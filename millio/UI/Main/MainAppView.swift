@@ -13,57 +13,206 @@ struct MainAppView: View {
     
     var body: some View {
         NavigationStack(path: $router.navigationPath) {
-            List {
-                Section {
-                    Toggle("Резервное копирование", isOn: Binding(
-                        get: { appState.isBackupEnabled },
-                        set: { newValue in
-                            appState.isBackupEnabled = newValue
-                            SettingsManager.shared.isBackupEnabled = newValue
-                            
-                            // Если backup включен, проверяем iCloud
-                            if newValue {
-                                Task {
-                                    // Можно добавить проверку iCloud здесь
-                                }
-                            } else {
-                                appState.isICloudAvailable = false
-                                appState.lastBackupDate = nil
+            ZStack {
+                GradientBackground()
+                
+                VStack(spacing: 0) {
+                    // Header
+                    HStack {
+                        Button {
+                            router.push(.profile)
+                        } label: {
+                            Image(systemName: "person.circle")
+                                .font(.system(size: 28))
+                                .foregroundStyle(.white)
+                        }
+                        
+                        Spacer()
+                        
+                        Button {
+                            router.push(.subscription)
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "star.fill")
+                                    .font(.system(size: 14))
+                                Text("PRO")
+                                    .font(.system(size: 14, weight: .semibold))
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background {
+                                Capsule()
+                                    .stroke(.white, lineWidth: 1.5)
                             }
                         }
-                    ))
-                    
-                    if appState.isBackupEnabled {
-                        if let backupDate = appState.lastBackupDate {
-                            HStack {
-                                Text("Последний backup")
-                                Spacer()
-                                Text(backupDate.formatted(date: .abbreviated, time: .shortened))
-                                    .foregroundStyle(.secondary)
-                            }
-                        } else {
-                            HStack {
-                                Text("Статус")
-                                Spacer()
-                                Text(appState.isICloudAvailable ? "iCloud доступен" : "iCloud недоступен")
-                                    .foregroundStyle(.secondary)
+                        
+                        Spacer()
+                        
+                        Button {
+                            router.push(.notifications)
+                        } label: {
+                            ZStack(alignment: .topTrailing) {
+                                Image(systemName: "bell")
+                                    .font(.system(size: 28))
+                                    .foregroundStyle(.white)
+                                
+                                Circle()
+                                    .fill(.green)
+                                    .frame(width: 10, height: 10)
+                                    .offset(x: 4, y: -4)
                             }
                         }
                     }
-                } header: {
-                    Text("Настройки")
-                }
-                
-                Section {
-                    Text("Главный экран")
-                        .font(.title2)
-                        .padding(.vertical, 8)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 16)
                     
-                    Text("Ядро приложения готово к работе")
-                        .foregroundStyle(.secondary)
+                    // Title and slogan
+                    VStack(spacing: 8) {
+                        Text("millio")
+                            .font(.system(size: 42, weight: .bold))
+                            .foregroundStyle(.white)
+                        
+                        Text("ваш лучший помощник")
+                            .font(.system(size: 16, weight: .regular))
+                            .foregroundStyle(.white.opacity(0.9))
+                    }
+                    .padding(.top, 32)
+                    .padding(.bottom, 40)
+                    
+                    // Service buttons grid
+                    VStack(spacing: 16) {
+                        HStack(spacing: 16) {
+                            ServiceButton(
+                                title: "Финансы",
+                                icon: "wallet.pass.fill",
+                                gradientColors: [.blue, .cyan]
+                            ) {
+                                router.push(.finances)
+                            }
+                            
+                            ServiceButton(
+                                title: "Курсы",
+                                icon: "briefcase.fill",
+                                gradientColors: [.green, .mint]
+                            ) {
+                                router.push(.courses)
+                            }
+                        }
+                        
+                        HStack(spacing: 16) {
+                            ServiceButton(
+                                title: "Кешбэк",
+                                icon: "percent",
+                                gradientColors: [.purple, .pink]
+                            ) {
+                                router.push(.cashback)
+                            }
+                            
+                            ServiceButton(
+                                title: "Кредиты",
+                                icon: "creditcard.fill",
+                                gradientColors: [.blue, .indigo]
+                            ) {
+                                router.push(.credits)
+                            }
+                        }
+                        
+                        HStack(spacing: 16) {
+                            ServiceButton(
+                                title: "Вода",
+                                icon: "drop.fill",
+                                gradientColors: [.cyan, .blue]
+                            ) {
+                                router.push(.water)
+                            }
+                            
+                            ServiceButton(
+                                title: "Привычки",
+                                icon: "clock.fill",
+                                gradientColors: [.indigo, .purple]
+                            ) {
+                                router.push(.habits)
+                            }
+                        }
+                        
+                        HStack(spacing: 16) {
+                            ServiceButton(
+                                title: "Картотека",
+                                icon: "archivebox.fill",
+                                gradientColors: [.orange, .brown]
+                            ) {
+                                router.push(.cardIndex)
+                            }
+                            
+                            ServiceButton(
+                                title: "Игры",
+                                icon: "gamecontroller.fill",
+                                gradientColors: [.green, .cyan]
+                            ) {
+                                router.push(.games)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                    
+                    Spacer()
+                    
+                    // Bottom action buttons
+                    HStack(spacing: 16) {
+                        ActionButton(
+                            title: "Расход",
+                            icon: "minus",
+                            gradientColors: [.purple, .pink]
+                        ) {
+                            // TODO: Navigate to expense screen
+                        }
+                        
+                        ActionButton(
+                            title: "Доход",
+                            icon: "plus",
+                            gradientColors: [.blue, .cyan]
+                        ) {
+                            // TODO: Navigate to income screen
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 32)
                 }
             }
-            .navigationTitle("Millio")
+            .navigationDestination(for: AppRoute.self) { route in
+                routeView(for: route)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func routeView(for route: AppRoute) -> some View {
+        switch route {
+        case .finances:
+            FinancesView()
+        case .courses:
+            CoursesView()
+        case .cashback:
+            CashbackView()
+        case .credits:
+            CreditsView()
+        case .water:
+            WaterView()
+        case .habits:
+            HabitsView()
+        case .cardIndex:
+            CardIndexView()
+        case .games:
+            GamesView()
+        case .profile:
+            ProfileView(router: router)
+        case .notifications:
+            NotificationsView()
+        case .subscription:
+            SubscriptionView()
+        default:
+            EmptyView()
         }
     }
 }

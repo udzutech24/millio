@@ -17,17 +17,24 @@ millio/
 ├── Core/
 │   ├── AppState/          # Управление состоянием приложения
 │   ├── Backup/            # Backup/Restore через CloudKit
+│   ├── Environment/        # Environment keys для SwiftUI
 │   ├── Language/          # Мультиязычность
 │   ├── Logging/           # Логирование через OSLog
 │   ├── Navigation/        # Навигационное ядро
 │   ├── Repository/        # Абстракции для SwiftData
+│   ├── Settings/           # Управление настройками
 │   └── UseCases/          # Бизнес-логика ядра
 ├── UI/
 │   ├── Onboarding/        # Экран онбординга
 │   ├── Restore/           # Экран восстановления
 │   ├── Main/              # Главный экран
 │   ├── Launching/         # Экран загрузки
-│   └── Error/             # Экран ошибок
+│   ├── Error/             # Экран ошибок
+│   ├── Services/          # Экраны сервисов (8 экранов)
+│   ├── Profile/           # Экран профиля с настройками
+│   ├── Notifications/     # Экран уведомлений
+│   ├── Subscription/      # Экран подписки PRO
+│   └── Shared/            # Общие UI компоненты
 └── Localizable.xcstrings  # String Catalog для локализации
 ```
 
@@ -145,6 +152,36 @@ Text("welcome", bundle: .main)
 ```swift
 LanguageManager.shared.setLanguage(.russian)
 ```
+
+## UI Компоненты
+
+### Главный экран
+Главный экран (`MainAppView`) предоставляет:
+- Доступ к 8 сервисам (Финансы, Курсы, Кешбэк, Кредиты, Вода, Привычки, Картотека, Игры)
+- Быстрые действия (Расход/Доход)
+- Навигацию к профилю, уведомлениям и подписке
+- Единый градиентный фон для всех экранов
+
+### Экраны сервисов
+Все экраны сервисов пустые и готовы к наполнению бизнес-логикой:
+- `FinancesView` - Финансы
+- `CoursesView` - Курсы
+- `CashbackView` - Кешбэк
+- `CreditsView` - Кредиты
+- `WaterView` - Вода
+- `HabitsView` - Привычки
+- `CardIndexView` - Картотека
+- `GamesView` - Игры
+
+### Дополнительные экраны
+- `ProfileView` - Профиль с настройками (включая настройки backup)
+- `NotificationsView` - Уведомления
+- `SubscriptionView` - Подписка PRO
+
+### Общие компоненты
+- `GradientBackground` - Градиентный фон для всех экранов
+- `ServiceButton` - Кнопка сервиса с градиентной обводкой
+- `ActionButton` - Кнопка действия (Расход/Доход)
 
 ## Ограничения ядра
 
