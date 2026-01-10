@@ -15,18 +15,22 @@ protocol BackupManagerProtocol {
     func lastBackupInfo() async -> BackupInfo?
 }
 
-nonisolated(unsafe) final class BackupManager: BackupManagerProtocol {
+nonisolated final class BackupManager: BackupManagerProtocol {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "BackupManager")
     private let cloudStore: CloudBackupStoreProtocol
     private let dataRepository: DataRepositoryProtocol
     private var backupTask: Task<Void, Never>?
     
     nonisolated init(
-        cloudStore: CloudBackupStoreProtocol = CloudBackupStore(),
+        cloudStore: CloudBackupStoreProtocol,
         dataRepository: DataRepositoryProtocol
     ) {
         self.cloudStore = cloudStore
         self.dataRepository = dataRepository
+    }
+    
+    convenience init(dataRepository: DataRepositoryProtocol) {
+        self.init(cloudStore: CloudBackupStore(), dataRepository: dataRepository)
     }
     
     func isAvailable() async -> Bool {

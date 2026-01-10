@@ -16,13 +16,13 @@ protocol CloudBackupStoreProtocol {
     func getLatestBackupInfo() async throws -> BackupInfo?
 }
 
-final class CloudBackupStore: CloudBackupStoreProtocol {
+nonisolated final class CloudBackupStore: CloudBackupStoreProtocol {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "CloudBackupStore")
     private let container: CKContainer
     private let recordType = "AppBackup"
     private let recordID = CKRecord.ID(recordName: "latest_backup")
     
-    init(container: CKContainer = .default()) {
+    nonisolated init(container: CKContainer = .default()) {
         self.container = container
     }
     

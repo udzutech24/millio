@@ -28,7 +28,7 @@ final class Item: Persistable {
     // MARK: - Importable
     static func `import`(_ data: Data) throws {
         guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let timestampInterval = dict["timestamp"] as? TimeInterval else {
+              dict["timestamp"] as? TimeInterval != nil else {
             throw AppError.backupCorrupted
         }
         // Импорт будет выполнен через ModelContext в DataRepository
