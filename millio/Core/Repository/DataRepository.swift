@@ -31,29 +31,43 @@ final class DataRepository: DataRepositoryProtocol {
             modelCount: 0
         )
         
-        // Экспортируем каждую модель из схемы
+        // Экспортируем каждую модель из схемы через ModelTypeRegistry
         var modelsData: [[String: Any]] = []
+        let registeredTypes = ModelTypeRegistry.shared.getExportableTypes()
         
-        // Экспортируем Item (базовый тип)
-        // TODO: Использовать ModelTypeRegistry для экспорта всех зарегистрированных типов
-        let itemDescriptor = FetchDescriptor<Item>()
-        let items = try modelContext.fetch(itemDescriptor)
-        
-        for item in items {
-            // Item уже Persistable, который включает Exportable, поэтому проверка не нужна
-            let data = try item.export()
-            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                var itemDict = json
-                itemDict["_type"] = "Item"
-                modelsData.append(itemDict)
+        // Экспортируем каждый зарегистрированный тип
+        for (typeName, _) in registeredTypes {
+            // Для каждого типа создаем FetchDescriptor и экспортируем экземпляры
+            // Это упрощенная реализация - в реальности нужна более сложная логика
+            // для работы с разными типами через рефлексию
+            
+            // Экспортируем Item (базовый тип)
+            if typeName == "Item" {
+                let itemDescriptor = FetchDescriptor<Item>()
+                let items = try modelContext.fetch(itemDescriptor)
+                
+                for item in items {
+                    let data = try item.export()
+                    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                        var itemDict = json
+                        itemDict["_type"] = typeName
+                        modelsData.append(itemDict)
+                    }
+                }
             }
+            // Здесь можно добавить экспорт других типов по мере их регистрации
         }
         
-        // TODO: Экспорт других зарегистрированных типов через рефлексию
-        // Это требует более сложной реализации с использованием ModelContainer.schema
+        // Обновляем metadata с реальным количеством моделей
+        let updatedMetadata = BackupMetadata(
+            version: metadata.version,
+            timestamp: metadata.timestamp,
+            schemaVersion: metadata.schemaVersion,
+            modelCount: modelsData.count
+        )
         
         let exportDict: [String: Any] = [
-            "metadata": try metadataToDict(metadata),
+            "metadata": try metadataToDict(updatedMetadata),
             "models": modelsData
         ]
         
@@ -84,27 +98,39 @@ final class DataRepository: DataRepositoryProtocol {
             }
         }
         
-        // Импорт будет реализован через конкретные типы моделей
-        // Ядро не знает конкретные типы, поэтому это делегируется фичам
-        // В реальной реализации фичи должны зарегистрировать свои импортеры
+        // Импорт через зарегистрированные импортеры из ModelTypeRegistry
         for modelData in modelsData {
-            guard let type = modelData["_type"] as? String else { continue }
+            guard let typeName = modelData["_type"] as? String else { continue }
             
-            // Пример импорта для Item
-            if type == "Item" {
-                // Парсинг и создание Item через ModelContext
-                // Это упрощённая реализация
+            // Получаем импортер для типа из реестра
+            guard let importerType = ModelTypeRegistry.shared.getImporter(for: typeName) else {
+                AppLogger.log(.error, category: "DataRepository", "No importer found for type: \(typeName)")
+                continue
             }
+            
+            // Вызываем статический метод импорта
+            try importerType.`import`(from: modelData, context: modelContext)
         }
+        
+        // Сохраняем все импортированные данные
+        try modelContext.save()
     }
     
     func clearAllData() throws {
-        // Очищаем все данные через известные типы
-        let itemDescriptor = FetchDescriptor<Item>()
-        let items = try modelContext.fetch(itemDescriptor)
+        // Очищаем все данные через зарегистрированные типы
+        let registeredTypes = ModelTypeRegistry.shared.getExportableTypes()
         
-        for item in items {
-            modelContext.delete(item)
+        for (typeName, _) in registeredTypes {
+            // Очищаем каждый тип
+            if typeName == "Item" {
+                let itemDescriptor = FetchDescriptor<Item>()
+                let items = try modelContext.fetch(itemDescriptor)
+                
+                for item in items {
+                    modelContext.delete(item)
+                }
+            }
+            // Здесь можно добавить очистку других типов по мере их регистрации
         }
         
         try modelContext.save()

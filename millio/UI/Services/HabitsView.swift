@@ -15,7 +15,7 @@ struct HabitsView: View {
             VStack {
                 Text("Привычки")
                     .font(.system(size: 32, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppColors.textPrimary)
             }
         }
         .navigationTitle("Привычки")

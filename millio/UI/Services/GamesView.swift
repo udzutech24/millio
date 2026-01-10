@@ -15,7 +15,7 @@ struct GamesView: View {
             VStack {
                 Text("Игры")
                     .font(.system(size: 32, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppColors.textPrimary)
             }
         }
         .navigationTitle("Игры")

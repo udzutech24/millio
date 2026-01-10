@@ -15,7 +15,7 @@ struct NotificationsView: View {
             VStack {
                 Text("Уведомления")
                     .font(.system(size: 32, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppColors.textPrimary)
             }
         }
         .navigationTitle("Уведомления")

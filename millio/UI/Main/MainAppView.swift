@@ -10,6 +10,12 @@ import SwiftUI
 struct MainAppView: View {
     @Bindable var router: AppRouter
     @Environment(AppState.self) private var appState
+    @StateObject private var viewModel: MainAppViewModel
+    
+    init(router: AppRouter) {
+        self.router = router
+        _viewModel = StateObject(wrappedValue: MainAppViewModel(router: router))
+    }
     
     var body: some View {
         NavigationStack(path: $router.navigationPath) {
@@ -20,17 +26,17 @@ struct MainAppView: View {
                     // Header
                     HStack {
                         Button {
-                            router.push(.profile)
+                            viewModel.handle(.navigateToProfile)
                         } label: {
                             Image(systemName: "person.circle")
                                 .font(.system(size: 28))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(AppColors.textPrimary)
                         }
                         
                         Spacer()
                         
                         Button {
-                            router.push(.subscription)
+                            viewModel.handle(.navigateToSubscription)
                         } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: "star.fill")
@@ -38,27 +44,27 @@ struct MainAppView: View {
                                 Text("PRO")
                                     .font(.system(size: 14, weight: .semibold))
                             }
-                            .foregroundStyle(.white)
+                            .foregroundStyle(AppColors.textPrimary)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
                             .background {
                                 Capsule()
-                                    .stroke(.white, lineWidth: 1.5)
+                                    .stroke(AppColors.textPrimary, lineWidth: 1.5)
                             }
                         }
                         
                         Spacer()
                         
                         Button {
-                            router.push(.notifications)
+                            viewModel.handle(.navigateToNotifications)
                         } label: {
                             ZStack(alignment: .topTrailing) {
                                 Image(systemName: "bell")
                                     .font(.system(size: 28))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(AppColors.textPrimary)
                                 
                                 Circle()
-                                    .fill(.green)
+                                    .fill(AppColors.notificationBadge)
                                     .frame(width: 10, height: 10)
                                     .offset(x: 4, y: -4)
                             }
@@ -71,11 +77,11 @@ struct MainAppView: View {
                     VStack(spacing: 8) {
                         Text("millio")
                             .font(.system(size: 42, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(AppColors.textPrimary)
                         
                         Text("ваш лучший помощник")
                             .font(.system(size: 16, weight: .regular))
-                            .foregroundStyle(.white.opacity(0.9))
+                            .foregroundStyle(AppColors.textSecondary)
                     }
                     .padding(.top, 32)
                     .padding(.bottom, 40)
@@ -86,17 +92,17 @@ struct MainAppView: View {
                             ServiceButton(
                                 title: "Финансы",
                                 icon: "wallet.pass.fill",
-                                gradientColors: [.blue, .cyan]
+                                gradientColors: AppColors.financesGradient
                             ) {
-                                router.push(.finances)
+                                viewModel.handle(.navigateToService(.finances))
                             }
                             
                             ServiceButton(
                                 title: "Курсы",
                                 icon: "briefcase.fill",
-                                gradientColors: [.green, .mint]
+                                gradientColors: AppColors.coursesGradient
                             ) {
-                                router.push(.courses)
+                                viewModel.handle(.navigateToService(.courses))
                             }
                         }
                         
@@ -104,17 +110,17 @@ struct MainAppView: View {
                             ServiceButton(
                                 title: "Кешбэк",
                                 icon: "percent",
-                                gradientColors: [.purple, .pink]
+                                gradientColors: AppColors.cashbackGradient
                             ) {
-                                router.push(.cashback)
+                                viewModel.handle(.navigateToService(.cashback))
                             }
                             
                             ServiceButton(
                                 title: "Кредиты",
                                 icon: "creditcard.fill",
-                                gradientColors: [.blue, .indigo]
+                                gradientColors: AppColors.creditsGradient
                             ) {
-                                router.push(.credits)
+                                viewModel.handle(.navigateToService(.credits))
                             }
                         }
                         
@@ -122,17 +128,17 @@ struct MainAppView: View {
                             ServiceButton(
                                 title: "Вода",
                                 icon: "drop.fill",
-                                gradientColors: [.cyan, .blue]
+                                gradientColors: AppColors.waterGradient
                             ) {
-                                router.push(.water)
+                                viewModel.handle(.navigateToService(.water))
                             }
                             
                             ServiceButton(
                                 title: "Привычки",
                                 icon: "clock.fill",
-                                gradientColors: [.indigo, .purple]
+                                gradientColors: AppColors.habitsGradient
                             ) {
-                                router.push(.habits)
+                                viewModel.handle(.navigateToService(.habits))
                             }
                         }
                         
@@ -140,17 +146,17 @@ struct MainAppView: View {
                             ServiceButton(
                                 title: "Картотека",
                                 icon: "archivebox.fill",
-                                gradientColors: [.orange, .brown]
+                                gradientColors: AppColors.cardIndexGradient
                             ) {
-                                router.push(.cardIndex)
+                                viewModel.handle(.navigateToService(.cardIndex))
                             }
                             
                             ServiceButton(
                                 title: "Игры",
                                 icon: "gamecontroller.fill",
-                                gradientColors: [.green, .cyan]
+                                gradientColors: AppColors.gamesGradient
                             ) {
-                                router.push(.games)
+                                viewModel.handle(.navigateToService(.games))
                             }
                         }
                     }
@@ -163,7 +169,7 @@ struct MainAppView: View {
                         ActionButton(
                             title: "Расход",
                             icon: "minus",
-                            gradientColors: [.purple, .pink]
+                            gradientColors: AppColors.expenseGradient
                         ) {
                             // TODO: Navigate to expense screen
                         }
@@ -171,7 +177,7 @@ struct MainAppView: View {
                         ActionButton(
                             title: "Доход",
                             icon: "plus",
-                            gradientColors: [.blue, .cyan]
+                            gradientColors: AppColors.incomeGradient
                         ) {
                             // TODO: Navigate to income screen
                         }

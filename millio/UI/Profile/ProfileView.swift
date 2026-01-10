@@ -21,11 +21,11 @@ struct ProfileView: View {
                     VStack(spacing: 12) {
                         Image(systemName: "person.circle.fill")
                             .font(.system(size: 80))
-                            .foregroundStyle(.white.opacity(0.8))
+                            .foregroundStyle(AppColors.textSecondary)
                         
                         Text("Профиль")
                             .font(.system(size: 28, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(AppColors.textPrimary)
                     }
                     .padding(.top, 40)
                     
@@ -54,25 +54,25 @@ struct ProfileView: View {
                                 if let backupDate = appState.lastBackupDate {
                                     HStack {
                                         Text("Последний backup")
-                                            .foregroundStyle(.white)
+                                            .foregroundStyle(AppColors.textPrimary)
                                         Spacer()
                                         Text(backupDate.formatted(date: .abbreviated, time: .shortened))
-                                            .foregroundStyle(.white.opacity(0.7))
+                                            .foregroundStyle(AppColors.textTertiary)
                                     }
                                 } else {
                                     HStack {
                                         Text("Статус")
-                                            .foregroundStyle(.white)
+                                            .foregroundStyle(AppColors.textPrimary)
                                         Spacer()
                                         Text(appState.isICloudAvailable ? "iCloud доступен" : "iCloud недоступен")
-                                            .foregroundStyle(.white.opacity(0.7))
+                                            .foregroundStyle(AppColors.textTertiary)
                                     }
                                 }
                             }
                         } header: {
                             Text("Настройки")
                                 .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.8))
+                                .foregroundStyle(AppColors.textSecondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }

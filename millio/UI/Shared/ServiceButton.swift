@@ -28,7 +28,7 @@ struct ServiceButton: View {
                 
                 Text(title)
                     .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppColors.textPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 

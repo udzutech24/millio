@@ -15,7 +15,7 @@ struct WaterView: View {
             VStack {
                 Text("Вода")
                     .font(.system(size: 32, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppColors.textPrimary)
             }
         }
         .navigationTitle("Вода")

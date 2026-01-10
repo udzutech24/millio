@@ -15,7 +15,7 @@ struct CashbackView: View {
             VStack {
                 Text("Кешбэк")
                     .font(.system(size: 32, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppColors.textPrimary)
             }
         }
         .navigationTitle("Кешбэк")

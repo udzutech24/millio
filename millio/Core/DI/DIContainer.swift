@@ -38,7 +38,7 @@ final class DIContainer {
         )
         
         let backupManager: BackupManagerProtocol = appState.isBackupEnabled
-            ? BackupManager(dataRepository: dataRepository)
+            ? BackupManager(dataRepository: dataRepository) // BackupManager сам проверяет настройки шифрования
             : MockBackupManager()
         
         return DIContainer(

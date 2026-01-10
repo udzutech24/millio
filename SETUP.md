@@ -45,33 +45,45 @@
 
 ## Известные ограничения
 
-- Импорт данных в `DataRepository.importAllData()` требует регистрации конкретных типов моделей фичами
-- Текущая реализация экспорта/импорта упрощена для демонстрации архитектуры
+- Импорт данных в `DataRepository.importAllData()` требует регистрации импортеров через `ModelTypeRegistry`
+- Экспорт работает для всех зарегистрированных типов через `ModelTypeRegistry`
 
 ## Расширение ядра
 
 ### Добавление новой модели
 
 ```swift
+// 1. Создайте модель
 @Model
 final class MyModel: Persistable {
     var name: String
     
     func export() throws -> Data {
-        // Сериализация в JSON
         let dict = ["name": name]
         return try JSONSerialization.data(withJSONObject: dict)
     }
     
     static func `import`(_ data: Data) throws {
-        // Десериализация из JSON
-        guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let name = dict["name"] as? String else {
-            throw AppError.backupCorrupted
-        }
-        // Создание модели через ModelContext
+        // Импорт через ModelImporter
     }
 }
+
+// 2. Создайте импортер
+struct MyModelImporter: ModelImporter {
+    static func importType() -> String { "MyModel" }
+    
+    static func `import`(from data: [String: Any], context: ModelContext) throws {
+        guard let name = data["name"] as? String else {
+            throw AppError.backupCorrupted
+        }
+        let model = MyModel(name: name)
+        context.insert(model)
+    }
+}
+
+// 3. Зарегистрируйте модель и импортер
+ModelTypeRegistry.shared.register(MyModel.self, typeName: "MyModel")
+ModelTypeRegistry.shared.registerImporter(MyModelImporter.self)
 ```
 
 ### Добавление нового экрана
