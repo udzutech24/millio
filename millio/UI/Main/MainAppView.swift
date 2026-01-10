@@ -10,6 +10,12 @@ import SwiftUI
 struct MainAppView: View {
     @Bindable var router: AppRouter
     @Environment(AppState.self) private var appState
+    @StateObject private var viewModel: MainAppViewModel
+    
+    init(router: AppRouter) {
+        self.router = router
+        _viewModel = StateObject(wrappedValue: MainAppViewModel(router: router))
+    }
     
     var body: some View {
         NavigationStack(path: $router.navigationPath) {
@@ -20,7 +26,7 @@ struct MainAppView: View {
                     // Header
                     HStack {
                         Button {
-                            router.push(.profile)
+                            viewModel.handle(.navigateToProfile)
                         } label: {
                             Image(systemName: "person.circle")
                                 .font(.system(size: 28))
@@ -30,7 +36,7 @@ struct MainAppView: View {
                         Spacer()
                         
                         Button {
-                            router.push(.subscription)
+                            viewModel.handle(.navigateToSubscription)
                         } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: "star.fill")
@@ -50,7 +56,7 @@ struct MainAppView: View {
                         Spacer()
                         
                         Button {
-                            router.push(.notifications)
+                            viewModel.handle(.navigateToNotifications)
                         } label: {
                             ZStack(alignment: .topTrailing) {
                                 Image(systemName: "bell")
@@ -88,7 +94,7 @@ struct MainAppView: View {
                                 icon: "wallet.pass.fill",
                                 gradientColors: AppColors.financesGradient
                             ) {
-                                router.push(.finances)
+                                viewModel.handle(.navigateToService(.finances))
                             }
                             
                             ServiceButton(
@@ -96,7 +102,7 @@ struct MainAppView: View {
                                 icon: "briefcase.fill",
                                 gradientColors: AppColors.coursesGradient
                             ) {
-                                router.push(.courses)
+                                viewModel.handle(.navigateToService(.courses))
                             }
                         }
                         
@@ -106,7 +112,7 @@ struct MainAppView: View {
                                 icon: "percent",
                                 gradientColors: AppColors.cashbackGradient
                             ) {
-                                router.push(.cashback)
+                                viewModel.handle(.navigateToService(.cashback))
                             }
                             
                             ServiceButton(
@@ -114,7 +120,7 @@ struct MainAppView: View {
                                 icon: "creditcard.fill",
                                 gradientColors: AppColors.creditsGradient
                             ) {
-                                router.push(.credits)
+                                viewModel.handle(.navigateToService(.credits))
                             }
                         }
                         
@@ -124,7 +130,7 @@ struct MainAppView: View {
                                 icon: "drop.fill",
                                 gradientColors: AppColors.waterGradient
                             ) {
-                                router.push(.water)
+                                viewModel.handle(.navigateToService(.water))
                             }
                             
                             ServiceButton(
@@ -132,7 +138,7 @@ struct MainAppView: View {
                                 icon: "clock.fill",
                                 gradientColors: AppColors.habitsGradient
                             ) {
-                                router.push(.habits)
+                                viewModel.handle(.navigateToService(.habits))
                             }
                         }
                         
@@ -142,7 +148,7 @@ struct MainAppView: View {
                                 icon: "archivebox.fill",
                                 gradientColors: AppColors.cardIndexGradient
                             ) {
-                                router.push(.cardIndex)
+                                viewModel.handle(.navigateToService(.cardIndex))
                             }
                             
                             ServiceButton(
@@ -150,7 +156,7 @@ struct MainAppView: View {
                                 icon: "gamecontroller.fill",
                                 gradientColors: AppColors.gamesGradient
                             ) {
-                                router.push(.games)
+                                viewModel.handle(.navigateToService(.games))
                             }
                         }
                     }

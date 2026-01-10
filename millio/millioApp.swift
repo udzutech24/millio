@@ -12,56 +12,76 @@ import UIKit
 @main
 struct millioApp: App {
     @State private var appState = AppState()
+    @State private var diContainer: DIContainer?
     @State private var lifecycleUseCase: AppLifecycleUseCase?
-    @State private var backupManager: BackupManager?
     
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
+    var sharedModelContainer: ModelContainer? = {
+        let schema = AppSchema.create()
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            AppLogger.log(.error, category: "App", "Failed to create ModelContainer: \(error.localizedDescription)")
+            // Fallback: создаем in-memory контейнер
+            do {
+                let fallbackConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+                return try ModelContainer(for: schema, configurations: [fallbackConfig])
+            } catch {
+                AppLogger.log(.error, category: "App", "Failed to create fallback ModelContainer: \(error.localizedDescription)")
+                // Последний fallback - пустая схема
+                do {
+                    return try ModelContainer(for: Schema([]), configurations: [])
+                } catch {
+                    return nil
+                }
+            }
         }
     }()
 
     var body: some Scene {
         WindowGroup {
-            RootViewResolver(appState: appState)
+            if let container = sharedModelContainer {
+                RootViewResolver(appState: appState)
+                    .preferredColorScheme(.dark)
+                    .environment(appState)
+                    .environment(\.modelContainer, container)
+                    .environment(\.diContainer, diContainer)
+                    .task {
+                        await initializeApp(container: container)
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+                        triggerBackgroundBackup()
+                    }
+            } else {
+                ErrorView(
+                    error: .unknown(NSError(
+                        domain: "App",
+                        code: -1,
+                        userInfo: [NSLocalizedDescriptionKey: "Не удалось инициализировать хранилище данных"]
+                    )),
+                    appState: appState,
+                    router: AppRouter()
+                )
                 .preferredColorScheme(.dark)
                 .environment(appState)
-                .environment(\.modelContainer, sharedModelContainer)
-                .task {
-                    await initializeApp()
-                }
-                .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
-                    triggerBackgroundBackup()
-                }
+            }
         }
-        .modelContainer(sharedModelContainer)
+        .modelContainer(sharedModelContainer ?? (try! ModelContainer(for: Schema([]), configurations: [])))
     }
     
-    private func initializeApp() async {
-        let modelContext = sharedModelContainer.mainContext
-        let dataRepository = DataRepository(modelContext: modelContext, modelContainer: sharedModelContainer)
+    private func initializeApp(container: ModelContainer) async {
+        // Используем DIContainer для создания зависимостей
+        let container = DIContainer.create(
+            appState: appState,
+            modelContainer: container
+        )
+        self.diContainer = container
         
-        // Создаём BackupManager только если backup включен
-        let manager: BackupManagerProtocol?
-        if appState.isBackupEnabled {
-            manager = BackupManager(dataRepository: dataRepository)
-            self.backupManager = manager as? BackupManager
-        } else {
-            manager = nil
-            self.backupManager = nil
-        }
-        
-        // Используем mock или nil для BackupManager, если backup отключен
+        // Создаем UseCase через DI Container
         let useCase = AppLifecycleUseCase(
             appState: appState,
-            backupManager: manager ?? MockBackupManager()
+            backupManager: container.backupManager
         )
         
         self.lifecycleUseCase = useCase
@@ -69,13 +89,13 @@ struct millioApp: App {
     }
     
     private func triggerBackgroundBackup() {
-        // Backup только если включен в настройках
+        // Backup только если включен в настройках и DIContainer доступен
         guard appState.isBackupEnabled,
-              let backupManager = backupManager else { return }
+              let diContainer = diContainer else { return }
         
         Task {
             do {
-                try await backupManager.backupNow()
+                try await diContainer.backupManager.backupNow()
             } catch {
                 // Логируем, но не блокируем приложение
                 AppLogger.log(.error, category: "App", "Background backup failed: \(error.localizedDescription)")
