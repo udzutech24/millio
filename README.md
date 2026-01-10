@@ -28,7 +28,7 @@ millio/
 │   ├── Onboarding/        # Экран онбординга
 │   ├── Restore/           # Экран восстановления
 │   ├── Main/              # Главный экран
-│   ├── Launching/         # Экран загрузки
+│   ├── Launching/         # Экран загрузки (SwiftUI)
 │   ├── Error/             # Экран ошибок
 │   ├── Services/          # Экраны сервисов (8 экранов)
 │   ├── Profile/           # Экран профиля с настройками
@@ -36,6 +36,7 @@ millio/
 │   ├── Subscription/      # Экран подписки PRO
 │   ├── Shared/            # Общие UI компоненты
 │   └── Design/            # Система дизайна (цвета, токены)
+├── LaunchScreen.storyboard # Launch Screen (статический экран до загрузки)
 └── Localizable.xcstrings  # String Catalog для локализации
 ```
 
@@ -192,6 +193,20 @@ LanguageManager.shared.setLanguage(.russian)
   - UI элементы (иконки, бейджи, ошибки)
 
 Подробнее см. `DESIGN_SYSTEM.md`
+
+### Launch Screen
+Приложение использует двухуровневый подход к splash screen:
+
+1. **LaunchScreen.storyboard** - Статический экран, показывается до загрузки SwiftUI
+   - Градиентный фон (темно-синий)
+   - Логотип "millio" и слоган
+   - Настроен через `INFOPLIST_KEY_UILaunchStoryboardName`
+
+2. **LaunchingView** - SwiftUI экран во время инициализации приложения
+   - Градиентный фон (`GradientBackground`)
+   - Анимированный логотип с плавным появлением
+   - Индикатор загрузки
+   - Показывается во время `AppLifecycleState.launching`
 
 ## Ограничения ядра
 
