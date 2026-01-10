@@ -1,0 +1,339 @@
+import Foundation
+import SwiftUI
+
+// MARK: - Currency + Crypto support (names, aliases, emoji)
+
+public struct CurrencySelectionSupport {
+    public static let ruLocale = Locale(identifier: "ru_RU")
+    public static let enLocale = Locale(identifier: "en_US_POSIX")
+
+    // MARK: Crypto meta
+
+    public struct CryptoMeta {
+        public let code: String
+        public let ruName: String
+        public let enName: String
+        public let emoji: String
+    }
+
+    /// Список крипты (порядок можно менять — так будет в allCodes, если ты захочешь выводить крипту отдельно)
+    public static let cryptoList: [CryptoMeta] = [
+        .init(code: "BTC",  ruName: "Биткоин",              enName: "Bitcoin",            emoji: "₿"),
+        .init(code: "ETH",  ruName: "Эфириум",             enName: "Ethereum",           emoji: "◇"),
+        .init(code: "USDT", ruName: "Tether",              enName: "Tether",             emoji: "🪙"),
+        .init(code: "USDC", ruName: "USD Coin",            enName: "USD Coin",           emoji: "🪙"),
+        .init(code: "BNB",  ruName: "BNB",                 enName: "BNB",                emoji: "🟡"),
+        .init(code: "SOL",  ruName: "Solana",              enName: "Solana",             emoji: "🟣"),
+        .init(code: "XRP",  ruName: "XRP",                 enName: "XRP",                emoji: "⚪️"),
+        .init(code: "ADA",  ruName: "Cardano",             enName: "Cardano",            emoji: "🔵"),
+        .init(code: "DOGE", ruName: "Dogecoin",            enName: "Dogecoin",           emoji: "🐶"),
+        .init(code: "TON",  ruName: "Toncoin",             enName: "Toncoin",            emoji: "💎"),
+        .init(code: "TRX",  ruName: "TRON",                enName: "TRON",               emoji: "🔺"),
+        .init(code: "DOT",  ruName: "Polkadot",            enName: "Polkadot",           emoji: "🟣"),
+        .init(code: "MATIC",ruName: "Polygon",             enName: "Polygon",            emoji: "🟪"),
+        .init(code: "AVAX", ruName: "Avalanche",           enName: "Avalanche",          emoji: "🔺"),
+        .init(code: "SHIB", ruName: "Shiba Inu",           enName: "Shiba Inu",          emoji: "🐕"),
+        .init(code: "LTC",  ruName: "Litecoin",            enName: "Litecoin",           emoji: "Ł"),
+        .init(code: "BCH",  ruName: "Bitcoin Cash",        enName: "Bitcoin Cash",       emoji: "🟧"),
+        .init(code: "ATOM", ruName: "Cosmos",              enName: "Cosmos",             emoji: "⚛️"),
+        .init(code: "LINK", ruName: "Chainlink",           enName: "Chainlink",          emoji: "🔗"),
+        .init(code: "XLM",  ruName: "Stellar",             enName: "Stellar",            emoji: "⭐️"),
+        .init(code: "ETC",  ruName: "Ethereum Classic",    enName: "Ethereum Classic",   emoji: "⟠"),
+        .init(code: "FIL",  ruName: "Filecoin",            enName: "Filecoin",           emoji: "🗄️"),
+        .init(code: "NEAR", ruName: "NEAR",                enName: "NEAR",               emoji: "🖤"),
+        .init(code: "HBAR", ruName: "Hedera",              enName: "Hedera",             emoji: "🧩"),
+        .init(code: "APT",  ruName: "Aptos",               enName: "Aptos",              emoji: "🌊"),
+        .init(code: "OP",   ruName: "Optimism",            enName: "Optimism",           emoji: "🟥"),
+        .init(code: "ARB",  ruName: "Arbitrum",            enName: "Arbitrum",           emoji: "🌀"),
+        .init(code: "ICP",  ruName: "Internet Computer",   enName: "Internet Computer",  emoji: "∞"),
+        .init(code: "SUI",  ruName: "Sui",                 enName: "Sui",                emoji: "💧"),
+        .init(code: "PEPE", ruName: "Pepe",                enName: "Pepe",               emoji: "🐸")
+    ]
+
+    private static let cryptoByCode: [String: CryptoMeta] = {
+        Dictionary(uniqueKeysWithValues: cryptoList.map { ($0.code.uppercased(), $0) })
+    }()
+
+    public static func isCrypto(_ code: String) -> Bool {
+        cryptoByCode[code.uppercased()] != nil
+    }
+
+    // MARK: Aliases (for search)
+
+    public static let aliases: [String: [String]] = {
+        var base: [String: [String]] = [
+            "RUB": ["рубль","руб","рубли","россия","рф","деревянный"],
+            "USD": ["доллар","доллары","бакс","баксы","доллар сша","сша","американский доллар"],
+            "EUR": ["евро","еврозона"],
+            "GBP": ["фунт","фунты","фунт стерлингов","стерлингов","британский фунт","великобритания","англия"],
+            "JPY": ["иена","йена","японская иена","япония"],
+            "CNY": ["юань","китайский юань","ренминби","китай"],
+            "KZT": ["тенге","казахстан"],
+            "TRY": ["лира","турецкая лира","турция"],
+            "UAH": ["гривна","украина"],
+            "BYN": ["белорусский рубль","беларусь"],
+            "AUD": ["австралийский доллар","австралия"],
+            "CAD": ["канадский доллар","канада"],
+            "CHF": ["швейцарский франк","франк","швейцария"],
+            "PLN": ["злотый","польша"],
+            "SEK": ["шведская крона","швеция","крона"],
+            "NOK": ["норвежская крона","норвегия","крона"],
+            "DKK": ["датская крона","дания","крона"],
+            "CZK": ["чешская крона","чехия","крона"],
+            "HUF": ["форинт","венгрия"],
+            "AED": ["дирхам","оаэ","эмираты"],
+            "AMD": ["драм","армения"],
+            "GEL": ["лари","грузия"],
+            "KGS": ["сом","кыргызстан","кыргызия"],
+            "UZS": ["сум","узбекистан"],
+            "AZN": ["манат","азербайджан"]
+        ]
+
+        // Crypto aliases — чтобы находилось и по русскому, и по англ, и по тикеру
+        func addCryptoAliases(_ code: String, _ words: [String]) {
+            base[code] = (base[code] ?? []) + words
+        }
+
+        addCryptoAliases("BTC",  ["btc","bitcoin","биткоин","биткойн","биток"])
+        addCryptoAliases("ETH",  ["eth","ethereum","эфир","эфириум"])
+        addCryptoAliases("USDT", ["usdt","tether","тезер","стейбл","стейблкоин"])
+        addCryptoAliases("USDC", ["usdc","usd coin","стейбл","стейблкоин"])
+        addCryptoAliases("BNB",  ["bnb","binance","бинанс"])
+        addCryptoAliases("SOL",  ["sol","solana","солана"])
+        addCryptoAliases("XRP",  ["xrp","ripple","рипл"])
+        addCryptoAliases("ADA",  ["ada","cardano","кардано"])
+        addCryptoAliases("DOGE", ["doge","dogecoin","додж"])
+        addCryptoAliases("TON",  ["ton","toncoin","тон","тонкоин","телеграм"])
+        addCryptoAliases("TRX",  ["trx","tron","трон"])
+        addCryptoAliases("DOT",  ["dot","polkadot","полкадот"])
+        addCryptoAliases("MATIC",["matic","polygon","полигон"])
+        addCryptoAliases("AVAX", ["avax","avalanche","аваланш"])
+        addCryptoAliases("SHIB", ["shib","shiba","шиба","шиба-ину"])
+        addCryptoAliases("LTC",  ["ltc","litecoin","лайткоин"])
+        addCryptoAliases("BCH",  ["bch","bitcoin cash","биткоин кэш"])
+        addCryptoAliases("ATOM", ["atom","cosmos","космос"])
+        addCryptoAliases("LINK", ["link","chainlink","чейнлинк"])
+        addCryptoAliases("XLM",  ["xlm","stellar","стеллар"])
+        addCryptoAliases("ETC",  ["etc","ethereum classic","эфир классик"])
+        addCryptoAliases("FIL",  ["fil","filecoin","файлкоин"])
+        addCryptoAliases("NEAR", ["near","ниар"])
+        addCryptoAliases("HBAR", ["hbar","hedera","хедера"])
+        addCryptoAliases("APT",  ["apt","aptos","аптос"])
+        addCryptoAliases("OP",   ["op","optimism","оптимизм"])
+        addCryptoAliases("ARB",  ["arb","arbitrum","арбитрум"])
+        addCryptoAliases("ICP",  ["icp","internet computer","интернет компьютер"])
+        addCryptoAliases("SUI",  ["sui","суи"])
+        addCryptoAliases("PEPE", ["pepe","пепе","лягушка"])
+
+        return base
+    }()
+
+    // MARK: Codes list
+
+    /// ВСЕ ISO 4217 валюты + крипта (если includeCrypto = true)
+    public static func allCodes(includeCrypto: Bool = true) -> [String] {
+        var set = Set(Locale.Currency.isoCurrencies.map { $0.identifier.uppercased() })
+        if includeCrypto {
+            cryptoByCode.keys.forEach { set.insert($0) }
+        }
+        return set.sorted()
+    }
+
+    // MARK: Names / Emoji
+
+    public static func nameRu(for code: String) -> String? {
+        let c = code.uppercased()
+        if let meta = cryptoByCode[c] { return meta.ruName }
+        return ruLocale.localizedString(forCurrencyCode: c)
+    }
+
+    public static func nameEn(for code: String) -> String? {
+        let c = code.uppercased()
+        if let meta = cryptoByCode[c] { return meta.enName }
+        return enLocale.localizedString(forCurrencyCode: c)
+    }
+
+    public static func emoji(for code: String) -> String {
+        let c = code.uppercased()
+        if let meta = cryptoByCode[c] { return meta.emoji }
+        return flagEmoji(forCurrencyCode: c)
+    }
+
+    // MARK: Flags for fiat
+
+    private static let flagOverrides: [String: String] = [
+        "EUR": "🇪🇺" // евро — не страна
+    ]
+
+    private static func flagEmoji(forCurrencyCode code: String) -> String {
+        if let manual = flagOverrides[code] { return manual }
+        if let region = currencyToRegionMap[code] {
+            return flagEmoji(fromRegionCode: region)
+        }
+        return "🏳️"
+    }
+
+    private static let currencyToRegionMap: [String: String] = {
+        var map: [String: String] = [:]
+        for id in Locale.availableIdentifiers {
+            let loc = Locale(identifier: id)
+            guard let c = loc.currency?.identifier.uppercased(),
+                  let region = loc.region?.identifier.uppercased(),
+                  map[c] == nil
+            else { continue }
+            map[c] = region
+        }
+        return map
+    }()
+
+    private static func flagEmoji(fromRegionCode regionCode: String) -> String {
+        let rc = regionCode.uppercased()
+        guard rc.count == 2 else { return "🏳️" }
+        let base: UInt32 = 0x1F1E6
+        let a = UnicodeScalar("A").value
+
+        var scalars: [UnicodeScalar] = []
+        for ch in rc.unicodeScalars {
+            let v = ch.value
+            guard v >= a, v <= UnicodeScalar("Z").value else { return "🏳️" }
+            let indicator = base + (v - a)
+            if let s = UnicodeScalar(indicator) { scalars.append(s) }
+        }
+        return String(String.UnicodeScalarView(scalars))
+    }
+}
+
+// MARK: - Picker with pinned favorites on top + RU/EN search
+
+public struct CurrencyPickerView: View {
+    public let allCodes: [String]
+    @Binding public var searchText: String
+    public let selectedCodes: [String]   // избранные
+    public let onSelect: (String) -> Void
+
+    public init(allCodes: [String], searchText: Binding<String>, selectedCodes: [String], onSelect: @escaping (String) -> Void) {
+        self.allCodes = allCodes.map { $0.uppercased() }
+        self._searchText = searchText
+        self.selectedCodes = selectedCodes.map { $0.uppercased() }
+        self.onSelect = onSelect
+    }
+
+    private var q: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    private func matches(_ code: String) -> Bool {
+        let c = code.uppercased()
+        guard !q.isEmpty else { return true }
+
+        let codeL = c.lowercased()
+        let ru = (CurrencySelectionSupport.nameRu(for: c) ?? "").lowercased()
+        let en = (CurrencySelectionSupport.nameEn(for: c) ?? "").lowercased()
+        let aliases = CurrencySelectionSupport.aliases[c]?.map { $0.lowercased() } ?? []
+
+        if codeL.contains(q) { return true }
+        if ru.contains(q) { return true }
+        if en.contains(q) { return true }
+        if aliases.contains(where: { $0.contains(q) }) { return true }
+
+        return false
+    }
+
+    /// Все совпадения (кроме избранных, они будут отдельной секцией сверху)
+    private var filteredOthers: [String] {
+        let setSelected = Set(selectedCodes)
+        return allCodes
+            .filter { matches($0) }
+            .filter { !setSelected.contains($0.uppercased()) }
+            .sorted()
+    }
+
+    /// Избранные сверху (закреплены). Можно: показывать только те, что совпадают с поиском.
+    private var pinnedFavorites: [String] {
+        // Вариант A: показывать избранные всегда
+        // return selectedCodes
+
+        // Вариант B (лучше): избранные сверху, но только если подходят под поиск
+        if q.isEmpty { return selectedCodes }
+        return selectedCodes.filter { matches($0) }
+    }
+
+    public var body: some View {
+        List {
+            if !pinnedFavorites.isEmpty {
+                Section("Избранные") {
+                    ForEach(pinnedFavorites, id: \.self) { code in
+                        row(code: code, showStar: true)
+                    }
+                }
+            }
+
+            Section {
+                ForEach(filteredOthers, id: \.self) { code in
+                    row(code: code, showStar: selectedCodes.contains(code.uppercased()))
+                }
+            }
+
+            Section {
+                HStack {
+                    Spacer()
+                    Text("Выбрано: \(selectedCodes.count)")
+                        .font(.footnote)
+                        .foregroundStyle(AppColors.textTertiary)
+                    Spacer()
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(Color.clear)
+
+        // Важно: это помогает вводить и тикеры (BTC), и англ. слова — без автозамены
+        .textInputAutocapitalization(.never)
+        .autocorrectionDisabled(true)
+        .keyboardType(.asciiCapable)
+
+        .searchable(
+            text: $searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "Код или название (RU/EN)"
+        )
+    }
+
+    @ViewBuilder
+    private func row(code: String, showStar: Bool) -> some View {
+        let c = code.uppercased()
+
+        HStack(spacing: 12) {
+            Text(CurrencySelectionSupport.emoji(for: c))
+                .font(.title3)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(c).font(.headline)
+
+                // Для крипты покажем русское имя, для фиата — русскую локализацию
+                let ruName = CurrencySelectionSupport.nameRu(for: c) ?? ""
+                if !ruName.isEmpty {
+                Text(ruName)
+                    .font(.caption)
+                    .foregroundStyle(AppColors.textTertiary)
+                }
+            }
+
+            Spacer()
+
+            if showStar {
+                Image(systemName: "star.fill").foregroundStyle(.yellow)
+            }
+        }
+        .contentShape(Rectangle())
+        .listRowBackground(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.ultraThinMaterial)
+        )
+        .onTapGesture {
+            onSelect(c)
+        }
+    }
+}
+

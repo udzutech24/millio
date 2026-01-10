@@ -9,17 +9,9 @@ import SwiftUI
 
 struct CoursesView: View {
     var body: some View {
-        ZStack {
-            GradientBackground()
-            
-            VStack {
-                Text("Курсы")
-                    .font(.system(size: 32, weight: .bold))
-                    .foregroundStyle(AppColors.textPrimary)
-            }
-        }
-        .navigationTitle("Курсы")
-        .navigationBarTitleDisplayMode(.inline)
+        ConverterView()
+            .navigationTitle("Курсы")
+            .navigationBarTitleDisplayMode(.inline)
     }
 }
 

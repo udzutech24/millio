@@ -13,6 +13,10 @@ import Testing
 struct AppStateTests {
     @Test("App state has correct initial values")
     func testInitialState() {
+        // Очищаем сохраненный язык для чистого теста
+        UserDefaults.standard.removeObject(forKey: "selectedLanguage")
+        UserDefaults.standard.synchronize()
+        
         let appState = AppState()
         
         #expect(appState.lifecycle == .launching)

@@ -17,6 +17,17 @@ struct millioApp: App {
     
     var sharedModelContainer: ModelContainer? = {
         let schema = AppSchema.create()
+        
+        // Убеждаемся, что директория Application Support существует
+        let fileManager = FileManager.default
+        if let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            do {
+                try fileManager.createDirectory(at: appSupportURL, withIntermediateDirectories: true, attributes: nil)
+            } catch {
+                AppLogger.log(.error, category: "App", "Failed to create Application Support directory: \(error.localizedDescription)")
+            }
+        }
+        
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
         do {
