@@ -24,39 +24,64 @@ final class DataRepository: DataRepositoryProtocol {
     }
     
     func exportAllData() throws -> Data {
-        // Создаём словарь для сериализации
-        var exportDict: [String: Any] = [:]
-        exportDict["version"] = "1.0"
-        exportDict["timestamp"] = Date().timeIntervalSince1970
+        let metadata = BackupMetadata(
+            version: .current,
+            timestamp: Date(),
+            schemaVersion: "1.0",
+            modelCount: 0
+        )
         
         // Экспортируем каждую модель из схемы
         var modelsData: [[String: Any]] = []
         
-        // Получаем все модели через известные типы из схемы
-        // В реальной реализации это можно расширить через регистрацию типов
+        // Экспортируем Item (базовый тип)
+        // TODO: Использовать ModelTypeRegistry для экспорта всех зарегистрированных типов
         let itemDescriptor = FetchDescriptor<Item>()
         let items = try modelContext.fetch(itemDescriptor)
         
         for item in items {
-            if let exportable = item as? Exportable {
-                let data = try exportable.export()
-                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                    var itemDict = json
-                    itemDict["_type"] = "Item"
-                    modelsData.append(itemDict)
-                }
+            // Item уже Persistable, который включает Exportable, поэтому проверка не нужна
+            let data = try item.export()
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                var itemDict = json
+                itemDict["_type"] = "Item"
+                modelsData.append(itemDict)
             }
         }
         
-        exportDict["models"] = modelsData
+        // TODO: Экспорт других зарегистрированных типов через рефлексию
+        // Это требует более сложной реализации с использованием ModelContainer.schema
+        
+        let exportDict: [String: Any] = [
+            "metadata": try metadataToDict(metadata),
+            "models": modelsData
+        ]
         
         return try JSONSerialization.data(withJSONObject: exportDict, options: .prettyPrinted)
+    }
+    
+    private func metadataToDict(_ metadata: BackupMetadata) throws -> [String: Any] {
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(metadata)
+        return try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
     }
     
     func importAllData(_ data: Data) throws {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let modelsData = json["models"] as? [[String: Any]] else {
             throw AppError.backupCorrupted
+        }
+        
+        // Проверяем версию backup
+        if let metadataDict = json["metadata"] as? [String: Any] {
+            let decoder = JSONDecoder()
+            if let metadataData = try? JSONSerialization.data(withJSONObject: metadataDict),
+               let metadata = try? decoder.decode(BackupMetadata.self, from: metadataData) {
+                // Проверяем совместимость версий
+                if !metadata.version.isCompatible(with: .current) {
+                    throw AppError.incompatibleSchemaVersion
+                }
+            }
         }
         
         // Импорт будет реализован через конкретные типы моделей
