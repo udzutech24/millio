@@ -15,7 +15,7 @@ struct CreditsView: View {
             VStack {
                 Text("Кредиты")
                     .font(.system(size: 32, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppColors.textPrimary)
             }
         }
         .navigationTitle("Кредиты")

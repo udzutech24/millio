@@ -18,17 +18,17 @@ struct ActionButton: View {
             HStack(spacing: 12) {
                 ZStack {
                     Circle()
-                        .fill(.white.opacity(0.2))
+                        .fill(AppColors.iconBackground)
                         .frame(width: 32, height: 32)
                     
                     Image(systemName: icon)
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(AppColors.iconColor)
                 }
                 
                 Text(title)
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppColors.textPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 

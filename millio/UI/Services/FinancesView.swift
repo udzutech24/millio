@@ -15,7 +15,7 @@ struct FinancesView: View {
             VStack {
                 Text("Финансы")
                     .font(.system(size: 32, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppColors.textPrimary)
             }
         }
         .navigationTitle("Финансы")

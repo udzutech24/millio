@@ -15,7 +15,7 @@ struct SubscriptionView: View {
             VStack {
                 Text("Подписка PRO")
                     .font(.system(size: 32, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppColors.textPrimary)
             }
         }
         .navigationTitle("Подписка")

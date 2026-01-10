@@ -15,7 +15,7 @@ struct CardIndexView: View {
             VStack {
                 Text("Картотека")
                     .font(.system(size: 32, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppColors.textPrimary)
             }
         }
         .navigationTitle("Картотека")

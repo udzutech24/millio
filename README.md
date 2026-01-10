@@ -34,7 +34,8 @@ millio/
 │   ├── Profile/           # Экран профиля с настройками
 │   ├── Notifications/     # Экран уведомлений
 │   ├── Subscription/      # Экран подписки PRO
-│   └── Shared/            # Общие UI компоненты
+│   ├── Shared/            # Общие UI компоненты
+│   └── Design/            # Система дизайна (цвета, токены)
 └── Localizable.xcstrings  # String Catalog для локализации
 ```
 
@@ -182,6 +183,15 @@ LanguageManager.shared.setLanguage(.russian)
 - `GradientBackground` - Градиентный фон для всех экранов
 - `ServiceButton` - Кнопка сервиса с градиентной обводкой
 - `ActionButton` - Кнопка действия (Расход/Доход)
+
+### Система дизайна
+- `AppColors` - Централизованная палитра цветов приложения
+  - Градиенты фона
+  - Цвета текста (primary, secondary, tertiary)
+  - Градиенты для сервисов и действий
+  - UI элементы (иконки, бейджи, ошибки)
+
+Подробнее см. `DESIGN_SYSTEM.md`
 
 ## Ограничения ядра
 
