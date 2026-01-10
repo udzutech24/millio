@@ -12,10 +12,15 @@ final class AppState {
     var lifecycle: AppLifecycleState = .launching
     var isICloudAvailable: Bool = false
     var lastBackupDate: Date?
-    var selectedLanguage: Language = .system
+    var selectedLanguage: Language = .system {
+        didSet {
+            LanguageManager.shared.setLanguage(selectedLanguage)
+        }
+    }
     var isBackupEnabled: Bool = false
     
     init() {
         self.isBackupEnabled = SettingsManager.shared.isBackupEnabled
+        self.selectedLanguage = LanguageManager.shared.currentLanguage
     }
 }

@@ -47,6 +47,8 @@ struct millioApp: App {
                     .environment(appState)
                     .environment(\.modelContainer, container)
                     .environment(\.diContainer, diContainer)
+                    .environment(\.locale, appState.selectedLanguage.locale ?? Locale.current)
+                    .id(appState.selectedLanguage) // Перезагружаем view при смене языка
                     .task {
                         await initializeApp(container: container)
                     }
