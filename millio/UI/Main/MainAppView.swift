@@ -11,6 +11,10 @@ struct MainAppView: View {
     @Bindable var router: AppRouter
     @Environment(AppState.self) private var appState
     @StateObject private var viewModel: MainAppViewModel
+    @State private var services: [ServiceItem] = []
+    @State private var draggedItem: ServiceItem?
+    
+    private let orderManager = ServiceOrderManager()
     
     init(router: AppRouter) {
         self.router = router
@@ -70,98 +74,8 @@ struct MainAppView: View {
                     .padding(.bottom, 40)
                     
                     // Service buttons grid
-                    VStack(spacing: 16) {
-                        HStack(spacing: 16) {
-                            ServiceButton(
-                                title: "Финансы",
-                                icon: "wallet.pass.fill",
-                                gradientColors: AppColors.financesGradient
-                            ) {
-                                viewModel.handle(.navigateToService(.finances))
-                            }
-                            
-                            ServiceButton(
-                                title: "Курсы",
-                                icon: "briefcase.fill",
-                                gradientColors: AppColors.coursesGradient
-                            ) {
-                                viewModel.handle(.navigateToService(.courses))
-                            }
-                        }
-                        
-                        HStack(spacing: 16) {
-                            ServiceButton(
-                                title: "Кешбэк",
-                                icon: "percent",
-                                gradientColors: AppColors.cashbackGradient
-                            ) {
-                                viewModel.handle(.navigateToService(.cashback))
-                            }
-                            
-                            ServiceButton(
-                                title: "Кредиты",
-                                icon: "creditcard.fill",
-                                gradientColors: AppColors.creditsGradient
-                            ) {
-                                viewModel.handle(.navigateToService(.credits))
-                            }
-                        }
-                        
-                        HStack(spacing: 16) {
-                            ServiceButton(
-                                title: "Привычки",
-                                icon: "clock.fill",
-                                gradientColors: AppColors.habitsGradient
-                            ) {
-                                viewModel.handle(.navigateToService(.habits))
-                            }
-                            
-                            ServiceButton(
-                                title: "Карты",
-                                icon: "archivebox.fill",
-                                gradientColors: AppColors.cardIndexGradient
-                            ) {
-                                viewModel.handle(.navigateToService(.cardIndex))
-                            }
-                        }
-                        
-                        HStack(spacing: 16) {
-                            ServiceButton(
-                                title: "Долги",
-                                icon: "list.bullet.rectangle",
-                                gradientColors: AppColors.debtsGradient
-                            ) {
-                                viewModel.handle(.navigateToService(.debts))
-                            }
-                            
-                            ServiceButton(
-                                title: "Активы",
-                                icon: "chart.line.uptrend.xyaxis",
-                                gradientColors: AppColors.investmentsGradient
-                            ) {
-                                viewModel.handle(.navigateToService(.investments))
-                            }
-                        }
-                        
-                        HStack(spacing: 16) {
-                            ServiceButton(
-                                title: "Планирование",
-                                icon: "calendar.badge.clock",
-                                gradientColors: AppColors.plannedExpensesGradient
-                            ) {
-                                viewModel.handle(.navigateToService(.plannedExpenses))
-                            }
-                            
-                            ServiceButton(
-                                title: "Кэшфлоу",
-                                icon: "arrow.left.arrow.right.circle.fill",
-                                gradientColors: AppColors.cashflowGradient
-                            ) {
-                                viewModel.handle(.navigateToService(.cashflow))
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 24)
+                    servicesGrid
+                        .padding(.horizontal, 24)
                     
                     Spacer()
                     
@@ -190,7 +104,64 @@ struct MainAppView: View {
             .navigationDestination(for: AppRoute.self) { route in
                 routeView(for: route)
             }
+            .onAppear {
+                loadServices()
+            }
         }
+    }
+    
+    // MARK: - Services Grid
+    
+    private var servicesGrid: some View {
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: 2)
+        
+        return LazyVGrid(columns: columns, spacing: 16) {
+            ForEach(services) { service in
+                ServiceButton(
+                    title: service.title,
+                    icon: service.icon,
+                    gradientColors: service.gradientColors
+                ) {
+                    viewModel.handle(.navigateToService(service.route))
+                }
+                .draggable(service.id) {
+                    ServiceButton(
+                        title: service.title,
+                        icon: service.icon,
+                        gradientColors: service.gradientColors
+                    ) {
+                        // Пустой action для drag preview
+                    }
+                    .opacity(0.8)
+                }
+                .dropDestination(for: String.self) { droppedIDs, location in
+                    guard let droppedID = droppedIDs.first,
+                          droppedID != service.id,
+                          let draggedIndex = services.firstIndex(where: { $0.id == droppedID }),
+                          let targetIndex = services.firstIndex(where: { $0.id == service.id }) else {
+                        return false
+                    }
+                    
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        services.move(fromOffsets: IndexSet(integer: draggedIndex), toOffset: targetIndex > draggedIndex ? targetIndex + 1 : targetIndex)
+                        saveServicesOrder()
+                    }
+                    
+                    return true
+                }
+            }
+        }
+    }
+    
+    // MARK: - Helpers
+    
+    private func loadServices() {
+        services = orderManager.getOrderedServices()
+    }
+    
+    private func saveServicesOrder() {
+        let order = services.map { $0.id }
+        orderManager.saveOrder(order)
     }
     
     @ViewBuilder
