@@ -248,7 +248,7 @@ final class ConverterViewModel: ViewModelProtocol {
             state.rateSource = source
             storedRateSource = source.rawValue
             mirrorToICloud(key: "conv_rate_source", value: source.rawValue)
-            Task { await fetchRates(haptic: true, force: true) }
+            Task { await fetchRates(haptic: false, force: true) }
             
         case .setShowOfflineBadge(let value):
             state.showOfflineBadge = value
@@ -265,7 +265,7 @@ final class ConverterViewModel: ViewModelProtocol {
             state.fractionDigits = digits
             
         case .refreshRates(let force):
-            Task { await fetchRates(haptic: true, force: force) }
+            Task { await fetchRates(haptic: false, force: force) }
             
         case .showPicker(let index):
             state.replaceIndex = index
@@ -623,19 +623,11 @@ final class ConverterViewModel: ViewModelProtocol {
             storedLastRatesTS = updateTS
             state.isOffline = false
             
-            #if os(iOS)
-            if haptic && state.hapticsEnabled {
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
-            }
-            #endif
+            // Тактильный отклик теперь только в UI при нажатии на кнопку
         } catch {
             state.isOffline = true
             
-            #if os(iOS)
-            if haptic && state.hapticsEnabled {
-                UINotificationFeedbackGenerator().notificationOccurred(.error)
-            }
-            #endif
+            // Тактильный отклик теперь только в UI при нажатии на кнопку
         }
     }
     

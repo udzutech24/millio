@@ -292,6 +292,11 @@ struct ConverterView: View {
                         }
                         
                         Button {
+                            #if os(iOS)
+                            if viewModel.state.hapticsEnabled {
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            }
+                            #endif
                             viewModel.handle(.refreshRates(force: true))
                         } label: {
                             HStack {
@@ -306,6 +311,7 @@ struct ConverterView: View {
                                 )
                             )
                         }
+                        .disabled(viewModel.state.isFetchingRates)
                     } header: {
                         Text("Курс")
                             .font(.system(size: 18, weight: .semibold))
