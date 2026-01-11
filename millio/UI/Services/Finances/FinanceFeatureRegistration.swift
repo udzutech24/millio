@@ -43,10 +43,13 @@ struct FinanceGroupImporter: ModelImporter {
             }
         )
         
+        let displayCurrency = dict["displayCurrency"] as? String
+        
         if let existingGroup = try? context.fetch(groupDescriptor).first {
             // Обновляем существующую группу
             existingGroup.colorHex = colorHex
             existingGroup.order = order
+            existingGroup.displayCurrency = displayCurrency
             existingGroup.updatedAt = Date(timeIntervalSince1970: updatedAt)
             return
         }
@@ -55,6 +58,7 @@ struct FinanceGroupImporter: ModelImporter {
         let group = FinanceGroup(name: name, colorHex: colorHex, order: order)
         group.createdAt = Date(timeIntervalSince1970: createdAt)
         group.updatedAt = Date(timeIntervalSince1970: updatedAt)
+        group.displayCurrency = displayCurrency
         
         context.insert(group)
     }

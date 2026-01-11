@@ -299,16 +299,12 @@ private struct FinanceGroupRow: View {
         viewModel.state.groupTotals[groupID] ?? 0.0
     }
     
-    var isDefaultGroup: Bool {
-        group.name == "Без группы"
-    }
-    
     private let swipeActionWidth: CGFloat = 140
     
     var body: some View {
         ZStack(alignment: .trailing) {
-            // Кнопки действий при свайпе (только для не дефолтной группы)
-            if !isDefaultGroup {
+            // Кнопки действий при свайпе
+            HStack(spacing: 0) {
                 HStack(spacing: 0) {
                     // Кнопка редактирования
                     Button {
@@ -380,7 +376,7 @@ private struct FinanceGroupRow: View {
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.8)
                                 
-                                Text(viewModel.state.displayCurrency)
+                                Text(groupDisplayCurrency)
                                     .font(.system(size: 12, weight: .medium))
                                     .foregroundStyle(AppColors.textSecondary)
                                     .lineLimit(1)
@@ -473,7 +469,7 @@ private struct FinanceGroupRow: View {
                 DragGesture()
                     .onChanged { value in
                         // Запрещаем свайп если аккордеон открыт
-                        if !isDefaultGroup && !isExpanded {
+                        if !isExpanded {
                             isSwiping = true
                             // Ограничиваем свайп только влево (отрицательные значения)
                             let newOffset = min(0, max(-swipeActionWidth, value.translation.width))
@@ -482,7 +478,7 @@ private struct FinanceGroupRow: View {
                     }
                     .onEnded { value in
                         isSwiping = false
-                        if !isDefaultGroup && !isExpanded {
+                        if !isExpanded {
                             // Если свайпнули больше половины ширины, показываем действия полностью
                             if value.translation.width < -swipeActionWidth / 2 {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -553,14 +549,33 @@ private struct FinanceGroupRow: View {
                 await loadGroupTotal()
             }
         }
+        .onChange(of: group.displayCurrency) { oldValue, newValue in
+            // При изменении валюты группы перезагружаем сумму
+            Task {
+                await loadGroupTotal()
+            }
+        }
+        .onChange(of: viewModel.state.displayCurrency) { oldValue, newValue in
+            // При изменении общей валюты перезагружаем сумму, если группа использует общую валюту
+            if group.displayCurrency == nil {
+                Task {
+                    await loadGroupTotal()
+                }
+            }
+        }
     }
     
     private func loadGroupTotal() async {
+        let currency = group.displayCurrency ?? viewModel.state.displayCurrency
         let total = await viewModel.calculateGroupTotal(
             group: group,
-            in: viewModel.state.displayCurrency
+            in: currency
         )
         viewModel.handle(.setGroupTotal(groupID, total))
+    }
+    
+    private var groupDisplayCurrency: String {
+        group.displayCurrency ?? viewModel.state.displayCurrency
     }
     
     private func formatBalance(_ balance: Double) -> String {
@@ -662,6 +677,9 @@ private struct FinanceGroupEditorView: View {
     
     @State private var name: String = ""
     @State private var selectedColor: Color = Color.blue
+    @State private var selectedCurrency: String? = nil
+    @State private var availableCurrencies: [String] = []
+    @State private var isLoadingCurrencies = true
     
     private let predefinedColors: [Color] = [
         .blue, .cyan, .green, .mint, .purple, .pink,
@@ -711,6 +729,31 @@ private struct FinanceGroupEditorView: View {
                         Text("Цвет группы")
                             .foregroundStyle(AppColors.textSecondary)
                     }
+                    
+                    Section {
+                        if isLoadingCurrencies {
+                            HStack {
+                                Spacer()
+                                ProgressView()
+                                    .tint(AppColors.textPrimary)
+                                Spacer()
+                            }
+                            .padding(.vertical, 8)
+                        } else {
+                            Picker("Валюта отображения", selection: $selectedCurrency) {
+                                Text("Использовать общую валюту")
+                                    .tag(nil as String?)
+                                ForEach(availableCurrencies, id: \.self) { currency in
+                                    Text(currency)
+                                        .tag(currency as String?)
+                                }
+                            }
+                            .foregroundStyle(AppColors.textPrimary)
+                        }
+                    } header: {
+                        Text("Валюта отображения")
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
                 }
                 .scrollContentBackground(.hidden)
             }
@@ -741,6 +784,7 @@ private struct FinanceGroupEditorView: View {
             .onAppear {
                 if let editing = viewModel.state.editingGroup {
                     name = editing.name
+                    selectedCurrency = editing.displayCurrency
                     // Находим соответствующий цвет из predefinedColors по hex-значению
                     let editingColorHex = editing.colorHex.uppercased()
                     if let matchingColor = predefinedColors.first(where: { color in
@@ -753,6 +797,9 @@ private struct FinanceGroupEditorView: View {
                     }
                 }
             }
+            .task {
+                await loadAvailableCurrencies()
+            }
         }
     }
     
@@ -762,8 +809,23 @@ private struct FinanceGroupEditorView: View {
     
     private func saveGroup() {
         let colorHex = selectedColor.toHex()
-        viewModel.handle(.updateGroup(name: name, colorHex: colorHex))
+        viewModel.handle(.updateGroup(name: name, colorHex: colorHex, displayCurrency: selectedCurrency))
         dismiss()
+    }
+    
+    private func loadAvailableCurrencies() async {
+        isLoadingCurrencies = true
+        defer { isLoadingCurrencies = false }
+        
+        _ = await CurrencyRateService.shared.getRate(from: "USD", to: "RUB")
+        
+        let fromRateSource = Set(CurrencyRateService.shared.getAvailableCurrencies())
+        let fromAccounts = Set(
+            viewModel.state.availableCards.map { $0.currency } +
+            viewModel.state.availableCredits.map { $0.currency } +
+            viewModel.state.availableInvestments.map { $0.currency }
+        )
+        availableCurrencies = Array(fromRateSource.union(fromAccounts)).sorted()
     }
 }
 
@@ -785,7 +847,7 @@ private struct FinanceAddAccountView: View {
                 group.groupUniqueID == selectedGroupID
             }
         }
-        return viewModel.state.selectedGroupForAccount ?? viewModel.state.defaultGroup
+        return viewModel.state.selectedGroupForAccount
     }
     
     var body: some View {
@@ -811,21 +873,29 @@ private struct FinanceAddAccountView: View {
                     }
                     
                     Section {
-                        Picker("Группа", selection: Binding(
-                            get: { selectedGroupID ?? (viewModel.state.defaultGroup?.groupUniqueID ?? "") },
-                            set: { selectedGroupID = $0.isEmpty ? nil : $0 }
-                        )) {
-                            ForEach(viewModel.state.groups) { group in
-                                HStack {
-                                    RoundedRectangle(cornerRadius: 2)
-                                        .fill(group.color)
-                                        .frame(width: 16, height: 16)
-                                    Text(group.name)
+                        if viewModel.state.groups.isEmpty {
+                            Text("Сначала создайте группу")
+                                .font(.system(size: 14))
+                                .foregroundStyle(AppColors.textTertiary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical, 8)
+                        } else {
+                            Picker("Группа", selection: Binding(
+                                get: { selectedGroupID ?? viewModel.state.selectedGroupForAccount?.groupUniqueID ?? viewModel.state.groups.first?.groupUniqueID ?? "" },
+                                set: { selectedGroupID = $0 }
+                            )) {
+                                ForEach(viewModel.state.groups) { group in
+                                    HStack {
+                                        RoundedRectangle(cornerRadius: 2)
+                                            .fill(group.color)
+                                            .frame(width: 16, height: 16)
+                                        Text(group.name)
+                                    }
+                                    .tag(group.groupUniqueID)
                                 }
-                                .tag(group.groupUniqueID)
                             }
+                            .foregroundStyle(AppColors.textPrimary)
                         }
-                        .foregroundStyle(AppColors.textPrimary)
                     } header: {
                         Text("Группа")
                             .foregroundStyle(AppColors.textSecondary)
@@ -1003,14 +1073,15 @@ private struct FinanceAddAccountView: View {
                 // Устанавливаем предустановленную группу, если она была выбрана
                 if let preselectedGroup = viewModel.state.selectedGroupForAccount {
                     selectedGroupID = preselectedGroup.groupUniqueID
-                } else if let defaultGroup = viewModel.state.defaultGroup {
-                    selectedGroupID = defaultGroup.groupUniqueID
+                } else if let firstGroup = viewModel.state.groups.first {
+                    selectedGroupID = firstGroup.groupUniqueID
                 }
             }
         }
     }
     
     private var isValid: Bool {
+        guard targetGroup != nil else { return false }
         switch selectedAccountType {
         case .card:
             return selectedCardID != nil
@@ -1022,6 +1093,8 @@ private struct FinanceAddAccountView: View {
     }
     
     private func addAccount() {
+        guard let targetGroup = targetGroup else { return }
+        
         let accountID: String?
         switch selectedAccountType {
         case .card:
@@ -1067,7 +1140,7 @@ private struct FinanceCreateCardView: View {
                     .onDisappear {
                         // После закрытия sheet добавляем карту в группу, если она была создана
                         if let cardID = createdCardID,
-                           let targetGroup = viewModel.state.selectedGroupForAccount ?? viewModel.state.defaultGroup {
+                           let targetGroup = viewModel.state.selectedGroupForAccount {
                             viewModel.handle(.addAccountToGroup(
                                 accountType: .card,
                                 accountID: cardID,
@@ -1110,7 +1183,7 @@ private struct FinanceCreateCreditView: View {
                     .onDisappear {
                         // После закрытия sheet добавляем кредит в группу, если он был создан
                         if let creditID = createdCreditID,
-                           let targetGroup = viewModel.state.selectedGroupForAccount ?? viewModel.state.defaultGroup {
+                           let targetGroup = viewModel.state.selectedGroupForAccount {
                             viewModel.handle(.addAccountToGroup(
                                 accountType: .credit,
                                 accountID: creditID,
@@ -1153,7 +1226,7 @@ private struct FinanceCreateInvestmentView: View {
                     .onDisappear {
                         // После закрытия sheet добавляем актив в группу, если он был создан
                         if let investmentID = createdInvestmentID,
-                           let targetGroup = viewModel.state.selectedGroupForAccount ?? viewModel.state.defaultGroup {
+                           let targetGroup = viewModel.state.selectedGroupForAccount {
                             viewModel.handle(.addAccountToGroup(
                                 accountType: .investment,
                                 accountID: investmentID,
@@ -1255,3 +1328,4 @@ private struct DisplayCurrencySheet: View {
         availableCurrencies = Array(fromRateSource.union(fromAccounts)).sorted()
     }
 }
+

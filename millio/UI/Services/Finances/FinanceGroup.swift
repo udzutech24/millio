@@ -27,6 +27,9 @@ final class FinanceGroup: Persistable {
     /// Порядок сортировки
     var order: Int = 0
     
+    /// Валюта отображения суммы группы (nil = использовать общую валюту)
+    var displayCurrency: String? = nil
+    
     /// Связанные счета
     @Relationship(deleteRule: .cascade) var accounts: [FinanceAccount]? = nil
     
@@ -49,7 +52,7 @@ final class FinanceGroup: Persistable {
     }
     
     func export() throws -> Data {
-        let dict: [String: Any] = [
+        var dict: [String: Any] = [
             "type": "FinanceGroup",
             "name": name,
             "colorHex": colorHex,
@@ -58,6 +61,9 @@ final class FinanceGroup: Persistable {
             "order": order,
             "groupUniqueID": groupUniqueID
         ]
+        if let displayCurrency = displayCurrency {
+            dict["displayCurrency"] = displayCurrency
+        }
         
         return try JSONSerialization.data(withJSONObject: dict)
     }

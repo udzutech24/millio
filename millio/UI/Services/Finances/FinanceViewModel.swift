@@ -16,8 +16,6 @@ struct FinanceState {
     /// Все группы
     var groups: [FinanceGroup] = []
     
-    /// Дефолтная группа "Без группы"
-    var defaultGroup: FinanceGroup?
     
     /// Показывать ли экран создания/редактирования группы
     var showGroupEditor: Bool = false
@@ -79,7 +77,7 @@ enum FinanceAction {
     case addGroup
     case editGroup(FinanceGroup)
     case deleteGroup(FinanceGroup)
-    case updateGroup(name: String, colorHex: String)
+    case updateGroup(name: String, colorHex: String, displayCurrency: String?)
     case hideGroupEditor
     case showAddAccountSheet(FinanceGroup?)
     case hideAddAccountSheet
@@ -141,8 +139,8 @@ final class FinanceViewModel: ViewModelProtocol {
         case .deleteGroup(let group):
             deleteGroup(group)
             
-        case .updateGroup(let name, let colorHex):
-            updateGroup(name: name, colorHex: colorHex)
+        case .updateGroup(let name, let colorHex, let displayCurrency):
+            updateGroup(name: name, colorHex: colorHex, displayCurrency: displayCurrency)
             
         case .hideGroupEditor:
             state.showGroupEditor = false
@@ -220,29 +218,7 @@ final class FinanceViewModel: ViewModelProtocol {
         )
         if let groups = try? modelContext.fetch(descriptor) {
             state.groups = groups
-            
-            // Ищем или создаем дефолтную группу
-            state.defaultGroup = groups.first { $0.name == "Без группы" }
-            if state.defaultGroup == nil {
-                createDefaultGroup()
-            }
-            
             calculateTotalAmount()
-        }
-    }
-    
-    private func createDefaultGroup() {
-        // Находим максимальный order
-        let maxOrder = state.groups.map { $0.order }.max() ?? -1
-        let defaultGroup = FinanceGroup(name: "Без группы", colorHex: "#808080", order: maxOrder + 1)
-        modelContext.insert(defaultGroup)
-        
-        do {
-            try modelContext.save()
-            state.defaultGroup = defaultGroup
-            state.groups.append(defaultGroup)
-        } catch {
-            AppLogger.log(.error, category: "Finance", "Failed to create default group: \(error.localizedDescription)")
         }
     }
     
@@ -400,15 +376,16 @@ final class FinanceViewModel: ViewModelProtocol {
     }
     
     private func deleteGroup(_ group: FinanceGroup) {
-        // Нельзя удалить дефолтную группу
-        if group.name == "Без группы" {
-            return
-        }
-        
-        // Перемещаем все счета из удаляемой группы в дефолтную
-        if let defaultGroup = state.defaultGroup, let accounts = group.accounts {
-            for account in accounts {
-                account.group = defaultGroup
+        // Перемещаем все счета из удаляемой группы в первую доступную группу
+        if let accounts = group.accounts, !accounts.isEmpty {
+            // Находим первую доступную группу (не удаляемую)
+            if let targetGroup = state.groups.first(where: { $0.id != group.id }) {
+                for account in accounts {
+                    account.group = targetGroup
+                }
+            } else {
+                // Если нет других групп, удаляем счета вместе с группой
+                // (они будут удалены каскадно через deleteRule: .cascade)
             }
         }
         
@@ -422,16 +399,21 @@ final class FinanceViewModel: ViewModelProtocol {
         }
     }
     
-    private func updateGroup(name: String, colorHex: String) {
+    private func updateGroup(name: String, colorHex: String, displayCurrency: String?) {
+        let groupToUpdate: FinanceGroup
         if let existing = state.editingGroup {
             existing.name = name
             existing.colorHex = colorHex
+            existing.displayCurrency = displayCurrency
             existing.updatedAt = Date()
+            groupToUpdate = existing
         } else {
             // Находим максимальный order
             let maxOrder = state.groups.map { $0.order }.max() ?? -1
             let newGroup = FinanceGroup(name: name, colorHex: colorHex, order: maxOrder + 1)
+            newGroup.displayCurrency = displayCurrency
             modelContext.insert(newGroup)
+            groupToUpdate = newGroup
         }
         
         do {
@@ -439,16 +421,21 @@ final class FinanceViewModel: ViewModelProtocol {
             loadGroups()
             state.showGroupEditor = false
             state.editingGroup = nil
+            // Пересчитываем сумму группы если изменилась валюта
+            let groupID = groupToUpdate.groupUniqueID
+            Task {
+                let currency = displayCurrency ?? state.displayCurrency
+                let total = await calculateGroupTotal(group: groupToUpdate, in: currency)
+                state.groupTotals[groupID] = total
+            }
         } catch {
             AppLogger.log(.error, category: "Finance", "Failed to save group: \(error.localizedDescription)")
         }
     }
     
     private func addAccountToGroup(accountType: FinanceAccountType, accountID: String, group: FinanceGroup?) {
-        let targetGroup = group ?? state.defaultGroup
-        
-        guard let targetGroup = targetGroup else {
-            AppLogger.log(.error, category: "Finance", "Default group not found")
+        guard let targetGroup = group else {
+            AppLogger.log(.error, category: "Finance", "Group is required")
             return
         }
         
