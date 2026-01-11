@@ -115,6 +115,36 @@ final class DataRepository: DataRepositoryProtocol {
                     }
                 }
             }
+            
+            // Экспортируем Habit
+            if typeName == "Habit" {
+                let habitDescriptor = FetchDescriptor<Habit>()
+                let habits = try modelContext.fetch(habitDescriptor)
+                
+                for habit in habits {
+                    let data = try habit.export()
+                    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                        var habitDict = json
+                        habitDict["_type"] = typeName
+                        modelsData.append(habitDict)
+                    }
+                }
+            }
+            
+            // Экспортируем HabitEntry
+            if typeName == "HabitEntry" {
+                let entryDescriptor = FetchDescriptor<HabitEntry>()
+                let entries = try modelContext.fetch(entryDescriptor)
+                
+                for entry in entries {
+                    let data = try entry.export()
+                    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                        var entryDict = json
+                        entryDict["_type"] = typeName
+                        modelsData.append(entryDict)
+                    }
+                }
+            }
         }
         
         // Обновляем metadata с реальным количеством моделей
@@ -275,6 +305,18 @@ final class DataRepository: DataRepositoryProtocol {
                 let credits = try modelContext.fetch(creditDescriptor)
                 for credit in credits {
                     modelContext.delete(credit)
+                }
+            } else if typeName == "HabitEntry" {
+                let entryDescriptor = FetchDescriptor<HabitEntry>()
+                let entries = try modelContext.fetch(entryDescriptor)
+                for entry in entries {
+                    modelContext.delete(entry)
+                }
+            } else if typeName == "Habit" {
+                let habitDescriptor = FetchDescriptor<Habit>()
+                let habits = try modelContext.fetch(habitDescriptor)
+                for habit in habits {
+                    modelContext.delete(habit)
                 }
             }
         }
