@@ -34,28 +34,14 @@ struct CashbackView: View {
 private struct CashbackContentViewInternal: View {
     @ObservedObject var viewModel: CashbackViewModel
     
-    var filteredCashbacks: [Cashback] {
-        if viewModel.state.searchText.isEmpty {
-            return viewModel.state.cashbacks
-        }
-        let searchLower = viewModel.state.searchText.lowercased()
-        return viewModel.state.cashbacks.filter { cashback in
-            cashback.name.lowercased().contains(searchLower) ||
-            cashback.category.displayName.lowercased().contains(searchLower)
-        }
-    }
-    
     var body: some View {
         ZStack {
             GradientBackground()
             
             ScrollView {
                 VStack(spacing: 24) {
-                    // Поиск
-                    searchSection
-                    
                     // Список кешбэков
-                    if filteredCashbacks.isEmpty {
+                    if viewModel.state.cashbacks.isEmpty {
                         emptyStateView
                     } else {
                         cashbacksList
@@ -92,38 +78,6 @@ private struct CashbackContentViewInternal: View {
         }
     }
     
-    // MARK: - Search Section
-    
-    private var searchSection: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(AppColors.textTertiary)
-            
-            TextField("Поиск кешбэков...", text: Binding(
-                get: { viewModel.state.searchText },
-                set: { viewModel.handle(.search($0)) }
-            ))
-            .font(.system(size: 16, weight: .regular))
-            .foregroundStyle(AppColors.textPrimary)
-            
-            if !viewModel.state.searchText.isEmpty {
-                Button {
-                    viewModel.handle(.search(""))
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(AppColors.textTertiary)
-                }
-            }
-        }
-        .padding(16)
-        .background {
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
-        }
-    }
-    
     // MARK: - Empty State
     
     private var emptyStateView: some View {
@@ -154,7 +108,7 @@ private struct CashbackContentViewInternal: View {
     
     private var cashbacksList: some View {
         VStack(spacing: 16) {
-            ForEach(filteredCashbacks) { cashback in
+            ForEach(viewModel.state.cashbacks) { cashback in
                 CashbackRowView(cashback: cashback, viewModel: viewModel)
             }
         }
@@ -192,33 +146,25 @@ private struct CashbackRowView: View {
                         }
                     
                     // Информация
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(cashback.name)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(cashback.category.displayName)
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
+                            .lineLimit(1)
                         
-                        HStack(spacing: 8) {
-                            Text(cashback.category.displayName)
-                                .font(.system(size: 14, weight: .regular))
-                                .foregroundStyle(AppColors.textSecondary)
-                            
-                            Text("•")
-                                .font(.system(size: 14, weight: .regular))
-                                .foregroundStyle(AppColors.textTertiary)
-                            
-                            Text(cashback.formattedPercentage)
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: AppColors.cashbackGradient,
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
+                        Text(cashback.formattedPercentage)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: AppColors.cashbackGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
                                 )
-                        }
+                            )
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    Spacer()
+                    Spacer(minLength: 0)
                     
                     HStack(spacing: 8) {
                         // Кнопка удаления
@@ -359,7 +305,6 @@ private struct CashbackEditorView: View {
     @ObservedObject var viewModel: CashbackViewModel
     @Environment(\.dismiss) private var dismiss
     
-    @State private var name: String = ""
     @State private var selectedCategory: CashbackCategory = .other
     @State private var percentageText: String = ""
     @State private var selectedCardIDs: Set<String> = []
@@ -376,22 +321,6 @@ private struct CashbackEditorView: View {
                 
                 ScrollView {
                     VStack(spacing: 24) {
-                        // Название
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Название")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(AppColors.textPrimary)
-                            
-                            TextField("Например: Заправки", text: $name)
-                                .font(.system(size: 16, weight: .regular))
-                                .foregroundStyle(AppColors.textPrimary)
-                                .padding(16)
-                                .background {
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .fill(.ultraThinMaterial)
-                                }
-                        }
-                        
                         // Категория
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Категория")
@@ -662,7 +591,6 @@ private struct CashbackEditorView: View {
             }
             .onAppear {
                 if let editing = viewModel.state.editingCashback {
-                    name = editing.name
                     selectedCategory = editing.category
                     percentageText = String(format: "%.1f", editing.percentage)
                     // Фильтруем только существующие карты для отображения
@@ -677,14 +605,12 @@ private struct CashbackEditorView: View {
     }
     
     private func saveCashback() {
-        guard !name.isEmpty,
-              let percentage = Double(percentageText.replacingOccurrences(of: ",", with: ".")),
+        guard let percentage = Double(percentageText.replacingOccurrences(of: ",", with: ".")),
               percentage >= 0 && percentage <= 100 else {
             return
         }
         
         viewModel.handle(.updateCashback(
-            name: name,
             category: selectedCategory,
             percentage: percentage,
             cardIDs: Array(selectedCardIDs)

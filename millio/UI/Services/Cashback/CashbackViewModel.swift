@@ -28,8 +28,6 @@ struct CashbackState {
     /// Все доступные карты
     var availableCards: [Card] = []
     
-    /// Текст поиска
-    var searchText: String = ""
 }
 
 // MARK: - Cashback Actions
@@ -40,12 +38,11 @@ enum CashbackAction {
     case addCashback
     case editCashback(Cashback)
     case deleteCashback(Cashback)
-    case updateCashback(name: String, category: CashbackCategory, percentage: Double, cardIDs: [String])
+    case updateCashback(category: CashbackCategory, percentage: Double, cardIDs: [String])
     case showCashbackEditor
     case hideCashbackEditor
     case showCardPicker
     case hideCardPicker
-    case search(String)
 }
 
 // MARK: - Cashback ViewModel
@@ -83,8 +80,8 @@ final class CashbackViewModel: ViewModelProtocol {
         case .deleteCashback(let cashback):
             deleteCashback(cashback)
             
-        case .updateCashback(let name, let category, let percentage, let cardIDs):
-            updateCashback(name: name, category: category, percentage: percentage, cardIDs: cardIDs)
+        case .updateCashback(let category, let percentage, let cardIDs):
+            updateCashback(category: category, percentage: percentage, cardIDs: cardIDs)
             
         case .showCashbackEditor:
             state.showCashbackEditor = true
@@ -100,9 +97,6 @@ final class CashbackViewModel: ViewModelProtocol {
         case .hideCardPicker:
             state.showCardPicker = false
             
-        case .search(let text):
-            state.searchText = text
-            applyFilters()
         }
     }
     
@@ -178,22 +172,21 @@ final class CashbackViewModel: ViewModelProtocol {
         }
     }
     
-    private func updateCashback(name: String, category: CashbackCategory, percentage: Double, cardIDs: [String]) {
+    private func updateCashback(category: CashbackCategory, percentage: Double, cardIDs: [String]) {
         // Фильтруем только существующие карты перед сохранением
         let availableCardIDs = Set(state.availableCards.map { String(describing: $0.persistentModelID) })
         let validCardIDs = cardIDs.filter { availableCardIDs.contains($0) }
         
         if let existing = state.editingCashback {
             // Обновляем существующий кешбэк
-            existing.name = name
             existing.category = category
             existing.percentage = percentage
             existing.cardIDs = validCardIDs
             existing.updatedAt = Date()
         } else {
-            // Создаем новый кешбэк
+            // Создаем новый кешбэк (name будет пустым, используется только категория)
             let newCashback = Cashback(
-                name: name,
+                name: "",
                 category: category,
                 percentage: percentage,
                 cardIDs: validCardIDs
