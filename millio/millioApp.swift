@@ -17,7 +17,6 @@ struct millioApp: App {
     
     var sharedModelContainer: ModelContainer? = {
         // Регистрируем фичи ДО создания схемы
-        WaterFeatureRegistration.register()
         CardFeatureRegistration.register()
         
         let schema = AppSchema.create()
@@ -88,7 +87,6 @@ struct millioApp: App {
     
     private func initializeApp(container: ModelContainer) async {
         // Фичи уже зарегистрированы при создании ModelContainer
-        // WaterFeatureRegistration.register() вызывается в sharedModelContainer
         
         // Используем DIContainer для создания зависимостей
         let container = DIContainer.create(

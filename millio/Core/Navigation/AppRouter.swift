@@ -18,10 +18,8 @@ enum AppRoute: Hashable {
     case courses
     case cashback
     case credits
-    case water
     case habits
     case cardIndex
-    case games
     
     // Other screens
     case profile

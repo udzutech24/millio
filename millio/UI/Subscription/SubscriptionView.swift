@@ -74,7 +74,7 @@ struct SubscriptionView: View {
                             FeatureRow(
                                 icon: "icloud.fill",
                                 text: "Неограниченное резервное копирование",
-                                gradient: AppColors.waterGradient
+                                gradient: AppColors.cashbackGradient
                             )
                             
                             FeatureRow(

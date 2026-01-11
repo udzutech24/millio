@@ -126,37 +126,19 @@ struct MainAppView: View {
                         
                         HStack(spacing: 16) {
                             ServiceButton(
-                                title: "Вода",
-                                icon: "drop.fill",
-                                gradientColors: AppColors.waterGradient
-                            ) {
-                                viewModel.handle(.navigateToService(.water))
-                            }
-                            
-                            ServiceButton(
                                 title: "Привычки",
                                 icon: "clock.fill",
                                 gradientColors: AppColors.habitsGradient
                             ) {
                                 viewModel.handle(.navigateToService(.habits))
                             }
-                        }
-                        
-                        HStack(spacing: 16) {
+                            
                             ServiceButton(
                                 title: "Картотека",
                                 icon: "archivebox.fill",
                                 gradientColors: AppColors.cardIndexGradient
                             ) {
                                 viewModel.handle(.navigateToService(.cardIndex))
-                            }
-                            
-                            ServiceButton(
-                                title: "Игры",
-                                icon: "gamecontroller.fill",
-                                gradientColors: AppColors.gamesGradient
-                            ) {
-                                viewModel.handle(.navigateToService(.games))
                             }
                         }
                     }
@@ -203,14 +185,10 @@ struct MainAppView: View {
             CashbackView()
         case .credits:
             CreditsView()
-        case .water:
-            WaterView()
         case .habits:
             HabitsView()
         case .cardIndex:
             CardIndexView()
-        case .games:
-            GamesView()
         case .profile:
             ProfileView(router: router)
         case .notifications:

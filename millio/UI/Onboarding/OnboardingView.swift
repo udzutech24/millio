@@ -57,7 +57,7 @@ struct OnboardingView: View {
                             icon: "icloud.fill",
                             title: "Резервное копирование",
                             description: "Автоматическое сохранение в iCloud",
-                            gradient: AppColors.waterGradient
+                            gradient: AppColors.cashbackGradient
                         )
                         
                         FeatureCard(
