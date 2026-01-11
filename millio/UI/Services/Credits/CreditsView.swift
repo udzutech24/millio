@@ -428,7 +428,7 @@ private struct CreditRow: View {
                                 }
                             }
                             
-                            HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 8) {
                                 // Остаток долга
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Остаток:")
