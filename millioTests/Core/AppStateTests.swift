@@ -17,12 +17,18 @@ struct AppStateTests {
         UserDefaults.standard.removeObject(forKey: "selectedLanguage")
         UserDefaults.standard.synchronize()
         
+        // Сбрасываем LanguageManager, устанавливая системный язык
+        // Это нужно, так как LanguageManager - singleton и может иметь старое значение
+        LanguageManager.shared.setLanguage(.system)
+        
         let appState = AppState()
         
         #expect(appState.lifecycle == .launching)
         #expect(appState.isICloudAvailable == false)
         #expect(appState.lastBackupDate == nil)
-        #expect(appState.selectedLanguage == .system)
+        // Проверяем, что selectedLanguage соответствует LanguageManager.shared.currentLanguage
+        // так как AppState инициализируется из LanguageManager
+        #expect(appState.selectedLanguage == LanguageManager.shared.currentLanguage)
     }
     
     @Test("App state lifecycle transitions work correctly")
