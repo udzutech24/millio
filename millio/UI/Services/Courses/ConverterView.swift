@@ -144,14 +144,19 @@ struct ConverterView: View {
         }
         .sheet(isPresented: Binding(
             get: { viewModel.state.showShareSheet },
-            set: { viewModel.state.showShareSheet = $0 }
+            set: { 
+                if !$0 {
+                    viewModel.state.showShareSheet = false
+                    viewModel.state.shareImage = nil
+                }
+            }
         )) {
-            if let img = viewModel.state.shareImage {
 #if os(iOS)
+            if let img = viewModel.state.shareImage {
                 ActivityView(activityItems: [ImageItem(image: img, compressionQuality: 0.92)])
                     .ignoresSafeArea()
-#endif
             }
+#endif
         }
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
@@ -232,91 +237,113 @@ struct ConverterView: View {
     
     private var settingsSheet: some View {
         NavigationStack {
-            List {
-                Section("Курс") {
-                    DisclosureGroup {
-                        ForEach(RateSource.allCases) { src in
-                            Button {
-                                viewModel.handle(.setRateSource(src))
-                            } label: {
-                                HStack(alignment: .center, spacing: 10) {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(src.title)
-                                        Text(src.subtitle)
-                                            .font(.caption)
-                                            .foregroundStyle(AppColors.textTertiary)
+            ZStack {
+                GradientBackground()
+                
+                List {
+                    Section {
+                        DisclosureGroup {
+                            ForEach(RateSource.allCases) { src in
+                                Button {
+                                    viewModel.handle(.setRateSource(src))
+                                } label: {
+                                    HStack(alignment: .center, spacing: 10) {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(src.title)
+                                                .font(.body)
+                                                .foregroundStyle(AppColors.textPrimary)
+                                            Text(src.subtitle)
+                                                .font(.caption)
+                                                .foregroundStyle(AppColors.textTertiary)
+                                        }
+                                        Spacer()
+                                        if src == viewModel.state.rateSource {
+                                            Image(systemName: "checkmark")
+                                                .foregroundStyle(
+                                                    LinearGradient(
+                                                        colors: AppColors.coursesGradient,
+                                                        startPoint: .leading,
+                                                        endPoint: .trailing
+                                                    )
+                                                )
+                                        }
                                     }
-                                    Spacer()
-                                    if src == viewModel.state.rateSource {
-                                        Image(systemName: "checkmark")
-                                            .foregroundStyle(AppColors.coursesGradient.first!)
-                                    }
+                                    .padding(.vertical, 4)
                                 }
                             }
+                        } label: {
+                            HStack {
+                                Text("Источник курса")
+                                    .foregroundStyle(AppColors.textPrimary)
+                                Spacer()
+                                Text(viewModel.state.rateSource.title)
+                                    .font(.subheadline)
+                                    .foregroundStyle(AppColors.textTertiary)
+                            }
                         }
-                    } label: {
+                        
                         HStack {
-                            Text("Источник курса")
+                            Text("Последнее обновление")
+                                .foregroundStyle(AppColors.textPrimary)
                             Spacer()
-                            Text(viewModel.state.rateSource.title)
+                            Text(viewModel.lastUpdatedText)
+                                .font(.subheadline)
                                 .foregroundStyle(AppColors.textTertiary)
                         }
-                    }
-                    
-                    Toggle("Показывать индикатор без интернета", isOn: Binding(
-                        get: { viewModel.state.showOfflineBadge },
-                        set: { viewModel.handle(.setShowOfflineBadge($0)) }
-                    ))
-                    
-                    HStack {
-                        Text("Последнее обновление")
-                        Spacer()
-                        Text(viewModel.lastUpdatedText)
-                            .font(.subheadline)
-                            .foregroundStyle(AppColors.textTertiary)
-                    }
-                    
-                    Button {
-                        viewModel.handle(.refreshRates(force: true))
-                    } label: {
-                        Label("Обновить курсы", systemImage: "arrow.clockwise")
-                    }
-                }
-                
-                Section("Точность") {
-                    Picker("Знаков после запятой", selection: Binding(
-                        get: { viewModel.state.fractionDigits },
-                        set: { viewModel.handle(.setFractionDigits($0)) }
-                    )) {
-                        ForEach(0...8, id: \.self) { n in
-                            Text("\(n)").tag(n)
+                        
+                        Button {
+                            viewModel.handle(.refreshRates(force: true))
+                        } label: {
+                            HStack {
+                                Image(systemName: "arrow.clockwise")
+                                Text("Обновить курсы")
+                            }
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: AppColors.coursesGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
                         }
+                    } header: {
+                        Text("Курс")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
                     }
-                    .pickerStyle(.segmented)
-                }
-                
-                Section("Ощущения") {
-                    Toggle("Тактильный отклик", isOn: Binding(
-                        get: { viewModel.state.hapticsEnabled },
-                        set: { viewModel.handle(.setHapticsEnabled($0)) }
-                    ))
-                }
-                
-                Section("Виджет") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Виджет можно добавить как отдельный target (WidgetKit) и читать настройки конвертора через App Group / UserDefaults.")
-                            .font(.footnote)
-                            .foregroundStyle(AppColors.textTertiary)
-                        Text("Если хочешь — я дам готовый WidgetKit target под твой дизайн.")
-                            .font(.footnote)
-                            .foregroundStyle(AppColors.textTertiary)
+                    
+                    Section {
+                        Picker("Знаков после запятой", selection: Binding(
+                            get: { viewModel.state.fractionDigits },
+                            set: { viewModel.handle(.setFractionDigits($0)) }
+                        )) {
+                            ForEach(0...8, id: \.self) { n in
+                                Text("\(n)").tag(n)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                    } header: {
+                        Text("Точность")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
                     }
-                    .padding(.vertical, 4)
+                    
+                    Section {
+                        Toggle("Тактильный отклик", isOn: Binding(
+                            get: { viewModel.state.hapticsEnabled },
+                            set: { viewModel.handle(.setHapticsEnabled($0)) }
+                        ))
+                        .foregroundStyle(AppColors.textPrimary)
+                    } header: {
+                        Text("Ощущения")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                    }
                 }
+                .listStyle(.insetGrouped)
+                .scrollContentBackground(.hidden)
+                .background(Color.clear)
             }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
-            .background(Color.clear)
             .navigationTitle("Конвертор")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -324,6 +351,7 @@ struct ConverterView: View {
                     Button("Готово") {
                         viewModel.handle(.hideSettingsSheet)
                     }
+                    .foregroundStyle(AppColors.textPrimary)
                 }
             }
         }
@@ -344,15 +372,6 @@ struct ConverterView: View {
         
         ToolbarItem(placement: .topBarTrailing) {
             HStack(spacing: 12) {
-                
-                if let iconName = viewModel.connectivityIconName {
-                    Image(systemName: iconName)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(iconName == "wifi.slash" ? AppColors.error.opacity(0.9) : AppColors.textTertiary)
-                        .frame(width: 28, height: 28)
-                        .accessibilityLabel("Состояние курсов")
-                }
-                
                 Button {
                     guard viewModel.canRemoveCurrency else { return }
                     viewModel.handle(.removeLastCurrency)
@@ -383,10 +402,6 @@ struct ConverterView: View {
                     Image(systemName: "square.and.arrow.up")
                         .font(.title3.weight(.semibold))
                         .frame(width: 28, height: 28)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .overlay(Capsule().strokeBorder(Color.primary.opacity(0.1), lineWidth: 1))
                 }
                 .accessibilityLabel("Поделиться")
                 
@@ -420,6 +435,11 @@ struct ConverterView: View {
             .buttonStyle(.plain)
             
             Button {
+                #if os(iOS)
+                if viewModel.state.hapticsEnabled {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                }
+                #endif
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
                     viewModel.handle(.selectCurrency(code))
                 }

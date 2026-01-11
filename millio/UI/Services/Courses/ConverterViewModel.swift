@@ -594,8 +594,20 @@ final class ConverterViewModel: ViewModelProtocol {
             state.allRates = rates
             storedLastRatesTS = updateTS
             state.isOffline = false
+            
+            #if os(iOS)
+            if haptic && state.hapticsEnabled {
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            }
+            #endif
         } catch {
             state.isOffline = true
+            
+            #if os(iOS)
+            if haptic && state.hapticsEnabled {
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
+            }
+            #endif
         }
     }
     
