@@ -90,6 +90,16 @@ private struct CardContentViewInternal: View {
         )) {
             CurrencyFilterSheet(viewModel: viewModel)
         }
+        .sheet(isPresented: Binding(
+            get: { viewModel.state.showDisplayCurrencySheet },
+            set: { if !$0 { viewModel.handle(.hideDisplayCurrencySheet) } }
+        )) {
+            DisplayCurrencySheet(viewModel: viewModel)
+        }
+        .task {
+            // Загружаем курсы при появлении экрана
+            await viewModel.refreshRates()
+        }
     }
     
     // MARK: - Stats Section
@@ -110,19 +120,51 @@ private struct CardContentViewInternal: View {
                 Spacer()
                 
                 VStack(alignment: .trailing, spacing: 4) {
-                    Text("Общий баланс")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(AppColors.textTertiary)
-                    
-                    Text(formatBalance(viewModel.state.totalBalance))
-                        .font(.system(size: 32, weight: .bold))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: AppColors.cardIndexGradient,
-                                startPoint: .leading,
-                                endPoint: .trailing
+                    HStack(spacing: 8) {
+                        Text("Общий баланс")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(AppColors.textTertiary)
+                        
+                        Button {
+                            viewModel.handle(.showDisplayCurrencySheet)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(viewModel.state.displayCurrency)
+                                    .font(.system(size: 14, weight: .semibold))
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 10, weight: .semibold))
+                            }
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: AppColors.cardIndexGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
                             )
-                        )
+                        }
+                    }
+                    
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(formatBalance(viewModel.state.totalBalance))
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: AppColors.cardIndexGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                        
+                        Text(viewModel.state.displayCurrency)
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
+                    
+                    if viewModel.state.isLoadingRates {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                            .tint(AppColors.textTertiary)
+                    }
                 }
             }
             .padding(.vertical, 20)
@@ -941,6 +983,69 @@ private struct CurrencyFilterSheet: View {
                 .scrollContentBackground(.hidden)
             }
             .navigationTitle("Выбор валюты")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Готово") {
+                        dismiss()
+                    }
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: AppColors.cardIndexGradient,
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                }
+            }
+        }
+    }
+}
+
+private struct DisplayCurrencySheet: View {
+    @ObservedObject var viewModel: CardViewModel
+    @Environment(\.dismiss) private var dismiss
+    
+    // Стандартные валюты + валюты из карт
+    private var availableCurrencies: [String] {
+        let standard = ["RUB", "USD", "EUR", "GBP", "CNY", "JPY", "KZT", "TRY"]
+        let fromCards = Set(viewModel.state.cards.map { $0.currency })
+        return Array(Set(standard + fromCards)).sorted()
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                GradientBackground()
+                
+                List {
+                    ForEach(availableCurrencies, id: \.self) { currency in
+                        Button {
+                            viewModel.handle(.setDisplayCurrency(currency))
+                            dismiss()
+                        } label: {
+                            HStack {
+                                Text(currency)
+                                    .foregroundStyle(AppColors.textPrimary)
+                                Spacer()
+                                if viewModel.state.displayCurrency == currency {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(
+                                            LinearGradient(
+                                                colors: AppColors.cardIndexGradient,
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                }
+                            }
+                        }
+                        .listRowBackground(Color.clear)
+                    }
+                }
+                .scrollContentBackground(.hidden)
+            }
+            .navigationTitle("Валюта отображения")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {

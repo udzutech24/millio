@@ -49,11 +49,20 @@ struct CardState {
     /// Показывать ли sheet выбора валюты
     var showCurrencyFilterSheet: Bool = false
     
-    /// Общий баланс всех карт
+    /// Показывать ли sheet выбора валюты для отображения общего баланса
+    var showDisplayCurrencySheet: Bool = false
+    
+    /// Валюта для отображения общего баланса
+    var displayCurrency: String = "RUB"
+    
+    /// Общий баланс всех карт (в выбранной валюте)
     var totalBalance: Double = 0.0
     
-    /// Баланс по валютам
+    /// Баланс по валютам (оригинальные значения)
     var balanceByCurrency: [String: Double] = [:]
+    
+    /// Флаг загрузки курсов
+    var isLoadingRates: Bool = false
 }
 
 // MARK: - Card Actions
@@ -80,6 +89,9 @@ enum CardAction {
     case hideCardTypeFilterSheet
     case showCurrencyFilterSheet
     case hideCurrencyFilterSheet
+    case showDisplayCurrencySheet
+    case hideDisplayCurrencySheet
+    case setDisplayCurrency(String)
 }
 
 // MARK: - Card ViewModel
@@ -90,8 +102,16 @@ final class CardViewModel: ViewModelProtocol {
     
     let modelContext: ModelContext
     
+    private let defaults = UserDefaults.standard
+    
+    private var storedDisplayCurrency: String {
+        get { defaults.string(forKey: "card_display_currency") ?? "RUB" }
+        set { defaults.set(newValue, forKey: "card_display_currency") }
+    }
+    
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
+        state.displayCurrency = storedDisplayCurrency
         loadCards()
     }
     
@@ -171,6 +191,17 @@ final class CardViewModel: ViewModelProtocol {
             
         case .hideCurrencyFilterSheet:
             state.showCurrencyFilterSheet = false
+            
+        case .showDisplayCurrencySheet:
+            state.showDisplayCurrencySheet = true
+            
+        case .hideDisplayCurrencySheet:
+            state.showDisplayCurrencySheet = false
+            
+        case .setDisplayCurrency(let currency):
+            state.displayCurrency = currency
+            storedDisplayCurrency = currency
+            calculateStats()
         }
     }
     
@@ -227,13 +258,52 @@ final class CardViewModel: ViewModelProtocol {
     }
     
     private func calculateStats() {
-        state.totalBalance = state.cards.reduce(0) { $0 + $1.balance }
-        
+        // Сначала считаем балансы по валютам (оригинальные значения)
         var balanceByCurrency: [String: Double] = [:]
         for card in state.cards {
             balanceByCurrency[card.currency, default: 0] += card.balance
         }
         state.balanceByCurrency = balanceByCurrency
+        
+        // Затем конвертируем общий баланс в выбранную валюту
+        Task {
+            await calculateTotalBalance()
+        }
+    }
+    
+    private func calculateTotalBalance() async {
+        let displayCurrency = state.displayCurrency
+        var total: Double = 0.0
+        
+        for (currency, amount) in state.balanceByCurrency {
+            if currency == displayCurrency {
+                total += amount
+            } else {
+                // Конвертируем через CurrencyRateService
+                if let converted = await CurrencyRateService.shared.convert(
+                    amount: amount,
+                    from: currency,
+                    to: displayCurrency
+                ) {
+                    total += converted
+                } else {
+                    // Если курс недоступен, просто суммируем (fallback)
+                    total += amount
+                }
+            }
+        }
+        
+        state.totalBalance = total
+    }
+    
+    func refreshRates() async {
+        state.isLoadingRates = true
+        defer { state.isLoadingRates = false }
+        
+        // Просто вызываем refreshRates у сервиса, чтобы обновить кэш
+        // Затем пересчитываем баланс
+        _ = await CurrencyRateService.shared.getRate(from: "USD", to: "RUB")
+        await calculateTotalBalance()
     }
     
     private func deleteCard(_ card: Card) {
