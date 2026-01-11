@@ -387,8 +387,15 @@ final class ConverterViewModel: ViewModelProtocol {
             state.entering = true
             state.justEvaluated = false
         }
-        if !state.inputText.isEmpty { state.inputText.removeLast() }
+        // Не удаляем, если остался только "0"
+        if state.inputText.count > 1 {
+            state.inputText.removeLast()
+        } else if state.inputText != "0" && !state.inputText.isEmpty {
+            state.inputText.removeLast()
+        }
         if state.inputText.isEmpty || state.inputText == "-" { state.inputText = "0" }
+        
+        // Обновляем expressionText синхронно с inputText
         if !state.expressionText.isEmpty {
             state.expressionText.removeLast()
         }
@@ -415,10 +422,31 @@ final class ConverterViewModel: ViewModelProtocol {
         
         if state.inputText == "0" && s != decSep {
             state.inputText = s
+            // Заменяем последний "0" в expressionText на новую цифру, если он действительно последний
+            // (не часть числа типа "10" или "20")
+            if !state.expressionText.isEmpty {
+                let lastChar = state.expressionText.last!
+                // Если последний символ - "0" и перед ним оператор или начало выражения
+                if lastChar == "0" {
+                    // Проверяем, что это действительно отдельный "0", а не часть числа
+                    let beforeLast = state.expressionText.count > 1 ? state.expressionText[state.expressionText.index(state.expressionText.endIndex, offsetBy: -2)] : nil
+                    if beforeLast == nil || ["+", "-", "*", "/", "="].contains(String(beforeLast!)) {
+                        state.expressionText.removeLast()
+                        state.expressionText.append(s)
+                    } else {
+                        // Это часть числа, просто добавляем
+                        state.expressionText.append(s)
+                    }
+                } else {
+                    state.expressionText.append(s)
+                }
+            } else {
+                state.expressionText = s
+            }
         } else {
             state.inputText.append(s)
+            state.expressionText.append(s)
         }
-        state.expressionText.append(s)
         limitFractionDigits(maxDigits: 8)
     }
     
