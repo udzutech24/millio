@@ -51,7 +51,7 @@ private struct InvestmentsContentViewInternal: View {
                 .padding(.bottom, 32)
             }
         }
-        .navigationTitle("Инвестиции")
+        .navigationTitle("Активы")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -88,7 +88,7 @@ private struct InvestmentsContentViewInternal: View {
             // Общий баланс
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Всего инвестиций")
+                    Text("Всего активов")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(AppColors.textTertiary)
                     
@@ -180,10 +180,13 @@ private struct InvestmentsContentViewInternal: View {
                         Text(formatBalance(viewModel.state.totalPositive))
                             .font(.system(size: 20, weight: .bold))
                             .foregroundStyle(AppColors.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
                         
                         Text(viewModel.state.displayCurrency)
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppColors.textSecondary)
+                            .lineLimit(1)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -215,10 +218,13 @@ private struct InvestmentsContentViewInternal: View {
                         Text(formatBalance(viewModel.state.totalNegative))
                             .font(.system(size: 20, weight: .bold))
                             .foregroundStyle(AppColors.error)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
                         
                         Text(viewModel.state.displayCurrency)
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppColors.textSecondary)
+                            .lineLimit(1)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -248,7 +254,7 @@ private struct InvestmentsContentViewInternal: View {
     private var investmentsListSection: some View {
         VStack(spacing: 12) {
             HStack {
-                Text("Инвестиции")
+                Text("Активы")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
                 
@@ -267,12 +273,12 @@ private struct InvestmentsContentViewInternal: View {
                         .font(.system(size: 64))
                         .foregroundStyle(AppColors.textTertiary)
                     
-                    Text(viewModel.state.investments.isEmpty ? "Нет инвестиций" : "Ничего не найдено")
+                    Text(viewModel.state.investments.isEmpty ? "Нет активов" : "Ничего не найдено")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                     
                     if viewModel.state.investments.isEmpty {
-                        Text("Добавьте первую инвестицию")
+                        Text("Добавьте первый актив")
                             .font(.system(size: 14, weight: .regular))
                             .foregroundStyle(AppColors.textSecondary)
                     }
@@ -341,13 +347,20 @@ private struct InvestmentRow: View {
                             }
                         
                         // Информация об инвестиции
-                        VStack(alignment: .leading, spacing: 3) {
+                        VStack(alignment: .leading, spacing: 6) {
                             HStack(spacing: 4) {
                                 Text(investment.name)
                                     .font(.system(size: 15, weight: .semibold))
                                     .foregroundStyle(AppColors.textPrimary)
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.8)
+                                
+                                // Стрелка типа инвестиции
+                                Image(systemName: investment.investmentType == .positive ? "arrow.up" : "arrow.down")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(
+                                        investment.investmentType == .positive ? Color.green : Color.red
+                                    )
                                 
                                 if investment.isFavorite {
                                     Image(systemName: "star.fill")
@@ -362,25 +375,17 @@ private struct InvestmentRow: View {
                                 }
                             }
                             
-                            HStack(spacing: 4) {
+                            VStack(alignment: .leading, spacing: 3) {
                                 Text(investment.category.displayName)
                                     .font(.system(size: 13, weight: .regular))
                                     .foregroundStyle(AppColors.textSecondary)
                                     .lineLimit(1)
                                 
-                                Text("•")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(AppColors.textTertiary)
-                                
-                                Text(investment.investmentType.displayName)
-                                    .font(.system(size: 13, weight: .regular))
-                                    .foregroundStyle(AppColors.textTertiary)
-                                    .lineLimit(1)
-                                
                                 if !investment.includeInTotal {
-                                    Text("• Не учитывается")
-                                        .font(.system(size: 11, weight: .medium))
+                                    Text("Не учитывается")
+                                        .font(.system(size: 12, weight: .medium))
                                         .foregroundStyle(AppColors.textTertiary)
+                                        .lineLimit(1)
                                 }
                             }
                         }
@@ -436,13 +441,13 @@ private struct InvestmentRow: View {
                             .frame(width: 32, height: 32)
                     }
                     .buttonStyle(.plain)
-                    .confirmationDialog("Удалить инвестицию?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
+                    .confirmationDialog("Удалить актив?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
                         Button("Удалить", role: .destructive) {
                             onDelete()
                         }
                         Button("Отмена", role: .cancel) {}
                     } message: {
-                        Text("Инвестиция \"\(investment.name)\" будет удалена без возможности восстановления.")
+                        Text("Актив \"\(investment.name)\" будет удален без возможности восстановления.")
                     }
                 }
             }
@@ -501,7 +506,7 @@ private struct InvestmentEditorView: View {
                 
                 Form {
                     Section {
-                        TextField("Название инвестиции", text: $name)
+                        TextField("Название актива", text: $name)
                             .foregroundStyle(AppColors.textPrimary)
                     } header: {
                         Text("Основная информация")
@@ -509,7 +514,7 @@ private struct InvestmentEditorView: View {
                     }
                     
                     Section {
-                        Picker("Тип инвестиции", selection: $selectedInvestmentType) {
+                        Picker("Тип актива", selection: $selectedInvestmentType) {
                             ForEach(InvestmentType.allCases, id: \.self) { type in
                                 Text(type.displayName).tag(type)
                             }
@@ -552,7 +557,7 @@ private struct InvestmentEditorView: View {
                             .foregroundStyle(AppColors.textPrimary)
                         }
                     } header: {
-                        Text("Параметры инвестиции")
+                        Text("Параметры актива")
                             .foregroundStyle(AppColors.textSecondary)
                     }
                     
@@ -576,7 +581,7 @@ private struct InvestmentEditorView: View {
                 }
                 .scrollContentBackground(.hidden)
             }
-            .navigationTitle(viewModel.state.editingInvestment == nil ? "Новая инвестиция" : "Редактировать")
+            .navigationTitle(viewModel.state.editingInvestment == nil ? "Новый актив" : "Редактировать")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {

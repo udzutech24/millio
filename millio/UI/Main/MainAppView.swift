@@ -135,7 +135,7 @@ struct MainAppView: View {
                             }
                             
                             ServiceButton(
-                                title: "Инвестиции",
+                                title: "Активы",
                                 icon: "chart.line.uptrend.xyaxis",
                                 gradientColors: AppColors.investmentsGradient
                             ) {
