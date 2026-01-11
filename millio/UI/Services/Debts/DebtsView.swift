@@ -92,7 +92,7 @@ private struct DebtsContentViewInternal: View {
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(AppColors.textTertiary)
                     
-                    Text("\(viewModel.state.debts.count)")
+                    Text("\(viewModel.state.debts.filter { !$0.isPaid }.count)")
                         .font(.system(size: 32, weight: .bold))
                         .foregroundStyle(AppColors.textPrimary)
                 }
@@ -255,7 +255,7 @@ private struct DebtsContentViewInternal: View {
                 Spacer()
                 
                 if !viewModel.state.filteredDebts.isEmpty {
-                    Text("\(viewModel.state.filteredDebts.count)")
+                    Text("\(viewModel.state.filteredDebts.filter { !$0.isPaid }.count)")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(AppColors.textTertiary)
                 }
@@ -288,6 +288,8 @@ private struct DebtsContentViewInternal: View {
                             viewModel.handle(.deleteDebt(debt))
                         } onToggleFavorite: {
                             viewModel.handle(.toggleFavorite(debt))
+                        } onTogglePaid: {
+                            viewModel.handle(.togglePaid(debt))
                         }
                     }
                 }
@@ -315,6 +317,7 @@ private struct DebtRow: View {
     let onEdit: () -> Void
     let onDelete: () -> Void
     let onToggleFavorite: () -> Void
+    let onTogglePaid: () -> Void
     
     @State private var showDeleteConfirmation = false
     
@@ -345,7 +348,8 @@ private struct DebtRow: View {
                             HStack(spacing: 4) {
                                 Text(debt.name)
                                     .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(AppColors.textPrimary)
+                                    .foregroundStyle(debt.isPaid ? AppColors.textTertiary : AppColors.textPrimary)
+                                    .strikethrough(debt.isPaid)
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.8)
                                 
@@ -360,12 +364,19 @@ private struct DebtRow: View {
                                             )
                                         )
                                 }
+                                
+                                if debt.isPaid {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(AppColors.coursesGradient.first ?? .green)
+                                }
                             }
                             
                             if !debt.contactName.isEmpty {
                                 Text(debt.contactName)
                                     .font(.system(size: 13, weight: .regular))
-                                    .foregroundStyle(AppColors.textSecondary)
+                                    .foregroundStyle(debt.isPaid ? AppColors.textTertiary : AppColors.textSecondary)
+                                    .strikethrough(debt.isPaid)
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.85)
                             }
@@ -373,12 +384,18 @@ private struct DebtRow: View {
                             HStack(spacing: 4) {
                                 Text(debt.debtType.displayName)
                                     .font(.system(size: 11, weight: .regular))
-                                    .foregroundStyle(AppColors.textTertiary)
+                                    .foregroundStyle(debt.isPaid ? AppColors.textTertiary : AppColors.textTertiary)
                                 
-                                if debt.isOverdue {
+                                if debt.isOverdue && !debt.isPaid {
                                     Text("• Просрочен")
                                         .font(.system(size: 11, weight: .medium))
                                         .foregroundStyle(AppColors.error)
+                                }
+                                
+                                if debt.isPaid {
+                                    Text("• Выплачен")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundStyle(AppColors.coursesGradient.first ?? .green)
                                 }
                             }
                         }
@@ -390,8 +407,9 @@ private struct DebtRow: View {
                             Text("\(formatBalance(debt.amount)) \(debt.currency)")
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(
-                                    debt.debtType == .owedToMe ? AppColors.textPrimary : AppColors.error
+                                    debt.isPaid ? AppColors.textTertiary : (debt.debtType == .owedToMe ? AppColors.textPrimary : AppColors.error)
                                 )
+                                .strikethrough(debt.isPaid)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.85)
                             
@@ -399,8 +417,9 @@ private struct DebtRow: View {
                                 Text(formatDate(dueDate))
                                     .font(.system(size: 11, weight: .regular))
                                     .foregroundStyle(
-                                        debt.isOverdue ? AppColors.error : AppColors.textTertiary
+                                        debt.isPaid ? AppColors.textTertiary : (debt.isOverdue ? AppColors.error : AppColors.textTertiary)
                                     )
+                                    .strikethrough(debt.isPaid)
                             }
                         }
                     }
@@ -409,6 +428,29 @@ private struct DebtRow: View {
                 
                 // Кнопки действий
                 VStack(spacing: 8) {
+                    // Кнопка выплаты
+                    Button {
+                        onTogglePaid()
+                    } label: {
+                        Image(systemName: debt.isPaid ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(
+                                debt.isPaid ?
+                                LinearGradient(
+                                    colors: AppColors.coursesGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ) :
+                                LinearGradient(
+                                    colors: [AppColors.textTertiary],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(width: 32, height: 32)
+                    }
+                    .buttonStyle(.plain)
+                    
                     // Кнопка избранного
                     Button {
                         onToggleFavorite()
@@ -505,6 +547,7 @@ private struct DebtEditorView: View {
     @State private var hasDueDate: Bool = false
     @State private var selectedPriority: DebtPriority = .normal
     @State private var isFavorite: Bool = false
+    @State private var isPaid: Bool = false
     @State private var availableCurrencies: [String] = ["RUB", "USD", "EUR"]
     @State private var isLoadingCurrencies: Bool = false
     
@@ -587,6 +630,9 @@ private struct DebtEditorView: View {
                         
                         Toggle("В избранном", isOn: $isFavorite)
                             .foregroundStyle(AppColors.textPrimary)
+                        
+                        Toggle("Выплачен", isOn: $isPaid)
+                            .foregroundStyle(AppColors.textPrimary)
                     } header: {
                         Text("Дополнительно")
                             .foregroundStyle(AppColors.textSecondary)
@@ -629,6 +675,7 @@ private struct DebtEditorView: View {
                     dueDate = editing.dueDate
                     selectedPriority = editing.priority
                     isFavorite = editing.isFavorite
+                    isPaid = editing.isPaid
                 }
                 
                 loadAvailableCurrencies()
@@ -695,16 +742,17 @@ private struct DebtEditorView: View {
             return
         }
         
-        viewModel.handle(.updateDebt(
-            name: name,
-            debtType: selectedDebtType,
-            amount: amount,
-            currency: selectedCurrency,
-            contactName: contactName,
-            dueDate: hasDueDate ? dueDate : nil,
-            priority: selectedPriority,
-            isFavorite: isFavorite
-        ))
+            viewModel.handle(.updateDebt(
+                name: name,
+                debtType: selectedDebtType,
+                amount: amount,
+                currency: selectedCurrency,
+                contactName: contactName,
+                dueDate: hasDueDate ? dueDate : nil,
+                priority: selectedPriority,
+                isFavorite: isFavorite,
+                isPaid: isPaid
+            ))
         
         dismiss()
     }

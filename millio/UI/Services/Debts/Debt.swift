@@ -82,6 +82,9 @@ final class Debt: Persistable {
     /// Избранный долг
     var isFavorite: Bool = false
     
+    /// Выплачен ли долг
+    var isPaid: Bool = false
+    
     /// Дата последнего обновления
     var updatedAt: Date = Date()
     
@@ -109,7 +112,8 @@ final class Debt: Persistable {
         contactName: String = "",
         dueDate: Date? = nil,
         priority: DebtPriority = .normal,
-        isFavorite: Bool = false
+        isFavorite: Bool = false,
+        isPaid: Bool = false
     ) {
         self.name = name
         self.debtTypeRaw = debtType.rawValue
@@ -119,6 +123,7 @@ final class Debt: Persistable {
         self.dueDate = dueDate
         self.priorityRaw = priority.rawValue
         self.isFavorite = isFavorite
+        self.isPaid = isPaid
         self.createdAt = Date()
         self.updatedAt = Date()
     }
@@ -140,6 +145,7 @@ final class Debt: Persistable {
             "contactName": contactName,
             "priorityRaw": priorityRaw,
             "isFavorite": isFavorite,
+            "isPaid": isPaid,
             "createdAt": createdAt.timeIntervalSince1970,
             "updatedAt": updatedAt.timeIntervalSince1970,
             "debtUniqueID": debtUniqueID

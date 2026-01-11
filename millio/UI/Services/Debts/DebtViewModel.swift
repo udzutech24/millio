@@ -52,6 +52,7 @@ enum DebtAction {
     case editDebt(Debt)
     case deleteDebt(Debt)
     case toggleFavorite(Debt)
+    case togglePaid(Debt)
     case updateDebt(
         name: String,
         debtType: DebtType,
@@ -60,7 +61,8 @@ enum DebtAction {
         contactName: String,
         dueDate: Date?,
         priority: DebtPriority,
-        isFavorite: Bool
+        isFavorite: Bool,
+        isPaid: Bool
     )
     case showDebtEditor
     case hideDebtEditor
@@ -109,7 +111,10 @@ final class DebtViewModel: ViewModelProtocol {
         case .toggleFavorite(let debt):
             toggleFavorite(debt)
             
-        case .updateDebt(let name, let debtType, let amount, let currency, let contactName, let dueDate, let priority, let isFavorite):
+        case .togglePaid(let debt):
+            togglePaid(debt)
+            
+        case .updateDebt(let name, let debtType, let amount, let currency, let contactName, let dueDate, let priority, let isFavorite, let isPaid):
             updateDebt(
                 name: name,
                 debtType: debtType,
@@ -118,7 +123,8 @@ final class DebtViewModel: ViewModelProtocol {
                 contactName: contactName,
                 dueDate: dueDate,
                 priority: priority,
-                isFavorite: isFavorite
+                isFavorite: isFavorite,
+                isPaid: isPaid
             )
             
         case .showDebtEditor:
@@ -148,8 +154,12 @@ final class DebtViewModel: ViewModelProtocol {
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
         if let debts = try? modelContext.fetch(descriptor) {
-            // Сортируем: сначала избранные, потом по приоритету, потом по дате
+            // Сортируем: сначала невыплаченные, потом избранные, потом по приоритету, потом по дате
             state.debts = debts.sorted { debt1, debt2 in
+                // Сначала невыплаченные долги
+                if debt1.isPaid != debt2.isPaid {
+                    return !debt1.isPaid
+                }
                 if debt1.isFavorite != debt2.isFavorite {
                     return debt1.isFavorite
                 }
@@ -178,6 +188,9 @@ final class DebtViewModel: ViewModelProtocol {
         var totalIOwe: Double = 0.0
         
         for debt in state.debts {
+            // Пропускаем выплаченные долги при подсчете статистики
+            guard !debt.isPaid else { continue }
+            
             let amount = debt.amount
             if debt.debtType == .owedToMe {
                 if debt.currency == displayCurrency {
@@ -246,6 +259,18 @@ final class DebtViewModel: ViewModelProtocol {
         }
     }
     
+    private func togglePaid(_ debt: Debt) {
+        debt.isPaid.toggle()
+        debt.updatedAt = Date()
+        
+        do {
+            try modelContext.save()
+            loadDebts()
+        } catch {
+            AppLogger.log(.error, category: "Debt", "Failed to toggle paid: \(error.localizedDescription)")
+        }
+    }
+    
     private func updateDebt(
         name: String,
         debtType: DebtType,
@@ -254,7 +279,8 @@ final class DebtViewModel: ViewModelProtocol {
         contactName: String,
         dueDate: Date?,
         priority: DebtPriority,
-        isFavorite: Bool
+        isFavorite: Bool,
+        isPaid: Bool
     ) {
         if let existing = state.editingDebt {
             // Обновляем существующий долг
@@ -266,6 +292,7 @@ final class DebtViewModel: ViewModelProtocol {
             existing.dueDate = dueDate
             existing.priority = priority
             existing.isFavorite = isFavorite
+            existing.isPaid = isPaid
             existing.updatedAt = Date()
         } else {
             // Создаем новый долг
@@ -277,7 +304,8 @@ final class DebtViewModel: ViewModelProtocol {
                 contactName: contactName,
                 dueDate: dueDate,
                 priority: priority,
-                isFavorite: isFavorite
+                isFavorite: isFavorite,
+                isPaid: isPaid
             )
             modelContext.insert(newDebt)
         }

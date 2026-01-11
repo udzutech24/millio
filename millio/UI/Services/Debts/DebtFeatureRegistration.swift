@@ -41,6 +41,8 @@ struct DebtImporter: ModelImporter {
         let priorityRaw = data["priorityRaw"] as? String ?? "normal"
         let priority = DebtPriority(rawValue: priorityRaw) ?? .normal
         
+        let isPaid = data["isPaid"] as? Bool ?? false
+        
         // Проверяем, не существует ли уже долг с такими же данными
         let existingDebtDescriptor = FetchDescriptor<Debt>(
             predicate: #Predicate<Debt> { debt in
@@ -55,6 +57,7 @@ struct DebtImporter: ModelImporter {
         // Если долг уже существует, обновляем его данные вместо создания новой
         if let existingDebt = try? context.fetch(existingDebtDescriptor).first {
             existingDebt.isFavorite = data["isFavorite"] as? Bool ?? false
+            existingDebt.isPaid = isPaid
             existingDebt.priority = priority
             if let dueDate = data["dueDate"] as? TimeInterval {
                 existingDebt.dueDate = Date(timeIntervalSince1970: dueDate)
@@ -76,7 +79,8 @@ struct DebtImporter: ModelImporter {
             contactName: contactName,
             dueDate: (data["dueDate"] as? TimeInterval).map { Date(timeIntervalSince1970: $0) },
             priority: priority,
-            isFavorite: data["isFavorite"] as? Bool ?? false
+            isFavorite: data["isFavorite"] as? Bool ?? false,
+            isPaid: isPaid
         )
         
         debt.createdAt = Date(timeIntervalSince1970: createdAt)
