@@ -53,25 +53,44 @@ struct ConverterView: View {
         let bottomSafe: CGFloat = 0
 #endif
         let headerH: CGFloat = 52
+        let topPadding: CGFloat = 8
+        let bottomPadding: CGFloat = 4
         
-        let keySpacing: CGFloat = totalH < 700 ? 10 : 12
+        // Минимальные размеры для клавиатуры
+        let minKeyHeight: CGFloat = 44
+        let minKeySpacing: CGFloat = 6
+        let keypadRows: Int = 5
+        
+        // Вычисляем минимальную высоту клавиатуры
+        let minKeypadHeight = CGFloat(keypadRows) * minKeyHeight + CGFloat(keypadRows - 1) * minKeySpacing + bottomSafe + bottomPadding
+        
+        // Доступная высота для контента (исключая header и клавиатуру)
+        let availableForContent = totalH - headerH - minKeypadHeight - topPadding
+        
+        // Адаптируем размеры клавиатуры под доступное место
+        let keypadAvailableHeight = totalH - headerH - availableForContent - topPadding - bottomPadding
+        
+        // Вычисляем размеры кнопок и отступы с учетом доступного места
+        let keypadContentHeight = keypadAvailableHeight - bottomSafe - bottomPadding
+        let keyH = max(minKeyHeight, floor((keypadContentHeight - CGFloat(keypadRows - 1) * minKeySpacing) / CGFloat(keypadRows)))
+        
+        // Адаптируем spacing между кнопками
+        let actualKeypadContentHeight = CGFloat(keypadRows) * keyH
+        let remainingSpace = keypadContentHeight - actualKeypadContentHeight
+        let keySpacing = minKeySpacing + (remainingSpace > 0 ? floor(remainingSpace / CGFloat(keypadRows - 1)) : 0)
+        
+        // Размер шрифта зависит от высоты кнопки
+        let fontSize: CGFloat = keyH >= 60 ? 22 : (keyH >= 54 ? 20 : (keyH >= 48 ? 18 : 16))
+        
+        // Для списка валют используем адаптивную высоту строк
         let desiredRows: Int = 6
         let rowSpacing: CGFloat = 8
+        let minRowHeight: CGFloat = 58
+        let maxRowHeight: CGFloat = 80
         
-        let keypadVerticalInsets = keySpacing * 4 + bottomSafe + 4
-        let reservedKeypad = 5 * 56 + keypadVerticalInsets
-        
-        let rowH = adaptiveRowHeight(
-            totalH: totalH,
-            reservedKeypad: CGFloat(reservedKeypad),
-            desiredRows: desiredRows,
-            rowSpacing: rowSpacing
-        )
-        
-        let listBlockH = CGFloat(desiredRows) * rowH + CGFloat(desiredRows - 1) * rowSpacing + 8 + 8
-        let availableForKeypad = max(260, totalH - headerH - 8 - listBlockH)
-        let keyH = max(52, floor((availableForKeypad - keypadVerticalInsets) / 5))
-        let fontSize: CGFloat = keyH >= 60 ? 22 : (keyH >= 54 ? 20 : 18)
+        // Вычисляем высоту строки списка валют
+        let listAvailableHeight = max(availableForContent - topPadding * 2, minRowHeight * CGFloat(desiredRows))
+        let rowH = min(maxRowHeight, max(minRowHeight, floor((listAvailableHeight - CGFloat(desiredRows - 1) * rowSpacing) / CGFloat(desiredRows))))
         
         return Layout(
             totalH: totalH,
@@ -143,13 +162,15 @@ struct ConverterView: View {
     
     @ViewBuilder
     private func mainContent(layout: Layout) -> some View {
-        VStack(spacing: 8) {
-            currencyList(layout: layout)
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
+        VStack(spacing: 0) {
+            // Список валют с возможностью скролла
+            ScrollView {
+                currencyList(layout: layout)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+            }
             
-            Spacer(minLength: 8)
-            
+            // Клавиатура всегда внизу
             VStack(spacing: 0) {
                 keypad(height: layout.keyH, spacing: layout.keySpacing, fontSize: layout.fontSize)
                     .padding(.horizontal, 16)
@@ -389,7 +410,7 @@ struct ConverterView: View {
             } label: {
                 Text(viewModel.flagEmoji(for: code))
                     .font(.system(size: 20))
-                    .frame(width: 40, height: rowHeight)
+                    .frame(width: 60, height: rowHeight)
                     .background(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
                             .fill(.ultraThinMaterial)
@@ -519,7 +540,7 @@ struct ConverterView: View {
             Image(systemName: "plus.circle.fill")
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(AppColors.textTertiary)
-                .frame(width: 40, height: rowHeight)
+                .frame(width: 60, height: rowHeight)
                 .background(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(.ultraThinMaterial)
@@ -669,11 +690,6 @@ struct ConverterView: View {
         }
     }
     
-    private func adaptiveRowHeight(totalH: CGFloat, reservedKeypad: CGFloat, desiredRows: Int, rowSpacing: CGFloat) -> CGFloat {
-        let availableForRows = max(280, totalH - reservedKeypad)
-        let h = floor((availableForRows - CGFloat(desiredRows - 1) * rowSpacing) / CGFloat(desiredRows))
-        return min(max(h, 58), 80)
-    }
     
     // MARK: - Share
     

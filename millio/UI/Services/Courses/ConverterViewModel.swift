@@ -344,12 +344,10 @@ final class ConverterViewModel: ViewModelProtocol {
     }
     
     private func removeLastCurrency() {
-        guard state.selectedCurrencies.count > 1 else { return }
-        let removed = state.selectedCurrencies.removeLast()
-        if removed == state.activeCode {
-            state.activeCode = state.selectedCurrencies.first ?? "USD"
-        }
-        persistSelected()
+        // Удаляем активную валюту, а не последнюю
+        guard let activeIndex = state.selectedCurrencies.firstIndex(of: state.activeCode),
+              state.selectedCurrencies.count > 1 else { return }
+        removeCurrency(at: activeIndex)
     }
     
     private func persistSelected() {
