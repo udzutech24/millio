@@ -627,6 +627,8 @@ final class ConverterViewModel: ViewModelProtocol {
             case .erapi:
                 url = URL(string: "https://open.er-api.com/v6/latest/USD")!
             case .exchangerateHost:
+                // Используем /latest (бесплатный endpoint) - возвращает rates
+                // /live требует access_key и возвращает quotes
                 url = URL(string: "https://api.exchangerate.host/latest?base=USD")!
             case .frankfurter:
                 url = URL(string: "https://api.frankfurter.app/latest?from=USD")!
@@ -649,11 +651,74 @@ final class ConverterViewModel: ViewModelProtocol {
                 
             case .exchangerateHost:
                 let decoded = try JSONDecoder().decode(ExchangeRateHostResponse.self, from: data)
-                rates = decoded.rates
+                // Проверяем success, если есть
+                if let success = decoded.success, !success {
+                    throw URLError(.cannotParseResponse)
+                }
+                // exchangerate.host /latest endpoint возвращает rates (формат "AED": 3.67)
+                // /live endpoint (требует access_key) возвращает quotes (формат "USDAED": 3.67)
+                if let ratesDict = decoded.rates {
+                    // Прямой формат /latest endpoint
+                    rates = ratesDict
+                } else if let quotes = decoded.quotes {
+                    // Формат /live endpoint - извлекаем код валюты из ключа "USDAED" -> "AED"
+                    for (key, value) in quotes {
+                        let upperKey = key.uppercased()
+                        if upperKey.hasPrefix("USD"), upperKey.count == 6 {
+                            let currencyCode = String(upperKey.dropFirst(3))
+                            rates[currencyCode] = value
+                        }
+                    }
+                }
+                // Используем timestamp из ответа
+                if let timestamp = decoded.timestamp {
+                    updateTS = TimeInterval(timestamp)
+                } else if let dateStr = decoded.date {
+                    // Парсим дату, если нет timestamp
+                    let df = DateFormatter()
+                    df.dateFormat = "yyyy-MM-dd"
+                    df.locale = Locale(identifier: "en_US_POSIX")
+                    df.timeZone = TimeZone(secondsFromGMT: 0)
+                    if let date = df.date(from: dateStr) {
+                        updateTS = date.timeIntervalSince1970
+                    }
+                }
                 
             case .frankfurter:
                 let decoded = try JSONDecoder().decode(FrankfurterResponse.self, from: data)
-                rates = decoded.rates
+                // Frankfurter использует EUR как базовую валюту, нужно конвертировать в USD
+                let eurRates = decoded.rates
+                if let eurToUsd = eurRates["USD"] {
+                    // Конвертируем все курсы из EUR в USD
+                    for (code, eurRate) in eurRates {
+                        if code != "USD" {
+                            // 1 USD = (1 / eurToUsd) * eurRate EUR = eurRate / eurToUsd
+                            rates[code] = eurRate / eurToUsd
+                        }
+                    }
+                } else {
+                    // Если нет курса EUR/USD, используем курсы как есть (но это не должно произойти)
+                    rates = eurRates
+                }
+                // Парсим дату из ответа (формат YYYY-MM-DD)
+                if let dateStr = decoded.date {
+                    let df = DateFormatter()
+                    df.dateFormat = "yyyy-MM-dd"
+                    df.locale = Locale(identifier: "en_US_POSIX")
+                    df.timeZone = TimeZone(secondsFromGMT: 0) // UTC
+                    if let date = df.date(from: dateStr) {
+                        // Устанавливаем время на 16:00 CET (15:00 UTC) - время обновления Frankfurter
+                        var components = Calendar.current.dateComponents([.year, .month, .day], from: date)
+                        components.hour = 15
+                        components.minute = 0
+                        components.timeZone = TimeZone(secondsFromGMT: 0)
+                        if let dateWithTime = Calendar.current.date(from: components) {
+                            updateTS = dateWithTime.timeIntervalSince1970
+                        } else {
+                            updateTS = date.timeIntervalSince1970
+                        }
+                    }
+                }
             }
             
             rates["USD"] = 1.0
@@ -789,9 +854,13 @@ private struct ERAPIResponse: Decodable {
 }
 
 private struct ExchangeRateHostResponse: Decodable {
-    let rates: [String: Double]
+    let success: Bool?
+    let timestamp: Int?
+    let source: String?
     let base: String?
     let date: String?
+    let quotes: [String: Double]?  // Формат "USDAED": 3.67 (для apilayer.com)
+    let rates: [String: Double]?   // Формат "AED": 3.67 (для exchangerate.host)
 }
 
 private struct FrankfurterResponse: Decodable {
