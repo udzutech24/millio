@@ -7,6 +7,9 @@
 
 import Foundation
 
+// Импортируем SubscriptionStatus из SubscriptionManager
+// (определен в SubscriptionManager.swift)
+
 @Observable
 final class AppState {
     var lifecycle: AppLifecycleState = .launching
@@ -19,8 +22,25 @@ final class AppState {
     }
     var isBackupEnabled: Bool = false
     
+    // Subscription status
+    var subscriptionStatus: SubscriptionStatus = .notSubscribed
+    var subscriptionExpirationDate: Date?
+    var isTrialActive: Bool = false
+    
+    var isPro: Bool {
+        subscriptionStatus == .subscribed || subscriptionStatus == .trial
+    }
+    
     init() {
         self.isBackupEnabled = SettingsManager.shared.isBackupEnabled
         self.selectedLanguage = LanguageManager.shared.currentLanguage
+        
+        // Загружаем статус подписки из менеджера
+        Task { @MainActor in
+            await SubscriptionManager.shared.checkSubscriptionStatus()
+            self.subscriptionStatus = SubscriptionManager.shared.status
+            self.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
+            self.isTrialActive = SubscriptionManager.shared.isTrialActive
+        }
     }
 }

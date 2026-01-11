@@ -6,9 +6,15 @@
 //
 
 import SwiftUI
+import StoreKit
 
 struct SubscriptionView: View {
-    @State private var selectedPlan: SubscriptionPlan = .monthly
+    @Environment(AppState.self) private var appState
+    @State private var selectedPlan: SubscriptionPlan = .yearly
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+    @State private var showError = false
+    @State private var products: [Product] = []
     
     var body: some View {
         ZStack {
@@ -81,9 +87,25 @@ struct SubscriptionView: View {
                     }
                     .padding(.bottom, 40)
                     
+                    // Статус подписки (если уже есть)
+                    if appState.isPro {
+                        subscriptionStatusSection
+                            .padding(.horizontal, 24)
+                            .padding(.bottom, 24)
+                    }
+                    
+                    // Кнопка пробного периода (если нет подписки)
+                    if !appState.isPro && !appState.isTrialActive {
+                        trialButton
+                            .padding(.horizontal, 24)
+                            .padding(.bottom, 16)
+                    }
+                    
                     // Кнопка подписки
                     Button {
-                        // TODO: Логика подписки
+                        Task {
+                            await purchaseSubscription()
+                        }
                     } label: {
                         HStack(spacing: 12) {
                             Text("Оформить подписку")
@@ -113,13 +135,215 @@ struct SubscriptionView: View {
                         }
                     }
                     .buttonStyle(.plain)
+                    .disabled(isLoading)
+                    .opacity(isLoading ? 0.6 : 1.0)
                     .padding(.horizontal, 24)
+                    .padding(.bottom, 24)
+                    
+                    // Кнопка восстановления покупок
+                    Button {
+                        Task {
+                            await restorePurchases()
+                        }
+                    } label: {
+                        Text("Восстановить покупки")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
+                    .disabled(isLoading)
                     .padding(.bottom, 40)
                 }
             }
         }
         .navigationTitle("Подписка")
         .navigationBarTitleDisplayMode(.inline)
+        .alert("Ошибка", isPresented: $showError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(errorMessage ?? "Неизвестная ошибка")
+        }
+        .task {
+            await loadProducts()
+        }
+    }
+    
+    // MARK: - Subscription Status Section
+    
+    private var subscriptionStatusSection: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 20))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: AppColors.incomeGradient,
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                
+                Text(appState.isTrialActive ? "Активен пробный период" : "Активна подписка PRO")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                
+                Spacer()
+            }
+            
+            if let expirationDate = appState.subscriptionExpirationDate {
+                HStack {
+                    Text("Действует до:")
+                        .font(.system(size: 14))
+                        .foregroundStyle(AppColors.textSecondary)
+                    
+                    Text(formatDate(expirationDate))
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(AppColors.textPrimary)
+                    
+                    Spacer()
+                }
+            }
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.black.opacity(0.3))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: AppColors.incomeGradient,
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ),
+                            lineWidth: 1.5
+                        )
+                }
+        )
+    }
+    
+    // MARK: - Trial Button
+    
+    private var trialButton: some View {
+        Button {
+            Task {
+                await startTrial()
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "gift.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                
+                Text("Начать пробный период (7 дней)")
+                    .font(.system(size: 16, weight: .semibold))
+            }
+            .foregroundStyle(AppColors.textPrimary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(
+                                LinearGradient(
+                                    colors: AppColors.cashbackGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ),
+                                lineWidth: 2
+                            )
+                    }
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(isLoading)
+    }
+    
+    // MARK: - Actions
+    
+    private func loadProducts() async {
+        isLoading = true
+        defer { isLoading = false }
+        
+        do {
+            let productIds = [
+                SubscriptionManager.shared.monthlyProductID,
+                SubscriptionManager.shared.yearlyProductID
+            ]
+            products = try await Product.products(for: productIds)
+        } catch {
+            errorMessage = "Не удалось загрузить продукты"
+            showError = true
+        }
+    }
+    
+    private func purchaseSubscription() async {
+        isLoading = true
+        defer { isLoading = false }
+        
+        let productId = selectedPlan == .monthly
+            ? SubscriptionManager.shared.monthlyProductID
+            : SubscriptionManager.shared.yearlyProductID
+        
+        do {
+            try await SubscriptionManager.shared.purchaseSubscription(productId: productId)
+            
+            // Обновляем статус в AppState
+            await SubscriptionManager.shared.checkSubscriptionStatus()
+            appState.subscriptionStatus = SubscriptionManager.shared.status
+            appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
+            appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+            
+        } catch {
+            if let subscriptionError = error as? SubscriptionError,
+               subscriptionError != .userCancelled {
+                errorMessage = subscriptionError.localizedDescription
+                showError = true
+            }
+        }
+    }
+    
+    private func restorePurchases() async {
+        isLoading = true
+        defer { isLoading = false }
+        
+        do {
+            try await SubscriptionManager.shared.restorePurchases()
+            
+            // Обновляем статус в AppState
+            appState.subscriptionStatus = SubscriptionManager.shared.status
+            appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
+            appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+            
+        } catch {
+            errorMessage = "Не удалось восстановить покупки"
+            showError = true
+        }
+    }
+    
+    private func startTrial() async {
+        isLoading = true
+        defer { isLoading = false }
+        
+        do {
+            try await SubscriptionManager.shared.startTrial()
+            
+            // Обновляем статус в AppState
+            appState.subscriptionStatus = SubscriptionManager.shared.status
+            appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+            
+        } catch {
+            errorMessage = (error as? SubscriptionError)?.localizedDescription ?? "Не удалось начать пробный период"
+            showError = true
+        }
+    }
+    
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        formatter.locale = Locale(identifier: "ru_RU")
+        return formatter.string(from: date)
     }
 }
 

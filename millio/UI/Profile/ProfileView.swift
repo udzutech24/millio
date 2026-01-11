@@ -40,6 +40,9 @@ struct ProfileView: View {
                     
                     // Settings section
                     VStack(spacing: 24) {
+                        // Subscription status
+                        subscriptionStatusSection
+                        
                         // Backup settings
                         VStack(spacing: 16) {
                             Section {
@@ -216,6 +219,101 @@ struct ProfileView: View {
         }
         .navigationTitle("Профиль")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            // Обновляем статус подписки при открытии профиля
+            await SubscriptionManager.shared.checkSubscriptionStatus()
+            appState.subscriptionStatus = SubscriptionManager.shared.status
+            appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
+            appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+        }
+    }
+    
+    // MARK: - Subscription Status Section
+    
+    private var subscriptionStatusSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Подписка")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                
+                Spacer()
+                
+                if appState.isPro {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 16))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: AppColors.incomeGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                        Text(appState.isTrialActive ? "Пробный период" : "PRO")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: AppColors.incomeGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                    }
+                } else {
+                    Text("Обычная")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(AppColors.textSecondary)
+                }
+            }
+            
+            if appState.isPro, let expirationDate = appState.subscriptionExpirationDate {
+                Text("Действует до: \(formatDate(expirationDate))")
+                    .font(.system(size: 14))
+                    .foregroundStyle(AppColors.textSecondary)
+            }
+            
+            Button {
+                router.push(.subscription)
+            } label: {
+                Text(appState.isPro ? "Управление подпиской" : "Оформить PRO")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(.ultraThinMaterial)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: appState.isPro ? AppColors.incomeGradient : [AppColors.textPrimary.opacity(0.3)],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        ),
+                                        lineWidth: 1.5
+                                    )
+                            }
+                    }
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 20)
+        .padding(.horizontal, 24)
+        .background {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(.ultraThinMaterial)
+        }
+        .padding(.horizontal, 24)
+    }
+    
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        formatter.locale = Locale(identifier: "ru_RU")
+        return formatter.string(from: date)
     }
 }
 

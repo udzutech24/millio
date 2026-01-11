@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		77B22ECF2F146CDC005146C6 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 77B22ECE2F146CDC005146C6 /* StoreKit.framework */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		772BE52D2F12DBEF00193DE9 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,6 +31,7 @@
 		772BE51D2F12DBED00193DE9 /* millio.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = millio.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		772BE52C2F12DBEF00193DE9 /* millioTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = millioTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		772BE5362F12DBEF00193DE9 /* millioUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = millioUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		77B22ECE2F146CDC005146C6 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -65,6 +70,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				77B22ECF2F146CDC005146C6 /* StoreKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -91,6 +97,7 @@
 				772BE51F2F12DBED00193DE9 /* millio */,
 				772BE52F2F12DBEF00193DE9 /* millioTests */,
 				772BE5392F12DBEF00193DE9 /* millioUITests */,
+				77B22ECD2F146CDC005146C6 /* Frameworks */,
 				772BE51E2F12DBED00193DE9 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -103,6 +110,14 @@
 				772BE5362F12DBEF00193DE9 /* millioUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		77B22ECD2F146CDC005146C6 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				77B22ECE2F146CDC005146C6 /* StoreKit.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

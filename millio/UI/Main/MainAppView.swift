@@ -47,17 +47,42 @@ struct MainAppView: View {
                             viewModel.handle(.navigateToSubscription)
                         } label: {
                             HStack(spacing: 6) {
-                                Image(systemName: "star.fill")
+                                Image(systemName: appState.isPro ? "star.fill" : "star")
                                     .font(.system(size: 14))
-                                Text("PRO")
+                                Text(appState.isPro ? "PRO" : "PRO")
                                     .font(.system(size: 14, weight: .semibold))
                             }
-                            .foregroundStyle(AppColors.textPrimary)
+                            .foregroundStyle(
+                                appState.isPro
+                                ? LinearGradient(
+                                    colors: AppColors.incomeGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                                : LinearGradient(
+                                    colors: [AppColors.textPrimary],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
                             .background {
                                 Capsule()
-                                    .stroke(AppColors.textPrimary, lineWidth: 1.5)
+                                    .stroke(
+                                        appState.isPro
+                                        ? LinearGradient(
+                                            colors: AppColors.incomeGradient,
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                        : LinearGradient(
+                                            colors: [AppColors.textPrimary],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        ),
+                                        lineWidth: 1.5
+                                    )
                             }
                         }
                     }
@@ -128,6 +153,14 @@ struct MainAppView: View {
                 loadServices()
                 if cashflowViewModel == nil {
                     cashflowViewModel = CashflowViewModel(modelContext: modelContext)
+                }
+                
+                // Обновляем статус подписки при открытии главного экрана
+                Task {
+                    await SubscriptionManager.shared.checkSubscriptionStatus()
+                    appState.subscriptionStatus = SubscriptionManager.shared.status
+                    appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
+                    appState.isTrialActive = SubscriptionManager.shared.isTrialActive
                 }
             }
         }

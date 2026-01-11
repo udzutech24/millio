@@ -77,6 +77,15 @@ struct millioApp: App {
                     .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
                         triggerBackgroundBackup()
                     }
+                    .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                        // Обновляем статус подписки при возврате из фона
+                        Task { @MainActor in
+                            await SubscriptionManager.shared.checkSubscriptionStatus()
+                            appState.subscriptionStatus = SubscriptionManager.shared.status
+                            appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
+                            appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+                        }
+                    }
             } else {
                 ErrorView(
                     error: .unknown(NSError(

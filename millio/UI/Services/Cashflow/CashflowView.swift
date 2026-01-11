@@ -11,12 +11,18 @@ import Charts
 
 struct CashflowView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(AppState.self) private var appState
     @State private var viewModel: CashflowViewModel?
+    @State private var showSubscriptionSheet = false
     
     var body: some View {
         Group {
             if let viewModel = viewModel {
-                CashflowContentView(viewModel: viewModel)
+                CashflowContentView(
+                    viewModel: viewModel,
+                    appState: appState,
+                    showSubscriptionSheet: $showSubscriptionSheet
+                )
             } else {
                 ProgressView()
                     .tint(AppColors.textPrimary)
@@ -34,6 +40,8 @@ struct CashflowView: View {
 
 private struct CashflowContentView: View {
     @ObservedObject var viewModel: CashflowViewModel
+    @Bindable var appState: AppState
+    @Binding var showSubscriptionSheet: Bool
     
     var body: some View {
         ZStack {
@@ -93,6 +101,11 @@ private struct CashflowContentView: View {
             set: { if !$0 { viewModel.handle(.hideCurrencySelector) } }
         )) {
             CashflowCurrencySelectorView(viewModel: viewModel)
+        }
+        .sheet(isPresented: $showSubscriptionSheet) {
+            NavigationStack {
+                SubscriptionView()
+            }
         }
     }
     
@@ -358,7 +371,56 @@ private struct CashflowContentView: View {
                 .padding(.horizontal, 4)
             }
             
-            if viewModel.state.incomeChartData.isEmpty && viewModel.state.expenseChartData.isEmpty {
+            if !appState.isPro {
+                // Блокировка графика для бесплатной версии
+                VStack(spacing: 16) {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 48))
+                        .foregroundStyle(AppColors.textTertiary)
+                    
+                    Text("График доступен в PRO версии")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                    
+                    Text("Оформите подписку для доступа к расширенной аналитике")
+                        .font(.system(size: 14))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .multilineTextAlignment(.center)
+                    
+                    Button {
+                        showSubscriptionSheet = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 14))
+                            Text("Оформить PRO")
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .background {
+                            Capsule()
+                                .fill(.ultraThinMaterial)
+                                .overlay {
+                                    Capsule()
+                                        .stroke(
+                                            LinearGradient(
+                                                colors: AppColors.incomeGradient,
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            ),
+                                            lineWidth: 2
+                                        )
+                                }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 300)
+                .padding(24)
+            } else if viewModel.state.incomeChartData.isEmpty && viewModel.state.expenseChartData.isEmpty {
                 VStack(spacing: 16) {
                     Image(systemName: "chart.line.uptrend.xyaxis")
                         .font(.system(size: 48))
