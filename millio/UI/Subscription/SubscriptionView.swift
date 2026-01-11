@@ -67,32 +67,14 @@ struct SubscriptionView: View {
                         VStack(spacing: 12) {
                             FeatureRow(
                                 icon: "sparkles",
-                                text: "Все 8 сервисов без ограничений",
+                                text: "Все 10 сервисов без ограничений",
                                 gradient: AppColors.financesGradient
-                            )
-                            
-                            FeatureRow(
-                                icon: "icloud.fill",
-                                text: "Неограниченное резервное копирование",
-                                gradient: AppColors.cashbackGradient
                             )
                             
                             FeatureRow(
                                 icon: "chart.line.uptrend.xyaxis",
                                 text: "Расширенная аналитика",
                                 gradient: AppColors.coursesGradient
-                            )
-                            
-                            FeatureRow(
-                                icon: "bell.badge.fill",
-                                text: "Приоритетная поддержка",
-                                gradient: AppColors.cashbackGradient
-                            )
-                            
-                            FeatureRow(
-                                icon: "paintbrush.fill",
-                                text: "Эксклюзивные темы и иконки",
-                                gradient: AppColors.habitsGradient
                             )
                         }
                         .padding(.horizontal, 24)
