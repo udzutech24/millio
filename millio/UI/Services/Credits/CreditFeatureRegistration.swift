@@ -33,6 +33,7 @@ struct CreditImporter: ModelImporter {
               let monthlyPayment = data["monthlyPayment"] as? Double,
               let startDate = data["startDate"] as? TimeInterval,
               let termMonths = data["termMonths"] as? Int,
+              let endDate = data["endDate"] as? TimeInterval,
               let currency = data["currency"] as? String,
               let bankRaw = data["bankRaw"] as? String,
               let creditTypeRaw = data["creditTypeRaw"] as? String,
@@ -81,6 +82,7 @@ struct CreditImporter: ModelImporter {
             creditType: CreditType(rawValue: creditTypeRaw) ?? .consumer
         )
         
+        credit.endDate = endDate > 0 ? Date(timeIntervalSince1970: endDate) : nil
         credit.remainingAmount = remainingAmount
         credit.isFavorite = data["isFavorite"] as? Bool ?? false
         credit.createdAt = Date(timeIntervalSince1970: createdAt)

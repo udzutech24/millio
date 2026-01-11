@@ -85,6 +85,7 @@ enum CreditAction {
         interestRate: Double,
         monthlyPayment: Double,
         startDate: Date,
+        endDate: Date,
         termMonths: Int,
         currency: String,
         bank: Bank,
@@ -144,13 +145,14 @@ final class CreditViewModel: ViewModelProtocol {
         case .toggleFavorite(let credit):
             toggleFavorite(credit)
             
-        case .updateCredit(let name, let amount, let interestRate, let monthlyPayment, let startDate, let termMonths, let currency, let bank, let creditType):
+        case .updateCredit(let name, let amount, let interestRate, let monthlyPayment, let startDate, let endDate, let termMonths, let currency, let bank, let creditType):
             updateCredit(
                 name: name,
                 amount: amount,
                 interestRate: interestRate,
                 monthlyPayment: monthlyPayment,
                 startDate: startDate,
+                endDate: endDate,
                 termMonths: termMonths,
                 currency: currency,
                 bank: bank,
@@ -379,6 +381,7 @@ final class CreditViewModel: ViewModelProtocol {
         interestRate: Double,
         monthlyPayment: Double,
         startDate: Date,
+        endDate: Date,
         termMonths: Int,
         currency: String,
         bank: Bank,
@@ -391,6 +394,7 @@ final class CreditViewModel: ViewModelProtocol {
             existing.interestRate = interestRate
             existing.monthlyPayment = monthlyPayment
             existing.startDate = startDate
+            existing.endDate = endDate
             existing.termMonths = termMonths
             existing.currency = currency
             existing.bank = bank
@@ -410,6 +414,7 @@ final class CreditViewModel: ViewModelProtocol {
                 bank: bank,
                 creditType: creditType
             )
+            newCredit.endDate = endDate
             modelContext.insert(newCredit)
         }
         

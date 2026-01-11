@@ -58,6 +58,9 @@ final class Credit: Persistable {
     /// Дата начала кредита
     var startDate: Date = Date()
     
+    /// Дата окончания кредита
+    var endDate: Date?
+    
     /// Срок кредита в месяцах
     var termMonths: Int = 0
     
@@ -104,6 +107,69 @@ final class Credit: Persistable {
         max(0, termMonths - monthsPassed)
     }
     
+    /// Рассчитать ежемесячный платеж по формуле аннуитета
+    /// M = S * (r * (1 + r)^n) / ((1 + r)^n - 1)
+    /// где S - сумма кредита, r - месячная ставка, n - количество месяцев
+    static func calculateMonthlyPayment(amount: Double, annualInterestRate: Double, termMonths: Int) -> Double {
+        guard amount > 0, termMonths > 0, annualInterestRate >= 0 else { return 0 }
+        
+        // Месячная процентная ставка (в долях)
+        let monthlyRate = annualInterestRate / 12.0 / 100.0
+        
+        // Если процентная ставка равна нулю, просто делим сумму на количество месяцев
+        if monthlyRate == 0 {
+            return amount / Double(termMonths)
+        }
+        
+        // Формула аннуитетного платежа
+        let power = pow(1 + monthlyRate, Double(termMonths))
+        let monthlyPayment = amount * (monthlyRate * power) / (power - 1)
+        
+        return monthlyPayment
+    }
+    
+    /// Рассчитать срок в месяцах из дат начала и окончания
+    /// Считает количество месяцев между датами (включая начальный и конечный месяц)
+    /// Пример: с 17 дек 2022 до 11 окт 2027 = 58 месяцев
+    static func calculateTermMonths(from startDate: Date, to endDate: Date) -> Int {
+        let calendar = Calendar.current
+        
+        // Получаем компоненты дат
+        let startComponents = calendar.dateComponents([.year, .month, .day], from: startDate)
+        let endComponents = calendar.dateComponents([.year, .month, .day], from: endDate)
+        
+        guard let startYear = startComponents.year,
+              let startMonth = startComponents.month,
+              let startDay = startComponents.day,
+              let endYear = endComponents.year,
+              let endMonth = endComponents.month,
+              let endDay = endComponents.day else {
+            // Fallback: используем dateComponents
+            let components = calendar.dateComponents([.year, .month], from: startDate, to: endDate)
+            if let years = components.year, let months = components.month {
+                return max(1, years * 12 + months)
+            }
+            return max(1, components.month ?? 0)
+        }
+        
+        // Считаем количество месяцев от начала начального месяца до начала конечного месяца
+        // (год_конца - год_начала) * 12 + (месяц_конца - месяц_начала)
+        // Это дает количество месяцев ВКЛЮЧАЯ начальный месяц до начала конечного месяца
+        let monthsToEndMonth = (endYear - startYear) * 12 + (endMonth - startMonth)
+        
+        // Если endDay >= startDay, конечный месяц считается полным
+        // Иначе конечный месяц неполный и не считается
+        if endDay >= startDay {
+            // Конечный месяц полный: monthsToEndMonth уже включает начальный месяц,
+            // добавляем конечный месяц
+            return max(1, monthsToEndMonth + 1)
+        } else {
+            // Конечный месяц неполный: monthsToEndMonth уже включает начальный месяц,
+            // конечный месяц не считаем
+            return max(1, monthsToEndMonth)
+        }
+    }
+    
     /// Общая сумма к выплате (сумма кредита + проценты)
     var totalAmount: Double {
         amount + totalInterest
@@ -134,7 +200,8 @@ final class Credit: Persistable {
         termMonths: Int,
         currency: String,
         bank: Bank = .other,
-        creditType: CreditType = .consumer
+        creditType: CreditType = .consumer,
+        endDate: Date? = nil
     ) {
         self.name = name
         self.amount = amount
@@ -145,6 +212,7 @@ final class Credit: Persistable {
         self.currency = currency
         self.bankRaw = bank.rawValue
         self.creditTypeRaw = creditType.rawValue
+        self.endDate = endDate
         self.remainingAmount = amount // Изначально остаток равен сумме кредита
         self.createdAt = Date()
         self.updatedAt = Date()
@@ -172,6 +240,7 @@ final class Credit: Persistable {
             "interestRate": interestRate,
             "monthlyPayment": monthlyPayment,
             "startDate": startDate.timeIntervalSince1970,
+            "endDate": endDate?.timeIntervalSince1970 ?? 0,
             "termMonths": termMonths,
             "currency": currency,
             "bankRaw": bankRaw,

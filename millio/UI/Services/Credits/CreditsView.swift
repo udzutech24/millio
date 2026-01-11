@@ -391,6 +391,8 @@ private struct CreditsContentViewInternal: View {
     private func formatBalance(_ balance: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
+        formatter.groupingSeparator = " "
+        formatter.usesGroupingSeparator = true
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
         return formatter.string(from: NSNumber(value: balance)) ?? "0.00"
@@ -435,6 +437,8 @@ private struct CurrencyDebtCard: View {
     private func formatBalance(_ balance: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
+        formatter.groupingSeparator = " "
+        formatter.usesGroupingSeparator = true
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
         return formatter.string(from: NSNumber(value: balance)) ?? "0.00"
@@ -491,170 +495,181 @@ private struct CreditRow: View {
     let onDelete: () -> Void
     let onToggleFavorite: () -> Void
     
+    @State private var showDeleteConfirmation = false
+    
     var body: some View {
-        Button {
-            onEdit()
-        } label: {
-            VStack(spacing: 0) {
-                HStack(spacing: 16) {
-                    // Иконка типа кредита
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: AppColors.creditsGradient,
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 48, height: 48)
-                        
-                        Image(systemName: credit.creditType.icon)
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary)
-                    }
-                    
-                    // Информация о кредите
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text(credit.name)
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(AppColors.textPrimary)
-                                .lineLimit(1)
-                            
-                            if credit.isFavorite {
-                                Image(systemName: "star.fill")
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(
-                                        LinearGradient(
-                                            colors: AppColors.creditsGradient,
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
-                            }
-                        }
-                        
-                        HStack(spacing: 12) {
-                            // Остаток долга
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Остаток")
-                                    .font(.system(size: 12, weight: .regular))
-                                    .foregroundStyle(AppColors.textTertiary)
-                                
-                                Text("\(formatBalance(credit.remainingAmount)) \(credit.currency)")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(AppColors.textPrimary)
-                            }
-                            
-                            // Ежемесячный платеж
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Платеж")
-                                    .font(.system(size: 12, weight: .regular))
-                                    .foregroundStyle(AppColors.textTertiary)
-                                
-                                Text("\(formatBalance(credit.monthlyPayment)) \(credit.currency)")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(AppColors.textPrimary)
-                            }
-                            
-                            // Осталось месяцев
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Осталось")
-                                    .font(.system(size: 12, weight: .regular))
-                                    .foregroundStyle(AppColors.textTertiary)
-                                
-                                Text("\(credit.monthsRemaining) мес.")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(AppColors.textPrimary)
-                            }
-                        }
-                    }
-                    
-                    Spacer()
-                    
-                    // Кнопки действий
-                    VStack(spacing: 8) {
-                        Button {
-                            onToggleFavorite()
-                        } label: {
-                            Image(systemName: credit.isFavorite ? "star.fill" : "star")
-                                .font(.system(size: 18))
-                                .foregroundStyle(
-                                    credit.isFavorite ?
-                                    LinearGradient(
-                                        colors: AppColors.creditsGradient,
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    ) :
-                                    LinearGradient(
-                                        colors: [AppColors.textTertiary],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                        }
-                        
-                        Menu {
-                            Button(role: .destructive) {
-                                onDelete()
-                            } label: {
-                                Label("Удалить", systemImage: "trash")
-                            }
-                        } label: {
-                            Image(systemName: "ellipsis")
-                                .font(.system(size: 18))
-                                .foregroundStyle(AppColors.textSecondary)
-                        }
-                    }
-                }
-                .padding(20)
-                .background {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                // Основная область кредита (кликабельна)
+                Button(action: onEdit) {
+                    HStack(spacing: 16) {
+                        // Иконка типа кредита
+                        ZStack {
+                            Circle()
+                                .fill(
                                     LinearGradient(
                                         colors: AppColors.creditsGradient,
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 1.5
+                                    )
                                 )
+                                .frame(width: 48, height: 48)
+                            
+                            Image(systemName: credit.creditType.icon)
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(AppColors.textPrimary)
                         }
-                }
-                
-                // Прогресс выплаты
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(AppColors.textTertiary.opacity(0.2))
-                            .frame(height: 4)
                         
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(
+                        // Информация о кредите
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text(credit.name)
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(AppColors.textPrimary)
+                                    .lineLimit(1)
+                                
+                                if credit.isFavorite {
+                                    Image(systemName: "star.fill")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(
+                                            LinearGradient(
+                                                colors: AppColors.creditsGradient,
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                }
+                            }
+                            
+                            HStack(spacing: 12) {
+                                // Остаток долга
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Остаток:")
+                                        .font(.system(size: 12, weight: .regular))
+                                        .foregroundStyle(AppColors.textTertiary)
+                                    
+                                    Text("\(formatBalance(credit.remainingAmount)) \(credit.currency)")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundStyle(AppColors.textPrimary)
+                                        .lineLimit(1)
+                                }
+                                
+                                // Ежемесячный платеж
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Платеж:")
+                                        .font(.system(size: 12, weight: .regular))
+                                        .foregroundStyle(AppColors.textTertiary)
+                                    
+                                    Text("\(formatBalance(credit.monthlyPayment)) \(credit.currency)")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundStyle(AppColors.textPrimary)
+                                        .lineLimit(1)
+                                }
+                                
+                                // Осталось месяцев
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Осталось:")
+                                        .font(.system(size: 12, weight: .regular))
+                                        .foregroundStyle(AppColors.textTertiary)
+                                    
+                                    Text("\(credit.monthsRemaining) мес.")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundStyle(AppColors.textPrimary)
+                                }
+                            }
+                        }
+                        
+                        Spacer()
+                    }
+                }
+                .buttonStyle(.plain)
+                
+                // Кнопки действий
+                VStack(spacing: 8) {
+                    Button {
+                        onToggleFavorite()
+                    } label: {
+                        Image(systemName: credit.isFavorite ? "star.fill" : "star")
+                            .font(.system(size: 18))
+                            .foregroundStyle(
+                                credit.isFavorite ?
                                 LinearGradient(
                                     colors: AppColors.creditsGradient,
                                     startPoint: .leading,
                                     endPoint: .trailing
+                                ) :
+                                LinearGradient(
+                                    colors: [AppColors.textTertiary],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
                                 )
                             )
-                            .frame(width: geometry.size.width * credit.paymentProgress, height: 4)
+                    }
+                    
+                    Button {
+                        showDeleteConfirmation = true
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 18))
+                            .foregroundStyle(AppColors.error)
+                    }
+                    .confirmationDialog("Удалить кредит?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
+                        Button("Удалить", role: .destructive) {
+                            onDelete()
+                        }
+                        Button("Отмена", role: .cancel) {}
+                    } message: {
+                        Text("Кредит \"\(credit.name)\" будет удален без возможности восстановления.")
                     }
                 }
-                .frame(height: 4)
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-                .padding(.bottom, 12)
             }
+            .padding(20)
+            .background {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(
+                                LinearGradient(
+                                    colors: AppColors.creditsGradient,
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.5
+                            )
+                    }
+            }
+            
+            // Прогресс выплаты
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(AppColors.textTertiary.opacity(0.2))
+                        .frame(height: 4)
+                    
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(
+                            LinearGradient(
+                                colors: AppColors.creditsGradient,
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: geometry.size.width * credit.paymentProgress, height: 4)
+                }
+            }
+            .frame(height: 4)
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 12)
         }
-        .buttonStyle(.plain)
     }
     
     private func formatBalance(_ balance: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
+        formatter.groupingSeparator = " "
+        formatter.usesGroupingSeparator = true
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 2
         return formatter.string(from: NSNumber(value: balance)) ?? "0"
@@ -854,42 +869,82 @@ private struct CurrencyFilterSheet: View {
 
 private struct DisplayCurrencySheet: View {
     @ObservedObject var viewModel: CreditViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var availableCurrencies: [String] = []
+    @State private var isLoading = true
     
     var body: some View {
         NavigationStack {
             ZStack {
                 GradientBackground()
                 
-                List {
-                    ForEach(CurrencyRateService.shared.getAvailableCurrencies(), id: \.self) { currency in
-                        Button {
-                            viewModel.handle(.setDisplayCurrency(currency))
-                            viewModel.handle(.hideDisplayCurrencySheet)
-                        } label: {
-                            HStack {
-                                Text(currency)
-                                    .foregroundStyle(AppColors.textPrimary)
-                                Spacer()
-                                if viewModel.state.displayCurrency == currency {
-                                    Image(systemName: "checkmark")
-                                        .foregroundStyle(
-                                            LinearGradient(
-                                                colors: AppColors.creditsGradient,
-                                                startPoint: .leading,
-                                                endPoint: .trailing
+                if isLoading {
+                    ProgressView()
+                        .tint(AppColors.textPrimary)
+                } else {
+                    List {
+                        ForEach(availableCurrencies, id: \.self) { currency in
+                            Button {
+                                viewModel.handle(.setDisplayCurrency(currency))
+                                dismiss()
+                            } label: {
+                                HStack {
+                                    Text(currency)
+                                        .foregroundStyle(AppColors.textPrimary)
+                                    Spacer()
+                                    if viewModel.state.displayCurrency == currency {
+                                        Image(systemName: "checkmark")
+                                            .foregroundStyle(
+                                                LinearGradient(
+                                                    colors: AppColors.creditsGradient,
+                                                    startPoint: .leading,
+                                                    endPoint: .trailing
+                                                )
                                             )
-                                        )
+                                    }
                                 }
                             }
+                            .listRowBackground(Color.clear)
                         }
-                        .listRowBackground(Color.clear)
                     }
+                    .scrollContentBackground(.hidden)
                 }
-                .scrollContentBackground(.hidden)
             }
             .navigationTitle("Валюта отображения")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Готово") {
+                        dismiss()
+                    }
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: AppColors.creditsGradient,
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                }
+            }
+            .task {
+                await loadAvailableCurrencies()
+            }
         }
+    }
+    
+    private func loadAvailableCurrencies() async {
+        isLoading = true
+        defer { isLoading = false }
+        
+        // Загружаем курсы, чтобы получить актуальный список валют
+        _ = await CurrencyRateService.shared.getRate(from: "USD", to: "RUB")
+        
+        // Получаем валюты из текущего источника курсов
+        let fromRateSource = Set(CurrencyRateService.shared.getAvailableCurrencies())
+        // Добавляем валюты из кредитов пользователя
+        let fromCredits = Set(viewModel.state.credits.map { $0.currency })
+        // Объединяем и сортируем
+        availableCurrencies = Array(fromRateSource.union(fromCredits)).sorted()
     }
 }
 
@@ -904,10 +959,15 @@ private struct CreditEditorView: View {
     @State private var interestRateText: String = ""
     @State private var monthlyPaymentText: String = ""
     @State private var startDate: Date = Date()
+    @State private var endDate: Date = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
     @State private var termMonthsText: String = ""
     @State private var selectedCurrency: String = "RUB"
     @State private var selectedBank: Bank = .other
     @State private var selectedCreditType: CreditType = .consumer
+    @State private var autoCalculatePayment: Bool = true
+    @State private var autoCalculateTerm: Bool = true
+    @State private var availableCurrencies: [String] = ["RUB", "USD", "EUR"]
+    @State private var isLoadingCurrencies: Bool = false
     
     var body: some View {
         NavigationStack {
@@ -924,36 +984,142 @@ private struct CreditEditorView: View {
                     }
                     
                     Section {
-                        TextField("Сумма кредита", text: $amountText)
-                            .keyboardType(.decimalPad)
-                            .foregroundStyle(AppColors.textPrimary)
+                        TextField("Сумма кредита", text: Binding(
+                            get: { formatNumberForDisplay(amountText) },
+                            set: { newValue in
+                                // Нормализуем: убираем пробелы и заменяем запятую на точку
+                                let normalized = newValue.replacingOccurrences(of: " ", with: "")
+                                    .replacingOccurrences(of: ",", with: ".")
+                                amountText = normalized
+                                
+                                if autoCalculatePayment {
+                                    calculateMonthlyPayment()
+                                }
+                            }
+                        ))
+                        .keyboardType(.decimalPad)
+                        .foregroundStyle(AppColors.textPrimary)
                         
                         TextField("Процентная ставка (% годовых)", text: $interestRateText)
                             .keyboardType(.decimalPad)
                             .foregroundStyle(AppColors.textPrimary)
+                            .onChange(of: interestRateText) { oldValue, newValue in
+                                // Нормализуем ввод: заменяем запятую на точку
+                                if newValue.contains(",") {
+                                    interestRateText = newValue.replacingOccurrences(of: ",", with: ".")
+                                }
+                                if autoCalculatePayment {
+                                    calculateMonthlyPayment()
+                                }
+                            }
                         
-                        TextField("Ежемесячный платеж", text: $monthlyPaymentText)
+                        HStack {
+                            TextField("Ежемесячный платеж", text: Binding(
+                                get: { formatNumberForDisplay(monthlyPaymentText) },
+                                set: { newValue in
+                                    // Нормализуем: убираем пробелы и заменяем запятую на точку
+                                    let normalized = newValue.replacingOccurrences(of: " ", with: "")
+                                        .replacingOccurrences(of: ",", with: ".")
+                                    monthlyPaymentText = normalized
+                                }
+                            ))
                             .keyboardType(.decimalPad)
                             .foregroundStyle(AppColors.textPrimary)
+                            .disabled(autoCalculatePayment)
+                            
+                            Button {
+                                autoCalculatePayment.toggle()
+                                if autoCalculatePayment {
+                                    calculateMonthlyPayment()
+                                }
+                            } label: {
+                                Image(systemName: autoCalculatePayment ? "wand.and.stars" : "wand.and.stars.inverse")
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: AppColors.creditsGradient,
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                            }
+                        }
                         
                         DatePicker("Дата начала", selection: $startDate, displayedComponents: .date)
                             .foregroundStyle(AppColors.textPrimary)
+                            .onChange(of: startDate) { _, _ in
+                                if autoCalculateTerm {
+                                    calculateTermMonths()
+                                }
+                            }
                         
-                        TextField("Срок в месяцах", text: $termMonthsText)
-                            .keyboardType(.numberPad)
+                        DatePicker("Дата окончания", selection: $endDate, displayedComponents: .date)
                             .foregroundStyle(AppColors.textPrimary)
+                            .onChange(of: endDate) { _, _ in
+                                if autoCalculateTerm {
+                                    calculateTermMonths()
+                                    if autoCalculatePayment {
+                                        calculateMonthlyPayment()
+                                    }
+                                }
+                            }
+                        
+                        HStack {
+                            TextField("Срок в месяцах", text: $termMonthsText)
+                                .keyboardType(.numberPad)
+                                .foregroundStyle(AppColors.textPrimary)
+                                .disabled(autoCalculateTerm)
+                                .onChange(of: termMonthsText) { _, _ in
+                                    if !autoCalculateTerm && autoCalculatePayment {
+                                        calculateMonthlyPayment()
+                                    }
+                                }
+                            
+                            Button {
+                                autoCalculateTerm.toggle()
+                                if autoCalculateTerm {
+                                    calculateTermMonths()
+                                    if autoCalculatePayment {
+                                        calculateMonthlyPayment()
+                                    }
+                                }
+                            } label: {
+                                Image(systemName: autoCalculateTerm ? "wand.and.stars" : "wand.and.stars.inverse")
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: AppColors.creditsGradient,
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                            }
+                        }
                     } header: {
                         Text("Параметры кредита")
                             .foregroundStyle(AppColors.textSecondary)
+                    } footer: {
+                        Text("Автоматический расчет включен. Нажмите на иконку, чтобы ввести значение вручную.")
+                            .foregroundStyle(AppColors.textTertiary)
+                            .font(.system(size: 12))
                     }
                     
                     Section {
-                        Picker("Валюта", selection: $selectedCurrency) {
-                            ForEach(CurrencyRateService.shared.getAvailableCurrencies(), id: \.self) { currency in
-                                Text(currency).tag(currency)
+                        if isLoadingCurrencies {
+                            HStack {
+                                Text("Валюта")
+                                    .foregroundStyle(AppColors.textPrimary)
+                                Spacer()
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                    .tint(AppColors.textTertiary)
                             }
+                        } else {
+                            Picker("Валюта", selection: $selectedCurrency) {
+                                ForEach(availableCurrencies, id: \.self) { currency in
+                                    Text(currency).tag(currency)
+                                }
+                            }
+                            .foregroundStyle(AppColors.textPrimary)
                         }
-                        .foregroundStyle(AppColors.textPrimary)
                         
                         Picker("Банк", selection: $selectedBank) {
                             ForEach(Bank.allCases, id: \.self) { bank in
@@ -1006,27 +1172,141 @@ private struct CreditEditorView: View {
                     interestRateText = String(format: "%.2f", editing.interestRate)
                     monthlyPaymentText = String(format: "%.2f", editing.monthlyPayment)
                     startDate = editing.startDate
+                    endDate = editing.endDate ?? Calendar.current.date(byAdding: .month, value: editing.termMonths, to: editing.startDate) ?? Date()
                     termMonthsText = String(editing.termMonths)
                     selectedCurrency = editing.currency
                     selectedBank = editing.bank
                     selectedCreditType = editing.creditType
+                } else {
+                    // Для нового кредита устанавливаем дату окончания на год вперед
+                    endDate = Calendar.current.date(byAdding: .year, value: 1, to: startDate) ?? Date()
+                    calculateTermMonths()
                 }
+                
+                // Загружаем доступные валюты
+                loadAvailableCurrencies()
             }
         }
     }
     
     private var isValid: Bool {
         !name.isEmpty &&
-        Double(amountText) != nil && Double(amountText)! > 0 &&
-        Double(interestRateText) != nil && Double(interestRateText)! >= 0 &&
-        Double(monthlyPaymentText) != nil && Double(monthlyPaymentText)! > 0 &&
-        Int(termMonthsText) != nil && Int(termMonthsText)! > 0
+        parseNumber(amountText) != nil && parseNumber(amountText)! > 0 &&
+        parseDecimal(interestRateText) != nil && parseDecimal(interestRateText)! >= 0 &&
+        parseNumber(monthlyPaymentText) != nil && parseNumber(monthlyPaymentText)! > 0 &&
+        Int(termMonthsText) != nil && Int(termMonthsText)! > 0 &&
+        endDate > startDate
+    }
+    
+    private func calculateTermMonths() {
+        let months = Credit.calculateTermMonths(from: startDate, to: endDate)
+        termMonthsText = String(months)
+    }
+    
+    private func calculateMonthlyPayment() {
+        guard let amount = parseNumber(amountText),
+              let interestRate = parseDecimal(interestRateText),
+              let termMonths = Int(termMonthsText),
+              amount > 0, termMonths > 0 else {
+            return
+        }
+        
+        let payment = Credit.calculateMonthlyPayment(
+            amount: amount,
+            annualInterestRate: interestRate,
+            termMonths: termMonths
+        )
+        
+        // Форматируем с пробелами между тысячами
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.groupingSeparator = " "
+        formatter.usesGroupingSeparator = true
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        monthlyPaymentText = formatter.string(from: NSNumber(value: payment)) ?? String(format: "%.2f", payment)
+    }
+    
+    // MARK: - Currency Loading
+    
+    private func loadAvailableCurrencies() {
+        Task {
+            isLoadingCurrencies = true
+            defer { isLoadingCurrencies = false }
+            
+            // Загружаем курсы, чтобы получить актуальный список валют
+            _ = await CurrencyRateService.shared.getRate(from: "USD", to: "RUB")
+            
+            // Получаем валюты из текущего источника курсов
+            let fromRateSource = Set(CurrencyRateService.shared.getAvailableCurrencies())
+            // Добавляем валюту текущего кредита, если она есть
+            var currencies = Array(fromRateSource)
+            if !currencies.contains(selectedCurrency) {
+                currencies.append(selectedCurrency)
+            }
+            // Сортируем
+            availableCurrencies = currencies.sorted()
+        }
+    }
+    
+    // MARK: - Number Formatting Helpers
+    
+    /// Нормализует число: убирает пробелы и заменяет запятую на точку
+    private func normalizeNumber(_ text: String) -> String {
+        text.replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: ",", with: ".")
+    }
+    
+    /// Нормализует десятичное число: заменяет запятую на точку
+    private func normalizeDecimal(_ text: String) -> String {
+        text.replacingOccurrences(of: ",", with: ".")
+    }
+    
+    /// Парсит число из строки (обрабатывает запятую и пробелы)
+    private func parseNumber(_ text: String) -> Double? {
+        let normalized = normalizeNumber(text)
+        return Double(normalized)
+    }
+    
+    /// Парсит десятичное число из строки (обрабатывает запятую)
+    private func parseDecimal(_ text: String) -> Double? {
+        let normalized = normalizeDecimal(text)
+        return Double(normalized)
+    }
+    
+    /// Форматирует число для отображения с пробелами между тысячами
+    private func formatNumberForDisplay(_ text: String) -> String {
+        // Если текст пустой, возвращаем как есть
+        guard !text.isEmpty else { return text }
+        
+        // Парсим число
+        guard let number = parseNumber(text) else {
+            // Если не число, возвращаем как есть (может быть в процессе ввода)
+            return text
+        }
+        
+        // Форматируем с пробелами между тысячами
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.groupingSeparator = " "
+        formatter.usesGroupingSeparator = true
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 2
+        
+        // Определяем, есть ли десятичная часть
+        let normalized = normalizeNumber(text)
+        let hasDecimal = normalized.contains(".")
+        if !hasDecimal {
+            formatter.maximumFractionDigits = 0
+        }
+        
+        return formatter.string(from: NSNumber(value: number)) ?? text
     }
     
     private func saveCredit() {
-        guard let amount = Double(amountText),
-              let interestRate = Double(interestRateText),
-              let monthlyPayment = Double(monthlyPaymentText),
+        guard let amount = parseNumber(amountText),
+              let interestRate = parseDecimal(interestRateText),
+              let monthlyPayment = parseNumber(monthlyPaymentText),
               let termMonths = Int(termMonthsText) else {
             return
         }
@@ -1037,6 +1317,7 @@ private struct CreditEditorView: View {
             interestRate: interestRate,
             monthlyPayment: monthlyPayment,
             startDate: startDate,
+            endDate: endDate,
             termMonths: termMonths,
             currency: selectedCurrency,
             bank: selectedBank,
