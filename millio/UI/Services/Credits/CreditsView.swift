@@ -134,10 +134,13 @@ private struct CreditsContentViewInternal: View {
                                     endPoint: .trailing
                                 )
                             )
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
                         
                         Text(viewModel.state.displayCurrency)
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundStyle(AppColors.textSecondary)
+                            .lineLimit(1)
                     }
                     
                     if viewModel.state.isLoadingRates {
