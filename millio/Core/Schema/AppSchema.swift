@@ -36,6 +36,11 @@ struct AppSchema {
             modelTypes.append(Card.self)
         }
         
+        // Явно добавляем модели Cashback
+        if !modelTypes.contains(where: { $0 == Cashback.self }) {
+            modelTypes.append(Cashback.self)
+        }
+        
         return Schema(modelTypes)
     }
 }

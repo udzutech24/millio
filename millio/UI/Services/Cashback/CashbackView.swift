@@ -34,17 +34,32 @@ struct CashbackView: View {
 private struct CashbackContentViewInternal: View {
     @ObservedObject var viewModel: CashbackViewModel
     
+    var filteredCashbacks: [Cashback] {
+        if viewModel.state.searchText.isEmpty {
+            return viewModel.state.cashbacks
+        }
+        let searchLower = viewModel.state.searchText.lowercased()
+        return viewModel.state.cashbacks.filter { cashback in
+            cashback.name.lowercased().contains(searchLower) ||
+            cashback.category.displayName.lowercased().contains(searchLower)
+        }
+    }
+    
     var body: some View {
         ZStack {
             GradientBackground()
             
             ScrollView {
                 VStack(spacing: 24) {
-                    // Выбранная карта
-                    selectedCardSection
+                    // Поиск
+                    searchSection
                     
-                    // Заглушка для будущего функционала
-                    placeholderSection
+                    // Список кешбэков
+                    if filteredCashbacks.isEmpty {
+                        emptyStateView
+                    } else {
+                        cashbacksList
+                    }
                 }
                 .padding(.horizontal, 24)
                 .padding(.vertical, 16)
@@ -52,138 +67,66 @@ private struct CashbackContentViewInternal: View {
         }
         .navigationTitle("Кешбэк")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    viewModel.handle(.addCashback)
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: AppColors.cashbackGradient,
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                }
+            }
+        }
         .sheet(isPresented: Binding(
-            get: { viewModel.state.showCardPicker },
-            set: { if !$0 { viewModel.handle(.hideCardPicker) } }
+            get: { viewModel.state.showCashbackEditor },
+            set: { if !$0 { viewModel.handle(.hideCashbackEditor) } }
         )) {
-            CardPickerView(viewModel: viewModel)
+            CashbackEditorView(viewModel: viewModel)
         }
     }
     
-    // MARK: - Selected Card Section
+    // MARK: - Search Section
     
-    private var selectedCardSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Привязанная карта")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-                
-                Spacer()
-            }
+    private var searchSection: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(AppColors.textTertiary)
             
-            if let card = viewModel.state.selectedCard {
-                // Карточка выбранной карты
+            TextField("Поиск кешбэков...", text: Binding(
+                get: { viewModel.state.searchText },
+                set: { viewModel.handle(.search($0)) }
+            ))
+            .font(.system(size: 16, weight: .regular))
+            .foregroundStyle(AppColors.textPrimary)
+            
+            if !viewModel.state.searchText.isEmpty {
                 Button {
-                    viewModel.handle(.showCardPicker)
+                    viewModel.handle(.search(""))
                 } label: {
-                    HStack(spacing: 16) {
-                        // Иконка карты
-                        Image(systemName: card.cardType.icon)
-                            .font(.system(size: 32, weight: .semibold))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: AppColors.cashbackGradient,
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 56, height: 56)
-                            .background {
-                                Circle()
-                                    .fill(.ultraThinMaterial)
-                            }
-                        
-                        // Информация о карте
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(card.name)
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(AppColors.textPrimary)
-                            
-                            Text(card.bank.displayName)
-                                .font(.system(size: 14, weight: .regular))
-                                .foregroundStyle(AppColors.textSecondary)
-                            
-                            Text(card.maskedNumber)
-                                .font(.system(size: 13, weight: .regular))
-                                .foregroundStyle(AppColors.textTertiary)
-                        }
-                        
-                        Spacer()
-                        
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(AppColors.textTertiary)
-                    }
-                    .padding(20)
-                    .background {
-                        RoundedRectangle(cornerRadius: 20)
-                            .fill(.ultraThinMaterial)
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 20)
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: AppColors.cashbackGradient,
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        ),
-                                        lineWidth: 1.5
-                                    )
-                            }
-                    }
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(AppColors.textTertiary)
                 }
-                .buttonStyle(.plain)
-            } else {
-                // Кнопка выбора карты
-                Button {
-                    viewModel.handle(.showCardPicker)
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: AppColors.cashbackGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                        
-                        Text("Выбрать карту")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary)
-                        
-                        Spacer()
-                        
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(AppColors.textTertiary)
-                    }
-                    .padding(20)
-                    .background {
-                        RoundedRectangle(cornerRadius: 20)
-                            .fill(.ultraThinMaterial)
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 20)
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: AppColors.cashbackGradient,
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        ),
-                                        lineWidth: 1.5
-                                    )
-                            }
-                    }
-                }
-                .buttonStyle(.plain)
             }
+        }
+        .padding(16)
+        .background {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.ultraThinMaterial)
         }
     }
     
-    // MARK: - Placeholder Section
+    // MARK: - Empty State
     
-    private var placeholderSection: some View {
+    private var emptyStateView: some View {
         VStack(spacing: 16) {
             Image(systemName: "percent")
                 .font(.system(size: 64))
@@ -195,23 +138,557 @@ private struct CashbackContentViewInternal: View {
                     )
                 )
             
-            Text("Кешбэк")
-                .font(.system(size: 24, weight: .bold))
+            Text("Нет кешбэков")
+                .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(AppColors.textPrimary)
             
-            Text("Функционал кешбэка будет доступен в следующих версиях")
+            Text("Добавьте свой первый кешбэк")
                 .font(.system(size: 14, weight: .regular))
                 .foregroundStyle(AppColors.textTertiary)
                 .multilineTextAlignment(.center)
         }
-        .padding(.vertical, 40)
+        .padding(.vertical, 60)
+    }
+    
+    // MARK: - Cashbacks List
+    
+    private var cashbacksList: some View {
+        VStack(spacing: 16) {
+            ForEach(filteredCashbacks) { cashback in
+                CashbackRowView(cashback: cashback, viewModel: viewModel)
+            }
+        }
     }
 }
 
-// MARK: - Card Picker View
+// MARK: - Cashback Row View
 
-private struct CardPickerView: View {
+private struct CashbackRowView: View {
+    let cashback: Cashback
     @ObservedObject var viewModel: CashbackViewModel
+    @State private var showCards: Bool = false
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Основная информация о кешбэке
+            Button {
+                viewModel.handle(.editCashback(cashback))
+            } label: {
+                HStack(spacing: 16) {
+                    // Иконка категории
+                    Image(systemName: cashback.category.icon)
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: AppColors.cashbackGradient,
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 56, height: 56)
+                        .background {
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                        }
+                    
+                    // Информация
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(cashback.name)
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                        
+                        HStack(spacing: 8) {
+                            Text(cashback.category.displayName)
+                                .font(.system(size: 14, weight: .regular))
+                                .foregroundStyle(AppColors.textSecondary)
+                            
+                            Text("•")
+                                .font(.system(size: 14, weight: .regular))
+                                .foregroundStyle(AppColors.textTertiary)
+                            
+                            Text(cashback.formattedPercentage)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: AppColors.cashbackGradient,
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    HStack(spacing: 8) {
+                        // Кнопка удаления
+                        Button {
+                            viewModel.handle(.deleteCashback(cashback))
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(AppColors.error)
+                                .frame(width: 32, height: 32)
+                                .background {
+                                    Circle()
+                                        .fill(.ultraThinMaterial)
+                                }
+                        }
+                        .buttonStyle(.plain)
+                        
+                        // Кнопка показа карт
+                        Button {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                showCards.toggle()
+                            }
+                        } label: {
+                            Image(systemName: showCards ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(AppColors.textTertiary)
+                                .frame(width: 32, height: 32)
+                                .background {
+                                    Circle()
+                                        .fill(.ultraThinMaterial)
+                                }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(20)
+                .background {
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(.ultraThinMaterial)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 20)
+                                .stroke(
+                                    LinearGradient(
+                                        colors: AppColors.cashbackGradient,
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    ),
+                                    lineWidth: 1.5
+                                )
+                        }
+                }
+            }
+            .buttonStyle(.plain)
+            
+            // Карты для этого кешбэка
+            if showCards {
+                cardsSection
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+    }
+    
+    private var cardsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            let cards = viewModel.getCardsForCashback(cashback)
+            
+            if cards.isEmpty {
+                Text("Нет доступных карт")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(AppColors.textTertiary)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+            } else {
+                Text("Используйте эти карты для получения кешбэка:")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(AppColors.textSecondary)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                
+                ForEach(cards) { card in
+                    HStack(spacing: 12) {
+                        Image(systemName: card.cardType.icon)
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: AppColors.cashbackGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(width: 40, height: 40)
+                            .background {
+                                Circle()
+                                    .fill(.ultraThinMaterial)
+                            }
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(card.name)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(AppColors.textPrimary)
+                            
+                            Text(card.bank.displayName)
+                                .font(.system(size: 13, weight: .regular))
+                                .foregroundStyle(AppColors.textSecondary)
+                        }
+                        
+                        Spacer()
+                        
+                        if card.isFavorite {
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 12))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: AppColors.cashbackGradient,
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 8)
+                }
+            }
+        }
+        .background {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.ultraThinMaterial.opacity(0.5))
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 12)
+    }
+}
+
+// MARK: - Cashback Editor View
+
+private struct CashbackEditorView: View {
+    @ObservedObject var viewModel: CashbackViewModel
+    @Environment(\.dismiss) private var dismiss
+    
+    @State private var name: String = ""
+    @State private var selectedCategory: CashbackCategory = .other
+    @State private var percentageText: String = ""
+    @State private var selectedCardIDs: Set<String> = []
+    @State private var showCardPicker: Bool = false
+    
+    var isEditing: Bool {
+        viewModel.state.editingCashback != nil
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                GradientBackground()
+                
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // Название
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Название")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(AppColors.textPrimary)
+                            
+                            TextField("Например: Заправки", text: $name)
+                                .font(.system(size: 16, weight: .regular))
+                                .foregroundStyle(AppColors.textPrimary)
+                                .padding(16)
+                                .background {
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(.ultraThinMaterial)
+                                }
+                        }
+                        
+                        // Категория
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Категория")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(AppColors.textPrimary)
+                            
+                            LazyVGrid(columns: [
+                                GridItem(.flexible()),
+                                GridItem(.flexible())
+                            ], spacing: 12) {
+                                ForEach(CashbackCategory.allCases, id: \.self) { category in
+                                    Button {
+                                        selectedCategory = category
+                                    } label: {
+                                        VStack(spacing: 8) {
+                                            Image(systemName: category.icon)
+                                                .font(.system(size: 24, weight: .semibold))
+                                                .foregroundStyle(
+                                                    selectedCategory == category ?
+                                                    LinearGradient(
+                                                        colors: AppColors.cashbackGradient,
+                                                        startPoint: .leading,
+                                                        endPoint: .trailing
+                                                    ) :
+                                                    LinearGradient(
+                                                        colors: [AppColors.textTertiary, AppColors.textTertiary],
+                                                        startPoint: .leading,
+                                                        endPoint: .trailing
+                                                    )
+                                                )
+                                            
+                                            Text(category.displayName)
+                                                .font(.system(size: 13, weight: .medium))
+                                                .foregroundStyle(
+                                                    selectedCategory == category ?
+                                                    AppColors.textPrimary :
+                                                    AppColors.textSecondary
+                                                )
+                                                .lineLimit(1)
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 16)
+                                        .background {
+                                            RoundedRectangle(cornerRadius: 16)
+                                                .fill(.ultraThinMaterial)
+                                                .overlay {
+                                                    if selectedCategory == category {
+                                                        RoundedRectangle(cornerRadius: 16)
+                                                            .stroke(
+                                                                LinearGradient(
+                                                                    colors: AppColors.cashbackGradient,
+                                                                    startPoint: .leading,
+                                                                    endPoint: .trailing
+                                                                ),
+                                                                lineWidth: 1.5
+                                                            )
+                                                    }
+                                                }
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                        
+                        // Процент
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Процент кешбэка")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(AppColors.textPrimary)
+                            
+                            HStack(spacing: 12) {
+                                TextField("0", text: $percentageText)
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(AppColors.textPrimary)
+                                    .keyboardType(.decimalPad)
+                                    .padding(16)
+                                    .background {
+                                        RoundedRectangle(cornerRadius: 16)
+                                            .fill(.ultraThinMaterial)
+                                    }
+                                
+                                Text("%")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(AppColors.textSecondary)
+                            }
+                        }
+                        
+                        // Привязанные карты
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Text("Привязанные карты")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(AppColors.textPrimary)
+                                
+                                Spacer()
+                                
+                                if !selectedCardIDs.isEmpty {
+                                    Text("\(selectedCardIDs.count)")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(
+                                            LinearGradient(
+                                                colors: AppColors.cashbackGradient,
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background {
+                                            Capsule()
+                                                .fill(.ultraThinMaterial)
+                                        }
+                                }
+                            }
+                            
+                            Button {
+                                showCardPicker = true
+                            } label: {
+                                HStack(spacing: 16) {
+                                    if !selectedCardIDs.isEmpty {
+                                        // Показываем первые 3 карты
+                                        HStack(spacing: -8) {
+                                            ForEach(Array(selectedCardIDs.prefix(3)), id: \.self) { cardID in
+                                                if let card = viewModel.getCard(byID: cardID) {
+                                                    Image(systemName: card.cardType.icon)
+                                                        .font(.system(size: 20, weight: .semibold))
+                                                        .foregroundStyle(
+                                                            LinearGradient(
+                                                                colors: AppColors.cashbackGradient,
+                                                                startPoint: .leading,
+                                                                endPoint: .trailing
+                                                            )
+                                                        )
+                                                        .frame(width: 40, height: 40)
+                                                        .background {
+                                                            Circle()
+                                                                .fill(.ultraThinMaterial)
+                                                                .overlay {
+                                                                    Circle()
+                                                                        .stroke(
+                                                                            LinearGradient(
+                                                                                colors: AppColors.cashbackGradient,
+                                                                                startPoint: .leading,
+                                                                                endPoint: .trailing
+                                                                            ),
+                                                                            lineWidth: 2
+                                                                        )
+                                                                }
+                                                        }
+                                                }
+                                            }
+                                            
+                                            if selectedCardIDs.count > 3 {
+                                                Text("+\(selectedCardIDs.count - 3)")
+                                                    .font(.system(size: 12, weight: .semibold))
+                                                    .foregroundStyle(AppColors.textPrimary)
+                                                    .frame(width: 40, height: 40)
+                                                    .background {
+                                                        Circle()
+                                                            .fill(.ultraThinMaterial)
+                                                            .overlay {
+                                                                Circle()
+                                                                    .stroke(
+                                                                        LinearGradient(
+                                                                            colors: AppColors.cashbackGradient,
+                                                                            startPoint: .leading,
+                                                                            endPoint: .trailing
+                                                                        ),
+                                                                        lineWidth: 2
+                                                                    )
+                                                            }
+                                                    }
+                                            }
+                                        }
+                                        
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(selectedCardIDs.count == 1 ? "1 карта" : "\(selectedCardIDs.count) карт")
+                                                .font(.system(size: 16, weight: .semibold))
+                                                .foregroundStyle(AppColors.textPrimary)
+                                            
+                                            Text("Нажмите для изменения")
+                                                .font(.system(size: 13, weight: .regular))
+                                                .foregroundStyle(AppColors.textSecondary)
+                                        }
+                                        
+                                        Spacer()
+                                    } else {
+                                        Image(systemName: "plus.circle.fill")
+                                            .font(.system(size: 24, weight: .semibold))
+                                            .foregroundStyle(
+                                                LinearGradient(
+                                                    colors: AppColors.cashbackGradient,
+                                                    startPoint: .leading,
+                                                    endPoint: .trailing
+                                                )
+                                            )
+                                        
+                                        Text("Выбрать карты")
+                                            .font(.system(size: 16, weight: .medium))
+                                            .foregroundStyle(AppColors.textPrimary)
+                                        
+                                        Spacer()
+                                    }
+                                    
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(AppColors.textTertiary)
+                                }
+                                .padding(16)
+                                .background {
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(.ultraThinMaterial)
+                                        .overlay {
+                                            RoundedRectangle(cornerRadius: 16)
+                                                .stroke(
+                                                    LinearGradient(
+                                                        colors: AppColors.cashbackGradient,
+                                                        startPoint: .leading,
+                                                        endPoint: .trailing
+                                                    ),
+                                                    lineWidth: 1.5
+                                                )
+                                        }
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 16)
+                }
+            }
+            .navigationTitle(isEditing ? "Редактирование" : "Новый кешбэк")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Отмена") {
+                        dismiss()
+                    }
+                    .foregroundStyle(AppColors.textSecondary)
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Сохранить") {
+                        saveCashback()
+                    }
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: AppColors.cashbackGradient,
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .fontWeight(.semibold)
+                }
+            }
+            .sheet(isPresented: $showCardPicker) {
+                CashbackCardPickerView(
+                    selectedCardIDs: $selectedCardIDs,
+                    availableCards: viewModel.state.availableCards
+                )
+            }
+            .onAppear {
+                if let editing = viewModel.state.editingCashback {
+                    name = editing.name
+                    selectedCategory = editing.category
+                    percentageText = String(format: "%.1f", editing.percentage)
+                    selectedCardIDs = Set(editing.cardIDs)
+                }
+            }
+        }
+    }
+    
+    private func saveCashback() {
+        guard !name.isEmpty,
+              let percentage = Double(percentageText.replacingOccurrences(of: ",", with: ".")),
+              percentage >= 0 && percentage <= 100 else {
+            return
+        }
+        
+        viewModel.handle(.updateCashback(
+            name: name,
+            category: selectedCategory,
+            percentage: percentage,
+            cardIDs: Array(selectedCardIDs)
+        ))
+        
+        dismiss()
+    }
+}
+
+// MARK: - Cashback Card Picker View
+
+private struct CashbackCardPickerView: View {
+    @Binding var selectedCardIDs: Set<String>
+    let availableCards: [Card]
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -219,7 +696,7 @@ private struct CardPickerView: View {
             ZStack {
                 GradientBackground()
                 
-                if viewModel.state.availableCards.isEmpty {
+                if availableCards.isEmpty {
                     VStack(spacing: 16) {
                         Image(systemName: "creditcard.trianglebadge.exclamationmark")
                             .font(.system(size: 64))
@@ -238,62 +715,36 @@ private struct CardPickerView: View {
                 } else {
                     ScrollView {
                         VStack(spacing: 12) {
-                            // Опция "Не привязывать"
-                            Button {
-                                viewModel.handle(.selectCard(nil))
-                                dismiss()
-                            } label: {
-                                HStack(spacing: 16) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 24, weight: .semibold))
-                                        .foregroundStyle(AppColors.textTertiary)
-                                    
-                                    Text("Не привязывать карту")
-                                        .font(.system(size: 16, weight: .medium))
-                                        .foregroundStyle(AppColors.textPrimary)
-                                    
-                                    Spacer()
-                                    
-                                    if viewModel.state.selectedCard == nil {
-                                        Image(systemName: "checkmark")
-                                            .font(.system(size: 14, weight: .semibold))
+                            // Список карт с множественным выбором
+                            ForEach(availableCards) { card in
+                                let cardID = String(describing: card.persistentModelID)
+                                let isSelected = selectedCardIDs.contains(cardID)
+                                
+                                Button {
+                                    if isSelected {
+                                        selectedCardIDs.remove(cardID)
+                                    } else {
+                                        selectedCardIDs.insert(cardID)
+                                    }
+                                } label: {
+                                    HStack(spacing: 16) {
+                                        // Чекбокс
+                                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                            .font(.system(size: 24, weight: .semibold))
                                             .foregroundStyle(
+                                                isSelected ?
                                                 LinearGradient(
                                                     colors: AppColors.cashbackGradient,
                                                     startPoint: .leading,
                                                     endPoint: .trailing
+                                                ) :
+                                                LinearGradient(
+                                                    colors: [AppColors.textTertiary, AppColors.textTertiary],
+                                                    startPoint: .leading,
+                                                    endPoint: .trailing
                                                 )
                                             )
-                                    }
-                                }
-                                .padding(16)
-                                .background {
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .fill(.ultraThinMaterial)
-                                        .overlay {
-                                            if viewModel.state.selectedCard == nil {
-                                                RoundedRectangle(cornerRadius: 16)
-                                                    .stroke(
-                                                        LinearGradient(
-                                                            colors: AppColors.cashbackGradient,
-                                                            startPoint: .leading,
-                                                            endPoint: .trailing
-                                                        ),
-                                                        lineWidth: 1.5
-                                                    )
-                                            }
-                                        }
-                                }
-                            }
-                            .buttonStyle(.plain)
-                            
-                            // Список карт
-                            ForEach(viewModel.state.availableCards) { card in
-                                Button {
-                                    viewModel.handle(.selectCard(card))
-                                    dismiss()
-                                } label: {
-                                    HStack(spacing: 16) {
+                                        
                                         // Иконка карты
                                         Image(systemName: card.cardType.icon)
                                             .font(.system(size: 28, weight: .semibold))
@@ -340,25 +791,13 @@ private struct CardPickerView: View {
                                         }
                                         
                                         Spacer()
-                                        
-                                        if viewModel.state.selectedCard?.persistentModelID == card.persistentModelID {
-                                            Image(systemName: "checkmark")
-                                                .font(.system(size: 14, weight: .semibold))
-                                                .foregroundStyle(
-                                                    LinearGradient(
-                                                        colors: AppColors.cashbackGradient,
-                                                        startPoint: .leading,
-                                                        endPoint: .trailing
-                                                    )
-                                                )
-                                        }
                                     }
                                     .padding(16)
                                     .background {
                                         RoundedRectangle(cornerRadius: 16)
                                             .fill(.ultraThinMaterial)
                                             .overlay {
-                                                if viewModel.state.selectedCard?.persistentModelID == card.persistentModelID {
+                                                if isSelected {
                                                     RoundedRectangle(cornerRadius: 16)
                                                         .stroke(
                                                             LinearGradient(
@@ -380,7 +819,7 @@ private struct CardPickerView: View {
                     }
                 }
             }
-            .navigationTitle("Выбор карты")
+            .navigationTitle("Выбор карт")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
