@@ -38,6 +38,11 @@ struct AppSchema {
             modelTypes.append(WaterSettings.self)
         }
         
+        // Явно добавляем модели Card
+        if !modelTypes.contains(where: { $0 == Card.self }) {
+            modelTypes.append(Card.self)
+        }
+        
         return Schema(modelTypes)
     }
 }

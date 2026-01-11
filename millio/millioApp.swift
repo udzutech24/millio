@@ -18,6 +18,7 @@ struct millioApp: App {
     var sharedModelContainer: ModelContainer? = {
         // Регистрируем фичи ДО создания схемы
         WaterFeatureRegistration.register()
+        CardFeatureRegistration.register()
         
         let schema = AppSchema.create()
         
