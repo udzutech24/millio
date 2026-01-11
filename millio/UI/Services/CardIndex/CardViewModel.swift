@@ -210,11 +210,17 @@ final class CardViewModel: ViewModelProtocol {
     private func loadCards() {
         let descriptor = FetchDescriptor<Card>()
         if let cards = try? modelContext.fetch(descriptor) {
-            // Сортируем вручную: сначала избранные, потом по дате обновления
+            // Сортируем: сначала избранные, потом по приоритету, потом по дате обновления
             state.cards = cards.sorted { card1, card2 in
+                // Сначала избранные
                 if card1.isFavorite != card2.isFavorite {
                     return card1.isFavorite
                 }
+                // Затем по приоритету (высокий > обычный > низкий)
+                if card1.priority.sortOrder != card2.priority.sortOrder {
+                    return card1.priority.sortOrder < card2.priority.sortOrder
+                }
+                // Затем по дате обновления (новые выше)
                 return card1.updatedAt > card2.updatedAt
             }
             applyFilters()
@@ -318,6 +324,7 @@ final class CardViewModel: ViewModelProtocol {
             existing.cardNumber = card.cardNumber
             existing.bank = card.bank
             existing.cardType = card.cardType
+            existing.priority = card.priority
             existing.currency = card.currency
             existing.balance = card.balance
             existing.creditLimit = card.creditLimit
@@ -333,6 +340,7 @@ final class CardViewModel: ViewModelProtocol {
                 cardNumber: card.cardNumber,
                 bank: card.bank,
                 cardType: card.cardType,
+                priority: card.priority,
                 currency: card.currency,
                 balance: card.balance,
                 creditLimit: card.creditLimit,

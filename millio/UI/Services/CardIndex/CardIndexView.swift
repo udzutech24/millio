@@ -526,6 +526,7 @@ struct CardEditorView: View {
                 cardNumber: editing.cardNumber,
                 bank: editing.bank,
                 cardType: editing.cardType,
+                priority: editing.priority,
                 currency: editing.currency,
                 balance: editing.balance,
                 creditLimit: editing.creditLimit,
@@ -543,6 +544,7 @@ struct CardEditorView: View {
                 cardNumber: "",
                 bank: .other,
                 cardType: .debit,
+                priority: .normal,
                 currency: "RUB",
                 balance: 0.0
             ))
@@ -557,7 +559,7 @@ struct CardEditorView: View {
                 GradientBackground()
                 
                 Form {
-                    Section("Основная информация") {
+                    Section {
                         TextField("Название карты", text: $card.name)
                             .foregroundStyle(AppColors.textPrimary)
                         
@@ -594,10 +596,12 @@ struct CardEditorView: View {
                                 creditLimitText = ""
                             }
                         }
+                    } header: {
+                        Text("Основная информация")
+                            .foregroundStyle(AppColors.textSecondary)
                     }
-                    .listRowBackground(Color.clear)
                     
-                    Section("Финансы") {
+                    Section {
                         if isLoadingCurrencies {
                             HStack {
                                 Text("Валюта")
@@ -632,14 +636,28 @@ struct CardEditorView: View {
                                     }
                                 }
                         }
+                    } header: {
+                        Text("Финансы")
+                            .foregroundStyle(AppColors.textSecondary)
                     }
-                    .listRowBackground(Color.clear)
                     
-                    Section("Дополнительно") {
+                    Section {
+                        Picker("Приоритет", selection: Binding(
+                            get: { card.priority },
+                            set: { card.priority = $0 }
+                        )) {
+                            ForEach(CardPriority.allCases, id: \.self) { priority in
+                                Text(priority.displayName).tag(priority)
+                            }
+                        }
+                        .foregroundStyle(AppColors.textPrimary)
+                        
                         Toggle("Избранная", isOn: $card.isFavorite)
                             .foregroundStyle(AppColors.textPrimary)
+                    } header: {
+                        Text("Дополнительно")
+                            .foregroundStyle(AppColors.textSecondary)
                     }
-                    .listRowBackground(Color.clear)
                 }
                 .scrollContentBackground(.hidden)
             }
@@ -658,7 +676,13 @@ struct CardEditorView: View {
                         viewModel.handle(.updateCard(card))
                         dismiss()
                     }
-                    .foregroundStyle(AppColors.textPrimary)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: AppColors.cardIndexGradient,
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
                     .disabled(card.name.isEmpty || card.cardNumber.isEmpty)
                 }
             }

@@ -28,6 +28,30 @@ enum CardType: String, Codable, CaseIterable {
     }
 }
 
+/// Приоритет карты
+enum CardPriority: String, Codable, CaseIterable {
+    case low = "low" // Низкий
+    case normal = "normal" // Обычный
+    case high = "high" // Высокий
+    
+    var displayName: String {
+        switch self {
+        case .low: return "Низкий"
+        case .normal: return "Обычный"
+        case .high: return "Высокий"
+        }
+    }
+    
+    /// Порядок сортировки (меньше = выше в списке)
+    var sortOrder: Int {
+        switch self {
+        case .high: return 0
+        case .normal: return 1
+        case .low: return 2
+        }
+    }
+}
+
 /// Банк
 enum Bank: String, Codable, CaseIterable {
     case sberbank = "sberbank"
@@ -87,6 +111,9 @@ final class Card: Persistable {
     /// Тип карты
     var cardTypeRaw: String = "debit"
     
+    /// Приоритет карты
+    var priorityRaw: String = "normal"
+    
     /// Валюта карты
     var currency: String = "RUB" // Код валюты (USD, EUR, RUB и т.д.)
     
@@ -127,6 +154,11 @@ final class Card: Persistable {
         set { cardTypeRaw = newValue.rawValue }
     }
     
+    var priority: CardPriority {
+        get { CardPriority(rawValue: priorityRaw) ?? .normal }
+        set { priorityRaw = newValue.rawValue }
+    }
+    
     /// Маскированный номер карты для отображения (только последние 4 цифры)
     var maskedNumber: String {
         String(cardNumber.suffix(4))
@@ -162,6 +194,7 @@ final class Card: Persistable {
         cardNumber: String,
         bank: Bank = .other,
         cardType: CardType = .debit,
+        priority: CardPriority = .normal,
         currency: String = "RUB",
         balance: Double = 0.0,
         creditLimit: Double? = nil,
@@ -174,6 +207,7 @@ final class Card: Persistable {
         self.cardNumber = cardNumber
         self.bankRaw = bank.rawValue
         self.cardTypeRaw = cardType.rawValue
+        self.priorityRaw = priority.rawValue
         self.currency = currency
         self.balance = balance
         self.creditLimit = creditLimit
@@ -200,6 +234,7 @@ final class Card: Persistable {
             "cardNumber": cardNumber,
             "bankRaw": bankRaw,
             "cardTypeRaw": cardTypeRaw,
+            "priorityRaw": priorityRaw,
             "currency": currency,
             "balance": balance,
             "creditLimit": creditLimit ?? NSNull(),

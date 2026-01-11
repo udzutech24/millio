@@ -50,10 +50,15 @@ struct CardImporter: ModelImporter {
             }
         )
         
+        // Получаем priority (для обратной совместимости используем normal по умолчанию)
+        let priorityRaw = data["priorityRaw"] as? String ?? "normal"
+        let priority = CardPriority(rawValue: priorityRaw) ?? .normal
+        
         // Если карта уже существует, обновляем её данные вместо создания новой
         if let existingCard = try? context.fetch(existingCardDescriptor).first {
             // Обновляем существующую карту
             existingCard.balance = balance
+            existingCard.priority = priority
             existingCard.creditLimit = data["creditLimit"] as? Double
             existingCard.expiryDate = data["expiryDate"] as? String
             existingCard.cardholderName = data["cardholderName"] as? String
@@ -81,6 +86,7 @@ struct CardImporter: ModelImporter {
             cardNumber: cardNumber,
             bank: Bank(rawValue: bankRaw) ?? .other,
             cardType: CardType(rawValue: cardTypeRaw) ?? .debit,
+            priority: priority,
             currency: currency,
             balance: balance,
             creditLimit: data["creditLimit"] as? Double,
