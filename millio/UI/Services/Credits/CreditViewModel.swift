@@ -88,7 +88,8 @@ enum CreditAction {
         currency: String,
         bank: Bank,
         creditType: CreditType,
-        isFavorite: Bool
+        isFavorite: Bool,
+        includeInTotal: Bool
     )
     case search(String)
     case filterByBank(Bank?)
@@ -144,7 +145,7 @@ final class CreditViewModel: ViewModelProtocol {
         case .toggleFavorite(let credit):
             toggleFavorite(credit)
             
-        case .updateCredit(let name, let amount, let monthlyPayment, let endDate, let remainingAmount, let currency, let bank, let creditType, let isFavorite):
+        case .updateCredit(let name, let amount, let monthlyPayment, let endDate, let remainingAmount, let currency, let bank, let creditType, let isFavorite, let includeInTotal):
             updateCredit(
                 name: name,
                 amount: amount,
@@ -154,7 +155,8 @@ final class CreditViewModel: ViewModelProtocol {
                 currency: currency,
                 bank: bank,
                 creditType: creditType,
-                isFavorite: isFavorite
+                isFavorite: isFavorite,
+                includeInTotal: includeInTotal
             )
             
         case .search(let text):
@@ -360,7 +362,8 @@ final class CreditViewModel: ViewModelProtocol {
         currency: String,
         bank: Bank,
         creditType: CreditType,
-        isFavorite: Bool
+        isFavorite: Bool,
+        includeInTotal: Bool
     ) {
         // Вычисляем startDate и termMonths для внутреннего использования
         // Устанавливаем startDate примерно за год до endDate (или используем существующую дату)
@@ -383,6 +386,7 @@ final class CreditViewModel: ViewModelProtocol {
             existing.bank = bank
             existing.creditType = creditType
             existing.isFavorite = isFavorite
+            existing.includeInTotal = includeInTotal
             existing.termMonths = termMonths
             // Если остаток = 0, помечаем кредит как закрытый
             if remainingAmount <= 0 {
@@ -404,7 +408,8 @@ final class CreditViewModel: ViewModelProtocol {
                 termMonths: termMonths,
                 currency: currency,
                 bank: bank,
-                creditType: creditType
+                creditType: creditType,
+                includeInTotal: includeInTotal
             )
             newCredit.endDate = endDate
             newCredit.remainingAmount = remainingAmount

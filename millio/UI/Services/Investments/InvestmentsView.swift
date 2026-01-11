@@ -484,7 +484,7 @@ private struct InvestmentRow: View {
 
 // MARK: - Investment Editor View
 
-private struct InvestmentEditorView: View {
+struct InvestmentEditorView: View {
     @ObservedObject var viewModel: InvestmentViewModel
     @Environment(\.dismiss) private var dismiss
     

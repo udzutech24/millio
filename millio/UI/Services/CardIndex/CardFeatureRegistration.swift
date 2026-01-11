@@ -64,6 +64,7 @@ struct CardImporter: ModelImporter {
             existingCard.cardholderName = data["cardholderName"] as? String
             existingCard.cardColor = data["cardColor"] as? String
             existingCard.isFavorite = data["isFavorite"] as? Bool ?? false
+            existingCard.includeInTotal = data["includeInTotal"] as? Bool ?? true
             existingCard.updatedAt = Date(timeIntervalSince1970: updatedAt)
             
             // Обновляем зашифрованные данные, если есть
@@ -93,7 +94,8 @@ struct CardImporter: ModelImporter {
             expiryDate: data["expiryDate"] as? String,
             cardholderName: data["cardholderName"] as? String,
             cardColor: data["cardColor"] as? String,
-            isFavorite: data["isFavorite"] as? Bool ?? false
+            isFavorite: data["isFavorite"] as? Bool ?? false,
+            includeInTotal: data["includeInTotal"] as? Bool ?? true
         )
         
         // Восстанавливаем даты

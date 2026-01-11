@@ -887,7 +887,7 @@ private struct DisplayCurrencySheet: View {
 
 // MARK: - Credit Editor View
 
-private struct CreditEditorView: View {
+struct CreditEditorView: View {
     @ObservedObject var viewModel: CreditViewModel
     @Environment(\.dismiss) private var dismiss
     
@@ -900,6 +900,7 @@ private struct CreditEditorView: View {
     @State private var selectedBank: Bank = .other
     @State private var selectedCreditType: CreditType = .consumer
     @State private var isFavorite: Bool = false
+    @State private var includeInTotal: Bool = true
     @State private var availableCurrencies: [String] = ["RUB", "USD", "EUR"]
     @State private var isLoadingCurrencies: Bool = false
     
@@ -996,6 +997,9 @@ private struct CreditEditorView: View {
                         
                         Toggle("В избранном", isOn: $isFavorite)
                             .foregroundStyle(AppColors.textPrimary)
+                        
+                        Toggle("Учитывать в общих финансах", isOn: $includeInTotal)
+                            .foregroundStyle(AppColors.textPrimary)
                     } header: {
                         Text("Дополнительно")
                             .foregroundStyle(AppColors.textSecondary)
@@ -1038,6 +1042,7 @@ private struct CreditEditorView: View {
                     selectedBank = editing.bank
                     selectedCreditType = editing.creditType
                     isFavorite = editing.isFavorite
+                    includeInTotal = editing.includeInTotal
                 } else {
                     // Для нового кредита устанавливаем дату окончания на год вперед
                     endDate = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
@@ -1148,7 +1153,8 @@ private struct CreditEditorView: View {
             currency: selectedCurrency,
             bank: selectedBank,
             creditType: selectedCreditType,
-            isFavorite: isFavorite
+            isFavorite: isFavorite,
+            includeInTotal: includeInTotal
         ))
         
         dismiss()

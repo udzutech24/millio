@@ -85,6 +85,9 @@ final class Credit: Persistable {
     /// Кредит закрыт (полностью погашен)
     var isClosed: Bool = false
     
+    /// Учитывать в общих финансах
+    var includeInTotal: Bool = true
+    
     /// Дата создания
     var createdAt: Date = Date()
     
@@ -207,7 +210,8 @@ final class Credit: Persistable {
         currency: String,
         bank: Bank = .other,
         creditType: CreditType = .consumer,
-        endDate: Date? = nil
+        endDate: Date? = nil,
+        includeInTotal: Bool = true
     ) {
         self.name = name
         self.amount = amount
@@ -220,6 +224,7 @@ final class Credit: Persistable {
         self.creditTypeRaw = creditType.rawValue
         self.endDate = endDate
         self.remainingAmount = amount // Изначально остаток равен сумме кредита
+        self.includeInTotal = includeInTotal
         self.createdAt = Date()
         self.updatedAt = Date()
     }
@@ -386,6 +391,7 @@ final class Credit: Persistable {
             "earlyPaymentsAmount": earlyPaymentsAmount,
             "isClosed": isClosed,
             "isFavorite": isFavorite,
+            "includeInTotal": includeInTotal,
             "createdAt": createdAt.timeIntervalSince1970,
             "updatedAt": updatedAt.timeIntervalSince1970,
             "creditUniqueID": creditUniqueID

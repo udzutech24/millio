@@ -71,6 +71,16 @@ struct AppSchema {
             modelTypes.append(PlannedExpense.self)
         }
         
+        // Явно добавляем модели FinanceGroup
+        if !modelTypes.contains(where: { $0 == FinanceGroup.self }) {
+            modelTypes.append(FinanceGroup.self)
+        }
+        
+        // Явно добавляем модели FinanceAccount
+        if !modelTypes.contains(where: { $0 == FinanceAccount.self }) {
+            modelTypes.append(FinanceAccount.self)
+        }
+        
         return Schema(modelTypes)
     }
 }

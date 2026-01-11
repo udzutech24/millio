@@ -138,6 +138,9 @@ final class Card: Persistable {
     /// Избранная карта
     var isFavorite: Bool = false
     
+    /// Учитывать в общих финансах
+    var includeInTotal: Bool = true
+    
     /// Дата создания
     var createdAt: Date = Date()
     
@@ -201,7 +204,8 @@ final class Card: Persistable {
         expiryDate: String? = nil,
         cardholderName: String? = nil,
         cardColor: String? = nil,
-        isFavorite: Bool = false
+        isFavorite: Bool = false,
+        includeInTotal: Bool = true
     ) {
         self.name = name
         self.cardNumber = cardNumber
@@ -215,6 +219,7 @@ final class Card: Persistable {
         self.cardholderName = cardholderName
         self.cardColor = cardColor
         self.isFavorite = isFavorite
+        self.includeInTotal = includeInTotal
         self.createdAt = Date()
         self.updatedAt = Date()
     }
@@ -242,6 +247,7 @@ final class Card: Persistable {
             "cardholderName": cardholderName ?? NSNull(),
             "cardColor": cardColor ?? NSNull(),
             "isFavorite": isFavorite,
+            "includeInTotal": includeInTotal,
             "createdAt": createdAt.timeIntervalSince1970,
             "updatedAt": updatedAt.timeIntervalSince1970,
             "cardUniqueID": cardUniqueID // Сохраняем уникальный ID для восстановления связей

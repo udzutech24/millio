@@ -24,6 +24,7 @@ struct millioApp: App {
         DebtFeatureRegistration.register()
         InvestmentFeatureRegistration.register()
         PlannedExpenseFeatureRegistration.register()
+        FinanceFeatureRegistration.register()
         
         let schema = AppSchema.create()
         
@@ -42,17 +43,18 @@ struct millioApp: App {
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
-            AppLogger.log(.error, category: "App", "Failed to create ModelContainer: \(error.localizedDescription)")
+            AppLogger.log(.error, category: "App", "Failed to create ModelContainer: \(error)")
             // Fallback: создаем in-memory контейнер
             do {
                 let fallbackConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
                 return try ModelContainer(for: schema, configurations: [fallbackConfig])
             } catch {
-                AppLogger.log(.error, category: "App", "Failed to create fallback ModelContainer: \(error.localizedDescription)")
+                AppLogger.log(.error, category: "App", "Failed to create fallback ModelContainer: \(error)")
                 // Последний fallback - пустая схема
                 do {
                     return try ModelContainer(for: Schema([]), configurations: [])
                 } catch {
+                    AppLogger.log(.error, category: "App", "Failed to create empty schema ModelContainer: \(error)")
                     return nil
                 }
             }

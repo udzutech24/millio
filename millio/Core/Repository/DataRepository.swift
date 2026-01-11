@@ -190,6 +190,39 @@ final class DataRepository: DataRepositoryProtocol {
                     }
                 }
             }
+            
+            // Экспортируем FinanceGroup
+            if typeName == "FinanceGroup" {
+                let groupDescriptor = FetchDescriptor<FinanceGroup>()
+                let groups = try modelContext.fetch(groupDescriptor)
+                
+                for group in groups {
+                    let data = try group.export()
+                    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                        var groupDict = json
+                        groupDict["_type"] = typeName
+                        modelsData.append(groupDict)
+                    }
+                }
+            }
+            
+            // Экспортируем FinanceAccount
+            if typeName == "FinanceAccount" {
+                let accountDescriptor = FetchDescriptor<FinanceAccount>()
+                let accounts = try modelContext.fetch(accountDescriptor)
+                
+                for account in accounts {
+                    let data = try account.export()
+                    if var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                        // Добавляем groupUniqueID для восстановления связи
+                        if let group = account.group {
+                            json["groupUniqueID"] = group.groupUniqueID
+                        }
+                        json["_type"] = typeName
+                        modelsData.append(json)
+                    }
+                }
+            }
         }
         
         // Обновляем metadata с реальным количеством моделей
@@ -279,15 +312,73 @@ final class DataRepository: DataRepositoryProtocol {
             }
         }
         
-        // Теперь импортируем остальные модели (включая кешбэки и кредиты)
+        // Импортируем FinanceGroup перед FinanceAccount
+        var groupUniqueIDMapping: [String: FinanceGroup] = [:]
+        for modelData in modelsData {
+            guard let typeName = modelData["_type"] as? String, typeName == "FinanceGroup" else { continue }
+            
+            guard let importerType = ModelTypeRegistry.shared.getImporter(for: typeName) else {
+                AppLogger.log(.error, category: "DataRepository", "No importer found for type: \(typeName)")
+                continue
+            }
+            
+            try importerType.`import`(from: modelData, context: modelContext)
+            try modelContext.save()
+            
+            // Сохраняем маппинг groupUniqueID -> группа
+            if let name = modelData["name"] as? String,
+               let colorHex = modelData["colorHex"] as? String,
+               let createdAt = modelData["createdAt"] as? TimeInterval {
+                let groupUniqueID = "\(name)|\(colorHex)|\(createdAt)"
+                let groupDescriptor = FetchDescriptor<FinanceGroup>(
+                    predicate: #Predicate<FinanceGroup> { group in
+                        group.name == name && group.colorHex == colorHex
+                    }
+                )
+                if let importedGroup = try? modelContext.fetch(groupDescriptor).first {
+                    groupUniqueIDMapping[groupUniqueID] = importedGroup
+                }
+            }
+        }
+        
+        // Теперь импортируем остальные модели (включая кешбэки, кредиты и FinanceAccount)
         for modelData in modelsData {
             guard let typeName = modelData["_type"] as? String else { continue }
             
-            // Карты уже импортированы
-            if typeName == "Card" { continue }
+            // Карты и FinanceGroup уже импортированы
+            if typeName == "Card" || typeName == "FinanceGroup" { continue }
             
-            // Если это кешбэк, конвертируем cardUniqueIDs обратно в persistentModelID
-            if typeName == "Cashback" {
+            // Если это FinanceAccount, восстанавливаем связь с группой
+            if typeName == "FinanceAccount" {
+                var accountData = modelData
+                if let groupUniqueID = accountData["groupUniqueID"] as? String,
+                   let group = groupUniqueIDMapping[groupUniqueID] {
+                    // Связь будет установлена через импортер
+                }
+                
+                guard let importerType = ModelTypeRegistry.shared.getImporter(for: typeName) else {
+                    AppLogger.log(.error, category: "DataRepository", "No importer found for type: \(typeName)")
+                    continue
+                }
+                
+                try importerType.`import`(from: accountData, context: modelContext)
+                
+                // Устанавливаем связь с группой после импорта
+                if let groupUniqueID = accountData["groupUniqueID"] as? String,
+                   let group = groupUniqueIDMapping[groupUniqueID],
+                   let accountTypeRaw = accountData["accountTypeRaw"] as? String,
+                   let accountID = accountData["accountID"] as? String {
+                    let accountDescriptor = FetchDescriptor<FinanceAccount>(
+                        predicate: #Predicate<FinanceAccount> { account in
+                            account.accountTypeRaw == accountTypeRaw && account.accountID == accountID
+                        }
+                    )
+                    if let importedAccount = try? modelContext.fetch(accountDescriptor).first {
+                        importedAccount.group = group
+                    }
+                }
+            } else if typeName == "Cashback" {
+                // Если это кешбэк, конвертируем cardUniqueIDs обратно в persistentModelID
                 var cashbackData = modelData
                 if var cardIDs = cashbackData["cardIDs"] as? [String] {
                     // Если cardIDs пустые, но есть старые cardIDs (обратная совместимость)
@@ -380,6 +471,18 @@ final class DataRepository: DataRepositoryProtocol {
                 let expenses = try modelContext.fetch(expenseDescriptor)
                 for expense in expenses {
                     modelContext.delete(expense)
+                }
+            } else if typeName == "FinanceAccount" {
+                let accountDescriptor = FetchDescriptor<FinanceAccount>()
+                let accounts = try modelContext.fetch(accountDescriptor)
+                for account in accounts {
+                    modelContext.delete(account)
+                }
+            } else if typeName == "FinanceGroup" {
+                let groupDescriptor = FetchDescriptor<FinanceGroup>()
+                let groups = try modelContext.fetch(groupDescriptor)
+                for group in groups {
+                    modelContext.delete(group)
                 }
             }
         }

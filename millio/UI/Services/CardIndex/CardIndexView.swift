@@ -533,7 +533,8 @@ struct CardEditorView: View {
                 expiryDate: editing.expiryDate,
                 cardholderName: editing.cardholderName,
                 cardColor: editing.cardColor,
-                isFavorite: editing.isFavorite
+                isFavorite: editing.isFavorite,
+                includeInTotal: editing.includeInTotal
             )
             _card = State(initialValue: newCard)
             _creditLimitText = State(initialValue: editing.creditLimit.map { String(format: "%.2f", $0) } ?? "")
@@ -653,6 +654,9 @@ struct CardEditorView: View {
                         .foregroundStyle(AppColors.textPrimary)
                         
                         Toggle("Избранная", isOn: $card.isFavorite)
+                            .foregroundStyle(AppColors.textPrimary)
+                        
+                        Toggle("Учитывать в общих финансах", isOn: $card.includeInTotal)
                             .foregroundStyle(AppColors.textPrimary)
                     } header: {
                         Text("Дополнительно")

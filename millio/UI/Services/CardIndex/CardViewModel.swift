@@ -332,6 +332,7 @@ final class CardViewModel: ViewModelProtocol {
             existing.cardholderName = card.cardholderName
             existing.cardColor = card.cardColor
             existing.isFavorite = card.isFavorite
+            existing.includeInTotal = card.includeInTotal
             existing.updatedAt = Date()
         } else {
             // Создаем новую карту
@@ -347,7 +348,8 @@ final class CardViewModel: ViewModelProtocol {
                 expiryDate: card.expiryDate,
                 cardholderName: card.cardholderName,
                 cardColor: card.cardColor,
-                isFavorite: card.isFavorite
+                isFavorite: card.isFavorite,
+                includeInTotal: card.includeInTotal
             )
             modelContext.insert(newCard)
         }
