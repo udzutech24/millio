@@ -54,6 +54,15 @@ private struct FinancesContentViewInternal: View {
         .navigationTitle("Финансы")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                NavigationLink {
+                    FinanceDynamicsView(financeViewModel: viewModel)
+                } label: {
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                        .foregroundStyle(AppColors.textPrimary)
+                }
+            }
+            
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
                     Button {
