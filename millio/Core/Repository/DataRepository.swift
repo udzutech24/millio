@@ -240,12 +240,22 @@ final class DataRepository: DataRepositoryProtocol {
             if typeName == "Item" {
                 let itemDescriptor = FetchDescriptor<Item>()
                 let items = try modelContext.fetch(itemDescriptor)
-                
                 for item in items {
                     modelContext.delete(item)
                 }
+            } else if typeName == "Card" {
+                let cardDescriptor = FetchDescriptor<Card>()
+                let cards = try modelContext.fetch(cardDescriptor)
+                for card in cards {
+                    modelContext.delete(card)
+                }
+            } else if typeName == "Cashback" {
+                let cashbackDescriptor = FetchDescriptor<Cashback>()
+                let cashbacks = try modelContext.fetch(cashbackDescriptor)
+                for cashback in cashbacks {
+                    modelContext.delete(cashback)
+                }
             }
-            // Здесь можно добавить очистку других типов по мере их регистрации
         }
         
         try modelContext.save()

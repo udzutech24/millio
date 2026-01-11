@@ -38,6 +38,44 @@ struct CardImporter: ModelImporter {
             throw AppError.backupCorrupted
         }
         
+        // Проверяем, не существует ли уже карта с такими же данными (по cardUniqueID)
+        // Используем комбинацию полей без createdAt для проверки, так как createdAt может немного отличаться
+        let existingCardDescriptor = FetchDescriptor<Card>(
+            predicate: #Predicate<Card> { card in
+                card.name == name &&
+                card.cardNumber == cardNumber &&
+                card.bankRaw == bankRaw &&
+                card.cardTypeRaw == cardTypeRaw &&
+                card.currency == currency
+            }
+        )
+        
+        // Если карта уже существует, обновляем её данные вместо создания новой
+        if let existingCard = try? context.fetch(existingCardDescriptor).first {
+            // Обновляем существующую карту
+            existingCard.balance = balance
+            existingCard.creditLimit = data["creditLimit"] as? Double
+            existingCard.expiryDate = data["expiryDate"] as? String
+            existingCard.cardholderName = data["cardholderName"] as? String
+            existingCard.cardColor = data["cardColor"] as? String
+            existingCard.isFavorite = data["isFavorite"] as? Bool ?? false
+            existingCard.updatedAt = Date(timeIntervalSince1970: updatedAt)
+            
+            // Обновляем зашифрованные данные, если есть
+            if let encryptedFullNumberStr = data["encryptedFullNumber"] as? String,
+               let encryptedFullNumber = Data(base64Encoded: encryptedFullNumberStr) {
+                existingCard.encryptedFullNumber = encryptedFullNumber
+            }
+            if let encryptedCVVStr = data["encryptedCVV"] as? String,
+               let encryptedCVV = Data(base64Encoded: encryptedCVVStr) {
+                existingCard.encryptedCVV = encryptedCVV
+            }
+            
+            AppLogger.log(.info, category: "CardImporter", "Updated existing card '\(name)' instead of creating duplicate")
+            return
+        }
+        
+        // Создаем новую карту только если она не существует
         let card = Card(
             name: name,
             cardNumber: cardNumber,

@@ -77,12 +77,53 @@ struct ProfileView: View {
                                 
                                 if appState.isBackupEnabled {
                                     if let backupDate = appState.lastBackupDate {
-                                        HStack {
-                                            Text("Последний backup")
-                                                .foregroundStyle(AppColors.textPrimary)
-                                            Spacer()
-                                            Text(backupDate.formatted(date: .abbreviated, time: .shortened))
-                                                .foregroundStyle(AppColors.textTertiary)
+                                        VStack(spacing: 12) {
+                                            HStack {
+                                                Text("Последний backup")
+                                                    .foregroundStyle(AppColors.textPrimary)
+                                                Spacer()
+                                                Text(backupDate.formatted(date: .abbreviated, time: .shortened))
+                                                    .foregroundStyle(AppColors.textTertiary)
+                                            }
+                                            
+                                            // Кнопка восстановления, если найдена резервная копия
+                                            NavigationLink {
+                                                RestoreView(appState: appState, router: router)
+                                            } label: {
+                                                HStack {
+                                                    Image(systemName: "icloud.and.arrow.down.fill")
+                                                        .font(.system(size: 16, weight: .semibold))
+                                                    Text("Восстановить данные")
+                                                        .font(.system(size: 16, weight: .semibold))
+                                                    Spacer()
+                                                    Image(systemName: "chevron.right")
+                                                        .font(.system(size: 12, weight: .semibold))
+                                                }
+                                                .foregroundStyle(
+                                                    LinearGradient(
+                                                        colors: AppColors.incomeGradient,
+                                                        startPoint: .leading,
+                                                        endPoint: .trailing
+                                                    )
+                                                )
+                                                .padding(.vertical, 12)
+                                                .padding(.horizontal, 16)
+                                                .background {
+                                                    RoundedRectangle(cornerRadius: 12)
+                                                        .fill(.ultraThinMaterial)
+                                                        .overlay {
+                                                            RoundedRectangle(cornerRadius: 12)
+                                                                .stroke(
+                                                                    LinearGradient(
+                                                                        colors: AppColors.incomeGradient,
+                                                                        startPoint: .leading,
+                                                                        endPoint: .trailing
+                                                                    ),
+                                                                    lineWidth: 1
+                                                                )
+                                                        }
+                                                }
+                                            }
                                         }
                                     } else {
                                         HStack {
