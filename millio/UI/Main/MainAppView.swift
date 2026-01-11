@@ -10,7 +10,15 @@ import SwiftUI
 struct MainAppView: View {
     @Bindable var router: AppRouter
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     @StateObject private var viewModel: MainAppViewModel
+    @State private var services: [ServiceItem] = []
+    @State private var draggedItem: ServiceItem?
+    @State private var cashflowViewModel: CashflowViewModel?
+    @State private var showExpenseSheet = false
+    @State private var showIncomeSheet = false
+    
+    private let orderManager = ServiceOrderManager()
     
     init(router: AppRouter) {
         self.router = router
@@ -39,34 +47,42 @@ struct MainAppView: View {
                             viewModel.handle(.navigateToSubscription)
                         } label: {
                             HStack(spacing: 6) {
-                                Image(systemName: "star.fill")
+                                Image(systemName: appState.isPro ? "star.fill" : "star")
                                     .font(.system(size: 14))
-                                Text("PRO")
+                                Text(appState.isPro ? "PRO" : "PRO")
                                     .font(.system(size: 14, weight: .semibold))
                             }
-                            .foregroundStyle(AppColors.textPrimary)
+                            .foregroundStyle(
+                                appState.isPro
+                                ? LinearGradient(
+                                    colors: AppColors.incomeGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                                : LinearGradient(
+                                    colors: [AppColors.textPrimary],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
                             .background {
                                 Capsule()
-                                    .stroke(AppColors.textPrimary, lineWidth: 1.5)
-                            }
-                        }
-                        
-                        Spacer()
-                        
-                        Button {
-                            viewModel.handle(.navigateToNotifications)
-                        } label: {
-                            ZStack(alignment: .topTrailing) {
-                                Image(systemName: "bell")
-                                    .font(.system(size: 28))
-                                    .foregroundStyle(AppColors.textPrimary)
-                                
-                                Circle()
-                                    .fill(AppColors.notificationBadge)
-                                    .frame(width: 10, height: 10)
-                                    .offset(x: 4, y: -4)
+                                    .stroke(
+                                        appState.isPro
+                                        ? LinearGradient(
+                                            colors: AppColors.incomeGradient,
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                        : LinearGradient(
+                                            colors: [AppColors.textPrimary],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        ),
+                                        lineWidth: 1.5
+                                    )
                             }
                         }
                     }
@@ -87,80 +103,8 @@ struct MainAppView: View {
                     .padding(.bottom, 40)
                     
                     // Service buttons grid
-                    VStack(spacing: 16) {
-                        HStack(spacing: 16) {
-                            ServiceButton(
-                                title: "Финансы",
-                                icon: "wallet.pass.fill",
-                                gradientColors: AppColors.financesGradient
-                            ) {
-                                viewModel.handle(.navigateToService(.finances))
-                            }
-                            
-                            ServiceButton(
-                                title: "Курсы",
-                                icon: "briefcase.fill",
-                                gradientColors: AppColors.coursesGradient
-                            ) {
-                                viewModel.handle(.navigateToService(.courses))
-                            }
-                        }
-                        
-                        HStack(spacing: 16) {
-                            ServiceButton(
-                                title: "Кешбэк",
-                                icon: "percent",
-                                gradientColors: AppColors.cashbackGradient
-                            ) {
-                                viewModel.handle(.navigateToService(.cashback))
-                            }
-                            
-                            ServiceButton(
-                                title: "Кредиты",
-                                icon: "creditcard.fill",
-                                gradientColors: AppColors.creditsGradient
-                            ) {
-                                viewModel.handle(.navigateToService(.credits))
-                            }
-                        }
-                        
-                        HStack(spacing: 16) {
-                            ServiceButton(
-                                title: "Вода",
-                                icon: "drop.fill",
-                                gradientColors: AppColors.waterGradient
-                            ) {
-                                viewModel.handle(.navigateToService(.water))
-                            }
-                            
-                            ServiceButton(
-                                title: "Привычки",
-                                icon: "clock.fill",
-                                gradientColors: AppColors.habitsGradient
-                            ) {
-                                viewModel.handle(.navigateToService(.habits))
-                            }
-                        }
-                        
-                        HStack(spacing: 16) {
-                            ServiceButton(
-                                title: "Картотека",
-                                icon: "archivebox.fill",
-                                gradientColors: AppColors.cardIndexGradient
-                            ) {
-                                viewModel.handle(.navigateToService(.cardIndex))
-                            }
-                            
-                            ServiceButton(
-                                title: "Игры",
-                                icon: "gamecontroller.fill",
-                                gradientColors: AppColors.gamesGradient
-                            ) {
-                                viewModel.handle(.navigateToService(.games))
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 24)
+                    servicesGrid
+                        .padding(.horizontal, 24)
                     
                     Spacer()
                     
@@ -171,7 +115,7 @@ struct MainAppView: View {
                             icon: "minus",
                             gradientColors: AppColors.expenseGradient
                         ) {
-                            // TODO: Navigate to expense screen
+                            showExpenseSheet = true
                         }
                         
                         ActionButton(
@@ -179,7 +123,7 @@ struct MainAppView: View {
                             icon: "plus",
                             gradientColors: AppColors.incomeGradient
                         ) {
-                            // TODO: Navigate to income screen
+                            showIncomeSheet = true
                         }
                     }
                     .padding(.horizontal, 24)
@@ -189,7 +133,91 @@ struct MainAppView: View {
             .navigationDestination(for: AppRoute.self) { route in
                 routeView(for: route)
             }
+            .sheet(isPresented: $showExpenseSheet) {
+                if let cashflowViewModel = cashflowViewModel {
+                    CashflowTransactionEditorView(
+                        viewModel: cashflowViewModel,
+                        transactionType: .expense
+                    )
+                }
+            }
+            .sheet(isPresented: $showIncomeSheet) {
+                if let cashflowViewModel = cashflowViewModel {
+                    CashflowTransactionEditorView(
+                        viewModel: cashflowViewModel,
+                        transactionType: .income
+                    )
+                }
+            }
+            .onAppear {
+                loadServices()
+                if cashflowViewModel == nil {
+                    cashflowViewModel = CashflowViewModel(modelContext: modelContext)
+                }
+                
+                // Обновляем статус подписки при открытии главного экрана
+                Task {
+                    await SubscriptionManager.shared.checkSubscriptionStatus()
+                    appState.subscriptionStatus = SubscriptionManager.shared.status
+                    appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
+                    appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+                }
+            }
         }
+    }
+    
+    // MARK: - Services Grid
+    
+    private var servicesGrid: some View {
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: 2)
+        
+        return LazyVGrid(columns: columns, spacing: 16) {
+            ForEach(services) { service in
+                ServiceButton(
+                    title: service.title,
+                    icon: service.icon,
+                    gradientColors: service.gradientColors
+                ) {
+                    viewModel.handle(.navigateToService(service.route))
+                }
+                .draggable(service.id) {
+                    ServiceButton(
+                        title: service.title,
+                        icon: service.icon,
+                        gradientColors: service.gradientColors
+                    ) {
+                        // Пустой action для drag preview
+                    }
+                    .opacity(0.8)
+                }
+                .dropDestination(for: String.self) { droppedIDs, location in
+                    guard let droppedID = droppedIDs.first,
+                          droppedID != service.id,
+                          let draggedIndex = services.firstIndex(where: { $0.id == droppedID }),
+                          let targetIndex = services.firstIndex(where: { $0.id == service.id }) else {
+                        return false
+                    }
+                    
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        services.move(fromOffsets: IndexSet(integer: draggedIndex), toOffset: targetIndex > draggedIndex ? targetIndex + 1 : targetIndex)
+                        saveServicesOrder()
+                    }
+                    
+                    return true
+                }
+            }
+        }
+    }
+    
+    // MARK: - Helpers
+    
+    private func loadServices() {
+        services = orderManager.getOrderedServices()
+    }
+    
+    private func saveServicesOrder() {
+        let order = services.map { $0.id }
+        orderManager.saveOrder(order)
     }
     
     @ViewBuilder
@@ -203,18 +231,20 @@ struct MainAppView: View {
             CashbackView()
         case .credits:
             CreditsView()
-        case .water:
-            WaterView()
         case .habits:
             HabitsView()
         case .cardIndex:
             CardIndexView()
-        case .games:
-            GamesView()
+        case .debts:
+            DebtsView()
+        case .investments:
+            InvestmentsView()
+        case .plannedExpenses:
+            PlannedExpensesView()
+        case .cashflow:
+            CashflowView()
         case .profile:
             ProfileView(router: router)
-        case .notifications:
-            NotificationsView()
         case .subscription:
             SubscriptionView()
         default:

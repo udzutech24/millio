@@ -61,8 +61,20 @@ enum AppColors {
     /// Градиент для кнопки "Привычки"
     static let habitsGradient = [Color.indigo, Color.purple]
     
-    /// Градиент для кнопки "Картотека"
+    /// Градиент для кнопки "Карты"
     static let cardIndexGradient = [Color.orange, Color.brown]
+    
+    /// Градиент для кнопки "Долги"
+    static let debtsGradient = [Color.red, Color.orange]
+    
+    /// Градиент для кнопки "Активы"
+    static let investmentsGradient = [Color.yellow, Color.orange]
+    
+    /// Градиент для кнопки "Планировщик"
+    static let plannedExpensesGradient = [Color.teal, Color.cyan]
+    
+    /// Градиент для кнопки "Кэшфлоу"
+    static let cashflowGradient = [Color.blue, Color.purple]
     
     /// Градиент для кнопки "Игры"
     static let gamesGradient = [Color.green, Color.cyan]
@@ -82,9 +94,6 @@ enum AppColors {
     
     /// Цвет фона для иконок в кнопках действий
     static let iconBackground = Color.white.opacity(0.2)
-    
-    /// Цвет для индикатора уведомлений (зеленый)
-    static let notificationBadge = Color.green
     
     /// Цвет для ошибок
     static let error = Color.red

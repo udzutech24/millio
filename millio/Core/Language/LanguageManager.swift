@@ -37,5 +37,15 @@ final class LanguageManager: LanguageManagerProtocol {
     func setLanguage(_ language: Language) {
         currentLanguage = language
         UserDefaults.standard.set(language.rawValue, forKey: userDefaultsKey)
+        
+        // Применяем locale для локализации
+        if let locale = language.locale {
+            UserDefaults.standard.set([locale.identifier], forKey: "AppleLanguages")
+            UserDefaults.standard.synchronize()
+        } else {
+            // Для системного языка удаляем настройку
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+            UserDefaults.standard.synchronize()
+        }
     }
 }

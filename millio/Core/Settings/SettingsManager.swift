@@ -11,6 +11,7 @@ import OSLog
 protocol SettingsManagerProtocol {
     var isBackupEnabled: Bool { get set }
     var isEncryptionEnabled: Bool { get set }
+    var isDailyReminderEnabled: Bool { get set }
 }
 
 nonisolated final class SettingsManager: SettingsManagerProtocol {
@@ -19,6 +20,7 @@ nonisolated final class SettingsManager: SettingsManagerProtocol {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "SettingsManager")
     private let backupEnabledKey = "isBackupEnabled"
     private let encryptionEnabledKey = "isEncryptionEnabled"
+    private let dailyReminderEnabledKey = "isDailyReminderEnabled"
     
     nonisolated var isBackupEnabled: Bool {
         get {
@@ -38,6 +40,16 @@ nonisolated final class SettingsManager: SettingsManagerProtocol {
         set {
             UserDefaults.standard.set(newValue, forKey: encryptionEnabledKey)
             logger.info("Backup encryption enabled: \(newValue)")
+        }
+    }
+    
+    nonisolated var isDailyReminderEnabled: Bool {
+        get {
+            UserDefaults.standard.object(forKey: dailyReminderEnabledKey) as? Bool ?? false
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: dailyReminderEnabledKey)
+            logger.info("Daily reminder enabled: \(newValue)")
         }
     }
     

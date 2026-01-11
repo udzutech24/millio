@@ -16,23 +16,46 @@ struct millioApp: App {
     @State private var lifecycleUseCase: AppLifecycleUseCase?
     
     var sharedModelContainer: ModelContainer? = {
+        // Регистрируем фичи ДО создания схемы
+        CardFeatureRegistration.register()
+        CashbackFeatureRegistration.register()
+        CreditFeatureRegistration.register()
+        HabitFeatureRegistration.register()
+        DebtFeatureRegistration.register()
+        InvestmentFeatureRegistration.register()
+        PlannedExpenseFeatureRegistration.register()
+        FinanceFeatureRegistration.register()
+        CashflowFeatureRegistration.register()
+        
         let schema = AppSchema.create()
+        
+        // Убеждаемся, что директория Application Support существует
+        let fileManager = FileManager.default
+        if let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            do {
+                try fileManager.createDirectory(at: appSupportURL, withIntermediateDirectories: true, attributes: nil)
+            } catch {
+                AppLogger.log(.error, category: "App", "Failed to create Application Support directory: \(error.localizedDescription)")
+            }
+        }
+        
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
-            AppLogger.log(.error, category: "App", "Failed to create ModelContainer: \(error.localizedDescription)")
+            AppLogger.log(.error, category: "App", "Failed to create ModelContainer: \(error)")
             // Fallback: создаем in-memory контейнер
             do {
                 let fallbackConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
                 return try ModelContainer(for: schema, configurations: [fallbackConfig])
             } catch {
-                AppLogger.log(.error, category: "App", "Failed to create fallback ModelContainer: \(error.localizedDescription)")
+                AppLogger.log(.error, category: "App", "Failed to create fallback ModelContainer: \(error)")
                 // Последний fallback - пустая схема
                 do {
                     return try ModelContainer(for: Schema([]), configurations: [])
                 } catch {
+                    AppLogger.log(.error, category: "App", "Failed to create empty schema ModelContainer: \(error)")
                     return nil
                 }
             }
@@ -47,11 +70,26 @@ struct millioApp: App {
                     .environment(appState)
                     .environment(\.modelContainer, container)
                     .environment(\.diContainer, diContainer)
+                    .environment(\.locale, appState.selectedLanguage.locale ?? Locale.current)
                     .task {
                         await initializeApp(container: container)
+                        
+                        // Восстанавливаем расписание уведомлений, если они включены
+                        if appState.isDailyReminderEnabled {
+                            await NotificationManager.shared.scheduleDailyReminder(enabled: true)
+                        }
                     }
                     .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
                         triggerBackgroundBackup()
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                        // Обновляем статус подписки при возврате из фона
+                        Task { @MainActor in
+                            await SubscriptionManager.shared.checkSubscriptionStatus()
+                            appState.subscriptionStatus = SubscriptionManager.shared.status
+                            appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
+                            appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+                        }
                     }
             } else {
                 ErrorView(
@@ -71,6 +109,8 @@ struct millioApp: App {
     }
     
     private func initializeApp(container: ModelContainer) async {
+        // Фичи уже зарегистрированы при создании ModelContainer
+        
         // Используем DIContainer для создания зависимостей
         let container = DIContainer.create(
             appState: appState,

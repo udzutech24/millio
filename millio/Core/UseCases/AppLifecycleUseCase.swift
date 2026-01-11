@@ -49,14 +49,9 @@ final class AppLifecycleUseCase: AppLifecycleUseCaseProtocol {
         // Определяем следующий шаг
         if !checkOnboardingStatus() {
             appState.lifecycle = .onboarding
-        } else if appState.isBackupEnabled {
-            let needsRestore = await checkRestoreNeeded()
-            if needsRestore {
-                appState.lifecycle = .restoring
-            } else {
-                appState.lifecycle = .ready
-            }
         } else {
+            // Не показываем экран восстановления автоматически
+            // Пользователь может перейти к нему из настроек
             appState.lifecycle = .ready
         }
         

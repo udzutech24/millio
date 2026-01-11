@@ -28,7 +28,6 @@ final class MainAppViewModel: ViewModelProtocol {
         case navigateToService(AppRoute)
         case navigateToProfile
         case navigateToSubscription
-        case navigateToNotifications
     }
     
     func handle(_ action: Action) {
@@ -39,8 +38,6 @@ final class MainAppViewModel: ViewModelProtocol {
             router.push(.profile)
         case .navigateToSubscription:
             router.push(.subscription)
-        case .navigateToNotifications:
-            router.push(.notifications)
         }
     }
 }
