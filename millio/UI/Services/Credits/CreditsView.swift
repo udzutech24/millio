@@ -75,14 +75,6 @@ private struct CreditsContentViewInternal: View {
         )) {
             DisplayCurrencySheet(viewModel: viewModel)
         }
-        .sheet(isPresented: Binding(
-            get: { viewModel.state.showPaymentSheet },
-            set: { if !$0 { viewModel.handle(.hidePaymentSheet) } }
-        )) {
-            if let credit = viewModel.state.paymentCredit {
-                PaymentSheet(viewModel: viewModel, credit: credit)
-            }
-        }
         .task {
             // Загружаем курсы при появлении экрана
             await viewModel.refreshRates()
@@ -481,23 +473,6 @@ private struct CreditRow: View {
                 
                     // Кнопки действий
                     VStack(spacing: 8) {
-                        // Кнопка внесения платежа (если кредит не закрыт)
-                        if !credit.isClosed {
-                            Button {
-                                viewModel.handle(.showPaymentSheet(credit))
-                            } label: {
-                                Image(systemName: "creditcard.fill")
-                                    .font(.system(size: 18))
-                                    .foregroundStyle(
-                                        LinearGradient(
-                                            colors: AppColors.creditsGradient,
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
-                            }
-                        }
-                        
                         Button {
                             onToggleFavorite()
                         } label: {
@@ -874,6 +849,7 @@ private struct CreditEditorView: View {
     @State private var selectedCurrency: String = "RUB"
     @State private var selectedBank: Bank = .other
     @State private var selectedCreditType: CreditType = .consumer
+    @State private var isFavorite: Bool = false
     @State private var availableCurrencies: [String] = ["RUB", "USD", "EUR"]
     @State private var isLoadingCurrencies: Bool = false
     
@@ -967,6 +943,9 @@ private struct CreditEditorView: View {
                             }
                         }
                         .foregroundStyle(AppColors.textPrimary)
+                        
+                        Toggle("В избранном", isOn: $isFavorite)
+                            .foregroundStyle(AppColors.textPrimary)
                     } header: {
                         Text("Дополнительно")
                             .foregroundStyle(AppColors.textSecondary)
@@ -1008,6 +987,7 @@ private struct CreditEditorView: View {
                     selectedCurrency = editing.currency
                     selectedBank = editing.bank
                     selectedCreditType = editing.creditType
+                    isFavorite = editing.isFavorite
                 } else {
                     // Для нового кредита устанавливаем дату окончания на год вперед
                     endDate = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
@@ -1117,7 +1097,8 @@ private struct CreditEditorView: View {
             remainingAmount: remainingAmount,
             currency: selectedCurrency,
             bank: selectedBank,
-            creditType: selectedCreditType
+            creditType: selectedCreditType,
+            isFavorite: isFavorite
         ))
         
         dismiss()

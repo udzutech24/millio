@@ -46,11 +46,6 @@ struct AppSchema {
             modelTypes.append(Credit.self)
         }
         
-        // Явно добавляем модели Payment
-        if !modelTypes.contains(where: { $0 == Payment.self }) {
-            modelTypes.append(Payment.self)
-        }
-        
         return Schema(modelTypes)
     }
 }
