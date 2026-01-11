@@ -34,6 +34,27 @@ struct CashflowState {
     /// Период для графика
     var chartPeriod: ChartPeriod = .month
     
+    /// Начальная дата для custom периода
+    var customStartDate: Date = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+    
+    /// Конечная дата для custom периода
+    var customEndDate: Date = Date()
+    
+    /// Выбранный месяц для конкретного месяца
+    var selectedMonth: Date = Date()
+    
+    /// Выбранный квартал для конкретного квартала
+    var selectedQuarter: Date = Date()
+    
+    /// Выбранный год для конкретного года
+    var selectedYear: Date = Date()
+    
+    /// Показывать ли селектор периода
+    var showPeriodSelector: Bool = false
+    
+    /// Показывать ли историю операций
+    var showTransactionsHistory: Bool = false
+    
     /// Данные для графика доходов
     var incomeChartData: [CashflowChartDataPoint] = []
     
@@ -59,12 +80,29 @@ enum ChartPeriod: String, CaseIterable {
     case month = "Месяц"
     case quarter = "Квартал"
     case year = "Год"
+    case specificMonth = "Конкретный месяц"
+    case specificQuarter = "Конкретный квартал"
+    case specificYear = "Конкретный год"
+    case custom = "Свой период"
     
     var days: Int {
         switch self {
-        case .month: return 30
-        case .quarter: return 90
-        case .year: return 365
+        case .month, .specificMonth: return 30
+        case .quarter, .specificQuarter: return 90
+        case .year, .specificYear: return 365
+        case .custom: return 365 // По умолчанию, будет переопределено
+        }
+    }
+    
+    var displayName: String {
+        switch self {
+        case .month: return "Месяц"
+        case .quarter: return "Квартал"
+        case .year: return "Год"
+        case .specificMonth: return "Месяц"
+        case .specificQuarter: return "Квартал"
+        case .specificYear: return "Год"
+        case .custom: return "Свой период"
         }
     }
 }
@@ -79,6 +117,14 @@ enum CashflowAction {
     case updateTransaction(CashflowTransaction)
     case hideTransactionEditor
     case setChartPeriod(ChartPeriod)
+    case setCustomPeriod(start: Date, end: Date)
+    case setSelectedMonth(Date)
+    case setSelectedQuarter(Date)
+    case setSelectedYear(Date)
+    case showPeriodSelector
+    case hidePeriodSelector
+    case showTransactionsHistory
+    case hideTransactionsHistory
     case loadCards
 }
 
@@ -129,6 +175,39 @@ final class CashflowViewModel: ViewModelProtocol {
             state.chartPeriod = period
             updateChartData()
             
+        case .setCustomPeriod(let start, let end):
+            state.customStartDate = start
+            state.customEndDate = end
+            state.chartPeriod = .custom
+            updateChartData()
+            
+        case .setSelectedMonth(let date):
+            state.selectedMonth = date
+            state.chartPeriod = .specificMonth
+            updateChartData()
+            
+        case .setSelectedQuarter(let date):
+            state.selectedQuarter = date
+            state.chartPeriod = .specificQuarter
+            updateChartData()
+            
+        case .setSelectedYear(let date):
+            state.selectedYear = date
+            state.chartPeriod = .specificYear
+            updateChartData()
+            
+        case .showPeriodSelector:
+            state.showPeriodSelector = true
+            
+        case .hidePeriodSelector:
+            state.showPeriodSelector = false
+            
+        case .showTransactionsHistory:
+            state.showTransactionsHistory = true
+            
+        case .hideTransactionsHistory:
+            state.showTransactionsHistory = false
+            
         case .loadCards:
             loadCards()
         }
@@ -160,8 +239,7 @@ final class CashflowViewModel: ViewModelProtocol {
     
     private func updateChartDataAsync() async {
         let calendar = Calendar.current
-        let endDate = Date()
-        let startDate = calendar.date(byAdding: .day, value: -state.chartPeriod.days, to: endDate) ?? endDate
+        let (startDate, endDate) = getDateRange()
         
         // Группируем транзакции по датам
         var incomeByDate: [Date: Double] = [:]
@@ -223,6 +301,48 @@ final class CashflowViewModel: ViewModelProtocol {
         
         state.incomeChartData = incomePoints.sorted { $0.date < $1.date }
         state.expenseChartData = expensePoints.sorted { $0.date < $1.date }
+    }
+    
+    private func getDateRange() -> (Date, Date) {
+        let calendar = Calendar.current
+        
+        switch state.chartPeriod {
+        case .month:
+            let endDate = Date()
+            let startDate = calendar.date(byAdding: .day, value: -30, to: endDate) ?? endDate
+            return (startDate, endDate)
+            
+        case .quarter:
+            let endDate = Date()
+            let startDate = calendar.date(byAdding: .day, value: -90, to: endDate) ?? endDate
+            return (startDate, endDate)
+            
+        case .year:
+            let endDate = Date()
+            let startDate = calendar.date(byAdding: .day, value: -365, to: endDate) ?? endDate
+            return (startDate, endDate)
+            
+        case .specificMonth:
+            let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: state.selectedMonth)) ?? state.selectedMonth
+            let endOfMonth = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: startOfMonth) ?? state.selectedMonth
+            return (startOfMonth, endOfMonth)
+            
+        case .specificQuarter:
+            let month = calendar.component(.month, from: state.selectedQuarter)
+            let quarter = (month - 1) / 3
+            let startMonth = quarter * 3 + 1
+            let startOfQuarter = calendar.date(from: DateComponents(year: calendar.component(.year, from: state.selectedQuarter), month: startMonth, day: 1)) ?? state.selectedQuarter
+            let endOfQuarter = calendar.date(byAdding: DateComponents(month: 3, day: -1), to: startOfQuarter) ?? state.selectedQuarter
+            return (startOfQuarter, endOfQuarter)
+            
+        case .specificYear:
+            let startOfYear = calendar.date(from: calendar.dateComponents([.year], from: state.selectedYear)) ?? state.selectedYear
+            let endOfYear = calendar.date(byAdding: DateComponents(year: 1, day: -1), to: startOfYear) ?? state.selectedYear
+            return (startOfYear, endOfYear)
+            
+        case .custom:
+            return (state.customStartDate, state.customEndDate)
+        }
     }
     
     private func convertAmount(value: Double, from: String, to: String) async -> Double {

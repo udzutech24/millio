@@ -41,14 +41,14 @@ private struct CashflowContentView: View {
             
             ScrollView {
                 VStack(spacing: 24) {
-                    // Кнопки действий
-                    actionButtonsSection
-                    
                     // График
                     chartSection
                     
-                    // История операций
-                    transactionsHistorySection
+                    // Кнопки действий
+                    actionButtonsSection
+                    
+                    // Кнопка для открытия истории операций
+                    historyButtonSection
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 16)
@@ -73,6 +73,18 @@ private struct CashflowContentView: View {
                 )
             }
         }
+        .sheet(isPresented: Binding(
+            get: { viewModel.state.showPeriodSelector },
+            set: { if !$0 { viewModel.handle(.hidePeriodSelector) } }
+        )) {
+            CashflowPeriodSelectorView(viewModel: viewModel)
+        }
+        .sheet(isPresented: Binding(
+            get: { viewModel.state.showTransactionsHistory },
+            set: { if !$0 { viewModel.handle(.hideTransactionsHistory) } }
+        )) {
+            CashflowTransactionsHistoryView(viewModel: viewModel)
+        }
     }
     
     // MARK: - Action Buttons Section
@@ -80,7 +92,7 @@ private struct CashflowContentView: View {
     private var actionButtonsSection: some View {
         HStack(spacing: 16) {
             // Кнопка Доход
-            ActionButton(
+            CashflowActionButton(
                 title: "Доход",
                 icon: "plus",
                 gradientColors: AppColors.incomeGradient
@@ -89,7 +101,7 @@ private struct CashflowContentView: View {
             }
             
             // Кнопка Расход
-            ActionButton(
+            CashflowActionButton(
                 title: "Расход",
                 icon: "minus",
                 gradientColors: AppColors.expenseGradient
@@ -98,7 +110,7 @@ private struct CashflowContentView: View {
             }
             
             // Кнопка Перевод
-            ActionButton(
+            CashflowActionButton(
                 title: "Перевод",
                 icon: "arrow.left.arrow.right",
                 gradientColors: AppColors.cashflowGradient
@@ -119,16 +131,102 @@ private struct CashflowContentView: View {
                 
                 Spacer()
                 
-                Picker("Период", selection: Binding(
-                    get: { viewModel.state.chartPeriod },
-                    set: { viewModel.handle(.setChartPeriod($0)) }
-                )) {
-                    ForEach(ChartPeriod.allCases, id: \.self) { period in
-                        Text(period.rawValue).tag(period)
+                Menu {
+                    Button {
+                        viewModel.handle(.setChartPeriod(.month))
+                    } label: {
+                        HStack {
+                            Text("Месяц")
+                            if viewModel.state.chartPeriod == .month {
+                                Image(systemName: "checkmark")
+                            }
+                        }
                     }
+                    
+                    Button {
+                        viewModel.handle(.setChartPeriod(.quarter))
+                    } label: {
+                        HStack {
+                            Text("Квартал")
+                            if viewModel.state.chartPeriod == .quarter {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                    
+                    Button {
+                        viewModel.handle(.setChartPeriod(.year))
+                    } label: {
+                        HStack {
+                            Text("Год")
+                            if viewModel.state.chartPeriod == .year {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                    
+                    Divider()
+                    
+                    Button {
+                        viewModel.handle(.showPeriodSelector)
+                    } label: {
+                        HStack {
+                            Text("Конкретный месяц")
+                            if viewModel.state.chartPeriod == .specificMonth {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                    
+                    Button {
+                        viewModel.handle(.showPeriodSelector)
+                    } label: {
+                        HStack {
+                            Text("Конкретный квартал")
+                            if viewModel.state.chartPeriod == .specificQuarter {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                    
+                    Button {
+                        viewModel.handle(.showPeriodSelector)
+                    } label: {
+                        HStack {
+                            Text("Конкретный год")
+                            if viewModel.state.chartPeriod == .specificYear {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                    
+                    Divider()
+                    
+                    Button {
+                        viewModel.handle(.showPeriodSelector)
+                    } label: {
+                        HStack {
+                            Text("Свой период")
+                            if viewModel.state.chartPeriod == .custom {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Text(getPeriodDisplayName())
+                            .font(.system(size: 14, weight: .medium))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundStyle(AppColors.textPrimary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.white.opacity(0.1))
+                    )
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 200)
             }
             
             if viewModel.state.incomeChartData.isEmpty && viewModel.state.expenseChartData.isEmpty {
@@ -243,37 +341,36 @@ private struct CashflowContentView: View {
         }
     }
     
-    // MARK: - Transactions History Section
+    // MARK: - History Button Section
     
-    private var transactionsHistorySection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("История операций")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(AppColors.textPrimary)
-            
-            if viewModel.state.filteredTransactions.isEmpty {
-                VStack(spacing: 16) {
-                    Image(systemName: "list.bullet.rectangle")
-                        .font(.system(size: 48))
-                        .foregroundStyle(AppColors.textTertiary)
+    private var historyButtonSection: some View {
+        Button {
+            viewModel.handle(.showTransactionsHistory)
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("История операций")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
                     
-                    Text("Нет операций")
-                        .font(.system(size: 16))
+                    Text("\(viewModel.state.filteredTransactions.count) операций")
+                        .font(.system(size: 14, weight: .regular))
                         .foregroundStyle(AppColors.textSecondary)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 40)
-            } else {
-                VStack(spacing: 12) {
-                    ForEach(viewModel.state.filteredTransactions) { transaction in
-                        CashflowTransactionRow(
-                            transaction: transaction,
-                            viewModel: viewModel
-                        )
-                    }
-                }
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppColors.textSecondary)
             }
+            .padding(20)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.black.opacity(0.3))
+            )
         }
+        .buttonStyle(.plain)
     }
     
     private func formatAmount(_ amount: Double) -> String {
@@ -289,150 +386,105 @@ private struct CashflowContentView: View {
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
         switch viewModel.state.chartPeriod {
-        case .month:
+        case .month, .specificMonth:
             formatter.dateFormat = "dd.MM"
-        case .quarter:
+        case .quarter, .specificQuarter:
             formatter.dateFormat = "dd.MM"
-        case .year:
+        case .year, .specificYear:
             formatter.dateFormat = "MMM"
+        case .custom:
+            formatter.dateFormat = "dd.MM"
         }
         return formatter.string(from: date)
     }
+    
+    private func getPeriodDisplayName() -> String {
+        switch viewModel.state.chartPeriod {
+        case .month:
+            return "Месяц"
+        case .quarter:
+            return "Квартал"
+        case .year:
+            return "Год"
+        case .specificMonth:
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMMM yyyy"
+            return formatter.string(from: viewModel.state.selectedMonth)
+        case .specificQuarter:
+            let calendar = Calendar.current
+            let month = calendar.component(.month, from: viewModel.state.selectedQuarter)
+            let quarter = (month - 1) / 3 + 1
+            let year = calendar.component(.year, from: viewModel.state.selectedQuarter)
+            return "Q\(quarter) \(year)"
+        case .specificYear:
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy"
+            return formatter.string(from: viewModel.state.selectedYear)
+        case .custom:
+            let formatter = DateFormatter()
+            formatter.dateFormat = "dd.MM.yyyy"
+            return "\(formatter.string(from: viewModel.state.customStartDate)) - \(formatter.string(from: viewModel.state.customEndDate))"
+        }
+    }
 }
 
-// MARK: - Cashflow Transaction Row
+// MARK: - Cashflow Action Button
 
-private struct CashflowTransactionRow: View {
-    let transaction: CashflowTransaction
-    @ObservedObject var viewModel: CashflowViewModel
+private struct CashflowActionButton: View {
+    let title: String
+    let icon: String
+    let gradientColors: [Color]
+    let action: () -> Void
     
     var body: some View {
-        Button {
-            viewModel.handle(.editTransaction(transaction))
-        } label: {
-            HStack(spacing: 16) {
-                // Иконка типа транзакции
-                Image(systemName: transaction.transactionType.icon)
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: getGradientColors(),
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+        Button(action: action) {
+            VStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: gradientColors.map { $0.opacity(0.2) },
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
                         )
-                    )
-                    .frame(width: 48, height: 48)
-                    .background(
-                        Circle()
-                            .fill(Color.white.opacity(0.1))
-                    )
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    // Категория или тип
-                    Text(getCategoryName())
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
+                        .frame(width: 56, height: 56)
                     
-                    // Дата
-                    Text(formatDate(transaction.transactionDate))
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundStyle(AppColors.textSecondary)
-                    
-                    // Карта или перевод
-                    if let cardName = getCardName() {
-                        Text(cardName)
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundStyle(AppColors.textTertiary)
-                    }
-                }
-                
-                Spacer()
-                
-                VStack(alignment: .trailing, spacing: 4) {
-                    // Сумма
-                    Text(formatAmount(transaction.amount))
-                        .font(.system(size: 16, weight: .semibold))
+                    Image(systemName: icon)
+                        .font(.system(size: 24, weight: .semibold))
                         .foregroundStyle(
-                            transaction.transactionType == .expense ? AppColors.error : AppColors.textPrimary
+                            LinearGradient(
+                                colors: gradientColors,
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
                         )
-                    
-                    // Валюта
-                    Text(transaction.currency)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(AppColors.textSecondary)
                 }
+                
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
             }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 20)
+            .padding(.horizontal, 12)
+            .background {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(Color.black.opacity(0.3))
-            )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(
+                                LinearGradient(
+                                    colors: gradientColors,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ),
+                                lineWidth: 2
+                            )
+                    }
+            }
         }
         .buttonStyle(.plain)
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button(role: .destructive) {
-                viewModel.handle(.deleteTransaction(transaction))
-            } label: {
-                Label("Удалить", systemImage: "trash")
-            }
-        }
-    }
-    
-    private func getGradientColors() -> [Color] {
-        switch transaction.transactionType {
-        case .income:
-            return AppColors.incomeGradient
-        case .expense:
-            return AppColors.expenseGradient
-        case .transfer:
-            return AppColors.cashflowGradient
-        }
-    }
-    
-    private func getCategoryName() -> String {
-        switch transaction.transactionType {
-        case .income:
-            return transaction.incomeCategory?.displayName ?? "Доход"
-        case .expense:
-            return transaction.expenseCategory?.displayName ?? "Расход"
-        case .transfer:
-            return "Перевод"
-        }
-    }
-    
-    private func getCardName() -> String? {
-        switch transaction.transactionType {
-        case .income, .expense:
-            if let cardID = transaction.cardID,
-               let card = viewModel.state.availableCards.first(where: { $0.cardUniqueID == cardID }) {
-                return card.name
-            }
-            return nil
-            
-        case .transfer:
-            if let fromCardID = transaction.cardID,
-               let toCardID = transaction.toCardID,
-               let fromCard = viewModel.state.availableCards.first(where: { $0.cardUniqueID == fromCardID }),
-               let toCard = viewModel.state.availableCards.first(where: { $0.cardUniqueID == toCardID }) {
-                return "\(fromCard.name) → \(toCard.name)"
-            }
-            return nil
-        }
-    }
-    
-    private func formatAmount(_ amount: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.groupingSeparator = " "
-        formatter.usesGroupingSeparator = true
-        formatter.minimumFractionDigits = 2
-        formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: amount)) ?? "0.00"
-    }
-    
-    private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "dd.MM.yyyy"
-        return formatter.string(from: date)
     }
 }
+
