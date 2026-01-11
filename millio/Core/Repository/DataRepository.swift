@@ -145,6 +145,21 @@ final class DataRepository: DataRepositoryProtocol {
                     }
                 }
             }
+            
+            // Экспортируем Debt
+            if typeName == "Debt" {
+                let debtDescriptor = FetchDescriptor<Debt>()
+                let debts = try modelContext.fetch(debtDescriptor)
+                
+                for debt in debts {
+                    let data = try debt.export()
+                    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                        var debtDict = json
+                        debtDict["_type"] = typeName
+                        modelsData.append(debtDict)
+                    }
+                }
+            }
         }
         
         // Обновляем metadata с реальным количеством моделей
@@ -317,6 +332,12 @@ final class DataRepository: DataRepositoryProtocol {
                 let habits = try modelContext.fetch(habitDescriptor)
                 for habit in habits {
                     modelContext.delete(habit)
+                }
+            } else if typeName == "Debt" {
+                let debtDescriptor = FetchDescriptor<Debt>()
+                let debts = try modelContext.fetch(debtDescriptor)
+                for debt in debts {
+                    modelContext.delete(debt)
                 }
             }
         }

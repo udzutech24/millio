@@ -56,6 +56,11 @@ struct AppSchema {
             modelTypes.append(HabitEntry.self)
         }
         
+        // Явно добавляем модели Debt
+        if !modelTypes.contains(where: { $0 == Debt.self }) {
+            modelTypes.append(Debt.self)
+        }
+        
         return Schema(modelTypes)
     }
 }

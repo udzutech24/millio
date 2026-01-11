@@ -20,6 +20,7 @@ enum AppRoute: Hashable {
     case credits
     case habits
     case cardIndex
+    case debts
     
     // Other screens
     case profile

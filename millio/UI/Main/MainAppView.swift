@@ -124,6 +124,16 @@ struct MainAppView: View {
                                 viewModel.handle(.navigateToService(.cardIndex))
                             }
                         }
+                        
+                        HStack(spacing: 16) {
+                            ServiceButton(
+                                title: "Долги",
+                                icon: "list.bullet.rectangle",
+                                gradientColors: AppColors.debtsGradient
+                            ) {
+                                viewModel.handle(.navigateToService(.debts))
+                            }
+                        }
                     }
                     .padding(.horizontal, 24)
                     
@@ -172,6 +182,8 @@ struct MainAppView: View {
             HabitsView()
         case .cardIndex:
             CardIndexView()
+        case .debts:
+            DebtsView()
         case .profile:
             ProfileView(router: router)
         case .subscription:
