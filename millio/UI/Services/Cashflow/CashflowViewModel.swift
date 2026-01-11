@@ -61,6 +61,15 @@ struct CashflowState {
     /// Данные для графика расходов
     var expenseChartData: [CashflowChartDataPoint] = []
     
+    /// Сумма доходов за выбранный период
+    var totalIncome: Double = 0.0
+    
+    /// Сумма расходов за выбранный период
+    var totalExpense: Double = 0.0
+    
+    /// Баланс за выбранный период (доходы - расходы)
+    var periodBalance: Double = 0.0
+    
     /// Флаг загрузки данных
     var isLoading: Bool = false
 }
@@ -303,6 +312,41 @@ final class CashflowViewModel: ViewModelProtocol {
         
         state.incomeChartData = incomePoints.sorted { $0.date < $1.date }
         state.expenseChartData = expensePoints.sorted { $0.date < $1.date }
+        
+        // Рассчитываем общие суммы за период
+        var totalIncome: Double = 0.0
+        var totalExpense: Double = 0.0
+        
+        for transaction in state.transactions {
+            guard transaction.transactionDate >= startDate && transaction.transactionDate <= endDate else {
+                continue
+            }
+            
+            switch transaction.transactionType {
+            case .income:
+                let converted = await convertAmount(
+                    value: transaction.amount,
+                    from: transaction.currency,
+                    to: "RUB"
+                )
+                totalIncome += converted
+                
+            case .expense:
+                let converted = await convertAmount(
+                    value: transaction.amount,
+                    from: transaction.currency,
+                    to: "RUB"
+                )
+                totalExpense += converted
+                
+            case .transfer, .exchange:
+                break
+            }
+        }
+        
+        state.totalIncome = totalIncome
+        state.totalExpense = totalExpense
+        state.periodBalance = totalIncome - totalExpense
     }
     
     private func getDateRange() -> (Date, Date) {

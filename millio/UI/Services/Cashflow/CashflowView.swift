@@ -41,6 +41,9 @@ private struct CashflowContentView: View {
             
             ScrollView {
                 VStack(spacing: 24) {
+                    // Статистика за период
+                    periodStatsSection
+                    
                     // График
                     chartSection
                     
@@ -128,6 +131,150 @@ private struct CashflowContentView: View {
             ) {
                 viewModel.handle(.addTransaction(.exchange))
             }
+        }
+    }
+    
+    // MARK: - Period Stats Section
+    
+    private var periodStatsSection: some View {
+        VStack(spacing: 16) {
+            HStack(spacing: 16) {
+                // Доходы
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Заработано")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(AppColors.textSecondary)
+                    
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(formatAmount(viewModel.state.totalIncome))
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: AppColors.incomeGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                        
+                        Text("RUB")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color.black.opacity(0.3))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(
+                                    LinearGradient(
+                                        colors: AppColors.incomeGradient,
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    ),
+                                    lineWidth: 2
+                                )
+                        }
+                )
+                
+                // Расходы
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Потрачено")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(AppColors.textSecondary)
+                    
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(formatAmount(viewModel.state.totalExpense))
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: AppColors.expenseGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                        
+                        Text("RUB")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color.black.opacity(0.3))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(
+                                    LinearGradient(
+                                        colors: AppColors.expenseGradient,
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    ),
+                                    lineWidth: 2
+                                )
+                        }
+                )
+            }
+            
+            // Баланс
+            HStack {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Баланс")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(AppColors.textSecondary)
+                    
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(formatAmount(viewModel.state.periodBalance))
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundStyle(
+                                viewModel.state.periodBalance >= 0 ?
+                                LinearGradient(
+                                    colors: AppColors.incomeGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ) :
+                                LinearGradient(
+                                    colors: AppColors.expenseGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                        
+                        Text("RUB")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
+                }
+                
+                Spacer()
+                
+                if viewModel.state.periodBalance != 0 {
+                    Image(systemName: viewModel.state.periodBalance >= 0 ? "arrow.up.circle.fill" : "arrow.down.circle.fill")
+                        .font(.system(size: 32))
+                        .foregroundStyle(
+                            viewModel.state.periodBalance >= 0 ?
+                            LinearGradient(
+                                colors: AppColors.incomeGradient,
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ) :
+                            LinearGradient(
+                                colors: AppColors.expenseGradient,
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                }
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.black.opacity(0.3))
+            )
         }
     }
     
@@ -254,65 +401,33 @@ private struct CashflowContentView: View {
                 .frame(height: 300)
             } else {
                 Chart {
-                    // Доходы
-                    ForEach(viewModel.state.incomeChartData) { dataPoint in
-                        LineMark(
-                            x: .value("Дата", dataPoint.date, unit: .day),
-                            y: .value("Доходы", dataPoint.value)
+                    // Доходы - левая полоса
+                    BarMark(
+                        x: .value("Тип", "Доходы"),
+                        y: .value("Сумма", viewModel.state.totalIncome)
+                    )
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: AppColors.incomeGradient,
+                            startPoint: .bottom,
+                            endPoint: .top
                         )
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: AppColors.incomeGradient,
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
-                        .interpolationMethod(.catmullRom)
-                        
-                        AreaMark(
-                            x: .value("Дата", dataPoint.date, unit: .day),
-                            y: .value("Доходы", dataPoint.value)
-                        )
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: AppColors.incomeGradient.map { $0.opacity(0.3) },
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .interpolationMethod(.catmullRom)
-                    }
+                    )
+                    .cornerRadius(8)
                     
-                    // Расходы
-                    ForEach(viewModel.state.expenseChartData) { dataPoint in
-                        LineMark(
-                            x: .value("Дата", dataPoint.date, unit: .day),
-                            y: .value("Расходы", dataPoint.value)
+                    // Расходы - правая полоса
+                    BarMark(
+                        x: .value("Тип", "Расходы"),
+                        y: .value("Сумма", viewModel.state.totalExpense)
+                    )
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: AppColors.expenseGradient,
+                            startPoint: .bottom,
+                            endPoint: .top
                         )
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: AppColors.expenseGradient,
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
-                        .interpolationMethod(.catmullRom)
-                        
-                        AreaMark(
-                            x: .value("Дата", dataPoint.date, unit: .day),
-                            y: .value("Расходы", dataPoint.value)
-                        )
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: AppColors.expenseGradient.map { $0.opacity(0.3) },
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .interpolationMethod(.catmullRom)
-                    }
+                    )
+                    .cornerRadius(8)
                 }
                 .chartYAxis {
                     AxisMarks(position: .leading) { value in
@@ -329,18 +444,15 @@ private struct CashflowContentView: View {
                 }
                 .chartXAxis {
                     AxisMarks { value in
-                        AxisGridLine()
-                            .foregroundStyle(AppColors.textTertiary.opacity(0.2))
                         AxisValueLabel {
-                            if let dateValue = value.as(Date.self) {
-                                Text(formatDate(dateValue))
+                            if let stringValue = value.as(String.self) {
+                                Text(stringValue)
                                     .foregroundStyle(AppColors.textSecondary)
-                                    .font(.system(size: 10))
+                                    .font(.system(size: 12, weight: .medium))
                             }
                         }
                     }
                 }
-                .chartXAxisLabel("Дата")
                 .chartYAxisLabel("Сумма (RUB)")
                 .frame(height: 300)
                 .padding(20)
