@@ -1005,45 +1005,45 @@ private struct CurrencyFilterSheet: View {
 private struct DisplayCurrencySheet: View {
     @ObservedObject var viewModel: CardViewModel
     @Environment(\.dismiss) private var dismiss
-    
-    // Стандартные валюты + валюты из карт
-    private var availableCurrencies: [String] {
-        let standard = ["RUB", "USD", "EUR", "GBP", "CNY", "JPY", "KZT", "TRY"]
-        let fromCards = Set(viewModel.state.cards.map { $0.currency })
-        return Array(Set(standard + fromCards)).sorted()
-    }
+    @State private var availableCurrencies: [String] = []
+    @State private var isLoading = true
     
     var body: some View {
         NavigationStack {
             ZStack {
                 GradientBackground()
                 
-                List {
-                    ForEach(availableCurrencies, id: \.self) { currency in
-                        Button {
-                            viewModel.handle(.setDisplayCurrency(currency))
-                            dismiss()
-                        } label: {
-                            HStack {
-                                Text(currency)
-                                    .foregroundStyle(AppColors.textPrimary)
-                                Spacer()
-                                if viewModel.state.displayCurrency == currency {
-                                    Image(systemName: "checkmark")
-                                        .foregroundStyle(
-                                            LinearGradient(
-                                                colors: AppColors.cardIndexGradient,
-                                                startPoint: .leading,
-                                                endPoint: .trailing
+                if isLoading {
+                    ProgressView()
+                        .tint(AppColors.textPrimary)
+                } else {
+                    List {
+                        ForEach(availableCurrencies, id: \.self) { currency in
+                            Button {
+                                viewModel.handle(.setDisplayCurrency(currency))
+                                dismiss()
+                            } label: {
+                                HStack {
+                                    Text(currency)
+                                        .foregroundStyle(AppColors.textPrimary)
+                                    Spacer()
+                                    if viewModel.state.displayCurrency == currency {
+                                        Image(systemName: "checkmark")
+                                            .foregroundStyle(
+                                                LinearGradient(
+                                                    colors: AppColors.cardIndexGradient,
+                                                    startPoint: .leading,
+                                                    endPoint: .trailing
+                                                )
                                             )
-                                        )
+                                    }
                                 }
                             }
+                            .listRowBackground(Color.clear)
                         }
-                        .listRowBackground(Color.clear)
                     }
+                    .scrollContentBackground(.hidden)
                 }
-                .scrollContentBackground(.hidden)
             }
             .navigationTitle("Валюта отображения")
             .navigationBarTitleDisplayMode(.inline)
@@ -1061,7 +1061,25 @@ private struct DisplayCurrencySheet: View {
                     )
                 }
             }
+            .task {
+                await loadAvailableCurrencies()
+            }
         }
+    }
+    
+    private func loadAvailableCurrencies() async {
+        isLoading = true
+        defer { isLoading = false }
+        
+        // Загружаем курсы, чтобы получить актуальный список валют
+        _ = await CurrencyRateService.shared.getRate(from: "USD", to: "RUB")
+        
+        // Получаем валюты из текущего источника курсов
+        let fromRateSource = Set(CurrencyRateService.shared.getAvailableCurrencies())
+        // Добавляем валюты из карт пользователя
+        let fromCards = Set(viewModel.state.cards.map { $0.currency })
+        // Объединяем и сортируем
+        availableCurrencies = Array(fromRateSource.union(fromCards)).sorted()
     }
 }
 

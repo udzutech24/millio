@@ -64,6 +64,14 @@ final class CurrencyRateService {
         return amount * rate
     }
     
+    /// Получить список доступных валют из текущего источника
+    /// USD всегда доступен
+    func getAvailableCurrencies() -> [String] {
+        var currencies = Set(cachedRates.keys)
+        currencies.insert("USD") // USD всегда доступен
+        return Array(currencies).sorted()
+    }
+    
     /// Обновить курсы из выбранного источника
     private func refreshRates() async {
         let source = currentRateSource
