@@ -6,10 +6,13 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct ProfileView: View {
     @Bindable var router: AppRouter
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContainer) private var modelContainer
+    @Environment(\.modelContext) private var modelContext
     
     private var appVersion: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -48,7 +51,21 @@ struct ProfileView: View {
                                         
                                         if newValue {
                                             Task {
-                                                // Можно добавить проверку iCloud здесь
+                                                // Проверяем доступность iCloud при включении тоггла
+                                                let cloudStore = CloudBackupStore()
+                                                appState.isICloudAvailable = await cloudStore.isAvailable()
+                                                
+                                                // Если iCloud доступен, получаем информацию о последнем backup
+                                                if appState.isICloudAvailable, let container = modelContainer {
+                                                    let dataRepository = DataRepository(
+                                                        modelContext: modelContext,
+                                                        modelContainer: container
+                                                    )
+                                                    let backupManager = BackupManager(dataRepository: dataRepository)
+                                                    if let backupInfo = await backupManager.lastBackupInfo() {
+                                                        appState.lastBackupDate = backupInfo.date
+                                                    }
+                                                }
                                             }
                                         } else {
                                             appState.isICloudAvailable = false
