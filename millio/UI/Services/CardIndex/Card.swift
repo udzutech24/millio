@@ -73,25 +73,25 @@ enum Bank: String, Codable, CaseIterable {
 @Model
 final class Card: Persistable {
     /// Название карты (например, "Основная карта")
-    var name: String
+    var name: String = ""
     
     /// Номер карты (последние 4 цифры для отображения, полный номер зашифрован)
-    var cardNumber: String // Храним последние 4 цифры для отображения
+    var cardNumber: String = "" // Храним последние 4 цифры для отображения
     
     /// Полный номер карты (зашифрован, опционально)
     var encryptedFullNumber: Data?
     
     /// Банк
-    var bankRaw: String
+    var bankRaw: String = "other"
     
     /// Тип карты
-    var cardTypeRaw: String
+    var cardTypeRaw: String = "debit"
     
     /// Валюта карты
-    var currency: String // Код валюты (USD, EUR, RUB и т.д.)
+    var currency: String = "RUB" // Код валюты (USD, EUR, RUB и т.д.)
     
     /// Баланс на карте
-    var balance: Double
+    var balance: Double = 0.0
     
     /// Кредитный лимит (только для кредитных карт)
     var creditLimit: Double?
@@ -109,13 +109,13 @@ final class Card: Persistable {
     var cardColor: String? // Hex цвет или название
     
     /// Избранная карта
-    var isFavorite: Bool
+    var isFavorite: Bool = false
     
     /// Дата создания
-    var createdAt: Date
+    var createdAt: Date = Date()
     
     /// Дата последнего обновления
-    var updatedAt: Date
+    var updatedAt: Date = Date()
     
     var bank: Bank {
         get { Bank(rawValue: bankRaw) ?? .other }
