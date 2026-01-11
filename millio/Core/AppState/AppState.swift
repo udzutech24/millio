@@ -21,6 +21,7 @@ final class AppState {
         }
     }
     var isBackupEnabled: Bool = false
+    var isDailyReminderEnabled: Bool = false
     
     // Subscription status
     var subscriptionStatus: SubscriptionStatus = .notSubscribed
@@ -33,6 +34,7 @@ final class AppState {
     
     init() {
         self.isBackupEnabled = SettingsManager.shared.isBackupEnabled
+        self.isDailyReminderEnabled = SettingsManager.shared.isDailyReminderEnabled
         self.selectedLanguage = LanguageManager.shared.currentLanguage
         
         // Загружаем статус подписки из менеджера

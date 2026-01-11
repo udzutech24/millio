@@ -73,6 +73,11 @@ struct millioApp: App {
                     .environment(\.locale, appState.selectedLanguage.locale ?? Locale.current)
                     .task {
                         await initializeApp(container: container)
+                        
+                        // Восстанавливаем расписание уведомлений, если они включены
+                        if appState.isDailyReminderEnabled {
+                            await NotificationManager.shared.scheduleDailyReminder(enabled: true)
+                        }
                     }
                     .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
                         triggerBackgroundBackup()

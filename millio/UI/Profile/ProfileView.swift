@@ -78,6 +78,19 @@ struct ProfileView: View {
                                 ))
                                 .tint(.blue)
                                 
+                                Toggle("Ежедневные напоминания", isOn: Binding(
+                                    get: { appState.isDailyReminderEnabled },
+                                    set: { newValue in
+                                        appState.isDailyReminderEnabled = newValue
+                                        SettingsManager.shared.isDailyReminderEnabled = newValue
+                                        
+                                        Task {
+                                            await NotificationManager.shared.scheduleDailyReminder(enabled: newValue)
+                                        }
+                                    }
+                                ))
+                                .tint(.blue)
+                                
                                 if appState.isBackupEnabled {
                                     if let backupDate = appState.lastBackupDate {
                                         VStack(spacing: 12) {
