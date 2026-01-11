@@ -39,6 +39,7 @@ enum CashbackAction {
     case editCashback(Cashback)
     case deleteCashback(Cashback)
     case updateCashback(category: CashbackCategory, percentage: Double, cardIDs: [String])
+    case updateCashbacksForCard(cardID: String, cashbacks: [(category: CashbackCategory, percentage: Double)])
     case showCashbackEditor
     case hideCashbackEditor
     case showCardPicker
@@ -99,6 +100,9 @@ final class CashbackViewModel: ViewModelProtocol {
             
         case .updateCashback(let category, let percentage, let cardIDs):
             updateCashback(category: category, percentage: percentage, cardIDs: cardIDs)
+            
+        case .updateCashbacksForCard(let cardID, let cashbacks):
+            updateCashbacksForCard(cardID: cardID, cashbacks: cashbacks)
             
         case .showCashbackEditor:
             state.showCashbackEditor = true
@@ -290,6 +294,52 @@ final class CashbackViewModel: ViewModelProtocol {
         // Фильтруем несуществующие карты
         return cashback.cardIDs.compactMap { cardID in
             getCard(byID: cardID)
+        }
+    }
+    
+    private func updateCashbacksForCard(cardID: String, cashbacks: [(category: CashbackCategory, percentage: Double)]) {
+        // Фильтруем только валидные кэшбеки (с процентом > 0)
+        let validCashbacks = cashbacks.filter { $0.percentage > 0 }
+        
+        guard !validCashbacks.isEmpty else { return }
+        
+        // Проверяем, что карта существует
+        guard let card = getCard(byID: cardID) else { return }
+        let validCardID = card.cardUniqueID
+        
+        // Создаем кэшбеки для выбранной карты
+        for (category, percentage) in validCashbacks {
+            // Проверяем, не существует ли уже такой кэшбек для этой карты
+            let existingCashback = state.cashbacks.first { cashback in
+                cashback.category == category && cashback.cardIDs.contains(validCardID)
+            }
+            
+            if let existing = existingCashback {
+                // Обновляем существующий кэшбэк, добавляя карту если её нет
+                if !existing.cardIDs.contains(validCardID) {
+                    existing.cardIDs.append(validCardID)
+                }
+                existing.percentage = percentage
+                existing.updatedAt = Date()
+            } else {
+                // Создаем новый кэшбэк
+                let newCashback = Cashback(
+                    name: "",
+                    category: category,
+                    percentage: percentage,
+                    cardIDs: [validCardID]
+                )
+                modelContext.insert(newCashback)
+            }
+        }
+        
+        do {
+            try modelContext.save()
+            loadCashbacks()
+            state.showCashbackEditor = false
+            state.editingCashback = nil
+        } catch {
+            AppLogger.log(.error, category: "Cashback", "Failed to save cashbacks: \(error.localizedDescription)")
         }
     }
 }
