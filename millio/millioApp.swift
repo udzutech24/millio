@@ -83,6 +83,9 @@ struct millioApp: App {
     }
     
     private func initializeApp(container: ModelContainer) async {
+        // Регистрируем фичи
+        WaterFeatureRegistration.register()
+        
         // Используем DIContainer для создания зависимостей
         let container = DIContainer.create(
             appState: appState,
