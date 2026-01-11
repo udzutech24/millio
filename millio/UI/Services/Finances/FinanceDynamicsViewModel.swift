@@ -45,6 +45,9 @@ struct FinanceDynamicsState {
     
     /// Все доступные инвестиции
     var availableInvestments: [Investment] = []
+    
+    /// Показывать ли sheet с деталями
+    var showDetailsSheet: Bool = false
 }
 
 // MARK: - Dynamics Period
@@ -84,6 +87,8 @@ enum FinanceDynamicsAction {
     case setPeriod(DynamicsPeriod)
     case toggleGroup(String)
     case toggleAccount(String)
+    case showDetailsSheet
+    case hideDetailsSheet
 }
 
 // MARK: - Finance Dynamics ViewModel
@@ -144,6 +149,12 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 state.selectedAccountIDs.insert(accountID)
             }
             updateChartData()
+            
+        case .showDetailsSheet:
+            state.showDetailsSheet = true
+            
+        case .hideDetailsSheet:
+            state.showDetailsSheet = false
         }
     }
     

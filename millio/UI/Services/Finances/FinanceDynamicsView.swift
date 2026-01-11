@@ -52,9 +52,9 @@ private struct FinanceDynamicsContentView: View {
                     // График
                     chartSection
                     
-                    // Легенда
+                    // Кнопка для открытия деталей
                     if !viewModel.state.chartData.isEmpty {
-                        legendSection
+                        detailsButton
                     }
                 }
                 .padding(.horizontal, 24)
@@ -64,6 +64,12 @@ private struct FinanceDynamicsContentView: View {
         }
         .navigationTitle("Динамика")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: Binding(
+            get: { viewModel.state.showDetailsSheet },
+            set: { if !$0 { viewModel.handle(.hideDetailsSheet) } }
+        )) {
+            FinanceDynamicsDetailsView(viewModel: viewModel)
+        }
     }
     
     // MARK: - Filters Section
@@ -347,63 +353,36 @@ private struct FinanceDynamicsContentView: View {
         }
     }
     
-    // MARK: - Legend Section
+    // MARK: - Details Button
     
-    private var legendSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Детали")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(AppColors.textPrimary)
-            
-            VStack(spacing: 8) {
-                ForEach(viewModel.state.chartData) { dataPoint in
-                    HStack {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(
-                                LinearGradient(
-                                    colors: AppColors.financesGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .frame(width: 16, height: 16)
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(dataPoint.label)
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(AppColors.textPrimary)
-                            
-                            Text(formatDate(dataPoint.date))
-                                .font(.system(size: 12, weight: .regular))
-                                .foregroundStyle(AppColors.textTertiary)
-                        }
-                        
-                        Spacer()
-                        
-                        VStack(alignment: .trailing, spacing: 4) {
-                            Text(formatAmount(dataPoint.value))
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(AppColors.textPrimary)
-                            
-                            Text(viewModel.state.displayCurrency)
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(AppColors.textSecondary)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color.white.opacity(0.05))
-                    )
+    private var detailsButton: some View {
+        Button {
+            viewModel.handle(.showDetailsSheet)
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Детали")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                    
+                    Text("\(viewModel.state.chartData.count) записей")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(AppColors.textSecondary)
                 }
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppColors.textSecondary)
             }
+            .padding(20)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.black.opacity(0.3))
+            )
         }
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.black.opacity(0.3))
-        )
+        .buttonStyle(.plain)
     }
     
     private func formatAmount(_ amount: Double) -> String {

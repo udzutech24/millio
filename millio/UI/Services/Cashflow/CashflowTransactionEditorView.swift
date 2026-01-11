@@ -143,42 +143,44 @@ struct CashflowTransactionEditorView: View {
                         }
                     }
                     
-                    // Основная информация
-                    Section {
-                        TextField("Сумма", text: Binding(
-                            get: { formatNumberForDisplay(amountText) },
-                            set: { newValue in
-                                let normalized = newValue.replacingOccurrences(of: " ", with: "")
-                                    .replacingOccurrences(of: ",", with: ".")
-                                amountText = normalized
-                            }
-                        ))
-                        .keyboardType(.decimalPad)
-                        .foregroundStyle(AppColors.textPrimary)
-                        
-                        if isLoadingCurrencies {
-                            HStack {
-                                Text("Валюта")
-                                    .foregroundStyle(AppColors.textPrimary)
-                                Spacer()
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                                    .tint(AppColors.textTertiary)
-                            }
-                        } else {
-                            Picker("Валюта", selection: $selectedCurrency) {
-                                ForEach(availableCurrencies, id: \.self) { currency in
-                                    Text(currency).tag(currency)
+                    // Основная информация (скрываем для обмена валют)
+                    if selectedTransactionType != .exchange {
+                        Section {
+                            TextField("Сумма", text: Binding(
+                                get: { formatNumberForDisplay(amountText) },
+                                set: { newValue in
+                                    let normalized = newValue.replacingOccurrences(of: " ", with: "")
+                                        .replacingOccurrences(of: ",", with: ".")
+                                    amountText = normalized
                                 }
+                            ))
+                            .keyboardType(.decimalPad)
+                            .foregroundStyle(AppColors.textPrimary)
+                            
+                            if isLoadingCurrencies {
+                                HStack {
+                                    Text("Валюта")
+                                        .foregroundStyle(AppColors.textPrimary)
+                                    Spacer()
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                        .tint(AppColors.textTertiary)
+                                }
+                            } else {
+                                Picker("Валюта", selection: $selectedCurrency) {
+                                    ForEach(availableCurrencies, id: \.self) { currency in
+                                        Text(currency).tag(currency)
+                                    }
+                                }
+                                .foregroundStyle(AppColors.textPrimary)
                             }
-                            .foregroundStyle(AppColors.textPrimary)
+                            
+                            DatePicker("Дата", selection: $transactionDate, displayedComponents: .date)
+                                .foregroundStyle(AppColors.textPrimary)
+                        } header: {
+                            Text("Основная информация")
+                                .foregroundStyle(AppColors.textSecondary)
                         }
-                        
-                        DatePicker("Дата", selection: $transactionDate, displayedComponents: .date)
-                            .foregroundStyle(AppColors.textPrimary)
-                    } header: {
-                        Text("Основная информация")
-                            .foregroundStyle(AppColors.textSecondary)
                     }
                     
                     // Карта
