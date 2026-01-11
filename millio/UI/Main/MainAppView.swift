@@ -10,9 +10,13 @@ import SwiftUI
 struct MainAppView: View {
     @Bindable var router: AppRouter
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     @StateObject private var viewModel: MainAppViewModel
     @State private var services: [ServiceItem] = []
     @State private var draggedItem: ServiceItem?
+    @State private var cashflowViewModel: CashflowViewModel?
+    @State private var showExpenseSheet = false
+    @State private var showIncomeSheet = false
     
     private let orderManager = ServiceOrderManager()
     
@@ -86,7 +90,7 @@ struct MainAppView: View {
                             icon: "minus",
                             gradientColors: AppColors.expenseGradient
                         ) {
-                            // TODO: Navigate to expense screen
+                            showExpenseSheet = true
                         }
                         
                         ActionButton(
@@ -94,7 +98,7 @@ struct MainAppView: View {
                             icon: "plus",
                             gradientColors: AppColors.incomeGradient
                         ) {
-                            // TODO: Navigate to income screen
+                            showIncomeSheet = true
                         }
                     }
                     .padding(.horizontal, 24)
@@ -104,8 +108,27 @@ struct MainAppView: View {
             .navigationDestination(for: AppRoute.self) { route in
                 routeView(for: route)
             }
+            .sheet(isPresented: $showExpenseSheet) {
+                if let cashflowViewModel = cashflowViewModel {
+                    CashflowTransactionEditorView(
+                        viewModel: cashflowViewModel,
+                        transactionType: .expense
+                    )
+                }
+            }
+            .sheet(isPresented: $showIncomeSheet) {
+                if let cashflowViewModel = cashflowViewModel {
+                    CashflowTransactionEditorView(
+                        viewModel: cashflowViewModel,
+                        transactionType: .income
+                    )
+                }
+            }
             .onAppear {
                 loadServices()
+                if cashflowViewModel == nil {
+                    cashflowViewModel = CashflowViewModel(modelContext: modelContext)
+                }
             }
         }
     }

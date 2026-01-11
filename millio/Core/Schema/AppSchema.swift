@@ -81,6 +81,11 @@ struct AppSchema {
             modelTypes.append(FinanceAccount.self)
         }
         
+        // Явно добавляем модели CashflowTransaction
+        if !modelTypes.contains(where: { $0 == CashflowTransaction.self }) {
+            modelTypes.append(CashflowTransaction.self)
+        }
+        
         return Schema(modelTypes)
     }
 }
