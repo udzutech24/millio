@@ -223,12 +223,38 @@ private struct FinancesContentViewInternal: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 48)
             } else {
-                VStack(spacing: 12) {
-                    ForEach(viewModel.state.groups) { group in
-                        FinanceGroupRow(
-                            group: group,
-                            viewModel: viewModel
+                groupsListView
+            }
+        }
+    }
+    
+    private var groupsListView: some View {
+        VStack(spacing: 12) {
+            ForEach(0..<viewModel.state.groups.count, id: \.self) { index in
+                Group {
+                    let group = viewModel.state.groups[index]
+                    FinanceGroupRow(
+                        group: group,
+                        viewModel: viewModel,
+                        openedSwipeGroupID: Binding(
+                            get: { viewModel.state.openedSwipeGroupID },
+                            set: { viewModel.handle(.setOpenedSwipeGroupID($0)) }
                         )
+                    )
+                    .draggable(group.groupUniqueID) {
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(.ultraThinMaterial)
+                            .frame(height: 60)
+                            .opacity(0.5)
+                    }
+                    .dropDestination(for: String.self) { droppedIDs, location in
+                        guard let droppedID = droppedIDs.first,
+                              let droppedIndex = viewModel.state.groups.firstIndex(where: { $0.groupUniqueID == droppedID }),
+                              droppedIndex != index else {
+                            return false
+                        }
+                        viewModel.handle(.moveGroup(from: droppedIndex, to: index))
+                        return true
                     }
                 }
             }
@@ -253,85 +279,126 @@ private struct FinancesContentViewInternal: View {
 private struct FinanceGroupRow: View {
     let group: FinanceGroup
     @ObservedObject var viewModel: FinanceViewModel
-    @State private var isExpanded: Bool = false
-    @State private var groupTotal: Double = 0.0
-    @State private var showDeleteConfirmation = false
+    @Binding var openedSwipeGroupID: String?
+    @State private var swipeOffset: CGFloat = 0
+    @State private var isSwiping: Bool = false
+    
+    private var groupID: String {
+        group.groupUniqueID
+    }
+    
+    private var isSwipeOpened: Bool {
+        openedSwipeGroupID == groupID
+    }
+    
+    private var isExpanded: Bool {
+        viewModel.state.expandedGroupIDs.contains(groupID)
+    }
+    
+    private var groupTotal: Double {
+        viewModel.state.groupTotals[groupID] ?? 0.0
+    }
     
     var isDefaultGroup: Bool {
         group.name == "Без группы"
     }
     
+    private let swipeActionWidth: CGFloat = 140
+    
     var body: some View {
-        VStack(spacing: 0) {
-            // Заголовок группы
-            HStack(spacing: 12) {
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        isExpanded.toggle()
-                    }
-                } label: {
-                    HStack(spacing: 12) {
-                        // Цветная полоска
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(group.color)
-                            .frame(width: 4, height: 40)
-                        
-                        // Название группы
-                        Text(group.name)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        
-                        // Сумма группы
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text(formatBalance(groupTotal))
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(AppColors.textPrimary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                            
-                            Text(viewModel.state.displayCurrency)
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(AppColors.textSecondary)
-                                .lineLimit(1)
+        ZStack(alignment: .trailing) {
+            // Кнопки действий при свайпе (только для не дефолтной группы)
+            if !isDefaultGroup {
+                HStack(spacing: 0) {
+                    // Кнопка редактирования
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            swipeOffset = 0
+                            openedSwipeGroupID = nil
                         }
-                        
-                        // Иконка раскрытия
-                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(AppColors.textTertiary)
+                        viewModel.handle(.editGroup(group))
+                    } label: {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: swipeActionWidth / 2, height: 60)
+                            .background(
+                                LinearGradient(
+                                    colors: [Color.blue, Color.cyan],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
                     }
-                    .padding(.vertical, 12)
-                    .padding(.horizontal, 16)
+                    
+                    // Кнопка удаления
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            swipeOffset = 0
+                            openedSwipeGroupID = nil
+                        }
+                        viewModel.handle(.deleteGroup(group))
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: swipeActionWidth / 2, height: 60)
+                            .background(AppColors.error)
+                    }
                 }
-                .buttonStyle(.plain)
-                
-                // Кнопки действий (только для не дефолтной группы)
-                if !isDefaultGroup {
-                    Menu {
-                        Button {
-                            viewModel.handle(.editGroup(group))
-                        } label: {
-                            Label("Редактировать", systemImage: "pencil")
-                        }
-                        
-                        Button(role: .destructive) {
-                            showDeleteConfirmation = true
-                        } label: {
-                            Label("Удалить", systemImage: "trash")
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .frame(width: swipeActionWidth)
+                .opacity(isSwipeOpened ? 1 : 0)
+            }
+            
+            // Основной контент группы
+            VStack(spacing: 0) {
+                // Заголовок группы
+                HStack(spacing: 12) {
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            viewModel.handle(.toggleGroupExpanded(groupID))
                         }
                     } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(AppColors.textTertiary)
-                            .frame(width: 32, height: 32)
+                        HStack(spacing: 12) {
+                            // Цветная полоска
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(group.color)
+                                .frame(width: 4, height: 40)
+                            
+                            // Название группы
+                            Text(group.name)
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(AppColors.textPrimary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            
+                            // Сумма группы
+                            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                Text(formatBalance(groupTotal))
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(AppColors.textPrimary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                                
+                                Text(viewModel.state.displayCurrency)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(AppColors.textSecondary)
+                                    .lineLimit(1)
+                            }
+                            
+                            // Иконка раскрытия
+                            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(AppColors.textTertiary)
+                        }
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
                     }
                     .buttonStyle(.plain)
                 }
-            }
-            
-            // Аккордеон с счетами
-            if isExpanded {
+                
+                // Аккордеон с счетами
+                if isExpanded {
                 VStack(spacing: 8) {
                     if let accounts = group.accounts, !accounts.isEmpty {
                         ForEach(accounts) { account in
@@ -384,29 +451,84 @@ private struct FinanceGroupRow: View {
                 }
                 .padding(.bottom, 12)
                 }
-        }
-        .background {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(
-                            LinearGradient(
-                                colors: AppColors.financesGradient,
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            ),
-                            lineWidth: 1.5
-                        )
-                }
-        }
-        .confirmationDialog("Удалить группу?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
-            Button("Удалить", role: .destructive) {
-                viewModel.handle(.deleteGroup(group))
             }
-            Button("Отмена", role: .cancel) {}
-        } message: {
-            Text("Все счета из группы будут перемещены в группу \"Без группы\".")
+            .background {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(
+                                LinearGradient(
+                                    colors: AppColors.financesGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ),
+                                lineWidth: 1.5
+                            )
+                    }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .offset(x: swipeOffset)
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        // Запрещаем свайп если аккордеон открыт
+                        if !isDefaultGroup && !isExpanded {
+                            isSwiping = true
+                            // Ограничиваем свайп только влево (отрицательные значения)
+                            let newOffset = min(0, max(-swipeActionWidth, value.translation.width))
+                            swipeOffset = newOffset
+                        }
+                    }
+                    .onEnded { value in
+                        isSwiping = false
+                        if !isDefaultGroup && !isExpanded {
+                            // Если свайпнули больше половины ширины, показываем действия полностью
+                            if value.translation.width < -swipeActionWidth / 2 {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    swipeOffset = -swipeActionWidth
+                                    // Закрываем другие открытые свайпы
+                                    if openedSwipeGroupID != groupID {
+                                        openedSwipeGroupID = nil
+                                    }
+                                    openedSwipeGroupID = groupID
+                                }
+                            } else {
+                                // Иначе возвращаем на место
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    swipeOffset = 0
+                                    if openedSwipeGroupID == groupID {
+                                        openedSwipeGroupID = nil
+                                    }
+                                }
+                            }
+                        }
+                    }
+            )
+            .onTapGesture {
+                // При тапе на группу закрываем свайп, если он открыт
+                if isSwipeOpened {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        swipeOffset = 0
+                        openedSwipeGroupID = nil
+                    }
+                }
+            }
+        }
+        .onChange(of: isSwipeOpened) { oldValue, newValue in
+            if newValue {
+                swipeOffset = -swipeActionWidth
+            } else if swipeOffset < 0 {
+                swipeOffset = 0
+            }
+        }
+        .onChange(of: openedSwipeGroupID) { oldValue, newValue in
+            // Если открыт свайп на другой группе, закрываем этот
+            if newValue != nil && newValue != groupID && isSwipeOpened {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    swipeOffset = 0
+                }
+            }
         }
         .task {
             await loadGroupTotal()
@@ -417,14 +539,28 @@ private struct FinanceGroupRow: View {
                     await loadGroupTotal()
                 }
             }
+            // Закрываем свайп при раскрытии/сворачивании
+            if isSwipeOpened {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    swipeOffset = 0
+                    openedSwipeGroupID = nil
+                }
+            }
+        }
+        .onChange(of: group.id) { oldValue, newValue in
+            // При изменении группы (после drag and drop) перезагружаем сумму
+            Task {
+                await loadGroupTotal()
+            }
         }
     }
     
     private func loadGroupTotal() async {
-        groupTotal = await viewModel.calculateGroupTotal(
+        let total = await viewModel.calculateGroupTotal(
             group: group,
             in: viewModel.state.displayCurrency
         )
+        viewModel.handle(.setGroupTotal(groupID, total))
     }
     
     private func formatBalance(_ balance: Double) -> String {
@@ -605,7 +741,16 @@ private struct FinanceGroupEditorView: View {
             .onAppear {
                 if let editing = viewModel.state.editingGroup {
                     name = editing.name
-                    selectedColor = editing.color
+                    // Находим соответствующий цвет из predefinedColors по hex-значению
+                    let editingColorHex = editing.colorHex.uppercased()
+                    if let matchingColor = predefinedColors.first(where: { color in
+                        color.toHex().uppercased() == editingColorHex
+                    }) {
+                        selectedColor = matchingColor
+                    } else {
+                        // Если точного совпадения нет, используем цвет из группы
+                        selectedColor = editing.color
+                    }
                 }
             }
         }

@@ -24,6 +24,9 @@ final class FinanceGroup: Persistable {
     /// Дата последнего обновления
     var updatedAt: Date = Date()
     
+    /// Порядок сортировки
+    var order: Int = 0
+    
     /// Связанные счета
     @Relationship(deleteRule: .cascade) var accounts: [FinanceAccount]? = nil
     
@@ -31,11 +34,12 @@ final class FinanceGroup: Persistable {
         Color(hex: colorHex) ?? Color.white
     }
     
-    init(name: String, colorHex: String = "#FFFFFF") {
+    init(name: String, colorHex: String = "#FFFFFF", order: Int = 0) {
         self.name = name
         self.colorHex = colorHex
         self.createdAt = Date()
         self.updatedAt = Date()
+        self.order = order
     }
     
     // MARK: - Exportable
@@ -51,6 +55,7 @@ final class FinanceGroup: Persistable {
             "colorHex": colorHex,
             "createdAt": createdAt.timeIntervalSince1970,
             "updatedAt": updatedAt.timeIntervalSince1970,
+            "order": order,
             "groupUniqueID": groupUniqueID
         ]
         

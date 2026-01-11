@@ -34,6 +34,8 @@ struct FinanceGroupImporter: ModelImporter {
             throw AppError.backupCorrupted
         }
         
+        let order = dict["order"] as? Int ?? 0
+        
         // Проверяем, не существует ли уже группа с таким именем
         let groupDescriptor = FetchDescriptor<FinanceGroup>(
             predicate: #Predicate<FinanceGroup> { group in
@@ -44,12 +46,13 @@ struct FinanceGroupImporter: ModelImporter {
         if let existingGroup = try? context.fetch(groupDescriptor).first {
             // Обновляем существующую группу
             existingGroup.colorHex = colorHex
+            existingGroup.order = order
             existingGroup.updatedAt = Date(timeIntervalSince1970: updatedAt)
             return
         }
         
         // Создаем новую группу
-        let group = FinanceGroup(name: name, colorHex: colorHex)
+        let group = FinanceGroup(name: name, colorHex: colorHex, order: order)
         group.createdAt = Date(timeIntervalSince1970: createdAt)
         group.updatedAt = Date(timeIntervalSince1970: updatedAt)
         

@@ -60,6 +60,15 @@ struct FinanceState {
     
     /// Доступные активы
     var availableInvestments: [Investment] = []
+    
+    /// ID группы с открытым свайпом (nil = нет открытого свайпа)
+    var openedSwipeGroupID: String? = nil
+    
+    /// Множество ID групп с открытыми аккордеонами
+    var expandedGroupIDs: Set<String> = []
+    
+    /// Словарь сумм групп по их ID
+    var groupTotals: [String: Double] = [:]
 }
 
 // MARK: - Finance Actions
@@ -85,6 +94,10 @@ enum FinanceAction {
     case showDisplayCurrencySheet
     case hideDisplayCurrencySheet
     case setDisplayCurrency(String)
+    case setOpenedSwipeGroupID(String?)
+    case moveGroup(from: Int, to: Int)
+    case toggleGroupExpanded(String)
+    case setGroupTotal(String, Double)
 }
 
 // MARK: - Finance ViewModel
@@ -177,6 +190,22 @@ final class FinanceViewModel: ViewModelProtocol {
             state.displayCurrency = currency
             storedDisplayCurrency = currency
             calculateTotalAmount()
+            
+        case .setOpenedSwipeGroupID(let groupID):
+            state.openedSwipeGroupID = groupID
+            
+        case .moveGroup(let from, let to):
+            moveGroup(from: from, to: to)
+            
+        case .toggleGroupExpanded(let groupID):
+            if state.expandedGroupIDs.contains(groupID) {
+                state.expandedGroupIDs.remove(groupID)
+            } else {
+                state.expandedGroupIDs.insert(groupID)
+            }
+            
+        case .setGroupTotal(let groupID, let total):
+            state.groupTotals[groupID] = total
         }
     }
     
@@ -184,7 +213,10 @@ final class FinanceViewModel: ViewModelProtocol {
     
     private func loadGroups() {
         let descriptor = FetchDescriptor<FinanceGroup>(
-            sortBy: [SortDescriptor(\.createdAt, order: .forward)]
+            sortBy: [
+                SortDescriptor(\.order, order: .forward),
+                SortDescriptor(\.createdAt, order: .forward)
+            ]
         )
         if let groups = try? modelContext.fetch(descriptor) {
             state.groups = groups
@@ -200,7 +232,9 @@ final class FinanceViewModel: ViewModelProtocol {
     }
     
     private func createDefaultGroup() {
-        let defaultGroup = FinanceGroup(name: "Без группы", colorHex: "#808080")
+        // Находим максимальный order
+        let maxOrder = state.groups.map { $0.order }.max() ?? -1
+        let defaultGroup = FinanceGroup(name: "Без группы", colorHex: "#808080", order: maxOrder + 1)
         modelContext.insert(defaultGroup)
         
         do {
@@ -209,6 +243,27 @@ final class FinanceViewModel: ViewModelProtocol {
             state.groups.append(defaultGroup)
         } catch {
             AppLogger.log(.error, category: "Finance", "Failed to create default group: \(error.localizedDescription)")
+        }
+    }
+    
+    private func moveGroup(from: Int, to: Int) {
+        guard from >= 0, to >= 0, from < state.groups.count, to < state.groups.count, from != to else {
+            return
+        }
+        
+        let group = state.groups[from]
+        state.groups.remove(at: from)
+        state.groups.insert(group, at: to)
+        
+        // Обновляем порядок всех групп
+        for (index, group) in state.groups.enumerated() {
+            group.order = index
+        }
+        
+        do {
+            try modelContext.save()
+        } catch {
+            AppLogger.log(.error, category: "Finance", "Failed to save group order: \(error.localizedDescription)")
         }
     }
     
@@ -373,7 +428,9 @@ final class FinanceViewModel: ViewModelProtocol {
             existing.colorHex = colorHex
             existing.updatedAt = Date()
         } else {
-            let newGroup = FinanceGroup(name: name, colorHex: colorHex)
+            // Находим максимальный order
+            let maxOrder = state.groups.map { $0.order }.max() ?? -1
+            let newGroup = FinanceGroup(name: name, colorHex: colorHex, order: maxOrder + 1)
             modelContext.insert(newGroup)
         }
         
