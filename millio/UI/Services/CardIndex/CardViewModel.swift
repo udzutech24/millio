@@ -259,9 +259,16 @@ final class CardViewModel: ViewModelProtocol {
     
     private func calculateStats() {
         // Сначала считаем балансы по валютам (оригинальные значения)
+        // Для дебетовых карт добавляем баланс, для кредитных вычитаем долг
         var balanceByCurrency: [String: Double] = [:]
         for card in state.cards {
-            balanceByCurrency[card.currency, default: 0] += card.balance
+            if card.cardType == .credit {
+                // Для кредитных карт вычитаем долг из общего баланса
+                balanceByCurrency[card.currency, default: 0] -= card.debt
+            } else {
+                // Для дебетовых карт добавляем баланс
+                balanceByCurrency[card.currency, default: 0] += card.balance
+            }
         }
         state.balanceByCurrency = balanceByCurrency
         
