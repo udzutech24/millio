@@ -127,10 +127,9 @@ final class Card: Persistable {
         set { cardTypeRaw = newValue.rawValue }
     }
     
-    /// Маскированный номер карты для отображения (**** **** **** 1234)
+    /// Маскированный номер карты для отображения (только последние 4 цифры)
     var maskedNumber: String {
-        let last4 = String(cardNumber.suffix(4))
-        return "**** **** **** \(last4)"
+        String(cardNumber.suffix(4))
     }
     
     /// Форматированный баланс

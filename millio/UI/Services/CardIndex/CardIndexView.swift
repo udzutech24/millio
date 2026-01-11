@@ -433,13 +433,13 @@ private struct CardRow: View {
     @State private var showDeleteConfirmation = false
     
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 12) {
             // Основная область карты (кликабельна)
             Button(action: onEdit) {
-                HStack(spacing: 16) {
+                HStack(spacing: 12) {
                     // Иконка карты
                     Image(systemName: card.cardType.icon)
-                        .font(.system(size: 32, weight: .semibold))
+                        .font(.system(size: 24, weight: .semibold))
                         .foregroundStyle(
                             LinearGradient(
                                 colors: AppColors.cardIndexGradient,
@@ -447,22 +447,24 @@ private struct CardRow: View {
                                 endPoint: .bottomTrailing
                             )
                         )
-                        .frame(width: 48, height: 48)
+                        .frame(width: 40, height: 40)
                         .background {
                             Circle()
                                 .fill(.ultraThinMaterial)
                         }
                     
                     // Информация о карте
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 4) {
                             Text(card.name)
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(AppColors.textPrimary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                             
                             if card.isFavorite {
                                 Image(systemName: "star.fill")
-                                    .font(.system(size: 12))
+                                    .font(.system(size: 10))
                                     .foregroundStyle(
                                         LinearGradient(
                                             colors: AppColors.cardIndexGradient,
@@ -474,86 +476,105 @@ private struct CardRow: View {
                         }
                         
                         Text(card.bank.displayName)
-                            .font(.system(size: 14, weight: .regular))
+                            .font(.system(size: 13, weight: .regular))
                             .foregroundStyle(AppColors.textSecondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
                         
                         Text(card.maskedNumber)
-                            .font(.system(size: 13, weight: .regular))
+                            .font(.system(size: 11, weight: .regular))
                             .foregroundStyle(AppColors.textTertiary)
                     }
                     
-                    Spacer()
+                    Spacer(minLength: 8)
                     
-                    // Баланс
-                    VStack(alignment: .trailing, spacing: 4) {
+                    // Финансовая информация
+                    VStack(alignment: .trailing, spacing: 3) {
                         if card.cardType == .credit, let limit = card.creditLimit {
-                            // Для кредитных карт показываем долг
-                            Text("Долг: \(formatBalance(card.debt)) \(card.currency)")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(AppColors.error)
+                            // Для кредитных карт: долг в одну строку
+                            HStack(spacing: 4) {
+                                Text("Долг:")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(AppColors.textTertiary)
+                                Text("\(formatBalance(card.debt)) \(card.currency)")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(AppColors.error)
+                            }
                             
-                            Text("Лимит: \(formatBalance(limit)) \(card.currency)")
-                                .font(.system(size: 12, weight: .regular))
-                                .foregroundStyle(AppColors.textTertiary)
+                            HStack(spacing: 4) {
+                                Text("Лимит:")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(AppColors.textTertiary)
+                                Text("\(formatBalance(limit))")
+                                    .font(.system(size: 12, weight: .regular))
+                                    .foregroundStyle(AppColors.textSecondary)
+                            }
                         } else {
-                            // Для дебетовых карт показываем баланс
+                            // Для дебетовых карт: баланс
                             Text("\(formatBalance(card.balance)) \(card.currency)")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(AppColors.textPrimary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
                         }
                         
+                        // Тип карты (компактно)
                         Text(card.cardType.displayName)
-                            .font(.system(size: 12, weight: .regular))
+                            .font(.system(size: 11, weight: .regular))
                             .foregroundStyle(AppColors.textTertiary)
+                            .lineLimit(1)
                     }
                 }
             }
             .buttonStyle(.plain)
             
-            // Кнопка избранного
-            Button {
-                onToggleFavorite()
-            } label: {
-                Image(systemName: card.isFavorite ? "star.fill" : "star")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(
-                        card.isFavorite ?
-                        LinearGradient(
-                            colors: AppColors.cardIndexGradient,
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        ) :
-                        LinearGradient(
-                            colors: [AppColors.textTertiary],
-                            startPoint: .leading,
-                            endPoint: .trailing
+            // Кнопки действий (компактные)
+            VStack(spacing: 8) {
+                // Кнопка избранного
+                Button {
+                    onToggleFavorite()
+                } label: {
+                    Image(systemName: card.isFavorite ? "star.fill" : "star")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(
+                            card.isFavorite ?
+                            LinearGradient(
+                                colors: AppColors.cardIndexGradient,
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ) :
+                            LinearGradient(
+                                colors: [AppColors.textTertiary],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
                         )
-                    )
-                    .padding(8)
-            }
-            .buttonStyle(.plain)
-            
-            // Кнопка удаления
-            Button {
-                showDeleteConfirmation = true
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(AppColors.error)
-                    .padding(8)
-            }
-            .buttonStyle(.plain)
-            .confirmationDialog("Удалить карту?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
-                Button("Удалить", role: .destructive) {
-                    onDelete()
+                        .frame(width: 32, height: 32)
                 }
-                Button("Отмена", role: .cancel) {}
-            } message: {
-                Text("Карта \"\(card.name)\" будет удалена без возможности восстановления.")
+                .buttonStyle(.plain)
+                
+                // Кнопка удаления
+                Button {
+                    showDeleteConfirmation = true
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(AppColors.error)
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(.plain)
+                .confirmationDialog("Удалить карту?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
+                    Button("Удалить", role: .destructive) {
+                        onDelete()
+                    }
+                    Button("Отмена", role: .cancel) {}
+                } message: {
+                    Text("Карта \"\(card.name)\" будет удалена без возможности восстановления.")
+                }
             }
         }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 14)
         .background {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(.ultraThinMaterial)
