@@ -100,6 +100,21 @@ final class DataRepository: DataRepositoryProtocol {
                     }
                 }
             }
+            
+            // Экспортируем Credit
+            if typeName == "Credit" {
+                let creditDescriptor = FetchDescriptor<Credit>()
+                let credits = try modelContext.fetch(creditDescriptor)
+                
+                for credit in credits {
+                    let data = try credit.export()
+                    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                        var creditDict = json
+                        creditDict["_type"] = typeName
+                        modelsData.append(creditDict)
+                    }
+                }
+            }
         }
         
         // Обновляем metadata с реальным количеством моделей
@@ -189,7 +204,7 @@ final class DataRepository: DataRepositoryProtocol {
             }
         }
         
-        // Теперь импортируем остальные модели (включая кешбэки)
+        // Теперь импортируем остальные модели (включая кешбэки и кредиты)
         for modelData in modelsData {
             guard let typeName = modelData["_type"] as? String else { continue }
             
@@ -217,7 +232,7 @@ final class DataRepository: DataRepositoryProtocol {
                 
                 try importerType.`import`(from: cashbackData, context: modelContext)
             } else {
-                // Остальные типы импортируем как обычно
+                // Остальные типы (включая Credit) импортируем как обычно
                 guard let importerType = ModelTypeRegistry.shared.getImporter(for: typeName) else {
                     AppLogger.log(.error, category: "DataRepository", "No importer found for type: \(typeName)")
                     continue
@@ -254,6 +269,12 @@ final class DataRepository: DataRepositoryProtocol {
                 let cashbacks = try modelContext.fetch(cashbackDescriptor)
                 for cashback in cashbacks {
                     modelContext.delete(cashback)
+                }
+            } else if typeName == "Credit" {
+                let creditDescriptor = FetchDescriptor<Credit>()
+                let credits = try modelContext.fetch(creditDescriptor)
+                for credit in credits {
+                    modelContext.delete(credit)
                 }
             }
         }

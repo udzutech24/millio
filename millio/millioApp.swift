@@ -19,6 +19,7 @@ struct millioApp: App {
         // Регистрируем фичи ДО создания схемы
         CardFeatureRegistration.register()
         CashbackFeatureRegistration.register()
+        CreditFeatureRegistration.register()
         
         let schema = AppSchema.create()
         
