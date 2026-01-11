@@ -52,23 +52,6 @@ struct MainAppView: View {
                                     .stroke(AppColors.textPrimary, lineWidth: 1.5)
                             }
                         }
-                        
-                        Spacer()
-                        
-                        Button {
-                            viewModel.handle(.navigateToNotifications)
-                        } label: {
-                            ZStack(alignment: .topTrailing) {
-                                Image(systemName: "bell")
-                                    .font(.system(size: 28))
-                                    .foregroundStyle(AppColors.textPrimary)
-                                
-                                Circle()
-                                    .fill(AppColors.notificationBadge)
-                                    .frame(width: 10, height: 10)
-                                    .offset(x: 4, y: -4)
-                            }
-                        }
                     }
                     .padding(.horizontal, 24)
                     .padding(.top, 16)
@@ -191,8 +174,6 @@ struct MainAppView: View {
             CardIndexView()
         case .profile:
             ProfileView(router: router)
-        case .notifications:
-            NotificationsView()
         case .subscription:
             SubscriptionView()
         default:

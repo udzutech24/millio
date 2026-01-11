@@ -23,7 +23,6 @@ enum AppRoute: Hashable {
     
     // Other screens
     case profile
-    case notifications
     case subscription
 }
 

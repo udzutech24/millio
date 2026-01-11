@@ -83,9 +83,6 @@ enum AppColors {
     /// Цвет фона для иконок в кнопках действий
     static let iconBackground = Color.white.opacity(0.2)
     
-    /// Цвет для индикатора уведомлений (зеленый)
-    static let notificationBadge = Color.green
-    
     /// Цвет для ошибок
     static let error = Color.red
     
