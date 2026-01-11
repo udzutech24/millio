@@ -55,6 +55,12 @@ struct CreditState {
     /// Валюта для отображения общего долга
     var displayCurrency: String = "RUB"
     
+    /// Показывать ли sheet внесения платежа
+    var showPaymentSheet: Bool = false
+    
+    /// Кредит для внесения платежа
+    var paymentCredit: Credit? = nil
+    
     /// Общий долг по всем кредитам (в выбранной валюте)
     var totalDebt: Double = 0.0
     
@@ -82,11 +88,9 @@ enum CreditAction {
     case updateCredit(
         name: String,
         amount: Double,
-        interestRate: Double,
         monthlyPayment: Double,
-        startDate: Date,
         endDate: Date,
-        termMonths: Int,
+        remainingAmount: Double,
         currency: String,
         bank: Bank,
         creditType: CreditType
@@ -109,6 +113,9 @@ enum CreditAction {
     case showDisplayCurrencySheet
     case hideDisplayCurrencySheet
     case setDisplayCurrency(String)
+    case showPaymentSheet(Credit)
+    case hidePaymentSheet
+    case makePayment(amount: Double, reduceTerm: Bool, credit: Credit)
 }
 
 // MARK: - Credit ViewModel
@@ -145,15 +152,13 @@ final class CreditViewModel: ViewModelProtocol {
         case .toggleFavorite(let credit):
             toggleFavorite(credit)
             
-        case .updateCredit(let name, let amount, let interestRate, let monthlyPayment, let startDate, let endDate, let termMonths, let currency, let bank, let creditType):
+        case .updateCredit(let name, let amount, let monthlyPayment, let endDate, let remainingAmount, let currency, let bank, let creditType):
             updateCredit(
                 name: name,
                 amount: amount,
-                interestRate: interestRate,
                 monthlyPayment: monthlyPayment,
-                startDate: startDate,
                 endDate: endDate,
-                termMonths: termMonths,
+                remainingAmount: remainingAmount,
                 currency: currency,
                 bank: bank,
                 creditType: creditType
@@ -222,6 +227,17 @@ final class CreditViewModel: ViewModelProtocol {
         case .setDisplayCurrency(let currency):
             state.displayCurrency = currency
             calculateStats()
+            
+        case .showPaymentSheet(let credit):
+            state.paymentCredit = credit
+            state.showPaymentSheet = true
+            
+        case .hidePaymentSheet:
+            state.showPaymentSheet = false
+            state.paymentCredit = nil
+            
+        case .makePayment(let amount, let reduceTerm, let credit):
+            makePayment(amount: amount, reduceTerm: reduceTerm, credit: credit)
         }
     }
     
@@ -245,33 +261,8 @@ final class CreditViewModel: ViewModelProtocol {
     }
     
     private func applyFilters() {
-        var filtered = state.credits
-        
-        // Фильтр по поисковому запросу
-        if !state.searchText.isEmpty {
-            let searchLower = state.searchText.lowercased()
-            filtered = filtered.filter { credit in
-                credit.name.lowercased().contains(searchLower) ||
-                credit.bank.displayName.lowercased().contains(searchLower)
-            }
-        }
-        
-        // Фильтр по банку
-        if let bank = state.selectedBank {
-            filtered = filtered.filter { $0.bank == bank }
-        }
-        
-        // Фильтр по типу кредита
-        if let creditType = state.selectedCreditType {
-            filtered = filtered.filter { $0.creditType == creditType }
-        }
-        
-        // Фильтр по валюте
-        if let currency = state.selectedCurrency {
-            filtered = filtered.filter { $0.currency == currency }
-        }
-        
-        state.filteredCredits = filtered
+        // Показываем все кредиты без фильтрации
+        state.filteredCredits = state.credits
     }
     
     private func calculateStats() {
@@ -378,28 +369,35 @@ final class CreditViewModel: ViewModelProtocol {
     private func updateCredit(
         name: String,
         amount: Double,
-        interestRate: Double,
         monthlyPayment: Double,
-        startDate: Date,
         endDate: Date,
-        termMonths: Int,
+        remainingAmount: Double,
         currency: String,
         bank: Bank,
         creditType: CreditType
     ) {
+        // Вычисляем startDate и termMonths для внутреннего использования
+        // Устанавливаем startDate примерно за год до endDate (или используем существующую дату)
+        let calendar = Calendar.current
+        let startDate = state.editingCredit?.startDate ?? calendar.date(byAdding: .year, value: -1, to: endDate) ?? Date()
+        let termMonths = Credit.calculateTermMonths(from: startDate, to: endDate)
+        
+        // Вычисляем процентную ставку из остальных параметров (приблизительно)
+        // Если не получается вычислить, используем 0
+        let interestRate = state.editingCredit?.interestRate ?? 0.0
+        
         if let existing = state.editingCredit {
             // Обновляем существующий кредит
             existing.name = name
             existing.amount = amount
-            existing.interestRate = interestRate
             existing.monthlyPayment = monthlyPayment
-            existing.startDate = startDate
             existing.endDate = endDate
-            existing.termMonths = termMonths
+            existing.remainingAmount = remainingAmount
             existing.currency = currency
             existing.bank = bank
             existing.creditType = creditType
-            existing.updateRemainingAmount()
+            existing.termMonths = termMonths
+            // startDate и interestRate оставляем как есть (не меняем при редактировании)
             existing.updatedAt = Date()
         } else {
             // Создаем новый кредит
@@ -415,6 +413,7 @@ final class CreditViewModel: ViewModelProtocol {
                 creditType: creditType
             )
             newCredit.endDate = endDate
+            newCredit.remainingAmount = remainingAmount
             modelContext.insert(newCredit)
         }
         
@@ -425,6 +424,22 @@ final class CreditViewModel: ViewModelProtocol {
             state.editingCredit = nil
         } catch {
             AppLogger.log(.error, category: "Credit", "Failed to save credit: \(error.localizedDescription)")
+        }
+    }
+    
+    private func makePayment(amount: Double, reduceTerm: Bool, credit: Credit) {
+        guard amount > 0, credit.remainingAmount > 0, !credit.isClosed else { return }
+        
+        // Применяем досрочное погашение
+        credit.applyEarlyPayment(amount: amount, reduceTerm: reduceTerm)
+        
+        do {
+            try modelContext.save()
+            loadCredits()
+            state.showPaymentSheet = false
+            state.paymentCredit = nil
+        } catch {
+            AppLogger.log(.error, category: "Credit", "Failed to save payment: \(error.localizedDescription)")
         }
     }
 }

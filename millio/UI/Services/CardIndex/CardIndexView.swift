@@ -43,9 +43,6 @@ private struct CardContentViewInternal: View {
                     // Статистика
                     statsSection
                     
-                    // Поиск и фильтры
-                    searchAndFiltersSection
-                    
                     // Список карт
                     cardsListSection
                 }
@@ -71,24 +68,6 @@ private struct CardContentViewInternal: View {
             set: { if !$0 { viewModel.handle(.hideCardEditor) } }
         )) {
             CardEditorView(viewModel: viewModel)
-        }
-        .sheet(isPresented: Binding(
-            get: { viewModel.state.showBankFilterSheet },
-            set: { if !$0 { viewModel.handle(.hideBankFilterSheet) } }
-        )) {
-            BankFilterSheet(viewModel: viewModel)
-        }
-        .sheet(isPresented: Binding(
-            get: { viewModel.state.showCardTypeFilterSheet },
-            set: { if !$0 { viewModel.handle(.hideCardTypeFilterSheet) } }
-        )) {
-            CardTypeFilterSheet(viewModel: viewModel)
-        }
-        .sheet(isPresented: Binding(
-            get: { viewModel.state.showCurrencyFilterSheet },
-            set: { if !$0 { viewModel.handle(.hideCurrencyFilterSheet) } }
-        )) {
-            CurrencyFilterSheet(viewModel: viewModel)
         }
         .sheet(isPresented: Binding(
             get: { viewModel.state.showDisplayCurrencySheet },
@@ -199,99 +178,6 @@ private struct CardContentViewInternal: View {
             }
         }
     }
-    
-    // MARK: - Search and Filters
-    
-    private var searchAndFiltersSection: some View {
-        VStack(spacing: 12) {
-            // Поиск
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(AppColors.textTertiary)
-                
-                TextField("Поиск карт...", text: Binding(
-                    get: { viewModel.state.searchText },
-                    set: { viewModel.handle(.search($0)) }
-                ))
-                .foregroundStyle(AppColors.textPrimary)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(
-                                LinearGradient(
-                                    colors: AppColors.cardIndexGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ),
-                                lineWidth: 1.5
-                            )
-                    }
-            }
-            
-            // Фильтры
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    // Фильтр по банку
-                    Button {
-                        viewModel.handle(.showBankFilterSheet)
-                    } label: {
-                        FilterChip(
-                            title: viewModel.state.selectedBank?.displayName ?? "Банк",
-                            isSelected: viewModel.state.selectedBank != nil
-                        )
-                    }
-                    
-                    // Фильтр по типу
-                    Button {
-                        viewModel.handle(.showCardTypeFilterSheet)
-                    } label: {
-                        FilterChip(
-                            title: viewModel.state.selectedCardType?.displayName ?? "Тип",
-                            isSelected: viewModel.state.selectedCardType != nil
-                        )
-                    }
-                    
-                    // Фильтр по валюте
-                    Button {
-                        viewModel.handle(.showCurrencyFilterSheet)
-                    } label: {
-                        FilterChip(
-                            title: viewModel.state.selectedCurrency ?? "Валюта",
-                            isSelected: viewModel.state.selectedCurrency != nil
-                        )
-                    }
-                    
-                    if viewModel.state.selectedBank != nil ||
-                       viewModel.state.selectedCardType != nil ||
-                       viewModel.state.selectedCurrency != nil {
-                        Button {
-                            viewModel.handle(.clearFilters)
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "xmark.circle.fill")
-                                Text("Сбросить")
-                            }
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(AppColors.error)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background {
-                                Capsule()
-                                    .fill(.ultraThinMaterial)
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, 4)
-            }
-        }
-    }
-    
     // MARK: - Cards List
     
     private var cardsListSection: some View {

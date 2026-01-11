@@ -61,6 +61,8 @@ struct CreditImporter: ModelImporter {
             existingCredit.interestRate = interestRate
             existingCredit.monthlyPayment = monthlyPayment
             existingCredit.remainingAmount = remainingAmount
+            existingCredit.earlyPaymentsAmount = data["earlyPaymentsAmount"] as? Double ?? 0.0
+            existingCredit.isClosed = data["isClosed"] as? Bool ?? false
             existingCredit.isFavorite = data["isFavorite"] as? Bool ?? false
             existingCredit.updatedAt = Date(timeIntervalSince1970: updatedAt)
             existingCredit.updateRemainingAmount()
@@ -84,6 +86,8 @@ struct CreditImporter: ModelImporter {
         
         credit.endDate = endDate > 0 ? Date(timeIntervalSince1970: endDate) : nil
         credit.remainingAmount = remainingAmount
+        credit.earlyPaymentsAmount = data["earlyPaymentsAmount"] as? Double ?? 0.0
+        credit.isClosed = data["isClosed"] as? Bool ?? false
         credit.isFavorite = data["isFavorite"] as? Bool ?? false
         credit.createdAt = Date(timeIntervalSince1970: createdAt)
         credit.updatedAt = Date(timeIntervalSince1970: updatedAt)

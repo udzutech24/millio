@@ -228,32 +228,7 @@ final class CardViewModel: ViewModelProtocol {
     private func applyFilters() {
         var filtered = state.cards
         
-        // Фильтр по поисковому запросу
-        if !state.searchText.isEmpty {
-            let searchLower = state.searchText.lowercased()
-            filtered = filtered.filter { card in
-                card.name.lowercased().contains(searchLower) ||
-                card.cardNumber.contains(searchLower) ||
-                card.bank.displayName.lowercased().contains(searchLower) ||
-                (card.cardholderName?.lowercased().contains(searchLower) ?? false)
-            }
-        }
-        
-        // Фильтр по банку
-        if let bank = state.selectedBank {
-            filtered = filtered.filter { $0.bank == bank }
-        }
-        
-        // Фильтр по типу карты
-        if let cardType = state.selectedCardType {
-            filtered = filtered.filter { $0.cardType == cardType }
-        }
-        
-        // Фильтр по валюте
-        if let currency = state.selectedCurrency {
-            filtered = filtered.filter { $0.currency == currency }
-        }
-        
+        // Показываем все карты без фильтрации
         state.filteredCards = filtered
     }
     

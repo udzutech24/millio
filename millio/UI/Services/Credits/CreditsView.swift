@@ -43,9 +43,6 @@ private struct CreditsContentViewInternal: View {
                     // Статистика
                     statsSection
                     
-                    // Поиск и фильтры
-                    searchAndFiltersSection
-                    
                     // Список кредитов
                     creditsListSection
                 }
@@ -73,28 +70,18 @@ private struct CreditsContentViewInternal: View {
             CreditEditorView(viewModel: viewModel)
         }
         .sheet(isPresented: Binding(
-            get: { viewModel.state.showBankFilterSheet },
-            set: { if !$0 { viewModel.handle(.hideBankFilterSheet) } }
-        )) {
-            BankFilterSheet(viewModel: viewModel)
-        }
-        .sheet(isPresented: Binding(
-            get: { viewModel.state.showCreditTypeFilterSheet },
-            set: { if !$0 { viewModel.handle(.hideCreditTypeFilterSheet) } }
-        )) {
-            CreditTypeFilterSheet(viewModel: viewModel)
-        }
-        .sheet(isPresented: Binding(
-            get: { viewModel.state.showCurrencyFilterSheet },
-            set: { if !$0 { viewModel.handle(.hideCurrencyFilterSheet) } }
-        )) {
-            CurrencyFilterSheet(viewModel: viewModel)
-        }
-        .sheet(isPresented: Binding(
             get: { viewModel.state.showDisplayCurrencySheet },
             set: { if !$0 { viewModel.handle(.hideDisplayCurrencySheet) } }
         )) {
             DisplayCurrencySheet(viewModel: viewModel)
+        }
+        .sheet(isPresented: Binding(
+            get: { viewModel.state.showPaymentSheet },
+            set: { if !$0 { viewModel.handle(.hidePaymentSheet) } }
+        )) {
+            if let credit = viewModel.state.paymentCredit {
+                PaymentSheet(viewModel: viewModel, credit: credit)
+            }
         }
         .task {
             // Загружаем курсы при появлении экрана
@@ -238,102 +225,6 @@ private struct CreditsContentViewInternal: View {
             }
         }
     }
-    
-    // MARK: - Search and Filters
-    
-    private var searchAndFiltersSection: some View {
-        VStack(spacing: 12) {
-            // Поиск
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(AppColors.textTertiary)
-                
-                TextField("Поиск кредитов...", text: Binding(
-                    get: { viewModel.state.searchText },
-                    set: { viewModel.handle(.search($0)) }
-                ))
-                .foregroundStyle(AppColors.textPrimary)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(
-                                LinearGradient(
-                                    colors: AppColors.creditsGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ),
-                                lineWidth: 1.5
-                            )
-                    }
-            }
-            
-            // Фильтры
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    // Фильтр по банку
-                    Button {
-                        viewModel.handle(.showBankFilterSheet)
-                    } label: {
-                        FilterChip(
-                            title: viewModel.state.selectedBank?.displayName ?? "Банк",
-                            isSelected: viewModel.state.selectedBank != nil,
-                            gradientColors: AppColors.creditsGradient
-                        )
-                    }
-                    
-                    // Фильтр по типу кредита
-                    Button {
-                        viewModel.handle(.showCreditTypeFilterSheet)
-                    } label: {
-                        FilterChip(
-                            title: viewModel.state.selectedCreditType?.displayName ?? "Тип",
-                            isSelected: viewModel.state.selectedCreditType != nil,
-                            gradientColors: AppColors.creditsGradient
-                        )
-                    }
-                    
-                    // Фильтр по валюте
-                    Button {
-                        viewModel.handle(.showCurrencyFilterSheet)
-                    } label: {
-                        FilterChip(
-                            title: viewModel.state.selectedCurrency ?? "Валюта",
-                            isSelected: viewModel.state.selectedCurrency != nil,
-                            gradientColors: AppColors.creditsGradient
-                        )
-                    }
-                    
-                    if viewModel.state.selectedBank != nil ||
-                       viewModel.state.selectedCreditType != nil ||
-                       viewModel.state.selectedCurrency != nil {
-                        Button {
-                            viewModel.handle(.clearFilters)
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "xmark.circle.fill")
-                                Text("Сбросить")
-                            }
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(AppColors.error)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background {
-                                Capsule()
-                                    .fill(.ultraThinMaterial)
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, 4)
-            }
-        }
-    }
-    
     // MARK: - Credits List
     
     private var creditsListSection: some View {
@@ -373,7 +264,10 @@ private struct CreditsContentViewInternal: View {
             } else {
                 VStack(spacing: 12) {
                     ForEach(viewModel.state.filteredCredits) { credit in
-                        CreditRow(credit: credit) {
+                        CreditRow(
+                            credit: credit,
+                            viewModel: viewModel
+                        ) {
                             viewModel.handle(.editCredit(credit))
                         } onDelete: {
                             viewModel.handle(.deleteCredit(credit))
@@ -491,6 +385,7 @@ private struct FilterChip: View {
 
 private struct CreditRow: View {
     let credit: Credit
+    let viewModel: CreditViewModel
     let onEdit: () -> Void
     let onDelete: () -> Void
     let onToggleFavorite: () -> Void
@@ -584,44 +479,61 @@ private struct CreditRow: View {
                 }
                 .buttonStyle(.plain)
                 
-                // Кнопки действий
-                VStack(spacing: 8) {
-                    Button {
-                        onToggleFavorite()
-                    } label: {
-                        Image(systemName: credit.isFavorite ? "star.fill" : "star")
-                            .font(.system(size: 18))
-                            .foregroundStyle(
-                                credit.isFavorite ?
-                                LinearGradient(
-                                    colors: AppColors.creditsGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ) :
-                                LinearGradient(
-                                    colors: [AppColors.textTertiary],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                    }
-                    
-                    Button {
-                        showDeleteConfirmation = true
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.system(size: 18))
-                            .foregroundStyle(AppColors.error)
-                    }
-                    .confirmationDialog("Удалить кредит?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
-                        Button("Удалить", role: .destructive) {
-                            onDelete()
+                    // Кнопки действий
+                    VStack(spacing: 8) {
+                        // Кнопка внесения платежа (если кредит не закрыт)
+                        if !credit.isClosed {
+                            Button {
+                                viewModel.handle(.showPaymentSheet(credit))
+                            } label: {
+                                Image(systemName: "creditcard.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: AppColors.creditsGradient,
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                            }
                         }
-                        Button("Отмена", role: .cancel) {}
-                    } message: {
-                        Text("Кредит \"\(credit.name)\" будет удален без возможности восстановления.")
+                        
+                        Button {
+                            onToggleFavorite()
+                        } label: {
+                            Image(systemName: credit.isFavorite ? "star.fill" : "star")
+                                .font(.system(size: 18))
+                                .foregroundStyle(
+                                    credit.isFavorite ?
+                                    LinearGradient(
+                                        colors: AppColors.creditsGradient,
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    ) :
+                                    LinearGradient(
+                                        colors: [AppColors.textTertiary],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                        }
+                        
+                        Button {
+                            showDeleteConfirmation = true
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.system(size: 18))
+                                .foregroundStyle(AppColors.error)
+                        }
+                        .confirmationDialog("Удалить кредит?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
+                            Button("Удалить", role: .destructive) {
+                                onDelete()
+                            }
+                            Button("Отмена", role: .cancel) {}
+                        } message: {
+                            Text("Кредит \"\(credit.name)\" будет удален без возможности восстановления.")
+                        }
                     }
-                }
             }
             .padding(20)
             .background {
@@ -956,16 +868,12 @@ private struct CreditEditorView: View {
     
     @State private var name: String = ""
     @State private var amountText: String = ""
-    @State private var interestRateText: String = ""
     @State private var monthlyPaymentText: String = ""
-    @State private var startDate: Date = Date()
     @State private var endDate: Date = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
-    @State private var termMonthsText: String = ""
+    @State private var remainingAmountText: String = ""
     @State private var selectedCurrency: String = "RUB"
     @State private var selectedBank: Bank = .other
     @State private var selectedCreditType: CreditType = .consumer
-    @State private var autoCalculatePayment: Bool = true
-    @State private var autoCalculateTerm: Bool = true
     @State private var availableCurrencies: [String] = ["RUB", "USD", "EUR"]
     @State private var isLoadingCurrencies: Bool = false
     
@@ -991,115 +899,40 @@ private struct CreditEditorView: View {
                                 let normalized = newValue.replacingOccurrences(of: " ", with: "")
                                     .replacingOccurrences(of: ",", with: ".")
                                 amountText = normalized
-                                
-                                if autoCalculatePayment {
-                                    calculateMonthlyPayment()
-                                }
                             }
                         ))
                         .keyboardType(.decimalPad)
                         .foregroundStyle(AppColors.textPrimary)
                         
-                        TextField("Процентная ставка (% годовых)", text: $interestRateText)
-                            .keyboardType(.decimalPad)
-                            .foregroundStyle(AppColors.textPrimary)
-                            .onChange(of: interestRateText) { oldValue, newValue in
-                                // Нормализуем ввод: заменяем запятую на точку
-                                if newValue.contains(",") {
-                                    interestRateText = newValue.replacingOccurrences(of: ",", with: ".")
-                                }
-                                if autoCalculatePayment {
-                                    calculateMonthlyPayment()
-                                }
+                        TextField("Ежемесячный платеж", text: Binding(
+                            get: { formatNumberForDisplay(monthlyPaymentText) },
+                            set: { newValue in
+                                // Нормализуем: убираем пробелы и заменяем запятую на точку
+                                let normalized = newValue.replacingOccurrences(of: " ", with: "")
+                                    .replacingOccurrences(of: ",", with: ".")
+                                monthlyPaymentText = normalized
                             }
-                        
-                        HStack {
-                            TextField("Ежемесячный платеж", text: Binding(
-                                get: { formatNumberForDisplay(monthlyPaymentText) },
-                                set: { newValue in
-                                    // Нормализуем: убираем пробелы и заменяем запятую на точку
-                                    let normalized = newValue.replacingOccurrences(of: " ", with: "")
-                                        .replacingOccurrences(of: ",", with: ".")
-                                    monthlyPaymentText = normalized
-                                }
-                            ))
-                            .keyboardType(.decimalPad)
-                            .foregroundStyle(AppColors.textPrimary)
-                            .disabled(autoCalculatePayment)
-                            
-                            Button {
-                                autoCalculatePayment.toggle()
-                                if autoCalculatePayment {
-                                    calculateMonthlyPayment()
-                                }
-                            } label: {
-                                Image(systemName: autoCalculatePayment ? "wand.and.stars" : "wand.and.stars.inverse")
-                                    .foregroundStyle(
-                                        LinearGradient(
-                                            colors: AppColors.creditsGradient,
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
-                            }
-                        }
-                        
-                        DatePicker("Дата начала", selection: $startDate, displayedComponents: .date)
-                            .foregroundStyle(AppColors.textPrimary)
-                            .onChange(of: startDate) { _, _ in
-                                if autoCalculateTerm {
-                                    calculateTermMonths()
-                                }
-                            }
+                        ))
+                        .keyboardType(.decimalPad)
+                        .foregroundStyle(AppColors.textPrimary)
                         
                         DatePicker("Дата окончания", selection: $endDate, displayedComponents: .date)
                             .foregroundStyle(AppColors.textPrimary)
-                            .onChange(of: endDate) { _, _ in
-                                if autoCalculateTerm {
-                                    calculateTermMonths()
-                                    if autoCalculatePayment {
-                                        calculateMonthlyPayment()
-                                    }
-                                }
-                            }
                         
-                        HStack {
-                            TextField("Срок в месяцах", text: $termMonthsText)
-                                .keyboardType(.numberPad)
-                                .foregroundStyle(AppColors.textPrimary)
-                                .disabled(autoCalculateTerm)
-                                .onChange(of: termMonthsText) { _, _ in
-                                    if !autoCalculateTerm && autoCalculatePayment {
-                                        calculateMonthlyPayment()
-                                    }
-                                }
-                            
-                            Button {
-                                autoCalculateTerm.toggle()
-                                if autoCalculateTerm {
-                                    calculateTermMonths()
-                                    if autoCalculatePayment {
-                                        calculateMonthlyPayment()
-                                    }
-                                }
-                            } label: {
-                                Image(systemName: autoCalculateTerm ? "wand.and.stars" : "wand.and.stars.inverse")
-                                    .foregroundStyle(
-                                        LinearGradient(
-                                            colors: AppColors.creditsGradient,
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
+                        TextField("Остаток долга", text: Binding(
+                            get: { formatNumberForDisplay(remainingAmountText) },
+                            set: { newValue in
+                                // Нормализуем: убираем пробелы и заменяем запятую на точку
+                                let normalized = newValue.replacingOccurrences(of: " ", with: "")
+                                    .replacingOccurrences(of: ",", with: ".")
+                                remainingAmountText = normalized
                             }
-                        }
+                        ))
+                        .keyboardType(.decimalPad)
+                        .foregroundStyle(AppColors.textPrimary)
                     } header: {
                         Text("Параметры кредита")
                             .foregroundStyle(AppColors.textSecondary)
-                    } footer: {
-                        Text("Автоматический расчет включен. Нажмите на иконку, чтобы ввести значение вручную.")
-                            .foregroundStyle(AppColors.textTertiary)
-                            .font(.system(size: 12))
                     }
                     
                     Section {
@@ -1169,18 +1002,15 @@ private struct CreditEditorView: View {
                 if let editing = viewModel.state.editingCredit {
                     name = editing.name
                     amountText = String(format: "%.2f", editing.amount)
-                    interestRateText = String(format: "%.2f", editing.interestRate)
                     monthlyPaymentText = String(format: "%.2f", editing.monthlyPayment)
-                    startDate = editing.startDate
-                    endDate = editing.endDate ?? Calendar.current.date(byAdding: .month, value: editing.termMonths, to: editing.startDate) ?? Date()
-                    termMonthsText = String(editing.termMonths)
+                    endDate = editing.endDate ?? Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
+                    remainingAmountText = String(format: "%.2f", editing.remainingAmount)
                     selectedCurrency = editing.currency
                     selectedBank = editing.bank
                     selectedCreditType = editing.creditType
                 } else {
                     // Для нового кредита устанавливаем дату окончания на год вперед
-                    endDate = Calendar.current.date(byAdding: .year, value: 1, to: startDate) ?? Date()
-                    calculateTermMonths()
+                    endDate = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
                 }
                 
                 // Загружаем доступные валюты
@@ -1192,39 +1022,8 @@ private struct CreditEditorView: View {
     private var isValid: Bool {
         !name.isEmpty &&
         parseNumber(amountText) != nil && parseNumber(amountText)! > 0 &&
-        parseDecimal(interestRateText) != nil && parseDecimal(interestRateText)! >= 0 &&
         parseNumber(monthlyPaymentText) != nil && parseNumber(monthlyPaymentText)! > 0 &&
-        Int(termMonthsText) != nil && Int(termMonthsText)! > 0 &&
-        endDate > startDate
-    }
-    
-    private func calculateTermMonths() {
-        let months = Credit.calculateTermMonths(from: startDate, to: endDate)
-        termMonthsText = String(months)
-    }
-    
-    private func calculateMonthlyPayment() {
-        guard let amount = parseNumber(amountText),
-              let interestRate = parseDecimal(interestRateText),
-              let termMonths = Int(termMonthsText),
-              amount > 0, termMonths > 0 else {
-            return
-        }
-        
-        let payment = Credit.calculateMonthlyPayment(
-            amount: amount,
-            annualInterestRate: interestRate,
-            termMonths: termMonths
-        )
-        
-        // Форматируем с пробелами между тысячами
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.groupingSeparator = " "
-        formatter.usesGroupingSeparator = true
-        formatter.minimumFractionDigits = 2
-        formatter.maximumFractionDigits = 2
-        monthlyPaymentText = formatter.string(from: NSNumber(value: payment)) ?? String(format: "%.2f", payment)
+        parseNumber(remainingAmountText) != nil && parseNumber(remainingAmountText)! >= 0
     }
     
     // MARK: - Currency Loading
@@ -1305,20 +1104,17 @@ private struct CreditEditorView: View {
     
     private func saveCredit() {
         guard let amount = parseNumber(amountText),
-              let interestRate = parseDecimal(interestRateText),
               let monthlyPayment = parseNumber(monthlyPaymentText),
-              let termMonths = Int(termMonthsText) else {
+              let remainingAmount = parseNumber(remainingAmountText) else {
             return
         }
         
         viewModel.handle(.updateCredit(
             name: name,
             amount: amount,
-            interestRate: interestRate,
             monthlyPayment: monthlyPayment,
-            startDate: startDate,
             endDate: endDate,
-            termMonths: termMonths,
+            remainingAmount: remainingAmount,
             currency: selectedCurrency,
             bank: selectedBank,
             creditType: selectedCreditType

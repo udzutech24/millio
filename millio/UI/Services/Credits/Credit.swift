@@ -76,8 +76,14 @@ final class Credit: Persistable {
     /// Остаток долга (вычисляется автоматически)
     var remainingAmount: Double = 0.0
     
+    /// Сумма досрочных платежей (для расчета)
+    var earlyPaymentsAmount: Double = 0.0
+    
     /// Избранный кредит
     var isFavorite: Bool = false
+    
+    /// Кредит закрыт (полностью погашен)
+    var isClosed: Bool = false
     
     /// Дата создания
     var createdAt: Date = Date()
@@ -219,9 +225,140 @@ final class Credit: Persistable {
     }
     
     /// Обновить остаток долга на основе прошедших месяцев
+    /// Использует правильную формулу для аннуитетного кредита через оставшиеся платежи
     func updateRemainingAmount() {
-        let paid = monthlyPayment * Double(min(monthsPassed, termMonths))
-        remainingAmount = max(0, amount - paid)
+        let monthsPaid = min(monthsPassed, termMonths)
+        let monthsRemaining = max(0, termMonths - monthsPaid)
+        
+        // Если все платежи сделаны, остаток равен нулю
+        guard monthsRemaining > 0 else {
+            remainingAmount = 0
+            isClosed = true
+            updatedAt = Date()
+            return
+        }
+        
+        // Если платежей не было, остаток равен сумме кредита
+        guard monthsPaid > 0 else {
+            remainingAmount = amount - earlyPaymentsAmount
+            updatedAt = Date()
+            return
+        }
+        
+        let monthlyRate = interestRate / 12.0 / 100.0
+        
+        if monthlyRate == 0 {
+            // Без процентов: просто вычитаем выплаченное
+            let paid = monthlyPayment * Double(monthsPaid)
+            remainingAmount = max(0, amount - paid - earlyPaymentsAmount)
+        } else {
+            // Формула для расчета остатка долга через текущую стоимость оставшихся платежей:
+            // S_n = M * ((1 - (1 + r)^-n_remaining) / r)
+            // где M - ежемесячный платеж, r - месячная ставка, n_remaining - оставшиеся месяцы
+            // Это более точная формула, которая дает правильный остаток
+            let discountFactor = pow(1 + monthlyRate, -Double(monthsRemaining))
+            let remaining = monthlyPayment * ((1 - discountFactor) / monthlyRate)
+            remainingAmount = max(0, remaining - earlyPaymentsAmount)
+        }
+        
+        // Если остаток равен нулю, кредит закрыт
+        if remainingAmount <= 0 {
+            isClosed = true
+            remainingAmount = 0
+        }
+        
+        updatedAt = Date()
+    }
+    
+    /// Рассчитать новый срок при досрочном погашении с уменьшением срока
+    /// Возвращает новый срок в месяцах (оставшийся срок после платежа)
+    func calculateNewTermAfterEarlyPayment(earlyPaymentAmount: Double) -> Int {
+        guard earlyPaymentAmount > 0, remainingAmount > 0 else { 
+            return monthsRemaining 
+        }
+        
+        // Новый остаток после досрочного платежа
+        let newRemaining = remainingAmount - earlyPaymentAmount
+        
+        if newRemaining <= 0 {
+            return 0 // Кредит полностью погашен
+        }
+        
+        // Рассчитываем новый срок через формулу аннуитета в обратную сторону
+        // n = log(1 + S*r/M) / log(1 + r)
+        // где S - остаток, r - месячная ставка, M - ежемесячный платеж
+        let monthlyRate = interestRate / 12.0 / 100.0
+        
+        if monthlyRate == 0 {
+            // Без процентов: просто делим остаток на платеж
+            return Int(ceil(newRemaining / monthlyPayment))
+        }
+        
+        // С формулой аннуитета
+        // M = S * (r * (1 + r)^n) / ((1 + r)^n - 1)
+        // Решаем обратно: n = log(1 + S*r/M) / log(1 + r)
+        let ratio = 1 + (newRemaining * monthlyRate / monthlyPayment)
+        guard ratio > 1 else { return 1 }
+        
+        let newTerm = log(ratio) / log(1 + monthlyRate)
+        return max(1, Int(ceil(newTerm)))
+    }
+    
+    /// Рассчитать новый ежемесячный платеж при досрочном погашении с уменьшением платежа
+    /// Возвращает новый ежемесячный платеж
+    func calculateNewPaymentAfterEarlyPayment(earlyPaymentAmount: Double) -> Double {
+        guard earlyPaymentAmount > 0, remainingAmount > 0 else { return monthlyPayment }
+        
+        // Новый остаток после досрочного платежа
+        let newRemaining = remainingAmount - earlyPaymentAmount
+        
+        if newRemaining <= 0 {
+            return 0 // Кредит полностью погашен
+        }
+        
+        // Рассчитываем новый платеж по формуле аннуитета
+        return Credit.calculateMonthlyPayment(
+            amount: newRemaining,
+            annualInterestRate: interestRate,
+            termMonths: monthsRemaining
+        )
+    }
+    
+    /// Применить досрочное погашение
+    /// - Parameters:
+    ///   - amount: Сумма досрочного платежа
+    ///   - reduceTerm: true = уменьшить срок, false = уменьшить платеж
+    func applyEarlyPayment(amount: Double, reduceTerm: Bool) {
+        guard amount > 0, remainingAmount > 0, !isClosed else { return }
+        
+        // Сначала обновляем остаток
+        let oldRemaining = remainingAmount
+        remainingAmount -= amount
+        earlyPaymentsAmount += amount
+        
+        if remainingAmount <= 0 {
+            // Полное погашение
+            isClosed = true
+            remainingAmount = 0
+            termMonths = monthsPassed
+            endDate = Date() // Обновляем дату окончания на сегодня
+        } else if reduceTerm {
+            // Уменьшаем срок, платеж не меняется
+            // Рассчитываем новый срок на основе нового остатка
+            let newTerm = calculateNewTermAfterEarlyPayment(earlyPaymentAmount: amount)
+            termMonths = monthsPassed + newTerm
+            
+            // Обновляем дату окончания
+            if let newEndDate = Calendar.current.date(byAdding: .month, value: newTerm, to: Date()) {
+                endDate = newEndDate
+            }
+        } else {
+            // Уменьшаем платеж, срок не меняется
+            // Рассчитываем новый платеж на основе нового остатка и оставшегося срока
+            monthlyPayment = calculateNewPaymentAfterEarlyPayment(earlyPaymentAmount: amount)
+            // Срок и дата окончания остаются прежними
+        }
+        
         updatedAt = Date()
     }
     
@@ -246,6 +383,8 @@ final class Credit: Persistable {
             "bankRaw": bankRaw,
             "creditTypeRaw": creditTypeRaw,
             "remainingAmount": remainingAmount,
+            "earlyPaymentsAmount": earlyPaymentsAmount,
+            "isClosed": isClosed,
             "isFavorite": isFavorite,
             "createdAt": createdAt.timeIntervalSince1970,
             "updatedAt": updatedAt.timeIntervalSince1970,
