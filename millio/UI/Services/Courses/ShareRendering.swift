@@ -134,8 +134,6 @@ struct ShareCardView: View {
 
                 // Небольшой “воздух”, но без огромной пустоты
                 Spacer(minLength: 0)
-
-                footer
             }
             .padding(.horizontal, 16)
             .padding(.top, 16)
@@ -201,23 +199,6 @@ struct ShareCardView: View {
                 .font(.system(size: 14, weight: .regular))
                 .foregroundStyle(.white.opacity(0.70))
         }
-    }
-
-    private var footer: some View {
-        HStack {
-            Spacer()
-            Text("GET APP")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(.white)
-                .padding(.vertical, 8)
-                .padding(.horizontal, 12)
-                .background(.ultraThinMaterial, in: Capsule())
-                .overlay(
-                    Capsule().strokeBorder(Color.white.opacity(0.14), lineWidth: 0.8)
-                )
-            Spacer()
-        }
-        .padding(.top, 6)
     }
 }
 
