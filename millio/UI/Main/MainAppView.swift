@@ -142,6 +142,18 @@ struct MainAppView: View {
                                 viewModel.handle(.navigateToService(.investments))
                             }
                         }
+                        
+                        HStack(spacing: 16) {
+                            ServiceButton(
+                                title: "Планирование",
+                                icon: "calendar.badge.clock",
+                                gradientColors: AppColors.plannedExpensesGradient
+                            ) {
+                                viewModel.handle(.navigateToService(.plannedExpenses))
+                            }
+                            
+                            Spacer()
+                        }
                     }
                     .padding(.horizontal, 24)
                     
@@ -194,6 +206,8 @@ struct MainAppView: View {
             DebtsView()
         case .investments:
             InvestmentsView()
+        case .plannedExpenses:
+            PlannedExpensesView()
         case .profile:
             ProfileView(router: router)
         case .subscription:

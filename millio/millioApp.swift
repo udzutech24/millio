@@ -23,6 +23,7 @@ struct millioApp: App {
         HabitFeatureRegistration.register()
         DebtFeatureRegistration.register()
         InvestmentFeatureRegistration.register()
+        PlannedExpenseFeatureRegistration.register()
         
         let schema = AppSchema.create()
         

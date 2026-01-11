@@ -175,6 +175,21 @@ final class DataRepository: DataRepositoryProtocol {
                     }
                 }
             }
+            
+            // Экспортируем PlannedExpense
+            if typeName == "PlannedExpense" {
+                let expenseDescriptor = FetchDescriptor<PlannedExpense>()
+                let expenses = try modelContext.fetch(expenseDescriptor)
+                
+                for expense in expenses {
+                    let data = try expense.export()
+                    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                        var expenseDict = json
+                        expenseDict["_type"] = typeName
+                        modelsData.append(expenseDict)
+                    }
+                }
+            }
         }
         
         // Обновляем metadata с реальным количеством моделей
@@ -359,6 +374,12 @@ final class DataRepository: DataRepositoryProtocol {
                 let investments = try modelContext.fetch(investmentDescriptor)
                 for investment in investments {
                     modelContext.delete(investment)
+                }
+            } else if typeName == "PlannedExpense" {
+                let expenseDescriptor = FetchDescriptor<PlannedExpense>()
+                let expenses = try modelContext.fetch(expenseDescriptor)
+                for expense in expenses {
+                    modelContext.delete(expense)
                 }
             }
         }
