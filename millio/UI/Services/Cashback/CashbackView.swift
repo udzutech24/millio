@@ -512,10 +512,13 @@ private struct CashbackEditorView: View {
                                 showCardPicker = true
                             } label: {
                                 HStack(spacing: 16) {
-                                    if !selectedCardIDs.isEmpty {
+                                    // Фильтруем только существующие карты
+                                    let validCardIDs = selectedCardIDs.filter { viewModel.getCard(byID: $0) != nil }
+                                    
+                                    if !validCardIDs.isEmpty {
                                         // Показываем первые 3 карты
                                         HStack(spacing: -8) {
-                                            ForEach(Array(selectedCardIDs.prefix(3)), id: \.self) { cardID in
+                                            ForEach(Array(validCardIDs.prefix(3)), id: \.self) { cardID in
                                                 if let card = viewModel.getCard(byID: cardID) {
                                                     Image(systemName: card.cardType.icon)
                                                         .font(.system(size: 20, weight: .semibold))
@@ -545,8 +548,8 @@ private struct CashbackEditorView: View {
                                                 }
                                             }
                                             
-                                            if selectedCardIDs.count > 3 {
-                                                Text("+\(selectedCardIDs.count - 3)")
+                                            if validCardIDs.count > 3 {
+                                                Text("+\(validCardIDs.count - 3)")
                                                     .font(.system(size: 12, weight: .semibold))
                                                     .foregroundStyle(AppColors.textPrimary)
                                                     .frame(width: 40, height: 40)
@@ -569,7 +572,9 @@ private struct CashbackEditorView: View {
                                         }
                                         
                                         VStack(alignment: .leading, spacing: 4) {
-                                            Text(selectedCardIDs.count == 1 ? "1 карта" : "\(selectedCardIDs.count) карт")
+                                            // Считаем только существующие карты
+                                            let validCardCount = selectedCardIDs.filter { viewModel.getCard(byID: $0) != nil }.count
+                                            Text(validCardCount == 1 ? "1 карта" : "\(validCardCount) карт")
                                                 .font(.system(size: 16, weight: .semibold))
                                                 .foregroundStyle(AppColors.textPrimary)
                                             
@@ -660,7 +665,12 @@ private struct CashbackEditorView: View {
                     name = editing.name
                     selectedCategory = editing.category
                     percentageText = String(format: "%.1f", editing.percentage)
-                    selectedCardIDs = Set(editing.cardIDs)
+                    // Фильтруем только существующие карты для отображения
+                    // НЕ изменяем модель здесь - только для UI
+                    let validCardIDs = editing.cardIDs.filter { cardID in
+                        viewModel.getCard(byID: cardID) != nil
+                    }
+                    selectedCardIDs = Set(validCardIDs)
                 }
             }
         }

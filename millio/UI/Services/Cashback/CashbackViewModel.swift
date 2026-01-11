@@ -118,8 +118,48 @@ final class CashbackViewModel: ViewModelProtocol {
         }
     }
     
+    /// Очищает несуществующие cardIDs из кешбэков
+    private func cleanInvalidCardIDs(in cashbacks: [Cashback]) {
+        let availableCardIDs = Set(state.availableCards.map { String(describing: $0.persistentModelID) })
+        var hasChanges = false
+        
+        for cashback in cashbacks {
+            let validCardIDs = cashback.cardIDs.filter { availableCardIDs.contains($0) }
+            if validCardIDs.count != cashback.cardIDs.count {
+                cashback.cardIDs = validCardIDs
+                cashback.updatedAt = Date()
+                hasChanges = true
+            }
+        }
+        
+        if hasChanges {
+            do {
+                try modelContext.save()
+            } catch {
+                AppLogger.log(.error, category: "Cashback", "Failed to clean invalid card IDs: \(error.localizedDescription)")
+            }
+        }
+    }
+    
     private func loadCards() {
+        let oldCardIDs = Set(state.availableCards.map { String(describing: $0.persistentModelID) })
         state.availableCards = CardManager.shared.getAllCards()
+        let newCardIDs = Set(state.availableCards.map { String(describing: $0.persistentModelID) })
+        
+        // Очищаем несуществующие cardIDs только если карты действительно удалены
+        // (проверяем, что список карт изменился и уменьшился)
+        if !oldCardIDs.isEmpty && oldCardIDs != newCardIDs && newCardIDs.isSubset(of: oldCardIDs) && !state.cashbacks.isEmpty {
+            // Карты были удалены - очищаем несуществующие ссылки
+            cleanInvalidCardIDs(in: state.cashbacks)
+            // Обновляем список кешбэков после очистки
+            let descriptor = FetchDescriptor<Cashback>(
+                sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+            )
+            if let cashbacks = try? modelContext.fetch(descriptor) {
+                state.cashbacks = cashbacks
+                applyFilters()
+            }
+        }
     }
     
     private func applyFilters() {
@@ -139,12 +179,16 @@ final class CashbackViewModel: ViewModelProtocol {
     }
     
     private func updateCashback(name: String, category: CashbackCategory, percentage: Double, cardIDs: [String]) {
+        // Фильтруем только существующие карты перед сохранением
+        let availableCardIDs = Set(state.availableCards.map { String(describing: $0.persistentModelID) })
+        let validCardIDs = cardIDs.filter { availableCardIDs.contains($0) }
+        
         if let existing = state.editingCashback {
             // Обновляем существующий кешбэк
             existing.name = name
             existing.category = category
             existing.percentage = percentage
-            existing.cardIDs = cardIDs
+            existing.cardIDs = validCardIDs
             existing.updatedAt = Date()
         } else {
             // Создаем новый кешбэк
@@ -152,7 +196,7 @@ final class CashbackViewModel: ViewModelProtocol {
                 name: name,
                 category: category,
                 percentage: percentage,
-                cardIDs: cardIDs
+                cardIDs: validCardIDs
             )
             modelContext.insert(newCashback)
         }
@@ -179,13 +223,10 @@ final class CashbackViewModel: ViewModelProtocol {
     
     /// Получить карты, которые можно использовать для получения кешбэка
     func getCardsForCashback(_ cashback: Cashback) -> [Card] {
-        // Если у кешбэка привязаны карты, показываем только их
-        if !cashback.cardIDs.isEmpty {
-            return cashback.cardIDs.compactMap { cardID in
-                getCard(byID: cardID)
-            }
+        // Всегда показываем только привязанные карты (если они есть)
+        // Фильтруем несуществующие карты
+        return cashback.cardIDs.compactMap { cardID in
+            getCard(byID: cardID)
         }
-        // Иначе показываем все доступные карты
-        return state.availableCards
     }
 }
