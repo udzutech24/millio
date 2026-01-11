@@ -109,6 +109,33 @@ private struct FinancesContentViewInternal: View {
         )) {
             DisplayCurrencySheet(viewModel: viewModel)
         }
+        .sheet(isPresented: Binding(
+            get: { viewModel.state.showEditCardSheet },
+            set: { if !$0 { viewModel.handle(.hideEditCardSheet) } }
+        )) {
+            if let cardID = viewModel.state.editingCardID,
+               let card = viewModel.state.availableCards.first(where: { $0.cardUniqueID == cardID }) {
+                FinanceEditCardView(card: card, viewModel: viewModel)
+            }
+        }
+        .sheet(isPresented: Binding(
+            get: { viewModel.state.showEditCreditSheet },
+            set: { if !$0 { viewModel.handle(.hideEditCreditSheet) } }
+        )) {
+            if let creditID = viewModel.state.editingCreditID,
+               let credit = viewModel.state.availableCredits.first(where: { $0.creditUniqueID == creditID }) {
+                FinanceEditCreditView(credit: credit, viewModel: viewModel)
+            }
+        }
+        .sheet(isPresented: Binding(
+            get: { viewModel.state.showEditInvestmentSheet },
+            set: { if !$0 { viewModel.handle(.hideEditInvestmentSheet) } }
+        )) {
+            if let investmentID = viewModel.state.editingInvestmentID,
+               let investment = viewModel.state.availableInvestments.first(where: { $0.investmentUniqueID == investmentID }) {
+                FinanceEditInvestmentView(investment: investment, viewModel: viewModel)
+            }
+        }
         .task {
             await viewModel.refreshRates()
         }
@@ -405,10 +432,14 @@ private struct FinanceGroupRow: View {
                                     amount: accountInfo.amount,
                                     currency: accountInfo.currency,
                                     icon: accountInfo.icon,
-                                    accountType: account.accountType
-                                ) {
-                                    viewModel.handle(.removeAccountFromGroup(account))
-                                }
+                                    accountType: account.accountType,
+                                    onEdit: {
+                                        viewModel.handle(.editAccount(account))
+                                    },
+                                    onDelete: {
+                                        viewModel.handle(.removeAccountFromGroup(account))
+                                    }
+                                )
                             }
                         }
                     } else {
@@ -598,6 +629,7 @@ private struct FinanceAccountRow: View {
     let currency: String
     let icon: String
     let accountType: FinanceAccountType
+    let onEdit: () -> Void
     let onDelete: () -> Void
     
     var body: some View {
@@ -648,6 +680,10 @@ private struct FinanceAccountRow: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 8)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onEdit()
+        }
     }
     
     private func formatBalance(_ balance: Double) -> String {
@@ -1338,6 +1374,104 @@ private struct FinanceInvestmentEditorWrapper: View {
                     }
                 }
             }
+    }
+}
+
+// MARK: - Finance Edit Views
+
+private struct FinanceEditCardView: View {
+    let card: Card
+    @ObservedObject var viewModel: FinanceViewModel
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    
+    @State private var cardViewModel: CardViewModel?
+    
+    var body: some View {
+        Group {
+            if let cardViewModel = cardViewModel {
+                CardEditorView(viewModel: cardViewModel)
+                    .onChange(of: cardViewModel.state.showCardEditor) { oldValue, newValue in
+                        if oldValue == true && newValue == false {
+                            // Редактор закрыт, обновляем данные
+                            viewModel.handle(.loadAccounts)
+                            viewModel.handle(.loadGroups)
+                            dismiss()
+                        }
+                    }
+            } else {
+                ProgressView()
+                    .tint(AppColors.textPrimary)
+                    .onAppear {
+                        cardViewModel = CardViewModel(modelContext: modelContext)
+                        cardViewModel?.handle(.editCard(card))
+                    }
+            }
+        }
+    }
+}
+
+private struct FinanceEditCreditView: View {
+    let credit: Credit
+    @ObservedObject var viewModel: FinanceViewModel
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    
+    @State private var creditViewModel: CreditViewModel?
+    
+    var body: some View {
+        Group {
+            if let creditViewModel = creditViewModel {
+                CreditEditorView(viewModel: creditViewModel)
+                    .onChange(of: creditViewModel.state.showCreditEditor) { oldValue, newValue in
+                        if oldValue == true && newValue == false {
+                            // Редактор закрыт, обновляем данные
+                            viewModel.handle(.loadAccounts)
+                            viewModel.handle(.loadGroups)
+                            dismiss()
+                        }
+                    }
+            } else {
+                ProgressView()
+                    .tint(AppColors.textPrimary)
+                    .onAppear {
+                        creditViewModel = CreditViewModel(modelContext: modelContext)
+                        creditViewModel?.handle(.editCredit(credit))
+                    }
+            }
+        }
+    }
+}
+
+private struct FinanceEditInvestmentView: View {
+    let investment: Investment
+    @ObservedObject var viewModel: FinanceViewModel
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    
+    @State private var investmentViewModel: InvestmentViewModel?
+    
+    var body: some View {
+        Group {
+            if let investmentViewModel = investmentViewModel {
+                InvestmentEditorView(viewModel: investmentViewModel)
+                    .onChange(of: investmentViewModel.state.showInvestmentEditor) { oldValue, newValue in
+                        if oldValue == true && newValue == false {
+                            // Редактор закрыт, обновляем данные
+                            viewModel.handle(.loadAccounts)
+                            viewModel.handle(.loadGroups)
+                            dismiss()
+                        }
+                    }
+            } else {
+                ProgressView()
+                    .tint(AppColors.textPrimary)
+                    .onAppear {
+                        investmentViewModel = InvestmentViewModel(modelContext: modelContext)
+                        investmentViewModel?.handle(.editInvestment(investment))
+                    }
+            }
+        }
     }
 }
 

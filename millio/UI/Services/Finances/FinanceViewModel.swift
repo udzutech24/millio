@@ -62,6 +62,24 @@ struct FinanceState {
     /// ID группы с открытым свайпом (nil = нет открытого свайпа)
     var openedSwipeGroupID: String? = nil
     
+    /// Показывать ли редактор карты для редактирования
+    var showEditCardSheet: Bool = false
+    
+    /// Показывать ли редактор кредита для редактирования
+    var showEditCreditSheet: Bool = false
+    
+    /// Показывать ли редактор инвестиции для редактирования
+    var showEditInvestmentSheet: Bool = false
+    
+    /// ID редактируемой карты
+    var editingCardID: String? = nil
+    
+    /// ID редактируемого кредита
+    var editingCreditID: String? = nil
+    
+    /// ID редактируемой инвестиции
+    var editingInvestmentID: String? = nil
+    
     /// Множество ID групп с открытыми аккордеонами
     var expandedGroupIDs: Set<String> = []
     
@@ -96,6 +114,10 @@ enum FinanceAction {
     case moveGroup(from: Int, to: Int)
     case toggleGroupExpanded(String)
     case setGroupTotal(String, Double)
+    case editAccount(FinanceAccount)
+    case hideEditCardSheet
+    case hideEditCreditSheet
+    case hideEditInvestmentSheet
 }
 
 // MARK: - Finance ViewModel
@@ -204,7 +226,22 @@ final class FinanceViewModel: ViewModelProtocol {
             
         case .setGroupTotal(let groupID, let total):
             state.groupTotals[groupID] = total
-        }
+            
+        case .editAccount(let account):
+            editAccount(account)
+            
+        case .hideEditCardSheet:
+            state.showEditCardSheet = false
+            state.editingCardID = nil
+            
+        case .hideEditCreditSheet:
+            state.showEditCreditSheet = false
+            state.editingCreditID = nil
+            
+        case .hideEditInvestmentSheet:
+            state.showEditInvestmentSheet = false
+            state.editingInvestmentID = nil
+    }
     }
     
     // MARK: - Private Methods
@@ -481,6 +518,22 @@ final class FinanceViewModel: ViewModelProtocol {
             loadGroups()
         } catch {
             AppLogger.log(.error, category: "Finance", "Failed to remove account: \(error.localizedDescription)")
+        }
+    }
+    
+    private func editAccount(_ account: FinanceAccount) {
+        switch account.accountType {
+        case .card:
+            state.editingCardID = account.accountID
+            state.showEditCardSheet = true
+            
+        case .credit:
+            state.editingCreditID = account.accountID
+            state.showEditCreditSheet = true
+            
+        case .investment:
+            state.editingInvestmentID = account.accountID
+            state.showEditInvestmentSheet = true
         }
     }
 }
