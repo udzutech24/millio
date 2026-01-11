@@ -62,8 +62,8 @@ struct OnboardingView: View {
                         
                         FeatureCard(
                             icon: "sparkles",
-                            title: "8 сервисов",
-                            description: "Финансы, курсы, кешбэк и многое другое",
+                            title: "10 сервисов",
+                            description: "Финансы, кэшфлоу, курсы и многое другое",
                             gradient: AppColors.financesGradient
                         )
                     }
