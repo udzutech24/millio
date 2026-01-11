@@ -594,6 +594,24 @@ private struct FinanceGroupRow: View {
                 }
             }
         }
+        .onChange(of: viewModel.state.availableCards) { oldCards, newCards in
+            // При изменении списка карт пересчитываем сумму группы
+            Task {
+                await loadGroupTotal()
+            }
+        }
+        .onChange(of: viewModel.state.availableCredits) { oldCredits, newCredits in
+            // При изменении списка кредитов пересчитываем сумму группы
+            Task {
+                await loadGroupTotal()
+            }
+        }
+        .onChange(of: viewModel.state.availableInvestments) { oldInvestments, newInvestments in
+            // При изменении списка инвестиций пересчитываем сумму группы
+            Task {
+                await loadGroupTotal()
+            }
+        }
     }
     
     private func loadGroupTotal() async {
@@ -1396,6 +1414,10 @@ private struct FinanceEditCardView: View {
                             // Редактор закрыт, обновляем данные
                             viewModel.handle(.loadAccounts)
                             viewModel.handle(.loadGroups)
+                            // Пересчитываем суммы всех групп
+                            Task {
+                                await recalculateAllGroupTotals()
+                            }
                             dismiss()
                         }
                     }
@@ -1408,6 +1430,16 @@ private struct FinanceEditCardView: View {
                     }
             }
         }
+    }
+    
+    private func recalculateAllGroupTotals() async {
+        for group in viewModel.state.groups {
+            let currency = group.displayCurrency ?? viewModel.state.displayCurrency
+            let total = await viewModel.calculateGroupTotal(group: group, in: currency)
+            viewModel.handle(.setGroupTotal(group.groupUniqueID, total))
+        }
+        // Также пересчитываем общую сумму
+        await viewModel.calculateTotalAmountAsync()
     }
 }
 
@@ -1428,6 +1460,10 @@ private struct FinanceEditCreditView: View {
                             // Редактор закрыт, обновляем данные
                             viewModel.handle(.loadAccounts)
                             viewModel.handle(.loadGroups)
+                            // Пересчитываем суммы всех групп
+                            Task {
+                                await recalculateAllGroupTotals()
+                            }
                             dismiss()
                         }
                     }
@@ -1440,6 +1476,16 @@ private struct FinanceEditCreditView: View {
                     }
             }
         }
+    }
+    
+    private func recalculateAllGroupTotals() async {
+        for group in viewModel.state.groups {
+            let currency = group.displayCurrency ?? viewModel.state.displayCurrency
+            let total = await viewModel.calculateGroupTotal(group: group, in: currency)
+            viewModel.handle(.setGroupTotal(group.groupUniqueID, total))
+        }
+        // Также пересчитываем общую сумму
+        await viewModel.calculateTotalAmountAsync()
     }
 }
 
@@ -1460,6 +1506,10 @@ private struct FinanceEditInvestmentView: View {
                             // Редактор закрыт, обновляем данные
                             viewModel.handle(.loadAccounts)
                             viewModel.handle(.loadGroups)
+                            // Пересчитываем суммы всех групп
+                            Task {
+                                await recalculateAllGroupTotals()
+                            }
                             dismiss()
                         }
                     }
@@ -1472,6 +1522,16 @@ private struct FinanceEditInvestmentView: View {
                     }
             }
         }
+    }
+    
+    private func recalculateAllGroupTotals() async {
+        for group in viewModel.state.groups {
+            let currency = group.displayCurrency ?? viewModel.state.displayCurrency
+            let total = await viewModel.calculateGroupTotal(group: group, in: currency)
+            viewModel.handle(.setGroupTotal(group.groupUniqueID, total))
+        }
+        // Также пересчитываем общую сумму
+        await viewModel.calculateTotalAmountAsync()
     }
 }
 

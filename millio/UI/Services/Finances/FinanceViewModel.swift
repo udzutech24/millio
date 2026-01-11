@@ -303,7 +303,7 @@ final class FinanceViewModel: ViewModelProtocol {
         }
     }
     
-    private func calculateTotalAmountAsync() async {
+    func calculateTotalAmountAsync() async {
         let displayCurrency = state.displayCurrency
         var total: Double = 0.0
         
