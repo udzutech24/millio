@@ -21,6 +21,7 @@ enum AppRoute: Hashable {
     case habits
     case cardIndex
     case debts
+    case investments
     
     // Other screens
     case profile

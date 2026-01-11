@@ -133,6 +133,14 @@ struct MainAppView: View {
                             ) {
                                 viewModel.handle(.navigateToService(.debts))
                             }
+                            
+                            ServiceButton(
+                                title: "Инвестиции",
+                                icon: "chart.line.uptrend.xyaxis",
+                                gradientColors: AppColors.investmentsGradient
+                            ) {
+                                viewModel.handle(.navigateToService(.investments))
+                            }
                         }
                     }
                     .padding(.horizontal, 24)
@@ -184,6 +192,8 @@ struct MainAppView: View {
             CardIndexView()
         case .debts:
             DebtsView()
+        case .investments:
+            InvestmentsView()
         case .profile:
             ProfileView(router: router)
         case .subscription:

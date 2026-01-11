@@ -160,6 +160,21 @@ final class DataRepository: DataRepositoryProtocol {
                     }
                 }
             }
+            
+            // Экспортируем Investment
+            if typeName == "Investment" {
+                let investmentDescriptor = FetchDescriptor<Investment>()
+                let investments = try modelContext.fetch(investmentDescriptor)
+                
+                for investment in investments {
+                    let data = try investment.export()
+                    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                        var investmentDict = json
+                        investmentDict["_type"] = typeName
+                        modelsData.append(investmentDict)
+                    }
+                }
+            }
         }
         
         // Обновляем metadata с реальным количеством моделей
@@ -338,6 +353,12 @@ final class DataRepository: DataRepositoryProtocol {
                 let debts = try modelContext.fetch(debtDescriptor)
                 for debt in debts {
                     modelContext.delete(debt)
+                }
+            } else if typeName == "Investment" {
+                let investmentDescriptor = FetchDescriptor<Investment>()
+                let investments = try modelContext.fetch(investmentDescriptor)
+                for investment in investments {
+                    modelContext.delete(investment)
                 }
             }
         }

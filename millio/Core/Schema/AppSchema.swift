@@ -61,6 +61,11 @@ struct AppSchema {
             modelTypes.append(Debt.self)
         }
         
+        // Явно добавляем модели Investment
+        if !modelTypes.contains(where: { $0 == Investment.self }) {
+            modelTypes.append(Investment.self)
+        }
+        
         return Schema(modelTypes)
     }
 }
