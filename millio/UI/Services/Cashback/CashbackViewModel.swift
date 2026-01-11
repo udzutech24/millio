@@ -57,8 +57,25 @@ final class CashbackViewModel: ViewModelProtocol {
         self.modelContext = modelContext
         // Инициализируем CardManager
         CardManager.shared.setup(modelContext: modelContext)
-        loadCashbacks()
+        // Сначала загружаем карты, потом кешбэки, чтобы правильно проверить связи
         loadCards()
+        loadCashbacks()
+        
+        // Логирование для отладки
+        AppLogger.log(.info, category: "Cashback", "Loaded \(state.availableCards.count) cards, \(state.cashbacks.count) cashbacks")
+        for cashback in state.cashbacks {
+            AppLogger.log(.info, category: "Cashback", "Cashback '\(cashback.category.displayName)' has \(cashback.cardIDs.count) cardIDs")
+            for cardID in cashback.cardIDs {
+                let cardExists = state.availableCards.contains { $0.cardUniqueID == cardID }
+                AppLogger.log(.info, category: "Cashback", "  CardID '\(cardID)' exists: \(cardExists)")
+            }
+        }
+        
+        // Автоматически проверяем и очищаем невалидные связи при первом запуске
+        cleanInvalidCardIDs(in: state.cashbacks)
+        
+        // НЕ вызываем cleanInvalidCardIDs здесь - это может удалить валидные связи
+        // Очистка будет происходить только при реальном удалении карт в loadCards()
     }
     
     func handle(_ action: CashbackAction) {
@@ -114,12 +131,48 @@ final class CashbackViewModel: ViewModelProtocol {
     
     /// Очищает несуществующие cardIDs из кешбэков
     private func cleanInvalidCardIDs(in cashbacks: [Cashback]) {
-        let availableCardIDs = Set(state.availableCards.map { String(describing: $0.persistentModelID) })
+        // Создаем маппинг cardUniqueID -> Card для стабильной идентификации
+        let cardUniqueIDMap: [String: Card] = Dictionary(uniqueKeysWithValues: state.availableCards.map { card in
+            (card.cardUniqueID, card)
+        })
+        
+        // Также создаем маппинг старых persistentModelID -> cardUniqueID для миграции
+        var oldIDToUniqueID: [String: String] = [:]
+        for card in state.availableCards {
+            let oldID = String(describing: card.persistentModelID)
+            oldIDToUniqueID[oldID] = card.cardUniqueID
+        }
+        
+        AppLogger.log(.info, category: "Cashback", "Available \(state.availableCards.count) cards with unique IDs")
+        
         var hasChanges = false
         
         for cashback in cashbacks {
-            let validCardIDs = cashback.cardIDs.filter { availableCardIDs.contains($0) }
-            if validCardIDs.count != cashback.cardIDs.count {
+            let originalCount = cashback.cardIDs.count
+            let validCardIDs = cashback.cardIDs.compactMap { cardIDString -> String? in
+                // Если это уже cardUniqueID, проверяем напрямую
+                if let card = cardUniqueIDMap[cardIDString] {
+                    return card.cardUniqueID
+                }
+                
+                // Если это старый формат (persistentModelID), конвертируем в cardUniqueID
+                if let uniqueID = oldIDToUniqueID[cardIDString] {
+                    AppLogger.log(.info, category: "Cashback", "Migrating old cardID '\(cardIDString.prefix(50))...' to uniqueID '\(uniqueID)'")
+                    return uniqueID
+                }
+                
+                // Пробуем найти по прямому сравнению (на случай если формат немного отличается)
+                if let card = state.availableCards.first(where: { String(describing: $0.persistentModelID) == cardIDString }) {
+                    AppLogger.log(.info, category: "Cashback", "Found card by direct comparison, using uniqueID")
+                    return card.cardUniqueID
+                }
+                
+                AppLogger.log(.info, category: "Cashback", "Invalid cardID '\(cardIDString.prefix(50))...' in cashback '\(cashback.category.displayName)'")
+                return nil
+            }
+            
+            if validCardIDs.count != originalCount || validCardIDs != cashback.cardIDs {
+                AppLogger.log(.info, category: "Cashback", "Updating cardIDs for cashback '\(cashback.category.displayName)'. Original count: \(originalCount), Valid count: \(validCardIDs.count)")
                 cashback.cardIDs = validCardIDs
                 cashback.updatedAt = Date()
                 hasChanges = true
@@ -129,9 +182,12 @@ final class CashbackViewModel: ViewModelProtocol {
         if hasChanges {
             do {
                 try modelContext.save()
+                AppLogger.log(.info, category: "Cashback", "Cleaned invalid card IDs and saved")
             } catch {
                 AppLogger.log(.error, category: "Cashback", "Failed to clean invalid card IDs: \(error.localizedDescription)")
             }
+        } else {
+            AppLogger.log(.info, category: "Cashback", "No invalid card IDs found")
         }
     }
     
@@ -140,10 +196,14 @@ final class CashbackViewModel: ViewModelProtocol {
         state.availableCards = CardManager.shared.getAllCards()
         let newCardIDs = Set(state.availableCards.map { String(describing: $0.persistentModelID) })
         
-        // Очищаем несуществующие cardIDs только если карты действительно удалены
-        // (проверяем, что список карт изменился и уменьшился)
-        if !oldCardIDs.isEmpty && oldCardIDs != newCardIDs && newCardIDs.isSubset(of: oldCardIDs) && !state.cashbacks.isEmpty {
-            // Карты были удалены - очищаем несуществующие ссылки
+        // Очищаем несуществующие cardIDs если:
+        // 1. Карты действительно удалены (список уменьшился)
+        // 2. Или это первый запуск и нужно проверить все связи
+        let cardsWereDeleted = !oldCardIDs.isEmpty && oldCardIDs != newCardIDs && newCardIDs.isSubset(of: oldCardIDs)
+        let isFirstLoad = oldCardIDs.isEmpty && !newCardIDs.isEmpty && !state.cashbacks.isEmpty
+        
+        if (cardsWereDeleted || isFirstLoad) && !state.cashbacks.isEmpty {
+            // Карты были удалены или это первый запуск - очищаем несуществующие ссылки
             cleanInvalidCardIDs(in: state.cashbacks)
             // Обновляем список кешбэков после очистки
             let descriptor = FetchDescriptor<Cashback>(
@@ -174,8 +234,19 @@ final class CashbackViewModel: ViewModelProtocol {
     
     private func updateCashback(category: CashbackCategory, percentage: Double, cardIDs: [String]) {
         // Фильтруем только существующие карты перед сохранением
-        let availableCardIDs = Set(state.availableCards.map { String(describing: $0.persistentModelID) })
-        let validCardIDs = cardIDs.filter { availableCardIDs.contains($0) }
+        // Используем cardUniqueID для стабильной идентификации
+        let availableUniqueIDs = Set(state.availableCards.map { $0.cardUniqueID })
+        let validCardIDs = cardIDs.compactMap { cardIDString -> String? in
+            // Если это уже uniqueID, проверяем напрямую
+            if availableUniqueIDs.contains(cardIDString) {
+                return cardIDString
+            }
+            // Если это старый формат (persistentModelID), конвертируем
+            if let card = state.availableCards.first(where: { String(describing: $0.persistentModelID) == cardIDString }) {
+                return card.cardUniqueID
+            }
+            return nil
+        }
         
         if let existing = state.editingCashback {
             // Обновляем существующий кешбэк
@@ -207,10 +278,9 @@ final class CashbackViewModel: ViewModelProtocol {
     /// Получить карту по ID
     func getCard(byID cardID: String?) -> Card? {
         guard let cardID = cardID else { return nil }
-        // Ищем карту по persistentModelID
+        // Ищем карту по cardUniqueID (новый формат) или persistentModelID (старый формат)
         return state.availableCards.first { card in
-            let cardIDString = String(describing: card.persistentModelID)
-            return cardIDString == cardID
+            card.cardUniqueID == cardID || String(describing: card.persistentModelID) == cardID
         }
     }
     

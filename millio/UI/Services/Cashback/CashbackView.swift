@@ -653,7 +653,7 @@ private struct CashbackCardPickerView: View {
                         VStack(spacing: 12) {
                             // Список карт с множественным выбором
                             ForEach(availableCards) { card in
-                                let cardID = String(describing: card.persistentModelID)
+                                let cardID = card.cardUniqueID // Используем стабильный uniqueID
                                 let isSelected = selectedCardIDs.contains(cardID)
                                 
                                 Button {

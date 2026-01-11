@@ -186,6 +186,13 @@ final class Card: Persistable {
     }
     
     // MARK: - Exportable
+    
+    /// Уникальный идентификатор карты для восстановления связей при restore
+    var cardUniqueID: String {
+        // Используем комбинацию полей для создания уникального идентификатора
+        "\(name)|\(cardNumber)|\(bankRaw)|\(cardTypeRaw)|\(currency)|\(createdAt.timeIntervalSince1970)"
+    }
+    
     func export() throws -> Data {
         var dict: [String: Any] = [
             "type": "Card",
@@ -201,7 +208,8 @@ final class Card: Persistable {
             "cardColor": cardColor ?? NSNull(),
             "isFavorite": isFavorite,
             "createdAt": createdAt.timeIntervalSince1970,
-            "updatedAt": updatedAt.timeIntervalSince1970
+            "updatedAt": updatedAt.timeIntervalSince1970,
+            "cardUniqueID": cardUniqueID // Сохраняем уникальный ID для восстановления связей
         ]
         
         // Экспортируем зашифрованные данные, если есть
