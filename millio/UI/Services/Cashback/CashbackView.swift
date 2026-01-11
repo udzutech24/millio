@@ -642,7 +642,7 @@ private struct CashbackCardPickerView: View {
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
                         
-                        Text("Добавьте карту в сервисе \"Картотека\"")
+                        Text("Добавьте карту в сервисе \"Карты\"")
                             .font(.system(size: 14, weight: .regular))
                             .foregroundStyle(AppColors.textTertiary)
                             .multilineTextAlignment(.center)

@@ -54,7 +54,7 @@ private struct CardContentViewInternal: View {
                 .padding(.bottom, 32)
             }
         }
-        .navigationTitle("Картотека")
+        .navigationTitle("Карты")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {

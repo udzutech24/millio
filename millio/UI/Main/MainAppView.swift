@@ -117,7 +117,7 @@ struct MainAppView: View {
                             }
                             
                             ServiceButton(
-                                title: "Картотека",
+                                title: "Карты",
                                 icon: "archivebox.fill",
                                 gradientColors: AppColors.cardIndexGradient
                             ) {

@@ -61,7 +61,7 @@ enum AppColors {
     /// Градиент для кнопки "Привычки"
     static let habitsGradient = [Color.indigo, Color.purple]
     
-    /// Градиент для кнопки "Картотека"
+    /// Градиент для кнопки "Карты"
     static let cardIndexGradient = [Color.orange, Color.brown]
     
     /// Градиент для кнопки "Игры"
