@@ -55,6 +55,15 @@ struct CashflowState {
     /// Показывать ли историю операций
     var showTransactionsHistory: Bool = false
     
+    /// Валюта для отображения
+    var displayCurrency: String = "RUB"
+    
+    /// Доступные валюты для отображения
+    var availableCurrencies: [String] = []
+    
+    /// Показывать ли sheet выбора валюты
+    var showCurrencySelector: Bool = false
+    
     /// Данные для графика доходов
     var incomeChartData: [CashflowChartDataPoint] = []
     
@@ -134,6 +143,9 @@ enum CashflowAction {
     case hidePeriodSelector
     case showTransactionsHistory
     case hideTransactionsHistory
+    case showCurrencySelector
+    case hideCurrencySelector
+    case setDisplayCurrency(String)
     case loadCards
 }
 
@@ -148,10 +160,19 @@ final class CashflowViewModel: ViewModelProtocol {
     
     let modelContext: ModelContext
     
+    private let defaults = UserDefaults.standard
+    
+    private var storedDisplayCurrency: String {
+        get { defaults.string(forKey: "cashflow_display_currency") ?? "RUB" }
+        set { defaults.set(newValue, forKey: "cashflow_display_currency") }
+    }
+    
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
+        state.displayCurrency = storedDisplayCurrency
         loadTransactions()
         loadCards()
+        loadAvailableCurrencies()
     }
     
     func handle(_ action: CashflowAction) {
@@ -217,6 +238,17 @@ final class CashflowViewModel: ViewModelProtocol {
         case .hideTransactionsHistory:
             state.showTransactionsHistory = false
             
+        case .showCurrencySelector:
+            state.showCurrencySelector = true
+            
+        case .hideCurrencySelector:
+            state.showCurrencySelector = false
+            
+        case .setDisplayCurrency(let currency):
+            state.displayCurrency = currency
+            storedDisplayCurrency = currency
+            updateChartData()
+            
         case .loadCards:
             loadCards()
         }
@@ -228,12 +260,36 @@ final class CashflowViewModel: ViewModelProtocol {
         )
         state.transactions = (try? modelContext.fetch(descriptor)) ?? []
         applyFilters()
+        loadAvailableCurrencies()
         updateChartData()
     }
     
     private func loadCards() {
         let descriptor = FetchDescriptor<Card>()
         state.availableCards = (try? modelContext.fetch(descriptor)) ?? []
+    }
+    
+    private func loadAvailableCurrencies() {
+        Task {
+            _ = await CurrencyRateService.shared.getRate(from: "USD", to: "RUB")
+            let fromRateSource = Set(CurrencyRateService.shared.getAvailableCurrencies())
+            
+            // Собираем валюты из всех транзакций
+            var currencies = Set<String>()
+            for transaction in state.transactions {
+                currencies.insert(transaction.currency)
+            }
+            
+            // Объединяем с валютами из источника курсов
+            currencies = currencies.union(fromRateSource)
+            
+            // Добавляем текущую валюту отображения, если её нет
+            if !currencies.contains(state.displayCurrency) {
+                currencies.insert(state.displayCurrency)
+            }
+            
+            state.availableCurrencies = Array(currencies).sorted()
+        }
     }
     
     private func applyFilters() {
@@ -266,7 +322,7 @@ final class CashflowViewModel: ViewModelProtocol {
                 let converted = await convertAmount(
                     value: transaction.amount,
                     from: transaction.currency,
-                    to: "RUB"
+                    to: state.displayCurrency
                 )
                 incomeByDate[dateKey, default: 0.0] += converted
                 
@@ -274,7 +330,7 @@ final class CashflowViewModel: ViewModelProtocol {
                 let converted = await convertAmount(
                     value: transaction.amount,
                     from: transaction.currency,
-                    to: "RUB"
+                    to: state.displayCurrency
                 )
                 expenseByDate[dateKey, default: 0.0] += converted
                 
@@ -327,7 +383,7 @@ final class CashflowViewModel: ViewModelProtocol {
                 let converted = await convertAmount(
                     value: transaction.amount,
                     from: transaction.currency,
-                    to: "RUB"
+                    to: state.displayCurrency
                 )
                 totalIncome += converted
                 
@@ -335,7 +391,7 @@ final class CashflowViewModel: ViewModelProtocol {
                 let converted = await convertAmount(
                     value: transaction.amount,
                     from: transaction.currency,
-                    to: "RUB"
+                    to: state.displayCurrency
                 )
                 totalExpense += converted
                 

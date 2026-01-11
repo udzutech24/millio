@@ -88,6 +88,12 @@ private struct CashflowContentView: View {
         )) {
             CashflowTransactionsHistoryView(viewModel: viewModel)
         }
+        .sheet(isPresented: Binding(
+            get: { viewModel.state.showCurrencySelector },
+            set: { if !$0 { viewModel.handle(.hideCurrencySelector) } }
+        )) {
+            CashflowCurrencySelectorView(viewModel: viewModel)
+        }
     }
     
     // MARK: - Action Buttons Section
@@ -156,7 +162,7 @@ private struct CashflowContentView: View {
                                 )
                             )
                         
-                        Text("RUB")
+                        Text(viewModel.state.displayCurrency)
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppColors.textSecondary)
                     }
@@ -196,7 +202,7 @@ private struct CashflowContentView: View {
                                 )
                             )
                         
-                        Text("RUB")
+                        Text(viewModel.state.displayCurrency)
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppColors.textSecondary)
                     }
@@ -244,7 +250,7 @@ private struct CashflowContentView: View {
                                 )
                             )
                         
-                        Text("RUB")
+                        Text(viewModel.state.displayCurrency)
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(AppColors.textSecondary)
                     }
@@ -289,102 +295,67 @@ private struct CashflowContentView: View {
                 
                 Spacer()
                 
-                Menu {
-                    Button {
-                        viewModel.handle(.setChartPeriod(.month))
-                    } label: {
-                        HStack {
-                            Text("Месяц")
-                            if viewModel.state.chartPeriod == .month {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-                    
-                    Button {
-                        viewModel.handle(.setChartPeriod(.quarter))
-                    } label: {
-                        HStack {
-                            Text("Квартал")
-                            if viewModel.state.chartPeriod == .quarter {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-                    
-                    Button {
-                        viewModel.handle(.setChartPeriod(.year))
-                    } label: {
-                        HStack {
-                            Text("Год")
-                            if viewModel.state.chartPeriod == .year {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-                    
-                    Divider()
-                    
-                    Button {
-                        viewModel.handle(.showPeriodSelector)
-                    } label: {
-                        HStack {
-                            Text("Конкретный месяц")
-                            if viewModel.state.chartPeriod == .specificMonth {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-                    
-                    Button {
-                        viewModel.handle(.showPeriodSelector)
-                    } label: {
-                        HStack {
-                            Text("Конкретный квартал")
-                            if viewModel.state.chartPeriod == .specificQuarter {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-                    
-                    Button {
-                        viewModel.handle(.showPeriodSelector)
-                    } label: {
-                        HStack {
-                            Text("Конкретный год")
-                            if viewModel.state.chartPeriod == .specificYear {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-                    
-                    Divider()
-                    
-                    Button {
-                        viewModel.handle(.showPeriodSelector)
-                    } label: {
-                        HStack {
-                            Text("Свой период")
-                            if viewModel.state.chartPeriod == .custom {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
+                // Кнопка выбора валюты
+                Button {
+                    viewModel.handle(.showCurrencySelector)
                 } label: {
-                    HStack(spacing: 8) {
-                        Text(getPeriodDisplayName())
+                    HStack(spacing: 6) {
+                        Text(viewModel.state.displayCurrency)
                             .font(.system(size: 14, weight: .medium))
                         Image(systemName: "chevron.down")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(size: 10, weight: .medium))
                     }
                     .foregroundStyle(AppColors.textPrimary)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
                     .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
                             .fill(Color.white.opacity(0.1))
                     )
                 }
+            }
+            
+            // Выбор периода через горизонтальный скролл
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    // Быстрые периоды
+                    PeriodChip(
+                        title: "Месяц",
+                        isSelected: viewModel.state.chartPeriod == .month,
+                        action: {
+                            viewModel.handle(.setChartPeriod(.month))
+                        }
+                    )
+                    
+                    PeriodChip(
+                        title: "Квартал",
+                        isSelected: viewModel.state.chartPeriod == .quarter,
+                        action: {
+                            viewModel.handle(.setChartPeriod(.quarter))
+                        }
+                    )
+                    
+                    PeriodChip(
+                        title: "Год",
+                        isSelected: viewModel.state.chartPeriod == .year,
+                        action: {
+                            viewModel.handle(.setChartPeriod(.year))
+                        }
+                    )
+                    
+                    // Конкретные периоды
+                    PeriodChip(
+                        title: getSpecificPeriodTitle(),
+                        isSelected: viewModel.state.chartPeriod == .specificMonth || 
+                                   viewModel.state.chartPeriod == .specificQuarter ||
+                                   viewModel.state.chartPeriod == .specificYear ||
+                                   viewModel.state.chartPeriod == .custom,
+                        action: {
+                            viewModel.handle(.showPeriodSelector)
+                        }
+                    )
+                }
+                .padding(.horizontal, 4)
             }
             
             if viewModel.state.incomeChartData.isEmpty && viewModel.state.expenseChartData.isEmpty {
@@ -453,7 +424,7 @@ private struct CashflowContentView: View {
                         }
                     }
                 }
-                .chartYAxisLabel("Сумма (RUB)")
+                .chartYAxisLabel("Сумма (\(viewModel.state.displayCurrency))")
                 .frame(height: 300)
                 .padding(20)
                 .background(
@@ -521,14 +492,8 @@ private struct CashflowContentView: View {
         return formatter.string(from: date)
     }
     
-    private func getPeriodDisplayName() -> String {
+    private func getSpecificPeriodTitle() -> String {
         switch viewModel.state.chartPeriod {
-        case .month:
-            return "Месяц"
-        case .quarter:
-            return "Квартал"
-        case .year:
-            return "Год"
         case .specificMonth:
             let formatter = DateFormatter()
             formatter.dateFormat = "MMMM yyyy"
@@ -545,8 +510,42 @@ private struct CashflowContentView: View {
             return formatter.string(from: viewModel.state.selectedYear)
         case .custom:
             let formatter = DateFormatter()
-            formatter.dateFormat = "dd.MM.yyyy"
+            formatter.dateFormat = "dd.MM"
             return "\(formatter.string(from: viewModel.state.customStartDate)) - \(formatter.string(from: viewModel.state.customEndDate))"
+        default:
+            return "Выбрать период"
+        }
+    }
+}
+
+// MARK: - Period Chip
+
+private struct PeriodChip: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(isSelected ? Color.white : AppColors.textPrimary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(
+                    Group {
+                        if isSelected {
+                            LinearGradient(
+                                colors: AppColors.cashflowGradient,
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        } else {
+                            Color.white.opacity(0.1)
+                        }
+                    }
+                )
+                .clipShape(Capsule())
         }
     }
 }
