@@ -515,6 +515,8 @@ struct CardEditorView: View {
     @Environment(\.dismiss) private var dismiss
     
     @State private var creditLimitText: String = ""
+    @State private var availableCurrencies: [String] = ["RUB", "USD", "EUR"]
+    @State private var isLoadingCurrencies: Bool = false
     
     init(viewModel: CardViewModel) {
         self.viewModel = viewModel
@@ -559,9 +561,18 @@ struct CardEditorView: View {
                         TextField("Название карты", text: $card.name)
                             .foregroundStyle(AppColors.textPrimary)
                         
-                        TextField("Номер карты (последние 4 цифры)", text: $card.cardNumber)
-                            .keyboardType(.numberPad)
-                            .foregroundStyle(AppColors.textPrimary)
+                        TextField("Номер карты (последние 4 цифры)", text: Binding(
+                            get: { card.cardNumber },
+                            set: { newValue in
+                                // Ограничиваем ввод только цифрами и максимум 4 символа
+                                let filtered = newValue.filter { $0.isNumber }
+                                if filtered.count <= 4 {
+                                    card.cardNumber = filtered
+                                }
+                            }
+                        ))
+                        .keyboardType(.numberPad)
+                        .foregroundStyle(AppColors.textPrimary)
                         
                         Picker("Банк", selection: $card.bankRaw) {
                             ForEach(Bank.allCases, id: \.rawValue) { bank in
@@ -587,8 +598,23 @@ struct CardEditorView: View {
                     .listRowBackground(Color.clear)
                     
                     Section("Финансы") {
-                        TextField("Валюта", text: $card.currency)
+                        if isLoadingCurrencies {
+                            HStack {
+                                Text("Валюта")
+                                    .foregroundStyle(AppColors.textPrimary)
+                                Spacer()
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                    .tint(AppColors.textTertiary)
+                            }
+                        } else {
+                            Picker("Валюта", selection: $card.currency) {
+                                ForEach(availableCurrencies, id: \.self) { currency in
+                                    Text(currency).tag(currency)
+                                }
+                            }
                             .foregroundStyle(AppColors.textPrimary)
+                        }
                         
                         TextField("Баланс", value: $card.balance, format: .number)
                             .keyboardType(.decimalPad)
@@ -610,18 +636,6 @@ struct CardEditorView: View {
                     .listRowBackground(Color.clear)
                     
                     Section("Дополнительно") {
-                        TextField("Дата окончания (MM/YY)", text: Binding(
-                            get: { card.expiryDate ?? "" },
-                            set: { card.expiryDate = $0.isEmpty ? nil : $0 }
-                        ))
-                        .foregroundStyle(AppColors.textPrimary)
-                        
-                        TextField("Имя держателя", text: Binding(
-                            get: { card.cardholderName ?? "" },
-                            set: { card.cardholderName = $0.isEmpty ? nil : $0 }
-                        ))
-                        .foregroundStyle(AppColors.textPrimary)
-                        
                         Toggle("Избранная", isOn: $card.isFavorite)
                             .foregroundStyle(AppColors.textPrimary)
                     }
@@ -648,6 +662,31 @@ struct CardEditorView: View {
                     .disabled(card.name.isEmpty || card.cardNumber.isEmpty)
                 }
             }
+            .onAppear {
+                loadAvailableCurrencies()
+            }
+        }
+    }
+    
+    // MARK: - Currency Loading
+    
+    private func loadAvailableCurrencies() {
+        Task {
+            isLoadingCurrencies = true
+            defer { isLoadingCurrencies = false }
+            
+            // Загружаем курсы, чтобы получить актуальный список валют
+            _ = await CurrencyRateService.shared.getRate(from: "USD", to: "RUB")
+            
+            // Получаем валюты из текущего источника курсов
+            let fromRateSource = Set(CurrencyRateService.shared.getAvailableCurrencies())
+            // Добавляем валюту текущей карты, если она есть
+            var currencies = Array(fromRateSource)
+            if !currencies.contains(card.currency) {
+                currencies.append(card.currency)
+            }
+            // Сортируем
+            availableCurrencies = currencies.sorted()
         }
     }
 }
