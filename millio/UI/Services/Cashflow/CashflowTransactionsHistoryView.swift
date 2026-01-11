@@ -147,6 +147,8 @@ private struct CashflowTransactionRow: View {
             return AppColors.expenseGradient
         case .transfer:
             return AppColors.cashflowGradient
+        case .exchange:
+            return AppColors.coursesGradient
         }
     }
     
@@ -158,6 +160,12 @@ private struct CashflowTransactionRow: View {
             return transaction.expenseCategory?.displayName ?? "Расход"
         case .transfer:
             return "Перевод"
+        case .exchange:
+            if let fromCurrency = transaction.exchangeFromCurrency,
+               let toCurrency = transaction.exchangeToCurrency {
+                return "\(fromCurrency) → \(toCurrency)"
+            }
+            return "Обмен"
         }
     }
     
@@ -176,6 +184,23 @@ private struct CashflowTransactionRow: View {
                let fromCard = viewModel.state.availableCards.first(where: { $0.cardUniqueID == fromCardID }),
                let toCard = viewModel.state.availableCards.first(where: { $0.cardUniqueID == toCardID }) {
                 return "\(fromCard.name) → \(toCard.name)"
+            }
+            return nil
+            
+        case .exchange:
+            if let fromAmount = transaction.exchangeFromAmount,
+               let toAmount = transaction.exchangeToAmount,
+               let fromCurrency = transaction.exchangeFromCurrency,
+               let toCurrency = transaction.exchangeToCurrency {
+                let formatter = NumberFormatter()
+                formatter.numberStyle = .decimal
+                formatter.groupingSeparator = " "
+                formatter.usesGroupingSeparator = true
+                formatter.minimumFractionDigits = 2
+                formatter.maximumFractionDigits = 2
+                let fromFormatted = formatter.string(from: NSNumber(value: fromAmount)) ?? "0.00"
+                let toFormatted = formatter.string(from: NSNumber(value: toAmount)) ?? "0.00"
+                return "\(fromFormatted) \(fromCurrency) → \(toFormatted) \(toCurrency)"
             }
             return nil
         }

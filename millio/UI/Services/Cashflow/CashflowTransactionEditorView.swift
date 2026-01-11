@@ -24,6 +24,11 @@ struct CashflowTransactionEditorView: View {
     @State private var selectedToCardID: String? = nil
     @State private var selectedIncomeCategory: IncomeCategory? = nil
     @State private var selectedExpenseCategory: ExpenseCategory? = nil
+    @State private var exchangeFromCurrency: String = "RUB"
+    @State private var exchangeToCurrency: String = "USD"
+    @State private var exchangeFromAmountText: String = ""
+    @State private var exchangeToAmountText: String = ""
+    @State private var isCalculatingExchange: Bool = false
     @State private var note: String = ""
     @State private var availableCurrencies: [String] = []
     @State private var isLoadingCurrencies: Bool = false
@@ -42,6 +47,10 @@ struct CashflowTransactionEditorView: View {
             _selectedToCardID = State(initialValue: transaction.toCardID)
             _selectedIncomeCategory = State(initialValue: transaction.incomeCategory)
             _selectedExpenseCategory = State(initialValue: transaction.expenseCategory)
+            _exchangeFromCurrency = State(initialValue: transaction.exchangeFromCurrency ?? "RUB")
+            _exchangeToCurrency = State(initialValue: transaction.exchangeToCurrency ?? "USD")
+            _exchangeFromAmountText = State(initialValue: transaction.exchangeFromAmount.map { formatNumberForDisplay($0) } ?? "")
+            _exchangeToAmountText = State(initialValue: transaction.exchangeToAmount.map { formatNumberForDisplay($0) } ?? "")
             _note = State(initialValue: transaction.note ?? "")
         } else if let type = transactionType {
             _selectedTransactionType = State(initialValue: type)
@@ -232,6 +241,91 @@ struct CashflowTransactionEditorView: View {
                             Text("Перевод")
                                 .foregroundStyle(AppColors.textSecondary)
                         }
+                    } else if selectedTransactionType == .exchange {
+                        Section {
+                            if isLoadingCurrencies {
+                                HStack {
+                                    Text("Валюта из")
+                                        .foregroundStyle(AppColors.textPrimary)
+                                    Spacer()
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                        .tint(AppColors.textTertiary)
+                                }
+                            } else {
+                                Picker("Валюта из", selection: $exchangeFromCurrency) {
+                                    ForEach(availableCurrencies, id: \.self) { currency in
+                                        Text(currency).tag(currency)
+                                    }
+                                }
+                                .foregroundStyle(AppColors.textPrimary)
+                                .onChange(of: exchangeFromCurrency) { oldValue, newValue in
+                                    calculateExchange()
+                                }
+                                
+                                TextField("Сумма", text: Binding(
+                                    get: { formatNumberForDisplay(exchangeFromAmountText) },
+                                    set: { newValue in
+                                        let normalized = newValue.replacingOccurrences(of: " ", with: "")
+                                            .replacingOccurrences(of: ",", with: ".")
+                                        exchangeFromAmountText = normalized
+                                        calculateExchange()
+                                    }
+                                ))
+                                .keyboardType(.decimalPad)
+                                .foregroundStyle(AppColors.textPrimary)
+                            }
+                            
+                            if isLoadingCurrencies {
+                                HStack {
+                                    Text("Валюта в")
+                                        .foregroundStyle(AppColors.textPrimary)
+                                    Spacer()
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                        .tint(AppColors.textTertiary)
+                                }
+                            } else {
+                                Picker("Валюта в", selection: $exchangeToCurrency) {
+                                    ForEach(availableCurrencies, id: \.self) { currency in
+                                        Text(currency).tag(currency)
+                                    }
+                                }
+                                .foregroundStyle(AppColors.textPrimary)
+                                .onChange(of: exchangeToCurrency) { oldValue, newValue in
+                                    calculateExchange()
+                                }
+                                
+                                if isCalculatingExchange {
+                                    HStack {
+                                        Text("Сумма")
+                                            .foregroundStyle(AppColors.textPrimary)
+                                        Spacer()
+                                        ProgressView()
+                                            .scaleEffect(0.8)
+                                            .tint(AppColors.textTertiary)
+                                    }
+                                } else {
+                                    TextField("Сумма", text: Binding(
+                                        get: { formatNumberForDisplay(exchangeToAmountText) },
+                                        set: { newValue in
+                                            let normalized = newValue.replacingOccurrences(of: " ", with: "")
+                                                .replacingOccurrences(of: ",", with: ".")
+                                            exchangeToAmountText = normalized
+                                        }
+                                    ))
+                                    .keyboardType(.decimalPad)
+                                    .foregroundStyle(AppColors.textPrimary)
+                                    .disabled(true)
+                                }
+                            }
+                            
+                            DatePicker("Дата", selection: $transactionDate, displayedComponents: .date)
+                                .foregroundStyle(AppColors.textPrimary)
+                        } header: {
+                            Text("Обмен валют")
+                                .foregroundStyle(AppColors.textSecondary)
+                        }
                     }
                     
                     // Комментарий
@@ -292,6 +386,17 @@ struct CashflowTransactionEditorView: View {
             return selectedCardID != nil
         case .transfer:
             return selectedCardID != nil && selectedToCardID != nil && selectedCardID != selectedToCardID
+        case .exchange:
+            guard !exchangeFromAmountText.isEmpty,
+                  let fromAmount = Double(exchangeFromAmountText.replacingOccurrences(of: ",", with: ".")),
+                  fromAmount > 0,
+                  !exchangeToAmountText.isEmpty,
+                  let toAmount = Double(exchangeToAmountText.replacingOccurrences(of: ",", with: ".")),
+                  toAmount > 0,
+                  exchangeFromCurrency != exchangeToCurrency else {
+                return false
+            }
+            return true
         }
     }
     
@@ -303,6 +408,8 @@ struct CashflowTransactionEditorView: View {
             return AppColors.expenseGradient
         case .transfer:
             return AppColors.cashflowGradient
+        case .exchange:
+            return AppColors.coursesGradient
         }
     }
     
@@ -338,10 +445,50 @@ struct CashflowTransactionEditorView: View {
         transaction.toCardID = selectedToCardID
         transaction.incomeCategoryRaw = selectedIncomeCategory?.rawValue
         transaction.expenseCategoryRaw = selectedExpenseCategory?.rawValue
+        
+        if selectedTransactionType == .exchange {
+            transaction.exchangeFromCurrency = exchangeFromCurrency
+            transaction.exchangeToCurrency = exchangeToCurrency
+            transaction.exchangeFromAmount = Double(exchangeFromAmountText.replacingOccurrences(of: ",", with: "."))
+            transaction.exchangeToAmount = Double(exchangeToAmountText.replacingOccurrences(of: ",", with: "."))
+            transaction.amount = transaction.exchangeFromAmount ?? 0.0
+            transaction.currency = exchangeFromCurrency
+        }
+        
         transaction.note = note.isEmpty ? nil : note
         
         viewModel.handle(.updateTransaction(transaction))
         dismiss()
+    }
+    
+    private func calculateExchange() {
+        guard !exchangeFromAmountText.isEmpty,
+              let fromAmount = Double(exchangeFromAmountText.replacingOccurrences(of: ",", with: ".")),
+              fromAmount > 0,
+              exchangeFromCurrency != exchangeToCurrency else {
+            exchangeToAmountText = ""
+            return
+        }
+        
+        isCalculatingExchange = true
+        
+        Task {
+            if let converted = await CurrencyRateService.shared.convert(
+                amount: fromAmount,
+                from: exchangeFromCurrency,
+                to: exchangeToCurrency
+            ) {
+                await MainActor.run {
+                    exchangeToAmountText = String(converted)
+                    isCalculatingExchange = false
+                }
+            } else {
+                await MainActor.run {
+                    exchangeToAmountText = ""
+                    isCalculatingExchange = false
+                }
+            }
+        }
     }
     
     private func loadAvailableCurrencies() {

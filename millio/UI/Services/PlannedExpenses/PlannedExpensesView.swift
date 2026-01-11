@@ -51,7 +51,7 @@ private struct PlannedExpensesContentViewInternal: View {
                 .padding(.bottom, 32)
             }
         }
-        .navigationTitle("Планирование")
+        .navigationTitle("Планировщик")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {

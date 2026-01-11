@@ -271,6 +271,8 @@ final class CashflowViewModel: ViewModelProtocol {
                 
             case .transfer:
                 break // Переводы не учитываем в графике
+            case .exchange:
+                break // Обмены валют не учитываем в графике
             }
         }
         
@@ -385,6 +387,10 @@ final class CashflowViewModel: ViewModelProtocol {
             existing.toCardID = transaction.toCardID
             existing.incomeCategoryRaw = transaction.incomeCategoryRaw
             existing.expenseCategoryRaw = transaction.expenseCategoryRaw
+            existing.exchangeFromCurrency = transaction.exchangeFromCurrency
+            existing.exchangeToCurrency = transaction.exchangeToCurrency
+            existing.exchangeFromAmount = transaction.exchangeFromAmount
+            existing.exchangeToAmount = transaction.exchangeToAmount
             existing.note = transaction.note
             existing.updatedAt = Date()
         } else {
@@ -398,6 +404,10 @@ final class CashflowViewModel: ViewModelProtocol {
                 toCardID: transaction.toCardID,
                 incomeCategory: transaction.incomeCategory,
                 expenseCategory: transaction.expenseCategory,
+                exchangeFromCurrency: transaction.exchangeFromCurrency,
+                exchangeToCurrency: transaction.exchangeToCurrency,
+                exchangeFromAmount: transaction.exchangeFromAmount,
+                exchangeToAmount: transaction.exchangeToAmount,
                 note: transaction.note
             )
             modelContext.insert(newTransaction)
@@ -483,6 +493,11 @@ final class CashflowViewModel: ViewModelProtocol {
                     try? modelContext.save()
                 }
             }
+            
+        case .exchange:
+            // Обмен валют не влияет на баланс карт напрямую
+            // Пользователь может вручную обновить балансы карт после обмена
+            break
         }
     }
 }

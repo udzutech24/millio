@@ -77,7 +77,7 @@ struct ServiceItem: Identifiable, Equatable {
             ServiceItem(
                 id: "plannedExpenses",
                 route: .plannedExpenses,
-                title: "Планирование",
+                title: "Планировщик",
                 icon: "calendar.badge.clock",
                 gradientColors: AppColors.plannedExpensesGradient
             ),

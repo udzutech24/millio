@@ -90,7 +90,9 @@ private struct CashflowContentView: View {
     // MARK: - Action Buttons Section
     
     private var actionButtonsSection: some View {
-        HStack(spacing: 16) {
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 2)
+        
+        return LazyVGrid(columns: columns, spacing: 12) {
             // Кнопка Доход
             CashflowActionButton(
                 title: "Доход",
@@ -116,6 +118,15 @@ private struct CashflowContentView: View {
                 gradientColors: AppColors.cashflowGradient
             ) {
                 viewModel.handle(.addTransaction(.transfer))
+            }
+            
+            // Кнопка Обмен
+            CashflowActionButton(
+                title: "Обмен",
+                icon: "arrow.triangle.2.circlepath.circle.fill",
+                gradientColors: AppColors.coursesGradient
+            ) {
+                viewModel.handle(.addTransaction(.exchange))
             }
         }
     }
