@@ -113,6 +113,17 @@ struct ConverterView: View {
                 let layout = makeLayout(totalH: geo.size.height)
                 mainContent(layout: layout)
             }
+            
+            // Toast для ошибок
+            VStack {
+                Spacer()
+                if let message = viewModel.state.toastMessage {
+                    ToastView(message: message, isPresented: Binding(
+                        get: { viewModel.state.showToast },
+                        set: { viewModel.state.showToast = $0 }
+                    ))
+                }
+            }
         }
         .task {
             if viewModel.state.allRates.count <= 1 {

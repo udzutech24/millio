@@ -49,6 +49,10 @@ struct ConverterState {
     // Share
     var shareImage: UIImage? = nil
     var showShareSheet: Bool = false
+    
+    // Toast
+    var toastMessage: String? = nil
+    var showToast: Bool = false
 }
 
 // MARK: - Rate Source
@@ -122,8 +126,14 @@ final class ConverterViewModel: ViewModelProtocol {
     }
     
     private var storedLastRatesTS: Double {
-        get { defaults.double(forKey: "conv_last_rates_ts") }
-        set { defaults.set(newValue, forKey: "conv_last_rates_ts") }
+        get {
+            let key = "conv_last_rates_ts_\(state.rateSource.rawValue)"
+            return defaults.double(forKey: key)
+        }
+        set {
+            let key = "conv_last_rates_ts_\(state.rateSource.rawValue)"
+            defaults.set(newValue, forKey: key)
+        }
     }
     
     private let maxCurrencies: Int = 6
@@ -627,7 +637,34 @@ final class ConverterViewModel: ViewModelProtocol {
         } catch {
             state.isOffline = true
             
-            // Тактильный отклик теперь только в UI при нажатии на кнопку
+            // Показываем ошибку в тостере
+            let errorMessage: String
+            if let urlError = error as? URLError {
+                switch urlError.code {
+                case .notConnectedToInternet, .networkConnectionLost:
+                    errorMessage = "Нет подключения к интернету"
+                case .timedOut:
+                    errorMessage = "Превышено время ожидания"
+                case .badServerResponse:
+                    errorMessage = "Ошибка сервера \(state.rateSource.title)"
+                case .cannotParseResponse:
+                    errorMessage = "Не удалось обработать ответ от \(state.rateSource.title)"
+                default:
+                    errorMessage = "Ошибка при обновлении курсов"
+                }
+            } else {
+                errorMessage = "Ошибка при обновлении курсов"
+            }
+            
+            state.toastMessage = errorMessage
+            state.showToast = true
+            
+            // Автоматически скрываем тостер через 3 секунды
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                state.showToast = false
+                state.toastMessage = nil
+            }
         }
     }
     
