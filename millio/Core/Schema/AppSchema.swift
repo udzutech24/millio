@@ -30,6 +30,14 @@ struct AppSchema {
             }
         }
         
+        // Явно добавляем модели Water (на случай, если регистрация происходит после создания схемы)
+        if !modelTypes.contains(where: { $0 == WaterEntry.self }) {
+            modelTypes.append(WaterEntry.self)
+        }
+        if !modelTypes.contains(where: { $0 == WaterSettings.self }) {
+            modelTypes.append(WaterSettings.self)
+        }
+        
         return Schema(modelTypes)
     }
 }

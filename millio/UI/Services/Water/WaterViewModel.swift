@@ -39,6 +39,12 @@ struct WaterState {
     
     /// Выбранное количество для добавления
     var selectedAmount: Int = 250
+    
+    /// Toast сообщение
+    var toastMessage: String? = nil
+    
+    /// Показывать ли toast
+    var showToast: Bool = false
 }
 
 struct DailyStat: Identifiable {
@@ -68,7 +74,7 @@ enum WaterAction {
 final class WaterViewModel: ViewModelProtocol {
     @Published var state = WaterState()
     
-    private let modelContext: ModelContext
+    let modelContext: ModelContext
     private var settingsQuery: FetchDescriptor<WaterSettings> {
         FetchDescriptor<WaterSettings>()
     }
@@ -143,6 +149,18 @@ final class WaterViewModel: ViewModelProtocol {
         let today = calendar.startOfDay(for: Date())
         let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
         
+        // Сначала попробуем загрузить все записи без предиката для отладки
+        let allDescriptor = FetchDescriptor<WaterEntry>(
+            sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
+        )
+        
+        if let allEntries = try? modelContext.fetch(allDescriptor) {
+            AppLogger.log(.info, category: "Water", "Total entries in context: \(allEntries.count)")
+            for entry in allEntries {
+                AppLogger.log(.info, category: "Water", "Entry: \(entry.amount) ml at \(entry.timestamp)")
+            }
+        }
+        
         let descriptor = FetchDescriptor<WaterEntry>(
             predicate: #Predicate<WaterEntry> { entry in
                 entry.timestamp >= today && entry.timestamp < tomorrow
@@ -150,10 +168,14 @@ final class WaterViewModel: ViewModelProtocol {
             sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
         )
         
-        if let entries = try? modelContext.fetch(descriptor) {
+        do {
+            let entries = try modelContext.fetch(descriptor)
             state.todayEntries = entries
             state.todayAmount = entries.reduce(0) { $0 + $1.amount }
             updateProgress()
+            AppLogger.log(.info, category: "Water", "Loaded \(entries.count) entries for today, total: \(state.todayAmount) ml")
+        } catch {
+            AppLogger.log(.error, category: "Water", "Failed to fetch today entries: \(error.localizedDescription)")
         }
     }
     
@@ -186,18 +208,31 @@ final class WaterViewModel: ViewModelProtocol {
     }
     
     private func addWater(amount: Int) {
-        guard amount > 0 else { return }
+        guard amount > 0 else {
+            AppLogger.log(.error, category: "Water", "Invalid amount: \(amount)")
+            return
+        }
+        
+        AppLogger.log(.info, category: "Water", "Adding water: \(amount) ml")
         
         let entry = WaterEntry(amount: amount)
         modelContext.insert(entry)
         
+        AppLogger.log(.info, category: "Water", "Entry inserted. ModelContext has changes: \(modelContext.hasChanges)")
+        
         do {
             try modelContext.save()
+            AppLogger.log(.info, category: "Water", "Water entry saved successfully. ModelContext has changes after save: \(modelContext.hasChanges)")
+            
+            // Перезагружаем данные сразу
             loadTodayEntries()
             loadWeeklyStats()
             state.showAddWaterDialog = false
         } catch {
             AppLogger.log(.error, category: "Water", "Failed to save water entry: \(error.localizedDescription)")
+            // Показываем ошибку пользователю
+            state.toastMessage = "Ошибка при сохранении: \(error.localizedDescription)"
+            state.showToast = true
         }
     }
     

@@ -30,22 +30,32 @@ struct WaterView: View {
     
     @ViewBuilder
     private func waterContentView(viewModel: WaterViewModel) -> some View {
+        WaterContentViewInternal(viewModel: viewModel)
+    }
+}
+
+// MARK: - Internal Content View
+
+private struct WaterContentViewInternal: View {
+    @ObservedObject var viewModel: WaterViewModel
+    
+    var body: some View {
         ZStack {
             GradientBackground()
             
             ScrollView {
                 VStack(spacing: 24) {
                     // Заголовок и прогресс
-                    progressSection(viewModel: viewModel)
+                    progressSection
                     
                     // Быстрые кнопки добавления
-                    quickAddButtons(viewModel: viewModel)
+                    quickAddButtons
                     
                     // Статистика за неделю
-                    weeklyStatsSection(viewModel: viewModel)
+                    weeklyStatsSection
                     
                     // История за сегодня
-                    todayHistorySection(viewModel: viewModel)
+                    todayHistorySection
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 16)
@@ -76,12 +86,22 @@ struct WaterView: View {
         )) {
             AddWaterDialog(viewModel: viewModel)
         }
+        .overlay(alignment: .bottom) {
+            if viewModel.state.showToast, let message = viewModel.state.toastMessage {
+                ToastView(message: message, isPresented: Binding(
+                    get: { viewModel.state.showToast },
+                    set: { if !$0 {
+                        viewModel.state.showToast = false
+                        viewModel.state.toastMessage = nil
+                    } }
+                ))
+            }
+        }
     }
     
     // MARK: - Progress Section
     
-    @ViewBuilder
-    private func progressSection(viewModel: WaterViewModel) -> some View {
+    private var progressSection: some View {
         VStack(spacing: 16) {
             // Круговой прогресс
             ZStack {
@@ -108,7 +128,6 @@ struct WaterView: View {
                     )
                     .frame(width: 200, height: 200)
                     .rotationEffect(.degrees(-90))
-                    .animation(.spring(response: 0.5, dampingFraction: 0.8), value: viewModel.state.progress)
                 
                 VStack(spacing: 4) {
                     Text("\(viewModel.state.todayAmount)")
@@ -124,6 +143,7 @@ struct WaterView: View {
                         .foregroundStyle(AppColors.textTertiary)
                 }
             }
+            .animation(.spring(response: 0.5, dampingFraction: 0.8), value: viewModel.state.progress)
             
             // Процент выполнения
             Text("\(Int(viewModel.state.progress * 100))%")
@@ -141,8 +161,7 @@ struct WaterView: View {
     
     // MARK: - Quick Add Buttons
     
-    @ViewBuilder
-    private func quickAddButtons(viewModel: WaterViewModel) -> some View {
+    private var quickAddButtons: some View {
         VStack(spacing: 12) {
             Text("Быстрое добавление")
                 .font(.system(size: 18, weight: .semibold))
@@ -160,8 +179,7 @@ struct WaterView: View {
     
     // MARK: - Weekly Stats
     
-    @ViewBuilder
-    private func weeklyStatsSection(viewModel: WaterViewModel) -> some View {
+    private var weeklyStatsSection: some View {
         VStack(spacing: 12) {
             Text("Статистика за неделю")
                 .font(.system(size: 18, weight: .semibold))
@@ -170,35 +188,7 @@ struct WaterView: View {
             
             HStack(spacing: 8) {
                 ForEach(viewModel.state.weeklyStats) { stat in
-                    VStack(spacing: 8) {
-                        // Бар
-                        GeometryReader { geometry in
-                            VStack {
-                                Spacer()
-                                
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(
-                                        LinearGradient(
-                                            colors: AppColors.waterGradient,
-                                            startPoint: .bottom,
-                                            endPoint: .top
-                                        )
-                                    )
-                                    .frame(height: max(4, CGFloat(stat.amount) / CGFloat(stat.target) * geometry.size.height))
-                            }
-                        }
-                        .frame(height: 100)
-                        
-                        // День недели
-                        Text(dayName(for: stat.date))
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(AppColors.textTertiary)
-                        
-                        // Количество
-                        Text("\(stat.amount)")
-                            .font(.system(size: 11, weight: .regular))
-                            .foregroundStyle(AppColors.textSecondary)
-                    }
+                    WeeklyStatBar(stat: stat, maxAmount: maxWeeklyAmount)
                 }
             }
             .padding(.vertical, 12)
@@ -210,10 +200,17 @@ struct WaterView: View {
         }
     }
     
+    // Максимальное количество воды за неделю для масштабирования графика
+    private var maxWeeklyAmount: Int {
+        let maxAmount = viewModel.state.weeklyStats.map { $0.amount }.max() ?? 1
+        // Используем минимум между максимальным значением и целевым, но не меньше целевого
+        let target = viewModel.state.weeklyStats.first?.target ?? 2000
+        return max(maxAmount, target)
+    }
+    
     // MARK: - Today History
     
-    @ViewBuilder
-    private func todayHistorySection(viewModel: WaterViewModel) -> some View {
+    private var todayHistorySection: some View {
         VStack(spacing: 12) {
             Text("Сегодня")
                 .font(.system(size: 18, weight: .semibold))
@@ -260,12 +257,67 @@ struct WaterView: View {
     }
 }
 
+// MARK: - Weekly Stat Bar
+
+private struct WeeklyStatBar: View {
+    let stat: DailyStat
+    let maxAmount: Int
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            // Бар
+            GeometryReader { geometry in
+                VStack {
+                    Spacer()
+                    
+                    let barHeight: CGFloat = {
+                        guard maxAmount > 0 else { return 4 }
+                        // Высота пропорциональна количеству, но не превышает высоту контейнера
+                        let ratio = CGFloat(stat.amount) / CGFloat(maxAmount)
+                        let calculatedHeight = ratio * geometry.size.height
+                        // Минимум 4pt для видимости, максимум - высота контейнера
+                        return max(4, min(calculatedHeight, geometry.size.height))
+                    }()
+                    
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: AppColors.waterGradient,
+                                startPoint: .bottom,
+                                endPoint: .top
+                            )
+                        )
+                        .frame(height: barHeight)
+                }
+            }
+            .frame(height: 100)
+            
+            // День недели
+            Text(dayName(for: stat.date))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(AppColors.textTertiary)
+            
+            // Количество
+            Text("\(stat.amount)")
+                .font(.system(size: 11, weight: .regular))
+                .foregroundStyle(AppColors.textSecondary)
+        }
+    }
+    
+    private func dayName(for date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.dateFormat = "E"
+        return formatter.string(from: date).prefix(1).uppercased()
+    }
+}
+
 // MARK: - Quick Add Button
 
 struct QuickAddButton: View {
     let amount: Int
     let icon: String
-    @ObservedObject var viewModel: WaterViewModel
+    let viewModel: WaterViewModel
     
     var body: some View {
         Button {
@@ -285,18 +337,22 @@ struct QuickAddButton: View {
                             endPoint: .bottomTrailing
                         )
                     )
+                    .frame(height: 24)
                 
                 if amount > 0 {
                     Text("\(amount) мл")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(AppColors.textPrimary)
+                        .frame(height: 17)
                 } else {
                     Text("Свое")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(AppColors.textPrimary)
+                        .frame(height: 17)
                 }
             }
             .frame(maxWidth: .infinity)
+            .frame(height: 73) // Фиксированная высота: 24 (иконка) + 8 (spacing) + 17 (текст) + 24 (padding) = 73
             .padding(.vertical, 16)
             .background {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)

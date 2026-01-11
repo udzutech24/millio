@@ -16,6 +16,9 @@ struct millioApp: App {
     @State private var lifecycleUseCase: AppLifecycleUseCase?
     
     var sharedModelContainer: ModelContainer? = {
+        // Регистрируем фичи ДО создания схемы
+        WaterFeatureRegistration.register()
+        
         let schema = AppSchema.create()
         
         // Убеждаемся, что директория Application Support существует
@@ -83,8 +86,8 @@ struct millioApp: App {
     }
     
     private func initializeApp(container: ModelContainer) async {
-        // Регистрируем фичи
-        WaterFeatureRegistration.register()
+        // Фичи уже зарегистрированы при создании ModelContainer
+        // WaterFeatureRegistration.register() вызывается в sharedModelContainer
         
         // Используем DIContainer для создания зависимостей
         let container = DIContainer.create(
