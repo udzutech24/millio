@@ -152,7 +152,13 @@ struct MainAppView: View {
                                 viewModel.handle(.navigateToService(.plannedExpenses))
                             }
                             
-                            Spacer()
+                            ServiceButton(
+                                title: "Кэшфлоу",
+                                icon: "arrow.left.arrow.right.circle.fill",
+                                gradientColors: AppColors.cashflowGradient
+                            ) {
+                                viewModel.handle(.navigateToService(.cashflow))
+                            }
                         }
                     }
                     .padding(.horizontal, 24)
@@ -208,6 +214,8 @@ struct MainAppView: View {
             InvestmentsView()
         case .plannedExpenses:
             PlannedExpensesView()
+        case .cashflow:
+            CashflowView()
         case .profile:
             ProfileView(router: router)
         case .subscription:
