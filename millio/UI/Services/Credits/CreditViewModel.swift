@@ -230,9 +230,12 @@ final class CreditViewModel: ViewModelProtocol {
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
         if let credits = try? modelContext.fetch(descriptor) {
-            // Обновляем остатки долга для всех кредитов
+            // Обновляем остатки долга только для незакрытых кредитов
             for credit in credits {
-                credit.updateRemainingAmount()
+                // Не пересчитываем остаток для закрытых кредитов (где остаток был установлен вручную = 0)
+                if !credit.isClosed {
+                    credit.updateRemainingAmount()
+                }
             }
             try? modelContext.save()
             
@@ -381,6 +384,13 @@ final class CreditViewModel: ViewModelProtocol {
             existing.creditType = creditType
             existing.isFavorite = isFavorite
             existing.termMonths = termMonths
+            // Если остаток = 0, помечаем кредит как закрытый
+            if remainingAmount <= 0 {
+                existing.isClosed = true
+                existing.remainingAmount = 0
+            } else {
+                existing.isClosed = false
+            }
             // startDate и interestRate оставляем как есть (не меняем при редактировании)
             existing.updatedAt = Date()
         } else {
@@ -399,6 +409,11 @@ final class CreditViewModel: ViewModelProtocol {
             newCredit.endDate = endDate
             newCredit.remainingAmount = remainingAmount
             newCredit.isFavorite = isFavorite
+            // Если остаток = 0, помечаем кредит как закрытый
+            if remainingAmount <= 0 {
+                newCredit.isClosed = true
+                newCredit.remainingAmount = 0
+            }
             modelContext.insert(newCredit)
         }
         

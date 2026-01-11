@@ -438,33 +438,55 @@ private struct CreditRow: View {
                                         .font(.system(size: 12, weight: .regular))
                                         .foregroundStyle(AppColors.textTertiary)
                                     
-                                    Text("\(formatBalance(credit.remainingAmount)) \(credit.currency)")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundStyle(AppColors.textPrimary)
-                                        .lineLimit(1)
+                                    if credit.isClosed || credit.remainingAmount <= 0 {
+                                        HStack(spacing: 4) {
+                                            Text("0 \(credit.currency)")
+                                                .font(.system(size: 16, weight: .semibold))
+                                                .foregroundStyle(AppColors.textSecondary)
+                                            
+                                            Text("(Закрыт)")
+                                                .font(.system(size: 12, weight: .medium))
+                                                .foregroundStyle(
+                                                    LinearGradient(
+                                                        colors: AppColors.creditsGradient,
+                                                        startPoint: .leading,
+                                                        endPoint: .trailing
+                                                    )
+                                                )
+                                        }
+                                    } else {
+                                        Text("\(formatBalance(credit.remainingAmount)) \(credit.currency)")
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundStyle(AppColors.textPrimary)
+                                            .lineLimit(1)
+                                    }
                                 }
                                 
-                                // Ежемесячный платеж
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Платеж:")
-                                        .font(.system(size: 12, weight: .regular))
-                                        .foregroundStyle(AppColors.textTertiary)
-                                    
-                                    Text("\(formatBalance(credit.monthlyPayment)) \(credit.currency)")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundStyle(AppColors.textPrimary)
-                                        .lineLimit(1)
+                                // Ежемесячный платеж (скрываем для закрытых кредитов)
+                                if !credit.isClosed && credit.remainingAmount > 0 {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Платеж:")
+                                            .font(.system(size: 12, weight: .regular))
+                                            .foregroundStyle(AppColors.textTertiary)
+                                        
+                                        Text("\(formatBalance(credit.monthlyPayment)) \(credit.currency)")
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundStyle(AppColors.textPrimary)
+                                            .lineLimit(1)
+                                    }
                                 }
                                 
-                                // Осталось месяцев
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Осталось:")
-                                        .font(.system(size: 12, weight: .regular))
-                                        .foregroundStyle(AppColors.textTertiary)
-                                    
-                                    Text("\(credit.monthsRemaining) мес.")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundStyle(AppColors.textPrimary)
+                                // Осталось месяцев (скрываем для закрытых кредитов)
+                                if !credit.isClosed && credit.remainingAmount > 0 {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Осталось:")
+                                            .font(.system(size: 12, weight: .regular))
+                                            .foregroundStyle(AppColors.textTertiary)
+                                        
+                                        Text("\(credit.monthsRemaining) мес.")
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundStyle(AppColors.textPrimary)
+                                    }
                                 }
                             }
                         }
@@ -530,28 +552,53 @@ private struct CreditRow: View {
                     }
             }
             
-            // Прогресс выплаты
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(AppColors.textTertiary.opacity(0.2))
-                        .frame(height: 4)
-                    
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(
-                            LinearGradient(
-                                colors: AppColors.creditsGradient,
-                                startPoint: .leading,
-                                endPoint: .trailing
+            // Прогресс выплаты (показываем только для незакрытых кредитов)
+            if !credit.isClosed && credit.remainingAmount > 0 {
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(AppColors.textTertiary.opacity(0.2))
+                            .frame(height: 4)
+                        
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(
+                                LinearGradient(
+                                    colors: AppColors.creditsGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
                             )
-                        )
-                        .frame(width: geometry.size.width * credit.paymentProgress, height: 4)
+                            .frame(width: geometry.size.width * credit.paymentProgress, height: 4)
+                    }
                 }
+                .frame(height: 4)
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 12)
+            } else {
+                // Для закрытых кредитов показываем полный прогресс-бар
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(AppColors.textTertiary.opacity(0.2))
+                            .frame(height: 4)
+                        
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(
+                                LinearGradient(
+                                    colors: AppColors.creditsGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(width: geometry.size.width, height: 4)
+                    }
+                }
+                .frame(height: 4)
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 12)
             }
-            .frame(height: 4)
-            .padding(.horizontal, 20)
-            .padding(.top, 8)
-            .padding(.bottom, 12)
         }
     }
     
