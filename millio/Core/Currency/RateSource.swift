@@ -10,7 +10,6 @@ import Foundation
 /// Источник курсов валют
 enum RateSource: String, CaseIterable, Identifiable {
     case erapi
-    case exchangerateHost
     case frankfurter
     
     var id: String { rawValue }
@@ -18,7 +17,6 @@ enum RateSource: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .erapi: return "(ER)"
-        case .exchangerateHost: return "Exchangerate.host"
         case .frankfurter: return "Frankfurter"
         }
     }
@@ -26,7 +24,6 @@ enum RateSource: String, CaseIterable, Identifiable {
     var subtitle: String {
         switch self {
         case .erapi: return "Много валют, высокая доступность"
-        case .exchangerateHost: return "Широкая база"
         case .frankfurter: return "Официальные курсы Европейского ЦБ"
         }
     }

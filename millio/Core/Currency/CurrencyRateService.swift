@@ -81,8 +81,6 @@ final class CurrencyRateService {
             switch source {
             case .erapi:
                 url = URL(string: "https://open.er-api.com/v6/latest/USD")!
-            case .exchangerateHost:
-                url = URL(string: "https://api.exchangerate.host/latest?base=USD")!
             case .frankfurter:
                 url = URL(string: "https://api.frankfurter.app/latest?from=USD")!
             }
@@ -106,41 +104,6 @@ final class CurrencyRateService {
                 guard decoded.result == "success" else { throw URLError(.cannotParseResponse) }
                 rates = decoded.rates
                 updateTS = TimeInterval(decoded.time_last_update_unix)
-                
-            case .exchangerateHost:
-                struct ExchangeRateHostResponse: Decodable {
-                    let success: Bool?
-                    let rates: [String: Double]?
-                    let quotes: [String: Double]?
-                    let timestamp: Int?
-                    let date: String?
-                }
-                let decoded = try JSONDecoder().decode(ExchangeRateHostResponse.self, from: data)
-                if let success = decoded.success, !success {
-                    throw URLError(.cannotParseResponse)
-                }
-                if let ratesDict = decoded.rates {
-                    rates = ratesDict
-                } else if let quotes = decoded.quotes {
-                    for (key, value) in quotes {
-                        let upperKey = key.uppercased()
-                        if upperKey.hasPrefix("USD"), upperKey.count == 6 {
-                            let currencyCode = String(upperKey.dropFirst(3))
-                            rates[currencyCode] = value
-                        }
-                    }
-                }
-                if let timestamp = decoded.timestamp {
-                    updateTS = TimeInterval(timestamp)
-                } else if let dateStr = decoded.date {
-                    let df = DateFormatter()
-                    df.dateFormat = "yyyy-MM-dd"
-                    df.locale = Locale(identifier: "en_US_POSIX")
-                    df.timeZone = TimeZone(secondsFromGMT: 0)
-                    if let date = df.date(from: dateStr) {
-                        updateTS = date.timeIntervalSince1970
-                    }
-                }
                 
             case .frankfurter:
                 struct FrankfurterResponse: Decodable {

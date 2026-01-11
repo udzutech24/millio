@@ -600,10 +600,6 @@ final class ConverterViewModel: ViewModelProtocol {
             switch state.rateSource {
             case .erapi:
                 url = URL(string: "https://open.er-api.com/v6/latest/USD")!
-            case .exchangerateHost:
-                // Используем /latest (бесплатный endpoint) - возвращает rates
-                // /live требует access_key и возвращает quotes
-                url = URL(string: "https://api.exchangerate.host/latest?base=USD")!
             case .frankfurter:
                 url = URL(string: "https://api.frankfurter.app/latest?from=USD")!
             }
@@ -622,41 +618,6 @@ final class ConverterViewModel: ViewModelProtocol {
                 guard decoded.result == "success" else { throw URLError(.cannotParseResponse) }
                 rates = decoded.rates
                 updateTS = TimeInterval(decoded.time_last_update_unix)
-                
-            case .exchangerateHost:
-                let decoded = try JSONDecoder().decode(ExchangeRateHostResponse.self, from: data)
-                // Проверяем success, если есть
-                if let success = decoded.success, !success {
-                    throw URLError(.cannotParseResponse)
-                }
-                // exchangerate.host /latest endpoint возвращает rates (формат "AED": 3.67)
-                // /live endpoint (требует access_key) возвращает quotes (формат "USDAED": 3.67)
-                if let ratesDict = decoded.rates {
-                    // Прямой формат /latest endpoint
-                    rates = ratesDict
-                } else if let quotes = decoded.quotes {
-                    // Формат /live endpoint - извлекаем код валюты из ключа "USDAED" -> "AED"
-                    for (key, value) in quotes {
-                        let upperKey = key.uppercased()
-                        if upperKey.hasPrefix("USD"), upperKey.count == 6 {
-                            let currencyCode = String(upperKey.dropFirst(3))
-                            rates[currencyCode] = value
-                        }
-                    }
-                }
-                // Используем timestamp из ответа
-                if let timestamp = decoded.timestamp {
-                    updateTS = TimeInterval(timestamp)
-                } else if let dateStr = decoded.date {
-                    // Парсим дату, если нет timestamp
-                    let df = DateFormatter()
-                    df.dateFormat = "yyyy-MM-dd"
-                    df.locale = Locale(identifier: "en_US_POSIX")
-                    df.timeZone = TimeZone(secondsFromGMT: 0)
-                    if let date = df.date(from: dateStr) {
-                        updateTS = date.timeIntervalSince1970
-                    }
-                }
                 
             case .frankfurter:
                 let decoded = try JSONDecoder().decode(FrankfurterResponse.self, from: data)
@@ -827,16 +788,6 @@ private struct ERAPIResponse: Decodable {
     let rates: [String: Double]
 }
 
-private struct ExchangeRateHostResponse: Decodable {
-    let success: Bool?
-    let timestamp: Int?
-    let source: String?
-    let base: String?
-    let date: String?
-    let quotes: [String: Double]?  // Формат "USDAED": 3.67 (для apilayer.com)
-    let rates: [String: Double]?   // Формат "AED": 3.67 (для exchangerate.host)
-}
-
 private struct FrankfurterResponse: Decodable {
     let rates: [String: Double]
     let base: String?
@@ -847,6 +798,8 @@ private struct FrankfurterResponse: Decodable {
 
 private func mirrorToICloud(key: String, value: String) {
     #if os(iOS)
+    // Опциональная синхронизация настроек с iCloud Key-Value Storage
+    // Требует entitlement: com.apple.developer.ubiquity-kvstore-identifier
     let kvs = NSUbiquitousKeyValueStore.default
     if kvs.string(forKey: key) != value {
         kvs.set(value, forKey: key)
