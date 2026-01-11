@@ -146,6 +146,10 @@ final class ConverterViewModel: ViewModelProtocol {
     
     init() {
         onAppearInit()
+        // Проверяем валюты после инициализации, если курсы уже загружены
+        if state.allRates.count > 1 {
+            filterSelectedCurrenciesToAvailable()
+        }
     }
     
     // MARK: - Actions
@@ -363,6 +367,34 @@ final class ConverterViewModel: ViewModelProtocol {
     private func persistSelected() {
         selectedCodesRaw = state.selectedCurrencies.joined(separator: ",")
         mirrorToICloud(key: "conv_selected_codes", value: selectedCodesRaw)
+    }
+    
+    /// Фильтрует выбранные валюты, оставляя только те, что доступны в текущем источнике
+    private func filterSelectedCurrenciesToAvailable() {
+        // Получаем список доступных валют (USD всегда доступен)
+        let availableCodes = Set(state.allRates.keys).union(["USD"])
+        
+        // Фильтруем выбранные валюты
+        let filtered = state.selectedCurrencies.filter { availableCodes.contains($0) }
+        
+        // Если после фильтрации список пуст, добавляем базовые валюты
+        if filtered.isEmpty {
+            // Добавляем валюты, которые обычно есть во всех источниках
+            let commonCurrencies = ["USD", "EUR", "GBP", "JPY", "CNY"]
+            state.selectedCurrencies = commonCurrencies.filter { availableCodes.contains($0) }
+        } else {
+            state.selectedCurrencies = filtered
+        }
+        
+        // Проверяем активную валюту
+        if !availableCodes.contains(state.activeCode) {
+            // Если активная валюта недоступна, выбираем первую из списка или USD
+            state.activeCode = state.selectedCurrencies.first ?? "USD"
+            storedActive = state.activeCode
+        }
+        
+        // Сохраняем обновленный список
+        persistSelected()
     }
     
     private func applyPickerSelection(_ code: String) {
@@ -633,6 +665,9 @@ final class ConverterViewModel: ViewModelProtocol {
             storedLastRatesTS = updateTS
             state.isOffline = false
             
+            // Фильтруем выбранные валюты, оставляя только те, что есть в новом источнике
+            filterSelectedCurrenciesToAvailable()
+            
             // Тактильный отклик теперь только в UI при нажатии на кнопку
         } catch {
             state.isOffline = true
@@ -695,7 +730,10 @@ final class ConverterViewModel: ViewModelProtocol {
     // MARK: - Helpers
     
     var allAvailableCodes: [String] {
-        CurrencySelectionSupport.allCodes(includeCrypto: true)
+        // Фильтруем по доступным валютам в текущем источнике
+        let availableCodes = Set(state.allRates.keys).union(["USD"])
+        let allCodes = CurrencySelectionSupport.allCodes(includeCrypto: true)
+        return allCodes.filter { availableCodes.contains($0.uppercased()) }
     }
     
     var filteredCodes: [String] {
