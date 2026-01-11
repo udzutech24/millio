@@ -604,7 +604,7 @@ final class ConverterViewModel: ViewModelProtocol {
     func getShareData() -> (rows: [ShareRowModel], dateString: String, highlightedCode: String) {
         let rows: [ShareRowModel] = state.selectedCurrencies.map { code in
             ShareRowModel(
-                flag: flagEmoji(for: code),
+                flag: CurrencySelectionSupport.emoji(for: code),
                 code: code,
                 value: displayValue(for: code)
             )
@@ -622,22 +622,6 @@ final class ConverterViewModel: ViewModelProtocol {
         state.shareImage = image
     }
     
-    func flagEmoji(for code: String) -> String {
-        switch code {
-        case "RUB": return "🇷🇺"
-        case "USD": return "🇺🇸"
-        case "EUR": return "🇪🇺"
-        case "KZT": return "🇰🇿"
-        case "TRY": return "🇹🇷"
-        case "GBP": return "🇬🇧"
-        case "CNY": return "🇨🇳"
-        case "JPY": return "🇯🇵"
-        case "UAH": return "🇺🇦"
-        case "BYN": return "🇧🇾"
-        case "AMD": return "🇦🇲"
-        default: return "🏳️"
-        }
-    }
     
     // MARK: - Helpers
     

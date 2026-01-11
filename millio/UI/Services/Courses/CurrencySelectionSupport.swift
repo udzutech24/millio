@@ -1,5 +1,8 @@
 import Foundation
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 // MARK: - Currency + Crypto support (names, aliases, emoji)
 
@@ -161,16 +164,12 @@ public struct CurrencySelectionSupport {
 
     // MARK: Flags for fiat
 
-    private static let flagOverrides: [String: String] = [
-        "EUR": "🇪🇺" // евро — не страна
-    ]
-
     private static func flagEmoji(forCurrencyCode code: String) -> String {
-        if let manual = flagOverrides[code] { return manual }
-        if let region = currencyToRegionMap[code] {
-            return flagEmoji(fromRegionCode: region)
-        }
-        return "🏳️"
+        return CurrencyFlags.flag(for: code)
+    }
+    
+    static func currencyToRegion(for currencyCode: String) -> String? {
+        return currencyToRegionMap[currencyCode.uppercased()]
     }
 
     private static let currencyToRegionMap: [String: String] = {
@@ -185,22 +184,6 @@ public struct CurrencySelectionSupport {
         }
         return map
     }()
-
-    private static func flagEmoji(fromRegionCode regionCode: String) -> String {
-        let rc = regionCode.uppercased()
-        guard rc.count == 2 else { return "🏳️" }
-        let base: UInt32 = 0x1F1E6
-        let a = UnicodeScalar("A").value
-
-        var scalars: [UnicodeScalar] = []
-        for ch in rc.unicodeScalars {
-            let v = ch.value
-            guard v >= a, v <= UnicodeScalar("Z").value else { return "🏳️" }
-            let indicator = base + (v - a)
-            if let s = UnicodeScalar(indicator) { scalars.append(s) }
-        }
-        return String(String.UnicodeScalarView(scalars))
-    }
 }
 
 // MARK: - Picker with pinned favorites on top + RU/EN search
@@ -259,40 +242,48 @@ public struct CurrencyPickerView: View {
     }
 
     public var body: some View {
-        List {
-            if !pinnedFavorites.isEmpty {
-                Section("Избранные") {
-                    ForEach(pinnedFavorites, id: \.self) { code in
-                        row(code: code, showStar: true)
+        ZStack {
+            GradientBackground()
+            
+            ScrollView {
+                LazyVStack(spacing: 8) {
+                    if !pinnedFavorites.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Избранные")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(AppColors.textPrimary)
+                                .padding(.horizontal, 20)
+                                .padding(.top, 8)
+                            
+                            ForEach(pinnedFavorites, id: \.self) { code in
+                                row(code: code, showStar: true)
+                                    .padding(.horizontal, 16)
+                            }
+                        }
+                    }
+
+                    if !filteredOthers.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Все валюты")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(AppColors.textPrimary)
+                                .padding(.horizontal, 20)
+                                .padding(.top, pinnedFavorites.isEmpty ? 8 : 16)
+                            
+                            ForEach(filteredOthers, id: \.self) { code in
+                                row(code: code, showStar: selectedCodes.contains(code.uppercased()))
+                                    .padding(.horizontal, 16)
+                            }
+                        }
                     }
                 }
-            }
-
-            Section {
-                ForEach(filteredOthers, id: \.self) { code in
-                    row(code: code, showStar: selectedCodes.contains(code.uppercased()))
-                }
-            }
-
-            Section {
-                HStack {
-                    Spacer()
-                    Text("Выбрано: \(selectedCodes.count)")
-                        .font(.footnote)
-                        .foregroundStyle(AppColors.textTertiary)
-                    Spacer()
-                }
+                .padding(.vertical, 8)
             }
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(Color.clear)
-
         // Важно: это помогает вводить и тикеры (BTC), и англ. слова — без автозамены
         .textInputAutocapitalization(.never)
         .autocorrectionDisabled(true)
         .keyboardType(.asciiCapable)
-
         .searchable(
             text: $searchText,
             placement: .navigationBarDrawer(displayMode: .always),
@@ -309,28 +300,43 @@ public struct CurrencyPickerView: View {
                 .font(.title3)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(c).font(.headline)
+                Text(c)
+                    .font(.headline)
+                    .foregroundStyle(AppColors.textPrimary)
 
                 // Для крипты покажем русское имя, для фиата — русскую локализацию
                 let ruName = CurrencySelectionSupport.nameRu(for: c) ?? ""
                 if !ruName.isEmpty {
-                Text(ruName)
-                    .font(.caption)
-                    .foregroundStyle(AppColors.textTertiary)
+                    Text(ruName)
+                        .font(.caption)
+                        .foregroundStyle(AppColors.textTertiary)
                 }
             }
 
             Spacer()
 
             if showStar {
-                Image(systemName: "star.fill").foregroundStyle(.yellow)
+                Image(systemName: "star.fill")
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: AppColors.coursesGradient,
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
             }
         }
-        .contentShape(Rectangle())
-        .listRowBackground(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(AppColors.textPrimary.opacity(0.1), lineWidth: 1)
+                )
         )
+        .contentShape(Rectangle())
         .onTapGesture {
             onSelect(c)
         }

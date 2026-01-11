@@ -225,6 +225,7 @@ struct ConverterView: View {
                     }
                 }
             }
+            .interactiveDismissDisabled(false)
         }
     }
     
@@ -408,7 +409,7 @@ struct ConverterView: View {
             Button {
                 viewModel.handle(.replaceCurrency(index))
             } label: {
-                Text(viewModel.flagEmoji(for: code))
+                Text(CurrencySelectionSupport.emoji(for: code))
                     .font(.system(size: 20))
                     .frame(width: 60, height: rowHeight)
                     .background(
