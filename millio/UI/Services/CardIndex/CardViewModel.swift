@@ -40,6 +40,15 @@ struct CardState {
     /// Показывать ли статистику
     var showStats: Bool = false
     
+    /// Показывать ли sheet выбора банка
+    var showBankFilterSheet: Bool = false
+    
+    /// Показывать ли sheet выбора типа карты
+    var showCardTypeFilterSheet: Bool = false
+    
+    /// Показывать ли sheet выбора валюты
+    var showCurrencyFilterSheet: Bool = false
+    
     /// Общий баланс всех карт
     var totalBalance: Double = 0.0
     
@@ -65,6 +74,12 @@ enum CardAction {
     case hideCardEditor
     case showStats
     case hideStats
+    case showBankFilterSheet
+    case hideBankFilterSheet
+    case showCardTypeFilterSheet
+    case hideCardTypeFilterSheet
+    case showCurrencyFilterSheet
+    case hideCurrencyFilterSheet
 }
 
 // MARK: - Card ViewModel
@@ -138,6 +153,24 @@ final class CardViewModel: ViewModelProtocol {
             
         case .hideStats:
             state.showStats = false
+            
+        case .showBankFilterSheet:
+            state.showBankFilterSheet = true
+            
+        case .hideBankFilterSheet:
+            state.showBankFilterSheet = false
+            
+        case .showCardTypeFilterSheet:
+            state.showCardTypeFilterSheet = true
+            
+        case .hideCardTypeFilterSheet:
+            state.showCardTypeFilterSheet = false
+            
+        case .showCurrencyFilterSheet:
+            state.showCurrencyFilterSheet = true
+            
+        case .hideCurrencyFilterSheet:
+            state.showCurrencyFilterSheet = false
         }
     }
     

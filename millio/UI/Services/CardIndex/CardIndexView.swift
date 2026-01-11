@@ -72,6 +72,24 @@ private struct CardContentViewInternal: View {
         )) {
             CardEditorView(viewModel: viewModel)
         }
+        .sheet(isPresented: Binding(
+            get: { viewModel.state.showBankFilterSheet },
+            set: { if !$0 { viewModel.handle(.hideBankFilterSheet) } }
+        )) {
+            BankFilterSheet(viewModel: viewModel)
+        }
+        .sheet(isPresented: Binding(
+            get: { viewModel.state.showCardTypeFilterSheet },
+            set: { if !$0 { viewModel.handle(.hideCardTypeFilterSheet) } }
+        )) {
+            CardTypeFilterSheet(viewModel: viewModel)
+        }
+        .sheet(isPresented: Binding(
+            get: { viewModel.state.showCurrencyFilterSheet },
+            set: { if !$0 { viewModel.handle(.hideCurrencyFilterSheet) } }
+        )) {
+            CurrencyFilterSheet(viewModel: viewModel)
+        }
     }
     
     // MARK: - Stats Section
@@ -177,22 +195,8 @@ private struct CardContentViewInternal: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     // Фильтр по банку
-                    Menu {
-                        Button {
-                            viewModel.handle(.filterByBank(nil))
-                        } label: {
-                            Label("Все банки", systemImage: viewModel.state.selectedBank == nil ? "checkmark" : "")
-                        }
-                        
-                        Divider()
-                        
-                        ForEach(Bank.allCases, id: \.self) { bank in
-                            Button {
-                                viewModel.handle(.filterByBank(bank))
-                            } label: {
-                                Label(bank.displayName, systemImage: viewModel.state.selectedBank == bank ? "checkmark" : "")
-                            }
-                        }
+                    Button {
+                        viewModel.handle(.showBankFilterSheet)
                     } label: {
                         FilterChip(
                             title: viewModel.state.selectedBank?.displayName ?? "Банк",
@@ -201,22 +205,8 @@ private struct CardContentViewInternal: View {
                     }
                     
                     // Фильтр по типу
-                    Menu {
-                        Button {
-                            viewModel.handle(.filterByCardType(nil))
-                        } label: {
-                            Label("Все типы", systemImage: viewModel.state.selectedCardType == nil ? "checkmark" : "")
-                        }
-                        
-                        Divider()
-                        
-                        ForEach(CardType.allCases, id: \.self) { type in
-                            Button {
-                                viewModel.handle(.filterByCardType(type))
-                            } label: {
-                                Label(type.displayName, systemImage: viewModel.state.selectedCardType == type ? "checkmark" : "")
-                            }
-                        }
+                    Button {
+                        viewModel.handle(.showCardTypeFilterSheet)
                     } label: {
                         FilterChip(
                             title: viewModel.state.selectedCardType?.displayName ?? "Тип",
@@ -225,22 +215,8 @@ private struct CardContentViewInternal: View {
                     }
                     
                     // Фильтр по валюте
-                    Menu {
-                        Button {
-                            viewModel.handle(.filterByCurrency(nil))
-                        } label: {
-                            Label("Все валюты", systemImage: viewModel.state.selectedCurrency == nil ? "checkmark" : "")
-                        }
-                        
-                        Divider()
-                        
-                        ForEach(Array(Set(viewModel.state.cards.map { $0.currency })).sorted(), id: \.self) { currency in
-                            Button {
-                                viewModel.handle(.filterByCurrency(currency))
-                            } label: {
-                                Label(currency, systemImage: viewModel.state.selectedCurrency == currency ? "checkmark" : "")
-                            }
-                        }
+                    Button {
+                        viewModel.handle(.showCurrencyFilterSheet)
                     } label: {
                         FilterChip(
                             title: viewModel.state.selectedCurrency ?? "Валюта",
@@ -742,6 +718,242 @@ struct CardEditorView: View {
                     }
                     .foregroundStyle(AppColors.textPrimary)
                     .disabled(card.name.isEmpty || card.cardNumber.isEmpty)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Filter Sheets
+
+private struct BankFilterSheet: View {
+    @ObservedObject var viewModel: CardViewModel
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                GradientBackground()
+                
+                List {
+                    Button {
+                        viewModel.handle(.filterByBank(nil))
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Text("Все банки")
+                                .foregroundStyle(AppColors.textPrimary)
+                            Spacer()
+                            if viewModel.state.selectedBank == nil {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: AppColors.cardIndexGradient,
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                            }
+                        }
+                    }
+                    .listRowBackground(Color.clear)
+                    
+                    ForEach(Bank.allCases, id: \.self) { bank in
+                        Button {
+                            viewModel.handle(.filterByBank(bank))
+                            dismiss()
+                        } label: {
+                            HStack {
+                                Text(bank.displayName)
+                                    .foregroundStyle(AppColors.textPrimary)
+                                Spacer()
+                                if viewModel.state.selectedBank == bank {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(
+                                            LinearGradient(
+                                                colors: AppColors.cardIndexGradient,
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                }
+                            }
+                        }
+                        .listRowBackground(Color.clear)
+                    }
+                }
+                .scrollContentBackground(.hidden)
+            }
+            .navigationTitle("Выбор банка")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Готово") {
+                        dismiss()
+                    }
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: AppColors.cardIndexGradient,
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                }
+            }
+        }
+    }
+}
+
+private struct CardTypeFilterSheet: View {
+    @ObservedObject var viewModel: CardViewModel
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                GradientBackground()
+                
+                List {
+                    Button {
+                        viewModel.handle(.filterByCardType(nil))
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Text("Все типы")
+                                .foregroundStyle(AppColors.textPrimary)
+                            Spacer()
+                            if viewModel.state.selectedCardType == nil {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: AppColors.cardIndexGradient,
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                            }
+                        }
+                    }
+                    .listRowBackground(Color.clear)
+                    
+                    ForEach(CardType.allCases, id: \.self) { type in
+                        Button {
+                            viewModel.handle(.filterByCardType(type))
+                            dismiss()
+                        } label: {
+                            HStack {
+                                Text(type.displayName)
+                                    .foregroundStyle(AppColors.textPrimary)
+                                Spacer()
+                                if viewModel.state.selectedCardType == type {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(
+                                            LinearGradient(
+                                                colors: AppColors.cardIndexGradient,
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                }
+                            }
+                        }
+                        .listRowBackground(Color.clear)
+                    }
+                }
+                .scrollContentBackground(.hidden)
+            }
+            .navigationTitle("Выбор типа")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Готово") {
+                        dismiss()
+                    }
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: AppColors.cardIndexGradient,
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                }
+            }
+        }
+    }
+}
+
+private struct CurrencyFilterSheet: View {
+    @ObservedObject var viewModel: CardViewModel
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                GradientBackground()
+                
+                List {
+                    Button {
+                        viewModel.handle(.filterByCurrency(nil))
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Text("Все валюты")
+                                .foregroundStyle(AppColors.textPrimary)
+                            Spacer()
+                            if viewModel.state.selectedCurrency == nil {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: AppColors.cardIndexGradient,
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                            }
+                        }
+                    }
+                    .listRowBackground(Color.clear)
+                    
+                    ForEach(Array(Set(viewModel.state.cards.map { $0.currency })).sorted(), id: \.self) { currency in
+                        Button {
+                            viewModel.handle(.filterByCurrency(currency))
+                            dismiss()
+                        } label: {
+                            HStack {
+                                Text(currency)
+                                    .foregroundStyle(AppColors.textPrimary)
+                                Spacer()
+                                if viewModel.state.selectedCurrency == currency {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(
+                                            LinearGradient(
+                                                colors: AppColors.cardIndexGradient,
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                }
+                            }
+                        }
+                        .listRowBackground(Color.clear)
+                    }
+                }
+                .scrollContentBackground(.hidden)
+            }
+            .navigationTitle("Выбор валюты")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Готово") {
+                        dismiss()
+                    }
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: AppColors.cardIndexGradient,
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
                 }
             }
         }
