@@ -145,6 +145,14 @@ private struct FinancesContentViewInternal: View {
                 FinanceEditInvestmentView(investment: investment, viewModel: viewModel)
             }
         }
+        .sheet(isPresented: Binding(
+            get: { viewModel.state.showQuickEditAccountSheet },
+            set: { if !$0 { viewModel.handle(.hideQuickEditAccountSheet) } }
+        )) {
+            if let account = viewModel.state.quickEditAccount {
+                FinanceQuickEditAccountView(account: account, viewModel: viewModel)
+            }
+        }
         .task {
             await viewModel.refreshRates()
         }
@@ -447,6 +455,9 @@ private struct FinanceGroupRow: View {
                                     },
                                     onDelete: {
                                         viewModel.handle(.removeAccountFromGroup(account))
+                                    },
+                                    onQuickEditAmount: {
+                                        viewModel.handle(.showQuickEditAccountSheet(account))
                                     }
                                 )
                             }
@@ -658,6 +669,11 @@ private struct FinanceAccountRow: View {
     let accountType: FinanceAccountType
     let onEdit: () -> Void
     let onDelete: () -> Void
+    let onQuickEditAmount: () -> Void
+    
+    private var isCreditCardDebt: Bool {
+        account.accountType == .card
+    }
     
     var body: some View {
         HStack(spacing: 12) {
@@ -680,19 +696,24 @@ private struct FinanceAccountRow: View {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
             
-            // Сумма
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(formatBalance(amount))
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(amount >= 0 ? AppColors.textPrimary : AppColors.error)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                
-                Text(currency)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(AppColors.textSecondary)
-                    .lineLimit(1)
+            // Сумма (кликабельна для быстрого редактирования)
+            Button {
+                onQuickEditAmount()
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(formatBalance(amount))
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(isCreditCardDebt ? AppColors.error : (amount >= 0 ? AppColors.textPrimary : AppColors.error))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    
+                    Text(currency)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .lineLimit(1)
+                }
             }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 8)

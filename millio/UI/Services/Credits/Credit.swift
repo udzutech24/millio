@@ -13,7 +13,6 @@ enum CreditType: String, Codable, CaseIterable {
     case consumer = "consumer" // Потребительский
     case mortgage = "mortgage" // Ипотека
     case auto = "auto" // Автокредит
-    case creditCard = "credit_card" // Кредитная карта
     case refinancing = "refinancing" // Рефинансирование
     case other = "other" // Другое
     
@@ -22,7 +21,6 @@ enum CreditType: String, Codable, CaseIterable {
         case .consumer: return "Потребительский"
         case .mortgage: return "Ипотека"
         case .auto: return "Автокредит"
-        case .creditCard: return "Кредитная карта"
         case .refinancing: return "Рефинансирование"
         case .other: return "Другое"
         }
@@ -33,7 +31,6 @@ enum CreditType: String, Codable, CaseIterable {
         case .consumer: return "creditcard.fill"
         case .mortgage: return "house.fill"
         case .auto: return "car.fill"
-        case .creditCard: return "creditcard.trianglebadge.exclamationmark.fill"
         case .refinancing: return "arrow.triangle.2.circlepath"
         case .other: return "doc.text.fill"
         }

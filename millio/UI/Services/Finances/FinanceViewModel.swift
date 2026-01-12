@@ -85,6 +85,12 @@ struct FinanceState {
     
     /// Словарь сумм групп по их ID
     var groupTotals: [String: Double] = [:]
+    
+    /// Показывать ли sheet быстрого редактирования суммы счета
+    var showQuickEditAccountSheet: Bool = false
+    
+    /// Счет для быстрого редактирования суммы
+    var quickEditAccount: FinanceAccount? = nil
 }
 
 // MARK: - Finance Actions
@@ -118,6 +124,9 @@ enum FinanceAction {
     case hideEditCardSheet
     case hideEditCreditSheet
     case hideEditInvestmentSheet
+    case showQuickEditAccountSheet(FinanceAccount)
+    case hideQuickEditAccountSheet
+    case updateAccountAmount(FinanceAccount, Double)
 }
 
 // MARK: - Finance ViewModel
@@ -241,6 +250,17 @@ final class FinanceViewModel: ViewModelProtocol {
         case .hideEditInvestmentSheet:
             state.showEditInvestmentSheet = false
             state.editingInvestmentID = nil
+            
+        case .showQuickEditAccountSheet(let account):
+            state.quickEditAccount = account
+            state.showQuickEditAccountSheet = true
+            
+        case .hideQuickEditAccountSheet:
+            state.showQuickEditAccountSheet = false
+            state.quickEditAccount = nil
+            
+        case .updateAccountAmount(let account, let newAmount):
+            updateAccountAmount(account: account, newAmount: newAmount)
     }
     }
     
@@ -350,11 +370,13 @@ final class FinanceViewModel: ViewModelProtocol {
                 // Учитываем только если includeInTotal = true
                 guard card.includeInTotal else { return (0.0, card.currency) }
                 
-                // Для кредитных карт учитываем долг (лимит - баланс)
+                // Для кредитных карт учитываем задолженность как отрицательное значение (вычитаем из общего счета)
                 if card.cardType == .credit, let limit = card.creditLimit {
                     let debt = max(0, limit - card.balance)
-                    return (card.balance - debt, card.currency)
+                    // Вычитаем задолженность из общего счета
+                    return (-debt, card.currency)
                 }
+                // Для дебетовых карт учитываем баланс как положительное значение
                 return (card.balance, card.currency)
             }
             
@@ -385,8 +407,15 @@ final class FinanceViewModel: ViewModelProtocol {
         switch account.accountType {
         case .card:
             if let card = state.availableCards.first(where: { $0.cardUniqueID == account.accountID }) {
-                let amount = card.cardType == .credit && card.creditLimit != nil ? 
-                    card.balance - max(0, card.creditLimit! - card.balance) : card.balance
+                // Для кредитных карт показываем задолженность (debt)
+                let amount: Double
+                if card.cardType == .credit, let limit = card.creditLimit {
+                    // Задолженность = лимит - баланс
+                    amount = max(0, limit - card.balance)
+                } else {
+                    // Для дебетовых карт показываем баланс
+                    amount = card.balance
+                }
                 return (card.name, amount, card.currency, card.cardType.icon)
             }
             
@@ -534,6 +563,61 @@ final class FinanceViewModel: ViewModelProtocol {
         case .investment:
             state.editingInvestmentID = account.accountID
             state.showEditInvestmentSheet = true
+        }
+    }
+    
+    private func updateAccountAmount(account: FinanceAccount, newAmount: Double) {
+        switch account.accountType {
+        case .card:
+            if let card = state.availableCards.first(where: { $0.cardUniqueID == account.accountID }) {
+                // Для кредитных карт меняем задолженность (т.е. меняем balance так, чтобы debt = newAmount)
+                if card.cardType == .credit, let limit = card.creditLimit {
+                    // debt = limit - balance
+                    // newAmount = limit - newBalance
+                    // newBalance = limit - newAmount
+                    card.balance = max(0, limit - newAmount)
+                } else {
+                    // Для дебетовых карт меняем баланс напрямую
+                    card.balance = newAmount
+                }
+                card.updatedAt = Date()
+                
+                do {
+                    try modelContext.save()
+                    loadAccounts()
+                    calculateTotalAmount()
+                } catch {
+                    AppLogger.log(.error, category: "Finance", "Failed to update card amount: \(error.localizedDescription)")
+                }
+            }
+            
+        case .credit:
+            if let credit = state.availableCredits.first(where: { $0.creditUniqueID == account.accountID }) {
+                credit.remainingAmount = newAmount
+                credit.updatedAt = Date()
+                
+                do {
+                    try modelContext.save()
+                    loadAccounts()
+                    calculateTotalAmount()
+                } catch {
+                    AppLogger.log(.error, category: "Finance", "Failed to update credit amount: \(error.localizedDescription)")
+                }
+            }
+            
+        case .investment:
+            if let investment = state.availableInvestments.first(where: { $0.investmentUniqueID == account.accountID }) {
+                investment.amount = newAmount
+                investment.updatedAt = Date()
+                
+                do {
+                    try modelContext.save()
+                    loadAccounts()
+                    calculateTotalAmount()
+                } catch {
+                    AppLogger.log(.error, category: "Finance", "Failed to update investment amount: \(error.localizedDescription)")
+                }
+            }
         }
     }
 }
