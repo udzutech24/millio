@@ -409,36 +409,8 @@ private struct FinanceGroupRow: View {
                     .padding(.leading, 20)
                     .padding(.vertical, 12)
             }
-            
-            addAccountButton
         }
         .padding(.bottom, 12)
-    }
-    
-    private var addAccountButton: some View {
-        Button {
-            viewModel.handle(.showAddAccountSheet(group))
-        } label: {
-            HStack {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 16))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: AppColors.financesGradient,
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                
-                Text("Добавить счет")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(AppColors.textSecondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.leading, 20)
-            .padding(.vertical, 8)
-        }
-        .buttonStyle(.plain)
     }
     
     private var groupBackground: some View {
@@ -853,6 +825,64 @@ private struct FinanceGroupEditorView: View {
                         Text("Дополнительно")
                             .foregroundStyle(AppColors.textSecondary)
                     }
+                    
+                    // Показываем список счетов только при редактировании группы
+                    if let editingGroup = viewModel.state.editingGroup,
+                       let accounts = editingGroup.accounts,
+                       !accounts.isEmpty {
+                        Section {
+                            ForEach(accounts) { account in
+                                if let accountInfo = viewModel.getAccountInfo(account: account) {
+                                    HStack {
+                                        // Иконка счета
+                                        Image(systemName: accountInfo.icon)
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundStyle(
+                                                LinearGradient(
+                                                    colors: AppColors.financesGradient,
+                                                    startPoint: .leading,
+                                                    endPoint: .trailing
+                                                )
+                                            )
+                                            .frame(width: 24, height: 24)
+                                        
+                                        // Название и сумма счета
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(accountInfo.name)
+                                                .font(.system(size: 14, weight: .medium))
+                                                .foregroundStyle(AppColors.textPrimary)
+                                            
+                                            HStack(spacing: 4) {
+                                                Text(formatAmount(accountInfo.amount))
+                                                    .font(.system(size: 12, weight: .regular))
+                                                    .foregroundStyle(accountInfo.isCreditCardDebt ? AppColors.error : AppColors.textSecondary)
+                                                
+                                                Text(accountInfo.currency)
+                                                    .font(.system(size: 12, weight: .regular))
+                                                    .foregroundStyle(AppColors.textSecondary)
+                                            }
+                                        }
+                                        
+                                        Spacer()
+                                        
+                                        // Кнопка удаления
+                                        Button {
+                                            viewModel.handle(.removeAccountFromGroup(account))
+                                        } label: {
+                                            Image(systemName: "trash")
+                                                .font(.system(size: 16, weight: .medium))
+                                                .foregroundStyle(AppColors.error)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                    .padding(.vertical, 4)
+                                }
+                            }
+                        } header: {
+                            Text("Счета группы")
+                                .foregroundStyle(AppColors.textSecondary)
+                        }
+                    }
                 }
                 .scrollContentBackground(.hidden)
             }
@@ -927,6 +957,16 @@ private struct FinanceGroupEditorView: View {
             viewModel.state.availableInvestments.map { $0.currency }
         )
         availableCurrencies = Array(fromRateSource.union(fromAccounts)).sorted()
+    }
+    
+    private func formatAmount(_ amount: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.groupingSeparator = " "
+        formatter.usesGroupingSeparator = true
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: amount)) ?? "0"
     }
 }
 

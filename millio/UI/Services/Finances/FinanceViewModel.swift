@@ -545,6 +545,16 @@ final class FinanceViewModel: ViewModelProtocol {
         do {
             try modelContext.save()
             loadGroups()
+            loadAccounts() // Обновляем список счетов
+            calculateTotalAmount() // Пересчитываем общую сумму
+            
+            // Пересчитываем сумму группы, в которую был добавлен счет
+            Task {
+                let currency = targetGroup.displayCurrency ?? state.displayCurrency
+                let total = await calculateGroupTotal(group: targetGroup, in: currency)
+                state.groupTotals[targetGroup.groupUniqueID] = total
+            }
+            
             state.showAddAccountSheet = false
             state.selectedGroupForAccount = nil
         } catch {
@@ -553,11 +563,27 @@ final class FinanceViewModel: ViewModelProtocol {
     }
     
     private func removeAccountFromGroup(_ account: FinanceAccount) {
+        // Находим группу, к которой принадлежал счет
+        let accountGroup = state.groups.first { group in
+            group.accounts?.contains(where: { $0.accountUniqueID == account.accountUniqueID }) ?? false
+        }
+        
         modelContext.delete(account)
         
         do {
             try modelContext.save()
             loadGroups()
+            loadAccounts() // Обновляем список счетов
+            calculateTotalAmount() // Пересчитываем общую сумму
+            
+            // Пересчитываем сумму группы, из которой был удален счет
+            if let group = accountGroup {
+                Task {
+                    let currency = group.displayCurrency ?? state.displayCurrency
+                    let total = await calculateGroupTotal(group: group, in: currency)
+                    state.groupTotals[group.groupUniqueID] = total
+                }
+            }
         } catch {
             AppLogger.log(.error, category: "Finance", "Failed to remove account: \(error.localizedDescription)")
         }
