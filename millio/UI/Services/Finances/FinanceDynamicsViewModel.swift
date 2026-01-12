@@ -51,6 +51,9 @@ struct FinanceDynamicsState {
     
     /// Режим просмотра одной группы (скрывает фильтры групп)
     var isSingleGroupMode: Bool = false
+    
+    /// Все транзакции Cashflow для расчета динамики балансов
+    var cashflowTransactions: [CashflowTransaction] = []
 }
 
 // MARK: - Dynamics Period
@@ -193,6 +196,9 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         state.availableCredits = financeViewModel.state.availableCredits
         state.availableInvestments = financeViewModel.state.availableInvestments
         
+        // Загружаем транзакции Cashflow для расчета динамики балансов
+        loadCashflowTransactions()
+        
         // Загружаем доступные валюты
         loadAvailableCurrencies()
         
@@ -200,6 +206,15 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         updateChartData()
         
         state.isLoading = false
+    }
+    
+    private func loadCashflowTransactions() {
+        let descriptor = FetchDescriptor<CashflowTransaction>(
+            sortBy: [SortDescriptor(\.transactionDate, order: .forward)]
+        )
+        if let transactions = try? modelContext.fetch(descriptor) {
+            state.cashflowTransactions = transactions
+        }
     }
     
     private func loadAvailableCurrencies() {
@@ -313,11 +328,46 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         var dataPoints: [ChartDataPoint] = []
         let calendar = Calendar.current
         
-        // Собираем все уникальные даты событий (создание/обновление счетов)
+        // Собираем все уникальные даты событий (создание/обновление счетов и транзакции)
         var eventDates: Set<Date> = [startDate, endDate]
+        
+        // Добавляем даты создания и обновления счетов
         for account in accounts {
             eventDates.insert(account.createdAt)
             eventDates.insert(account.updatedAt)
+        }
+        
+        // Добавляем даты транзакций Cashflow, которые влияют на выбранные счета
+        let accountCardIDs = Set(accounts.compactMap { account -> String? in
+            if account.accountType == .card {
+                return account.accountID
+            }
+            return nil
+        })
+        
+        for transaction in state.cashflowTransactions {
+            // Проверяем, влияет ли транзакция на выбранные счета
+            var affectsAccount = false
+            switch transaction.transactionType {
+            case .income, .expense:
+                if let cardID = transaction.cardID, accountCardIDs.contains(cardID) {
+                    affectsAccount = true
+                }
+            case .transfer:
+                if let fromCardID = transaction.cardID, accountCardIDs.contains(fromCardID) {
+                    affectsAccount = true
+                }
+                if let toCardID = transaction.toCardID, accountCardIDs.contains(toCardID) {
+                    affectsAccount = true
+                }
+            case .exchange:
+                // Обмен валют не влияет напрямую на балансы карт
+                break
+            }
+            
+            if affectsAccount {
+                eventDates.insert(transaction.transactionDate)
+            }
         }
         
         // Фильтруем даты в пределах периода и сортируем
@@ -325,51 +375,214 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             .filter { $0 >= startDate && $0 <= endDate }
             .sorted()
         
-        // Если дат мало, добавляем промежуточные точки для плавности графика
+        // Всегда добавляем промежуточные точки для плавности графика
+        // Но не дублируем даты, которые уже есть в eventDates
         var datesToShow = sortedDates
-        if sortedDates.count < 10 {
-            // Добавляем точки каждые N дней в зависимости от периода
-            let stepDays = max(1, state.period.days / 20)
-            var currentDate = startDate
-            while currentDate <= endDate {
-                if !datesToShow.contains(where: { calendar.isDate($0, inSameDayAs: currentDate) }) {
-                    datesToShow.append(currentDate)
-                }
-                currentDate = calendar.date(byAdding: .day, value: stepDays, to: currentDate) ?? endDate
+        let stepDays = max(1, state.period.days / 15) // Уменьшил делитель для большего количества точек
+        var currentDate = startDate
+        while currentDate <= endDate {
+            if !datesToShow.contains(where: { calendar.isDate($0, inSameDayAs: currentDate) }) {
+                datesToShow.append(currentDate)
             }
-            datesToShow.sort()
+            currentDate = calendar.date(byAdding: .day, value: stepDays, to: currentDate) ?? endDate
         }
+        datesToShow.sort()
         
-        // Для каждой даты рассчитываем накопленную сумму
-        var cumulativeTotal: Double = 0.0
+        // Группируем даты по дням и рассчитываем баланс для каждого дня
+        var dailyBalances: [Date: Double] = [:]
         
         for date in datesToShow {
-            // Рассчитываем сумму всех счетов, которые были созданы до или в эту дату
-            var totalAtDate: Double = 0.0
+            // Рассчитываем баланс на конец этого дня с учетом транзакций
+            let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: date) ?? date
+            let balance = await calculateBalanceAtDate(
+                accounts: accounts,
+                date: endOfDay,
+                accountCardIDs: accountCardIDs
+            )
             
-            for account in accounts {
-                // Счет учитывается только если он был создан до или в эту дату
-                if account.createdAt <= date {
-                    if let accountInfo = financeViewModel.getAccountInfo(account: account) {
-                        // Используем текущее значение счета (так как истории изменений нет)
-                        let amount = await convertAmount(
-                            value: accountInfo.amount,
-                            from: accountInfo.currency,
-                            to: state.displayCurrency
-                        )
-                        totalAtDate += amount
-                    }
-                }
+            // Группируем по дню (без учета времени)
+            let dayStart = calendar.startOfDay(for: date)
+            // Сохраняем баланс только если его еще нет для этого дня, или если это более поздняя дата в этот день
+            if let existingBalance = dailyBalances[dayStart] {
+                // Если баланс уже есть, берем максимальный (более поздний) баланс для этого дня
+                dailyBalances[dayStart] = max(existingBalance, balance)
+            } else {
+                dailyBalances[dayStart] = balance
             }
-            
+        }
+        
+        // Преобразуем в массив ChartDataPoint, убирая дубликаты по дням
+        for (date, balance) in dailyBalances.sorted(by: { $0.key < $1.key }) {
             dataPoints.append(ChartDataPoint(
                 date: date,
-                value: totalAtDate,
+                value: balance,
                 label: label
             ))
         }
         
         return dataPoints
+    }
+    
+    /// Рассчитать баланс счетов на конкретную дату с учетом транзакций
+    private func calculateBalanceAtDate(
+        accounts: [FinanceAccount],
+        date: Date,
+        accountCardIDs: Set<String>
+    ) async -> Double {
+        var totalBalance: Double = 0.0
+        
+        for account in accounts {
+            // Счет учитывается только если он был создан до или в эту дату
+            if account.createdAt <= date {
+                if let accountInfo = financeViewModel.getAccountInfo(account: account) {
+                    // Начальный баланс счета (будет пересчитан для карт)
+                    var accountBalance = accountInfo.amount
+                    
+                    // Для карт учитываем транзакции Cashflow и пересчитываем баланс
+                    if account.accountType == .card, accountCardIDs.contains(account.accountID) {
+                        guard let card = state.availableCards.first(where: { $0.cardUniqueID == account.accountID }) else {
+                            // Если карта не найдена, используем значение из accountInfo
+                            let converted = await convertAmount(
+                                value: accountBalance,
+                                from: accountInfo.currency,
+                                to: state.displayCurrency
+                            )
+                            totalBalance += converted
+                            continue
+                        }
+                        
+                        let cardCreatedAt = card.createdAt
+                        
+                        // Начальный баланс карты на момент создания
+                        // Откатываем все транзакции от текущего баланса, чтобы получить начальный баланс
+                        var initialBalance = card.balance
+                        
+                        // Откатываем все транзакции от текущего момента назад до даты создания карты
+                        // Сортируем транзакции по убыванию даты (от новых к старым)
+                        let sortedTransactions = state.cashflowTransactions.sorted(by: { $0.transactionDate > $1.transactionDate })
+                        
+                        for transaction in sortedTransactions {
+                            // Обрабатываем только транзакции после создания карты и до текущего момента
+                            guard transaction.transactionDate >= cardCreatedAt && transaction.transactionDate <= Date() else { continue }
+                            
+                            switch transaction.transactionType {
+                            case .income:
+                                if transaction.cardID == account.accountID {
+                                    let converted = await convertAmount(
+                                        value: transaction.amount,
+                                        from: transaction.currency,
+                                        to: accountInfo.currency
+                                    )
+                                    initialBalance -= converted // Откатываем доход
+                                }
+                                
+                            case .expense:
+                                if transaction.cardID == account.accountID {
+                                    let converted = await convertAmount(
+                                        value: transaction.amount,
+                                        from: transaction.currency,
+                                        to: accountInfo.currency
+                                    )
+                                    initialBalance += converted // Откатываем расход
+                                }
+                                
+                            case .transfer:
+                                if transaction.cardID == account.accountID {
+                                    // Перевод с этой карты - откатываем (возвращаем деньги)
+                                    let converted = await convertAmount(
+                                        value: transaction.amount,
+                                        from: transaction.currency,
+                                        to: accountInfo.currency
+                                    )
+                                    initialBalance += converted
+                                } else if transaction.toCardID == account.accountID {
+                                    // Перевод на эту карту - откатываем (забираем деньги)
+                                    let converted = await convertAmount(
+                                        value: transaction.amount,
+                                        from: transaction.currency,
+                                        to: accountInfo.currency
+                                    )
+                                    initialBalance -= converted
+                                }
+                                
+                            case .exchange:
+                                break
+                            }
+                        }
+                        
+                        // Теперь применяем транзакции от даты создания карты до нужной даты
+                        // Сортируем транзакции по возрастанию даты (от старых к новым)
+                        accountBalance = initialBalance
+                        let transactionsToApply = state.cashflowTransactions
+                            .filter { $0.transactionDate >= cardCreatedAt && $0.transactionDate <= date }
+                            .sorted(by: { $0.transactionDate < $1.transactionDate })
+                        
+                        for transaction in transactionsToApply {
+                            switch transaction.transactionType {
+                            case .income:
+                                if transaction.cardID == account.accountID {
+                                    let converted = await convertAmount(
+                                        value: transaction.amount,
+                                        from: transaction.currency,
+                                        to: accountInfo.currency
+                                    )
+                                    accountBalance += converted
+                                }
+                                
+                            case .expense:
+                                if transaction.cardID == account.accountID {
+                                    let converted = await convertAmount(
+                                        value: transaction.amount,
+                                        from: transaction.currency,
+                                        to: accountInfo.currency
+                                    )
+                                    accountBalance = max(0, accountBalance - converted)
+                                }
+                                
+                            case .transfer:
+                                if transaction.cardID == account.accountID {
+                                    // Перевод с этой карты
+                                    let converted = await convertAmount(
+                                        value: transaction.amount,
+                                        from: transaction.currency,
+                                        to: accountInfo.currency
+                                    )
+                                    accountBalance = max(0, accountBalance - converted)
+                                } else if transaction.toCardID == account.accountID {
+                                    // Перевод на эту карту
+                                    let converted = await convertAmount(
+                                        value: transaction.amount,
+                                        from: transaction.currency,
+                                        to: accountInfo.currency
+                                    )
+                                    accountBalance += converted
+                                }
+                                
+                            case .exchange:
+                                break
+                            }
+                        }
+                        
+                        // Для кредитных карт преобразуем баланс в задолженность (если нужно)
+                        if card.cardType == .credit, let limit = card.creditLimit {
+                            // Для кредитных карт в динамике показываем задолженность как положительное значение
+                            // Задолженность = лимит - баланс
+                            accountBalance = max(0, limit - accountBalance)
+                        }
+                    }
+                    
+                    // Конвертируем в валюту отображения
+                    let converted = await convertAmount(
+                        value: accountBalance,
+                        from: accountInfo.currency,
+                        to: state.displayCurrency
+                    )
+                    totalBalance += converted
+                }
+            }
+        }
+        
+        return totalBalance
     }
     
     private func calculateTotalForAllGroups() async -> Double {
