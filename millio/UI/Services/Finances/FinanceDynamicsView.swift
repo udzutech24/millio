@@ -28,35 +28,44 @@ struct FinanceDynamicsView: View {
     /// Валюта счета для предустановки (опционально)
     var initialAccountCurrency: String? = nil
     
+    /// Нужно ли оборачивать в NavigationStack (для sheet'ов нужен, для navigationDestination - нет)
+    var wrapInNavigationStack: Bool = true
+    
     var body: some View {
-        NavigationStack {
-            Group {
-                if let dynamicsViewModel = dynamicsViewModel {
-                    FinanceDynamicsContentView(
-                        viewModel: dynamicsViewModel,
-                        appState: appState,
-                        showSubscriptionSheet: $showSubscriptionSheet,
-                        financeViewModel: financeViewModel,
-                        initialAccountID: initialAccountID
-                    )
-                } else {
-                    ProgressView()
-                        .tint(AppColors.textPrimary)
-                }
+        let content = Group {
+            if let dynamicsViewModel = dynamicsViewModel {
+                FinanceDynamicsContentView(
+                    viewModel: dynamicsViewModel,
+                    appState: appState,
+                    showSubscriptionSheet: $showSubscriptionSheet,
+                    financeViewModel: financeViewModel,
+                    initialAccountID: initialAccountID
+                )
+            } else {
+                ProgressView()
+                    .tint(AppColors.textPrimary)
             }
-            .onAppear {
-                if dynamicsViewModel == nil {
-                    dynamicsViewModel = FinanceDynamicsViewModel(
-                        modelContext: modelContext,
-                        financeViewModel: financeViewModel,
-                        initialGroupID: initialGroupID,
-                        initialGroupCurrency: initialGroupCurrency,
-                        initialAccountID: initialAccountID,
-                        initialAccountCurrency: initialAccountCurrency
-                    )
-                    dynamicsViewModel?.handle(.loadData)
-                }
+        }
+        .onAppear {
+            if dynamicsViewModel == nil {
+                dynamicsViewModel = FinanceDynamicsViewModel(
+                    modelContext: modelContext,
+                    financeViewModel: financeViewModel,
+                    initialGroupID: initialGroupID,
+                    initialGroupCurrency: initialGroupCurrency,
+                    initialAccountID: initialAccountID,
+                    initialAccountCurrency: initialAccountCurrency
+                )
+                dynamicsViewModel?.handle(.loadData)
             }
+        }
+        
+        if wrapInNavigationStack {
+            NavigationStack {
+                content
+            }
+        } else {
+            content
         }
     }
 }

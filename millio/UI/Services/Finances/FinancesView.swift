@@ -33,6 +33,7 @@ struct FinancesView: View {
 
 private struct FinancesContentViewInternal: View {
     @ObservedObject var viewModel: FinanceViewModel
+    @State private var showDynamicsView = false
     
     var body: some View {
         mainContent
@@ -42,6 +43,12 @@ private struct FinancesContentViewInternal: View {
                 toolbarContent
             }
             .modifier(SheetsModifier(viewModel: viewModel))
+            .navigationDestination(isPresented: $showDynamicsView) {
+                FinanceDynamicsView(
+                    financeViewModel: viewModel,
+                    wrapInNavigationStack: false
+                )
+            }
             .task {
                 await viewModel.refreshRates()
             }
@@ -96,8 +103,8 @@ private struct FinancesContentViewInternal: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .navigationBarLeading) {
-            NavigationLink {
-                FinanceDynamicsView(financeViewModel: viewModel)
+            Button {
+                showDynamicsView = true
             } label: {
                 Image(systemName: "chart.line.uptrend.xyaxis")
                     .foregroundStyle(AppColors.textPrimary)
