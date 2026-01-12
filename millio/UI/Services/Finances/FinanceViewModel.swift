@@ -580,6 +580,11 @@ final class FinanceViewModel: ViewModelProtocol {
     }
     
     private func updateAccountAmount(account: FinanceAccount, newAmount: Double) {
+        // Находим группу, к которой принадлежит счет
+        let accountGroup = state.groups.first { group in
+            group.accounts?.contains(where: { $0.accountUniqueID == account.accountUniqueID }) ?? false
+        }
+        
         switch account.accountType {
         case .card:
             if let card = state.availableCards.first(where: { $0.cardUniqueID == account.accountID }) {
@@ -599,6 +604,15 @@ final class FinanceViewModel: ViewModelProtocol {
                     try modelContext.save()
                     loadAccounts()
                     calculateTotalAmount()
+                    
+                    // Пересчитываем сумму группы, к которой принадлежит счет
+                    if let group = accountGroup {
+                        Task {
+                            let currency = group.displayCurrency ?? state.displayCurrency
+                            let total = await calculateGroupTotal(group: group, in: currency)
+                            state.groupTotals[group.groupUniqueID] = total
+                        }
+                    }
                 } catch {
                     AppLogger.log(.error, category: "Finance", "Failed to update card amount: \(error.localizedDescription)")
                 }
@@ -613,6 +627,15 @@ final class FinanceViewModel: ViewModelProtocol {
                     try modelContext.save()
                     loadAccounts()
                     calculateTotalAmount()
+                    
+                    // Пересчитываем сумму группы, к которой принадлежит счет
+                    if let group = accountGroup {
+                        Task {
+                            let currency = group.displayCurrency ?? state.displayCurrency
+                            let total = await calculateGroupTotal(group: group, in: currency)
+                            state.groupTotals[group.groupUniqueID] = total
+                        }
+                    }
                 } catch {
                     AppLogger.log(.error, category: "Finance", "Failed to update credit amount: \(error.localizedDescription)")
                 }
@@ -627,6 +650,15 @@ final class FinanceViewModel: ViewModelProtocol {
                     try modelContext.save()
                     loadAccounts()
                     calculateTotalAmount()
+                    
+                    // Пересчитываем сумму группы, к которой принадлежит счет
+                    if let group = accountGroup {
+                        Task {
+                            let currency = group.displayCurrency ?? state.displayCurrency
+                            let total = await calculateGroupTotal(group: group, in: currency)
+                            state.groupTotals[group.groupUniqueID] = total
+                        }
+                    }
                 } catch {
                     AppLogger.log(.error, category: "Finance", "Failed to update investment amount: \(error.localizedDescription)")
                 }
