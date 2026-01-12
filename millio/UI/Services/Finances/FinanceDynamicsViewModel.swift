@@ -31,6 +31,9 @@ struct FinanceDynamicsState {
     /// Данные для графика
     var chartData: [ChartDataPoint] = []
     
+    /// Данные для деталей (каждая транзакция - отдельная точка)
+    var detailsData: [ChartDataPoint] = []
+    
     /// Флаг загрузки данных
     var isLoading: Bool = false
     
@@ -316,6 +319,191 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
         
         state.chartData = dataPoints
+        
+        // Строим детали (каждая транзакция - отдельная точка)
+        // Используем те же счета, что и для графика
+        var detailsLabel = "Общая сумма"
+        if !groupsToShow.isEmpty && accountsToShow.isEmpty {
+            detailsLabel = groupsToShow.count == 1 ? groupsToShow.first?.name ?? "Группа" : "Выбранные группы"
+        } else if !accountsToShow.isEmpty {
+            detailsLabel = accountsToShow.count == 1 ? (financeViewModel.getAccountInfo(account: accountsToShow.first!)?.name ?? "Счет") : "Выбранные счета"
+        }
+        
+        state.detailsData = await buildDetailsData(
+            accounts: accountsToShow.isEmpty ? (groupsToShow.isEmpty ? [] : {
+                var allGroupAccounts: [FinanceAccount] = []
+                for group in (groupsToShow.isEmpty ? state.groups : groupsToShow) {
+                    if let accounts = group.accounts {
+                        allGroupAccounts.append(contentsOf: accounts)
+                    }
+                }
+                return allGroupAccounts
+            }()) : accountsToShow,
+            startDate: startDate,
+            endDate: endDate,
+            label: detailsLabel
+        )
+    }
+    
+    /// Построить данные для деталей (каждая транзакция - отдельная точка)
+    private func buildDetailsData(
+        accounts: [FinanceAccount],
+        startDate: Date,
+        endDate: Date,
+        label: String
+    ) async -> [ChartDataPoint] {
+        var dataPoints: [ChartDataPoint] = []
+        let calendar = Calendar.current
+        
+        // Собираем все события, которые влияют на баланс
+        var eventDates: [(date: Date, type: String)] = []
+        
+        // Добавляем даты создания счетов
+        for account in accounts {
+            eventDates.append((date: account.createdAt, type: "account_created"))
+            eventDates.append((date: account.updatedAt, type: "account_updated"))
+        }
+        
+        // Добавляем даты обновления карт/кредитов/инвестиций
+        let accountCardIDs = Set(accounts.compactMap { account -> String? in
+            if account.accountType == .card {
+                return account.accountID
+            }
+            return nil
+        })
+        
+        for cardID in accountCardIDs {
+            if let card = state.availableCards.first(where: { $0.cardUniqueID == cardID }) {
+                eventDates.append((date: card.createdAt, type: "card_created"))
+                eventDates.append((date: card.updatedAt, type: "card_updated"))
+            }
+        }
+        
+        let accountCreditIDs = Set(accounts.compactMap { account -> String? in
+            if account.accountType == .credit {
+                return account.accountID
+            }
+            return nil
+        })
+        
+        for creditID in accountCreditIDs {
+            if let credit = state.availableCredits.first(where: { $0.creditUniqueID == creditID }) {
+                eventDates.append((date: credit.createdAt, type: "credit_created"))
+                eventDates.append((date: credit.updatedAt, type: "credit_updated"))
+            }
+        }
+        
+        let accountInvestmentIDs = Set(accounts.compactMap { account -> String? in
+            if account.accountType == .investment {
+                return account.accountID
+            }
+            return nil
+        })
+        
+        for investmentID in accountInvestmentIDs {
+            if let investment = state.availableInvestments.first(where: { $0.investmentUniqueID == investmentID }) {
+                eventDates.append((date: investment.createdAt, type: "investment_created"))
+                eventDates.append((date: investment.updatedAt, type: "investment_updated"))
+            }
+        }
+        
+        // Добавляем каждую транзакцию как отдельное событие
+        for transaction in state.cashflowTransactions {
+            var affectsAccount = false
+            switch transaction.transactionType {
+            case .income, .expense:
+                if let cardID = transaction.cardID, accountCardIDs.contains(cardID) {
+                    affectsAccount = true
+                }
+            case .transfer:
+                if let fromCardID = transaction.cardID, accountCardIDs.contains(fromCardID) {
+                    affectsAccount = true
+                }
+                if let toCardID = transaction.toCardID, accountCardIDs.contains(toCardID) {
+                    affectsAccount = true
+                }
+            case .exchange:
+                break
+            }
+            
+            if affectsAccount {
+                eventDates.append((date: transaction.transactionDate, type: "transaction"))
+            }
+        }
+        
+        // Фильтруем события по периоду и сортируем
+        let filteredEvents = eventDates
+            .filter { $0.date >= startDate && $0.date <= endDate }
+            .sorted(by: { $0.date < $1.date })
+        
+        // Группируем события по периодам в зависимости от выбранного периода
+        // Для недели/месяца группируем по дням, для года - по месяцам
+        var groupedEvents: [Date: [Date]] = [:] // Ключ - начало периода, значение - список событий в этот период
+        
+        for event in filteredEvents {
+            let periodStart: Date
+            switch state.period {
+            case .week, .month:
+                // Группируем по дням
+                periodStart = calendar.startOfDay(for: event.date)
+            case .year:
+                // Группируем по месяцам
+                let components = calendar.dateComponents([.year, .month], from: event.date)
+                periodStart = calendar.date(from: components) ?? calendar.startOfDay(for: event.date)
+            case .day:
+                // Для дня группируем по часам
+                let components = calendar.dateComponents([.year, .month, .day, .hour], from: event.date)
+                periodStart = calendar.date(from: components) ?? calendar.startOfDay(for: event.date)
+            }
+            
+            if groupedEvents[periodStart] == nil {
+                groupedEvents[periodStart] = []
+            }
+            groupedEvents[periodStart]?.append(event.date)
+        }
+        
+        // Для каждого периода берем последний баланс (после всех транзакций в этот период)
+        for (periodStart, eventsInPeriod) in groupedEvents.sorted(by: { $0.key < $1.key }) {
+            // Берем самое позднее событие в этом периоде
+            guard let latestEvent = eventsInPeriod.max() else { continue }
+            
+            // Рассчитываем баланс на конец периода (после всех транзакций)
+            let balance = await calculateBalanceAtDate(
+                accounts: accounts,
+                date: latestEvent,
+                accountCardIDs: accountCardIDs
+            )
+            
+            // Используем начало периода для отображения
+            dataPoints.append(ChartDataPoint(
+                date: periodStart,
+                value: balance,
+                label: label
+            ))
+        }
+        
+        // Убираем дубликаты с одинаковым балансом подряд
+        var uniqueDataPoints: [ChartDataPoint] = []
+        var lastBalance: Double? = nil
+        
+        for point in dataPoints {
+            // Добавляем точку, если баланс изменился или это первая точка
+            if lastBalance == nil || abs(point.value - lastBalance!) > 0.01 {
+                uniqueDataPoints.append(point)
+                lastBalance = point.value
+            } else {
+                // Если баланс такой же, обновляем дату на более позднюю
+                if let lastIndex = uniqueDataPoints.indices.last {
+                    uniqueDataPoints[lastIndex] = ChartDataPoint(
+                        date: point.date, // Берем более позднюю дату
+                        value: point.value,
+                        label: point.label
+                    )
+                }
+            }
+        }
+        
+        return uniqueDataPoints
     }
     
     /// Построить временной ряд данных для графика
@@ -407,45 +595,63 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             }
         }
         
-        // Фильтруем даты в пределах периода и сортируем
-        let sortedDates = eventDates
+        // Разделяем даты на важные события (транзакции, обновления счетов) и промежуточные точки
+        let importantDates = eventDates
             .filter { $0 >= startDate && $0 <= endDate }
             .sorted()
         
-        // Всегда добавляем промежуточные точки для плавности графика
-        // Но не дублируем даты, которые уже есть в eventDates
-        var datesToShow = sortedDates
-        let stepDays = max(1, state.period.days / 15) // Уменьшил делитель для большего количества точек
+        // Создаем множество дней с важными событиями для проверки
+        let importantDays = Set(importantDates.map { calendar.startOfDay(for: $0) })
+        
+        // Добавляем промежуточные точки для плавности графика
+        // Но не добавляем их в дни, где уже есть важные события
+        var intermediateDates: [Date] = []
+        let stepDays = max(1, state.period.days / 15)
         var currentDate = startDate
         while currentDate <= endDate {
-            if !datesToShow.contains(where: { calendar.isDate($0, inSameDayAs: currentDate) }) {
-                datesToShow.append(currentDate)
+            let dayStart = calendar.startOfDay(for: currentDate)
+            // Добавляем промежуточную точку только если в этот день нет важных событий
+            if !importantDays.contains(dayStart) {
+                intermediateDates.append(currentDate)
             }
             currentDate = calendar.date(byAdding: .day, value: stepDays, to: currentDate) ?? endDate
         }
-        datesToShow.sort()
         
-        // Группируем даты по дням и рассчитываем баланс для каждого дня
-        var dailyBalances: [Date: Double] = [:]
-        
-        for date in datesToShow {
-            // Рассчитываем баланс на конец этого дня с учетом транзакций
-            let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: date) ?? date
+        // Рассчитываем баланс для каждого дня с важными событиями
+        // Для каждого дня берем баланс на конец дня (после всех транзакций в этот день)
+        var eventBalances: [Date: Double] = [:]
+        for dayStart in importantDays {
+            // Рассчитываем баланс на конец этого дня
+            let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: dayStart) ?? dayStart
             let balance = await calculateBalanceAtDate(
                 accounts: accounts,
                 date: endOfDay,
                 accountCardIDs: accountCardIDs
             )
-            
-            // Группируем по дню (без учета времени)
-            let dayStart = calendar.startOfDay(for: date)
-            // Всегда используем баланс на конец дня (после всех транзакций в этот день)
-            // Это гарантирует, что расходы правильно отображаются
-            dailyBalances[dayStart] = balance
+            eventBalances[dayStart] = balance
         }
         
-        // Преобразуем в массив ChartDataPoint, убирая дубликаты по дням
-        for (date, balance) in dailyBalances.sorted(by: { $0.key < $1.key }) {
+        // Рассчитываем баланс для промежуточных точек (группируем по дням)
+        var intermediateBalances: [Date: Double] = [:]
+        for intermediateDate in intermediateDates {
+            let dayStart = calendar.startOfDay(for: intermediateDate)
+            let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: intermediateDate) ?? intermediateDate
+            let balance = await calculateBalanceAtDate(
+                accounts: accounts,
+                date: endOfDay,
+                accountCardIDs: accountCardIDs
+            )
+            intermediateBalances[dayStart] = balance
+        }
+        
+        // Объединяем все балансы (важные события имеют приоритет над промежуточными точками)
+        var allBalances = intermediateBalances
+        for (day, balance) in eventBalances {
+            allBalances[day] = balance // Важные события перезаписывают промежуточные точки
+        }
+        
+        // Преобразуем в массив ChartDataPoint, сортируя по дате
+        for (date, balance) in allBalances.sorted(by: { $0.key < $1.key }) {
             dataPoints.append(ChartDataPoint(
                 date: date,
                 value: balance,
@@ -488,8 +694,9 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                         // Это проще и надежнее, чем пытаться рассчитать начальный баланс
                         var cardBalance = card.balance
                         
-                        // Откатываем все транзакции после нужной даты (от новых к старым)
+                        // Откатываем все транзакции после ТОЧНОЙ даты события (от новых к старым)
                         // Сортируем транзакции по убыванию даты
+                        // Важно: используем точную дату, а не конец дня, чтобы транзакции в тот же день учитывались правильно
                         let transactionsAfterDate = state.cashflowTransactions
                             .filter { $0.transactionDate > date && $0.transactionDate <= Date() }
                             .sorted(by: { $0.transactionDate > $1.transactionDate })

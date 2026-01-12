@@ -476,7 +476,7 @@ private struct FinanceDynamicsContentView: View {
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                     
-                    Text("\(viewModel.state.chartData.count) записей")
+                    Text("\(viewModel.state.detailsData.count) записей")
                         .font(.system(size: 14, weight: .regular))
                         .foregroundStyle(AppColors.textSecondary)
                 }

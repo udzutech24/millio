@@ -16,7 +16,7 @@ struct FinanceDynamicsDetailsView: View {
             ZStack {
                 GradientBackground()
                 
-                if viewModel.state.chartData.isEmpty {
+                if viewModel.state.detailsData.isEmpty {
                     VStack(spacing: 16) {
                         Image(systemName: "list.bullet.rectangle")
                             .font(.system(size: 64))
@@ -30,7 +30,7 @@ struct FinanceDynamicsDetailsView: View {
                 } else {
                     ScrollView {
                         VStack(spacing: 8) {
-                            ForEach(viewModel.state.chartData) { dataPoint in
+                            ForEach(viewModel.state.detailsData) { dataPoint in
                                 HStack {
                                     RoundedRectangle(cornerRadius: 4)
                                         .fill(
@@ -103,15 +103,14 @@ struct FinanceDynamicsDetailsView: View {
     
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
+        // Форматируем дату в зависимости от периода
         switch viewModel.state.period {
         case .day:
             formatter.dateFormat = "HH:mm"
-        case .week:
-            formatter.dateFormat = "dd.MM"
-        case .month:
+        case .week, .month:
             formatter.dateFormat = "dd.MM"
         case .year:
-            formatter.dateFormat = "MMM"
+            formatter.dateFormat = "MMM yyyy"
         }
         return formatter.string(from: date)
     }
