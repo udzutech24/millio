@@ -89,6 +89,12 @@ struct FinanceState {
     
     /// Счет для быстрого редактирования суммы
     var quickEditAccount: FinanceAccount? = nil
+    
+    /// Показывать ли динамику группы
+    var showGroupDynamics: Bool = false
+    
+    /// Группа для отображения динамики
+    var selectedGroupForDynamics: FinanceGroup? = nil
 }
 
 // MARK: - Finance Actions
@@ -125,6 +131,8 @@ enum FinanceAction {
     case showQuickEditAccountSheet(FinanceAccount)
     case hideQuickEditAccountSheet
     case updateAccountAmount(FinanceAccount, Double)
+    case showGroupDynamics(FinanceGroup)
+    case hideGroupDynamics
 }
 
 // MARK: - Finance ViewModel
@@ -273,6 +281,14 @@ final class FinanceViewModel: ViewModelProtocol {
             } catch {
                 AppLogger.log(.error, category: "Finance", "Failed to set group priority: \(error.localizedDescription)")
             }
+            
+        case .showGroupDynamics(let group):
+            state.selectedGroupForDynamics = group
+            state.showGroupDynamics = true
+            
+        case .hideGroupDynamics:
+            state.showGroupDynamics = false
+            state.selectedGroupForDynamics = nil
     }
     }
     

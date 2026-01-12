@@ -16,6 +16,12 @@ struct FinanceDynamicsView: View {
     @State private var dynamicsViewModel: FinanceDynamicsViewModel?
     @State private var showSubscriptionSheet = false
     
+    /// ID группы для предустановки фильтров (опционально)
+    var initialGroupID: String? = nil
+    
+    /// Валюта группы для предустановки (опционально)
+    var initialGroupCurrency: String? = nil
+    
     var body: some View {
         Group {
             if let dynamicsViewModel = dynamicsViewModel {
@@ -33,7 +39,9 @@ struct FinanceDynamicsView: View {
             if dynamicsViewModel == nil {
                 dynamicsViewModel = FinanceDynamicsViewModel(
                     modelContext: modelContext,
-                    financeViewModel: financeViewModel
+                    financeViewModel: financeViewModel,
+                    initialGroupID: initialGroupID,
+                    initialGroupCurrency: initialGroupCurrency
                 )
                 dynamicsViewModel?.handle(.loadData)
             }

@@ -105,10 +105,21 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     
     private let defaults = UserDefaults.standard
     
-    init(modelContext: ModelContext, financeViewModel: FinanceViewModel) {
+    init(modelContext: ModelContext, financeViewModel: FinanceViewModel, initialGroupID: String? = nil, initialGroupCurrency: String? = nil) {
         self.modelContext = modelContext
         self.financeViewModel = financeViewModel
-        state.displayCurrency = financeViewModel.state.displayCurrency
+        
+        // Если передан initialGroupID, устанавливаем его как выбранную группу
+        if let groupID = initialGroupID {
+            state.selectedGroupIDs = [groupID]
+        }
+        
+        // Если у группы есть своя валюта, используем её, иначе используем общую валюту
+        if let groupCurrency = initialGroupCurrency {
+            state.displayCurrency = groupCurrency
+        } else {
+            state.displayCurrency = financeViewModel.state.displayCurrency
+        }
     }
     
     func handle(_ action: FinanceDynamicsAction) {

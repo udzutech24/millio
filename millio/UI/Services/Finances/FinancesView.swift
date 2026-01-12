@@ -35,6 +35,19 @@ private struct FinancesContentViewInternal: View {
     @ObservedObject var viewModel: FinanceViewModel
     
     var body: some View {
+        mainContent
+            .navigationTitle("Финансы")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                toolbarContent
+            }
+            .modifier(SheetsModifier(viewModel: viewModel))
+            .task {
+                await viewModel.refreshRates()
+            }
+    }
+    
+    private var mainContent: some View {
         ZStack {
             GradientBackground()
             
@@ -51,110 +64,36 @@ private struct FinancesContentViewInternal: View {
                 .padding(.bottom, 32)
             }
         }
-        .navigationTitle("Финансы")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                NavigationLink {
-                    FinanceDynamicsView(financeViewModel: viewModel)
+    }
+    
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .navigationBarLeading) {
+            NavigationLink {
+                FinanceDynamicsView(financeViewModel: viewModel)
+            } label: {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .foregroundStyle(AppColors.textPrimary)
+            }
+        }
+        
+        ToolbarItem(placement: .navigationBarTrailing) {
+            Menu {
+                Button {
+                    viewModel.handle(.addGroup)
                 } label: {
-                    Image(systemName: "chart.line.uptrend.xyaxis")
-                        .foregroundStyle(AppColors.textPrimary)
+                    Label("Создать группу", systemImage: "folder.badge.plus")
                 }
-            }
-            
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Menu {
-                    Button {
-                        viewModel.handle(.addGroup)
-                    } label: {
-                        Label("Создать группу", systemImage: "folder.badge.plus")
-                    }
-                    
-                    Button {
-                        viewModel.handle(.showAddAccountSheet(nil))
-                    } label: {
-                        Label("Добавить счет", systemImage: "plus.circle")
-                    }
+                
+                Button {
+                    viewModel.handle(.showAddAccountSheet(nil))
                 } label: {
-                    Image(systemName: "plus")
-                        .foregroundStyle(AppColors.textPrimary)
+                    Label("Добавить счет", systemImage: "plus.circle")
                 }
+            } label: {
+                Image(systemName: "plus")
+                    .foregroundStyle(AppColors.textPrimary)
             }
-        }
-        .sheet(isPresented: Binding(
-            get: { viewModel.state.showGroupEditor },
-            set: { if !$0 { viewModel.handle(.hideGroupEditor) } }
-        )) {
-            FinanceGroupEditorView(viewModel: viewModel)
-        }
-        .sheet(isPresented: Binding(
-            get: { viewModel.state.showAddAccountSheet },
-            set: { if !$0 { viewModel.handle(.hideAddAccountSheet) } }
-        )) {
-            FinanceAddAccountView(viewModel: viewModel)
-        }
-        .sheet(isPresented: Binding(
-            get: { viewModel.state.showCreateCardSheet },
-            set: { if !$0 { viewModel.handle(.hideCreateCardSheet) } }
-        )) {
-            FinanceCreateCardView(viewModel: viewModel)
-        }
-        .sheet(isPresented: Binding(
-            get: { viewModel.state.showCreateCreditSheet },
-            set: { if !$0 { viewModel.handle(.hideCreateCreditSheet) } }
-        )) {
-            FinanceCreateCreditView(viewModel: viewModel)
-        }
-        .sheet(isPresented: Binding(
-            get: { viewModel.state.showCreateInvestmentSheet },
-            set: { if !$0 { viewModel.handle(.hideCreateInvestmentSheet) } }
-        )) {
-            FinanceCreateInvestmentView(viewModel: viewModel)
-        }
-        .sheet(isPresented: Binding(
-            get: { viewModel.state.showDisplayCurrencySheet },
-            set: { if !$0 { viewModel.handle(.hideDisplayCurrencySheet) } }
-        )) {
-            DisplayCurrencySheet(viewModel: viewModel)
-        }
-        .sheet(isPresented: Binding(
-            get: { viewModel.state.showEditCardSheet },
-            set: { if !$0 { viewModel.handle(.hideEditCardSheet) } }
-        )) {
-            if let cardID = viewModel.state.editingCardID,
-               let card = viewModel.state.availableCards.first(where: { $0.cardUniqueID == cardID }) {
-                FinanceEditCardView(card: card, viewModel: viewModel)
-            }
-        }
-        .sheet(isPresented: Binding(
-            get: { viewModel.state.showEditCreditSheet },
-            set: { if !$0 { viewModel.handle(.hideEditCreditSheet) } }
-        )) {
-            if let creditID = viewModel.state.editingCreditID,
-               let credit = viewModel.state.availableCredits.first(where: { $0.creditUniqueID == creditID }) {
-                FinanceEditCreditView(credit: credit, viewModel: viewModel)
-            }
-        }
-        .sheet(isPresented: Binding(
-            get: { viewModel.state.showEditInvestmentSheet },
-            set: { if !$0 { viewModel.handle(.hideEditInvestmentSheet) } }
-        )) {
-            if let investmentID = viewModel.state.editingInvestmentID,
-               let investment = viewModel.state.availableInvestments.first(where: { $0.investmentUniqueID == investmentID }) {
-                FinanceEditInvestmentView(investment: investment, viewModel: viewModel)
-            }
-        }
-        .sheet(isPresented: Binding(
-            get: { viewModel.state.showQuickEditAccountSheet },
-            set: { if !$0 { viewModel.handle(.hideQuickEditAccountSheet) } }
-        )) {
-            if let account = viewModel.state.quickEditAccount {
-                FinanceQuickEditAccountView(account: account, viewModel: viewModel)
-            }
-        }
-        .task {
-            await viewModel.refreshRates()
         }
     }
     
@@ -343,225 +282,222 @@ private struct FinanceGroupRow: View {
     }
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Заголовок группы
-            HStack(spacing: 12) {
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        viewModel.handle(.toggleGroupExpanded(groupID))
-                    }
-                } label: {
-                    HStack(spacing: 12) {
-                        // Цветная полоска
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(group.color)
-                            .frame(width: 4, height: 40)
-                        
-                        // Название группы
-                        HStack(spacing: 6) {
-                            if group.isFavorite {
-                                Image(systemName: "star.fill")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundStyle(
-                                        LinearGradient(
-                                            colors: AppColors.incomeGradient,
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
-                            }
-                            Text(group.name)
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(AppColors.textPrimary)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        
-                        // Сумма группы
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text(formatBalance(groupTotal))
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(AppColors.textPrimary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                            
-                            Text(groupDisplayCurrency)
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(AppColors.textSecondary)
-                                .lineLimit(1)
-                        }
-                        
-                        // Иконка раскрытия
-                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(AppColors.textTertiary)
-                    }
-                    .padding(.vertical, 12)
-                    .padding(.horizontal, 16)
-                }
-                .buttonStyle(.plain)
+        groupContent
+            .background(groupBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .contextMenu {
+                contextMenuContent
             }
-            
-            // Аккордеон с счетами
+            .modifier(GroupRowModifiers(
+                isExpanded: isExpanded,
+                group: group,
+                viewModel: viewModel,
+                groupID: groupID,
+                loadGroupTotal: loadGroupTotal
+            ))
+    }
+    
+    private var groupContent: some View {
+        VStack(spacing: 0) {
+            groupHeader
             if isExpanded {
-            VStack(spacing: 8) {
-                if let accounts = group.accounts, !accounts.isEmpty {
-                    ForEach(accounts) { account in
-                        if let accountInfo = viewModel.getAccountInfo(account: account) {
-                            FinanceAccountRow(
-                                account: account,
-                                name: accountInfo.name,
-                                amount: accountInfo.amount,
-                                currency: accountInfo.currency,
-                                icon: accountInfo.icon,
-                                accountType: account.accountType,
-                                isCreditCardDebt: accountInfo.isCreditCardDebt,
-                                onEdit: {
-                                    viewModel.handle(.editAccount(account))
-                                },
-                                onDelete: {
-                                    viewModel.handle(.removeAccountFromGroup(account))
-                                },
-                                onQuickEditAmount: {
-                                    viewModel.handle(.showQuickEditAccountSheet(account))
-                                }
-                            )
-                        }
-                    }
-                } else {
-                    Text("Нет счетов")
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundStyle(AppColors.textTertiary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.leading, 20)
-                        .padding(.vertical, 12)
+                accountsAccordion
+            }
+        }
+    }
+    
+    private var groupHeader: some View {
+        HStack(spacing: 12) {
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    viewModel.handle(.toggleGroupExpanded(groupID))
                 }
-                
-                // Кнопка добавления счета в группу
-                Button {
-                    viewModel.handle(.showAddAccountSheet(group))
-                } label: {
-                    HStack {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 16))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: AppColors.financesGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                        
-                        Text("Добавить счет")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(AppColors.textSecondary)
+            } label: {
+                headerContent
+            }
+            .buttonStyle(.plain)
+        }
+    }
+    
+    private var headerContent: some View {
+        HStack(spacing: 12) {
+            // Цветная полоска
+            RoundedRectangle(cornerRadius: 2)
+                .fill(group.color)
+                .frame(width: 4, height: 40)
+            
+            // Название группы
+            groupNameSection
+            
+            // Сумма группы
+            groupAmountSection
+            
+            // Иконка раскрытия
+            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(AppColors.textTertiary)
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+    }
+    
+    private var groupNameSection: some View {
+        HStack(spacing: 6) {
+            if group.isFavorite {
+                Image(systemName: "star.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: AppColors.incomeGradient,
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+            }
+            Text(group.name)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(AppColors.textPrimary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    
+    private var groupAmountSection: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(formatBalance(groupTotal))
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(AppColors.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            
+            Text(groupDisplayCurrency)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(AppColors.textSecondary)
+                .lineLimit(1)
+        }
+    }
+    
+    private var accountsAccordion: some View {
+        VStack(spacing: 8) {
+            if let accounts = group.accounts, !accounts.isEmpty {
+                ForEach(accounts) { account in
+                    if let accountInfo = viewModel.getAccountInfo(account: account) {
+                        FinanceAccountRow(
+                            account: account,
+                            name: accountInfo.name,
+                            amount: accountInfo.amount,
+                            currency: accountInfo.currency,
+                            icon: accountInfo.icon,
+                            accountType: account.accountType,
+                            isCreditCardDebt: accountInfo.isCreditCardDebt,
+                            onEdit: {
+                                viewModel.handle(.editAccount(account))
+                            },
+                            onDelete: {
+                                viewModel.handle(.removeAccountFromGroup(account))
+                            },
+                            onQuickEditAmount: {
+                                viewModel.handle(.showQuickEditAccountSheet(account))
+                            }
+                        )
                     }
+                }
+            } else {
+                Text("Нет счетов")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(AppColors.textTertiary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.leading, 20)
-                    .padding(.vertical, 8)
-                }
-                .buttonStyle(.plain)
+                    .padding(.vertical, 12)
             }
-            .padding(.bottom, 12)
-            }
+            
+            addAccountButton
         }
-        .background {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(
-                            LinearGradient(
-                                colors: AppColors.financesGradient,
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            ),
-                            lineWidth: 1.5
+        .padding(.bottom, 12)
+    }
+    
+    private var addAccountButton: some View {
+        Button {
+            viewModel.handle(.showAddAccountSheet(group))
+        } label: {
+            HStack {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 16))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: AppColors.financesGradient,
+                            startPoint: .leading,
+                            endPoint: .trailing
                         )
-                }
+                    )
+                
+                Text("Добавить счет")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AppColors.textSecondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, 20)
+            .padding(.vertical, 8)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .contextMenu {
-            // Избранное
-            Button {
-                viewModel.handle(.toggleGroupFavorite(group))
-            } label: {
-                Label(
-                    group.isFavorite ? "Убрать из избранного" : "В избранное",
-                    systemImage: group.isFavorite ? "star.fill" : "star"
-                )
+        .buttonStyle(.plain)
+    }
+    
+    private var groupBackground: some View {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(.ultraThinMaterial)
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: AppColors.financesGradient,
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        lineWidth: 1.5
+                    )
             }
-            
-            // Приоритет
-            Button {
-                viewModel.handle(.setGroupPriority(group, nextPriority))
-            } label: {
-                Label(
-                    "Приоритет: \(priorityDisplayName)",
-                    systemImage: priorityIcon
-                )
-            }
-            
-            // Редактирование
-            Button {
-                viewModel.handle(.editGroup(group))
-            } label: {
-                Label("Редактировать", systemImage: "pencil")
-            }
-            
-            // Удаление
-            Button(role: .destructive) {
-                viewModel.handle(.deleteGroup(group))
-            } label: {
-                Label("Удалить", systemImage: "trash")
-            }
+    }
+    
+    @ViewBuilder
+    private var contextMenuContent: some View {
+        // Открыть группу (динамика)
+        Button {
+            viewModel.handle(.showGroupDynamics(group))
+        } label: {
+            Label("Открыть группу", systemImage: "chart.line.uptrend.xyaxis")
         }
-        .task {
-            await loadGroupTotal()
+        
+        // Избранное
+        Button {
+            viewModel.handle(.toggleGroupFavorite(group))
+        } label: {
+            Label(
+                group.isFavorite ? "Убрать из избранного" : "В избранное",
+                systemImage: group.isFavorite ? "star.fill" : "star"
+            )
         }
-        .onChange(of: isExpanded) { oldValue, newValue in
-            if newValue {
-                Task {
-                    await loadGroupTotal()
-                }
-            }
+        
+        // Приоритет
+        Button {
+            viewModel.handle(.setGroupPriority(group, nextPriority))
+        } label: {
+            Label(
+                "Приоритет: \(priorityDisplayName)",
+                systemImage: priorityIcon
+            )
         }
-        .onChange(of: group.id) { oldValue, newValue in
-            // При изменении группы (после drag and drop) перезагружаем сумму
-            Task {
-                await loadGroupTotal()
-            }
+        
+        // Редактирование
+        Button {
+            viewModel.handle(.editGroup(group))
+        } label: {
+            Label("Редактировать", systemImage: "pencil")
         }
-        .onChange(of: group.displayCurrency) { oldValue, newValue in
-            // При изменении валюты группы перезагружаем сумму
-            Task {
-                await loadGroupTotal()
-            }
-        }
-        .onChange(of: viewModel.state.displayCurrency) { oldValue, newValue in
-            // При изменении общей валюты перезагружаем сумму, если группа использует общую валюту
-            if group.displayCurrency == nil {
-                Task {
-                    await loadGroupTotal()
-                }
-            }
-        }
-        .onChange(of: viewModel.state.availableCards) { oldCards, newCards in
-            // При изменении списка карт пересчитываем сумму группы
-            Task {
-                await loadGroupTotal()
-            }
-        }
-        .onChange(of: viewModel.state.availableCredits) { oldCredits, newCredits in
-            // При изменении списка кредитов пересчитываем сумму группы
-            Task {
-                await loadGroupTotal()
-            }
-        }
-        .onChange(of: viewModel.state.availableInvestments) { oldInvestments, newInvestments in
-            // При изменении списка инвестиций пересчитываем сумму группы
-            Task {
-                await loadGroupTotal()
-            }
+        
+        // Удаление
+        Button(role: .destructive) {
+            viewModel.handle(.deleteGroup(group))
+        } label: {
+            Label("Удалить", systemImage: "trash")
         }
     }
     
@@ -586,6 +522,62 @@ private struct FinanceGroupRow: View {
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: balance)) ?? "0"
+    }
+}
+
+// MARK: - Group Row Modifiers
+
+private struct GroupRowModifiers: ViewModifier {
+    let isExpanded: Bool
+    let group: FinanceGroup
+    @ObservedObject var viewModel: FinanceViewModel
+    let groupID: String
+    let loadGroupTotal: () async -> Void
+    
+    func body(content: Content) -> some View {
+        content
+            .task {
+                await loadGroupTotal()
+            }
+            .onChange(of: isExpanded) { oldValue, newValue in
+                if newValue {
+                    Task {
+                        await loadGroupTotal()
+                    }
+                }
+            }
+            .onChange(of: group.id) { oldValue, newValue in
+                Task {
+                    await loadGroupTotal()
+                }
+            }
+            .onChange(of: group.displayCurrency) { oldValue, newValue in
+                Task {
+                    await loadGroupTotal()
+                }
+            }
+            .onChange(of: viewModel.state.displayCurrency) { oldValue, newValue in
+                if group.displayCurrency == nil {
+                    Task {
+                        await loadGroupTotal()
+                    }
+                }
+            }
+            .onChange(of: viewModel.state.availableCards) { oldCards, newCards in
+                Task {
+                    await loadGroupTotal()
+                }
+            }
+            .onChange(of: viewModel.state.availableCredits) { oldCredits, newCredits in
+                Task {
+                    await loadGroupTotal()
+                }
+            }
+            .onChange(of: viewModel.state.availableInvestments) { oldInvestments, newInvestments in
+                Task {
+                    await loadGroupTotal()
+                }
+            }
     }
 }
 
@@ -659,6 +651,103 @@ private struct FinanceAccountRow: View {
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: balance)) ?? "0"
+    }
+}
+
+// MARK: - Sheets Modifier
+
+private struct SheetsModifier: ViewModifier {
+    @ObservedObject var viewModel: FinanceViewModel
+    
+    func body(content: Content) -> some View {
+        content
+            .sheet(isPresented: Binding(
+                get: { viewModel.state.showGroupEditor },
+                set: { if !$0 { viewModel.handle(.hideGroupEditor) } }
+            )) {
+                FinanceGroupEditorView(viewModel: viewModel)
+            }
+            .sheet(isPresented: Binding(
+                get: { viewModel.state.showAddAccountSheet },
+                set: { if !$0 { viewModel.handle(.hideAddAccountSheet) } }
+            )) {
+                FinanceAddAccountView(viewModel: viewModel)
+            }
+            .sheet(isPresented: Binding(
+                get: { viewModel.state.showCreateCardSheet },
+                set: { if !$0 { viewModel.handle(.hideCreateCardSheet) } }
+            )) {
+                FinanceCreateCardView(viewModel: viewModel)
+            }
+            .sheet(isPresented: Binding(
+                get: { viewModel.state.showCreateCreditSheet },
+                set: { if !$0 { viewModel.handle(.hideCreateCreditSheet) } }
+            )) {
+                FinanceCreateCreditView(viewModel: viewModel)
+            }
+            .sheet(isPresented: Binding(
+                get: { viewModel.state.showCreateInvestmentSheet },
+                set: { if !$0 { viewModel.handle(.hideCreateInvestmentSheet) } }
+            )) {
+                FinanceCreateInvestmentView(viewModel: viewModel)
+            }
+            .sheet(isPresented: Binding(
+                get: { viewModel.state.showDisplayCurrencySheet },
+                set: { if !$0 { viewModel.handle(.hideDisplayCurrencySheet) } }
+            )) {
+                DisplayCurrencySheet(viewModel: viewModel)
+            }
+            .sheet(isPresented: Binding(
+                get: { viewModel.state.showEditCardSheet },
+                set: { if !$0 { viewModel.handle(.hideEditCardSheet) } }
+            )) {
+                if let cardID = viewModel.state.editingCardID,
+                   let card = viewModel.state.availableCards.first(where: { $0.cardUniqueID == cardID }) {
+                    FinanceEditCardView(card: card, viewModel: viewModel)
+                }
+            }
+            .sheet(isPresented: Binding(
+                get: { viewModel.state.showEditCreditSheet },
+                set: { if !$0 { viewModel.handle(.hideEditCreditSheet) } }
+            )) {
+                if let creditID = viewModel.state.editingCreditID,
+                   let credit = viewModel.state.availableCredits.first(where: { $0.creditUniqueID == creditID }) {
+                    FinanceEditCreditView(credit: credit, viewModel: viewModel)
+                }
+            }
+            .sheet(isPresented: Binding(
+                get: { viewModel.state.showEditInvestmentSheet },
+                set: { if !$0 { viewModel.handle(.hideEditInvestmentSheet) } }
+            )) {
+                if let investmentID = viewModel.state.editingInvestmentID,
+                   let investment = viewModel.state.availableInvestments.first(where: { $0.investmentUniqueID == investmentID }) {
+                    FinanceEditInvestmentView(investment: investment, viewModel: viewModel)
+                }
+            }
+            .sheet(isPresented: Binding(
+                get: { viewModel.state.showQuickEditAccountSheet },
+                set: { if !$0 { viewModel.handle(.hideQuickEditAccountSheet) } }
+            )) {
+                if let account = viewModel.state.quickEditAccount {
+                    FinanceQuickEditAccountView(account: account, viewModel: viewModel)
+                }
+            }
+            .sheet(isPresented: Binding(
+                get: { viewModel.state.showGroupDynamics },
+                set: { if !$0 { viewModel.handle(.hideGroupDynamics) } }
+            )) {
+                if let group = viewModel.state.selectedGroupForDynamics {
+                    NavigationStack {
+                        FinanceDynamicsView(
+                            financeViewModel: viewModel,
+                            initialGroupID: group.groupUniqueID,
+                            initialGroupCurrency: group.displayCurrency
+                        )
+                        .navigationTitle(group.name)
+                        .navigationBarTitleDisplayMode(.inline)
+                    }
+                }
+            }
     }
 }
 
