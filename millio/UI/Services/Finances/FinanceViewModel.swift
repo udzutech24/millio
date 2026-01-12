@@ -101,7 +101,7 @@ enum FinanceAction {
     case addGroup
     case editGroup(FinanceGroup)
     case deleteGroup(FinanceGroup)
-    case updateGroup(name: String, colorHex: String, displayCurrency: String?)
+    case updateGroup(name: String, colorHex: String, displayCurrency: String?, isFavorite: Bool, priority: GroupPriority)
     case hideGroupEditor
     case showAddAccountSheet(FinanceGroup?)
     case hideAddAccountSheet
@@ -117,8 +117,9 @@ enum FinanceAction {
     case hideDisplayCurrencySheet
     case setDisplayCurrency(String)
     case setOpenedSwipeGroupID(String?)
-    case moveGroup(from: Int, to: Int)
     case toggleGroupExpanded(String)
+    case toggleGroupFavorite(FinanceGroup)
+    case setGroupPriority(FinanceGroup, GroupPriority)
     case setGroupTotal(String, Double)
     case editAccount(FinanceAccount)
     case hideEditCardSheet
@@ -170,8 +171,8 @@ final class FinanceViewModel: ViewModelProtocol {
         case .deleteGroup(let group):
             deleteGroup(group)
             
-        case .updateGroup(let name, let colorHex, let displayCurrency):
-            updateGroup(name: name, colorHex: colorHex, displayCurrency: displayCurrency)
+        case .updateGroup(let name, let colorHex, let displayCurrency, let isFavorite, let priority):
+            updateGroup(name: name, colorHex: colorHex, displayCurrency: displayCurrency, isFavorite: isFavorite, priority: priority)
             
         case .hideGroupEditor:
             state.showGroupEditor = false
@@ -223,9 +224,6 @@ final class FinanceViewModel: ViewModelProtocol {
         case .setOpenedSwipeGroupID(let groupID):
             state.openedSwipeGroupID = groupID
             
-        case .moveGroup(let from, let to):
-            moveGroup(from: from, to: to)
-            
         case .toggleGroupExpanded(let groupID):
             if state.expandedGroupIDs.contains(groupID) {
                 state.expandedGroupIDs.remove(groupID)
@@ -261,42 +259,48 @@ final class FinanceViewModel: ViewModelProtocol {
             
         case .updateAccountAmount(let account, let newAmount):
             updateAccountAmount(account: account, newAmount: newAmount)
+            
+        case .toggleGroupFavorite(let group):
+            group.isFavorite.toggle()
+            group.updatedAt = Date()
+            do {
+                try modelContext.save()
+                loadGroups()
+            } catch {
+                AppLogger.log(.error, category: "Finance", "Failed to toggle group favorite: \(error.localizedDescription)")
+            }
+            
+        case .setGroupPriority(let group, let priority):
+            group.priority = priority
+            group.updatedAt = Date()
+            do {
+                try modelContext.save()
+                loadGroups()
+            } catch {
+                AppLogger.log(.error, category: "Finance", "Failed to set group priority: \(error.localizedDescription)")
+            }
     }
     }
     
     // MARK: - Private Methods
     
     private func loadGroups() {
-        let descriptor = FetchDescriptor<FinanceGroup>(
-            sortBy: [
-                SortDescriptor(\.order, order: .forward),
-                SortDescriptor(\.createdAt, order: .forward)
-            ]
-        )
+        let descriptor = FetchDescriptor<FinanceGroup>()
         if let groups = try? modelContext.fetch(descriptor) {
-            state.groups = groups
+            // Сортируем: сначала избранные, потом по приоритету, потом по дате создания
+            state.groups = groups.sorted { group1, group2 in
+                // Сначала избранные
+                if group1.isFavorite != group2.isFavorite {
+                    return group1.isFavorite
+                }
+                // Потом по приоритету
+                if group1.priority.sortOrder != group2.priority.sortOrder {
+                    return group1.priority.sortOrder < group2.priority.sortOrder
+                }
+                // Потом по дате создания
+                return group1.createdAt < group2.createdAt
+            }
             calculateTotalAmount()
-        }
-    }
-    
-    private func moveGroup(from: Int, to: Int) {
-        guard from >= 0, to >= 0, from < state.groups.count, to < state.groups.count, from != to else {
-            return
-        }
-        
-        let group = state.groups[from]
-        state.groups.remove(at: from)
-        state.groups.insert(group, at: to)
-        
-        // Обновляем порядок всех групп
-        for (index, group) in state.groups.enumerated() {
-            group.order = index
-        }
-        
-        do {
-            try modelContext.save()
-        } catch {
-            AppLogger.log(.error, category: "Finance", "Failed to save group order: \(error.localizedDescription)")
         }
     }
     
@@ -462,18 +466,20 @@ final class FinanceViewModel: ViewModelProtocol {
         }
     }
     
-    private func updateGroup(name: String, colorHex: String, displayCurrency: String?) {
+    private func updateGroup(name: String, colorHex: String, displayCurrency: String?, isFavorite: Bool, priority: GroupPriority) {
         let groupToUpdate: FinanceGroup
         if let existing = state.editingGroup {
             existing.name = name
             existing.colorHex = colorHex
             existing.displayCurrency = displayCurrency
+            existing.isFavorite = isFavorite
+            existing.priority = priority
             existing.updatedAt = Date()
             groupToUpdate = existing
         } else {
             // Находим максимальный order
             let maxOrder = state.groups.map { $0.order }.max() ?? -1
-            let newGroup = FinanceGroup(name: name, colorHex: colorHex, order: maxOrder + 1)
+            let newGroup = FinanceGroup(name: name, colorHex: colorHex, order: maxOrder + 1, isFavorite: isFavorite, priority: priority)
             newGroup.displayCurrency = displayCurrency
             modelContext.insert(newGroup)
             groupToUpdate = newGroup

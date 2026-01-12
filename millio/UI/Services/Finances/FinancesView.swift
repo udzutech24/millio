@@ -285,21 +285,6 @@ private struct FinancesContentViewInternal: View {
                             set: { viewModel.handle(.setOpenedSwipeGroupID($0)) }
                         )
                     )
-                    .draggable(group.groupUniqueID) {
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(.ultraThinMaterial)
-                            .frame(height: 60)
-                            .opacity(0.5)
-                    }
-                    .dropDestination(for: String.self) { droppedIDs, location in
-                        guard let droppedID = droppedIDs.first,
-                              let droppedIndex = viewModel.state.groups.firstIndex(where: { $0.groupUniqueID == droppedID }),
-                              droppedIndex != index else {
-                            return false
-                        }
-                        viewModel.handle(.moveGroup(from: droppedIndex, to: index))
-                        return true
-                    }
                 }
             }
         }
@@ -343,13 +328,72 @@ private struct FinanceGroupRow: View {
         viewModel.state.groupTotals[groupID] ?? 0.0
     }
     
-    private let swipeActionWidth: CGFloat = 140
+    private var priorityIcon: String {
+        switch group.priority {
+        case .high: return "arrow.up"
+        case .normal: return "minus"
+        case .low: return "arrow.down"
+        }
+    }
+    
+    private var priorityColor: Color {
+        switch group.priority {
+        case .high: return Color.green
+        case .normal: return Color.blue
+        case .low: return Color.gray
+        }
+    }
+    
+    private let swipeActionWidth: CGFloat = 240 // Для 4 кнопок
     
     var body: some View {
         ZStack(alignment: .trailing) {
             // Кнопки действий при свайпе
             HStack(spacing: 0) {
                 HStack(spacing: 0) {
+                    // Кнопка избранного
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            swipeOffset = 0
+                            openedSwipeGroupID = nil
+                        }
+                        viewModel.handle(.toggleGroupFavorite(group))
+                    } label: {
+                        Image(systemName: group.isFavorite ? "star.fill" : "star")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: swipeActionWidth / 4, height: 60)
+                            .background(
+                                LinearGradient(
+                                    colors: AppColors.incomeGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                    }
+                    
+                    // Кнопка приоритета (циклическое переключение)
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            swipeOffset = 0
+                            openedSwipeGroupID = nil
+                        }
+                        // Циклически переключаем приоритет: normal -> high -> low -> normal
+                        let nextPriority: GroupPriority
+                        switch group.priority {
+                        case .normal: nextPriority = .high
+                        case .high: nextPriority = .low
+                        case .low: nextPriority = .normal
+                        }
+                        viewModel.handle(.setGroupPriority(group, nextPriority))
+                    } label: {
+                        Image(systemName: priorityIcon)
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: swipeActionWidth / 4, height: 60)
+                            .background(priorityColor)
+                    }
+                    
                     // Кнопка редактирования
                     Button {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -361,7 +405,7 @@ private struct FinanceGroupRow: View {
                         Image(systemName: "pencil")
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(.white)
-                            .frame(width: swipeActionWidth / 2, height: 60)
+                            .frame(width: swipeActionWidth / 4, height: 60)
                             .background(
                                 LinearGradient(
                                     colors: [Color.blue, Color.cyan],
@@ -382,7 +426,7 @@ private struct FinanceGroupRow: View {
                         Image(systemName: "trash")
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(.white)
-                            .frame(width: swipeActionWidth / 2, height: 60)
+                            .frame(width: swipeActionWidth / 4, height: 60)
                             .background(AppColors.error)
                     }
                 }
@@ -407,10 +451,23 @@ private struct FinanceGroupRow: View {
                                 .frame(width: 4, height: 40)
                             
                             // Название группы
-                            Text(group.name)
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(AppColors.textPrimary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                            HStack(spacing: 6) {
+                                if group.isFavorite {
+                                    Image(systemName: "star.fill")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(
+                                            LinearGradient(
+                                                colors: AppColors.incomeGradient,
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                }
+                                Text(group.name)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(AppColors.textPrimary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             
                             // Сумма группы
                             HStack(alignment: .firstTextBaseline, spacing: 4) {
@@ -743,6 +800,8 @@ private struct FinanceGroupEditorView: View {
     @State private var selectedCurrency: String? = nil
     @State private var availableCurrencies: [String] = []
     @State private var isLoadingCurrencies = true
+    @State private var isFavorite: Bool = false
+    @State private var selectedPriority: GroupPriority = .normal
     
     private let predefinedColors: [Color] = [
         .blue, .cyan, .green, .mint, .purple, .pink,
@@ -817,6 +876,21 @@ private struct FinanceGroupEditorView: View {
                         Text("Валюта отображения")
                             .foregroundStyle(AppColors.textSecondary)
                     }
+                    
+                    Section {
+                        Toggle("В избранном", isOn: $isFavorite)
+                            .foregroundStyle(AppColors.textPrimary)
+                        
+                        Picker("Приоритет", selection: $selectedPriority) {
+                            ForEach(GroupPriority.allCases, id: \.self) { priority in
+                                Text(priority.displayName).tag(priority)
+                            }
+                        }
+                        .foregroundStyle(AppColors.textPrimary)
+                    } header: {
+                        Text("Дополнительно")
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
                 }
                 .scrollContentBackground(.hidden)
             }
@@ -848,6 +922,8 @@ private struct FinanceGroupEditorView: View {
                 if let editing = viewModel.state.editingGroup {
                     name = editing.name
                     selectedCurrency = editing.displayCurrency
+                    isFavorite = editing.isFavorite
+                    selectedPriority = editing.priority
                     // Находим соответствующий цвет из predefinedColors по hex-значению
                     let editingColorHex = editing.colorHex.uppercased()
                     if let matchingColor = predefinedColors.first(where: { color in
@@ -872,7 +948,7 @@ private struct FinanceGroupEditorView: View {
     
     private func saveGroup() {
         let colorHex = selectedColor.toHex()
-        viewModel.handle(.updateGroup(name: name, colorHex: colorHex, displayCurrency: selectedCurrency))
+        viewModel.handle(.updateGroup(name: name, colorHex: colorHex, displayCurrency: selectedCurrency, isFavorite: isFavorite, priority: selectedPriority))
         dismiss()
     }
     

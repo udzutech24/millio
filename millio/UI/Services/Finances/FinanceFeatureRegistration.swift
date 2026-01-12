@@ -50,12 +50,23 @@ struct FinanceGroupImporter: ModelImporter {
             existingGroup.colorHex = colorHex
             existingGroup.order = order
             existingGroup.displayCurrency = displayCurrency
+            if let isFavorite = dict["isFavorite"] as? Bool {
+                existingGroup.isFavorite = isFavorite
+            }
+            if let priorityRaw = dict["priorityRaw"] as? String,
+               let priority = GroupPriority(rawValue: priorityRaw) {
+                existingGroup.priority = priority
+            }
             existingGroup.updatedAt = Date(timeIntervalSince1970: updatedAt)
             return
         }
         
         // Создаем новую группу
-        let group = FinanceGroup(name: name, colorHex: colorHex, order: order)
+        let isFavorite = dict["isFavorite"] as? Bool ?? false
+        let priorityRaw = dict["priorityRaw"] as? String ?? "normal"
+        let priority = GroupPriority(rawValue: priorityRaw) ?? .normal
+        
+        let group = FinanceGroup(name: name, colorHex: colorHex, order: order, isFavorite: isFavorite, priority: priority)
         group.createdAt = Date(timeIntervalSince1970: createdAt)
         group.updatedAt = Date(timeIntervalSince1970: updatedAt)
         group.displayCurrency = displayCurrency

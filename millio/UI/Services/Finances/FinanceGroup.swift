@@ -27,8 +27,19 @@ final class FinanceGroup: Persistable {
     /// Порядок сортировки
     var order: Int = 0
     
+    /// Избранная группа
+    var isFavorite: Bool = false
+    
+    /// Приоритет группы
+    var priorityRaw: String = "normal"
+    
     /// Валюта отображения суммы группы (nil = использовать общую валюту)
     var displayCurrency: String? = nil
+    
+    var priority: GroupPriority {
+        get { GroupPriority(rawValue: priorityRaw) ?? .normal }
+        set { priorityRaw = newValue.rawValue }
+    }
     
     /// Связанные счета
     @Relationship(deleteRule: .nullify) var accounts: [FinanceAccount]? = nil
@@ -37,12 +48,14 @@ final class FinanceGroup: Persistable {
         Color(hex: colorHex) ?? Color.white
     }
     
-    init(name: String, colorHex: String = "#FFFFFF", order: Int = 0) {
+    init(name: String, colorHex: String = "#FFFFFF", order: Int = 0, isFavorite: Bool = false, priority: GroupPriority = .normal) {
         self.name = name
         self.colorHex = colorHex
         self.createdAt = Date()
         self.updatedAt = Date()
         self.order = order
+        self.isFavorite = isFavorite
+        self.priorityRaw = priority.rawValue
     }
     
     // MARK: - Exportable
@@ -59,6 +72,8 @@ final class FinanceGroup: Persistable {
             "createdAt": createdAt.timeIntervalSince1970,
             "updatedAt": updatedAt.timeIntervalSince1970,
             "order": order,
+            "isFavorite": isFavorite,
+            "priorityRaw": priorityRaw,
             "groupUniqueID": groupUniqueID
         ]
         if let displayCurrency = displayCurrency {
