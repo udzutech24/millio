@@ -95,6 +95,12 @@ struct FinanceState {
     
     /// Группа для отображения динамики
     var selectedGroupForDynamics: FinanceGroup? = nil
+    
+    /// Показывать ли динамику счета
+    var showAccountDynamics: Bool = false
+    
+    /// Счет для отображения динамики
+    var selectedAccountForDynamics: FinanceAccount? = nil
 }
 
 // MARK: - Finance Actions
@@ -133,6 +139,8 @@ enum FinanceAction {
     case updateAccountAmount(FinanceAccount, Double)
     case showGroupDynamics(FinanceGroup)
     case hideGroupDynamics
+    case showAccountDynamics(FinanceAccount)
+    case hideAccountDynamics
 }
 
 // MARK: - Finance ViewModel
@@ -289,6 +297,14 @@ final class FinanceViewModel: ViewModelProtocol {
         case .hideGroupDynamics:
             state.showGroupDynamics = false
             state.selectedGroupForDynamics = nil
+            
+        case .showAccountDynamics(let account):
+            state.selectedAccountForDynamics = account
+            state.showAccountDynamics = true
+            
+        case .hideAccountDynamics:
+            state.showAccountDynamics = false
+            state.selectedAccountForDynamics = nil
     }
     }
     

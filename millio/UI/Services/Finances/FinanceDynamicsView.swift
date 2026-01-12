@@ -22,13 +22,21 @@ struct FinanceDynamicsView: View {
     /// Валюта группы для предустановки (опционально)
     var initialGroupCurrency: String? = nil
     
+    /// ID счета для предустановки фильтров (опционально)
+    var initialAccountID: String? = nil
+    
+    /// Валюта счета для предустановки (опционально)
+    var initialAccountCurrency: String? = nil
+    
     var body: some View {
         Group {
             if let dynamicsViewModel = dynamicsViewModel {
                 FinanceDynamicsContentView(
                     viewModel: dynamicsViewModel,
                     appState: appState,
-                    showSubscriptionSheet: $showSubscriptionSheet
+                    showSubscriptionSheet: $showSubscriptionSheet,
+                    financeViewModel: financeViewModel,
+                    initialAccountID: initialAccountID
                 )
             } else {
                 ProgressView()
@@ -41,7 +49,9 @@ struct FinanceDynamicsView: View {
                     modelContext: modelContext,
                     financeViewModel: financeViewModel,
                     initialGroupID: initialGroupID,
-                    initialGroupCurrency: initialGroupCurrency
+                    initialGroupCurrency: initialGroupCurrency,
+                    initialAccountID: initialAccountID,
+                    initialAccountCurrency: initialAccountCurrency
                 )
                 dynamicsViewModel?.handle(.loadData)
             }
@@ -55,6 +65,8 @@ private struct FinanceDynamicsContentView: View {
     @ObservedObject var viewModel: FinanceDynamicsViewModel
     @Bindable var appState: AppState
     @Binding var showSubscriptionSheet: Bool
+    @ObservedObject var financeViewModel: FinanceViewModel
+    var initialAccountID: String? = nil
     @State private var isFiltersExpanded: Bool = false
     
     var body: some View {
@@ -86,6 +98,31 @@ private struct FinanceDynamicsContentView: View {
         }
         .navigationTitle("Динамика")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // Кнопка редактирования счета в режиме одного счета
+            if viewModel.state.isSingleAccountMode, let accountID = initialAccountID {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        // Находим счет во всех группах и открываем форму редактирования
+                        var foundAccount: FinanceAccount? = nil
+                        for group in financeViewModel.state.groups {
+                            if let accounts = group.accounts {
+                                if let account = accounts.first(where: { $0.accountUniqueID == accountID }) {
+                                    foundAccount = account
+                                    break
+                                }
+                            }
+                        }
+                        if let account = foundAccount {
+                            financeViewModel.handle(.editAccount(account))
+                        }
+                    } label: {
+                        Image(systemName: "pencil")
+                            .foregroundStyle(AppColors.textPrimary)
+                    }
+                }
+            }
+        }
         .sheet(isPresented: Binding(
             get: { viewModel.state.showDetailsSheet },
             set: { if !$0 { viewModel.handle(.hideDetailsSheet) } }
@@ -95,6 +132,31 @@ private struct FinanceDynamicsContentView: View {
         .sheet(isPresented: $showSubscriptionSheet) {
             NavigationStack {
                 SubscriptionView()
+            }
+        }
+        .sheet(isPresented: Binding(
+            get: { financeViewModel.state.showEditCardSheet || financeViewModel.state.showEditCreditSheet || financeViewModel.state.showEditInvestmentSheet },
+            set: { if !$0 {
+                if financeViewModel.state.showEditCardSheet {
+                    financeViewModel.handle(.hideEditCardSheet)
+                }
+                if financeViewModel.state.showEditCreditSheet {
+                    financeViewModel.handle(.hideEditCreditSheet)
+                }
+                if financeViewModel.state.showEditInvestmentSheet {
+                    financeViewModel.handle(.hideEditInvestmentSheet)
+                }
+            } }
+        )) {
+            if let cardID = financeViewModel.state.editingCardID,
+               let card = financeViewModel.state.availableCards.first(where: { $0.cardUniqueID == cardID }) {
+                FinanceEditCardView(card: card, viewModel: financeViewModel)
+            } else if let creditID = financeViewModel.state.editingCreditID,
+                      let credit = financeViewModel.state.availableCredits.first(where: { $0.creditUniqueID == creditID }) {
+                FinanceEditCreditView(credit: credit, viewModel: financeViewModel)
+            } else if let investmentID = financeViewModel.state.editingInvestmentID,
+                      let investment = financeViewModel.state.availableInvestments.first(where: { $0.investmentUniqueID == investmentID }) {
+                FinanceEditInvestmentView(investment: investment, viewModel: financeViewModel)
             }
         }
     }
@@ -137,13 +199,13 @@ private struct FinanceDynamicsContentView: View {
             // Валюта
             currencyPicker
             
-            // Группы (скрываем в режиме одной группы)
-            if !viewModel.state.isSingleGroupMode {
+            // Фильтр групп (скрываем в режиме одной группы или одного счета)
+            if !viewModel.state.isSingleGroupMode && !viewModel.state.isSingleAccountMode {
                 groupsFilter
             }
             
-            // Счета (показываем если выбраны группы или в режиме одной группы)
-            if !viewModel.state.selectedGroupIDs.isEmpty {
+            // Фильтр счетов (скрываем в режиме одного счета, показываем если выбраны группы или в режиме одной группы)
+            if !viewModel.state.isSingleAccountMode && (!viewModel.state.selectedGroupIDs.isEmpty || viewModel.state.isSingleGroupMode) {
                 accountsFilter
             }
         }

@@ -55,6 +55,9 @@ struct FinanceDynamicsState {
     /// Режим просмотра одной группы (скрывает фильтры групп)
     var isSingleGroupMode: Bool = false
     
+    /// Режим просмотра одного счета (скрывает фильтры групп и счетов)
+    var isSingleAccountMode: Bool = false
+    
     /// Все транзакции Cashflow для расчета динамики балансов
     var cashflowTransactions: [CashflowTransaction] = []
 }
@@ -114,18 +117,25 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     
     private let defaults = UserDefaults.standard
     
-    init(modelContext: ModelContext, financeViewModel: FinanceViewModel, initialGroupID: String? = nil, initialGroupCurrency: String? = nil) {
+    init(modelContext: ModelContext, financeViewModel: FinanceViewModel, initialGroupID: String? = nil, initialGroupCurrency: String? = nil, initialAccountID: String? = nil, initialAccountCurrency: String? = nil) {
         self.modelContext = modelContext
         self.financeViewModel = financeViewModel
         
-        // Если передан initialGroupID, устанавливаем его как выбранную группу и включаем режим одной группы
-        if let groupID = initialGroupID {
+        // Если передан initialAccountID, устанавливаем его как выбранный счет и включаем режим одного счета
+        if let accountID = initialAccountID {
+            state.selectedAccountIDs = [accountID]
+            state.isSingleAccountMode = true
+            state.isSingleGroupMode = true // В режиме одного счета также скрываем фильтры групп
+        } else if let groupID = initialGroupID {
+            // Если передан initialGroupID, устанавливаем его как выбранную группу и включаем режим одной группы
             state.selectedGroupIDs = [groupID]
             state.isSingleGroupMode = true
         }
         
-        // Если у группы есть своя валюта, используем её, иначе используем общую валюту
-        if let groupCurrency = initialGroupCurrency {
+        // Если у группы или счета есть своя валюта, используем её, иначе используем общую валюту
+        if let accountCurrency = initialAccountCurrency {
+            state.displayCurrency = accountCurrency
+        } else if let groupCurrency = initialGroupCurrency {
             state.displayCurrency = groupCurrency
         } else {
             state.displayCurrency = financeViewModel.state.displayCurrency
@@ -143,16 +153,19 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             loadData()
             
         case .selectGroups(let groupIDs):
-            // В режиме одной группы запрещаем изменение групп
-            if !state.isSingleGroupMode {
+            // В режиме одной группы или одного счета запрещаем изменение групп
+            if !state.isSingleGroupMode && !state.isSingleAccountMode {
                 state.selectedGroupIDs = groupIDs
                 state.selectedAccountIDs = [] // Сбрасываем выбор счетов при изменении групп
                 updateChartData()
             }
             
         case .selectAccounts(let accountIDs):
-            state.selectedAccountIDs = accountIDs
-            updateChartData()
+            // В режиме одного счета запрещаем изменение счетов
+            if !state.isSingleAccountMode {
+                state.selectedAccountIDs = accountIDs
+                updateChartData()
+            }
             
         case .setDisplayCurrency(let currency):
             state.displayCurrency = currency
@@ -163,8 +176,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             updateChartData()
             
         case .toggleGroup(let groupID):
-            // В режиме одной группы запрещаем изменение групп
-            if !state.isSingleGroupMode {
+            // В режиме одной группы или одного счета запрещаем изменение групп
+            if !state.isSingleGroupMode && !state.isSingleAccountMode {
                 if state.selectedGroupIDs.contains(groupID) {
                     state.selectedGroupIDs.remove(groupID)
                 } else {
@@ -175,12 +188,15 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             }
             
         case .toggleAccount(let accountID):
-            if state.selectedAccountIDs.contains(accountID) {
-                state.selectedAccountIDs.remove(accountID)
-            } else {
-                state.selectedAccountIDs.insert(accountID)
+            // В режиме одного счета запрещаем изменение счетов
+            if !state.isSingleAccountMode {
+                if state.selectedAccountIDs.contains(accountID) {
+                    state.selectedAccountIDs.remove(accountID)
+                } else {
+                    state.selectedAccountIDs.insert(accountID)
+                }
+                updateChartData()
             }
-            updateChartData()
             
         case .showDetailsSheet:
             state.showDetailsSheet = true
@@ -267,25 +283,45 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         
         // Собираем все счета из выбранных групп
         var accountsToShow: [FinanceAccount] = []
-        for group in groupsToShow {
-            if let accounts = group.accounts {
-                if state.selectedAccountIDs.isEmpty {
-                    accountsToShow.append(contentsOf: accounts)
-                } else {
-                    accountsToShow.append(contentsOf: accounts.filter { 
-                        state.selectedAccountIDs.contains($0.accountUniqueID) 
-                    })
+        
+        // В режиме одного счета ищем счет во всех группах
+        if state.isSingleAccountMode && !state.selectedAccountIDs.isEmpty {
+            for group in state.groups {
+                if let accounts = group.accounts {
+                    if let account = accounts.first(where: { state.selectedAccountIDs.contains($0.accountUniqueID) }) {
+                        accountsToShow.append(account)
+                        break // Нашли счет, выходим
+                    }
+                }
+            }
+        } else {
+            // Обычная логика: собираем счета из выбранных групп
+            for group in groupsToShow {
+                if let accounts = group.accounts {
+                    if state.selectedAccountIDs.isEmpty {
+                        accountsToShow.append(contentsOf: accounts)
+                    } else {
+                        accountsToShow.append(contentsOf: accounts.filter { 
+                            state.selectedAccountIDs.contains($0.accountUniqueID) 
+                        })
+                    }
                 }
             }
         }
         
         // Если ничего не выбрано, показываем общую сумму всех групп
         if groupsToShow.isEmpty && accountsToShow.isEmpty {
-            // Собираем все счета из всех групп
+            // Собираем все счета из всех групп, убирая дубликаты по accountUniqueID
             var allAccounts: [FinanceAccount] = []
+            var seenAccountIDs: Set<String> = []
             for group in state.groups {
                 if let accounts = group.accounts {
-                    allAccounts.append(contentsOf: accounts)
+                    for account in accounts {
+                        if !seenAccountIDs.contains(account.accountUniqueID) {
+                            allAccounts.append(account)
+                            seenAccountIDs.insert(account.accountUniqueID)
+                        }
+                    }
                 }
             }
             dataPoints = await buildTimeSeriesData(
@@ -329,16 +365,48 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             detailsLabel = accountsToShow.count == 1 ? (financeViewModel.getAccountInfo(account: accountsToShow.first!)?.name ?? "Счет") : "Выбранные счета"
         }
         
-        state.detailsData = await buildDetailsData(
-            accounts: accountsToShow.isEmpty ? (groupsToShow.isEmpty ? [] : {
-                var allGroupAccounts: [FinanceAccount] = []
-                for group in (groupsToShow.isEmpty ? state.groups : groupsToShow) {
+        // Для деталей используем те же счета, что и для графика, убирая дубликаты
+        var detailsAccounts: [FinanceAccount] = []
+        var seenAccountIDs: Set<String> = []
+        
+        if accountsToShow.isEmpty {
+            if groupsToShow.isEmpty {
+                // Все счета из всех групп
+                for group in state.groups {
                     if let accounts = group.accounts {
-                        allGroupAccounts.append(contentsOf: accounts)
+                        for account in accounts {
+                            if !seenAccountIDs.contains(account.accountUniqueID) {
+                                detailsAccounts.append(account)
+                                seenAccountIDs.insert(account.accountUniqueID)
+                            }
+                        }
                     }
                 }
-                return allGroupAccounts
-            }()) : accountsToShow,
+            } else {
+                // Все счета из выбранных групп
+                for group in groupsToShow {
+                    if let accounts = group.accounts {
+                        for account in accounts {
+                            if !seenAccountIDs.contains(account.accountUniqueID) {
+                                detailsAccounts.append(account)
+                                seenAccountIDs.insert(account.accountUniqueID)
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // Убираем дубликаты из выбранных счетов
+            for account in accountsToShow {
+                if !seenAccountIDs.contains(account.accountUniqueID) {
+                    detailsAccounts.append(account)
+                    seenAccountIDs.insert(account.accountUniqueID)
+                }
+            }
+        }
+        
+        state.detailsData = await buildDetailsData(
+            accounts: detailsAccounts,
             startDate: startDate,
             endDate: endDate,
             label: detailsLabel

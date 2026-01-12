@@ -390,7 +390,7 @@ private struct FinanceGroupRow: View {
                             accountType: account.accountType,
                             isCreditCardDebt: accountInfo.isCreditCardDebt,
                             onEdit: {
-                                viewModel.handle(.editAccount(account))
+                                viewModel.handle(.showAccountDynamics(account))
                             },
                             onDelete: {
                                 viewModel.handle(.removeAccountFromGroup(account))
@@ -709,15 +709,23 @@ private struct SheetsModifier: ViewModifier {
                 set: { if !$0 { viewModel.handle(.hideGroupDynamics) } }
             )) {
                 if let group = viewModel.state.selectedGroupForDynamics {
-                    NavigationStack {
-                        FinanceDynamicsView(
-                            financeViewModel: viewModel,
-                            initialGroupID: group.groupUniqueID,
-                            initialGroupCurrency: group.displayCurrency
-                        )
-                        .navigationTitle(group.name)
-                        .navigationBarTitleDisplayMode(.inline)
-                    }
+                    FinanceDynamicsView(
+                        financeViewModel: viewModel,
+                        initialGroupID: group.groupUniqueID,
+                        initialGroupCurrency: group.displayCurrency
+                    )
+                }
+            }
+            .sheet(isPresented: Binding(
+                get: { viewModel.state.showAccountDynamics },
+                set: { if !$0 { viewModel.handle(.hideAccountDynamics) } }
+            )) {
+                if let account = viewModel.state.selectedAccountForDynamics {
+                    FinanceDynamicsView(
+                        financeViewModel: viewModel,
+                        initialAccountID: account.accountUniqueID,
+                        initialAccountCurrency: viewModel.getAccountInfo(account: account)?.currency
+                    )
                 }
             }
     }
@@ -1492,7 +1500,7 @@ private struct FinanceInvestmentEditorWrapper: View {
 
 // MARK: - Finance Edit Views
 
-private struct FinanceEditCardView: View {
+struct FinanceEditCardView: View {
     let card: Card
     @ObservedObject var viewModel: FinanceViewModel
     @Environment(\.dismiss) private var dismiss
@@ -1538,7 +1546,7 @@ private struct FinanceEditCardView: View {
     }
 }
 
-private struct FinanceEditCreditView: View {
+struct FinanceEditCreditView: View {
     let credit: Credit
     @ObservedObject var viewModel: FinanceViewModel
     @Environment(\.dismiss) private var dismiss
@@ -1584,7 +1592,7 @@ private struct FinanceEditCreditView: View {
     }
 }
 
-private struct FinanceEditInvestmentView: View {
+struct FinanceEditInvestmentView: View {
     let investment: Investment
     @ObservedObject var viewModel: FinanceViewModel
     @Environment(\.dismiss) private var dismiss
