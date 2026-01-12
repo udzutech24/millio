@@ -119,6 +119,9 @@ struct FinanceState {
     
     /// Сумма цели накопления
     var savingsGoalAmount: Double = 0.0
+    
+    /// Скрыты ли суммы денег (показывать точки вместо цифр)
+    var isAmountHidden: Bool = false
 }
 
 // MARK: - Finance Actions
@@ -166,6 +169,7 @@ enum FinanceAction {
     case hideSavingsGoalSheet
     case setSavingsGoalEnabled(Bool)
     case setSavingsGoalAmount(Double)
+    case toggleAmountVisibility
 }
 
 // MARK: - Finance ViewModel
@@ -202,6 +206,11 @@ final class FinanceViewModel: ViewModelProtocol {
         set { defaults.set(newValue, forKey: "finance_savings_goal_amount") }
     }
     
+    private var storedAmountHidden: Bool {
+        get { defaults.bool(forKey: "finance_amount_hidden") }
+        set { defaults.set(newValue, forKey: "finance_amount_hidden") }
+    }
+    
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
         state.displayCurrency = storedDisplayCurrency
@@ -209,6 +218,7 @@ final class FinanceViewModel: ViewModelProtocol {
         state.secondaryDisplayCurrency = storedSecondaryDisplayCurrency
         state.isSavingsGoalEnabled = storedSavingsGoalEnabled
         state.savingsGoalAmount = storedSavingsGoalAmount
+        state.isAmountHidden = storedAmountHidden
         loadGroups()
         loadAccounts()
     }
@@ -384,6 +394,10 @@ final class FinanceViewModel: ViewModelProtocol {
         case .setSavingsGoalAmount(let amount):
             state.savingsGoalAmount = amount
             storedSavingsGoalAmount = amount
+            
+        case .toggleAmountVisibility:
+            state.isAmountHidden.toggle()
+            storedAmountHidden = state.isAmountHidden
     }
     }
     

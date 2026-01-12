@@ -126,6 +126,15 @@ private struct FinancesContentViewInternal: View {
     private var totalAmountSection: some View {
         VStack(spacing: 16) {
             HStack {
+                // Кнопка глаза для скрытия/показа сумм
+                Button {
+                    viewModel.handle(.toggleAmountVisibility)
+                } label: {
+                    Image(systemName: viewModel.state.isAmountHidden ? "eye.slash" : "eye")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(AppColors.textTertiary)
+                }
+                
                 Spacer()
                 
                 HStack(spacing: 8) {
@@ -176,7 +185,7 @@ private struct FinancesContentViewInternal: View {
             }
             
             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(formatBalance(viewModel.state.totalAmount))
+                Text(formatBalance(viewModel.state.totalAmount, isHidden: viewModel.state.isAmountHidden))
                     .font(.system(size: 32, weight: .bold))
                     .foregroundStyle(
                         LinearGradient(
@@ -197,7 +206,7 @@ private struct FinancesContentViewInternal: View {
             // Дополнительная валюта
             if let secondaryCurrency = viewModel.state.secondaryDisplayCurrency, viewModel.state.secondaryTotalAmount > 0 {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(formatBalance(viewModel.state.secondaryTotalAmount))
+                    Text(formatBalance(viewModel.state.secondaryTotalAmount, isHidden: viewModel.state.isAmountHidden))
                         .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(AppColors.textTertiary)
                     
@@ -218,7 +227,7 @@ private struct FinancesContentViewInternal: View {
                         .scaleEffect(x: 1, y: 1.5, anchor: .center)
                     
                     HStack {
-                        Text("Осталось: \(formatBalance(remaining)) \(viewModel.state.displayCurrency)")
+                        Text("Осталось: \(formatBalance(remaining, isHidden: viewModel.state.isAmountHidden)) \(viewModel.state.displayCurrency)")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(AppColors.textTertiary)
                         
@@ -319,7 +328,15 @@ private struct FinancesContentViewInternal: View {
     
     // MARK: - Helpers
     
-    private func formatBalance(_ balance: Double) -> String {
+    private func formatBalance(_ balance: Double, isHidden: Bool = false) -> String {
+        if isHidden {
+            // Подсчитываем количество цифр в числе
+            let digits = Int(balance.rounded())
+            let digitCount = String(digits).count
+            // Возвращаем точки вместо цифр
+            return String(repeating: "•", count: max(3, digitCount))
+        }
+        
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.groupingSeparator = " "
@@ -455,7 +472,7 @@ private struct FinanceGroupRow: View {
     
     private var groupAmountSection: some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
-            Text(formatBalance(groupTotal))
+            Text(formatBalance(groupTotal, isHidden: viewModel.state.isAmountHidden))
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(AppColors.textPrimary)
                 .lineLimit(1)
@@ -474,6 +491,7 @@ private struct FinanceGroupRow: View {
                 ForEach(accounts) { account in
                     if let accountInfo = viewModel.getAccountInfo(account: account) {
                         FinanceAccountRow(
+                            viewModel: viewModel,
                             account: account,
                             name: accountInfo.name,
                             amount: accountInfo.amount,
@@ -578,7 +596,15 @@ private struct FinanceGroupRow: View {
         group.displayCurrency ?? viewModel.state.displayCurrency
     }
     
-    private func formatBalance(_ balance: Double) -> String {
+    private func formatBalance(_ balance: Double, isHidden: Bool = false) -> String {
+        if isHidden {
+            // Подсчитываем количество цифр в числе
+            let digits = Int(balance.rounded())
+            let digitCount = String(digits).count
+            // Возвращаем точки вместо цифр
+            return String(repeating: "•", count: max(3, digitCount))
+        }
+        
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.groupingSeparator = " "
@@ -648,6 +674,7 @@ private struct GroupRowModifiers: ViewModifier {
 // MARK: - Finance Account Row
 
 private struct FinanceAccountRow: View {
+    @ObservedObject var viewModel: FinanceViewModel
     let account: FinanceAccount
     let name: String
     let amount: Double
@@ -685,7 +712,7 @@ private struct FinanceAccountRow: View {
                 onQuickEditAmount()
             } label: {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(formatBalance(amount))
+                    Text(formatBalance(amount, isHidden: viewModel.state.isAmountHidden))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(isCreditCardDebt ? AppColors.error : (amount >= 0 ? AppColors.textPrimary : AppColors.error))
                         .lineLimit(1)
@@ -707,7 +734,15 @@ private struct FinanceAccountRow: View {
         }
     }
     
-    private func formatBalance(_ balance: Double) -> String {
+    private func formatBalance(_ balance: Double, isHidden: Bool = false) -> String {
+        if isHidden {
+            // Подсчитываем количество цифр в числе
+            let digits = Int(balance.rounded())
+            let digitCount = String(digits).count
+            // Возвращаем точки вместо цифр
+            return String(repeating: "•", count: max(3, digitCount))
+        }
+        
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.groupingSeparator = " "
@@ -965,7 +1000,7 @@ private struct FinanceGroupEditorView: View {
                                                 .foregroundStyle(AppColors.textPrimary)
                                             
                                             HStack(spacing: 4) {
-                                                Text(formatAmount(accountInfo.amount))
+                                                Text(formatAmount(accountInfo.amount, isHidden: viewModel.state.isAmountHidden))
                                                     .font(.system(size: 12, weight: .regular))
                                                     .foregroundStyle(accountInfo.isCreditCardDebt ? AppColors.error : AppColors.textSecondary)
                                                 
@@ -1071,7 +1106,15 @@ private struct FinanceGroupEditorView: View {
         availableCurrencies = Array(fromRateSource.union(fromAccounts)).sorted()
     }
     
-    private func formatAmount(_ amount: Double) -> String {
+    private func formatAmount(_ amount: Double, isHidden: Bool = false) -> String {
+        if isHidden {
+            // Подсчитываем количество цифр в числе
+            let digits = Int(amount.rounded())
+            let digitCount = String(digits).count
+            // Возвращаем точки вместо цифр
+            return String(repeating: "•", count: max(3, digitCount))
+        }
+        
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.groupingSeparator = " "
@@ -2318,8 +2361,8 @@ private struct SavingsGoalSettingsView: View {
                                 let remaining = max(0, amount - viewModel.state.totalAmount)
                                 
                                 VStack(alignment: .leading, spacing: 8) {
-                                    Text("Текущая сумма: \(formatAmount(viewModel.state.totalAmount)) \(viewModel.state.displayCurrency)")
-                                    Text("Осталось накопить: \(formatAmount(remaining)) \(viewModel.state.displayCurrency)")
+                                    Text("Текущая сумма: \(formatAmount(viewModel.state.totalAmount, isHidden: viewModel.state.isAmountHidden)) \(viewModel.state.displayCurrency)")
+                                    Text("Осталось накопить: \(formatAmount(remaining, isHidden: viewModel.state.isAmountHidden)) \(viewModel.state.displayCurrency)")
                                     
                                     ProgressView(value: min(1.0, progress))
                                         .tint(AppColors.financesGradient.first)
@@ -2371,7 +2414,15 @@ private struct SavingsGoalSettingsView: View {
         }
     }
     
-    private func formatAmount(_ amount: Double) -> String {
+    private func formatAmount(_ amount: Double, isHidden: Bool = false) -> String {
+        if isHidden {
+            // Подсчитываем количество цифр в числе
+            let digits = Int(amount.rounded())
+            let digitCount = String(digits).count
+            // Возвращаем точки вместо цифр
+            return String(repeating: "•", count: max(3, digitCount))
+        }
+        
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.groupingSeparator = " "
