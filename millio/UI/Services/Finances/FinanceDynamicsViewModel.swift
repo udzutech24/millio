@@ -337,13 +337,50 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             eventDates.insert(account.updatedAt)
         }
         
-        // Добавляем даты транзакций Cashflow, которые влияют на выбранные счета
+        // Добавляем даты обновления самих карт/кредитов/инвестиций
+        // Это важно для отслеживания ручных изменений баланса (быстрое редактирование)
         let accountCardIDs = Set(accounts.compactMap { account -> String? in
             if account.accountType == .card {
                 return account.accountID
             }
             return nil
         })
+        
+        // Добавляем даты обновления карт
+        for cardID in accountCardIDs {
+            if let card = state.availableCards.first(where: { $0.cardUniqueID == cardID }) {
+                eventDates.insert(card.createdAt)
+                eventDates.insert(card.updatedAt) // Дата изменения баланса при быстром редактировании
+            }
+        }
+        
+        // Добавляем даты обновления кредитов
+        let accountCreditIDs = Set(accounts.compactMap { account -> String? in
+            if account.accountType == .credit {
+                return account.accountID
+            }
+            return nil
+        })
+        for creditID in accountCreditIDs {
+            if let credit = state.availableCredits.first(where: { $0.creditUniqueID == creditID }) {
+                eventDates.insert(credit.createdAt)
+                eventDates.insert(credit.updatedAt)
+            }
+        }
+        
+        // Добавляем даты обновления инвестиций
+        let accountInvestmentIDs = Set(accounts.compactMap { account -> String? in
+            if account.accountType == .investment {
+                return account.accountID
+            }
+            return nil
+        })
+        for investmentID in accountInvestmentIDs {
+            if let investment = state.availableInvestments.first(where: { $0.investmentUniqueID == investmentID }) {
+                eventDates.insert(investment.createdAt)
+                eventDates.insert(investment.updatedAt)
+            }
+        }
         
         for transaction in state.cashflowTransactions {
             // Проверяем, влияет ли транзакция на выбранные счета
