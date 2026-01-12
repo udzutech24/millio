@@ -41,11 +41,20 @@ struct FinanceState {
     /// Показывать ли sheet выбора валюты для отображения
     var showDisplayCurrencySheet: Bool = false
     
+    /// Показывать ли sheet выбора дополнительной валюты для отображения
+    var showSecondaryDisplayCurrencySheet: Bool = false
+    
     /// Валюта для отображения
     var displayCurrency: String = "RUB"
     
+    /// Дополнительная валюта для отображения
+    var secondaryDisplayCurrency: String? = nil
+    
     /// Общая сумма всех групп (в выбранной валюте)
     var totalAmount: Double = 0.0
+    
+    /// Общая сумма всех групп (в дополнительной валюте)
+    var secondaryTotalAmount: Double = 0.0
     
     /// Флаг загрузки курсов
     var isLoadingRates: Bool = false
@@ -135,6 +144,9 @@ enum FinanceAction {
     case showDisplayCurrencySheet
     case hideDisplayCurrencySheet
     case setDisplayCurrency(String)
+    case showSecondaryDisplayCurrencySheet
+    case hideSecondaryDisplayCurrencySheet
+    case setSecondaryDisplayCurrency(String?)
     case toggleGroupExpanded(String)
     case toggleGroupFavorite(FinanceGroup)
     case setGroupPriority(FinanceGroup, GroupPriority)
@@ -171,6 +183,15 @@ final class FinanceViewModel: ViewModelProtocol {
         set { defaults.set(newValue, forKey: "finance_display_currency") }
     }
     
+    private var storedSecondaryDisplayCurrency: String? {
+        get { 
+            let value = defaults.string(forKey: "finance_secondary_display_currency")
+            // Если значение не задано, возвращаем USD по умолчанию
+            return value ?? "USD"
+        }
+        set { defaults.set(newValue, forKey: "finance_secondary_display_currency") }
+    }
+    
     private var storedSavingsGoalEnabled: Bool {
         get { defaults.bool(forKey: "finance_savings_goal_enabled") }
         set { defaults.set(newValue, forKey: "finance_savings_goal_enabled") }
@@ -184,6 +205,8 @@ final class FinanceViewModel: ViewModelProtocol {
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
         state.displayCurrency = storedDisplayCurrency
+        // По умолчанию дополнительная валюта - USD
+        state.secondaryDisplayCurrency = storedSecondaryDisplayCurrency
         state.isSavingsGoalEnabled = storedSavingsGoalEnabled
         state.savingsGoalAmount = storedSavingsGoalAmount
         loadGroups()
@@ -254,10 +277,27 @@ final class FinanceViewModel: ViewModelProtocol {
         case .hideDisplayCurrencySheet:
             state.showDisplayCurrencySheet = false
             
+        case .showSecondaryDisplayCurrencySheet:
+            state.showSecondaryDisplayCurrencySheet = true
+            
+        case .hideSecondaryDisplayCurrencySheet:
+            state.showSecondaryDisplayCurrencySheet = false
+            
         case .setDisplayCurrency(let currency):
             state.displayCurrency = currency
             storedDisplayCurrency = currency
-            calculateTotalAmount()
+            Task {
+                await refreshRates()
+                await calculateTotalAmountAsync()
+            }
+            
+        case .setSecondaryDisplayCurrency(let currency):
+            state.secondaryDisplayCurrency = currency
+            storedSecondaryDisplayCurrency = currency
+            Task {
+                await refreshRates()
+                await calculateTotalAmountAsync()
+            }
             
         case .toggleGroupExpanded(let groupID):
             if state.expandedGroupIDs.contains(groupID) {
@@ -403,6 +443,18 @@ final class FinanceViewModel: ViewModelProtocol {
         }
         
         state.totalAmount = total
+        
+        // Рассчитываем сумму в дополнительной валюте, если она задана
+        if let secondaryCurrency = state.secondaryDisplayCurrency {
+            var secondaryTotal: Double = 0.0
+            for group in state.groups {
+                let groupTotal = await calculateGroupTotal(group: group, in: secondaryCurrency)
+                secondaryTotal += groupTotal
+            }
+            state.secondaryTotalAmount = secondaryTotal
+        } else {
+            state.secondaryTotalAmount = 0.0
+        }
     }
     
     /// Подсчитать сумму группы в указанной валюте

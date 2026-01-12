@@ -126,28 +126,52 @@ private struct FinancesContentViewInternal: View {
     private var totalAmountSection: some View {
         VStack(spacing: 16) {
             HStack {
-                Text("Общая сумма")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(AppColors.textTertiary)
-                
                 Spacer()
                 
-                Button {
-                    viewModel.handle(.showDisplayCurrencySheet)
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(viewModel.state.displayCurrency)
-                            .font(.system(size: 14, weight: .semibold))
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 10, weight: .semibold))
-                    }
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: AppColors.financesGradient,
-                            startPoint: .leading,
-                            endPoint: .trailing
+                HStack(spacing: 8) {
+                    Button {
+                        viewModel.handle(.showDisplayCurrencySheet)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(viewModel.state.displayCurrency)
+                                .font(.system(size: 14, weight: .semibold))
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 10, weight: .semibold))
+                        }
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: AppColors.financesGradient,
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
                         )
-                    )
+                    }
+                    
+                    if let secondaryCurrency = viewModel.state.secondaryDisplayCurrency {
+                        Button {
+                            viewModel.handle(.showSecondaryDisplayCurrencySheet)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(secondaryCurrency)
+                                    .font(.system(size: 12, weight: .medium))
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 8, weight: .medium))
+                            }
+                            .foregroundStyle(AppColors.textTertiary)
+                        }
+                    } else {
+                        Button {
+                            viewModel.handle(.showSecondaryDisplayCurrencySheet)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "plus.circle")
+                                    .font(.system(size: 12, weight: .medium))
+                                Text("Доп. валюта")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .foregroundStyle(AppColors.textTertiary)
+                        }
+                    }
                 }
             }
             
@@ -168,6 +192,19 @@ private struct FinancesContentViewInternal: View {
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(AppColors.textSecondary)
                     .lineLimit(1)
+            }
+            
+            // Дополнительная валюта
+            if let secondaryCurrency = viewModel.state.secondaryDisplayCurrency, viewModel.state.secondaryTotalAmount > 0 {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(formatBalance(viewModel.state.secondaryTotalAmount))
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(AppColors.textTertiary)
+                    
+                    Text(secondaryCurrency)
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(AppColors.textTertiary)
+                }
             }
             
             // Полоса прогресса цели накопления
@@ -722,7 +759,13 @@ private struct SheetsModifier: ViewModifier {
                 get: { viewModel.state.showDisplayCurrencySheet },
                 set: { if !$0 { viewModel.handle(.hideDisplayCurrencySheet) } }
             )) {
-                DisplayCurrencySheet(viewModel: viewModel)
+                DisplayCurrencySheet(viewModel: viewModel, isSecondary: false)
+            }
+            .sheet(isPresented: Binding(
+                get: { viewModel.state.showSecondaryDisplayCurrencySheet },
+                set: { if !$0 { viewModel.handle(.hideSecondaryDisplayCurrencySheet) } }
+            )) {
+                DisplayCurrencySheet(viewModel: viewModel, isSecondary: true)
             }
             .sheet(isPresented: Binding(
                 get: { viewModel.state.showEditCardSheet },
@@ -2107,7 +2150,10 @@ private struct FinanceCreateInvestmentView: View {
 private struct DisplayCurrencySheet: View {
     @ObservedObject var viewModel: FinanceViewModel
     @Environment(\.dismiss) private var dismiss
+    var isSecondary: Bool = false
     @State private var availableCurrencies: [String] = []
+    @State private var filteredCurrencies: [String] = []
+    @State private var searchText: String = ""
     @State private var isLoading = true
     
     var body: some View {
@@ -2119,35 +2165,71 @@ private struct DisplayCurrencySheet: View {
                     ProgressView()
                         .tint(AppColors.textPrimary)
                 } else {
-                    List {
-                        ForEach(availableCurrencies, id: \.self) { currency in
-                            Button {
-                                viewModel.handle(.setDisplayCurrency(currency))
-                                dismiss()
-                            } label: {
-                                HStack {
-                                    Text(currency)
-                                        .foregroundStyle(AppColors.textPrimary)
-                                    Spacer()
-                                    if viewModel.state.displayCurrency == currency {
-                                        Image(systemName: "checkmark")
-                                            .foregroundStyle(
-                                                LinearGradient(
-                                                    colors: AppColors.financesGradient,
-                                                    startPoint: .leading,
-                                                    endPoint: .trailing
-                                                )
-                                            )
+                    VStack(spacing: 0) {
+                        // Поиск
+                        HStack {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundStyle(AppColors.textTertiary)
+                            
+                            TextField("Поиск валют", text: $searchText)
+                                .foregroundStyle(AppColors.textPrimary)
+                                .autocorrectionDisabled()
+                                .textInputAutocapitalization(.never)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(.ultraThinMaterial)
+                        .cornerRadius(12)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                        
+                        List {
+                            ForEach(filteredCurrencies, id: \.self) { currency in
+                                Button {
+                                    if isSecondary {
+                                        viewModel.handle(.setSecondaryDisplayCurrency(currency))
+                                    } else {
+                                        viewModel.handle(.setDisplayCurrency(currency))
+                                    }
+                                    dismiss()
+                                } label: {
+                                    HStack {
+                                        Text(currency)
+                                            .foregroundStyle(AppColors.textPrimary)
+                                        Spacer()
+                                        if isSecondary {
+                                            if viewModel.state.secondaryDisplayCurrency == currency {
+                                                Image(systemName: "checkmark")
+                                                    .foregroundStyle(
+                                                        LinearGradient(
+                                                            colors: AppColors.financesGradient,
+                                                            startPoint: .leading,
+                                                            endPoint: .trailing
+                                                        )
+                                                    )
+                                            }
+                                        } else {
+                                            if viewModel.state.displayCurrency == currency {
+                                                Image(systemName: "checkmark")
+                                                    .foregroundStyle(
+                                                        LinearGradient(
+                                                            colors: AppColors.financesGradient,
+                                                            startPoint: .leading,
+                                                            endPoint: .trailing
+                                                        )
+                                                    )
+                                            }
+                                        }
                                     }
                                 }
+                                .listRowBackground(Color.clear)
                             }
-                            .listRowBackground(Color.clear)
                         }
+                        .scrollContentBackground(.hidden)
                     }
-                    .scrollContentBackground(.hidden)
                 }
             }
-            .navigationTitle("Валюта отображения")
+            .navigationTitle(isSecondary ? "Дополнительная валюта" : "Валюта отображения")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -2166,6 +2248,9 @@ private struct DisplayCurrencySheet: View {
             .task {
                 await loadAvailableCurrencies()
             }
+            .onChange(of: searchText) { _, _ in
+                filterCurrencies()
+            }
         }
     }
     
@@ -2182,6 +2267,17 @@ private struct DisplayCurrencySheet: View {
             viewModel.state.availableInvestments.map { $0.currency }
         )
         availableCurrencies = Array(fromRateSource.union(fromAccounts)).sorted()
+        filteredCurrencies = availableCurrencies
+    }
+    
+    private func filterCurrencies() {
+        if searchText.isEmpty {
+            filteredCurrencies = availableCurrencies
+        } else {
+            filteredCurrencies = availableCurrencies.filter { currency in
+                currency.localizedCaseInsensitiveContains(searchText)
+            }
+        }
     }
 }
 
