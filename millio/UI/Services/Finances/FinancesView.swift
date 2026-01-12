@@ -693,17 +693,6 @@ private struct FinanceAccountRow: View {
                     .foregroundStyle(AppColors.textSecondary)
                     .lineLimit(1)
             }
-            
-            // Кнопка удаления
-            Button {
-                onDelete()
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(AppColors.error)
-                    .frame(width: 24, height: 24)
-            }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 8)
