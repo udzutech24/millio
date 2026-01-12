@@ -61,7 +61,34 @@ private struct FinancesContentViewInternal: View {
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 16)
-                .padding(.bottom, 32)
+                .padding(.bottom, 100) // Дополнительный отступ снизу для FAB
+            }
+            
+            // Floating Action Button (FAB) внизу справа
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Button {
+                        viewModel.handle(.showAddAccountSheet(nil))
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 56, height: 56)
+                            .background(
+                                LinearGradient(
+                                    colors: AppColors.financesGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .clipShape(Circle())
+                            .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
+                    }
+                    .padding(.trailing, 24)
+                    .padding(.bottom, 24)
+                }
             }
         }
     }
@@ -78,20 +105,10 @@ private struct FinancesContentViewInternal: View {
         }
         
         ToolbarItem(placement: .navigationBarTrailing) {
-            Menu {
-                Button {
-                    viewModel.handle(.addGroup)
-                } label: {
-                    Label("Создать группу", systemImage: "folder.badge.plus")
-                }
-                
-                Button {
-                    viewModel.handle(.showAddAccountSheet(nil))
-                } label: {
-                    Label("Добавить счет", systemImage: "plus.circle")
-                }
+            Button {
+                viewModel.handle(.showSavingsGoalSheet)
             } label: {
-                Image(systemName: "plus")
+                Image(systemName: "gearshape")
                     .foregroundStyle(AppColors.textPrimary)
             }
         }
@@ -144,6 +161,37 @@ private struct FinancesContentViewInternal: View {
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(AppColors.textSecondary)
                     .lineLimit(1)
+            }
+            
+            // Полоса прогресса цели накопления
+            if viewModel.state.isSavingsGoalEnabled && viewModel.state.savingsGoalAmount > 0 {
+                VStack(spacing: 8) {
+                    let progress = min(1.0, viewModel.state.totalAmount / viewModel.state.savingsGoalAmount)
+                    let remaining = max(0, viewModel.state.savingsGoalAmount - viewModel.state.totalAmount)
+                    
+                    ProgressView(value: progress)
+                        .tint(AppColors.financesGradient.first)
+                        .scaleEffect(x: 1, y: 1.5, anchor: .center)
+                    
+                    HStack {
+                        Text("Осталось: \(formatBalance(remaining)) \(viewModel.state.displayCurrency)")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(AppColors.textTertiary)
+                        
+                        Spacer()
+                        
+                        Text("\(Int(progress * 100))%")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: AppColors.financesGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                    }
+                }
+                .padding(.top, 4)
             }
             
             if viewModel.state.isLoadingRates {
@@ -728,6 +776,12 @@ private struct SheetsModifier: ViewModifier {
                     )
                 }
             }
+            .sheet(isPresented: Binding(
+                get: { viewModel.state.showSavingsGoalSheet },
+                set: { if !$0 { viewModel.handle(.hideSavingsGoalSheet) } }
+            )) {
+                SavingsGoalSettingsView(viewModel: viewModel)
+            }
     }
 }
 
@@ -993,6 +1047,7 @@ private struct FinanceAddAccountView: View {
     @State private var showCreateCard = false
     @State private var showCreateCredit = false
     @State private var showCreateInvestment = false
+    @State private var showCreateGroup = false
     @State private var cardViewModel: CardViewModel?
     @State private var creditViewModel: CreditViewModel?
     @State private var investmentViewModel: InvestmentViewModel?
@@ -1029,11 +1084,29 @@ private struct FinanceAddAccountView: View {
     private var groupSection: some View {
         Section {
             if viewModel.state.groups.isEmpty {
-                Text("Сначала создайте группу")
-                    .font(.system(size: 14))
-                    .foregroundStyle(AppColors.textTertiary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 8)
+                VStack(spacing: 12) {
+                    Text("Сначала создайте группу")
+                        .font(.system(size: 14))
+                        .foregroundStyle(AppColors.textTertiary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 8)
+                    
+                    Button {
+                        showCreateGroup = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "folder.badge.plus")
+                            Text("Создать группу")
+                        }
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: AppColors.financesGradient,
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                    }
+                }
             } else {
                 Picker("Группа", selection: Binding(
                     get: { selectedGroupID ?? viewModel.state.selectedGroupForAccount?.groupUniqueID ?? viewModel.state.groups.first?.groupUniqueID ?? "" },
@@ -1050,6 +1123,22 @@ private struct FinanceAddAccountView: View {
                     }
                 }
                 .foregroundStyle(AppColors.textPrimary)
+                
+                Button {
+                    showCreateGroup = true
+                } label: {
+                    HStack {
+                        Image(systemName: "folder.badge.plus")
+                        Text("Создать новую группу")
+                    }
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: AppColors.financesGradient,
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                }
             }
         } header: {
             Text("Группа")
@@ -1261,6 +1350,17 @@ private struct FinanceAddAccountView: View {
                             }
                     }
                 }
+            }
+            .sheet(isPresented: $showCreateGroup) {
+                FinanceGroupEditorView(viewModel: viewModel)
+                    .onDisappear {
+                        // После создания группы обновляем список групп и выбираем новую группу
+                        viewModel.handle(.loadGroups)
+                        // Выбираем последнюю созданную группу (она будет последней в списке)
+                        if let newGroup = viewModel.state.groups.last {
+                            selectedGroupID = newGroup.groupUniqueID
+                        }
+                    }
             }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -1847,6 +1947,107 @@ private struct DisplayCurrencySheet: View {
             viewModel.state.availableInvestments.map { $0.currency }
         )
         availableCurrencies = Array(fromRateSource.union(fromAccounts)).sorted()
+    }
+}
+
+// MARK: - Savings Goal Settings View
+
+private struct SavingsGoalSettingsView: View {
+    @ObservedObject var viewModel: FinanceViewModel
+    @Environment(\.dismiss) private var dismiss
+    
+    @State private var isEnabled: Bool = false
+    @State private var goalAmount: String = ""
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                GradientBackground()
+                
+                Form {
+                    Section {
+                        Toggle("Включить цель накопления", isOn: $isEnabled)
+                            .foregroundStyle(AppColors.textPrimary)
+                    } header: {
+                        Text("Настройки цели")
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
+                    
+                    if isEnabled {
+                        Section {
+                            TextField("Сумма цели", text: $goalAmount)
+                                .keyboardType(.decimalPad)
+                                .foregroundStyle(AppColors.textPrimary)
+                        } header: {
+                            Text("Сумма цели (\(viewModel.state.displayCurrency))")
+                                .foregroundStyle(AppColors.textSecondary)
+                        } footer: {
+                            if let amount = Double(goalAmount), amount > 0 {
+                                let progress = viewModel.state.totalAmount / amount
+                                let remaining = max(0, amount - viewModel.state.totalAmount)
+                                
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Текущая сумма: \(formatAmount(viewModel.state.totalAmount)) \(viewModel.state.displayCurrency)")
+                                    Text("Осталось накопить: \(formatAmount(remaining)) \(viewModel.state.displayCurrency)")
+                                    
+                                    ProgressView(value: min(1.0, progress))
+                                        .tint(AppColors.financesGradient.first)
+                                    
+                                    Text("Прогресс: \(Int(min(100, progress * 100)))%")
+                                        .font(.caption)
+                                        .foregroundStyle(AppColors.textTertiary)
+                                }
+                                .padding(.top, 8)
+                            }
+                        }
+                    }
+                }
+                .scrollContentBackground(.hidden)
+            }
+            .navigationTitle("Цель накопления")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Отмена") {
+                        dismiss()
+                    }
+                    .foregroundStyle(AppColors.textPrimary)
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Сохранить") {
+                        viewModel.handle(.setSavingsGoalEnabled(isEnabled))
+                        if let amount = Double(goalAmount) {
+                            viewModel.handle(.setSavingsGoalAmount(amount))
+                        }
+                        dismiss()
+                    }
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: AppColors.financesGradient,
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                }
+            }
+            .onAppear {
+                isEnabled = viewModel.state.isSavingsGoalEnabled
+                if viewModel.state.savingsGoalAmount > 0 {
+                    goalAmount = String(format: "%.2f", viewModel.state.savingsGoalAmount)
+                }
+            }
+        }
+    }
+    
+    private func formatAmount(_ amount: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.groupingSeparator = " "
+        formatter.usesGroupingSeparator = true
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: amount)) ?? "0"
     }
 }
 

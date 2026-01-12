@@ -101,6 +101,15 @@ struct FinanceState {
     
     /// Счет для отображения динамики
     var selectedAccountForDynamics: FinanceAccount? = nil
+    
+    /// Показывать ли sheet настроек цели накопления
+    var showSavingsGoalSheet: Bool = false
+    
+    /// Включена ли цель накопления
+    var isSavingsGoalEnabled: Bool = false
+    
+    /// Сумма цели накопления
+    var savingsGoalAmount: Double = 0.0
 }
 
 // MARK: - Finance Actions
@@ -141,6 +150,10 @@ enum FinanceAction {
     case hideGroupDynamics
     case showAccountDynamics(FinanceAccount)
     case hideAccountDynamics
+    case showSavingsGoalSheet
+    case hideSavingsGoalSheet
+    case setSavingsGoalEnabled(Bool)
+    case setSavingsGoalAmount(Double)
 }
 
 // MARK: - Finance ViewModel
@@ -158,9 +171,21 @@ final class FinanceViewModel: ViewModelProtocol {
         set { defaults.set(newValue, forKey: "finance_display_currency") }
     }
     
+    private var storedSavingsGoalEnabled: Bool {
+        get { defaults.bool(forKey: "finance_savings_goal_enabled") }
+        set { defaults.set(newValue, forKey: "finance_savings_goal_enabled") }
+    }
+    
+    private var storedSavingsGoalAmount: Double {
+        get { defaults.double(forKey: "finance_savings_goal_amount") }
+        set { defaults.set(newValue, forKey: "finance_savings_goal_amount") }
+    }
+    
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
         state.displayCurrency = storedDisplayCurrency
+        state.isSavingsGoalEnabled = storedSavingsGoalEnabled
+        state.savingsGoalAmount = storedSavingsGoalAmount
         loadGroups()
         loadAccounts()
     }
@@ -305,6 +330,20 @@ final class FinanceViewModel: ViewModelProtocol {
         case .hideAccountDynamics:
             state.showAccountDynamics = false
             state.selectedAccountForDynamics = nil
+            
+        case .showSavingsGoalSheet:
+            state.showSavingsGoalSheet = true
+            
+        case .hideSavingsGoalSheet:
+            state.showSavingsGoalSheet = false
+            
+        case .setSavingsGoalEnabled(let enabled):
+            state.isSavingsGoalEnabled = enabled
+            storedSavingsGoalEnabled = enabled
+            
+        case .setSavingsGoalAmount(let amount):
+            state.savingsGoalAmount = amount
+            storedSavingsGoalAmount = amount
     }
     }
     
