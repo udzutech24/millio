@@ -29,31 +29,33 @@ struct FinanceDynamicsView: View {
     var initialAccountCurrency: String? = nil
     
     var body: some View {
-        Group {
-            if let dynamicsViewModel = dynamicsViewModel {
-                FinanceDynamicsContentView(
-                    viewModel: dynamicsViewModel,
-                    appState: appState,
-                    showSubscriptionSheet: $showSubscriptionSheet,
-                    financeViewModel: financeViewModel,
-                    initialAccountID: initialAccountID
-                )
-            } else {
-                ProgressView()
-                    .tint(AppColors.textPrimary)
+        NavigationStack {
+            Group {
+                if let dynamicsViewModel = dynamicsViewModel {
+                    FinanceDynamicsContentView(
+                        viewModel: dynamicsViewModel,
+                        appState: appState,
+                        showSubscriptionSheet: $showSubscriptionSheet,
+                        financeViewModel: financeViewModel,
+                        initialAccountID: initialAccountID
+                    )
+                } else {
+                    ProgressView()
+                        .tint(AppColors.textPrimary)
+                }
             }
-        }
-        .onAppear {
-            if dynamicsViewModel == nil {
-                dynamicsViewModel = FinanceDynamicsViewModel(
-                    modelContext: modelContext,
-                    financeViewModel: financeViewModel,
-                    initialGroupID: initialGroupID,
-                    initialGroupCurrency: initialGroupCurrency,
-                    initialAccountID: initialAccountID,
-                    initialAccountCurrency: initialAccountCurrency
-                )
-                dynamicsViewModel?.handle(.loadData)
+            .onAppear {
+                if dynamicsViewModel == nil {
+                    dynamicsViewModel = FinanceDynamicsViewModel(
+                        modelContext: modelContext,
+                        financeViewModel: financeViewModel,
+                        initialGroupID: initialGroupID,
+                        initialGroupCurrency: initialGroupCurrency,
+                        initialAccountID: initialAccountID,
+                        initialAccountCurrency: initialAccountCurrency
+                    )
+                    dynamicsViewModel?.handle(.loadData)
+                }
             }
         }
     }
@@ -98,31 +100,6 @@ private struct FinanceDynamicsContentView: View {
         }
         .navigationTitle("Динамика")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            // Кнопка редактирования счета в режиме одного счета
-            if viewModel.state.isSingleAccountMode, let accountID = initialAccountID {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        // Находим счет во всех группах и открываем форму редактирования
-                        var foundAccount: FinanceAccount? = nil
-                        for group in financeViewModel.state.groups {
-                            if let accounts = group.accounts {
-                                if let account = accounts.first(where: { $0.accountUniqueID == accountID }) {
-                                    foundAccount = account
-                                    break
-                                }
-                            }
-                        }
-                        if let account = foundAccount {
-                            financeViewModel.handle(.editAccount(account))
-                        }
-                    } label: {
-                        Image(systemName: "pencil")
-                            .foregroundStyle(AppColors.textPrimary)
-                    }
-                }
-            }
-        }
         .sheet(isPresented: Binding(
             get: { viewModel.state.showDetailsSheet },
             set: { if !$0 { viewModel.handle(.hideDetailsSheet) } }
