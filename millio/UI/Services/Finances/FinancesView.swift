@@ -1296,9 +1296,11 @@ private struct FinanceAddAccountView: View {
                     if let cardViewModel = cardViewModel {
                         FinanceCardEditorWrapper(
                             cardViewModel: cardViewModel,
+                            showCreateCard: $showCreateCard,
                             onCardCreated: { cardID in
                                 selectedCardID = cardID
                                 viewModel.handle(.loadAccounts)
+                                showCreateCard = false
                             }
                         )
                     } else {
@@ -1316,9 +1318,11 @@ private struct FinanceAddAccountView: View {
                     if let creditViewModel = creditViewModel {
                         FinanceCreditEditorWrapper(
                             creditViewModel: creditViewModel,
+                            showCreateCredit: $showCreateCredit,
                             onCreditCreated: { creditID in
                                 selectedCreditID = creditID
                                 viewModel.handle(.loadAccounts)
+                                showCreateCredit = false
                             }
                         )
                     } else {
@@ -1336,9 +1340,11 @@ private struct FinanceAddAccountView: View {
                     if let investmentViewModel = investmentViewModel {
                         FinanceInvestmentEditorWrapper(
                             investmentViewModel: investmentViewModel,
+                            showCreateInvestment: $showCreateInvestment,
                             onInvestmentCreated: { investmentID in
                                 selectedInvestmentID = investmentID
                                 viewModel.handle(.loadAccounts)
+                                showCreateInvestment = false
                             }
                         )
                     } else {
@@ -1479,7 +1485,7 @@ private struct FinanceAddAccountView: View {
 
 private struct FinanceCardEditorWrapper: View {
     @ObservedObject var cardViewModel: CardViewModel
-    @Environment(\.dismiss) private var dismiss
+    @Binding var showCreateCard: Bool
     let onCardCreated: (String) -> Void
     
     @State private var initialCardsCount: Int = 0
@@ -1500,7 +1506,6 @@ private struct FinanceCardEditorWrapper: View {
                     let newCards = cardViewModel.state.cards.filter { !initialCardIDs.contains($0.cardUniqueID) }
                     if let newCard = newCards.first {
                         onCardCreated(newCard.cardUniqueID)
-                        dismiss()
                     }
                 }
             }
@@ -1512,7 +1517,6 @@ private struct FinanceCardEditorWrapper: View {
                         let newCards = cardViewModel.state.cards.filter { !initialCardIDs.contains($0.cardUniqueID) }
                         if let newCard = newCards.first {
                             onCardCreated(newCard.cardUniqueID)
-                            dismiss()
                         }
                     }
                 }
@@ -1522,7 +1526,7 @@ private struct FinanceCardEditorWrapper: View {
 
 private struct FinanceCreditEditorWrapper: View {
     @ObservedObject var creditViewModel: CreditViewModel
-    @Environment(\.dismiss) private var dismiss
+    @Binding var showCreateCredit: Bool
     let onCreditCreated: (String) -> Void
     
     @State private var initialCreditsCount: Int = 0
@@ -1541,7 +1545,6 @@ private struct FinanceCreditEditorWrapper: View {
                     let newCredits = creditViewModel.state.credits.filter { !initialCreditIDs.contains($0.creditUniqueID) }
                     if let newCredit = newCredits.first {
                         onCreditCreated(newCredit.creditUniqueID)
-                        dismiss()
                     }
                 }
             }
@@ -1551,7 +1554,6 @@ private struct FinanceCreditEditorWrapper: View {
                         let newCredits = creditViewModel.state.credits.filter { !initialCreditIDs.contains($0.creditUniqueID) }
                         if let newCredit = newCredits.first {
                             onCreditCreated(newCredit.creditUniqueID)
-                            dismiss()
                         }
                     }
                 }
@@ -1561,7 +1563,7 @@ private struct FinanceCreditEditorWrapper: View {
 
 private struct FinanceInvestmentEditorWrapper: View {
     @ObservedObject var investmentViewModel: InvestmentViewModel
-    @Environment(\.dismiss) private var dismiss
+    @Binding var showCreateInvestment: Bool
     let onInvestmentCreated: (String) -> Void
     
     @State private var initialInvestmentsCount: Int = 0
@@ -1580,7 +1582,6 @@ private struct FinanceInvestmentEditorWrapper: View {
                     let newInvestments = investmentViewModel.state.investments.filter { !initialInvestmentIDs.contains($0.investmentUniqueID) }
                     if let newInvestment = newInvestments.first {
                         onInvestmentCreated(newInvestment.investmentUniqueID)
-                        dismiss()
                     }
                 }
             }
@@ -1590,7 +1591,6 @@ private struct FinanceInvestmentEditorWrapper: View {
                         let newInvestments = investmentViewModel.state.investments.filter { !initialInvestmentIDs.contains($0.investmentUniqueID) }
                         if let newInvestment = newInvestments.first {
                             onInvestmentCreated(newInvestment.investmentUniqueID)
-                            dismiss()
                         }
                     }
                 }
