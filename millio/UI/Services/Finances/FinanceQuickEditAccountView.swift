@@ -15,7 +15,7 @@ struct FinanceQuickEditAccountView: View {
     @State private var amountText: String = ""
     @State private var isLoading = false
     
-    var accountInfo: (name: String, amount: Double, currency: String, icon: String)? {
+    var accountInfo: (name: String, amount: Double, currency: String, icon: String, isCreditCardDebt: Bool)? {
         viewModel.getAccountInfo(account: account)
     }
     

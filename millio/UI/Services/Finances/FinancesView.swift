@@ -450,6 +450,7 @@ private struct FinanceGroupRow: View {
                                     currency: accountInfo.currency,
                                     icon: accountInfo.icon,
                                     accountType: account.accountType,
+                                    isCreditCardDebt: accountInfo.isCreditCardDebt,
                                     onEdit: {
                                         viewModel.handle(.editAccount(account))
                                     },
@@ -667,13 +668,10 @@ private struct FinanceAccountRow: View {
     let currency: String
     let icon: String
     let accountType: FinanceAccountType
+    let isCreditCardDebt: Bool
     let onEdit: () -> Void
     let onDelete: () -> Void
     let onQuickEditAmount: () -> Void
-    
-    private var isCreditCardDebt: Bool {
-        account.accountType == .card
-    }
     
     var body: some View {
         HStack(spacing: 12) {

@@ -403,30 +403,33 @@ final class FinanceViewModel: ViewModelProtocol {
     }
     
     /// Получить информацию о счете для отображения
-    func getAccountInfo(account: FinanceAccount) -> (name: String, amount: Double, currency: String, icon: String)? {
+    func getAccountInfo(account: FinanceAccount) -> (name: String, amount: Double, currency: String, icon: String, isCreditCardDebt: Bool)? {
         switch account.accountType {
         case .card:
             if let card = state.availableCards.first(where: { $0.cardUniqueID == account.accountID }) {
                 // Для кредитных карт показываем задолженность (debt)
                 let amount: Double
+                let isCreditCardDebt: Bool
                 if card.cardType == .credit, let limit = card.creditLimit {
                     // Задолженность = лимит - баланс
                     amount = max(0, limit - card.balance)
+                    isCreditCardDebt = true
                 } else {
                     // Для дебетовых карт показываем баланс
                     amount = card.balance
+                    isCreditCardDebt = false
                 }
-                return (card.name, amount, card.currency, card.cardType.icon)
+                return (card.name, amount, card.currency, card.cardType.icon, isCreditCardDebt)
             }
             
         case .credit:
             if let credit = state.availableCredits.first(where: { $0.creditUniqueID == account.accountID }) {
-                return (credit.name, credit.remainingAmount, credit.currency, credit.creditType.icon)
+                return (credit.name, credit.remainingAmount, credit.currency, credit.creditType.icon, false)
             }
             
         case .investment:
             if let investment = state.availableInvestments.first(where: { $0.investmentUniqueID == account.accountID }) {
-                return (investment.name, investment.amount, investment.currency, investment.category.icon)
+                return (investment.name, investment.amount, investment.currency, investment.category.icon, false)
             }
         }
         
