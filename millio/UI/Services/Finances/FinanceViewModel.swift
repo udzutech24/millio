@@ -445,16 +445,10 @@ final class FinanceViewModel: ViewModelProtocol {
     }
     
     private func deleteGroup(_ group: FinanceGroup) {
-        // Перемещаем все счета из удаляемой группы в первую доступную группу
-        if let accounts = group.accounts, !accounts.isEmpty {
-            // Находим первую доступную группу (не удаляемую)
-            if let targetGroup = state.groups.first(where: { $0.id != group.id }) {
-                for account in accounts {
-                    account.group = targetGroup
-                }
-            } else {
-                // Если нет других групп, удаляем счета вместе с группой
-                // (они будут удалены каскадно через deleteRule: .cascade)
+        // Отвязываем все счета от группы (но не удаляем их)
+        if let accounts = group.accounts {
+            for account in accounts {
+                account.group = nil
             }
         }
         

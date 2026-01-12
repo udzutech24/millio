@@ -31,7 +31,7 @@ final class FinanceGroup: Persistable {
     var displayCurrency: String? = nil
     
     /// Связанные счета
-    @Relationship(deleteRule: .cascade) var accounts: [FinanceAccount]? = nil
+    @Relationship(deleteRule: .nullify) var accounts: [FinanceAccount]? = nil
     
     var color: Color {
         Color(hex: colorHex) ?? Color.white
