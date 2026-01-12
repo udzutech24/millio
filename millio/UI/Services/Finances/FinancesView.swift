@@ -1072,16 +1072,46 @@ private struct FinanceAddAccountView: View {
     
     private var accountTypeSection: some View {
         Section {
-            Picker("Тип счета", selection: $selectedAccountType) {
+            VStack(spacing: 0) {
                 ForEach(FinanceAccountType.allCases, id: \.self) { type in
-                    HStack {
-                        Image(systemName: type.icon)
-                        Text(type.displayName)
+                    Button {
+                        selectedAccountType = type
+                    } label: {
+                        HStack {
+                            Image(systemName: type.icon)
+                                .foregroundStyle(AppColors.textPrimary)
+                                .frame(width: 24)
+                            
+                            Text(type.displayName)
+                                .foregroundStyle(AppColors.textPrimary)
+                            
+                            Spacer()
+                            
+                            if selectedAccountType == type {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: AppColors.financesGradient,
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
                     }
-                    .tag(type)
+                    .buttonStyle(.plain)
+                    
+                    if type != FinanceAccountType.allCases.last {
+                        Divider()
+                            .padding(.leading, 40)
+                    }
                 }
             }
-            .foregroundStyle(AppColors.textPrimary)
+            .background(.ultraThinMaterial)
+            .cornerRadius(12)
         } header: {
             Text("Тип счета")
                 .foregroundStyle(AppColors.textSecondary)
@@ -1115,21 +1145,48 @@ private struct FinanceAddAccountView: View {
                     }
                 }
             } else {
-                Picker("Группа", selection: Binding(
-                    get: { selectedGroupID ?? viewModel.state.selectedGroupForAccount?.groupUniqueID ?? viewModel.state.groups.first?.groupUniqueID ?? "" },
-                    set: { selectedGroupID = $0 }
-                )) {
+                let currentGroupID = selectedGroupID ?? viewModel.state.selectedGroupForAccount?.groupUniqueID ?? viewModel.state.groups.first?.groupUniqueID ?? ""
+                
+                VStack(spacing: 0) {
                     ForEach(viewModel.state.groups) { group in
-                        HStack {
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(group.color)
-                                .frame(width: 16, height: 16)
-                            Text(group.name)
+                        Button {
+                            selectedGroupID = group.groupUniqueID
+                        } label: {
+                            HStack {
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(group.color)
+                                    .frame(width: 16, height: 16)
+                                
+                                Text(group.name)
+                                    .foregroundStyle(AppColors.textPrimary)
+                                
+                                Spacer()
+                                
+                                if currentGroupID == group.groupUniqueID {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(
+                                            LinearGradient(
+                                                colors: AppColors.financesGradient,
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 16)
                         }
-                        .tag(group.groupUniqueID)
+                        .buttonStyle(.plain)
+                        
+                        if group.groupUniqueID != viewModel.state.groups.last?.groupUniqueID {
+                            Divider()
+                                .padding(.leading, 40)
+                        }
                     }
                 }
-                .foregroundStyle(AppColors.textPrimary)
+                .background(.ultraThinMaterial)
+                .cornerRadius(12)
                 
                 Button {
                     showCreateGroup = true
@@ -1175,16 +1232,73 @@ private struct FinanceAddAccountView: View {
         if viewModel.state.availableCards.isEmpty {
             createCardButton(isEmpty: true)
         } else {
-            Picker("Карта", selection: Binding(
-                get: { selectedCardID ?? "" },
-                set: { selectedCardID = $0.isEmpty ? nil : $0 }
-            )) {
-                Text("Выберите карту").tag("")
+            VStack(spacing: 0) {
+                Button {
+                    selectedCardID = nil
+                } label: {
+                    HStack {
+                        Text("Выберите карту")
+                            .foregroundStyle(AppColors.textSecondary)
+                        
+                        Spacer()
+                        
+                        if selectedCardID == nil {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: AppColors.financesGradient,
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                }
+                .buttonStyle(.plain)
+                
+                if !viewModel.state.availableCards.isEmpty {
+                    Divider()
+                        .padding(.leading, 16)
+                }
+                
                 ForEach(viewModel.state.availableCards) { card in
-                    Text(card.name).tag(card.cardUniqueID)
+                    Button {
+                        selectedCardID = card.cardUniqueID
+                    } label: {
+                        HStack {
+                            Text(card.name)
+                                .foregroundStyle(AppColors.textPrimary)
+                            
+                            Spacer()
+                            
+                            if selectedCardID == card.cardUniqueID {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: AppColors.financesGradient,
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                    }
+                    .buttonStyle(.plain)
+                    
+                    if card.cardUniqueID != viewModel.state.availableCards.last?.cardUniqueID {
+                        Divider()
+                            .padding(.leading, 16)
+                    }
                 }
             }
-            .foregroundStyle(AppColors.textPrimary)
+            .background(.ultraThinMaterial)
+            .cornerRadius(12)
             
             createCardButton(isEmpty: false)
         }
@@ -1195,16 +1309,73 @@ private struct FinanceAddAccountView: View {
         if viewModel.state.availableCredits.isEmpty {
             createCreditButton(isEmpty: true)
         } else {
-            Picker("Кредит", selection: Binding(
-                get: { selectedCreditID ?? "" },
-                set: { selectedCreditID = $0.isEmpty ? nil : $0 }
-            )) {
-                Text("Выберите кредит").tag("")
+            VStack(spacing: 0) {
+                Button {
+                    selectedCreditID = nil
+                } label: {
+                    HStack {
+                        Text("Выберите кредит")
+                            .foregroundStyle(AppColors.textSecondary)
+                        
+                        Spacer()
+                        
+                        if selectedCreditID == nil {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: AppColors.financesGradient,
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                }
+                .buttonStyle(.plain)
+                
+                if !viewModel.state.availableCredits.isEmpty {
+                    Divider()
+                        .padding(.leading, 16)
+                }
+                
                 ForEach(viewModel.state.availableCredits) { credit in
-                    Text(credit.name).tag(credit.creditUniqueID)
+                    Button {
+                        selectedCreditID = credit.creditUniqueID
+                    } label: {
+                        HStack {
+                            Text(credit.name)
+                                .foregroundStyle(AppColors.textPrimary)
+                            
+                            Spacer()
+                            
+                            if selectedCreditID == credit.creditUniqueID {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: AppColors.financesGradient,
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                    }
+                    .buttonStyle(.plain)
+                    
+                    if credit.creditUniqueID != viewModel.state.availableCredits.last?.creditUniqueID {
+                        Divider()
+                            .padding(.leading, 16)
+                    }
                 }
             }
-            .foregroundStyle(AppColors.textPrimary)
+            .background(.ultraThinMaterial)
+            .cornerRadius(12)
             
             createCreditButton(isEmpty: false)
         }
@@ -1215,16 +1386,73 @@ private struct FinanceAddAccountView: View {
         if viewModel.state.availableInvestments.isEmpty {
             createInvestmentButton(isEmpty: true)
         } else {
-            Picker("Актив", selection: Binding(
-                get: { selectedInvestmentID ?? "" },
-                set: { selectedInvestmentID = $0.isEmpty ? nil : $0 }
-            )) {
-                Text("Выберите актив").tag("")
+            VStack(spacing: 0) {
+                Button {
+                    selectedInvestmentID = nil
+                } label: {
+                    HStack {
+                        Text("Выберите актив")
+                            .foregroundStyle(AppColors.textSecondary)
+                        
+                        Spacer()
+                        
+                        if selectedInvestmentID == nil {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: AppColors.financesGradient,
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                }
+                .buttonStyle(.plain)
+                
+                if !viewModel.state.availableInvestments.isEmpty {
+                    Divider()
+                        .padding(.leading, 16)
+                }
+                
                 ForEach(viewModel.state.availableInvestments) { investment in
-                    Text(investment.name).tag(investment.investmentUniqueID)
+                    Button {
+                        selectedInvestmentID = investment.investmentUniqueID
+                    } label: {
+                        HStack {
+                            Text(investment.name)
+                                .foregroundStyle(AppColors.textPrimary)
+                            
+                            Spacer()
+                            
+                            if selectedInvestmentID == investment.investmentUniqueID {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: AppColors.financesGradient,
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                    }
+                    .buttonStyle(.plain)
+                    
+                    if investment.investmentUniqueID != viewModel.state.availableInvestments.last?.investmentUniqueID {
+                        Divider()
+                            .padding(.leading, 16)
+                    }
                 }
             }
-            .foregroundStyle(AppColors.textPrimary)
+            .background(.ultraThinMaterial)
+            .cornerRadius(12)
             
             createInvestmentButton(isEmpty: false)
         }
