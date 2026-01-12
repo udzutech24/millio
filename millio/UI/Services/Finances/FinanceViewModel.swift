@@ -59,8 +59,6 @@ struct FinanceState {
     /// Доступные активы
     var availableInvestments: [Investment] = []
     
-    /// ID группы с открытым свайпом (nil = нет открытого свайпа)
-    var openedSwipeGroupID: String? = nil
     
     /// Показывать ли редактор карты для редактирования
     var showEditCardSheet: Bool = false
@@ -116,7 +114,6 @@ enum FinanceAction {
     case showDisplayCurrencySheet
     case hideDisplayCurrencySheet
     case setDisplayCurrency(String)
-    case setOpenedSwipeGroupID(String?)
     case toggleGroupExpanded(String)
     case toggleGroupFavorite(FinanceGroup)
     case setGroupPriority(FinanceGroup, GroupPriority)
@@ -220,9 +217,6 @@ final class FinanceViewModel: ViewModelProtocol {
             state.displayCurrency = currency
             storedDisplayCurrency = currency
             calculateTotalAmount()
-            
-        case .setOpenedSwipeGroupID(let groupID):
-            state.openedSwipeGroupID = groupID
             
         case .toggleGroupExpanded(let groupID):
             if state.expandedGroupIDs.contains(groupID) {
