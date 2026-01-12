@@ -304,9 +304,9 @@ private struct FinancesContentViewInternal: View {
         formatter.numberStyle = .decimal
         formatter.groupingSeparator = " "
         formatter.usesGroupingSeparator = true
-        formatter.minimumFractionDigits = 2
-        formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: balance)) ?? "0.00"
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: balance)) ?? "0"
     }
 }
 
@@ -641,9 +641,9 @@ private struct FinanceGroupRow: View {
         formatter.numberStyle = .decimal
         formatter.groupingSeparator = " "
         formatter.usesGroupingSeparator = true
-        formatter.minimumFractionDigits = 2
-        formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: balance)) ?? "0.00"
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSNumber(value: balance)) ?? "0"
     }
 }
 
@@ -708,7 +708,7 @@ private struct FinanceAccountRow: View {
         formatter.groupingSeparator = " "
         formatter.usesGroupingSeparator = true
         formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 2
+        formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: balance)) ?? "0"
     }
 }
