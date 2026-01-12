@@ -402,13 +402,9 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             
             // Группируем по дню (без учета времени)
             let dayStart = calendar.startOfDay(for: date)
-            // Сохраняем баланс только если его еще нет для этого дня, или если это более поздняя дата в этот день
-            if let existingBalance = dailyBalances[dayStart] {
-                // Если баланс уже есть, берем максимальный (более поздний) баланс для этого дня
-                dailyBalances[dayStart] = max(existingBalance, balance)
-            } else {
-                dailyBalances[dayStart] = balance
-            }
+            // Всегда используем баланс на конец дня (после всех транзакций в этот день)
+            // Это гарантирует, что расходы правильно отображаются
+            dailyBalances[dayStart] = balance
         }
         
         // Преобразуем в массив ChartDataPoint, убирая дубликаты по дням
@@ -451,58 +447,57 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                             continue
                         }
                         
-                        let cardCreatedAt = card.createdAt
+                        // Используем текущий баланс карты и откатываем транзакции назад до нужной даты
+                        // Это проще и надежнее, чем пытаться рассчитать начальный баланс
+                        var cardBalance = card.balance
                         
-                        // Начальный баланс карты на момент создания
-                        // Откатываем все транзакции от текущего баланса, чтобы получить начальный баланс
-                        var initialBalance = card.balance
+                        // Откатываем все транзакции после нужной даты (от новых к старым)
+                        // Сортируем транзакции по убыванию даты
+                        let transactionsAfterDate = state.cashflowTransactions
+                            .filter { $0.transactionDate > date && $0.transactionDate <= Date() }
+                            .sorted(by: { $0.transactionDate > $1.transactionDate })
                         
-                        // Откатываем все транзакции от текущего момента назад до даты создания карты
-                        // Сортируем транзакции по убыванию даты (от новых к старым)
-                        let sortedTransactions = state.cashflowTransactions.sorted(by: { $0.transactionDate > $1.transactionDate })
-                        
-                        for transaction in sortedTransactions {
-                            // Обрабатываем только транзакции после создания карты и до текущего момента
-                            guard transaction.transactionDate >= cardCreatedAt && transaction.transactionDate <= Date() else { continue }
-                            
+                        for transaction in transactionsAfterDate {
                             switch transaction.transactionType {
                             case .income:
                                 if transaction.cardID == account.accountID {
+                                    // Откатываем доход - вычитаем
                                     let converted = await convertAmount(
                                         value: transaction.amount,
                                         from: transaction.currency,
                                         to: accountInfo.currency
                                     )
-                                    initialBalance -= converted // Откатываем доход
+                                    cardBalance -= converted
                                 }
                                 
                             case .expense:
                                 if transaction.cardID == account.accountID {
+                                    // Откатываем расход - возвращаем деньги
                                     let converted = await convertAmount(
                                         value: transaction.amount,
                                         from: transaction.currency,
                                         to: accountInfo.currency
                                     )
-                                    initialBalance += converted // Откатываем расход
+                                    cardBalance += converted
                                 }
                                 
                             case .transfer:
                                 if transaction.cardID == account.accountID {
-                                    // Перевод с этой карты - откатываем (возвращаем деньги)
+                                    // Откатываем перевод с карты - возвращаем деньги
                                     let converted = await convertAmount(
                                         value: transaction.amount,
                                         from: transaction.currency,
                                         to: accountInfo.currency
                                     )
-                                    initialBalance += converted
+                                    cardBalance += converted
                                 } else if transaction.toCardID == account.accountID {
-                                    // Перевод на эту карту - откатываем (забираем деньги)
+                                    // Откатываем перевод на карту - забираем деньги
                                     let converted = await convertAmount(
                                         value: transaction.amount,
                                         from: transaction.currency,
                                         to: accountInfo.currency
                                     )
-                                    initialBalance -= converted
+                                    cardBalance -= converted
                                 }
                                 
                             case .exchange:
@@ -510,58 +505,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                             }
                         }
                         
-                        // Теперь применяем транзакции от даты создания карты до нужной даты
-                        // Сортируем транзакции по возрастанию даты (от старых к новым)
-                        accountBalance = initialBalance
-                        let transactionsToApply = state.cashflowTransactions
-                            .filter { $0.transactionDate >= cardCreatedAt && $0.transactionDate <= date }
-                            .sorted(by: { $0.transactionDate < $1.transactionDate })
-                        
-                        for transaction in transactionsToApply {
-                            switch transaction.transactionType {
-                            case .income:
-                                if transaction.cardID == account.accountID {
-                                    let converted = await convertAmount(
-                                        value: transaction.amount,
-                                        from: transaction.currency,
-                                        to: accountInfo.currency
-                                    )
-                                    accountBalance += converted
-                                }
-                                
-                            case .expense:
-                                if transaction.cardID == account.accountID {
-                                    let converted = await convertAmount(
-                                        value: transaction.amount,
-                                        from: transaction.currency,
-                                        to: accountInfo.currency
-                                    )
-                                    accountBalance = max(0, accountBalance - converted)
-                                }
-                                
-                            case .transfer:
-                                if transaction.cardID == account.accountID {
-                                    // Перевод с этой карты
-                                    let converted = await convertAmount(
-                                        value: transaction.amount,
-                                        from: transaction.currency,
-                                        to: accountInfo.currency
-                                    )
-                                    accountBalance = max(0, accountBalance - converted)
-                                } else if transaction.toCardID == account.accountID {
-                                    // Перевод на эту карту
-                                    let converted = await convertAmount(
-                                        value: transaction.amount,
-                                        from: transaction.currency,
-                                        to: accountInfo.currency
-                                    )
-                                    accountBalance += converted
-                                }
-                                
-                            case .exchange:
-                                break
-                            }
-                        }
+                        // Используем рассчитанный баланс
+                        accountBalance = cardBalance
                         
                         // Для кредитных карт преобразуем баланс в задолженность (если нужно)
                         if card.cardType == .credit, let limit = card.creditLimit {
