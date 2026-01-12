@@ -55,6 +55,7 @@ private struct FinanceDynamicsContentView: View {
     @ObservedObject var viewModel: FinanceDynamicsViewModel
     @Bindable var appState: AppState
     @Binding var showSubscriptionSheet: Bool
+    @State private var isFiltersExpanded: Bool = false
     
     var body: some View {
         ZStack {
@@ -62,8 +63,13 @@ private struct FinanceDynamicsContentView: View {
             
             ScrollView {
                 VStack(spacing: 24) {
-                    // Фильтры
-                    filtersSection
+                    // Кнопка фильтров
+                    filtersToggleButton
+                    
+                    // Фильтры (показываем только если развернуты)
+                    if isFiltersExpanded {
+                        filtersSection
+                    }
                     
                     // График
                     chartSection
@@ -93,6 +99,34 @@ private struct FinanceDynamicsContentView: View {
         }
     }
     
+    // MARK: - Filters Toggle Button
+    
+    private var filtersToggleButton: some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                isFiltersExpanded.toggle()
+            }
+        } label: {
+            HStack {
+                Text("Фильтры")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                
+                Spacer()
+                
+                Image(systemName: isFiltersExpanded ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppColors.textSecondary)
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.black.opacity(0.3))
+            )
+        }
+        .buttonStyle(.plain)
+    }
+    
     // MARK: - Filters Section
     
     private var filtersSection: some View {
@@ -103,10 +137,12 @@ private struct FinanceDynamicsContentView: View {
             // Валюта
             currencyPicker
             
-            // Группы
-            groupsFilter
+            // Группы (скрываем в режиме одной группы)
+            if !viewModel.state.isSingleGroupMode {
+                groupsFilter
+            }
             
-            // Счета (показываем только если выбраны группы)
+            // Счета (показываем если выбраны группы или в режиме одной группы)
             if !viewModel.state.selectedGroupIDs.isEmpty {
                 accountsFilter
             }
@@ -128,12 +164,17 @@ private struct FinanceDynamicsContentView: View {
                 get: { viewModel.state.period },
                 set: { viewModel.handle(.setPeriod($0)) }
             )) {
-                ForEach(DynamicsPeriod.allCases, id: \.self) { period in
+                ForEach(availablePeriods, id: \.self) { period in
                     Text(period.rawValue).tag(period)
                 }
             }
             .pickerStyle(.segmented)
         }
+    }
+    
+    private var availablePeriods: [DynamicsPeriod] {
+        // Убираем период "День"
+        DynamicsPeriod.allCases.filter { $0 != .day }
     }
     
     private var currencyPicker: some View {

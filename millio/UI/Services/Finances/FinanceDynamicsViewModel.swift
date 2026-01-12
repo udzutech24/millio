@@ -48,6 +48,9 @@ struct FinanceDynamicsState {
     
     /// Показывать ли sheet с деталями
     var showDetailsSheet: Bool = false
+    
+    /// Режим просмотра одной группы (скрывает фильтры групп)
+    var isSingleGroupMode: Bool = false
 }
 
 // MARK: - Dynamics Period
@@ -109,9 +112,10 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         self.modelContext = modelContext
         self.financeViewModel = financeViewModel
         
-        // Если передан initialGroupID, устанавливаем его как выбранную группу
+        // Если передан initialGroupID, устанавливаем его как выбранную группу и включаем режим одной группы
         if let groupID = initialGroupID {
             state.selectedGroupIDs = [groupID]
+            state.isSingleGroupMode = true
         }
         
         // Если у группы есть своя валюта, используем её, иначе используем общую валюту
@@ -119,6 +123,11 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             state.displayCurrency = groupCurrency
         } else {
             state.displayCurrency = financeViewModel.state.displayCurrency
+        }
+        
+        // Если период установлен на "День", меняем на "Месяц" (так как период "День" убран из фильтров)
+        if state.period == .day {
+            state.period = .month
         }
     }
     
@@ -128,9 +137,12 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             loadData()
             
         case .selectGroups(let groupIDs):
-            state.selectedGroupIDs = groupIDs
-            state.selectedAccountIDs = [] // Сбрасываем выбор счетов при изменении групп
-            updateChartData()
+            // В режиме одной группы запрещаем изменение групп
+            if !state.isSingleGroupMode {
+                state.selectedGroupIDs = groupIDs
+                state.selectedAccountIDs = [] // Сбрасываем выбор счетов при изменении групп
+                updateChartData()
+            }
             
         case .selectAccounts(let accountIDs):
             state.selectedAccountIDs = accountIDs
@@ -145,13 +157,16 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             updateChartData()
             
         case .toggleGroup(let groupID):
-            if state.selectedGroupIDs.contains(groupID) {
-                state.selectedGroupIDs.remove(groupID)
-            } else {
-                state.selectedGroupIDs.insert(groupID)
+            // В режиме одной группы запрещаем изменение групп
+            if !state.isSingleGroupMode {
+                if state.selectedGroupIDs.contains(groupID) {
+                    state.selectedGroupIDs.remove(groupID)
+                } else {
+                    state.selectedGroupIDs.insert(groupID)
+                }
+                state.selectedAccountIDs = [] // Сбрасываем выбор счетов
+                updateChartData()
             }
-            state.selectedAccountIDs = [] // Сбрасываем выбор счетов
-            updateChartData()
             
         case .toggleAccount(let accountID):
             if state.selectedAccountIDs.contains(accountID) {
