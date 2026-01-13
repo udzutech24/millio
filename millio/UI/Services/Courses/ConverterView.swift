@@ -610,7 +610,7 @@ struct ConverterView: View {
     
     
     // MARK: - Keypad (нижний ряд заполняет ширину)
-    private enum KeyKind { case dark, gray, accent }
+    private enum KeyKind { case dark, gray, grayTop, accent }
     
     @ViewBuilder
     private func neonCapsule(background: Color, corner: CGFloat = 28) -> some View {
@@ -634,9 +634,9 @@ struct ConverterView: View {
                 // Rows 1-4 в сетке 4x4
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: spacing), count: 4), spacing: spacing) {
                 // Row 1
-                iconKey("delete.left", kind: .gray, height: height, fontSize: fontSize) { viewModel.handle(.backspace) }
-                key("C", kind: .gray, height: height, fontSize: fontSize) { viewModel.handle(.clearAll) }
-                key("%", kind: .gray, height: height, fontSize: fontSize) { viewModel.handle(.percent) }
+                iconKey("delete.left", kind: .grayTop, height: height, fontSize: fontSize) { viewModel.handle(.backspace) }
+                key("C", kind: .grayTop, height: height, fontSize: fontSize) { viewModel.handle(.clearAll) }
+                key("%", kind: .grayTop, height: height, fontSize: fontSize) { viewModel.handle(.percent) }
                 iconKey("divide", kind: .accent, height: height, fontSize: fontSize) { viewModel.handle(.operation("/")) }
                     
                     // Row 2
@@ -727,7 +727,8 @@ struct ConverterView: View {
     private func backgroundColor(for kind: KeyKind) -> Color {
         switch kind {
         case .dark: return Color(hex: "D9D9D9").opacity(0.2) // Светло-серый с opacity 20% для цифр
-        case .gray: return Color(hex: "D9D9D9").opacity(0.2) // Светло-серый с opacity 20% для C, %, запятой, удаления
+        case .gray: return Color(hex: "D9D9D9").opacity(0.2) // Светло-серый с opacity 20% для запятой
+        case .grayTop: return Color(hex: "#D9D9D9").opacity(0.4) // Светло-серый с opacity 40% для первых трех кнопок (удаление, C, %)
         case .accent: return Color(hex: "68A5FF").opacity(0.6) // Синий с opacity 60% для операторов и =
         }
     }
