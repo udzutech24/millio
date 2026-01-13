@@ -37,9 +37,7 @@ struct MainAppView: View {
                         Button {
                             viewModel.handle(.navigateToProfile)
                         } label: {
-                            Image(systemName: "person.circle")
-                                .font(.system(size: 28))
-                                .foregroundStyle(AppColors.textPrimary)
+                            Image("profile")
                         }
                         
                         Spacer()
@@ -48,15 +46,15 @@ struct MainAppView: View {
                         Button {
                             viewModel.handle(.navigateToSubscription)
                         } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: appState.isPro ? "star.fill" : "star")
+                            HStack(spacing: 8) {
+                                Image(appState.isPro ? "star" : "star")
                                     .font(.system(size: 14))
                                 Text("PRO")
-                                    .font(.system(size: 14, weight: .semibold))
+                                    .font(.system(size: 15, weight: .medium))
                             }
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
                             .background {
                                 Capsule()
                                     .stroke(
@@ -76,22 +74,18 @@ struct MainAppView: View {
                     .padding(.top, 16)
                     
                     // Title and slogan
-                    VStack(spacing: 8) {
+                    VStack(spacing: 0) {
                         Text("millio")
-                            .font(.system(size: 42, weight: .bold))
-                            .foregroundStyle(AppColors.textPrimary)
+                            .font(.system(size: 34, weight: .bold))
+                            .foregroundStyle(Color.white)
                         
                         Text("ваш лучший помощник")
-                            .font(.system(size: 16, weight: .regular))
-                            .foregroundStyle(Color(hex: "19E694"))
-                            .overlay(alignment: .bottom) {
-                                Rectangle()
-                                    .fill(Color(hex: "19E694"))
-                                    .frame(height: 1)
-                            }
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(Color.white)
+                          
                     }
-                    .padding(.top, 32)
-                    .padding(.bottom, 40)
+                    .padding(.top, 24)
+                    .padding(.bottom, 30)
                     
                     // Service buttons grid
                     servicesGrid

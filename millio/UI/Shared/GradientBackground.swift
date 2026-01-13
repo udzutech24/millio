@@ -75,3 +75,18 @@ private struct NoiseTexture: View {
     }
 }
 
+
+// Генератор случайных чисел с seed для стабильности (используется в GradientBackground)
+struct SeededRandomNumberGenerator: RandomNumberGenerator {
+    private var state: UInt64
+    
+    init(seed: Int) {
+        state = UInt64(seed)
+    }
+    
+    mutating func next() -> UInt64 {
+        state = state &* 1103515245 &+ 12345
+        return state
+    }
+}
+

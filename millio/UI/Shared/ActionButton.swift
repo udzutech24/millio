@@ -16,68 +16,59 @@ struct ActionButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
+                
+                // MARK: Glass Icon Circle
                 ZStack {
                     Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: gradientColors,
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
+                        .fill(Color.clear)
+                        .overlay(
+                            Circle()
+                                .stroke(
+                                    LinearGradient(
+                                        colors: gradientColors,
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1
+                                )
                         )
-                        .frame(width: 32, height: 32)
+                        .frame(width: 48, height: 48)
+                        
                     
-                    Image(systemName: icon)
-                        .font(.system(size: 16, weight: .semibold))
+                    Image(icon)
+                        .font(.system(size: 16, weight: .regular))
                         .foregroundStyle(.white)
                 }
+                .padding(.leading, 10)
                 
                 Text(title)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 15, weight: .regular))
                     .foregroundStyle(AppColors.textPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 
                 Spacer()
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 18)
+            .frame(height: 68) 
             .background {
                 ZStack {
-                    // Эффект стекла с blur
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(.ultraThinMaterial)
+
                     
-                    // Обводка с градиентом
-                    RoundedRectangle(cornerRadius: 20)
+                    // Gradient stroke
+                    RoundedRectangle(cornerRadius: 999)
                         .stroke(
                             LinearGradient(
                                 colors: gradientColors,
                                 startPoint: .leading,
                                 endPoint: .trailing
                             ),
-                            lineWidth: 2
+                            lineWidth: 1
                         )
-                    
                 }
             }
-           
         }
         .buttonStyle(.plain)
     }
 }
 
 
-// Генератор случайных чисел с seed для стабильности (используется в ActionButton и GradientBackground)
-struct SeededRandomNumberGenerator: RandomNumberGenerator {
-    private var state: UInt64
-    
-    init(seed: Int) {
-        state = UInt64(seed)
-    }
-    
-    mutating func next() -> UInt64 {
-        state = state &* 1103515245 &+ 12345
-        return state
-    }
-}

@@ -107,11 +107,11 @@ enum AppColors {
     
     // MARK: - Action Button Gradients
     
-    /// Градиент для кнопки "Расход" (фиолетовый -> розовый/красный)
-    static let expenseGradient = [Color(hex: "BD00E7"), Color(hex: "FF006E")]
+    /// Градиент для кнопки "Расход" (синий -> розовый)
+    static let expenseGradient = [Color(hex: "197CE6"), Color(hex: "FF02A6")]
     
-    /// Градиент для кнопки "Доход" (голубой -> зеленый)
-    static let incomeGradient = [Color(hex: "19E694"), Color(hex: "00D4AA")]
+    /// Градиент для кнопки "Доход" (зеленый -> синий)
+    static let incomeGradient = [Color(hex: "19E694"), Color(hex: "0947E4")]
     
     // MARK: - UI Elements
     
