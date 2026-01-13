@@ -334,7 +334,6 @@ final class Credit: Persistable {
         guard amount > 0, remainingAmount > 0, !isClosed else { return }
         
         // Сначала обновляем остаток
-        let oldRemaining = remainingAmount
         remainingAmount -= amount
         earlyPaymentsAmount += amount
         
@@ -372,7 +371,7 @@ final class Credit: Persistable {
     }
     
     func export() throws -> Data {
-        var dict: [String: Any] = [
+        let dict: [String: Any] = [
             "type": "Credit",
             "name": name,
             "amount": amount,

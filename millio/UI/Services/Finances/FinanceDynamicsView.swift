@@ -556,7 +556,6 @@ private struct FinanceDynamicsContentView: View {
     
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
-        let calendar = Calendar.current
         
         switch viewModel.state.period {
         case .day:

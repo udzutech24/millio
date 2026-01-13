@@ -80,47 +80,41 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         checkTrialStatus()
         
         // Проверяем активные подписки через StoreKit
-        do {
-            var hasActiveSubscription = false
-            var latestExpirationDate: Date?
-            
-            // Получаем все активные подписки
-            for await result in Transaction.currentEntitlements {
-                switch result {
-                case .verified(let transaction):
-                    if let expirationDate = transaction.expirationDate,
-                       expirationDate > Date() {
-                        hasActiveSubscription = true
-                        if latestExpirationDate == nil || expirationDate > latestExpirationDate! {
-                            latestExpirationDate = expirationDate
-                        }
+        var hasActiveSubscription = false
+        var latestExpirationDate: Date?
+        
+        // Получаем все активные подписки
+        for await result in Transaction.currentEntitlements {
+            switch result {
+            case .verified(let transaction):
+                if let expirationDate = transaction.expirationDate,
+                   expirationDate > Date() {
+                    hasActiveSubscription = true
+                    if latestExpirationDate == nil || expirationDate > latestExpirationDate! {
+                        latestExpirationDate = expirationDate
                     }
-                case .unverified:
-                    continue
                 }
+            case .unverified:
+                continue
             }
-            
-            if hasActiveSubscription, let expiration = latestExpirationDate {
-                self.status = .subscribed
-                self.expirationDate = expiration
-                self.isTrialActive = false
-                saveLocalStatus()
-                logger.info("Active subscription found, expires: \(expiration)")
+        }
+        
+        if hasActiveSubscription, let expiration = latestExpirationDate {
+            self.status = .subscribed
+            self.expirationDate = expiration
+            self.isTrialActive = false
+            saveLocalStatus()
+            logger.info("Active subscription found, expires: \(expiration)")
+        } else {
+            // Если нет активной подписки, проверяем триал
+            if isTrialActive {
+                self.status = .trial
             } else {
-                // Если нет активной подписки, проверяем триал
-                if isTrialActive {
-                    self.status = .trial
-                } else {
-                    self.status = .notSubscribed
-                }
-                self.expirationDate = nil
-                saveLocalStatus()
-                logger.info("No active subscription found")
+                self.status = .notSubscribed
             }
-        } catch {
-            logger.error("Failed to check subscription status: \(error.localizedDescription)")
-            // В случае ошибки используем локально сохраненный статус (offline-first)
-            loadLocalStatus()
+            self.expirationDate = nil
+            saveLocalStatus()
+            logger.info("No active subscription found")
         }
     }
     
@@ -234,17 +228,13 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
     private func listenForTransactions() -> Task<Void, Never> {
         return Task.detached { [weak self] in
             for await result in Transaction.updates {
-                do {
-                    switch result {
-                    case .verified(let transaction):
-                        await transaction.finish()
-                        await self?.checkSubscriptionStatus()
-                    case .unverified:
-                        // Пропускаем непроверенные транзакции
-                        continue
-                    }
-                } catch {
-                    self?.logger.error("Transaction verification failed: \(error.localizedDescription)")
+                switch result {
+                case .verified(let transaction):
+                    await transaction.finish()
+                    await self?.checkSubscriptionStatus()
+                case .unverified:
+                    // Пропускаем непроверенные транзакции
+                    continue
                 }
             }
         }

@@ -232,7 +232,7 @@ final class CardViewModel: ViewModelProtocol {
     }
     
     private func applyFilters() {
-        var filtered = state.cards
+        let filtered = state.cards
         
         // Показываем все карты без фильтрации
         state.filteredCards = filtered

@@ -350,9 +350,9 @@ final class DataRepository: DataRepositoryProtocol {
             
             // Если это FinanceAccount, восстанавливаем связь с группой
             if typeName == "FinanceAccount" {
-                var accountData = modelData
+                let accountData = modelData
                 if let groupUniqueID = accountData["groupUniqueID"] as? String,
-                   let group = groupUniqueIDMapping[groupUniqueID] {
+                   let _ = groupUniqueIDMapping[groupUniqueID] {
                     // Связь будет установлена через импортер
                 }
                 

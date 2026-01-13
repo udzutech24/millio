@@ -54,7 +54,6 @@ struct ConverterView: View {
 #endif
         let headerH: CGFloat = 52
         let topPadding: CGFloat = 8
-        let bottomPadding: CGFloat = 0 // Убрали лишний отступ
         
         // Минимальные размеры для клавиатуры
         let minKeyHeight: CGFloat = 44
