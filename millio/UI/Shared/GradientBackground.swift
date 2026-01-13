@@ -8,17 +8,23 @@
 import SwiftUI
 
 struct GradientBackground: View {
+    // Кастомные цвета для градиентов (опционально)
+    var topGradientColor: String? = nil
+    var topGradientFadeColor: String? = nil
+    var bottomGradientColor: String? = nil
+    var bottomGradientFadeColor: String? = nil
+    
     var body: some View {
         ZStack {
             // Основной цвет фона
             Color(hex: "161C29")
                 .ignoresSafeArea()
             
-            // Верхний радиальный градиент (зеленоватый)
+            // Верхний радиальный градиент
             RadialGradient(
                 gradient: Gradient(colors: [
-                    Color(hex: "19E694").opacity(1.0),
-                    Color(hex: "0081E7").opacity(0.05)
+                    Color(hex: topGradientColor ?? "19E694").opacity(1.0),
+                    Color(hex: topGradientFadeColor ?? "0081E7").opacity(0.05)
                 ]),
                 center: UnitPoint(x: 1.3, y: 0),
                 startRadius: 0,
@@ -29,11 +35,11 @@ struct GradientBackground: View {
             .shadow(color: Color(hex: "0061A7").opacity(0.3), radius: 10, x: -10, y: 4)
             .blur(radius: 50)
             
-            // Нижний радиальный градиент (фиолетовый)
+            // Нижний радиальный градиент
             RadialGradient(
                 gradient: Gradient(colors: [
-                    Color(hex: "BD00E7").opacity(1.0),
-                    Color(hex: "196EE6").opacity(0.05)
+                    Color(hex: bottomGradientColor ?? "BD00E7").opacity(1.0),
+                    Color(hex: bottomGradientFadeColor ?? "196EE6").opacity(0.05)
                 ]),
                 center: UnitPoint(x: 0.5, y: 1.2),
                 startRadius: 0,

@@ -107,7 +107,12 @@ struct ConverterView: View {
     
     var body: some View {
         ZStack {
-            GradientBackground()
+            GradientBackground(
+                topGradientColor: "F78C3B",
+                topGradientFadeColor: "1942E6",
+                bottomGradientColor: "1942E6",
+                bottomGradientFadeColor: "F78C3B"
+            )
             
             GeometryReader { geo in
                 let layout = makeLayout(totalH: geo.size.height)
