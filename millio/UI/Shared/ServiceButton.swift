@@ -15,45 +15,59 @@ struct ServiceButton: View {
     
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 12) {
-                Text(title)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(AppColors.textPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+            ZStack(alignment: .topLeading) {
                 
-                Spacer()
-                
-                // Иконка справа с 3D эффектом
-                Image(systemName: icon)
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(
+                // Фон
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(
                         LinearGradient(
-                            colors: gradientColors,
+                            colors: [
+                                Color(hex: "161C29").opacity(0.5),
+                                Color(hex: "161C29").opacity(0.5)
+                            ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
-                    .shadow(color: gradientColors.first?.opacity(0.5) ?? .clear, radius: 8, x: 0, y: 4)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-            .background {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(.ultraThinMaterial)
                     .overlay {
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: 14)
                             .stroke(
                                 LinearGradient(
-                                    colors: gradientColors,
+                                    colors: [
+                                        Color(hex: "0081E7").opacity(0.5),
+                                        Color(hex: "19E694").opacity(0.5),
+                                    ],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 ),
-                                lineWidth: 1.5
+                                lineWidth: 1
                             )
                     }
+                
+                // Текст
+                Text(title)
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .padding(.leading, 16)
+                    .padding(.top, 12)
+                
+                // Иконка снизу справа
+                VStack {
+                    Spacer()
+                    
+                    HStack {
+                        Spacer()
+                        
+                        Image(icon)
+                            .offset(x: 6, y: 6) // <-- выход за бордер
+                    }
+                }
             }
+            .frame(height: 68)
         }
         .buttonStyle(.plain)
     }
 }
+

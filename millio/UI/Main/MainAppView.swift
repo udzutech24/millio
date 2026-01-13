@@ -60,8 +60,8 @@ struct MainAppView: View {
                                     .stroke(
                                         LinearGradient(
                                             colors: appState.isPro
-                                                ? AppColors.incomeGradient
-                                                : [Color(hex: "19E694"), Color(hex: "BD00E7")],
+                                                ? [Color(hex: "19E694").opacity(0.5), Color(hex: "BD00E7").opacity(0.5)]
+                                            : [Color(hex: "19E694").opacity(0.5), Color(hex: "BD00E7").opacity(0.5)],
                                             startPoint: .leading,
                                             endPoint: .trailing
                                         ),
@@ -74,7 +74,7 @@ struct MainAppView: View {
                     .padding(.top, 16)
                     
                     // Title and slogan
-                    VStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: 0) {
                         Text("millio")
                             .font(.system(size: 34, weight: .bold))
                             .foregroundStyle(Color.white)
@@ -84,6 +84,8 @@ struct MainAppView: View {
                             .foregroundStyle(Color.white)
                           
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.leading, 24)
                     .padding(.top, 24)
                     .padding(.bottom, 30)
                     
