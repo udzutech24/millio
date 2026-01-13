@@ -33,6 +33,7 @@ struct MainAppView: View {
                 VStack(spacing: 0) {
                     // Header
                     HStack {
+                        // Иконка профиля слева
                         Button {
                             viewModel.handle(.navigateToProfile)
                         } label: {
@@ -43,41 +44,26 @@ struct MainAppView: View {
                         
                         Spacer()
                         
+                        // Кнопка PRO справа
                         Button {
                             viewModel.handle(.navigateToSubscription)
                         } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: appState.isPro ? "star.fill" : "star")
                                     .font(.system(size: 14))
-                                Text(appState.isPro ? "PRO" : "PRO")
+                                Text("PRO")
                                     .font(.system(size: 14, weight: .semibold))
                             }
-                            .foregroundStyle(
-                                appState.isPro
-                                ? LinearGradient(
-                                    colors: AppColors.incomeGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                                : LinearGradient(
-                                    colors: [AppColors.textPrimary],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
+                            .foregroundStyle(.white)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
                             .background {
                                 Capsule()
                                     .stroke(
-                                        appState.isPro
-                                        ? LinearGradient(
-                                            colors: AppColors.incomeGradient,
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                        : LinearGradient(
-                                            colors: [AppColors.textPrimary],
+                                        LinearGradient(
+                                            colors: appState.isPro
+                                                ? AppColors.incomeGradient
+                                                : [Color(hex: "19E694"), Color(hex: "BD00E7")],
                                             startPoint: .leading,
                                             endPoint: .trailing
                                         ),
@@ -97,7 +83,12 @@ struct MainAppView: View {
                         
                         Text("ваш лучший помощник")
                             .font(.system(size: 16, weight: .regular))
-                            .foregroundStyle(AppColors.textSecondary)
+                            .foregroundStyle(Color(hex: "19E694"))
+                            .overlay(alignment: .bottom) {
+                                Rectangle()
+                                    .fill(Color(hex: "19E694"))
+                                    .frame(height: 1)
+                            }
                     }
                     .padding(.top, 32)
                     .padding(.bottom, 40)

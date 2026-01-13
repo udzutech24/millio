@@ -56,7 +56,7 @@ struct ServiceItem: Identifiable, Equatable {
             ServiceItem(
                 id: "cards",
                 route: .cardIndex,
-                title: "Карты",
+                title: "Картотека",
                 icon: "archivebox.fill",
                 gradientColors: AppColors.cardIndexGradient
             ),
