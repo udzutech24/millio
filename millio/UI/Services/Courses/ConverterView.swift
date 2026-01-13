@@ -616,17 +616,6 @@ struct ConverterView: View {
     private func neonCapsule(background: Color, corner: CGFloat = 28) -> some View {
         Capsule(style: .continuous)
             .fill(background)
-            .overlay(
-                Capsule(style: .continuous)
-                    .stroke(
-                        LinearGradient(
-                            colors: AppColors.coursesGradient,
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        ),
-                        lineWidth: 1.0
-                    )
-            )
     }
     
     private struct NeonPressStyle: ButtonStyle {
@@ -638,41 +627,51 @@ struct ConverterView: View {
     }
     
     private func keypad(height: CGFloat, spacing: CGFloat, fontSize: CGFloat) -> some View {
-        VStack(spacing: spacing) {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: spacing), count: 4), spacing: spacing) {
+        GeometryReader { geometry in
+            let buttonWidth = (geometry.size.width - spacing * 3) / 4
+            
+            VStack(spacing: spacing) {
+                // Rows 1-4 в сетке 4x4
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: spacing), count: 4), spacing: spacing) {
                 // Row 1
-                key("C", kind: .gray, height: height, fontSize: fontSize) { viewModel.handle(.clearAll) }
                 iconKey("delete.left", kind: .gray, height: height, fontSize: fontSize) { viewModel.handle(.backspace) }
+                key("C", kind: .gray, height: height, fontSize: fontSize) { viewModel.handle(.clearAll) }
                 key("%", kind: .gray, height: height, fontSize: fontSize) { viewModel.handle(.percent) }
                 iconKey("divide", kind: .accent, height: height, fontSize: fontSize) { viewModel.handle(.operation("/")) }
+                    
+                    // Row 2
+                    key("7", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("7")) }
+                    key("8", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("8")) }
+                    key("9", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("9")) }
+                    iconKey("multiply", kind: .accent, height: height, fontSize: fontSize) { viewModel.handle(.operation("*")) }
+                    
+                    // Row 3
+                    key("4", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("4")) }
+                    key("5", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("5")) }
+                    key("6", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("6")) }
+                    iconKey("minus", kind: .accent, height: height, fontSize: fontSize) { viewModel.handle(.operation("-")) }
+                    
+                    // Row 4
+                    key("1", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("1")) }
+                    key("2", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("2")) }
+                    key("3", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("3")) }
+                    iconKey("plus", kind: .accent, height: height, fontSize: fontSize) { viewModel.handle(.operation("+")) }
+                }
                 
-                // Row 2
-                key("7", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("7")) }
-                key("8", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("8")) }
-                key("9", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("9")) }
-                iconKey("multiply", kind: .accent, height: height, fontSize: fontSize) { viewModel.handle(.operation("*")) }
-                
-                // Row 3
-                key("4", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("4")) }
-                key("5", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("5")) }
-                key("6", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("6")) }
-                iconKey("minus", kind: .accent, height: height, fontSize: fontSize) { viewModel.handle(.operation("-")) }
-                
-                // Row 4
-                key("1", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("1")) }
-                key("2", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("2")) }
-                key("3", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("3")) }
-                iconKey("plus", kind: .accent, height: height, fontSize: fontSize) { viewModel.handle(.operation("+")) }
-            }
-            
-            // Row 5 — заполняет ширину
-            HStack(spacing: spacing) {
-                key("0", height: height, fontSize: fontSize) { viewModel.handle(.appendZero) }
-                    .frame(maxWidth: .infinity)
-                key(decSep, height: height, fontSize: fontSize) { viewModel.handle(.appendComma) }
-                    .frame(maxWidth: .infinity)
-                key("=", kind: .accent, height: height, fontSize: fontSize) { viewModel.handle(.equal) }
-                    .frame(maxWidth: .infinity)
+                // Row 5 — 0 и запятая стандартного размера, = занимает 2 слота
+                HStack(spacing: spacing) {
+                    // Кнопка 0 - стандартный размер (1 слот)
+                    key("0", height: height, fontSize: fontSize) { viewModel.handle(.appendZero) }
+                        .frame(width: buttonWidth)
+                    
+                    // Кнопка запятой - стандартный размер (1 слот)
+                    key(decSep, height: height, fontSize: fontSize) { viewModel.handle(.appendComma) }
+                        .frame(width: buttonWidth)
+                    
+                    // Кнопка = - занимает 2 слота (2 колонки)
+                    key("=", kind: .accent, height: height, fontSize: fontSize) { viewModel.handle(.equal) }
+                        .frame(width: buttonWidth * 2 + spacing)
+                }
             }
         }
     }
@@ -727,9 +726,9 @@ struct ConverterView: View {
     
     private func backgroundColor(for kind: KeyKind) -> Color {
         switch kind {
-        case .dark: return Color.black.opacity(0.3)
-        case .gray: return AppColors.iconBackground
-        case .accent: return Color.black.opacity(0.4)
+        case .dark: return Color(hex: "D9D9D9").opacity(0.2) // Светло-серый с opacity 20% для цифр
+        case .gray: return Color(hex: "D9D9D9").opacity(0.2) // Светло-серый с opacity 20% для C, %, запятой, удаления
+        case .accent: return Color(hex: "68A5FF").opacity(0.6) // Синий с opacity 60% для операторов и =
         }
     }
     
