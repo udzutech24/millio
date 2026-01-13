@@ -13,12 +13,9 @@ struct MainAppView: View {
     @Environment(\.modelContext) private var modelContext
     @StateObject private var viewModel: MainAppViewModel
     @State private var services: [ServiceItem] = []
-    @State private var draggedItem: ServiceItem?
     @State private var cashflowViewModel: CashflowViewModel?
     @State private var showExpenseSheet = false
     @State private var showIncomeSheet = false
-    
-    private let orderManager = ServiceOrderManager()
     
     init(router: AppRouter) {
         self.router = router
@@ -156,9 +153,9 @@ struct MainAppView: View {
     // MARK: - Services Grid
     
     private var servicesGrid: some View {
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: 2)
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 2)
         
-        return LazyVGrid(columns: columns, spacing: 16) {
+        return LazyVGrid(columns: columns, spacing: 8) {
             ForEach(services) { service in
                 ServiceButton(
                     title: service.title,
@@ -167,31 +164,6 @@ struct MainAppView: View {
                 ) {
                     viewModel.handle(.navigateToService(service.route))
                 }
-                .draggable(service.id) {
-                    ServiceButton(
-                        title: service.title,
-                        icon: service.icon,
-                        gradientColors: service.gradientColors
-                    ) {
-                        // Пустой action для drag preview
-                    }
-                    .opacity(0.8)
-                }
-                .dropDestination(for: String.self) { droppedIDs, location in
-                    guard let droppedID = droppedIDs.first,
-                          droppedID != service.id,
-                          let draggedIndex = services.firstIndex(where: { $0.id == droppedID }),
-                          let targetIndex = services.firstIndex(where: { $0.id == service.id }) else {
-                        return false
-                    }
-                    
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        services.move(fromOffsets: IndexSet(integer: draggedIndex), toOffset: targetIndex > draggedIndex ? targetIndex + 1 : targetIndex)
-                        saveServicesOrder()
-                    }
-                    
-                    return true
-                }
             }
         }
     }
@@ -199,12 +171,8 @@ struct MainAppView: View {
     // MARK: - Helpers
     
     private func loadServices() {
-        services = orderManager.getOrderedServices()
-    }
-    
-    private func saveServicesOrder() {
-        let order = services.map { $0.id }
-        orderManager.saveOrder(order)
+        // Фиксированный порядок сервисов
+        services = ServiceItem.allServices()
     }
     
     @ViewBuilder
