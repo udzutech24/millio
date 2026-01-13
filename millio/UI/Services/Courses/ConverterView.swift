@@ -446,8 +446,11 @@ struct ConverterView: View {
             Button {
                 viewModel.handle(.replaceCurrency(index))
             } label: {
-                Text(CurrencySelectionSupport.emoji(for: code))
-                    .font(.system(size: 20))
+                Image("flag")
+                    .resizable()
+                    .renderingMode(.template)
+                    .foregroundStyle(AppColors.textPrimary)
+                    .frame(width: 24, height: 24)
                     .frame(width: 60, height: rowHeight)
                     .background(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)

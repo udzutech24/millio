@@ -57,8 +57,11 @@ struct ShareRow: View {
     var body: some View {
         HStack(spacing: 12) {
             // Flag
-            Text(flag)
-                .font(.system(size: 48))
+            Image("flag")
+                .resizable()
+                .renderingMode(.template)
+                .foregroundStyle(Color.white)
+                .frame(width: 48, height: 48)
                 .frame(width: 64, height: 64)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay(
@@ -271,10 +274,10 @@ struct ActivityView: UIViewControllerRepresentable {
 // MARK: - Previews
 #Preview("ShareCardView – Full Screen Mock") {
     let rows: [ShareRowModel] = [
-        .init(flag: "🇺🇸", code: "USD", value: "92.54"),
-        .init(flag: "🇪🇺", code: "EUR", value: "101.22"),
-        .init(flag: "🇬🇧", code: "GBP", value: "118.47"),
-        .init(flag: "🇯🇵", code: "JPY", value: "0.62")
+        .init(flag: "", code: "USD", value: "92.54"),
+        .init(flag: "", code: "EUR", value: "101.22"),
+        .init(flag: "", code: "GBP", value: "118.47"),
+        .init(flag: "", code: "JPY", value: "0.62")
     ]
     let date = Date()
     let formatter = DateFormatter()

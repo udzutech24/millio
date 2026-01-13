@@ -159,13 +159,15 @@ public struct CurrencySelectionSupport {
     public static func emoji(for code: String) -> String {
         let c = code.uppercased()
         if let meta = cryptoByCode[c] { return meta.emoji }
-        return flagEmoji(forCurrencyCode: c)
+        // Флаги эмодзи больше не используются, используется кастомная иконка "flag"
+        return ""
     }
 
-    // MARK: Flags for fiat
+    // MARK: Flags for fiat (deprecated - используйте Image("flag") вместо этого)
 
     private static func flagEmoji(forCurrencyCode code: String) -> String {
-        return CurrencyFlags.flag(for: code)
+        // Deprecated - флаги эмодзи больше не используются
+        return ""
     }
     
     static func currencyToRegion(for currencyCode: String) -> String? {
@@ -296,8 +298,11 @@ public struct CurrencyPickerView: View {
         let c = code.uppercased()
 
         HStack(spacing: 12) {
-            Text(CurrencySelectionSupport.emoji(for: c))
-                .font(.title3)
+            Image("flag")
+                .resizable()
+                .renderingMode(.template)
+                .foregroundStyle(AppColors.textPrimary)
+                .frame(width: 16, height: 16)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(c)
