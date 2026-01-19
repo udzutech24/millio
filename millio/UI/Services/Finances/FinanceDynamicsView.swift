@@ -484,26 +484,7 @@ private struct FinanceDynamicsContentView: View {
     
     private var chartSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Показываем выбранный период над графиком, если выбран кастомный период
-            if viewModel.state.period == .custom, let customPeriod = viewModel.state.customPeriod {
-                HStack {
-                    Image(systemName: "calendar")
-                        .font(.system(size: 14))
-                        .foregroundStyle(AppColors.textSecondary)
-                    
-                    Text(formatPeriodRange(customPeriod.start, customPeriod.end))
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(AppColors.textPrimary)
-                    
-                    Spacer()
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.white.opacity(0.1))
-                )
-            }
+            customPeriodHeader
             
             if !appState.isPro {
                 // Блокировка графика для бесплатной версии
@@ -572,91 +553,195 @@ private struct FinanceDynamicsContentView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 300)
             } else {
-                // Оранжевый цвет для графика
-                let seriesColor = Color(red: 1.0, green: 0.5, blue: 0.0)
-                
-                // Вычисляем нижнюю границу для AreaMark (минимальное значение с небольшим отступом)
-                let values = viewModel.state.chartData.map { $0.value }
-                let minValue = values.min() ?? 0
-                let maxValue = values.max() ?? 0
-                let range = maxValue - minValue
-                let niceLower = minValue - max(0.5, range * 0.05)
-                
-                Chart(viewModel.state.chartData) { dataPoint in
-                    AreaMark(
-                        x: .value("Дата", dataPoint.date, unit: .day),
-                        yStart: .value("Низ", niceLower),
-                        yEnd: .value("Сумма", dataPoint.value)
-                    )
-                    .interpolationMethod(.monotone)
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [
-                                seriesColor.opacity(0.28),
-                                seriesColor.opacity(0.10),
-                                Color.clear
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    
-                    LineMark(
-                        x: .value("Дата", dataPoint.date, unit: .day),
-                        y: .value("Сумма", dataPoint.value)
-                    )
-                    .interpolationMethod(.monotone)
-                    .lineStyle(StrokeStyle(lineWidth: 2.0, lineCap: .round, lineJoin: .round))
-                    .foregroundStyle(seriesColor)
-                }
-                .chartYAxis {
-                    AxisMarks(position: .trailing) { value in
-                        AxisGridLine()
-                            .foregroundStyle(AppColors.textTertiary.opacity(0.3))
-                        AxisValueLabel {
-                            if let doubleValue = value.as(Double.self) {
-                                Text(formatCompactAmount(doubleValue))
-                                    .foregroundStyle(AppColors.textSecondary)
-                                    .font(.system(size: 10))
-                            }
-                        }
-                    }
-                }
-                .chartXAxis {
-                    AxisMarks { value in
-                        AxisGridLine()
-                            .foregroundStyle(AppColors.textTertiary.opacity(0.2))
-                        AxisValueLabel {
-                            if let dateValue = value.as(Date.self) {
-                                Text(formatDate(dateValue))
-                                    .foregroundStyle(AppColors.textSecondary)
-                                    .font(.system(size: 10))
-                            }
-                        }
-                    }
-                }
-                .chartXSelection(value: Binding(
-                    get: { viewModel.state.selectedDate },
-                    set: { date in
-                        viewModel.handle(.selectDateOnChart(date))
-                    }
-                ))
-                .chartGesture { proxy in
-                    DragGesture(minimumDistance: 0)
-                        .onEnded { _ in
-                            // При отпускании возвращаемся к live значению
-                            viewModel.handle(.selectDateOnChart(nil))
-                        }
-                }
-                .frame(height: 300)
-                .padding(20)
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color.black.opacity(0.3))
-                )
+                financeChart
                 
                 // Выбор периода под графиком
                 periodSelectorUnderChart
+            }
+        }
+    }
+    
+    // MARK: - Custom Period Header
+    
+    private var customPeriodHeader: some View {
+        Group {
+            if viewModel.state.period == .custom, let customPeriod = viewModel.state.customPeriod {
+                HStack {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 14))
+                        .foregroundStyle(AppColors.textSecondary)
+                    
+                    Text(formatPeriodRange(customPeriod.start, customPeriod.end))
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(AppColors.textPrimary)
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.white.opacity(0.1))
+                )
+            }
+        }
+    }
+    
+    // MARK: - Finance Chart
+    
+    private var financeChart: some View {
+        let seriesColor = Color(red: 1.0, green: 0.5, blue: 0.0)
+        
+        // Вычисляем нижнюю границу для AreaMark (минимальное значение с небольшим отступом)
+        let values = viewModel.state.chartData.map { $0.value }
+        let minValue = values.min() ?? 0
+        let maxValue = values.max() ?? 0
+        let range = maxValue - minValue
+        let niceLower = minValue - max(0.5, range * 0.05)
+        
+        let chartContent = buildChartContent(
+            seriesColor: seriesColor,
+            niceLower: niceLower
+        )
+        
+        let chartWithAxes = chartContent
+            .chartYAxis {
+                AxisMarks(position: .trailing, values: .automatic(desiredCount: 6)) { value in
+                    AxisGridLine()
+                        .foregroundStyle(AppColors.textTertiary.opacity(0.4))
+                    AxisValueLabel {
+                        if let doubleValue = value.as(Double.self) {
+                            Text(formatCompactAmount(doubleValue))
+                                .foregroundStyle(AppColors.textSecondary)
+                                .font(.system(size: 10))
+                        }
+                    }
+                }
+            }
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 6)) { value in
+                    AxisGridLine()
+                        .foregroundStyle(AppColors.textTertiary.opacity(0.4))
+                    AxisValueLabel {
+                        if let dateValue = value.as(Date.self) {
+                            Text(formatDate(dateValue))
+                                .foregroundStyle(AppColors.textSecondary)
+                                .font(.system(size: 10))
+                        }
+                    }
+                }
+            }
+        
+        let chartWithSelection = chartWithAxes
+            .chartXSelection(value: Binding(
+                get: { viewModel.state.selectedDate },
+                set: { date in
+                    viewModel.handle(.selectDateOnChart(date))
+                }
+            ))
+            .chartGesture { proxy in
+                DragGesture(minimumDistance: 0)
+                    .onEnded { _ in
+                        viewModel.handle(.selectDateOnChart(nil))
+                    }
+            }
+        
+        return chartWithSelection
+            .overlay(alignment: .top) {
+                chartAnnotation(seriesColor: seriesColor)
+            }
+            .animation(.easeInOut(duration: 0.3), value: viewModel.state.chartData)
+            .animation(.easeInOut(duration: 0.2), value: viewModel.state.selectedDate)
+            .frame(height: 300)
+            .padding(20)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.black.opacity(0.3))
+            )
+    }
+    
+    // MARK: - Chart Content Builder
+    
+    @ViewBuilder
+    private func buildChartContent(seriesColor: Color, niceLower: Double) -> some View {
+        Chart {
+            // Всегда используем AreaMark с плавной интерполяцией для агрегированных данных
+            ForEach(viewModel.state.chartData) { dataPoint in
+                AreaMark(
+                    x: .value("Дата", dataPoint.date, unit: .day),
+                    yStart: .value("Низ", niceLower),
+                    yEnd: .value("Сумма", dataPoint.value)
+                )
+                .interpolationMethod(.cardinal)
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [
+                            seriesColor.opacity(0.35),
+                            seriesColor.opacity(0.20),
+                            seriesColor.opacity(0.10),
+                            seriesColor.opacity(0.05),
+                            Color.clear
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                
+                LineMark(
+                    x: .value("Дата", dataPoint.date, unit: .day),
+                    y: .value("Сумма", dataPoint.value)
+                )
+                .interpolationMethod(.cardinal)
+                .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+                .foregroundStyle(seriesColor)
+            }
+            
+            // Визуализация выбранной точки
+            if let selectedDate = viewModel.state.selectedDate {
+                // Вертикальная линия на выбранной дате
+                RuleMark(x: .value("Дата", selectedDate, unit: .day))
+                    .foregroundStyle(seriesColor.opacity(0.5))
+                    .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
+                
+                // Точка на выбранной дате
+                PointMark(
+                    x: .value("Дата", selectedDate, unit: .day),
+                    y: .value("Сумма", viewModel.state.currentBalance)
+                )
+                .foregroundStyle(.white)
+                .symbolSize(80)
+                .shadow(color: seriesColor.opacity(0.6), radius: 4)
+            }
+        }
+    }
+    
+    
+    // MARK: - Chart Annotation
+    
+    private func chartAnnotation(seriesColor: Color) -> some View {
+        Group {
+            if let selectedDate = viewModel.state.selectedDate {
+                VStack(spacing: 4) {
+                    Text(formatBalance(viewModel.state.currentBalance))
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(AppColors.textPrimary)
+                    
+                    Text(formatDate(selectedDate))
+                        .font(.system(size: 12))
+                        .foregroundStyle(AppColors.textSecondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(seriesColor.opacity(0.3), lineWidth: 1)
+                        }
+                }
+                .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+                .padding(.top, 8)
             }
         }
     }

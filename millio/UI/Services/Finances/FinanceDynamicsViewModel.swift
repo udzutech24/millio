@@ -113,16 +113,20 @@ enum DynamicsPeriod: String, CaseIterable {
 
 // MARK: - Chart Data Point
 
-struct ChartDataPoint: Identifiable {
+struct ChartDataPoint: Identifiable, Equatable {
     let id = UUID()
     let date: Date
     let value: Double
     let label: String
+    
+    static func == (lhs: ChartDataPoint, rhs: ChartDataPoint) -> Bool {
+        lhs.id == rhs.id && lhs.date == rhs.date && lhs.value == rhs.value
+    }
 }
 
 // MARK: - Dynamics Mode
 
-enum DynamicsMode {
+enum DynamicsMode: Equatable {
     case aggregated // Все счета в одну линию
     case byAccounts // Каждый счет - отдельная линия
     case singleAccount(String) // Один выбранный счет (accountUniqueID)
@@ -304,9 +308,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             // Автоматически переключаем режим
             if state.selectedAccountIDs.count == 1 {
                 state.dynamicsMode = .singleAccount(state.selectedAccountIDs.first!)
-            } else if state.selectedAccountIDs.count > 1 {
-                state.dynamicsMode = .byAccounts
             } else {
+                // Для нескольких счетов всегда используем агрегированный режим
                 state.dynamicsMode = .aggregated
             }
             updateChartData()
@@ -336,12 +339,11 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 } else {
                     state.selectedAccountIDs.insert(accountID)
                 }
-                // Автоматически переключаем режим, если выбран один счет
+                // Автоматически переключаем режим
                 if state.selectedAccountIDs.count == 1 {
                     state.dynamicsMode = .singleAccount(state.selectedAccountIDs.first!)
-                } else if state.selectedAccountIDs.count > 1 {
-                    state.dynamicsMode = .byAccounts
                 } else {
+                    // Для нескольких счетов всегда используем агрегированный режим
                     state.dynamicsMode = .aggregated
                 }
                 updateChartData()
@@ -650,16 +652,18 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 }
             }
             
-            // Сохраняем ссылку на groups для доступа внутри TaskGroup
-            let groupsForTaskGroup = await MainActor.run { groupsToShow }
-            let selectedAccountIDsForTaskGroup = selectedAccountIDs
+            // Сохраняем только ID групп для передачи между задачами
+            let groupIDs = await MainActor.run {
+                Set(groupsToShow.map { $0.groupUniqueID })
+            }
             
             await withTaskGroup(of: DynamicsBreakdownItem?.self) { group in
                 for (groupID, groupName, accountCardIDsArray) in groupsData {
                     group.addTask { @MainActor in
-                        // Получаем accounts на main actor по их IDs
-                        guard let (_, accountIDs) = accountIDsForGroups.first(where: { $0.0 == groupID }),
-                              let groupItem = groupsForTaskGroup.first(where: { $0.groupUniqueID == groupID }),
+                        // Получаем accounts на main actor по их IDs из state.groups внутри @MainActor контекста
+                        guard groupIDs.contains(groupID),
+                              let (_, accountIDs) = accountIDsForGroups.first(where: { $0.0 == groupID }),
+                              let groupItem = self.state.groups.first(where: { $0.groupUniqueID == groupID }),
                               let groupAccounts = groupItem.accounts else {
                             return nil
                         }
@@ -731,9 +735,9 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             }
             
             // Сохраняем accounts для использования в TaskGroup
-            // Создаем словарь для быстрого поиска по accountUniqueID
-            let accountIDsMap: [String: FinanceAccount] = await MainActor.run {
-                Dictionary(uniqueKeysWithValues: accounts.map { ($0.accountUniqueID, $0) })
+            // Используем только ID для передачи между задачами, объекты получаем внутри @MainActor
+            let accountUniqueIDs = await MainActor.run {
+                Set(accounts.map { $0.accountUniqueID })
             }
             
             await withTaskGroup(of: DynamicsBreakdownItem?.self) { group in
@@ -741,8 +745,13 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     group.addTask { @MainActor in
                         let accountCardIDs = isCard ? Set([accountCardID]) : Set<String>()
                         
-                        // Получаем account из словаря (словарь создан на main actor, доступен в @MainActor контексте)
-                        guard let account = accountIDsMap[accountUniqueID] else {
+                        // Получаем account из getAccountsForCalculation() внутри @MainActor контекста
+                        guard accountUniqueIDs.contains(accountUniqueID) else {
+                            return nil
+                        }
+                        
+                        let currentAccounts = self.getAccountsForCalculation()
+                        guard let account = currentAccounts.first(where: { $0.accountUniqueID == accountUniqueID }) else {
                             return nil
                         }
                         
@@ -943,8 +952,33 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         // Добавляем промежуточные точки для плавности графика
         // Но не добавляем их в дни, где уже есть важные события
         var intermediateDates: [Date] = []
-        let periodDays = await MainActor.run { state.period.days ?? 30 }
-        let stepDays = max(1, periodDays / 15)
+        let periodDays = await MainActor.run { state.period.days }
+        
+        // Для коротких периодов используем ежедневные точки, для длинных - более плотную сетку для плавности
+        let stepDays: Int
+        if let days = periodDays {
+            if days <= 30 {
+                // Для месяца и меньше - ежедневные точки
+                stepDays = 1
+            } else if days <= 365 {
+                // Для года - каждые 2 дня для более плавного графика
+                stepDays = 2
+            } else {
+                // Для длинных периодов - каждые 5 дней для баланса между плавностью и производительностью
+                stepDays = 5
+            }
+        } else {
+            // Для "All" периода используем более плотную сетку (каждые 7 дней)
+            let totalDays = calendar.dateComponents([.day], from: startDate, to: endDate).day ?? 365
+            if totalDays <= 365 {
+                stepDays = 2
+            } else if totalDays <= 730 {
+                stepDays = 5
+            } else {
+                stepDays = 7
+            }
+        }
+        
         var currentDate = startDate
         while currentDate <= endDate {
             let dayStart = calendar.startOfDay(for: currentDate)
@@ -997,10 +1031,62 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             }
         }
         
+        // Добавляем дополнительные промежуточные точки между важными событиями для плавности
+        // Это помогает сгладить резкие скачки значений
+        var additionalIntermediateDates: [Date] = []
+        let sortedImportantDates = importantDates.sorted()
+        
+        for i in 0..<(sortedImportantDates.count - 1) {
+            let startDate = sortedImportantDates[i]
+            let endDate = sortedImportantDates[i + 1]
+            let daysBetween = calendar.dateComponents([.day], from: startDate, to: endDate).day ?? 0
+            
+            // Если между важными событиями больше 3 дней, добавляем промежуточные точки
+            if daysBetween > 3 {
+                let intermediateCount = min(3, daysBetween - 1) // Максимум 3 промежуточные точки
+                for j in 1...intermediateCount {
+                    if let intermediateDate = calendar.date(byAdding: .day, value: (daysBetween * j) / (intermediateCount + 1), to: startDate) {
+                        let dayStart = calendar.startOfDay(for: intermediateDate)
+                        if !importantDays.contains(dayStart) {
+                            additionalIntermediateDates.append(intermediateDate)
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Рассчитываем баланс для дополнительных промежуточных точек
+        var additionalBalances: [Date: Double] = [:]
+        if !additionalIntermediateDates.isEmpty {
+            await withTaskGroup(of: (Date, Double).self) { group in
+                for intermediateDate in additionalIntermediateDates {
+                    group.addTask {
+                        let dayStart = calendar.startOfDay(for: intermediateDate)
+                        let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: intermediateDate) ?? intermediateDate
+                        let balance = await self.calculateBalanceAtDate(
+                            accounts: accounts,
+                            date: endOfDay,
+                            accountCardIDs: accountCardIDs
+                        )
+                        return (dayStart, balance)
+                    }
+                }
+                
+                for await (dayStart, balance) in group {
+                    additionalBalances[dayStart] = balance
+                }
+            }
+        }
+        
         // Объединяем все балансы (важные события имеют приоритет над промежуточными точками)
         var allBalances = intermediateBalances
+        // Добавляем дополнительные промежуточные точки
+        for (day, balance) in additionalBalances {
+            allBalances[day] = balance
+        }
+        // Важные события перезаписывают все промежуточные точки
         for (day, balance) in eventBalances {
-            allBalances[day] = balance // Важные события перезаписывают промежуточные точки
+            allBalances[day] = balance
         }
         
         // Преобразуем в массив ChartDataPoint, сортируя по дате
