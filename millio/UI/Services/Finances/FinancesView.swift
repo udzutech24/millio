@@ -8,6 +8,13 @@
 import SwiftUI
 import SwiftData
 
+// MARK: - Finances Tab Enum
+
+enum FinancesTab: String {
+    case main = "main"
+    case dynamics = "dynamics"
+}
+
 struct FinancesView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: FinanceViewModel?
@@ -33,7 +40,34 @@ struct FinancesView: View {
 
 private struct FinancesContentViewInternal: View {
     @ObservedObject var viewModel: FinanceViewModel
-    @State private var showDynamicsView = false
+    @State private var selectedTab: FinancesTab = .main
+    
+    var body: some View {
+        TabView(selection: $selectedTab) {
+            // Вкладка 1: Основной экран
+            FinancesMainTabView(viewModel: viewModel)
+                .tabItem {
+                    Label("Финансы", systemImage: "creditcard")
+                }
+                .tag(FinancesTab.main)
+            
+            // Вкладка 2: Динамика
+            FinanceDynamicsTabView(financeViewModel: viewModel)
+                .tabItem {
+                    Label("Динамика", systemImage: "chart.line.uptrend.xyaxis")
+                }
+                .tag(FinancesTab.dynamics)
+        }
+        .task {
+            await viewModel.refreshRates()
+        }
+    }
+}
+
+// MARK: - Finances Main Tab View
+
+private struct FinancesMainTabView: View {
+    @ObservedObject var viewModel: FinanceViewModel
     
     var body: some View {
         mainContent
@@ -43,15 +77,6 @@ private struct FinancesContentViewInternal: View {
                 toolbarContent
             }
             .modifier(SheetsModifier(viewModel: viewModel))
-            .navigationDestination(isPresented: $showDynamicsView) {
-                FinanceDynamicsView(
-                    financeViewModel: viewModel,
-                    wrapInNavigationStack: false
-                )
-            }
-            .task {
-                await viewModel.refreshRates()
-            }
     }
     
     private var mainContent: some View {
@@ -102,15 +127,6 @@ private struct FinancesContentViewInternal: View {
     
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .navigationBarLeading) {
-            Button {
-                showDynamicsView = true
-            } label: {
-                Image(systemName: "chart.line.uptrend.xyaxis")
-                    .foregroundStyle(AppColors.textPrimary)
-            }
-        }
-        
         ToolbarItem(placement: .navigationBarTrailing) {
             Button {
                 viewModel.handle(.showSavingsGoalSheet)
@@ -344,6 +360,19 @@ private struct FinancesContentViewInternal: View {
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: balance)) ?? "0"
+    }
+}
+
+// MARK: - Finance Dynamics Tab View
+
+private struct FinanceDynamicsTabView: View {
+    @ObservedObject var financeViewModel: FinanceViewModel
+    
+    var body: some View {
+        FinanceDynamicsView(
+            financeViewModel: financeViewModel,
+            wrapInNavigationStack: false
+        )
     }
 }
 
