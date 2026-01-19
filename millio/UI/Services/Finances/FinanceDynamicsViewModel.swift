@@ -28,11 +28,11 @@ struct FinanceDynamicsState {
     /// Период отображения
     var period: DynamicsPeriod = .month
     
+    /// Кастомный период (если period == .custom)
+    var customPeriod: (start: Date, end: Date)? = nil
+    
     /// Данные для графика
     var chartData: [ChartDataPoint] = []
-    
-    /// Данные для деталей (каждая транзакция - отдельная точка)
-    var detailsData: [ChartDataPoint] = []
     
     /// Флаг загрузки данных
     var isLoading: Bool = false
@@ -49,9 +49,6 @@ struct FinanceDynamicsState {
     /// Все доступные инвестиции
     var availableInvestments: [Investment] = []
     
-    /// Показывать ли sheet с деталями
-    var showDetailsSheet: Bool = false
-    
     /// Режим просмотра одной группы (скрывает фильтры групп)
     var isSingleGroupMode: Bool = false
     
@@ -60,22 +57,56 @@ struct FinanceDynamicsState {
     
     /// Все транзакции Cashflow для расчета динамики балансов
     var cashflowTransactions: [CashflowTransaction] = []
+    
+    // MARK: - Новые поля для переделанного экрана
+    
+    /// Выбранная дата на графике (nil = live значение)
+    var selectedDate: Date? = nil
+    
+    /// Текущее значение баланса (из выбранной точки или live)
+    var currentBalance: Double = 0.0
+    
+    /// Дельта за период (абсолютная и процентная)
+    var periodDelta: (absolute: Double, percent: Double) = (0.0, 0.0)
+    
+    /// Начало периода
+    var periodStartDate: Date = Date()
+    
+    /// Конец периода
+    var periodEndDate: Date = Date()
+    
+    /// Режим отображения графика
+    var dynamicsMode: DynamicsMode = .aggregated
+    
+    /// Данные для списка динамики
+    var dynamicsBreakdown: [DynamicsBreakdownItem] = []
+    
+    /// Режим просмотра списка (группы/счета)
+    var viewMode: DynamicsViewMode = .groups
+    
+    /// Показывать ли sheet с фильтром
+    var showFilterSheet: Bool = false
+    
+    /// Показывать ли sheet с выбором периода
+    var showPeriodSelector: Bool = false
 }
 
 // MARK: - Dynamics Period
 
 enum DynamicsPeriod: String, CaseIterable {
-    case day = "День"
-    case week = "Неделя"
-    case month = "Месяц"
-    case year = "Год"
+    case week = "1W"
+    case month = "1M"
+    case year = "1Y"
+    case all = "All"
+    case custom = "Custom"
     
-    var days: Int {
+    var days: Int? {
         switch self {
-        case .day: return 1
         case .week: return 7
         case .month: return 30
         case .year: return 365
+        case .all: return nil
+        case .custom: return nil
         }
     }
 }
@@ -89,6 +120,32 @@ struct ChartDataPoint: Identifiable {
     let label: String
 }
 
+// MARK: - Dynamics Mode
+
+enum DynamicsMode {
+    case aggregated // Все счета в одну линию
+    case byAccounts // Каждый счет - отдельная линия
+    case singleAccount(String) // Один выбранный счет (accountUniqueID)
+}
+
+// MARK: - Dynamics View Mode
+
+enum DynamicsViewMode {
+    case groups
+    case accounts
+}
+
+// MARK: - Dynamics Breakdown Item
+
+struct DynamicsBreakdownItem: Identifiable {
+    let id: String
+    let name: String
+    let startValue: Double
+    let endValue: Double
+    let delta: Double
+    let deltaPercent: Double
+}
+
 // MARK: - Finance Dynamics Actions
 
 enum FinanceDynamicsAction {
@@ -97,10 +154,20 @@ enum FinanceDynamicsAction {
     case selectAccounts(Set<String>)
     case setDisplayCurrency(String)
     case setPeriod(DynamicsPeriod)
+    case setCustomPeriod(start: Date, end: Date)
     case toggleGroup(String)
     case toggleAccount(String)
-    case showDetailsSheet
-    case hideDetailsSheet
+    case selectDateOnChart(Date?)
+    case setDynamicsMode(DynamicsMode)
+    case setViewMode(DynamicsViewMode)
+    case showFilterSheet
+    case hideFilterSheet
+    case selectAllGroups
+    case deselectAllGroups
+    case selectAllAccounts
+    case deselectAllAccounts
+    case showPeriodSelector
+    case hidePeriodSelector
 }
 
 // MARK: - Finance Dynamics ViewModel
@@ -126,10 +193,12 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             state.selectedAccountIDs = [accountID]
             state.isSingleAccountMode = true
             state.isSingleGroupMode = true // В режиме одного счета также скрываем фильтры групп
+            state.dynamicsMode = .singleAccount(accountID)
         } else if let groupID = initialGroupID {
             // Если передан initialGroupID, устанавливаем его как выбранную группу и включаем режим одной группы
             state.selectedGroupIDs = [groupID]
             state.isSingleGroupMode = true
+            state.dynamicsMode = .aggregated
         }
         
         // Если у группы или счета есть своя валюта, используем её, иначе используем общую валюту
@@ -141,8 +210,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             state.displayCurrency = financeViewModel.state.displayCurrency
         }
         
-        // Если период установлен на "День", меняем на "Месяц" (так как период "День" убран из фильтров)
-        if state.period == .day {
+        // Устанавливаем период по умолчанию
+        if state.period == .custom && state.customPeriod == nil {
             state.period = .month
         }
     }
@@ -173,6 +242,70 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             
         case .setPeriod(let period):
             state.period = period
+            if period != .custom {
+                state.customPeriod = nil
+            }
+            updateChartData()
+            
+        case .setCustomPeriod(let start, let end):
+            state.period = .custom
+            state.customPeriod = (start, end)
+            updateChartData()
+            
+        case .selectDateOnChart(let date):
+            state.selectedDate = date
+            Task {
+                await updateCurrentBalanceAndDelta()
+            }
+            
+        case .setDynamicsMode(let mode):
+            state.dynamicsMode = mode
+            updateChartData()
+            
+        case .setViewMode(let mode):
+            state.viewMode = mode
+            Task {
+                await updateDynamicsBreakdown()
+            }
+            
+        case .showFilterSheet:
+            state.showFilterSheet = true
+            
+        case .hideFilterSheet:
+            state.showFilterSheet = false
+            
+        case .showPeriodSelector:
+            state.showPeriodSelector = true
+            
+        case .hidePeriodSelector:
+            state.showPeriodSelector = false
+            
+        case .selectAllGroups:
+            state.selectedGroupIDs = Set(state.groups.map { $0.groupUniqueID })
+            state.selectedAccountIDs = [] // Сбрасываем выбор счетов
+            updateChartData()
+            
+        case .deselectAllGroups:
+            state.selectedGroupIDs = []
+            state.selectedAccountIDs = [] // Сбрасываем выбор счетов
+            updateChartData()
+            
+        case .selectAllAccounts:
+            let accounts = getAccountsForSelectedGroups()
+            state.selectedAccountIDs = Set(accounts.map { $0.accountUniqueID })
+            // Автоматически переключаем режим
+            if state.selectedAccountIDs.count == 1 {
+                state.dynamicsMode = .singleAccount(state.selectedAccountIDs.first!)
+            } else if state.selectedAccountIDs.count > 1 {
+                state.dynamicsMode = .byAccounts
+            } else {
+                state.dynamicsMode = .aggregated
+            }
+            updateChartData()
+            
+        case .deselectAllAccounts:
+            state.selectedAccountIDs = []
+            state.dynamicsMode = .aggregated
             updateChartData()
             
         case .toggleGroup(let groupID):
@@ -195,14 +328,16 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 } else {
                     state.selectedAccountIDs.insert(accountID)
                 }
+                // Автоматически переключаем режим, если выбран один счет
+                if state.selectedAccountIDs.count == 1 {
+                    state.dynamicsMode = .singleAccount(state.selectedAccountIDs.first!)
+                } else if state.selectedAccountIDs.count > 1 {
+                    state.dynamicsMode = .byAccounts
+                } else {
+                    state.dynamicsMode = .aggregated
+                }
                 updateChartData()
             }
-            
-        case .showDetailsSheet:
-            state.showDetailsSheet = true
-            
-        case .hideDetailsSheet:
-            state.showDetailsSheet = false
         }
     }
     
@@ -265,313 +400,272 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     private func updateChartData() {
         Task {
             await updateChartDataAsync()
+            await updateCurrentBalanceAndDelta()
+            await updateDynamicsBreakdown()
         }
     }
     
-    private func updateChartDataAsync() async {
-        var dataPoints: [ChartDataPoint] = []
-        
-        // Определяем период для графика
+    /// Получить даты периода
+    private func getPeriodDates() -> (start: Date, end: Date) {
         let calendar = Calendar.current
         let endDate = Date()
-        let startDate = calendar.date(byAdding: .day, value: -state.period.days, to: endDate) ?? endDate
+        let startDate: Date
         
-        // Определяем, какие группы и счета показывать
-        let groupsToShow = state.selectedGroupIDs.isEmpty 
-            ? state.groups 
-            : state.groups.filter { state.selectedGroupIDs.contains($0.groupUniqueID) }
-        
-        // Собираем все счета из выбранных групп
-        var accountsToShow: [FinanceAccount] = []
-        
-        // В режиме одного счета ищем счет во всех группах
-        if state.isSingleAccountMode && !state.selectedAccountIDs.isEmpty {
-            for group in state.groups {
-                if let accounts = group.accounts {
-                    if let account = accounts.first(where: { state.selectedAccountIDs.contains($0.accountUniqueID) }) {
-                        accountsToShow.append(account)
-                        break // Нашли счет, выходим
-                    }
-                }
-            }
-        } else {
-            // Обычная логика: собираем счета из выбранных групп
-            for group in groupsToShow {
-                if let accounts = group.accounts {
-                    if state.selectedAccountIDs.isEmpty {
-                        accountsToShow.append(contentsOf: accounts)
-                    } else {
-                        accountsToShow.append(contentsOf: accounts.filter { 
-                            state.selectedAccountIDs.contains($0.accountUniqueID) 
-                        })
-                    }
-                }
-            }
+        if let customPeriod = state.customPeriod {
+            return (customPeriod.start, customPeriod.end)
         }
         
-        // Если ничего не выбрано, показываем общую сумму всех групп
-        if groupsToShow.isEmpty && accountsToShow.isEmpty {
-            // Собираем все счета из всех групп, убирая дубликаты по accountUniqueID
-            var allAccounts: [FinanceAccount] = []
-            var seenAccountIDs: Set<String> = []
+        switch state.period {
+        case .week, .month, .year:
+            if let days = state.period.days {
+                startDate = calendar.date(byAdding: .day, value: -days, to: endDate) ?? endDate
+            } else {
+                startDate = endDate
+            }
+        case .all:
+            // Для "All" берем самую раннюю дату создания счета или транзакции
+            var earliestDate = endDate
             for group in state.groups {
                 if let accounts = group.accounts {
                     for account in accounts {
-                        if !seenAccountIDs.contains(account.accountUniqueID) {
-                            allAccounts.append(account)
-                            seenAccountIDs.insert(account.accountUniqueID)
+                        if account.createdAt < earliestDate {
+                            earliestDate = account.createdAt
                         }
                     }
                 }
             }
-            dataPoints = await buildTimeSeriesData(
-                accounts: allAccounts,
-                startDate: startDate,
-                endDate: endDate,
-                label: "Общая сумма"
-            )
-        } else if accountsToShow.isEmpty {
-            // Показываем суммы по группам - объединяем все счета из выбранных групп
-            var allGroupAccounts: [FinanceAccount] = []
-            for group in groupsToShow {
-                if let accounts = group.accounts {
-                    allGroupAccounts.append(contentsOf: accounts)
+            if let firstTransaction = state.cashflowTransactions.first {
+                if firstTransaction.transactionDate < earliestDate {
+                    earliestDate = firstTransaction.transactionDate
                 }
             }
-            dataPoints = await buildTimeSeriesData(
-                accounts: allGroupAccounts,
-                startDate: startDate,
-                endDate: endDate,
-                label: groupsToShow.count == 1 ? groupsToShow.first?.name ?? "Группа" : "Выбранные группы"
-            )
-        } else {
-            // Показываем суммы по выбранным счетам
-            dataPoints = await buildTimeSeriesData(
-                accounts: accountsToShow,
-                startDate: startDate,
-                endDate: endDate,
-                label: accountsToShow.count == 1 ? (financeViewModel.getAccountInfo(account: accountsToShow.first!)?.name ?? "Счет") : "Выбранные счета"
-            )
-        }
-        
-        state.chartData = dataPoints
-        
-        // Строим детали (каждая транзакция - отдельная точка)
-        // Используем те же счета, что и для графика
-        var detailsLabel = "Общая сумма"
-        if !groupsToShow.isEmpty && accountsToShow.isEmpty {
-            detailsLabel = groupsToShow.count == 1 ? groupsToShow.first?.name ?? "Группа" : "Выбранные группы"
-        } else if !accountsToShow.isEmpty {
-            detailsLabel = accountsToShow.count == 1 ? (financeViewModel.getAccountInfo(account: accountsToShow.first!)?.name ?? "Счет") : "Выбранные счета"
-        }
-        
-        // Для деталей используем те же счета, что и для графика, убирая дубликаты
-        var detailsAccounts: [FinanceAccount] = []
-        var seenAccountIDs: Set<String> = []
-        
-        if accountsToShow.isEmpty {
-            if groupsToShow.isEmpty {
-                // Все счета из всех групп
-                for group in state.groups {
-                    if let accounts = group.accounts {
-                        for account in accounts {
-                            if !seenAccountIDs.contains(account.accountUniqueID) {
-                                detailsAccounts.append(account)
-                                seenAccountIDs.insert(account.accountUniqueID)
-                            }
-                        }
-                    }
-                }
-            } else {
-                // Все счета из выбранных групп
-                for group in groupsToShow {
-                    if let accounts = group.accounts {
-                        for account in accounts {
-                            if !seenAccountIDs.contains(account.accountUniqueID) {
-                                detailsAccounts.append(account)
-                                seenAccountIDs.insert(account.accountUniqueID)
-                            }
-                        }
-                    }
-                }
+            startDate = earliestDate
+        case .custom:
+            if let customPeriod = state.customPeriod {
+                return (customPeriod.start, customPeriod.end)
             }
-        } else {
-            // Убираем дубликаты из выбранных счетов
-            for account in accountsToShow {
-                if !seenAccountIDs.contains(account.accountUniqueID) {
-                    detailsAccounts.append(account)
-                    seenAccountIDs.insert(account.accountUniqueID)
-                }
-            }
+            startDate = endDate
         }
         
-        state.detailsData = await buildDetailsData(
-            accounts: detailsAccounts,
-            startDate: startDate,
-            endDate: endDate,
-            label: detailsLabel
-        )
+        return (startDate, endDate)
     }
     
-    /// Построить данные для деталей (каждая транзакция - отдельная точка)
-    private func buildDetailsData(
-        accounts: [FinanceAccount],
-        startDate: Date,
-        endDate: Date,
-        label: String
-    ) async -> [ChartDataPoint] {
-        var dataPoints: [ChartDataPoint] = []
-        let calendar = Calendar.current
+    /// Обновить текущий баланс и дельту
+    private func updateCurrentBalanceAndDelta() async {
+        let (startDate, endDate) = getPeriodDates()
+        state.periodStartDate = startDate
+        state.periodEndDate = endDate
         
-        // Собираем все события, которые влияют на баланс
-        var eventDates: [(date: Date, type: String)] = []
+        // Получаем счета для расчета
+        let accounts = getAccountsForCalculation()
         
-        // Добавляем даты создания счетов
-        for account in accounts {
-            eventDates.append((date: account.createdAt, type: "account_created"))
-            eventDates.append((date: account.updatedAt, type: "account_updated"))
-        }
+        // Рассчитываем текущий баланс
+        let targetDate = state.selectedDate ?? endDate
+        state.currentBalance = await calculateBalanceAtDate(
+            accounts: accounts,
+            date: targetDate,
+            accountCardIDs: Set(accounts.compactMap { $0.accountType == .card ? $0.accountID : nil })
+        )
         
-        // Добавляем даты обновления карт/кредитов/инвестиций
-        let accountCardIDs = Set(accounts.compactMap { account -> String? in
-            if account.accountType == .card {
-                return account.accountID
-            }
-            return nil
-        })
+        // Рассчитываем баланс на начало периода
+        let startBalance = await calculateBalanceAtDate(
+            accounts: accounts,
+            date: startDate,
+            accountCardIDs: Set(accounts.compactMap { $0.accountType == .card ? $0.accountID : nil })
+        )
         
-        for cardID in accountCardIDs {
-            if let card = state.availableCards.first(where: { $0.cardUniqueID == cardID }) {
-                eventDates.append((date: card.createdAt, type: "card_created"))
-                eventDates.append((date: card.updatedAt, type: "card_updated"))
-            }
-        }
+        // Рассчитываем дельту
+        let delta = state.currentBalance - startBalance
+        let percent = startBalance != 0 
+            ? (delta / abs(startBalance)) * 100 
+            : (state.currentBalance > 0 ? 100.0 : (state.currentBalance < 0 ? -100.0 : 0.0))
+        state.periodDelta = (delta, percent)
+    }
+    
+    /// Получить счета для расчета (в зависимости от фильтров)
+    private func getAccountsForCalculation() -> [FinanceAccount] {
+        let groupsToShow = state.selectedGroupIDs.isEmpty
+            ? state.groups
+            : state.groups.filter { state.selectedGroupIDs.contains($0.groupUniqueID) }
         
-        let accountCreditIDs = Set(accounts.compactMap { account -> String? in
-            if account.accountType == .credit {
-                return account.accountID
-            }
-            return nil
-        })
+        var accounts: [FinanceAccount] = []
         
-        for creditID in accountCreditIDs {
-            if let credit = state.availableCredits.first(where: { $0.creditUniqueID == creditID }) {
-                eventDates.append((date: credit.createdAt, type: "credit_created"))
-                eventDates.append((date: credit.updatedAt, type: "credit_updated"))
-            }
-        }
-        
-        let accountInvestmentIDs = Set(accounts.compactMap { account -> String? in
-            if account.accountType == .investment {
-                return account.accountID
-            }
-            return nil
-        })
-        
-        for investmentID in accountInvestmentIDs {
-            if let investment = state.availableInvestments.first(where: { $0.investmentUniqueID == investmentID }) {
-                eventDates.append((date: investment.createdAt, type: "investment_created"))
-                eventDates.append((date: investment.updatedAt, type: "investment_updated"))
-            }
-        }
-        
-        // Добавляем каждую транзакцию как отдельное событие
-        for transaction in state.cashflowTransactions {
-            var affectsAccount = false
-            switch transaction.transactionType {
-            case .income, .expense:
-                if let cardID = transaction.cardID, accountCardIDs.contains(cardID) {
-                    affectsAccount = true
+        if state.isSingleAccountMode && !state.selectedAccountIDs.isEmpty {
+            // Режим одного счета
+            for group in state.groups {
+                if let groupAccounts = group.accounts {
+                    if let account = groupAccounts.first(where: { state.selectedAccountIDs.contains($0.accountUniqueID) }) {
+                        accounts.append(account)
+                        break
+                    }
                 }
-            case .transfer:
-                if let fromCardID = transaction.cardID, accountCardIDs.contains(fromCardID) {
-                    affectsAccount = true
+            }
+        } else {
+            // Обычная логика
+            for group in groupsToShow {
+                guard let groupAccounts = group.accounts, !groupAccounts.isEmpty else {
+                    // Пропускаем группы без счетов
+                    continue
                 }
-                if let toCardID = transaction.toCardID, accountCardIDs.contains(toCardID) {
-                    affectsAccount = true
+                
+                // Если выбраны конкретные счета, фильтруем по ним
+                if !state.selectedAccountIDs.isEmpty {
+                    let filteredAccounts = groupAccounts.filter {
+                        state.selectedAccountIDs.contains($0.accountUniqueID)
+                    }
+                    // Если в группе выбрано 0 счетов - исключаем группу полностью
+                    if filteredAccounts.isEmpty {
+                        continue
+                    }
+                    accounts.append(contentsOf: filteredAccounts)
+                } else {
+                    // Если счета не выбраны, берем все счета группы
+                    accounts.append(contentsOf: groupAccounts)
                 }
-            case .exchange:
-                break
+            }
+        }
+        
+        // Убираем дубликаты
+        var seenIDs: Set<String> = []
+        return accounts.filter { account in
+            if seenIDs.contains(account.accountUniqueID) {
+                return false
+            }
+            seenIDs.insert(account.accountUniqueID)
+            return true
+        }
+    }
+    
+    /// Обновить список динамики
+    private func updateDynamicsBreakdown() async {
+        let accounts = getAccountsForCalculation()
+        let (startDate, endDate) = getPeriodDates()
+        
+        var breakdown: [DynamicsBreakdownItem] = []
+        
+        switch state.viewMode {
+        case .groups:
+            // Группируем по группам
+            let groupsToShow = state.selectedGroupIDs.isEmpty
+                ? state.groups
+                : state.groups.filter { state.selectedGroupIDs.contains($0.groupUniqueID) }
+            
+            for group in groupsToShow {
+                guard let groupAccounts = group.accounts else { continue }
+                
+                // Фильтруем счета группы, если есть выбор счетов
+                let filteredAccounts = state.selectedAccountIDs.isEmpty
+                    ? groupAccounts
+                    : groupAccounts.filter { state.selectedAccountIDs.contains($0.accountUniqueID) }
+                
+                if filteredAccounts.isEmpty { continue }
+                
+                let startBalance = await calculateBalanceAtDate(
+                    accounts: filteredAccounts,
+                    date: startDate,
+                    accountCardIDs: Set(filteredAccounts.compactMap { $0.accountType == .card ? $0.accountID : nil })
+                )
+                
+                let endBalance = await calculateBalanceAtDate(
+                    accounts: filteredAccounts,
+                    date: endDate,
+                    accountCardIDs: Set(filteredAccounts.compactMap { $0.accountType == .card ? $0.accountID : nil })
+                )
+                
+                let delta = endBalance - startBalance
+                let percent = startBalance != 0 
+                    ? (delta / abs(startBalance)) * 100 
+                    : (endBalance > 0 ? 100.0 : (endBalance < 0 ? -100.0 : 0.0))
+                
+                breakdown.append(DynamicsBreakdownItem(
+                    id: group.groupUniqueID,
+                    name: group.name,
+                    startValue: startBalance,
+                    endValue: endBalance,
+                    delta: delta,
+                    deltaPercent: percent
+                ))
             }
             
-            if affectsAccount {
-                eventDates.append((date: transaction.transactionDate, type: "transaction"))
+        case .accounts:
+            // Показываем каждый счет отдельно
+            for account in accounts {
+                guard let accountInfo = financeViewModel.getAccountInfo(account: account) else { continue }
+                
+                let accountCardIDs = account.accountType == .card ? Set([account.accountID]) : Set<String>()
+                
+                let startBalance = await calculateBalanceAtDate(
+                    accounts: [account],
+                    date: startDate,
+                    accountCardIDs: accountCardIDs
+                )
+                
+                let endBalance = await calculateBalanceAtDate(
+                    accounts: [account],
+                    date: endDate,
+                    accountCardIDs: accountCardIDs
+                )
+                
+                let delta = endBalance - startBalance
+                let percent = startBalance != 0 
+                    ? (delta / abs(startBalance)) * 100 
+                    : (endBalance > 0 ? 100.0 : (endBalance < 0 ? -100.0 : 0.0))
+                
+                breakdown.append(DynamicsBreakdownItem(
+                    id: account.accountUniqueID,
+                    name: accountInfo.name,
+                    startValue: startBalance,
+                    endValue: endBalance,
+                    delta: delta,
+                    deltaPercent: percent
+                ))
             }
         }
         
-        // Фильтруем события по периоду и сортируем
-        let filteredEvents = eventDates
-            .filter { $0.date >= startDate && $0.date <= endDate }
-            .sorted(by: { $0.date < $1.date })
+        state.dynamicsBreakdown = breakdown
+    }
+    
+    private func updateChartDataAsync() async {
+        let accounts = getAccountsForCalculation()
         
-        // Группируем события по периодам в зависимости от выбранного периода
-        // Для недели/месяца группируем по дням, для года - по месяцам
-        var groupedEvents: [Date: [Date]] = [:] // Ключ - начало периода, значение - список событий в этот период
-        
-        for event in filteredEvents {
-            let periodStart: Date
-            switch state.period {
-            case .week, .month:
-                // Группируем по дням
-                periodStart = calendar.startOfDay(for: event.date)
-            case .year:
-                // Группируем по месяцам
-                let components = calendar.dateComponents([.year, .month], from: event.date)
-                periodStart = calendar.date(from: components) ?? calendar.startOfDay(for: event.date)
-            case .day:
-                // Для дня группируем по часам
-                let components = calendar.dateComponents([.year, .month, .day, .hour], from: event.date)
-                periodStart = calendar.date(from: components) ?? calendar.startOfDay(for: event.date)
-            }
-            
-            if groupedEvents[periodStart] == nil {
-                groupedEvents[periodStart] = []
-            }
-            groupedEvents[periodStart]?.append(event.date)
-        }
-        
-        // Для каждого периода берем последний баланс (после всех транзакций в этот период)
-        for (periodStart, eventsInPeriod) in groupedEvents.sorted(by: { $0.key < $1.key }) {
-            // Берем самое позднее событие в этом периоде
-            guard let latestEvent = eventsInPeriod.max() else { continue }
-            
-            // Рассчитываем баланс на конец периода (после всех транзакций)
-            let balance = await calculateBalanceAtDate(
+        // Строим данные графика в зависимости от режима
+        switch state.dynamicsMode {
+        case .aggregated:
+            // Все счета в одну линию
+            state.chartData = await buildTimeSeriesData(
                 accounts: accounts,
-                date: latestEvent,
-                accountCardIDs: accountCardIDs
+                startDate: getPeriodDates().start,
+                endDate: getPeriodDates().end,
+                label: "Общая сумма"
             )
             
-            // Используем начало периода для отображения
-            dataPoints.append(ChartDataPoint(
-                date: periodStart,
-                value: balance,
-                label: label
-            ))
-        }
-        
-        // Убираем дубликаты с одинаковым балансом подряд
-        var uniqueDataPoints: [ChartDataPoint] = []
-        var lastBalance: Double? = nil
-        
-        for point in dataPoints {
-            // Добавляем точку, если баланс изменился или это первая точка
-            if lastBalance == nil || abs(point.value - lastBalance!) > 0.01 {
-                uniqueDataPoints.append(point)
-                lastBalance = point.value
+        case .byAccounts:
+            // Каждый счет - отдельная линия
+            var allDataPoints: [ChartDataPoint] = []
+            for account in accounts {
+                let accountData = await buildTimeSeriesData(
+                    accounts: [account],
+                    startDate: getPeriodDates().start,
+                    endDate: getPeriodDates().end,
+                    label: financeViewModel.getAccountInfo(account: account)?.name ?? "Счет"
+                )
+                allDataPoints.append(contentsOf: accountData)
+            }
+            state.chartData = allDataPoints
+            
+        case .singleAccount(let accountID):
+            // Один выбранный счет
+            if let account = accounts.first(where: { $0.accountUniqueID == accountID }) {
+                state.chartData = await buildTimeSeriesData(
+                    accounts: [account],
+                    startDate: getPeriodDates().start,
+                    endDate: getPeriodDates().end,
+                    label: financeViewModel.getAccountInfo(account: account)?.name ?? "Счет"
+                )
             } else {
-                // Если баланс такой же, обновляем дату на более позднюю
-                if let lastIndex = uniqueDataPoints.indices.last {
-                    uniqueDataPoints[lastIndex] = ChartDataPoint(
-                        date: point.date, // Берем более позднюю дату
-                        value: point.value,
-                        label: point.label
-                    )
-                }
+                state.chartData = []
             }
         }
-        
-        return uniqueDataPoints
     }
     
     /// Построить временной ряд данных для графика
@@ -674,7 +768,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         // Добавляем промежуточные точки для плавности графика
         // Но не добавляем их в дни, где уже есть важные события
         var intermediateDates: [Date] = []
-        let stepDays = max(1, state.period.days / 15)
+        let periodDays = state.period.days ?? 30
+        let stepDays = max(1, periodDays / 15)
         var currentDate = startDate
         while currentDate <= endDate {
             let dayStart = calendar.startOfDay(for: currentDate)
