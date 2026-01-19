@@ -225,6 +225,40 @@ struct ProfileView: View {
                                 .fill(.ultraThinMaterial)
                         }
                         .padding(.horizontal, 24)
+                        
+                        #if DEBUG
+                        // Debug section
+                        VStack(spacing: 16) {
+                            Section {
+                                Toggle("Премиум доступ", isOn: Binding(
+                                    get: { appState.isPro },
+                                    set: { newValue in
+                                        if newValue {
+                                            SubscriptionManager.shared.grantDebugPremium()
+                                        } else {
+                                            SubscriptionManager.shared.revokeDebugPremium()
+                                        }
+                                        appState.subscriptionStatus = SubscriptionManager.shared.status
+                                        appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
+                                        appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+                                    }
+                                ))
+                                .tint(.blue)
+                            } header: {
+                                Text("Отладка")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(AppColors.textSecondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 20)
+                        .background {
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(.ultraThinMaterial)
+                        }
+                        .padding(.horizontal, 24)
+                        #endif
                     }
                 }
                 .padding(.bottom, 40)
