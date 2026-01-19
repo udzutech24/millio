@@ -1344,7 +1344,7 @@ private struct FinanceAddAccountView: View {
     
     @ViewBuilder
     private var cardAccountContent: some View {
-        if viewModel.state.availableCards.isEmpty {
+        if viewModel.state.unattachedCards.isEmpty {
             createCardButton(isEmpty: true)
         } else {
             VStack(spacing: 0) {
@@ -1374,12 +1374,12 @@ private struct FinanceAddAccountView: View {
                 }
                 .buttonStyle(.plain)
                 
-                if !viewModel.state.availableCards.isEmpty {
+                if !viewModel.state.unattachedCards.isEmpty {
                     Divider()
                         .padding(.leading, 16)
                 }
                 
-                ForEach(viewModel.state.availableCards) { card in
+                ForEach(viewModel.state.unattachedCards) { card in
                     Button {
                         selectedCardID = card.cardUniqueID
                     } label: {
@@ -1406,7 +1406,7 @@ private struct FinanceAddAccountView: View {
                     }
                     .buttonStyle(.plain)
                     
-                    if card.cardUniqueID != viewModel.state.availableCards.last?.cardUniqueID {
+                    if card.cardUniqueID != viewModel.state.unattachedCards.last?.cardUniqueID {
                         Divider()
                             .padding(.leading, 16)
                     }
@@ -1421,7 +1421,7 @@ private struct FinanceAddAccountView: View {
     
     @ViewBuilder
     private var creditAccountContent: some View {
-        if viewModel.state.availableCredits.isEmpty {
+        if viewModel.state.unattachedCredits.isEmpty {
             createCreditButton(isEmpty: true)
         } else {
             VStack(spacing: 0) {
@@ -1451,12 +1451,12 @@ private struct FinanceAddAccountView: View {
                 }
                 .buttonStyle(.plain)
                 
-                if !viewModel.state.availableCredits.isEmpty {
+                if !viewModel.state.unattachedCredits.isEmpty {
                     Divider()
                         .padding(.leading, 16)
                 }
                 
-                ForEach(viewModel.state.availableCredits) { credit in
+                ForEach(viewModel.state.unattachedCredits) { credit in
                     Button {
                         selectedCreditID = credit.creditUniqueID
                     } label: {
@@ -1483,7 +1483,7 @@ private struct FinanceAddAccountView: View {
                     }
                     .buttonStyle(.plain)
                     
-                    if credit.creditUniqueID != viewModel.state.availableCredits.last?.creditUniqueID {
+                    if credit.creditUniqueID != viewModel.state.unattachedCredits.last?.creditUniqueID {
                         Divider()
                             .padding(.leading, 16)
                     }
@@ -1498,7 +1498,7 @@ private struct FinanceAddAccountView: View {
     
     @ViewBuilder
     private var investmentAccountContent: some View {
-        if viewModel.state.availableInvestments.isEmpty {
+        if viewModel.state.unattachedInvestments.isEmpty {
             createInvestmentButton(isEmpty: true)
         } else {
             VStack(spacing: 0) {
@@ -1528,12 +1528,12 @@ private struct FinanceAddAccountView: View {
                 }
                 .buttonStyle(.plain)
                 
-                if !viewModel.state.availableInvestments.isEmpty {
+                if !viewModel.state.unattachedInvestments.isEmpty {
                     Divider()
                         .padding(.leading, 16)
                 }
                 
-                ForEach(viewModel.state.availableInvestments) { investment in
+                ForEach(viewModel.state.unattachedInvestments) { investment in
                     Button {
                         selectedInvestmentID = investment.investmentUniqueID
                     } label: {
@@ -1560,7 +1560,7 @@ private struct FinanceAddAccountView: View {
                     }
                     .buttonStyle(.plain)
                     
-                    if investment.investmentUniqueID != viewModel.state.availableInvestments.last?.investmentUniqueID {
+                    if investment.investmentUniqueID != viewModel.state.unattachedInvestments.last?.investmentUniqueID {
                         Divider()
                             .padding(.leading, 16)
                     }
@@ -1750,7 +1750,7 @@ private struct FinanceAddAccountView: View {
                 // Обновляем список доступных карт при открытии формы
                 viewModel.handle(.loadAccounts)
             }
-            .onChange(of: viewModel.state.availableCards) { oldCards, newCards in
+            .onChange(of: viewModel.state.unattachedCards) { oldCards, newCards in
                 // Если была выбрана карта, но её нет в новом списке, сбрасываем выбор
                 if let selectedID = selectedCardID,
                    !newCards.contains(where: { $0.cardUniqueID == selectedID }) {
@@ -1765,7 +1765,7 @@ private struct FinanceAddAccountView: View {
                     }
                 }
             }
-            .onChange(of: viewModel.state.availableCredits) { oldCredits, newCredits in
+            .onChange(of: viewModel.state.unattachedCredits) { oldCredits, newCredits in
                 if let selectedID = selectedCreditID,
                    !newCredits.contains(where: { $0.creditUniqueID == selectedID }) {
                     selectedCreditID = nil
@@ -1778,7 +1778,7 @@ private struct FinanceAddAccountView: View {
                     }
                 }
             }
-            .onChange(of: viewModel.state.availableInvestments) { oldInvestments, newInvestments in
+            .onChange(of: viewModel.state.unattachedInvestments) { oldInvestments, newInvestments in
                 if let selectedID = selectedInvestmentID,
                    !newInvestments.contains(where: { $0.investmentUniqueID == selectedID }) {
                     selectedInvestmentID = nil

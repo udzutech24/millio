@@ -182,7 +182,15 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     let modelContext: ModelContext
     let financeViewModel: FinanceViewModel
     
-    private let defaults = UserDefaults.standard
+    let defaults = UserDefaults.standard
+    
+    // Кэши для оптимизации производительности
+    var cardsCache: [String: Card] = [:]
+    var creditsCache: [String: Credit] = [:]
+    var investmentsCache: [String: Investment] = [:]
+    var transactionsByCardCache: [String: [CashflowTransaction]] = [:]
+    var initialBalancesCache: [String: Double] = [:]
+    var balanceCache: [String: Double] = [:] // Кэш для calculateBalanceAtDate: "accountID_date" -> balance
     
     init(modelContext: ModelContext, financeViewModel: FinanceViewModel, initialGroupID: String? = nil, initialGroupCurrency: String? = nil, initialAccountID: String? = nil, initialAccountCurrency: String? = nil) {
         self.modelContext = modelContext
@@ -291,7 +299,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             updateChartData()
             
         case .selectAllAccounts:
-            let accounts = getAccountsForSelectedGroups()
+            let accounts = self.getAccountsForSelectedGroups()
             state.selectedAccountIDs = Set(accounts.map { $0.accountUniqueID })
             // Автоматически переключаем режим
             if state.selectedAccountIDs.count == 1 {
@@ -341,14 +349,25 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
     }
     
-    private func loadData() {
+    func loadData() {
         state.isLoading = true
         
         // Загружаем группы и счета из financeViewModel
         state.groups = financeViewModel.state.groups
-        state.availableCards = financeViewModel.state.availableCards
-        state.availableCredits = financeViewModel.state.availableCredits
-        state.availableInvestments = financeViewModel.state.availableInvestments
+        
+        // Загружаем карты, кредиты и инвестиции напрямую из базы данных,
+        // чтобы всегда получать актуальные данные (включая обновленные балансы)
+        let cardDescriptor = FetchDescriptor<Card>()
+        state.availableCards = (try? modelContext.fetch(cardDescriptor)) ?? []
+        
+        let creditDescriptor = FetchDescriptor<Credit>()
+        state.availableCredits = (try? modelContext.fetch(creditDescriptor)) ?? []
+        
+        let investmentDescriptor = FetchDescriptor<Investment>()
+        state.availableInvestments = (try? modelContext.fetch(investmentDescriptor)) ?? []
+        
+        // Создаем словари для быстрого поиска (O(1) вместо O(n))
+        rebuildCaches()
         
         // Загружаем транзакции Cashflow для расчета динамики балансов
         loadCashflowTransactions()
@@ -362,16 +381,48 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         state.isLoading = false
     }
     
-    private func loadCashflowTransactions() {
+    /// Перестроить кэши для оптимизации производительности
+    func rebuildCaches() {
+        // Кэш карт
+        cardsCache = Dictionary(uniqueKeysWithValues: state.availableCards.map { ($0.cardUniqueID, $0) })
+        
+        // Кэш кредитов
+        creditsCache = Dictionary(uniqueKeysWithValues: state.availableCredits.map { ($0.creditUniqueID, $0) })
+        
+        // Кэш инвестиций
+        investmentsCache = Dictionary(uniqueKeysWithValues: state.availableInvestments.map { ($0.investmentUniqueID, $0) })
+        
+        // Очищаем кэши балансов при перезагрузке данных
+        initialBalancesCache.removeAll()
+        balanceCache.removeAll()
+        transactionsByCardCache.removeAll()
+    }
+    
+    func loadCashflowTransactions() {
         let descriptor = FetchDescriptor<CashflowTransaction>(
             sortBy: [SortDescriptor(\.transactionDate, order: .forward)]
         )
         if let transactions = try? modelContext.fetch(descriptor) {
             state.cashflowTransactions = transactions
+            // Предфильтруем транзакции по картам для оптимизации
+            rebuildTransactionsCache()
         }
     }
     
-    private func loadAvailableCurrencies() {
+    /// Предфильтровать транзакции по картам для быстрого доступа
+    func rebuildTransactionsCache() {
+        transactionsByCardCache.removeAll()
+        for transaction in state.cashflowTransactions {
+            if let cardID = transaction.cardID {
+                transactionsByCardCache[cardID, default: []].append(transaction)
+            }
+            if let toCardID = transaction.toCardID {
+                transactionsByCardCache[toCardID, default: []].append(transaction)
+            }
+        }
+    }
+    
+    func loadAvailableCurrencies() {
         Task {
             // Загружаем курсы для получения списка валют
             _ = await CurrencyRateService.shared.getRate(from: "USD", to: "RUB")
@@ -397,7 +448,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
     }
     
-    private func updateChartData() {
+    func updateChartData() {
         Task {
             await updateChartDataAsync()
             await updateCurrentBalanceAndDelta()
@@ -406,7 +457,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     }
     
     /// Получить даты периода
-    private func getPeriodDates() -> (start: Date, end: Date) {
+    func getPeriodDates() -> (start: Date, end: Date) {
         let calendar = Calendar.current
         let endDate = Date()
         let startDate: Date
@@ -451,7 +502,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     }
     
     /// Обновить текущий баланс и дельту
-    private func updateCurrentBalanceAndDelta() async {
+    func updateCurrentBalanceAndDelta() async {
         let (startDate, endDate) = getPeriodDates()
         state.periodStartDate = startDate
         state.periodEndDate = endDate
@@ -476,14 +527,26 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         
         // Рассчитываем дельту
         let delta = state.currentBalance - startBalance
-        let percent = startBalance != 0 
-            ? (delta / abs(startBalance)) * 100 
-            : (state.currentBalance > 0 ? 100.0 : (state.currentBalance < 0 ? -100.0 : 0.0))
+        let percent: Double
+        if abs(startBalance) < 0.01 {
+            // Если начальный баланс близок к нулю, процентный прирост очень большой или бесконечный
+            if abs(state.currentBalance) < 0.01 {
+                percent = 0.0
+            } else if state.currentBalance > 0 {
+                // Очень большой положительный прирост (можно использовать Double.infinity, но для отображения используем большое число)
+                percent = 999999.0
+            } else {
+                // Очень большой отрицательный прирост
+                percent = -999999.0
+            }
+        } else {
+            percent = (delta / abs(startBalance)) * 100
+        }
         state.periodDelta = (delta, percent)
     }
     
     /// Получить счета для расчета (в зависимости от фильтров)
-    private func getAccountsForCalculation() -> [FinanceAccount] {
+    func getAccountsForCalculation() -> [FinanceAccount] {
         let groupsToShow = state.selectedGroupIDs.isEmpty
             ? state.groups
             : state.groups.filter { state.selectedGroupIDs.contains($0.groupUniqueID) }
@@ -537,95 +600,207 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     }
     
     /// Обновить список динамики
-    private func updateDynamicsBreakdown() async {
+    func updateDynamicsBreakdown() async {
         let accounts = getAccountsForCalculation()
         let (startDate, endDate) = getPeriodDates()
         
         var breakdown: [DynamicsBreakdownItem] = []
         
-        switch state.viewMode {
+        let viewMode = state.viewMode
+        let selectedGroupIDs = state.selectedGroupIDs
+        let selectedAccountIDs = state.selectedAccountIDs
+        let groups = state.groups
+        
+        switch viewMode {
         case .groups:
-            // Группируем по группам
-            let groupsToShow = state.selectedGroupIDs.isEmpty
-                ? state.groups
-                : state.groups.filter { state.selectedGroupIDs.contains($0.groupUniqueID) }
+            // Группируем по группам - вычисляем параллельно
+            let groupsToShow = selectedGroupIDs.isEmpty
+                ? groups
+                : groups.filter { selectedGroupIDs.contains($0.groupUniqueID) }
             
-            for group in groupsToShow {
-                guard let groupAccounts = group.accounts else { continue }
+            // Подготавливаем данные для групп до входа в TaskGroup
+            let groupsData = await MainActor.run {
+                groupsToShow.compactMap { groupItem -> (String, String, [String])? in
+                    guard let groupAccounts = groupItem.accounts else { return nil }
+                    let filteredAccounts = selectedAccountIDs.isEmpty
+                        ? groupAccounts
+                        : groupAccounts.filter { selectedAccountIDs.contains($0.accountUniqueID) }
+                    if filteredAccounts.isEmpty { return nil }
+                    // Извлекаем accountCardIDs на main actor
+                    let accountCardIDs = Set(filteredAccounts.compactMap { account -> String? in
+                        if account.accountType == .card {
+                            return account.accountID
+                        }
+                        return nil
+                    })
+                    return (groupItem.groupUniqueID, groupItem.name, Array(accountCardIDs))
+                }
+            }
+            
+            // Подготавливаем account IDs для передачи
+            let accountIDsForGroups = await MainActor.run {
+                groupsToShow.compactMap { groupItem -> (String, [String])? in
+                    guard let groupAccounts = groupItem.accounts else { return nil }
+                    let filteredAccounts = selectedAccountIDs.isEmpty
+                        ? groupAccounts
+                        : groupAccounts.filter { selectedAccountIDs.contains($0.accountUniqueID) }
+                    if filteredAccounts.isEmpty { return nil }
+                    let accountIDs = filteredAccounts.map { $0.accountUniqueID }
+                    return (groupItem.groupUniqueID, accountIDs)
+                }
+            }
+            
+            // Сохраняем ссылку на groups для доступа внутри TaskGroup
+            let groupsForTaskGroup = await MainActor.run { groupsToShow }
+            let selectedAccountIDsForTaskGroup = selectedAccountIDs
+            
+            await withTaskGroup(of: DynamicsBreakdownItem?.self) { group in
+                for (groupID, groupName, accountCardIDsArray) in groupsData {
+                    group.addTask { @MainActor in
+                        // Получаем accounts на main actor по их IDs
+                        guard let (_, accountIDs) = accountIDsForGroups.first(where: { $0.0 == groupID }),
+                              let groupItem = groupsForTaskGroup.first(where: { $0.groupUniqueID == groupID }),
+                              let groupAccounts = groupItem.accounts else {
+                            return nil
+                        }
+                        
+                        let filteredAccounts = groupAccounts.filter { accountIDs.contains($0.accountUniqueID) }
+                        let accountCardIDs = Set(accountCardIDsArray)
+                        
+                        // Вычисляем start и end балансы параллельно
+                        async let startBalanceTask = self.calculateBalanceAtDate(
+                            accounts: filteredAccounts,
+                            date: startDate,
+                            accountCardIDs: accountCardIDs
+                        )
+                        async let endBalanceTask = self.calculateBalanceAtDate(
+                            accounts: filteredAccounts,
+                            date: endDate,
+                            accountCardIDs: accountCardIDs
+                        )
+                        
+                        let startBalance = await startBalanceTask
+                        let endBalance = await endBalanceTask
+                        
+                        let delta = endBalance - startBalance
+                        let percent: Double
+                        if abs(startBalance) < 0.01 {
+                            // Если начальный баланс близок к нулю, процентный прирост очень большой или бесконечный
+                            if abs(endBalance) < 0.01 {
+                                percent = 0.0
+                            } else if endBalance > 0 {
+                                percent = 999999.0
+                            } else {
+                                percent = -999999.0
+                            }
+                        } else {
+                            percent = (delta / abs(startBalance)) * 100
+                        }
+                        
+                        return DynamicsBreakdownItem(
+                            id: groupID,
+                            name: groupName,
+                            startValue: startBalance,
+                            endValue: endBalance,
+                            delta: delta,
+                            deltaPercent: percent
+                        )
+                    }
+                }
                 
-                // Фильтруем счета группы, если есть выбор счетов
-                let filteredAccounts = state.selectedAccountIDs.isEmpty
-                    ? groupAccounts
-                    : groupAccounts.filter { state.selectedAccountIDs.contains($0.accountUniqueID) }
-                
-                if filteredAccounts.isEmpty { continue }
-                
-                let startBalance = await calculateBalanceAtDate(
-                    accounts: filteredAccounts,
-                    date: startDate,
-                    accountCardIDs: Set(filteredAccounts.compactMap { $0.accountType == .card ? $0.accountID : nil })
-                )
-                
-                let endBalance = await calculateBalanceAtDate(
-                    accounts: filteredAccounts,
-                    date: endDate,
-                    accountCardIDs: Set(filteredAccounts.compactMap { $0.accountType == .card ? $0.accountID : nil })
-                )
-                
-                let delta = endBalance - startBalance
-                let percent = startBalance != 0 
-                    ? (delta / abs(startBalance)) * 100 
-                    : (endBalance > 0 ? 100.0 : (endBalance < 0 ? -100.0 : 0.0))
-                
-                breakdown.append(DynamicsBreakdownItem(
-                    id: group.groupUniqueID,
-                    name: group.name,
-                    startValue: startBalance,
-                    endValue: endBalance,
-                    delta: delta,
-                    deltaPercent: percent
-                ))
+                for await item in group {
+                    if let item = item {
+                        breakdown.append(item)
+                    }
+                }
             }
             
         case .accounts:
-            // Показываем каждый счет отдельно
-            for account in accounts {
-                guard let accountInfo = financeViewModel.getAccountInfo(account: account) else { continue }
+            // Показываем каждый счет отдельно - вычисляем параллельно
+            // Подготавливаем данные для счетов до входа в TaskGroup
+            let accountsData = await MainActor.run {
+                accounts.compactMap { account -> (String, String, String, String, Bool)? in
+                    guard let accountInfo = self.financeViewModel.getAccountInfo(account: account) else {
+                        return nil
+                    }
+                    let accountID = account.accountUniqueID
+                    let accountCardID = account.accountID
+                    let isCard = account.accountType == .card
+                    return (accountID, accountInfo.name, accountCardID, accountID, isCard)
+                }
+            }
+            
+            // Сохраняем accounts для использования в TaskGroup
+            // Создаем словарь для быстрого поиска по accountUniqueID
+            let accountIDsMap: [String: FinanceAccount] = await MainActor.run {
+                Dictionary(uniqueKeysWithValues: accounts.map { ($0.accountUniqueID, $0) })
+            }
+            
+            await withTaskGroup(of: DynamicsBreakdownItem?.self) { group in
+                for (accountUniqueID, accountName, accountCardID, _, isCard) in accountsData {
+                    group.addTask { @MainActor in
+                        let accountCardIDs = isCard ? Set([accountCardID]) : Set<String>()
+                        
+                        // Получаем account из словаря (словарь создан на main actor, доступен в @MainActor контексте)
+                        guard let account = accountIDsMap[accountUniqueID] else {
+                            return nil
+                        }
+                        
+                        // Вычисляем start и end балансы параллельно
+                        async let startBalanceTask = self.calculateBalanceAtDate(
+                            accounts: [account],
+                            date: startDate,
+                            accountCardIDs: accountCardIDs
+                        )
+                        async let endBalanceTask = self.calculateBalanceAtDate(
+                            accounts: [account],
+                            date: endDate,
+                            accountCardIDs: accountCardIDs
+                        )
+                        
+                        let startBalance = await startBalanceTask
+                        let endBalance = await endBalanceTask
                 
-                let accountCardIDs = account.accountType == .card ? Set([account.accountID]) : Set<String>()
+                        let delta = endBalance - startBalance
+                        let percent: Double
+                        if abs(startBalance) < 0.01 {
+                            // Если начальный баланс близок к нулю, процентный прирост очень большой или бесконечный
+                            if abs(endBalance) < 0.01 {
+                                percent = 0.0
+                            } else if endBalance > 0 {
+                                percent = 999999.0
+                            } else {
+                                percent = -999999.0
+                            }
+                        } else {
+                            percent = (delta / abs(startBalance)) * 100
+                        }
+                        
+                        return DynamicsBreakdownItem(
+                            id: accountUniqueID,
+                            name: accountName,
+                            startValue: startBalance,
+                            endValue: endBalance,
+                            delta: delta,
+                            deltaPercent: percent
+                        )
+                    }
+                }
                 
-                let startBalance = await calculateBalanceAtDate(
-                    accounts: [account],
-                    date: startDate,
-                    accountCardIDs: accountCardIDs
-                )
-                
-                let endBalance = await calculateBalanceAtDate(
-                    accounts: [account],
-                    date: endDate,
-                    accountCardIDs: accountCardIDs
-                )
-                
-                let delta = endBalance - startBalance
-                let percent = startBalance != 0 
-                    ? (delta / abs(startBalance)) * 100 
-                    : (endBalance > 0 ? 100.0 : (endBalance < 0 ? -100.0 : 0.0))
-                
-                breakdown.append(DynamicsBreakdownItem(
-                    id: account.accountUniqueID,
-                    name: accountInfo.name,
-                    startValue: startBalance,
-                    endValue: endBalance,
-                    delta: delta,
-                    deltaPercent: percent
-                ))
+                for await item in group {
+                    if let item = item {
+                        breakdown.append(item)
+                    }
+                }
             }
         }
         
-        state.dynamicsBreakdown = breakdown
+        await MainActor.run {
+            state.dynamicsBreakdown = breakdown
+        }
     }
     
-    private func updateChartDataAsync() async {
+    func updateChartDataAsync() async {
         let accounts = getAccountsForCalculation()
         
         // Строим данные графика в зависимости от режима
@@ -669,7 +844,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     }
     
     /// Построить временной ряд данных для графика
-    private func buildTimeSeriesData(
+    func buildTimeSeriesData(
         accounts: [FinanceAccount],
         startDate: Date,
         endDate: Date,
@@ -696,15 +871,15 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             return nil
         })
         
-        // Добавляем даты обновления карт
+        // Добавляем даты обновления карт (используем кэш)
         for cardID in accountCardIDs {
-            if let card = state.availableCards.first(where: { $0.cardUniqueID == cardID }) {
+            if let card = cardsCache[cardID] {
                 eventDates.insert(card.createdAt)
                 eventDates.insert(card.updatedAt) // Дата изменения баланса при быстром редактировании
             }
         }
         
-        // Добавляем даты обновления кредитов
+        // Добавляем даты обновления кредитов (используем кэш)
         let accountCreditIDs = Set(accounts.compactMap { account -> String? in
             if account.accountType == .credit {
                 return account.accountID
@@ -712,13 +887,13 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             return nil
         })
         for creditID in accountCreditIDs {
-            if let credit = state.availableCredits.first(where: { $0.creditUniqueID == creditID }) {
+            if let credit = creditsCache[creditID] {
                 eventDates.insert(credit.createdAt)
                 eventDates.insert(credit.updatedAt)
             }
         }
         
-        // Добавляем даты обновления инвестиций
+        // Добавляем даты обновления инвестиций (используем кэш)
         let accountInvestmentIDs = Set(accounts.compactMap { account -> String? in
             if account.accountType == .investment {
                 return account.accountID
@@ -726,7 +901,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             return nil
         })
         for investmentID in accountInvestmentIDs {
-            if let investment = state.availableInvestments.first(where: { $0.investmentUniqueID == investmentID }) {
+            if let investment = investmentsCache[investmentID] {
                 eventDates.insert(investment.createdAt)
                 eventDates.insert(investment.updatedAt)
             }
@@ -768,7 +943,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         // Добавляем промежуточные точки для плавности графика
         // Но не добавляем их в дни, где уже есть важные события
         var intermediateDates: [Date] = []
-        let periodDays = state.period.days ?? 30
+        let periodDays = await MainActor.run { state.period.days ?? 30 }
         let stepDays = max(1, periodDays / 15)
         var currentDate = startDate
         while currentDate <= endDate {
@@ -780,31 +955,46 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             currentDate = calendar.date(byAdding: .day, value: stepDays, to: currentDate) ?? endDate
         }
         
-        // Рассчитываем баланс для каждого дня с важными событиями
+        // Рассчитываем баланс для каждого дня с важными событиями параллельно
         // Для каждого дня берем баланс на конец дня (после всех транзакций в этот день)
         var eventBalances: [Date: Double] = [:]
-        for dayStart in importantDays {
-            // Рассчитываем баланс на конец этого дня
-            let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: dayStart) ?? dayStart
-            let balance = await calculateBalanceAtDate(
-                accounts: accounts,
-                date: endOfDay,
-                accountCardIDs: accountCardIDs
-            )
-            eventBalances[dayStart] = balance
+        await withTaskGroup(of: (Date, Double).self) { group in
+            for dayStart in importantDays {
+                group.addTask {
+                    let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: dayStart) ?? dayStart
+                    let balance = await self.calculateBalanceAtDate(
+                        accounts: accounts,
+                        date: endOfDay,
+                        accountCardIDs: accountCardIDs
+                    )
+                    return (dayStart, balance)
+                }
+            }
+            
+            for await (dayStart, balance) in group {
+                eventBalances[dayStart] = balance
+            }
         }
         
-        // Рассчитываем баланс для промежуточных точек (группируем по дням)
+        // Рассчитываем баланс для промежуточных точек параллельно (группируем по дням)
         var intermediateBalances: [Date: Double] = [:]
-        for intermediateDate in intermediateDates {
-            let dayStart = calendar.startOfDay(for: intermediateDate)
-            let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: intermediateDate) ?? intermediateDate
-            let balance = await calculateBalanceAtDate(
-                accounts: accounts,
-                date: endOfDay,
-                accountCardIDs: accountCardIDs
-            )
-            intermediateBalances[dayStart] = balance
+        await withTaskGroup(of: (Date, Double).self) { group in
+            for intermediateDate in intermediateDates {
+                group.addTask {
+                    let dayStart = calendar.startOfDay(for: intermediateDate)
+                    let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: intermediateDate) ?? intermediateDate
+                    let balance = await self.calculateBalanceAtDate(
+                        accounts: accounts,
+                        date: endOfDay,
+                        accountCardIDs: accountCardIDs
+                    )
+                    return (dayStart, balance)
+                }
+            }
+            
+            for await (dayStart, balance) in group {
+                intermediateBalances[dayStart] = balance
+            }
         }
         
         // Объединяем все балансы (важные события имеют приоритет над промежуточными точками)
@@ -826,118 +1016,319 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     }
     
     /// Рассчитать баланс счетов на конкретную дату с учетом транзакций
-    private func calculateBalanceAtDate(
+    func calculateBalanceAtDate(
         accounts: [FinanceAccount],
         date: Date,
         accountCardIDs: Set<String>
     ) async -> Double {
+        // Проверяем кэш
+        let cacheKey = "\(accounts.map { $0.accountUniqueID }.joined(separator: "_"))_\(date.timeIntervalSince1970)"
+        if let cached = balanceCache[cacheKey] {
+            return cached
+        }
+        
         var totalBalance: Double = 0.0
         
         for account in accounts {
-            // Счет учитывается только если он был создан до или в эту дату
-            if account.createdAt <= date {
-                if let accountInfo = financeViewModel.getAccountInfo(account: account) {
-                    // Начальный баланс счета (будет пересчитан для карт)
-                    var accountBalance = accountInfo.amount
+            var accountBalance: Double = 0.0
+            var accountCurrency: String = "RUB"
+            var shouldInclude = false
+            
+            switch account.accountType {
+            case .card:
+                // Используем кэш вместо first(where:) для O(1) поиска
+                guard let card = cardsCache[account.accountID] else {
+                    continue
+                }
+                
+                // Карта учитывается только если она была создана до или в эту дату
+                guard card.createdAt <= date else {
+                    continue
+                }
+                
+                guard card.includeInTotal else {
+                    continue
+                }
+                
+                accountCurrency = card.currency
+                shouldInclude = true
+                
+                // Кэшируем начальный баланс при создании карты
+                let initialBalanceKey = "initial_\(account.accountID)"
+                var initialBalanceAtCreation: Double
+                if let cached = initialBalancesCache[initialBalanceKey] {
+                    initialBalanceAtCreation = cached
+                } else {
+                    // Рассчитываем начальный баланс при создании карты один раз
+                    initialBalanceAtCreation = card.balance
+                    // Используем предфильтрованные транзакции из кэша
+                    let cardTransactions = transactionsByCardCache[account.accountID] ?? []
+                    let transactionsSinceCreation = cardTransactions
+                        .filter { $0.transactionDate >= card.createdAt && $0.transactionDate <= Date() }
+                        .sorted(by: { $0.transactionDate > $1.transactionDate })
                     
-                    // Для карт учитываем транзакции Cashflow и пересчитываем баланс
-                    if account.accountType == .card, accountCardIDs.contains(account.accountID) {
-                        guard let card = state.availableCards.first(where: { $0.cardUniqueID == account.accountID }) else {
-                            // Если карта не найдена, используем значение из accountInfo
-                            let converted = await convertAmount(
-                                value: accountBalance,
-                                from: accountInfo.currency,
-                                to: state.displayCurrency
-                            )
-                            totalBalance += converted
-                            continue
-                        }
-                        
-                        // Используем текущий баланс карты и откатываем транзакции назад до нужной даты
-                        // Это проще и надежнее, чем пытаться рассчитать начальный баланс
-                        var cardBalance = card.balance
-                        
-                        // Откатываем все транзакции после ТОЧНОЙ даты события (от новых к старым)
-                        // Сортируем транзакции по убыванию даты
-                        // Важно: используем точную дату, а не конец дня, чтобы транзакции в тот же день учитывались правильно
-                        let transactionsAfterDate = state.cashflowTransactions
-                            .filter { $0.transactionDate > date && $0.transactionDate <= Date() }
-                            .sorted(by: { $0.transactionDate > $1.transactionDate })
-                        
-                        for transaction in transactionsAfterDate {
-                            switch transaction.transactionType {
-                            case .income:
-                                if transaction.cardID == account.accountID {
-                                    // Откатываем доход - вычитаем
+                    for transaction in transactionsSinceCreation {
+                        switch transaction.transactionType {
+                        case .income:
+                            if transaction.cardID == account.accountID {
+                                let converted = await convertAmount(
+                                    value: transaction.amount,
+                                    from: transaction.currency,
+                                    to: accountCurrency
+                                )
+                                initialBalanceAtCreation -= converted
+                            }
+                            
+                        case .expense:
+                            if transaction.cardID == account.accountID {
+                                let converted = await convertAmount(
+                                    value: transaction.amount,
+                                    from: transaction.currency,
+                                    to: accountCurrency
+                                )
+                                initialBalanceAtCreation += converted
+                            }
+                            
+                        case .transfer:
+                            if transaction.cardID == account.accountID {
+                                let converted = await convertAmount(
+                                    value: transaction.amount,
+                                    from: transaction.currency,
+                                    to: accountCurrency
+                                )
+                                initialBalanceAtCreation += converted
+                            } else if transaction.toCardID == account.accountID {
+                                let converted = await convertAmount(
+                                    value: transaction.amount,
+                                    from: transaction.currency,
+                                    to: accountCurrency
+                                )
+                                initialBalanceAtCreation -= converted
+                            }
+                            
+                        case .exchange:
+                            // Для обмена валют учитываем изменения баланса
+                            if transaction.cardID == account.accountID {
+                                if let fromAmount = transaction.exchangeFromAmount {
                                     let converted = await convertAmount(
-                                        value: transaction.amount,
-                                        from: transaction.currency,
-                                        to: accountInfo.currency
+                                        value: fromAmount,
+                                        from: transaction.exchangeFromCurrency ?? accountCurrency,
+                                        to: accountCurrency
                                     )
-                                    cardBalance -= converted
+                                    initialBalanceAtCreation += converted
                                 }
-                                
-                            case .expense:
-                                if transaction.cardID == account.accountID {
-                                    // Откатываем расход - возвращаем деньги
+                                if let toAmount = transaction.exchangeToAmount {
                                     let converted = await convertAmount(
-                                        value: transaction.amount,
-                                        from: transaction.currency,
-                                        to: accountInfo.currency
+                                        value: toAmount,
+                                        from: transaction.exchangeToCurrency ?? accountCurrency,
+                                        to: accountCurrency
                                     )
-                                    cardBalance += converted
+                                    initialBalanceAtCreation -= converted
                                 }
-                                
-                            case .transfer:
-                                if transaction.cardID == account.accountID {
-                                    // Откатываем перевод с карты - возвращаем деньги
-                                    let converted = await convertAmount(
-                                        value: transaction.amount,
-                                        from: transaction.currency,
-                                        to: accountInfo.currency
-                                    )
-                                    cardBalance += converted
-                                } else if transaction.toCardID == account.accountID {
-                                    // Откатываем перевод на карту - забираем деньги
-                                    let converted = await convertAmount(
-                                        value: transaction.amount,
-                                        from: transaction.currency,
-                                        to: accountInfo.currency
-                                    )
-                                    cardBalance -= converted
-                                }
-                                
-                            case .exchange:
-                                break
                             }
                         }
-                        
-                        // Используем рассчитанный баланс
-                        accountBalance = cardBalance
-                        
-                        // Для кредитных карт преобразуем баланс в задолженность (если нужно)
-                        if card.cardType == .credit, let limit = card.creditLimit {
-                            // Для кредитных карт в динамике показываем задолженность как положительное значение
-                            // Задолженность = лимит - баланс
-                            accountBalance = max(0, limit - accountBalance)
+                    }
+                    // Кэшируем начальный баланс
+                    initialBalancesCache[initialBalanceKey] = initialBalanceAtCreation
+                }
+                
+                // Определяем баланс на запрашиваемую дату
+                var cardBalance: Double
+                if date < card.createdAt {
+                    // Запрашиваемая дата раньше создания карты
+                    // Используем начальный баланс при создании (который пользователь ввел)
+                    cardBalance = initialBalanceAtCreation
+                } else {
+                    // Запрашиваемая дата после или в момент создания карты
+                    // Начинаем с начального баланса при создании и применяем транзакции до запрашиваемой даты
+                    cardBalance = initialBalanceAtCreation
+                    
+                    // Используем предфильтрованные транзакции из кэша вместо фильтрации всех транзакций
+                    let cardTransactions = transactionsByCardCache[account.accountID] ?? []
+                    let transactionsUpToDate = cardTransactions
+                        .filter { $0.transactionDate >= card.createdAt && $0.transactionDate <= date }
+                        .sorted(by: { $0.transactionDate < $1.transactionDate })
+                    
+                    for transaction in transactionsUpToDate {
+                        switch transaction.transactionType {
+                        case .income:
+                            if transaction.cardID == account.accountID {
+                                let converted = await convertAmount(
+                                    value: transaction.amount,
+                                    from: transaction.currency,
+                                    to: accountCurrency
+                                )
+                                cardBalance += converted
+                            }
+                            
+                        case .expense:
+                            if transaction.cardID == account.accountID {
+                                let converted = await convertAmount(
+                                    value: transaction.amount,
+                                    from: transaction.currency,
+                                    to: accountCurrency
+                                )
+                                cardBalance = max(0, cardBalance - converted)
+                            }
+                            
+                        case .transfer:
+                            if transaction.cardID == account.accountID {
+                                let converted = await convertAmount(
+                                    value: transaction.amount,
+                                    from: transaction.currency,
+                                    to: accountCurrency
+                                )
+                                cardBalance = max(0, cardBalance - converted)
+                            } else if transaction.toCardID == account.accountID {
+                                let converted = await convertAmount(
+                                    value: transaction.amount,
+                                    from: transaction.currency,
+                                    to: accountCurrency
+                                )
+                                cardBalance += converted
+                            }
+                            
+                        case .exchange:
+                            // Для обмена валют учитываем изменения баланса
+                            if transaction.cardID == account.accountID {
+                                if let fromAmount = transaction.exchangeFromAmount {
+                                    let converted = await convertAmount(
+                                        value: fromAmount,
+                                        from: transaction.exchangeFromCurrency ?? accountCurrency,
+                                        to: accountCurrency
+                                    )
+                                    cardBalance = max(0, cardBalance - converted)
+                                }
+                                if let toAmount = transaction.exchangeToAmount {
+                                    let converted = await convertAmount(
+                                        value: toAmount,
+                                        from: transaction.exchangeToCurrency ?? accountCurrency,
+                                        to: accountCurrency
+                                    )
+                                    cardBalance += converted
+                                }
+                            }
                         }
                     }
-                    
-                    // Конвертируем в валюту отображения
-                    let converted = await convertAmount(
-                        value: accountBalance,
-                        from: accountInfo.currency,
-                        to: state.displayCurrency
-                    )
-                    totalBalance += converted
                 }
+                
+                // Для кредитных карт преобразуем баланс в задолженность
+                if card.cardType == .credit, let limit = card.creditLimit {
+                    // Задолженность = лимит - баланс
+                    accountBalance = max(0, limit - cardBalance)
+                } else {
+                    // Для дебетовых карт используем баланс
+                    accountBalance = cardBalance
+                }
+                
+            case .credit:
+                // Используем кэш вместо first(where:) для O(1) поиска
+                guard let credit = creditsCache[account.accountID] else {
+                    continue
+                }
+                
+                // Кредит учитывается только если он был начат до или в эту дату
+                guard credit.startDate <= date else {
+                    continue
+                }
+                
+                guard credit.includeInTotal else {
+                    continue
+                }
+                
+                accountCurrency = credit.currency
+                shouldInclude = true
+                
+                // Рассчитываем остаток долга на нужную дату
+                accountBalance = calculateCreditRemainingAmount(credit: credit, at: date)
+                
+            case .investment:
+                // Используем кэш вместо first(where:) для O(1) поиска
+                guard let investment = investmentsCache[account.accountID] else {
+                    continue
+                }
+                
+                // Актив учитывается только если он был создан до или в эту дату
+                guard investment.createdAt <= date else {
+                    continue
+                }
+                
+                guard investment.includeInTotal else {
+                    continue
+                }
+                
+                accountCurrency = investment.currency
+                shouldInclude = true
+                
+                // Для активов используем текущую сумму (предполагаем, что она не менялась)
+                // В будущем можно добавить историю изменений активов
+                accountBalance = investment.investmentType == .positive ? investment.amount : -investment.amount
             }
+            
+            if shouldInclude {
+                // Конвертируем в валюту отображения
+                let converted = await convertAmount(
+                    value: accountBalance,
+                    from: accountCurrency,
+                    to: state.displayCurrency
+                )
+                totalBalance += converted
+            }
+        }
+        
+        // Сохраняем результат в кэш (ограничиваем размер кэша для экономии памяти)
+        if balanceCache.count < 1000 {
+            balanceCache[cacheKey] = totalBalance
         }
         
         return totalBalance
     }
     
-    private func calculateTotalForAllGroups() async -> Double {
+    /// Рассчитать остаток долга по кредиту на конкретную дату
+    func calculateCreditRemainingAmount(credit: Credit, at date: Date) -> Double {
+        let calendar = Calendar.current
+        
+        // Если кредит еще не начался, остаток равен сумме кредита
+        if date < credit.startDate {
+            return credit.amount
+        }
+        
+        // Если кредит закрыт и дата после закрытия, остаток равен 0
+        if credit.isClosed, let endDate = credit.endDate, date > endDate {
+            return 0.0
+        }
+        
+        // Рассчитываем количество прошедших месяцев с начала кредита до указанной даты
+        let components = calendar.dateComponents([.month], from: credit.startDate, to: date)
+        let monthsPassed = max(0, components.month ?? 0)
+        let monthsPaid = min(monthsPassed, credit.termMonths)
+        let monthsRemaining = max(0, credit.termMonths - monthsPaid)
+        
+        // Если все платежи сделаны, остаток равен нулю
+        guard monthsRemaining > 0 else {
+            return 0.0
+        }
+        
+        // Если платежей не было, остаток равен сумме кредита минус досрочные платежи
+        guard monthsPaid > 0 else {
+            return max(0, credit.amount - credit.earlyPaymentsAmount)
+        }
+        
+        let monthlyRate = credit.interestRate / 12.0 / 100.0
+        
+        if monthlyRate == 0 {
+            // Без процентов: просто вычитаем выплаченное
+            let paid = credit.monthlyPayment * Double(monthsPaid)
+            return max(0, credit.amount - paid - credit.earlyPaymentsAmount)
+        } else {
+            // Формула для расчета остатка долга через текущую стоимость оставшихся платежей
+            let discountFactor = pow(1 + monthlyRate, -Double(monthsRemaining))
+            let remaining = credit.monthlyPayment * ((1 - discountFactor) / monthlyRate)
+            return max(0, remaining - credit.earlyPaymentsAmount)
+        }
+    }
+    
+    func calculateTotalForAllGroups() async -> Double {
         var total: Double = 0.0
         for group in state.groups {
             total += await calculateGroupTotal(group: group)
@@ -945,7 +1336,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         return total
     }
     
-    private func calculateGroupTotal(group: FinanceGroup) async -> Double {
+    func calculateGroupTotal(group: FinanceGroup) async -> Double {
         var total: Double = 0.0
         
         guard let accounts = group.accounts else { return 0.0 }
@@ -964,7 +1355,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         return total
     }
     
-    private func convertAmount(value: Double, from: String, to: String) async -> Double {
+    func convertAmount(value: Double, from: String, to: String) async -> Double {
         if from == to {
             return value
         }
@@ -982,8 +1373,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     
     /// Получить список счетов для выбранных групп
     func getAccountsForSelectedGroups() -> [FinanceAccount] {
-        let groupsToShow = state.selectedGroupIDs.isEmpty 
-            ? state.groups 
+        let groupsToShow = state.selectedGroupIDs.isEmpty
+            ? state.groups
             : state.groups.filter { state.selectedGroupIDs.contains($0.groupUniqueID) }
         
         var accounts: [FinanceAccount] = []
@@ -996,3 +1387,4 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         return accounts
     }
 }
+

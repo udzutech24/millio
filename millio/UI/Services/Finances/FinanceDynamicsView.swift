@@ -57,7 +57,14 @@ struct FinanceDynamicsView: View {
                     initialAccountCurrency: initialAccountCurrency
                 )
                 dynamicsViewModel?.handle(.loadData)
+            } else {
+                // Обновляем данные при возврате на экран
+                dynamicsViewModel?.handle(.loadData)
             }
+        }
+        .onChange(of: financeViewModel.state.availableCards.count) { _, _ in
+            // Обновляем данные при изменении списка карт
+            dynamicsViewModel?.handle(.loadData)
         }
         
         if wrapInNavigationStack {
@@ -750,12 +757,17 @@ private struct FinanceDynamicsContentView: View {
                     .foregroundStyle(viewModel.state.periodDelta.absolute >= 0 ? Color.green : AppColors.error)
                     
                     HStack(spacing: 4) {
-                        Text(viewModel.state.periodDelta.percent >= 0 ? "+" : "")
-                            .font(.system(size: 14, weight: .medium))
-                        Text(String(format: "%.1f", viewModel.state.periodDelta.percent))
-                            .font(.system(size: 14, weight: .medium))
-                        Text("%")
-                            .font(.system(size: 14, weight: .medium))
+                        if abs(viewModel.state.periodDelta.percent) >= 999999.0 {
+                            Text("∞")
+                                .font(.system(size: 14, weight: .medium))
+                        } else {
+                            Text(viewModel.state.periodDelta.percent >= 0 ? "+" : "")
+                                .font(.system(size: 14, weight: .medium))
+                            Text(String(format: "%.1f", viewModel.state.periodDelta.percent))
+                                .font(.system(size: 14, weight: .medium))
+                            Text("%")
+                                .font(.system(size: 14, weight: .medium))
+                        }
                     }
                     .foregroundStyle(viewModel.state.periodDelta.percent >= 0 ? Color.green : AppColors.error)
                 }
@@ -950,12 +962,17 @@ private struct FinanceDynamicsContentView: View {
                                 .foregroundStyle(item.delta >= 0 ? Color.green : AppColors.error)
                                 
                                 HStack(spacing: 4) {
-                                    Text(item.deltaPercent >= 0 ? "+" : "")
-                                        .font(.system(size: 10))
-                                    Text(String(format: "%.1f", item.deltaPercent))
-                                        .font(.system(size: 10))
-                                    Text("%")
-                                        .font(.system(size: 10))
+                                    if abs(item.deltaPercent) >= 999999.0 {
+                                        Text("∞")
+                                            .font(.system(size: 10))
+                                    } else {
+                                        Text(item.deltaPercent >= 0 ? "+" : "")
+                                            .font(.system(size: 10))
+                                        Text(String(format: "%.1f", item.deltaPercent))
+                                            .font(.system(size: 10))
+                                        Text("%")
+                                            .font(.system(size: 10))
+                                    }
                                 }
                                 .foregroundStyle(item.deltaPercent >= 0 ? Color.green : AppColors.error)
                             }

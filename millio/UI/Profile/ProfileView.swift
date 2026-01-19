@@ -244,6 +244,8 @@ struct ProfileView: View {
                                     }
                                 ))
                                 .tint(.blue)
+                                
+                                MockDataGeneratorButton(modelContext: modelContext)
                             } header: {
                                 Text("Отладка")
                                     .font(.system(size: 18, weight: .semibold))
@@ -363,6 +365,78 @@ struct ProfileView: View {
         return formatter.string(from: date)
     }
 }
+
+// MARK: - Mock Data Generator Button
+
+#if DEBUG
+private struct MockDataGeneratorButton: View {
+    let modelContext: ModelContext
+    @State private var isGenerating = false
+    @State private var showAlert = false
+    @State private var alertMessage = ""
+    @State private var alertTitle = ""
+    
+    var body: some View {
+        Button {
+            generateMockData()
+        } label: {
+            HStack {
+                if isGenerating {
+                    ProgressView()
+                        .tint(.white)
+                } else {
+                    Image(systemName: "sparkles")
+                    Text("Генерировать моковые данные")
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(
+                LinearGradient(
+                    colors: AppColors.financesGradient,
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .foregroundColor(.white)
+            .cornerRadius(12)
+        }
+        .disabled(isGenerating)
+        .alert(alertTitle, isPresented: $showAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(alertMessage)
+        }
+    }
+    
+    private func generateMockData() {
+        isGenerating = true
+        
+        Task {
+            do {
+                let generator = MockDataGenerator(modelContext: modelContext)
+                try await MainActor.run {
+                    try generator.generateMockData()
+                }
+                
+                await MainActor.run {
+                    isGenerating = false
+                    alertTitle = "Успешно"
+                    alertMessage = "Моковые данные успешно сгенерированы:\n- 5 групп финансов\n- 12 карт\n- 10 кредитов\n- 10 активов\n- ~500 транзакций кэшфлоу"
+                    showAlert = true
+                }
+            } catch {
+                await MainActor.run {
+                    isGenerating = false
+                    alertTitle = "Ошибка"
+                    alertMessage = "Не удалось сгенерировать моковые данные: \(error.localizedDescription)"
+                    showAlert = true
+                }
+            }
+        }
+    }
+}
+#endif
 
 #Preview {
     NavigationStack {

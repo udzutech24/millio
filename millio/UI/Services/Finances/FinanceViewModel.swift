@@ -68,6 +68,14 @@ struct FinanceState {
     /// Доступные активы
     var availableInvestments: [Investment] = []
     
+    /// Непривязанные карты (не добавленные ни в одну группу)
+    var unattachedCards: [Card] = []
+    
+    /// Непривязанные кредиты (не добавленные ни в одну группу)
+    var unattachedCredits: [Credit] = []
+    
+    /// Непривязанные активы (не добавленные ни в одну группу)
+    var unattachedInvestments: [Investment] = []
     
     /// Показывать ли редактор карты для редактирования
     var showEditCardSheet: Bool = false
@@ -419,6 +427,8 @@ final class FinanceViewModel: ViewModelProtocol {
                 // Потом по дате создания
                 return group1.createdAt < group2.createdAt
             }
+            // Обновляем списки непривязанных элементов после загрузки групп
+            updateUnattachedItems()
             calculateTotalAmount()
         }
     }
@@ -438,6 +448,36 @@ final class FinanceViewModel: ViewModelProtocol {
         CardManager.shared.setup(modelContext: modelContext)
         CreditManager.shared.setup(modelContext: modelContext)
         InvestmentManager.shared.setup(modelContext: modelContext)
+        
+        // Вычисляем непривязанные элементы
+        updateUnattachedItems()
+    }
+    
+    /// Обновить списки непривязанных элементов
+    private func updateUnattachedItems() {
+        // Получаем все привязанные счета из всех групп
+        var attachedCardIDs: Set<String> = []
+        var attachedCreditIDs: Set<String> = []
+        var attachedInvestmentIDs: Set<String> = []
+        
+        for group in state.groups {
+            guard let accounts = group.accounts else { continue }
+            for account in accounts {
+                switch account.accountType {
+                case .card:
+                    attachedCardIDs.insert(account.accountID)
+                case .credit:
+                    attachedCreditIDs.insert(account.accountID)
+                case .investment:
+                    attachedInvestmentIDs.insert(account.accountID)
+                }
+            }
+        }
+        
+        // Фильтруем непривязанные элементы
+        state.unattachedCards = state.availableCards.filter { !attachedCardIDs.contains($0.cardUniqueID) }
+        state.unattachedCredits = state.availableCredits.filter { !attachedCreditIDs.contains($0.creditUniqueID) }
+        state.unattachedInvestments = state.availableInvestments.filter { !attachedInvestmentIDs.contains($0.investmentUniqueID) }
     }
     
     private func calculateTotalAmount() {
@@ -592,6 +632,7 @@ final class FinanceViewModel: ViewModelProtocol {
         do {
             try modelContext.save()
             loadGroups()
+            updateUnattachedItems() // Обновляем списки непривязанных элементов после удаления группы
         } catch {
             AppLogger.log(.error, category: "Finance", "Failed to delete group: \(error.localizedDescription)")
         }
@@ -667,6 +708,7 @@ final class FinanceViewModel: ViewModelProtocol {
             try modelContext.save()
             loadGroups()
             loadAccounts() // Обновляем список счетов
+            updateUnattachedItems() // Обновляем списки непривязанных элементов
             calculateTotalAmount() // Пересчитываем общую сумму
             
             // Пересчитываем сумму группы, в которую был добавлен счет
@@ -695,6 +737,7 @@ final class FinanceViewModel: ViewModelProtocol {
             try modelContext.save()
             loadGroups()
             loadAccounts() // Обновляем список счетов
+            updateUnattachedItems() // Обновляем списки непривязанных элементов
             calculateTotalAmount() // Пересчитываем общую сумму
             
             // Пересчитываем сумму группы, из которой был удален счет
