@@ -148,6 +148,9 @@ struct DynamicsBreakdownItem: Identifiable {
     let endValue: Double
     let delta: Double
     let deltaPercent: Double
+    let icon: String?
+    let accountType: FinanceAccountType?
+    let isCreditCard: Bool
 }
 
 // MARK: - Finance Dynamics Actions
@@ -707,7 +710,10 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                             startValue: startBalance,
                             endValue: endBalance,
                             delta: delta,
-                            deltaPercent: percent
+                            deltaPercent: percent,
+                            icon: nil,
+                            accountType: nil,
+                            isCreditCard: false
                         )
                     }
                 }
@@ -785,13 +791,33 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                             percent = (delta / abs(startBalance)) * 100
                         }
                         
+                        // Получаем информацию о счете для иконки
+                        guard let accountInfo = self.financeViewModel.getAccountInfo(account: account) else {
+                            return nil
+                        }
+                        
+                        // Определяем, является ли карта кредитной
+                        let isCreditCard: Bool
+                        if account.accountType == .card {
+                            if let card = self.state.availableCards.first(where: { $0.cardUniqueID == account.accountID }) {
+                                isCreditCard = card.cardType == .credit
+                            } else {
+                                isCreditCard = false
+                            }
+                        } else {
+                            isCreditCard = false
+                        }
+                        
                         return DynamicsBreakdownItem(
                             id: accountUniqueID,
                             name: accountName,
                             startValue: startBalance,
                             endValue: endBalance,
                             delta: delta,
-                            deltaPercent: percent
+                            deltaPercent: percent,
+                            icon: accountInfo.icon,
+                            accountType: account.accountType,
+                            isCreditCard: isCreditCard
                         )
                     }
                 }

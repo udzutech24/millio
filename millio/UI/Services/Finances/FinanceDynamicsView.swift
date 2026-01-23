@@ -1000,6 +1000,16 @@ private struct FinanceDynamicsContentView: View {
                 VStack(spacing: 0) {
                     // Заголовки таблицы
                     HStack(spacing: 12) {
+                        // Отступ для иконки (если есть счета с иконками)
+                        if viewModel.state.viewMode == .accounts && viewModel.state.dynamicsBreakdown.contains(where: { $0.icon != nil }) {
+                            Spacer()
+                                .frame(width: 20)
+                        } else if viewModel.state.viewMode == .accounts {
+                            // Если режим счетов, но нет иконок, все равно добавляем отступ для выравнивания
+                            Spacer()
+                                .frame(width: 0)
+                        }
+                        
                         Text("Название")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppColors.textSecondary)
@@ -1025,10 +1035,38 @@ private struct FinanceDynamicsContentView: View {
                     // Строки данных
                     ForEach(viewModel.state.dynamicsBreakdown) { item in
                         HStack(spacing: 12) {
+                            // Иконка счета (если есть) или фиксированное место для выравнивания
+                            if viewModel.state.viewMode == .accounts {
+                                if let icon = item.icon {
+                                    Image(systemName: icon)
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(
+                                            (item.accountType == .credit || item.isCreditCard)
+                                                ? LinearGradient(
+                                                    colors: [AppColors.error, AppColors.error],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                )
+                                                : LinearGradient(
+                                                    colors: AppColors.financesGradient,
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                )
+                                        )
+                                        .frame(width: 20, height: 20)
+                                } else {
+                                    // Фиксированное место для выравнивания, если иконки нет
+                                    Spacer()
+                                        .frame(width: 20)
+                                }
+                            }
+                            
                             Text(item.name)
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundStyle(AppColors.textPrimary)
                                 .frame(minWidth: 100, maxWidth: .infinity, alignment: .leading)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
                             
                             Text(formatBalance(item.startValue))
                                 .font(.system(size: 14))

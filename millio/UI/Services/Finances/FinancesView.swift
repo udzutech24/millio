@@ -495,6 +495,8 @@ private struct FinanceGroupRow: View {
             Text(group.name)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(AppColors.textPrimary)
+                .lineLimit(1)
+                .truncationMode(.tail)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -721,11 +723,17 @@ private struct FinanceAccountRow: View {
             Image(systemName: icon)
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(
-                    LinearGradient(
-                        colors: AppColors.financesGradient,
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
+                    accountType == .credit || isCreditCardDebt
+                        ? LinearGradient(
+                            colors: [AppColors.error, AppColors.error],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        : LinearGradient(
+                            colors: AppColors.financesGradient,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
                 )
                 .frame(width: 32, height: 32)
             
@@ -734,6 +742,7 @@ private struct FinanceAccountRow: View {
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(AppColors.textPrimary)
                 .lineLimit(1)
+                .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
             
             // Сумма (кликабельна для быстрого редактирования)
@@ -1274,6 +1283,8 @@ private struct FinanceAddAccountView: View {
                                 
                                 Text(group.name)
                                     .foregroundStyle(AppColors.textPrimary)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
                                 
                                 Spacer()
                                 
