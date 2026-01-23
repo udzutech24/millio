@@ -1078,28 +1078,33 @@ private struct FinanceDynamicsContentView: View {
                                     .font(.system(size: 14, weight: .medium))
                                     .foregroundStyle(AppColors.textPrimary)
                                 
-                                HStack(spacing: 4) {
-                                    Text(item.delta >= 0 ? "+" : "")
-                                        .font(.system(size: 11, weight: .medium))
-                                    Text(formatBalance(item.delta))
-                                        .font(.system(size: 11, weight: .medium))
-                                }
-                                .foregroundStyle(item.delta >= 0 ? Color.green : AppColors.error)
+                                // Для кредитов инвертируем логику: уменьшение долга = хорошо (зеленый плюс)
+                                let isCredit = item.accountType == .credit
+                                let displayDelta = isCredit ? -item.delta : item.delta
+                                let displayDeltaPercent = isCredit ? -item.deltaPercent : item.deltaPercent
                                 
                                 HStack(spacing: 4) {
-                                    if abs(item.deltaPercent) >= 999999.0 {
+                                    Text(displayDelta >= 0 ? "+" : "")
+                                        .font(.system(size: 11, weight: .medium))
+                                    Text(formatBalance(abs(displayDelta)))
+                                        .font(.system(size: 11, weight: .medium))
+                                }
+                                .foregroundStyle(displayDelta >= 0 ? Color.green : AppColors.error)
+                                
+                                HStack(spacing: 4) {
+                                    if abs(displayDeltaPercent) >= 999999.0 {
                                         Text("∞")
                                             .font(.system(size: 10))
                                     } else {
-                                        Text(item.deltaPercent >= 0 ? "+" : "")
+                                        Text(displayDeltaPercent >= 0 ? "+" : "")
                                             .font(.system(size: 10))
-                                        Text(String(format: "%.1f", item.deltaPercent))
+                                        Text(String(format: "%.1f", abs(displayDeltaPercent)))
                                             .font(.system(size: 10))
                                         Text("%")
                                             .font(.system(size: 10))
                                     }
                                 }
-                                .foregroundStyle(item.deltaPercent >= 0 ? Color.green : AppColors.error)
+                                .foregroundStyle(displayDeltaPercent >= 0 ? Color.green : AppColors.error)
                             }
                             .frame(width: 100, alignment: .trailing)
                         }
