@@ -622,11 +622,13 @@ private struct FinanceDynamicsContentView: View {
                 AxisMarks(values: .automatic(desiredCount: 6)) { value in
                     AxisGridLine()
                         .foregroundStyle(AppColors.textTertiary.opacity(0.4))
-                    AxisValueLabel {
-                        if let dateValue = value.as(Date.self) {
-                            Text(formatDate(dateValue))
-                                .foregroundStyle(AppColors.textSecondary)
-                                .font(.system(size: 10))
+                    if viewModel.state.period != .all {
+                        AxisValueLabel {
+                            if let dateValue = value.as(Date.self) {
+                                Text(formatDate(dateValue))
+                                    .foregroundStyle(AppColors.textSecondary)
+                                    .font(.system(size: 10))
+                            }
                         }
                     }
                 }
@@ -751,7 +753,7 @@ private struct FinanceDynamicsContentView: View {
     private var periodSelectorUnderChart: some View {
         HStack(spacing: 8) {
             // Кнопки периодов
-            ForEach([DynamicsPeriod.week, .month, .year, .all], id: \.self) { period in
+            ForEach([DynamicsPeriod.all, .week, .month, .year], id: \.self) { period in
                 Button {
                     viewModel.handle(.setPeriod(period))
                 } label: {

@@ -171,8 +171,9 @@ struct MainAppView: View {
     // MARK: - Helpers
     
     private func loadServices() {
-        // Фиксированный порядок сервисов
-        services = ServiceItem.allServices()
+        // Временно показываем только основные сервисы
+        let allowedIds = ["finances", "courses", "cashback", "cashflow"]
+        services = ServiceItem.allServices().filter { allowedIds.contains($0.id) }
     }
     
     @ViewBuilder
