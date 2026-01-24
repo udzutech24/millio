@@ -1207,12 +1207,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 if let cached = initialBalancesCache[initialBalanceKey] {
                     initialBalanceAtCreation = cached
                 } else {
-                    // Используем сохраненный initialBalance, если он есть
-                    if card.hasInitialBalance {
-                        initialBalanceAtCreation = card.initialBalance
-                    } else {
-                        initialBalanceAtCreation = card.balance
-                    }
+                    initialBalanceAtCreation = await resolveCardInitialBalance(card: card, accountCurrency: accountCurrency)
                     // Кэшируем начальный баланс
                     initialBalancesCache[initialBalanceKey] = initialBalanceAtCreation
                 }
@@ -1475,6 +1470,26 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             return delta > 0 ? 999999.0 : -999999.0
         }
         return (delta / abs(startBalance)) * 100
+    }
+
+    private func resolveCardInitialBalance(card: Card, accountCurrency: String) async -> Double {
+        if card.hasInitialBalance {
+            return card.initialBalance
+        }
+        
+        // Восстанавливаем базу, чтобы ручные правки не "сдвигали" историю
+        let cardTransactions = transactionsByCardCache[card.cardUniqueID] ?? []
+        var totalAdjustments: Double = 0.0
+        for transaction in cardTransactions where transaction.transactionType == .balanceAdjustment &&
+            transaction.cardID == card.cardUniqueID {
+            let converted = await convertAmount(
+                value: transaction.amount,
+                from: transaction.currency,
+                to: accountCurrency
+            )
+            totalAdjustments += converted
+        }
+        return card.balance - totalAdjustments
     }
     
     /// Рассчитать остаток долга по кредиту на конкретную дату с учетом транзакций balanceAdjustment
