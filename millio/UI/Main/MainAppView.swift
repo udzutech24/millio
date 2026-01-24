@@ -70,25 +70,10 @@ struct MainAppView: View {
                     .padding(.horizontal, 24)
                     .padding(.top, 16)
                     
-                    // Title and slogan
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("millio")
-                            .font(.system(size: 34, weight: .bold))
-                            .foregroundStyle(Color.white)
-                        
-                        Text("ваш лучший помощник")
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundStyle(Color.white)
-                          
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, 24)
-                    .padding(.top, 24)
-                    .padding(.bottom, 30)
-                    
                     // Service buttons grid
                     servicesGrid
                         .padding(.horizontal, 24)
+                        .padding(.top, 24)
                     
                     Spacer()
                     
