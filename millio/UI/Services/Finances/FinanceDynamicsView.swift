@@ -942,11 +942,12 @@ private struct FinanceDynamicsContentView: View {
         return formatter.string(from: NSNumber(value: amount)) ?? "0.00"
     }
 
-    private func deltaLineText(delta: Double, percent: Double) -> String {
+    private func deltaLineText(delta: Double, percent: Double, currency: String) -> String {
         let deltaSign = delta >= 0 ? "+" : "-"
         let percentSign = percent >= 0 ? "+" : "-"
         let percentText = abs(percent) >= 999999.0 ? "∞" : String(format: "%.1f", abs(percent))
-        return "\(deltaSign) \(formatBalance(abs(delta))) • \(percentSign) \(percentText) %"
+        let currencyLetter = String(currency.prefix(1))
+        return "\(deltaSign)\(formatBalance(abs(delta))) \(currencyLetter) • \(percentSign)\(percentText) %"
     }
     
     private func formatDate(_ date: Date) -> String {
@@ -1055,63 +1056,76 @@ private struct FinanceDynamicsContentView: View {
                     
                     // Строки данных
                     ForEach(viewModel.state.dynamicsBreakdown) { item in
-                        HStack(spacing: 12) {
-                            // Иконка счета (если есть) или фиксированное место для выравнивания
-                            if viewModel.state.viewMode == .accounts {
-                                if let icon = item.icon {
-                                    Image(systemName: icon)
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundStyle(
-                                            (item.accountType == .credit || item.isCreditCard)
-                                                ? LinearGradient(
-                                                    colors: [AppColors.error, AppColors.error],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                                : LinearGradient(
-                                                    colors: AppColors.financesGradient,
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                        )
-                                        .frame(width: 20, height: 20)
-                                } else {
-                                    // Фиксированное место для выравнивания, если иконки нет
-                                    Spacer()
-                                        .frame(width: 20)
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 12) {
+                                // Иконка счета (если есть) или фиксированное место для выравнивания
+                                if viewModel.state.viewMode == .accounts {
+                                    if let icon = item.icon {
+                                        Image(systemName: icon)
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundStyle(
+                                                (item.accountType == .credit || item.isCreditCard)
+                                                    ? LinearGradient(
+                                                        colors: [AppColors.error, AppColors.error],
+                                                        startPoint: .topLeading,
+                                                        endPoint: .bottomTrailing
+                                                    )
+                                                    : LinearGradient(
+                                                        colors: AppColors.financesGradient,
+                                                        startPoint: .topLeading,
+                                                        endPoint: .bottomTrailing
+                                                    )
+                                            )
+                                            .frame(width: 20, height: 20)
+                                    } else {
+                                        // Фиксированное место для выравнивания, если иконки нет
+                                        Spacer()
+                                            .frame(width: 20)
+                                    }
                                 }
-                            }
-                            
-                            Text(item.name)
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(AppColors.textPrimary)
-                                .frame(minWidth: 100, maxWidth: .infinity, alignment: .leading)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                            
-                            Text(formatBalance(item.startValue))
-                                .font(.system(size: 14))
-                                .foregroundStyle(AppColors.textSecondary)
-                                .frame(width: 80, alignment: .trailing)
-                            
-                            VStack(alignment: .trailing, spacing: 2) {
+                                
+                                Text(item.name)
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundStyle(AppColors.textPrimary)
+                                    .frame(minWidth: 100, maxWidth: .infinity, alignment: .leading)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                                
+                                Text(formatBalance(item.startValue))
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(AppColors.textSecondary)
+                                    .frame(width: 80, alignment: .trailing)
+                                
                                 Text(formatBalance(item.endValue))
                                     .font(.system(size: 14, weight: .medium))
                                     .foregroundStyle(AppColors.textPrimary)
+                                    .frame(width: 100, alignment: .trailing)
+                            }
+                            
+                            // Подстрока с динамикой, чтобы не накладываться на "Начало"
+                            HStack(spacing: 12) {
+                                if viewModel.state.viewMode == .accounts {
+                                    Spacer().frame(width: 20)
+                                }
+                                Spacer(minLength: 0)
+                                    .frame(minWidth: 100, maxWidth: .infinity, alignment: .leading)
+                                Spacer().frame(width: 80)
                                 
                                 // Для кредитов и кредитных карт инвертируем логику: уменьшение долга = хорошо (зеленый плюс)
                                 // Дельта уже инвертирована в ViewModel для кредитных карт и кредитов
-                                let isCredit = item.accountType == .credit || item.isCreditCard
                                 let displayDelta = item.delta
                                 let displayDeltaPercent = item.deltaPercent
                                 
-                                Text(deltaLineText(delta: displayDelta, percent: displayDeltaPercent))
-                                    .font(.system(size: 11, weight: .medium))
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.75)
+                                Text(deltaLineText(
+                                    delta: displayDelta,
+                                    percent: displayDeltaPercent,
+                                    currency: viewModel.state.displayCurrency
+                                ))
+                                    .font(.system(size: 13, weight: .medium))
                                     .foregroundStyle(displayDelta >= 0 ? Color.green : AppColors.error)
+                                    .fixedSize(horizontal: true, vertical: false)
+                                    .frame(minWidth: 120, alignment: .trailing)
                             }
-                            .frame(width: 100, alignment: .trailing)
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 6)
