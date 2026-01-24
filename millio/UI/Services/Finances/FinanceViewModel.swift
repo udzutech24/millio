@@ -559,18 +559,6 @@ final class FinanceViewModel: ViewModelProtocol {
         
         guard let accounts = group.accounts else { return 0.0 }
         
-        // Структура для хранения информации о пропущенных суммах
-        struct SkippedAmount {
-            let accountName: String
-            let accountType: String
-            let amount: Double
-            let fromCurrency: String
-            let toCurrency: String
-            let reason: String
-        }
-        
-        var skippedAmounts: [SkippedAmount] = []
-        
         // Собираем все уникальные валюты из счетов группы
         let currencies = await collectCurrenciesFromGroup(group: group)
         
@@ -583,16 +571,6 @@ final class FinanceViewModel: ViewModelProtocol {
         if !allCurrenciesNeeded.isEmpty && allCurrenciesNeeded.count > 1 {
             // Принудительно обновляем курсы из API перед расчетом
             await CurrencyRateService.shared.forceRefreshRates()
-            
-            AppLogger.log(
-                .debug,
-                category: "Finance",
-                """
-                [Конвертация] Предзагрузка курсов для группы "\(group.name)":
-                - Валюты счетов: \(currencies.sorted().joined(separator: ", "))
-                - Целевая валюта: \(currency)
-                """
-            )
         }
         
         // Предзагружаем курсы для всех необходимых валют через USD
@@ -600,20 +578,7 @@ final class FinanceViewModel: ViewModelProtocol {
         for neededCurrency in allCurrenciesNeeded {
             if neededCurrency != "USD" {
                 // Запрашиваем курс, что автоматически загрузит его из API, если нужно
-                let rate = await CurrencyRateService.shared.getRate(from: "USD", to: neededCurrency)
-                if rate == nil {
-                    AppLogger.log(
-                        .warning,
-                        category: "Finance",
-                        "[Конвертация] Не удалось загрузить курс USD → \(neededCurrency) для группы \"\(group.name)\""
-                    )
-                } else {
-                    AppLogger.log(
-                        .debug,
-                        category: "Finance",
-                        "[Конвертация] Курс USD → \(neededCurrency) загружен: \(String(format: "%.6f", rate!))"
-                    )
-                }
+                _ = await CurrencyRateService.shared.getRate(from: "USD", to: neededCurrency)
             }
         }
         
@@ -635,86 +600,10 @@ final class FinanceViewModel: ViewModelProtocol {
                     // Курс доступен - выполняем конвертацию
                     let converted = amount.value * rate
                     total += converted
-                    
-                    // Логируем успешную конвертацию для отладки
-                    let accountInfo = getAccountInfo(account: account)
-                    let accountName = accountInfo?.name ?? "Неизвестный счет"
-                    AppLogger.log(
-                        .debug,
-                        category: "Finance",
-                        """
-                        [Конвертация] Успешно конвертировано для группы "\(group.name)":
-                        - Счет: \(accountName)
-                        - Сумма: \(String(format: "%.2f", amount.value)) \(amount.currency)
-                        - Курс: \(String(format: "%.6f", rate))
-                        - Результат: \(String(format: "%.2f", converted)) \(currency)
-                        """
-                    )
                 } else {
                     // Курс недоступен - пропускаем сумму
-                    // Получаем информацию о счете для детального логирования
-                    let accountInfo = getAccountInfo(account: account)
-                    let accountName = accountInfo?.name ?? "Неизвестный счет"
-                    let accountTypeName: String
-                    switch account.accountType {
-                    case .card:
-                        accountTypeName = "Карта"
-                    case .credit:
-                        accountTypeName = "Кредит"
-                    case .investment:
-                        accountTypeName = "Инвестиция"
-                    }
-                    
-                    // Определяем причину ошибки конвертации
-                    let reason: String
-                    if rate == nil {
-                        reason = "Курс конвертации \(amount.currency) → \(currency) недоступен (возможно, валюта не поддерживается API)"
-                    } else {
-                        reason = "Ошибка конвертации (курс = \(rate ?? 0), но конвертация не удалась)"
-                    }
-                    
-                    // Сохраняем информацию о пропущенной сумме
-                    skippedAmounts.append(SkippedAmount(
-                        accountName: accountName,
-                        accountType: accountTypeName,
-                        amount: amount.value,
-                        fromCurrency: amount.currency,
-                        toCurrency: currency,
-                        reason: reason
-                    ))
-                    
-                    // Детальное логирование каждой пропущенной суммы
-                    AppLogger.log(
-                        .error,
-                        category: "Finance",
-                        """
-                        [Конвертация] Пропущена сумма при расчете группы "\(group.name)":
-                        - Счет: \(accountName) (\(accountTypeName))
-                        - Сумма: \(String(format: "%.2f", amount.value)) \(amount.currency)
-                        - Целевая валюта: \(currency)
-                        - Причина: \(reason)
-                        """
-                    )
                 }
             }
-        }
-        
-        // Итоговое логирование, если были пропущенные суммы
-        if !skippedAmounts.isEmpty {
-            let totalSkipped = skippedAmounts.reduce(0.0) { $0 + $1.amount }
-            let currenciesList = skippedAmounts.map { "\($0.amount) \($0.fromCurrency)" }.joined(separator: ", ")
-            
-            AppLogger.log(
-                .error,
-                category: "Finance",
-                """
-                [Конвертация] Итог по группе "\(group.name)":
-                - Пропущено счетов: \(skippedAmounts.count)
-                - Общая сумма пропущенных средств: \(String(format: "%.2f", totalSkipped)) (\(currenciesList))
-                - Итоговая сумма группы (без пропущенных): \(String(format: "%.2f", total)) \(currency)
-                - Внимание: Итоговая сумма может быть неполной из-за отсутствия курсов конвертации
-                """
-            )
         }
         
         return total
