@@ -1330,23 +1330,11 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 shouldInclude = true
                 
                 // Рассчитываем остаток долга на нужную дату с учетом транзакций balanceAdjustment
-                if date < credit.startDate {
-                    if includeInitialBeforeCreation {
-                        accountBalance = await calculateCreditRemainingAmount(
-                            credit: credit,
-                            at: credit.startDate,
-                            accountCurrency: accountCurrency
-                        )
-                    } else {
-                        continue
-                    }
-                } else {
-                    accountBalance = await calculateCreditRemainingAmount(
-                        credit: credit,
-                        at: date,
-                        accountCurrency: accountCurrency
-                    )
-                }
+                accountBalance = await calculateCreditRemainingAmount(
+                    credit: credit,
+                    at: date,
+                    accountCurrency: accountCurrency
+                )
                 
             case .investment:
                 // Используем кэш вместо first(where:) для O(1) поиска
