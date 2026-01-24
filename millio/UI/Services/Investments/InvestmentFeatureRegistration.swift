@@ -43,6 +43,8 @@ struct InvestmentImporter: ModelImporter {
         
         // Получаем includeInTotal (для обратной совместимости используем true по умолчанию)
         let includeInTotal = data["includeInTotal"] as? Bool ?? true
+        let initialAmount = data["initialAmount"] as? Double
+        let hasInitialAmount = data["hasInitialAmount"] as? Bool
         
         // Проверяем, не существует ли уже инвестиция с такими же данными
         let existingInvestmentDescriptor = FetchDescriptor<Investment>(
@@ -59,6 +61,10 @@ struct InvestmentImporter: ModelImporter {
         if let existingInvestment = try? context.fetch(existingInvestmentDescriptor).first {
             if let uniqueID = data["investmentUniqueID"] as? String, !uniqueID.isEmpty {
                 existingInvestment.uniqueID = uniqueID
+            }
+            if let initialAmount = initialAmount {
+                existingInvestment.initialAmount = initialAmount
+                existingInvestment.hasInitialAmount = hasInitialAmount ?? true
             }
             existingInvestment.isFavorite = data["isFavorite"] as? Bool ?? false
             existingInvestment.priority = priority
@@ -83,6 +89,13 @@ struct InvestmentImporter: ModelImporter {
         
         investment.createdAt = Date(timeIntervalSince1970: createdAt)
         investment.updatedAt = Date(timeIntervalSince1970: updatedAt)
+        if let initialAmount = initialAmount {
+            investment.initialAmount = initialAmount
+            investment.hasInitialAmount = hasInitialAmount ?? true
+        } else {
+            investment.initialAmount = amount
+            investment.hasInitialAmount = true
+        }
         if let uniqueID = data["investmentUniqueID"] as? String, !uniqueID.isEmpty {
             investment.uniqueID = uniqueID
         }

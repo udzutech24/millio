@@ -256,10 +256,19 @@ final class InvestmentViewModel: ViewModelProtocol {
         priority: InvestmentPriority,
         isFavorite: Bool
     ) {
+        var editedInvestment: Investment? = nil
+        var oldAmount: Double = 0.0
+        
         if let existing = state.editingInvestment {
             if existing.uniqueID.isEmpty {
                 _ = existing.investmentUniqueID
             }
+            if !existing.hasInitialAmount {
+                existing.initialAmount = existing.amount
+                existing.hasInitialAmount = true
+            }
+            oldAmount = existing.amount
+            editedInvestment = existing
             // Обновляем существующую инвестицию
             existing.name = name
             existing.investmentType = investmentType
@@ -287,6 +296,21 @@ final class InvestmentViewModel: ViewModelProtocol {
         
         do {
             try modelContext.save()
+            if let existing = editedInvestment {
+                let delta = amount - oldAmount
+                if abs(delta) > 0.01 {
+                    let transaction = CashflowTransaction(
+                        transactionType: .balanceAdjustment,
+                        amount: delta,
+                        currency: existing.currency,
+                        transactionDate: Date(),
+                        investmentID: existing.investmentUniqueID,
+                        note: "Ручное изменение баланса"
+                    )
+                    modelContext.insert(transaction)
+                    try modelContext.save()
+                }
+            }
             loadInvestments()
             state.showInvestmentEditor = false
             state.editingInvestment = nil

@@ -1103,6 +1103,10 @@ final class FinanceViewModel: ViewModelProtocol {
             if let investment = state.availableInvestments.first(where: { $0.investmentUniqueID == account.accountID }) {
                 // Сохраняем старое значение для создания транзакции
                 let oldAmount = investment.amount
+                if !investment.hasInitialAmount {
+                    investment.initialAmount = investment.amount
+                    investment.hasInitialAmount = true
+                }
                 
                 investment.amount = newAmount
                 investment.updatedAt = Date()
@@ -1145,4 +1149,3 @@ final class FinanceViewModel: ViewModelProtocol {
         }
     }
 }
-

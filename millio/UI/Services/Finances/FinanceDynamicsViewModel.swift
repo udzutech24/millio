@@ -1363,7 +1363,24 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 shouldInclude = true
                 
                 // Начальный баланс = значение при создании инвестиции
-                var investmentBalance = investment.investmentType == .positive ? investment.amount : -investment.amount
+                // Если initialAmount нет, восстанавливаем базу из текущей суммы и всех balanceAdjustment
+                var baseAmount = investment.hasInitialAmount ? investment.initialAmount : investment.amount
+                let investmentTransactions = transactionsByInvestmentCache[investment.investmentUniqueID] ?? []
+                if !investment.hasInitialAmount {
+                    var totalDelta: Double = 0.0
+                    for transaction in investmentTransactions where transaction.transactionType == .balanceAdjustment &&
+                        transaction.investmentID == investment.investmentUniqueID {
+                        let converted = await convertAmount(
+                            value: transaction.amount,
+                            from: transaction.currency,
+                            to: accountCurrency
+                        )
+                        totalDelta += converted
+                    }
+                    baseAmount = investment.amount - totalDelta
+                }
+                
+                var investmentBalance = investment.investmentType == .positive ? baseAmount : -baseAmount
                 
                 if date < investment.createdAt {
                     if includeInitialBeforeCreation {
@@ -1373,7 +1390,6 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     }
                 } else {
                     // Применяем транзакции balanceAdjustment с датой <= запрашиваемой даты
-                    let investmentTransactions = transactionsByInvestmentCache[investment.investmentUniqueID] ?? []
                     let balanceAdjustmentTransactions = investmentTransactions
                         .filter { transaction in
                             transaction.transactionType == .balanceAdjustment &&

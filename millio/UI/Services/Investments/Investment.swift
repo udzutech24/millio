@@ -104,6 +104,12 @@ final class Investment: Persistable {
     
     /// Стоимость/сумма инвестиции
     var amount: Double = 0.0
+
+    /// Изначальная сумма для истории (не меняется при редактировании)
+    var initialAmount: Double = 0.0
+
+    /// Флаг, что initialAmount установлен
+    var hasInitialAmount: Bool = false
     
     /// Валюта
     var currency: String = "RUB"
@@ -155,6 +161,8 @@ final class Investment: Persistable {
         self.investmentTypeRaw = investmentType.rawValue
         self.categoryRaw = category.rawValue
         self.amount = amount
+        self.initialAmount = amount
+        self.hasInitialAmount = true
         self.currency = currency
         self.includeInTotal = includeInTotal
         self.priorityRaw = priority.rawValue
@@ -185,6 +193,8 @@ final class Investment: Persistable {
             "investmentTypeRaw": investmentTypeRaw,
             "categoryRaw": categoryRaw,
             "amount": amount,
+            "initialAmount": initialAmount,
+            "hasInitialAmount": hasInitialAmount,
             "currency": currency,
             "includeInTotal": includeInTotal,
             "priorityRaw": priorityRaw,
