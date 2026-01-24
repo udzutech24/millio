@@ -62,11 +62,25 @@ struct FinanceDynamicsView: View {
                 dynamicsViewModel?.handle(.loadData)
             }
         }
-        .onChange(of: financeViewModel.state.availableCards.count) { _, _ in
-            // Обновляем данные при изменении списка карт
+        .onChange(of: financeViewModel.state.availableCards.map {
+            "\($0.cardUniqueID)_\($0.balance)_\($0.updatedAt.timeIntervalSince1970)"
+        }) { _, _ in
+            // Обновляем данные при изменении карт (количество или баланс)
             dynamicsViewModel?.handle(.loadData)
         }
-        
+        .onChange(of: financeViewModel.state.availableCredits.map {
+            "\($0.creditUniqueID)_\($0.remainingAmount)_\($0.updatedAt.timeIntervalSince1970)"
+        }) { _, _ in
+            // Обновляем данные при изменении кредитов (количество или остаток)
+            dynamicsViewModel?.handle(.loadData)
+        }
+        .onChange(of: financeViewModel.state.availableInvestments.map {
+            "\($0.investmentUniqueID)_\($0.amount)_\($0.updatedAt.timeIntervalSince1970)"
+        }) { _, _ in
+            // Обновляем данные при изменении инвестиций (количество или сумма)
+            dynamicsViewModel?.handle(.loadData)
+        }
+
         if wrapInNavigationStack {
             NavigationStack {
                 content
@@ -1078,10 +1092,11 @@ private struct FinanceDynamicsContentView: View {
                                     .font(.system(size: 14, weight: .medium))
                                     .foregroundStyle(AppColors.textPrimary)
                                 
-                                // Для кредитов инвертируем логику: уменьшение долга = хорошо (зеленый плюс)
-                                let isCredit = item.accountType == .credit
-                                let displayDelta = isCredit ? -item.delta : item.delta
-                                let displayDeltaPercent = isCredit ? -item.deltaPercent : item.deltaPercent
+                                // Для кредитов и кредитных карт инвертируем логику: уменьшение долга = хорошо (зеленый плюс)
+                                // Дельта уже инвертирована в ViewModel для кредитных карт и кредитов
+                                let isCredit = item.accountType == .credit || item.isCreditCard
+                                let displayDelta = item.delta
+                                let displayDeltaPercent = item.deltaPercent
                                 
                                 HStack(spacing: 4) {
                                     Text(displayDelta >= 0 ? "+" : "")

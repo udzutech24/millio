@@ -17,36 +17,8 @@ struct GradientBackground: View {
     var body: some View {
         ZStack {
             // Основной цвет фона
-            Color(hex: "161C29")
+            Color.black
                 .ignoresSafeArea()
-            
-            // Верхний радиальный градиент
-            RadialGradient(
-                gradient: Gradient(colors: [
-                    Color(hex: topGradientColor ?? "19E694").opacity(1.0),
-                    Color(hex: topGradientFadeColor ?? "0081E7").opacity(0.05)
-                ]),
-                center: UnitPoint(x: 1.3, y: 0),
-                startRadius: 0,
-                endRadius: 500
-            )
-            .ignoresSafeArea()
-            .shadow(color: Color(hex: "01A486").opacity(0.3), radius: 10, x: 10, y: 4)
-            .shadow(color: Color(hex: "0061A7").opacity(0.3), radius: 10, x: -10, y: 4)
-            .blur(radius: 50)
-            
-            // Нижний радиальный градиент
-            RadialGradient(
-                gradient: Gradient(colors: [
-                    Color(hex: bottomGradientColor ?? "BD00E7").opacity(1.0),
-                    Color(hex: bottomGradientFadeColor ?? "196EE6").opacity(0.05)
-                ]),
-                center: UnitPoint(x: 0.5, y: 1.2),
-                startRadius: 0,
-                endRadius: 400
-            )
-            .ignoresSafeArea()
-            .blur(radius: 100) // Layer blur для эффекта стекла
             
             // Монотонный шум (текстура)
             NoiseTexture()

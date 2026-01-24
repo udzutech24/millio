@@ -45,7 +45,7 @@ struct ProfileView: View {
                         
                         // Backup settings
                         VStack(spacing: 16) {
-                            Section {
+                            Section(content: {
                                 Toggle("Резервное копирование", isOn: Binding(
                                     get: { appState.isBackupEnabled },
                                     set: { newValue in
@@ -151,12 +151,12 @@ struct ProfileView: View {
                                         }
                                     }
                                 }
-                            } header: {
+                            }, header: {
                                 Text("Настройки")
                                     .font(.system(size: 18, weight: .semibold))
                                     .foregroundStyle(AppColors.textSecondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                            }
+                            })
                         }
                         .padding(.horizontal, 24)
                         .padding(.vertical, 20)
@@ -168,7 +168,7 @@ struct ProfileView: View {
                         
                         // Language selection
                         VStack(spacing: 16) {
-                            Section {
+                            Section(content: {
                                 NavigationLink {
                                     LanguageSelectionView(selectedLanguage: Binding(
                                         get: { appState.selectedLanguage },
@@ -186,12 +186,12 @@ struct ProfileView: View {
                                             .foregroundStyle(AppColors.textTertiary)
                                     }
                                 }
-                            } header: {
+                            }, header: {
                                 Text("Язык и регион")
                                     .font(.system(size: 18, weight: .semibold))
                                     .foregroundStyle(AppColors.textSecondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                            }
+                            })
                         }
                         .padding(.horizontal, 24)
                         .padding(.vertical, 20)
@@ -203,7 +203,7 @@ struct ProfileView: View {
                         
                         // App info
                         VStack(spacing: 16) {
-                            Section {
+                            Section(content: {
                                 HStack {
                                     Text("Версия")
                                         .foregroundStyle(AppColors.textPrimary)
@@ -211,12 +211,12 @@ struct ProfileView: View {
                                     Text(appVersion)
                                         .foregroundStyle(AppColors.textTertiary)
                                 }
-                            } header: {
+                            }, header: {
                                 Text("О приложении")
                                     .font(.system(size: 18, weight: .semibold))
                                     .foregroundStyle(AppColors.textSecondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                            }
+                            })
                         }
                         .padding(.horizontal, 24)
                         .padding(.vertical, 20)
@@ -229,7 +229,7 @@ struct ProfileView: View {
                         #if DEBUG
                         // Debug section
                         VStack(spacing: 16) {
-                            Section {
+                            Section(content: {
                                 Toggle("Премиум доступ", isOn: Binding(
                                     get: { appState.isPro },
                                     set: { newValue in
@@ -244,14 +244,12 @@ struct ProfileView: View {
                                     }
                                 ))
                                 .tint(.blue)
-                                
-                                MockDataGeneratorButton(modelContext: modelContext)
-                            } header: {
+                            }, header: {
                                 Text("Отладка")
                                     .font(.system(size: 18, weight: .semibold))
                                     .foregroundStyle(AppColors.textSecondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                            }
+                            })
                         }
                         .padding(.horizontal, 24)
                         .padding(.vertical, 20)
@@ -366,81 +364,10 @@ struct ProfileView: View {
     }
 }
 
-// MARK: - Mock Data Generator Button
-
-#if DEBUG
-private struct MockDataGeneratorButton: View {
-    let modelContext: ModelContext
-    @State private var isGenerating = false
-    @State private var showAlert = false
-    @State private var alertMessage = ""
-    @State private var alertTitle = ""
-    
-    var body: some View {
-        Button {
-            generateMockData()
-        } label: {
-            HStack {
-                if isGenerating {
-                    ProgressView()
-                        .tint(.white)
-                } else {
-                    Image(systemName: "sparkles")
-                    Text("Генерировать моковые данные")
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(
-                LinearGradient(
-                    colors: AppColors.financesGradient,
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
-            .foregroundColor(.white)
-            .cornerRadius(12)
-        }
-        .disabled(isGenerating)
-        .alert(alertTitle, isPresented: $showAlert) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(alertMessage)
-        }
-    }
-    
-    private func generateMockData() {
-        isGenerating = true
-        
-        Task {
-            do {
-                let generator = MockDataGenerator(modelContext: modelContext)
-                try await MainActor.run {
-                    try generator.generateMockData()
-                }
-                
-                await MainActor.run {
-                    isGenerating = false
-                    alertTitle = "Успешно"
-                    alertMessage = "Моковые данные успешно сгенерированы:\n- 5 групп финансов\n- 12 карт\n- 10 кредитов\n- 10 активов\n- ~500 транзакций кэшфлоу"
-                    showAlert = true
-                }
-            } catch {
-                await MainActor.run {
-                    isGenerating = false
-                    alertTitle = "Ошибка"
-                    alertMessage = "Не удалось сгенерировать моковые данные: \(error.localizedDescription)"
-                    showAlert = true
-                }
-            }
-        }
-    }
-}
-#endif
-
 #Preview {
     NavigationStack {
         ProfileView(router: AppRouter())
             .environment(AppState())
     }
 }
+

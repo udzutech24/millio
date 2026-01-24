@@ -338,6 +338,8 @@ final class CashflowViewModel: ViewModelProtocol {
                 break // Переводы не учитываем в графике
             case .exchange:
                 break // Обмены валют не учитываем в графике
+            case .balanceAdjustment:
+                break // Ручные изменения баланса не учитываем в графике доходов/расходов
             }
         }
         
@@ -395,7 +397,7 @@ final class CashflowViewModel: ViewModelProtocol {
                 )
                 totalExpense += converted
                 
-            case .transfer, .exchange:
+            case .transfer, .exchange, .balanceAdjustment:
                 break
             }
         }
@@ -597,6 +599,11 @@ final class CashflowViewModel: ViewModelProtocol {
         case .exchange:
             // Обмен валют не влияет на баланс карт напрямую
             // Пользователь может вручную обновить балансы карт после обмена
+            break
+            
+        case .balanceAdjustment:
+            // Ручное изменение баланса уже было применено к карте
+            // Не нужно обновлять баланс повторно
             break
         }
     }

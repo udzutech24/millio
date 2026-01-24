@@ -72,6 +72,12 @@ final class CurrencyRateService {
         return Array(currencies).sorted()
     }
     
+    /// Явно обновить курсы из API (принудительная загрузка)
+    /// Используется когда нужно гарантировать наличие актуальных курсов
+    func forceRefreshRates() async {
+        await refreshRates()
+    }
+    
     /// Обновить курсы из выбранного источника
     private func refreshRates() async {
         let source = currentRateSource

@@ -47,14 +47,14 @@ enum AppColors {
         ]
     }
     
-    /// Верхняя точка градиента (темно-синий)
-    static let backgroundTop = Color(red: 0.1, green: 0.2, blue: 0.35)
+    /// Верхняя точка градиента (черный)
+    static let backgroundTop = Color.black
     
-    /// Средняя точка градиента (сине-зеленый)
-    static let backgroundMiddle = Color(red: 0.15, green: 0.25, blue: 0.4)
+    /// Средняя точка градиента (черный)
+    static let backgroundMiddle = Color.black
     
-    /// Нижняя точка градиента (темно-фиолетовый)
-    static let backgroundBottom = Color(red: 0.2, green: 0.15, blue: 0.3)
+    /// Нижняя точка градиента (черный)
+    static let backgroundBottom = Color.black
     
     // MARK: - Text Colors
     

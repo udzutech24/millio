@@ -149,6 +149,8 @@ private struct CashflowTransactionRow: View {
             return AppColors.cashflowGradient
         case .exchange:
             return AppColors.coursesGradient
+        case .balanceAdjustment:
+            return AppColors.cardIndexGradient
         }
     }
     
@@ -166,6 +168,8 @@ private struct CashflowTransactionRow: View {
                 return "\(fromCurrency) → \(toCurrency)"
             }
             return "Обмен"
+        case .balanceAdjustment:
+            return "Изменение баланса"
         }
     }
     
@@ -202,6 +206,15 @@ private struct CashflowTransactionRow: View {
                 let toFormatted = formatter.string(from: NSNumber(value: toAmount)) ?? "0.00"
                 return "\(fromFormatted) \(fromCurrency) → \(toFormatted) \(toCurrency)"
             }
+            return nil
+            
+        case .balanceAdjustment:
+            // Для ручного изменения баланса показываем имя карты, если есть
+            if let cardID = transaction.cardID,
+               let card = viewModel.state.availableCards.first(where: { $0.cardUniqueID == cardID }) {
+                return card.name
+            }
+            // Для кредитов и инвестиций возвращаем nil, так как нет доступа к их данным в этом ViewModel
             return nil
         }
     }

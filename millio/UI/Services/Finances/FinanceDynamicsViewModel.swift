@@ -196,6 +196,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     var creditsCache: [String: Credit] = [:]
     var investmentsCache: [String: Investment] = [:]
     var transactionsByCardCache: [String: [CashflowTransaction]] = [:]
+    var transactionsByCreditCache: [String: [CashflowTransaction]] = [:]
+    var transactionsByInvestmentCache: [String: [CashflowTransaction]] = [:]
     var initialBalancesCache: [String: Double] = [:]
     var balanceCache: [String: Double] = [:] // Кэш для calculateBalanceAtDate: "accountID_date" -> balance
     
@@ -401,6 +403,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         initialBalancesCache.removeAll()
         balanceCache.removeAll()
         transactionsByCardCache.removeAll()
+        transactionsByCreditCache.removeAll()
+        transactionsByInvestmentCache.removeAll()
     }
     
     func loadCashflowTransactions() {
@@ -414,15 +418,23 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
     }
     
-    /// Предфильтровать транзакции по картам для быстрого доступа
+    /// Предфильтровать транзакции по картам, кредитам и инвестициям для быстрого доступа
     func rebuildTransactionsCache() {
         transactionsByCardCache.removeAll()
+        transactionsByCreditCache.removeAll()
+        transactionsByInvestmentCache.removeAll()
         for transaction in state.cashflowTransactions {
             if let cardID = transaction.cardID {
                 transactionsByCardCache[cardID, default: []].append(transaction)
             }
             if let toCardID = transaction.toCardID {
                 transactionsByCardCache[toCardID, default: []].append(transaction)
+            }
+            if let creditID = transaction.creditID {
+                transactionsByCreditCache[creditID, default: []].append(transaction)
+            }
+            if let investmentID = transaction.investmentID {
+                transactionsByInvestmentCache[investmentID, default: []].append(transaction)
             }
         }
     }
@@ -514,40 +526,35 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         
         // Получаем счета для расчета
         let accounts = getAccountsForCalculation()
+        let useNetTotals = shouldUseNetTotals()
         
         // Рассчитываем текущий баланс
         let targetDate = state.selectedDate ?? endDate
         state.currentBalance = await calculateBalanceAtDate(
             accounts: accounts,
             date: targetDate,
-            accountCardIDs: Set(accounts.compactMap { $0.accountType == .card ? $0.accountID : nil })
+            accountCardIDs: Set(accounts.compactMap { $0.accountType == .card ? $0.accountID : nil }),
+            debtAsNegative: useNetTotals,
+            includeInitialBeforeCreation: false
         )
         
         // Рассчитываем баланс на начало периода
         let startBalance = await calculateBalanceAtDate(
             accounts: accounts,
             date: startDate,
-            accountCardIDs: Set(accounts.compactMap { $0.accountType == .card ? $0.accountID : nil })
+            accountCardIDs: Set(accounts.compactMap { $0.accountType == .card ? $0.accountID : nil }),
+            debtAsNegative: useNetTotals,
+            includeInitialBeforeCreation: true
         )
         
         // Рассчитываем дельту
-        let delta = state.currentBalance - startBalance
-        let percent: Double
-        if abs(startBalance) < 0.01 {
-            // Если начальный баланс близок к нулю, процентный прирост очень большой или бесконечный
-            if abs(state.currentBalance) < 0.01 {
-                percent = 0.0
-            } else if state.currentBalance > 0 {
-                // Очень большой положительный прирост (можно использовать Double.infinity, но для отображения используем большое число)
-                percent = 999999.0
-            } else {
-                // Очень большой отрицательный прирост
-                percent = -999999.0
-            }
-        } else {
-            percent = (delta / abs(startBalance)) * 100
-        }
-        state.periodDelta = (delta, percent)
+        let rawDelta = state.currentBalance - startBalance
+        let delta = adjustDeltaForSingleAccountIfNeeded(
+            delta: rawDelta,
+            accounts: accounts,
+            useNetTotals: useNetTotals
+        )
+        state.periodDelta = (delta, calculateDeltaPercent(delta: delta, startBalance: startBalance))
     }
     
     /// Получить счета для расчета (в зависимости от фильтров)
@@ -678,31 +685,24 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                         async let startBalanceTask = self.calculateBalanceAtDate(
                             accounts: filteredAccounts,
                             date: startDate,
-                            accountCardIDs: accountCardIDs
+                            accountCardIDs: accountCardIDs,
+                            debtAsNegative: true,
+                            includeInitialBeforeCreation: true
                         )
                         async let endBalanceTask = self.calculateBalanceAtDate(
                             accounts: filteredAccounts,
                             date: endDate,
-                            accountCardIDs: accountCardIDs
+                            accountCardIDs: accountCardIDs,
+                            debtAsNegative: true,
+                            includeInitialBeforeCreation: false
                         )
                         
                         let startBalance = await startBalanceTask
                         let endBalance = await endBalanceTask
                         
+                        // Для групп считаем чистый баланс (долги учитываем со знаком минус)
                         let delta = endBalance - startBalance
-                        let percent: Double
-                        if abs(startBalance) < 0.01 {
-                            // Если начальный баланс близок к нулю, процентный прирост очень большой или бесконечный
-                            if abs(endBalance) < 0.01 {
-                                percent = 0.0
-                            } else if endBalance > 0 {
-                                percent = 999999.0
-                            } else {
-                                percent = -999999.0
-                            }
-                        } else {
-                            percent = (delta / abs(startBalance)) * 100
-                        }
+                        let percent = self.calculateDeltaPercent(delta: delta, startBalance: startBalance)
                         
                         return DynamicsBreakdownItem(
                             id: groupID,
@@ -765,47 +765,57 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                         async let startBalanceTask = self.calculateBalanceAtDate(
                             accounts: [account],
                             date: startDate,
-                            accountCardIDs: accountCardIDs
+                            accountCardIDs: accountCardIDs,
+                            debtAsNegative: false,
+                            includeInitialBeforeCreation: true
                         )
                         async let endBalanceTask = self.calculateBalanceAtDate(
                             accounts: [account],
                             date: endDate,
-                            accountCardIDs: accountCardIDs
+                            accountCardIDs: accountCardIDs,
+                            debtAsNegative: false,
+                            includeInitialBeforeCreation: false
                         )
                         
                         let startBalance = await startBalanceTask
                         let endBalance = await endBalanceTask
                 
-                        let delta = endBalance - startBalance
-                        let percent: Double
-                        if abs(startBalance) < 0.01 {
-                            // Если начальный баланс близок к нулю, процентный прирост очень большой или бесконечный
-                            if abs(endBalance) < 0.01 {
-                                percent = 0.0
-                            } else if endBalance > 0 {
-                                percent = 999999.0
+                        // Определяем, является ли карта кредитной или это кредит
+                        let isCreditCard: Bool
+                        let isCredit: Bool
+                        if account.accountType == .card {
+                            if let card = self.state.availableCards.first(where: { $0.cardUniqueID == account.accountID }) {
+                                isCreditCard = card.cardType == .credit
+                                isCredit = false
                             } else {
-                                percent = -999999.0
+                                isCreditCard = false
+                                isCredit = false
                             }
+                        } else if account.accountType == .credit {
+                            isCreditCard = false
+                            isCredit = true
                         } else {
-                            percent = (delta / abs(startBalance)) * 100
+                            isCreditCard = false
+                            isCredit = false
                         }
+                        
+                        // Для кредитных карт и кредитов: уменьшение долга = положительная дельта
+                        // Инвертируем дельту: если долг уменьшился (endBalance < startBalance), это хорошо (+)
+                        let rawDelta = endBalance - startBalance
+                        let delta: Double
+                        if isCreditCard || isCredit {
+                            // Инвертируем: уменьшение долга (отрицательная rawDelta) становится положительной дельтой
+                            delta = -rawDelta
+                        } else {
+                            delta = rawDelta
+                        }
+                        
+                        // Расчет процента: для кредитных карт и кредитов считаем от начального долга
+                        let percent = self.calculateDeltaPercent(delta: delta, startBalance: startBalance)
                         
                         // Получаем информацию о счете для иконки
                         guard let accountInfo = self.financeViewModel.getAccountInfo(account: account) else {
                             return nil
-                        }
-                        
-                        // Определяем, является ли карта кредитной
-                        let isCreditCard: Bool
-                        if account.accountType == .card {
-                            if let card = self.state.availableCards.first(where: { $0.cardUniqueID == account.accountID }) {
-                                isCreditCard = card.cardType == .credit
-                            } else {
-                                isCreditCard = false
-                            }
-                        } else {
-                            isCreditCard = false
                         }
                         
                         return DynamicsBreakdownItem(
@@ -839,6 +849,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         let accounts = getAccountsForCalculation()
         
         // Строим данные графика в зависимости от режима
+        let useNetTotals = shouldUseNetTotals()
         switch state.dynamicsMode {
         case .aggregated:
             // Все счета в одну линию
@@ -846,7 +857,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 accounts: accounts,
                 startDate: getPeriodDates().start,
                 endDate: getPeriodDates().end,
-                label: "Общая сумма"
+                label: "Общая сумма",
+                debtAsNegative: useNetTotals
             )
             
         case .byAccounts:
@@ -857,7 +869,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     accounts: [account],
                     startDate: getPeriodDates().start,
                     endDate: getPeriodDates().end,
-                    label: financeViewModel.getAccountInfo(account: account)?.name ?? "Счет"
+                    label: financeViewModel.getAccountInfo(account: account)?.name ?? "Счет",
+                    debtAsNegative: false
                 )
                 allDataPoints.append(contentsOf: accountData)
             }
@@ -870,7 +883,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     accounts: [account],
                     startDate: getPeriodDates().start,
                     endDate: getPeriodDates().end,
-                    label: financeViewModel.getAccountInfo(account: account)?.name ?? "Счет"
+                    label: financeViewModel.getAccountInfo(account: account)?.name ?? "Счет",
+                    debtAsNegative: false
                 )
             } else {
                 state.chartData = []
@@ -883,7 +897,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         accounts: [FinanceAccount],
         startDate: Date,
         endDate: Date,
-        label: String
+        label: String,
+        debtAsNegative: Bool = false
     ) async -> [ChartDataPoint] {
         var dataPoints: [ChartDataPoint] = []
         let calendar = Calendar.current
@@ -950,6 +965,15 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 if let cardID = transaction.cardID, accountCardIDs.contains(cardID) {
                     affectsAccount = true
                 }
+                // Проверяем кредиты и инвестиции для транзакций типа balanceAdjustment
+                if transaction.transactionType == .balanceAdjustment {
+                    if let creditID = transaction.creditID, accountCreditIDs.contains(creditID) {
+                        affectsAccount = true
+                    }
+                    if let investmentID = transaction.investmentID, accountInvestmentIDs.contains(investmentID) {
+                        affectsAccount = true
+                    }
+                }
             case .transfer:
                 if let fromCardID = transaction.cardID, accountCardIDs.contains(fromCardID) {
                     affectsAccount = true
@@ -960,6 +984,17 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             case .exchange:
                 // Обмен валют не влияет напрямую на балансы карт
                 break
+            case .balanceAdjustment:
+                // Ручное изменение баланса может быть для карт, кредитов или инвестиций
+                if let cardID = transaction.cardID, accountCardIDs.contains(cardID) {
+                    affectsAccount = true
+                }
+                if let creditID = transaction.creditID, accountCreditIDs.contains(creditID) {
+                    affectsAccount = true
+                }
+                if let investmentID = transaction.investmentID, accountInvestmentIDs.contains(investmentID) {
+                    affectsAccount = true
+                }
             }
             
             if affectsAccount {
@@ -1025,7 +1060,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     let balance = await self.calculateBalanceAtDate(
                         accounts: accounts,
                         date: endOfDay,
-                        accountCardIDs: accountCardIDs
+                        accountCardIDs: accountCardIDs,
+                        debtAsNegative: debtAsNegative
                     )
                     return (dayStart, balance)
                 }
@@ -1046,7 +1082,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     let balance = await self.calculateBalanceAtDate(
                         accounts: accounts,
                         date: endOfDay,
-                        accountCardIDs: accountCardIDs
+                        accountCardIDs: accountCardIDs,
+                        debtAsNegative: debtAsNegative
                     )
                     return (dayStart, balance)
                 }
@@ -1092,7 +1129,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                         let balance = await self.calculateBalanceAtDate(
                             accounts: accounts,
                             date: endOfDay,
-                            accountCardIDs: accountCardIDs
+                            accountCardIDs: accountCardIDs,
+                            debtAsNegative: debtAsNegative
                         )
                         return (dayStart, balance)
                     }
@@ -1131,10 +1169,12 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     func calculateBalanceAtDate(
         accounts: [FinanceAccount],
         date: Date,
-        accountCardIDs: Set<String>
+        accountCardIDs: Set<String>,
+        debtAsNegative: Bool = false,
+        includeInitialBeforeCreation: Bool = false
     ) async -> Double {
         // Проверяем кэш
-        let cacheKey = "\(accounts.map { $0.accountUniqueID }.joined(separator: "_"))_\(date.timeIntervalSince1970)"
+        let cacheKey = "\(accounts.map { $0.accountUniqueID }.joined(separator: "_"))_\(date.timeIntervalSince1970)_\(debtAsNegative ? "net" : "raw")_\(includeInitialBeforeCreation ? "init" : "strict")"
         if let cached = balanceCache[cacheKey] {
             return cached
         }
@@ -1153,11 +1193,6 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     continue
                 }
                 
-                // Карта учитывается только если она была создана до или в эту дату
-                guard card.createdAt <= date else {
-                    continue
-                }
-                
                 guard card.includeInTotal else {
                     continue
                 }
@@ -1166,80 +1201,14 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 shouldInclude = true
                 
                 // Кэшируем начальный баланс при создании карты
+                // Начальный баланс - это значение, которое пользователь ввел при создании карты
                 let initialBalanceKey = "initial_\(account.accountID)"
                 var initialBalanceAtCreation: Double
                 if let cached = initialBalancesCache[initialBalanceKey] {
                     initialBalanceAtCreation = cached
                 } else {
-                    // Рассчитываем начальный баланс при создании карты один раз
+                    // Начальный баланс = баланс карты на момент создания (значение, которое ввел пользователь)
                     initialBalanceAtCreation = card.balance
-                    // Используем предфильтрованные транзакции из кэша
-                    let cardTransactions = transactionsByCardCache[account.accountID] ?? []
-                    let transactionsSinceCreation = cardTransactions
-                        .filter { $0.transactionDate >= card.createdAt && $0.transactionDate <= Date() }
-                        .sorted(by: { $0.transactionDate > $1.transactionDate })
-                    
-                    for transaction in transactionsSinceCreation {
-                        switch transaction.transactionType {
-                        case .income:
-                            if transaction.cardID == account.accountID {
-                                let converted = await convertAmount(
-                                    value: transaction.amount,
-                                    from: transaction.currency,
-                                    to: accountCurrency
-                                )
-                                initialBalanceAtCreation -= converted
-                            }
-                            
-                        case .expense:
-                            if transaction.cardID == account.accountID {
-                                let converted = await convertAmount(
-                                    value: transaction.amount,
-                                    from: transaction.currency,
-                                    to: accountCurrency
-                                )
-                                initialBalanceAtCreation += converted
-                            }
-                            
-                        case .transfer:
-                            if transaction.cardID == account.accountID {
-                                let converted = await convertAmount(
-                                    value: transaction.amount,
-                                    from: transaction.currency,
-                                    to: accountCurrency
-                                )
-                                initialBalanceAtCreation += converted
-                            } else if transaction.toCardID == account.accountID {
-                                let converted = await convertAmount(
-                                    value: transaction.amount,
-                                    from: transaction.currency,
-                                    to: accountCurrency
-                                )
-                                initialBalanceAtCreation -= converted
-                            }
-                            
-                        case .exchange:
-                            // Для обмена валют учитываем изменения баланса
-                            if transaction.cardID == account.accountID {
-                                if let fromAmount = transaction.exchangeFromAmount {
-                                    let converted = await convertAmount(
-                                        value: fromAmount,
-                                        from: transaction.exchangeFromCurrency ?? accountCurrency,
-                                        to: accountCurrency
-                                    )
-                                    initialBalanceAtCreation += converted
-                                }
-                                if let toAmount = transaction.exchangeToAmount {
-                                    let converted = await convertAmount(
-                                        value: toAmount,
-                                        from: transaction.exchangeToCurrency ?? accountCurrency,
-                                        to: accountCurrency
-                                    )
-                                    initialBalanceAtCreation -= converted
-                                }
-                            }
-                        }
-                    }
                     // Кэшируем начальный баланс
                     initialBalancesCache[initialBalanceKey] = initialBalanceAtCreation
                 }
@@ -1247,9 +1216,12 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 // Определяем баланс на запрашиваемую дату
                 var cardBalance: Double
                 if date < card.createdAt {
-                    // Запрашиваемая дата раньше создания карты
-                    // Используем начальный баланс при создании (который пользователь ввел)
-                    cardBalance = initialBalanceAtCreation
+                    if includeInitialBeforeCreation {
+                        // Если период начинается раньше создания, считаем старт с начального баланса
+                        cardBalance = initialBalanceAtCreation
+                    } else {
+                        continue
+                    }
                 } else {
                     // Запрашиваемая дата после или в момент создания карты
                     // Начинаем с начального баланса при создании и применяем транзакции до запрашиваемой даты
@@ -1320,6 +1292,18 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                                     cardBalance += converted
                                 }
                             }
+                            
+                        case .balanceAdjustment:
+                            // Применяем изменение баланса: положительное = увеличение баланса, отрицательное = уменьшение
+                            // Для кредитных карт: увеличение баланса снижает задолженность (debt = limit - balance)
+                            if transaction.cardID == account.accountID {
+                                let converted = await convertAmount(
+                                    value: transaction.amount,
+                                    from: transaction.currency,
+                                    to: accountCurrency
+                                )
+                                cardBalance += converted
+                            }
                         }
                     }
                 }
@@ -1339,11 +1323,6 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     continue
                 }
                 
-                // Кредит учитывается только если он был начат до или в эту дату
-                guard credit.startDate <= date else {
-                    continue
-                }
-                
                 guard credit.includeInTotal else {
                     continue
                 }
@@ -1351,17 +1330,28 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 accountCurrency = credit.currency
                 shouldInclude = true
                 
-                // Рассчитываем остаток долга на нужную дату
-                accountBalance = calculateCreditRemainingAmount(credit: credit, at: date)
+                // Рассчитываем остаток долга на нужную дату с учетом транзакций balanceAdjustment
+                if date < credit.startDate {
+                    if includeInitialBeforeCreation {
+                        accountBalance = await calculateCreditRemainingAmount(
+                            credit: credit,
+                            at: credit.startDate,
+                            accountCurrency: accountCurrency
+                        )
+                    } else {
+                        continue
+                    }
+                } else {
+                    accountBalance = await calculateCreditRemainingAmount(
+                        credit: credit,
+                        at: date,
+                        accountCurrency: accountCurrency
+                    )
+                }
                 
             case .investment:
                 // Используем кэш вместо first(where:) для O(1) поиска
                 guard let investment = investmentsCache[account.accountID] else {
-                    continue
-                }
-                
-                // Актив учитывается только если он был создан до или в эту дату
-                guard investment.createdAt <= date else {
                     continue
                 }
                 
@@ -1372,9 +1362,38 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 accountCurrency = investment.currency
                 shouldInclude = true
                 
-                // Для активов используем текущую сумму (предполагаем, что она не менялась)
-                // В будущем можно добавить историю изменений активов
-                accountBalance = investment.investmentType == .positive ? investment.amount : -investment.amount
+                // Начальный баланс = значение при создании инвестиции
+                var investmentBalance = investment.investmentType == .positive ? investment.amount : -investment.amount
+                
+                if date < investment.createdAt {
+                    if includeInitialBeforeCreation {
+                        accountBalance = investmentBalance
+                    } else {
+                        continue
+                    }
+                } else {
+                    // Применяем транзакции balanceAdjustment с датой <= запрашиваемой даты
+                    let investmentTransactions = transactionsByInvestmentCache[investment.investmentUniqueID] ?? []
+                    let balanceAdjustmentTransactions = investmentTransactions
+                        .filter { transaction in
+                            transaction.transactionType == .balanceAdjustment &&
+                            transaction.investmentID == investment.investmentUniqueID &&
+                            transaction.transactionDate <= date
+                        }
+                        .sorted(by: { $0.transactionDate < $1.transactionDate })
+                    
+                    for transaction in balanceAdjustmentTransactions {
+                        // Для инвестиций: положительное amount (income) увеличивает баланс, отрицательное (expense) уменьшает
+                        let converted = await convertAmount(
+                            value: transaction.amount,
+                            from: transaction.currency,
+                            to: accountCurrency
+                        )
+                        investmentBalance += converted
+                    }
+                    
+                    accountBalance = investmentBalance
+                }
             }
             
             if shouldInclude {
@@ -1384,7 +1403,12 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     from: accountCurrency,
                     to: state.displayCurrency
                 )
-                totalBalance += converted
+                let isLiability = debtAsNegative && isLiabilityAccount(account)
+                if isLiability {
+                    totalBalance -= abs(converted)
+                } else {
+                    totalBalance += converted
+                }
             }
         }
         
@@ -1395,9 +1419,46 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         
         return totalBalance
     }
+
+    private func shouldUseNetTotals() -> Bool {
+        if case .singleAccount = state.dynamicsMode {
+            return false
+        }
+        return true
+    }
+
+    private func isLiabilityAccount(_ account: FinanceAccount) -> Bool {
+        switch account.accountType {
+        case .credit:
+            return true
+        case .card:
+            return cardsCache[account.accountID]?.cardType == .credit
+        case .investment:
+            return false
+        }
+    }
+
+    private func adjustDeltaForSingleAccountIfNeeded(
+        delta: Double,
+        accounts: [FinanceAccount],
+        useNetTotals: Bool
+    ) -> Double {
+        guard !useNetTotals, accounts.count == 1 else { return delta }
+        return isLiabilityAccount(accounts[0]) ? -delta : delta
+    }
+
+    private func calculateDeltaPercent(delta: Double, startBalance: Double) -> Double {
+        if abs(startBalance) < 0.01 {
+            if abs(delta) < 0.01 {
+                return 0.0
+            }
+            return delta > 0 ? 999999.0 : -999999.0
+        }
+        return (delta / abs(startBalance)) * 100
+    }
     
-    /// Рассчитать остаток долга по кредиту на конкретную дату
-    func calculateCreditRemainingAmount(credit: Credit, at date: Date) -> Double {
+    /// Рассчитать остаток долга по кредиту на конкретную дату с учетом транзакций balanceAdjustment
+    func calculateCreditRemainingAmount(credit: Credit, at date: Date, accountCurrency: String) async -> Double {
         let calendar = Calendar.current
         
         // Если кредит еще не начался, остаток равен сумме кредита
@@ -1416,28 +1477,55 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         let monthsPaid = min(monthsPassed, credit.termMonths)
         let monthsRemaining = max(0, credit.termMonths - monthsPaid)
         
-        // Если все платежи сделаны, остаток равен нулю
-        guard monthsRemaining > 0 else {
-            return 0.0
-        }
-        
-        // Если платежей не было, остаток равен сумме кредита минус досрочные платежи
-        guard monthsPaid > 0 else {
-            return max(0, credit.amount - credit.earlyPaymentsAmount)
-        }
-        
-        let monthlyRate = credit.interestRate / 12.0 / 100.0
-        
-        if monthlyRate == 0 {
-            // Без процентов: просто вычитаем выплаченное
-            let paid = credit.monthlyPayment * Double(monthsPaid)
-            return max(0, credit.amount - paid - credit.earlyPaymentsAmount)
+        // Рассчитываем начальный остаток долга по формуле
+        var remainingAmount: Double
+        if monthsRemaining <= 0 {
+            // Если все платежи сделаны, остаток равен нулю
+            remainingAmount = 0.0
+        } else if monthsPaid == 0 {
+            // Если платежей не было, остаток равен сумме кредита минус досрочные платежи
+            remainingAmount = max(0, credit.amount - credit.earlyPaymentsAmount)
         } else {
-            // Формула для расчета остатка долга через текущую стоимость оставшихся платежей
-            let discountFactor = pow(1 + monthlyRate, -Double(monthsRemaining))
-            let remaining = credit.monthlyPayment * ((1 - discountFactor) / monthlyRate)
-            return max(0, remaining - credit.earlyPaymentsAmount)
+            let monthlyRate = credit.interestRate / 12.0 / 100.0
+            
+            if monthlyRate == 0 {
+                // Без процентов: просто вычитаем выплаченное
+                let paid = credit.monthlyPayment * Double(monthsPaid)
+                remainingAmount = max(0, credit.amount - paid - credit.earlyPaymentsAmount)
+            } else {
+                // Формула для расчета остатка долга через текущую стоимость оставшихся платежей
+                let discountFactor = pow(1 + monthlyRate, -Double(monthsRemaining))
+                let remaining = credit.monthlyPayment * ((1 - discountFactor) / monthlyRate)
+                remainingAmount = max(0, remaining - credit.earlyPaymentsAmount)
+            }
         }
+        
+        // Применяем транзакции balanceAdjustment с датой <= запрашиваемой даты
+        let creditTransactions = transactionsByCreditCache[credit.creditUniqueID] ?? []
+        let balanceAdjustmentTransactions = creditTransactions
+            .filter { transaction in
+                transaction.transactionType == .balanceAdjustment &&
+                transaction.creditID == credit.creditUniqueID &&
+                transaction.transactionDate <= date
+            }
+            .sorted(by: { $0.transactionDate < $1.transactionDate })
+        
+        for transaction in balanceAdjustmentTransactions {
+            // Применяем изменение условного "баланса" кредита
+            // Положительное amount = погашение долга (уменьшение remainingAmount)
+            // Отрицательное amount = увеличение долга (увеличение remainingAmount)
+            let converted = await convertAmount(
+                value: transaction.amount,
+                from: transaction.currency,
+                to: accountCurrency
+            )
+            // Формула: remainingAmount - converted работает для обоих случаев
+            // Если amount > 0 (погашение), то remainingAmount уменьшается
+            // Если amount < 0 (рост долга), то remainingAmount - (-x) = remainingAmount + x увеличивается
+            remainingAmount = max(0, remainingAmount - converted)
+        }
+        
+        return remainingAmount
     }
     
     func calculateTotalForAllGroups() async -> Double {
@@ -1499,4 +1587,3 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         return accounts
     }
 }
-

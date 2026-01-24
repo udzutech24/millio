@@ -399,6 +399,9 @@ struct CashflowTransactionEditorView: View {
                 return false
             }
             return true
+        case .balanceAdjustment:
+            // Для ручного изменения баланса требуется выбор карты
+            return selectedCardID != nil
         }
     }
     
@@ -412,6 +415,8 @@ struct CashflowTransactionEditorView: View {
             return AppColors.cashflowGradient
         case .exchange:
             return AppColors.coursesGradient
+        case .balanceAdjustment:
+            return AppColors.cardIndexGradient
         }
     }
     

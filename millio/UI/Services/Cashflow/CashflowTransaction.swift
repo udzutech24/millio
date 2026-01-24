@@ -15,6 +15,7 @@ enum CashflowTransactionType: String, Codable, CaseIterable {
     case expense = "expense"    // Расход
     case transfer = "transfer"  // Перевод
     case exchange = "exchange"  // Обмен валют
+    case balanceAdjustment = "balance_adjustment"  // Ручное изменение баланса
     
     var displayName: String {
         switch self {
@@ -22,6 +23,7 @@ enum CashflowTransactionType: String, Codable, CaseIterable {
         case .expense: return "Расход"
         case .transfer: return "Перевод"
         case .exchange: return "Обмен"
+        case .balanceAdjustment: return "Изменение баланса"
         }
     }
     
@@ -31,6 +33,7 @@ enum CashflowTransactionType: String, Codable, CaseIterable {
         case .expense: return "arrow.up.circle.fill"
         case .transfer: return "arrow.left.arrow.right.circle.fill"
         case .exchange: return "arrow.triangle.2.circlepath.circle.fill"
+        case .balanceAdjustment: return "pencil.circle.fill"
         }
     }
 }
@@ -138,6 +141,12 @@ final class CashflowTransaction: Persistable {
     /// ID карты-получателя для перевода
     var toCardID: String?
     
+    /// ID кредита (для транзакций связанных с кредитами)
+    var creditID: String?
+    
+    /// ID инвестиции (для транзакций связанных с инвестициями)
+    var investmentID: String?
+    
     /// Валюта обмена "из" (для обмена валют)
     var exchangeFromCurrency: String?
     
@@ -187,6 +196,8 @@ final class CashflowTransaction: Persistable {
         transactionDate: Date,
         cardID: String? = nil,
         toCardID: String? = nil,
+        creditID: String? = nil,
+        investmentID: String? = nil,
         incomeCategory: IncomeCategory? = nil,
         expenseCategory: ExpenseCategory? = nil,
         exchangeFromCurrency: String? = nil,
@@ -201,6 +212,8 @@ final class CashflowTransaction: Persistable {
         self.transactionDate = transactionDate
         self.cardID = cardID
         self.toCardID = toCardID
+        self.creditID = creditID
+        self.investmentID = investmentID
         self.incomeCategoryRaw = incomeCategory?.rawValue
         self.expenseCategoryRaw = expenseCategory?.rawValue
         self.exchangeFromCurrency = exchangeFromCurrency
@@ -241,6 +254,12 @@ final class CashflowTransaction: Persistable {
         }
         if let toCardID = toCardID {
             dict["toCardID"] = toCardID
+        }
+        if let creditID = creditID {
+            dict["creditID"] = creditID
+        }
+        if let investmentID = investmentID {
+            dict["investmentID"] = investmentID
         }
         if let exchangeFromCurrency = exchangeFromCurrency {
             dict["exchangeFromCurrency"] = exchangeFromCurrency

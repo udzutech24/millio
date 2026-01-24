@@ -45,6 +45,8 @@ struct CashflowTransactionImporter: ModelImporter {
         let expenseCategoryRaw = dict["expenseCategoryRaw"] as? String
         let cardID = dict["cardID"] as? String
         let toCardID = dict["toCardID"] as? String
+        let creditID = dict["creditID"] as? String
+        let investmentID = dict["investmentID"] as? String
         let exchangeFromCurrency = dict["exchangeFromCurrency"] as? String
         let exchangeToCurrency = dict["exchangeToCurrency"] as? String
         let exchangeFromAmount = dict["exchangeFromAmount"] as? Double
@@ -71,6 +73,8 @@ struct CashflowTransactionImporter: ModelImporter {
                 existing.transactionDate = transactionDate
                 existing.cardID = cardID
                 existing.toCardID = toCardID
+                existing.creditID = creditID
+                existing.investmentID = investmentID
                 existing.incomeCategoryRaw = incomeCategoryRaw
                 existing.expenseCategoryRaw = expenseCategoryRaw
                 existing.exchangeFromCurrency = exchangeFromCurrency
@@ -91,6 +95,8 @@ struct CashflowTransactionImporter: ModelImporter {
             transactionDate: transactionDate,
             cardID: cardID,
             toCardID: toCardID,
+            creditID: creditID,
+            investmentID: investmentID,
             incomeCategory: incomeCategory,
             expenseCategory: expenseCategory,
             exchangeFromCurrency: exchangeFromCurrency,

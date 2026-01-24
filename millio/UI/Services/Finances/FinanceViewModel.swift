@@ -130,6 +130,9 @@ struct FinanceState {
     
     /// Скрыты ли суммы денег (показывать точки вместо цифр)
     var isAmountHidden: Bool = false
+    
+    /// Сообщение об ошибке или предупреждении при конвертации валют
+    var currencyConversionWarning: String? = nil
 }
 
 // MARK: - Finance Actions
@@ -196,7 +199,7 @@ final class FinanceViewModel: ViewModelProtocol {
     }
     
     private var storedSecondaryDisplayCurrency: String? {
-        get { 
+        get {
             let value = defaults.string(forKey: "finance_secondary_display_currency")
             // Если значение не задано, возвращаем USD по умолчанию
             return value ?? "USD"
@@ -489,11 +492,31 @@ final class FinanceViewModel: ViewModelProtocol {
     func calculateTotalAmountAsync() async {
         let displayCurrency = state.displayCurrency
         var total: Double = 0.0
+        var warnings: [String] = []
         
-        // Проходим по всем группам
+        state.currencyConversionWarning = nil
+        
+        // Для каждого group вычисляем сумму в его валюте (или в state.displayCurrency, если не задана)
         for group in state.groups {
-            let groupTotal = await calculateGroupTotal(group: group, in: displayCurrency)
-            total += groupTotal
+            let groupCurrency = group.displayCurrency ?? state.displayCurrency
+            let groupTotalInGroupCurrency = await calculateGroupTotal(group: group, in: groupCurrency)
+            
+            // Конвертируем сумму группы в displayCurrency если нужно
+            if groupCurrency == displayCurrency {
+                total += groupTotalInGroupCurrency
+            } else {
+                if let rate = await CurrencyRateService.shared.getRate(from: groupCurrency, to: displayCurrency), rate > 0 {
+                    total += groupTotalInGroupCurrency * rate
+                } else {
+                    // Если курс недоступен, просто пропускаем сумму этой группы и добавляем предупреждение
+                    warnings.append("Курс конвертации \(groupCurrency) → \(displayCurrency) недоступен. Некоторые суммы не учтены, потому что выбранная API не поддерживает эти валюты.")
+                    AppLogger.log(
+                        .warning,
+                        category: "Finance",
+                        "[Конвертация] Не удалось конвертировать сумму группы \"\(group.name)\" из \(groupCurrency) в \(displayCurrency). Сумма проигнорирована."
+                    )
+                }
+            }
         }
         
         state.totalAmount = total
@@ -502,12 +525,31 @@ final class FinanceViewModel: ViewModelProtocol {
         if let secondaryCurrency = state.secondaryDisplayCurrency {
             var secondaryTotal: Double = 0.0
             for group in state.groups {
-                let groupTotal = await calculateGroupTotal(group: group, in: secondaryCurrency)
-                secondaryTotal += groupTotal
+                let groupCurrency = group.displayCurrency ?? state.displayCurrency
+                let groupTotalInGroupCurrency = await calculateGroupTotal(group: group, in: groupCurrency)
+                
+                if groupCurrency == secondaryCurrency {
+                    secondaryTotal += groupTotalInGroupCurrency
+                } else {
+                    if let rate = await CurrencyRateService.shared.getRate(from: groupCurrency, to: secondaryCurrency), rate > 0 {
+                        secondaryTotal += groupTotalInGroupCurrency * rate
+                    } else {
+                        warnings.append("Курс конвертации \(groupCurrency) → \(secondaryCurrency) недоступен. Некоторые суммы не учтены, потому что выбранная API не поддерживает эти валюты.")
+                        AppLogger.log(
+                            .warning,
+                            category: "Finance",
+                            "[Конвертация] Не удалось конвертировать сумму группы \"\(group.name)\" из \(groupCurrency) в \(secondaryCurrency). Сумма проигнорирована."
+                        )
+                    }
+                }
             }
             state.secondaryTotalAmount = secondaryTotal
         } else {
             state.secondaryTotalAmount = 0.0
+        }
+        
+        if !warnings.isEmpty {
+            state.currencyConversionWarning = warnings.joined(separator: "\n")
         }
     }
     
@@ -517,24 +559,182 @@ final class FinanceViewModel: ViewModelProtocol {
         
         guard let accounts = group.accounts else { return 0.0 }
         
-        for account in accounts {
-            let amount = await getAccountAmount(account: account)
-            if amount.currency == currency {
-                total += amount.value
-            } else {
-                if let converted = await CurrencyRateService.shared.convert(
-                    amount: amount.value,
-                    from: amount.currency,
-                    to: currency
-                ) {
-                    total += converted
+        // Структура для хранения информации о пропущенных суммах
+        struct SkippedAmount {
+            let accountName: String
+            let accountType: String
+            let amount: Double
+            let fromCurrency: String
+            let toCurrency: String
+            let reason: String
+        }
+        
+        var skippedAmounts: [SkippedAmount] = []
+        
+        // Собираем все уникальные валюты из счетов группы
+        let currencies = await collectCurrenciesFromGroup(group: group)
+        
+        // Собираем все валюты, для которых нужны курсы (включая целевую)
+        var allCurrenciesNeeded = Set(currencies)
+        allCurrenciesNeeded.insert(currency)
+        
+        // Если есть валюты, отличные от USD, явно загружаем курсы из API
+        // Это гарантирует, что все необходимые курсы будут доступны перед расчетом
+        if !allCurrenciesNeeded.isEmpty && allCurrenciesNeeded.count > 1 {
+            // Принудительно обновляем курсы из API перед расчетом
+            await CurrencyRateService.shared.forceRefreshRates()
+            
+            AppLogger.log(
+                .debug,
+                category: "Finance",
+                """
+                [Конвертация] Предзагрузка курсов для группы "\(group.name)":
+                - Валюты счетов: \(currencies.sorted().joined(separator: ", "))
+                - Целевая валюта: \(currency)
+                """
+            )
+        }
+        
+        // Предзагружаем курсы для всех необходимых валют через USD
+        // Это гарантирует, что все необходимые курсы будут загружены перед расчетом
+        for neededCurrency in allCurrenciesNeeded {
+            if neededCurrency != "USD" {
+                // Запрашиваем курс, что автоматически загрузит его из API, если нужно
+                let rate = await CurrencyRateService.shared.getRate(from: "USD", to: neededCurrency)
+                if rate == nil {
+                    AppLogger.log(
+                        .warning,
+                        category: "Finance",
+                        "[Конвертация] Не удалось загрузить курс USD → \(neededCurrency) для группы \"\(group.name)\""
+                    )
                 } else {
-                    total += amount.value
+                    AppLogger.log(
+                        .debug,
+                        category: "Finance",
+                        "[Конвертация] Курс USD → \(neededCurrency) загружен: \(String(format: "%.6f", rate!))"
+                    )
                 }
             }
         }
         
+        for account in accounts {
+            let amount = await getAccountAmount(account: account)
+            
+            // Пропускаем нулевые значения
+            guard abs(amount.value) > 0.01 else { continue }
+            
+            if amount.currency == currency {
+                // Валюта совпадает с целевой - добавляем напрямую
+                total += amount.value
+            } else {
+                // Конвертируем валюту в целевую валюту группы
+                // Сначала проверяем доступность курса
+                let rate = await CurrencyRateService.shared.getRate(from: amount.currency, to: currency)
+                
+                if let rate = rate, rate > 0 {
+                    // Курс доступен - выполняем конвертацию
+                    let converted = amount.value * rate
+                    total += converted
+                    
+                    // Логируем успешную конвертацию для отладки
+                    let accountInfo = getAccountInfo(account: account)
+                    let accountName = accountInfo?.name ?? "Неизвестный счет"
+                    AppLogger.log(
+                        .debug,
+                        category: "Finance",
+                        """
+                        [Конвертация] Успешно конвертировано для группы "\(group.name)":
+                        - Счет: \(accountName)
+                        - Сумма: \(String(format: "%.2f", amount.value)) \(amount.currency)
+                        - Курс: \(String(format: "%.6f", rate))
+                        - Результат: \(String(format: "%.2f", converted)) \(currency)
+                        """
+                    )
+                } else {
+                    // Курс недоступен - пропускаем сумму
+                    // Получаем информацию о счете для детального логирования
+                    let accountInfo = getAccountInfo(account: account)
+                    let accountName = accountInfo?.name ?? "Неизвестный счет"
+                    let accountTypeName: String
+                    switch account.accountType {
+                    case .card:
+                        accountTypeName = "Карта"
+                    case .credit:
+                        accountTypeName = "Кредит"
+                    case .investment:
+                        accountTypeName = "Инвестиция"
+                    }
+                    
+                    // Определяем причину ошибки конвертации
+                    let reason: String
+                    if rate == nil {
+                        reason = "Курс конвертации \(amount.currency) → \(currency) недоступен (возможно, валюта не поддерживается API)"
+                    } else {
+                        reason = "Ошибка конвертации (курс = \(rate ?? 0), но конвертация не удалась)"
+                    }
+                    
+                    // Сохраняем информацию о пропущенной сумме
+                    skippedAmounts.append(SkippedAmount(
+                        accountName: accountName,
+                        accountType: accountTypeName,
+                        amount: amount.value,
+                        fromCurrency: amount.currency,
+                        toCurrency: currency,
+                        reason: reason
+                    ))
+                    
+                    // Детальное логирование каждой пропущенной суммы
+                    AppLogger.log(
+                        .error,
+                        category: "Finance",
+                        """
+                        [Конвертация] Пропущена сумма при расчете группы "\(group.name)":
+                        - Счет: \(accountName) (\(accountTypeName))
+                        - Сумма: \(String(format: "%.2f", amount.value)) \(amount.currency)
+                        - Целевая валюта: \(currency)
+                        - Причина: \(reason)
+                        """
+                    )
+                }
+            }
+        }
+        
+        // Итоговое логирование, если были пропущенные суммы
+        if !skippedAmounts.isEmpty {
+            let totalSkipped = skippedAmounts.reduce(0.0) { $0 + $1.amount }
+            let currenciesList = skippedAmounts.map { "\($0.amount) \($0.fromCurrency)" }.joined(separator: ", ")
+            
+            AppLogger.log(
+                .error,
+                category: "Finance",
+                """
+                [Конвертация] Итог по группе "\(group.name)":
+                - Пропущено счетов: \(skippedAmounts.count)
+                - Общая сумма пропущенных средств: \(String(format: "%.2f", totalSkipped)) (\(currenciesList))
+                - Итоговая сумма группы (без пропущенных): \(String(format: "%.2f", total)) \(currency)
+                - Внимание: Итоговая сумма может быть неполной из-за отсутствия курсов конвертации
+                """
+            )
+        }
+        
         return total
+    }
+    
+    /// Собрать все уникальные валюты из счетов группы
+    private func collectCurrenciesFromGroup(group: FinanceGroup) async -> Set<String> {
+        var currencies: Set<String> = []
+        
+        guard let accounts = group.accounts else { return currencies }
+        
+        for account in accounts {
+            let amount = await getAccountAmount(account: account)
+            // Добавляем валюту только если сумма не нулевая
+            if abs(amount.value) > 0.01 {
+                currencies.insert(amount.currency)
+            }
+        }
+        
+        return currencies
     }
     
     /// Получить сумму счета
@@ -586,6 +786,7 @@ final class FinanceViewModel: ViewModelProtocol {
                 let amount: Double
                 let isCreditCardDebt: Bool
                 if card.cardType == .credit, let limit = card.creditLimit {
+                    // Для кредитных карт используем актуальный сохраненный баланс
                     // Задолженность = лимит - баланс
                     amount = max(0, limit - card.balance)
                     isCreditCardDebt = true
@@ -778,6 +979,17 @@ final class FinanceViewModel: ViewModelProtocol {
         switch account.accountType {
         case .card:
             if let card = state.availableCards.first(where: { $0.cardUniqueID == account.accountID }) {
+                // Сохраняем старое значение для создания транзакции
+                let oldBalance = card.balance
+                let oldAmount: Double
+                if card.cardType == .credit, let limit = card.creditLimit {
+                    // Для кредитных карт старое значение - это задолженность
+                    oldAmount = max(0, limit - oldBalance)
+                } else {
+                    // Для дебетовых карт старое значение - это баланс
+                    oldAmount = oldBalance
+                }
+                
                 // Для кредитных карт меняем задолженность (т.е. меняем balance так, чтобы debt = newAmount)
                 if card.cardType == .credit, let limit = card.creditLimit {
                     // debt = limit - balance
@@ -792,6 +1004,37 @@ final class FinanceViewModel: ViewModelProtocol {
                 
                 do {
                     try modelContext.save()
+                    
+                    // Создаем транзакцию для ручного изменения баланса
+                    let difference = newAmount - oldAmount
+                    if abs(difference) > 0.01 { // Создаем транзакцию только если есть изменение
+                        // Для кредитных карт newAmount - это ДОЛГ
+                        // Увеличение долга = УМЕНЬШЕНИЕ баланса = отрицательная транзакция
+                        // Уменьшение долга = УВЕЛИЧЕНИЕ баланса = положительная транзакция
+                        // Для дебетовых карт: положительное значение = увеличение баланса, отрицательное = уменьшение
+                        let transactionAmount: Double
+                        let transactionNote: String
+
+                        if card.cardType == .credit {
+                            transactionAmount = -difference
+                            transactionNote = "Ручное изменение задолженности"
+                        } else {
+                            transactionAmount = difference
+                            transactionNote = "Ручное изменение баланса"
+                        }
+
+                        let transaction = CashflowTransaction(
+                            transactionType: .balanceAdjustment,
+                            amount: transactionAmount,
+                            currency: card.currency,
+                            transactionDate: Date(),
+                            cardID: card.cardUniqueID,
+                            note: transactionNote
+                        )
+                        modelContext.insert(transaction)
+                        try modelContext.save()
+                    }
+                    
                     loadAccounts()
                     calculateTotalAmount()
                     
@@ -810,11 +1053,36 @@ final class FinanceViewModel: ViewModelProtocol {
             
         case .credit:
             if let credit = state.availableCredits.first(where: { $0.creditUniqueID == account.accountID }) {
+                // Сохраняем старое значение для создания транзакции
+                let oldAmount = credit.remainingAmount
+                
                 credit.remainingAmount = newAmount
                 credit.updatedAt = Date()
                 
                 do {
                     try modelContext.save()
+                    
+                    // Создаем транзакцию для ручного изменения баланса
+                    let difference = newAmount - oldAmount
+                    if abs(difference) > 0.01 { // Создаем транзакцию только если есть изменение
+                        // Для кредитов newAmount - это ОСТАТОК ДОЛГА
+                        // Увеличение долга = отрицательная транзакция
+                        // Уменьшение долга (погашение) = положительная транзакция
+                        // Это обеспечивает единую семантику для всех типов счетов
+                        let balanceChange = -difference
+
+                        let transaction = CashflowTransaction(
+                            transactionType: .balanceAdjustment,
+                            amount: balanceChange,
+                            currency: credit.currency,
+                            transactionDate: Date(),
+                            creditID: credit.creditUniqueID,
+                            note: "Ручное изменение остатка долга"
+                        )
+                        modelContext.insert(transaction)
+                        try modelContext.save()
+                    }
+                    
                     loadAccounts()
                     calculateTotalAmount()
                     
@@ -833,11 +1101,32 @@ final class FinanceViewModel: ViewModelProtocol {
             
         case .investment:
             if let investment = state.availableInvestments.first(where: { $0.investmentUniqueID == account.accountID }) {
+                // Сохраняем старое значение для создания транзакции
+                let oldAmount = investment.amount
+                
                 investment.amount = newAmount
                 investment.updatedAt = Date()
                 
                 do {
                     try modelContext.save()
+                    
+                    // Создаем транзакцию для ручного изменения баланса
+                    let difference = newAmount - oldAmount
+                    if abs(difference) > 0.01 { // Создаем транзакцию только если есть изменение
+                        // Для инвестиций: положительное значение = увеличение баланса (income), отрицательное = уменьшение (expense)
+                        // Сохраняем знак difference для правильной обработки в FinanceDynamicsViewModel
+                        let transaction = CashflowTransaction(
+                            transactionType: .balanceAdjustment,
+                            amount: difference, // Сохраняем знак для определения направления
+                            currency: investment.currency,
+                            transactionDate: Date(),
+                            investmentID: investment.investmentUniqueID,
+                            note: "Ручное изменение баланса"
+                        )
+                        modelContext.insert(transaction)
+                        try modelContext.save()
+                    }
+                    
                     loadAccounts()
                     calculateTotalAmount()
                     
@@ -856,3 +1145,4 @@ final class FinanceViewModel: ViewModelProtocol {
         }
     }
 }
+

@@ -14,6 +14,7 @@ struct FinanceQuickEditAccountView: View {
     
     @State private var amountText: String = ""
     @State private var isLoading = false
+    @FocusState private var isAmountFieldFocused: Bool
     
     var accountInfo: (name: String, amount: Double, currency: String, icon: String, isCreditCardDebt: Bool)? {
         viewModel.getAccountInfo(account: account)
@@ -65,14 +66,22 @@ struct FinanceQuickEditAccountView: View {
                                     .foregroundStyle(AppColors.textPrimary)
                                     .keyboardType(.decimalPad)
                                     .multilineTextAlignment(.leading)
-                                    .onAppear {
-                                        // Форматируем текущую сумму для отображения
-                                        amountText = formatAmountForInput(info.amount)
-                                    }
+                                    .focused($isAmountFieldFocused)
+                                    .autocorrectionDisabled()
+                                    .textInputAutocapitalization(.never)
                                 
                                 Text(info.currency)
                                     .font(.system(size: 20, weight: .semibold))
                                     .foregroundStyle(AppColors.textSecondary)
+                            }
+                            .task {
+                                // Инициализируем значение при первом появлении
+                                if amountText.isEmpty {
+                                    amountText = formatAmountForInput(info.amount)
+                                }
+                                // Автоматически устанавливаем фокус на поле ввода
+                                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 секунды
+                                isAmountFieldFocused = true
                             }
                             .padding(20)
                             .background(
