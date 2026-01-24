@@ -1207,8 +1207,12 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 if let cached = initialBalancesCache[initialBalanceKey] {
                     initialBalanceAtCreation = cached
                 } else {
-                    // Начальный баланс = баланс карты на момент создания (значение, которое ввел пользователь)
-                    initialBalanceAtCreation = card.balance
+                    // Используем сохраненный initialBalance, если он есть
+                    if card.hasInitialBalance {
+                        initialBalanceAtCreation = card.initialBalance
+                    } else {
+                        initialBalanceAtCreation = card.balance
+                    }
                     // Кэшируем начальный баланс
                     initialBalancesCache[initialBalanceKey] = initialBalanceAtCreation
                 }

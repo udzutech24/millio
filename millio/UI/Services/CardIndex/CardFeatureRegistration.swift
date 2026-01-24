@@ -60,6 +60,10 @@ struct CardImporter: ModelImporter {
             if let uniqueID = data["cardUniqueID"] as? String, !uniqueID.isEmpty {
                 existingCard.uniqueID = uniqueID
             }
+            if let initialBalance = data["initialBalance"] as? Double {
+                existingCard.initialBalance = initialBalance
+                existingCard.hasInitialBalance = data["hasInitialBalance"] as? Bool ?? true
+            }
             existingCard.balance = balance
             existingCard.priority = priority
             existingCard.creditLimit = data["creditLimit"] as? Double
@@ -104,6 +108,13 @@ struct CardImporter: ModelImporter {
         // Восстанавливаем даты
         card.createdAt = Date(timeIntervalSince1970: createdAt)
         card.updatedAt = Date(timeIntervalSince1970: updatedAt)
+        if let initialBalance = data["initialBalance"] as? Double {
+            card.initialBalance = initialBalance
+            card.hasInitialBalance = data["hasInitialBalance"] as? Bool ?? true
+        } else {
+            card.initialBalance = balance
+            card.hasInitialBalance = true
+        }
         if let uniqueID = data["cardUniqueID"] as? String, !uniqueID.isEmpty {
             card.uniqueID = uniqueID
         }

@@ -870,6 +870,10 @@ final class FinanceViewModel: ViewModelProtocol {
             if let card = state.availableCards.first(where: { $0.cardUniqueID == account.accountID }) {
                 // Сохраняем старое значение для создания транзакции
                 let oldBalance = card.balance
+                if !card.hasInitialBalance {
+                    card.initialBalance = card.balance
+                    card.hasInitialBalance = true
+                }
                 let oldAmount: Double
                 if card.cardType == .credit, let limit = card.creditLimit {
                     // Для кредитных карт старое значение - это задолженность

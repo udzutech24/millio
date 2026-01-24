@@ -119,6 +119,12 @@ final class Card: Persistable {
     
     /// Баланс на карте
     var balance: Double = 0.0
+
+    /// Изначальный баланс для истории (не меняется при редактировании)
+    var initialBalance: Double = 0.0
+
+    /// Флаг, что initialBalance установлен
+    var hasInitialBalance: Bool = false
     
     /// Кредитный лимит (только для кредитных карт)
     var creditLimit: Double?
@@ -217,6 +223,8 @@ final class Card: Persistable {
         self.priorityRaw = priority.rawValue
         self.currency = currency
         self.balance = balance
+        self.initialBalance = balance
+        self.hasInitialBalance = true
         self.creditLimit = creditLimit
         self.expiryDate = expiryDate
         self.cardholderName = cardholderName
@@ -252,6 +260,8 @@ final class Card: Persistable {
             "priorityRaw": priorityRaw,
             "currency": currency,
             "balance": balance,
+            "initialBalance": initialBalance,
+            "hasInitialBalance": hasInitialBalance,
             "creditLimit": creditLimit ?? NSNull(),
             "expiryDate": expiryDate ?? NSNull(),
             "cardholderName": cardholderName ?? NSNull(),

@@ -322,6 +322,10 @@ final class CardViewModel: ViewModelProtocol {
             if existing.uniqueID.isEmpty {
                 _ = existing.cardUniqueID
             }
+            if !existing.hasInitialBalance {
+                existing.initialBalance = existing.balance
+                existing.hasInitialBalance = true
+            }
             // Обновляем существующую карту
             existing.name = card.name
             existing.cardNumber = card.cardNumber
