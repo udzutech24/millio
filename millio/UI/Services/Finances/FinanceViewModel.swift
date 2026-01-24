@@ -948,6 +948,10 @@ final class FinanceViewModel: ViewModelProtocol {
             if let credit = state.availableCredits.first(where: { $0.creditUniqueID == account.accountID }) {
                 // Сохраняем старое значение для создания транзакции
                 let oldAmount = credit.remainingAmount
+                if !credit.hasInitialRemainingAmount {
+                    credit.initialRemainingAmount = credit.remainingAmount
+                    credit.hasInitialRemainingAmount = true
+                }
                 
                 credit.remainingAmount = newAmount
                 credit.updatedAt = Date()

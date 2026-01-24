@@ -1494,45 +1494,23 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     
     /// Рассчитать остаток долга по кредиту на конкретную дату с учетом транзакций balanceAdjustment
     func calculateCreditRemainingAmount(credit: Credit, at date: Date, accountCurrency: String) async -> Double {
-        let calendar = Calendar.current
-        
-        // Если кредит еще не начался, остаток равен сумме кредита
-        if date < credit.startDate {
-            return credit.amount
-        }
-        
-        // Если кредит закрыт и дата после закрытия, остаток равен 0
-        if credit.isClosed, let endDate = credit.endDate, date > endDate {
-            return 0.0
-        }
-        
-        // Рассчитываем количество прошедших месяцев с начала кредита до указанной даты
-        let components = calendar.dateComponents([.month], from: credit.startDate, to: date)
-        let monthsPassed = max(0, components.month ?? 0)
-        let monthsPaid = min(monthsPassed, credit.termMonths)
-        let monthsRemaining = max(0, credit.termMonths - monthsPaid)
-        
-        // Рассчитываем начальный остаток долга по формуле
-        var remainingAmount: Double
-        if monthsRemaining <= 0 {
-            // Если все платежи сделаны, остаток равен нулю
-            remainingAmount = 0.0
-        } else if monthsPaid == 0 {
-            // Если платежей не было, остаток равен сумме кредита минус досрочные платежи
-            remainingAmount = max(0, credit.amount - credit.earlyPaymentsAmount)
+        // Базовый остаток (фиксируем, чтобы ручные правки не сдвигали историю)
+        var baseAmount: Double
+        if credit.hasInitialRemainingAmount {
+            baseAmount = credit.initialRemainingAmount
         } else {
-            let monthlyRate = credit.interestRate / 12.0 / 100.0
-            
-            if monthlyRate == 0 {
-                // Без процентов: просто вычитаем выплаченное
-                let paid = credit.monthlyPayment * Double(monthsPaid)
-                remainingAmount = max(0, credit.amount - paid - credit.earlyPaymentsAmount)
-            } else {
-                // Формула для расчета остатка долга через текущую стоимость оставшихся платежей
-                let discountFactor = pow(1 + monthlyRate, -Double(monthsRemaining))
-                let remaining = credit.monthlyPayment * ((1 - discountFactor) / monthlyRate)
-                remainingAmount = max(0, remaining - credit.earlyPaymentsAmount)
+            let creditTransactions = transactionsByCreditCache[credit.creditUniqueID] ?? []
+            var totalAdjustments: Double = 0.0
+            for transaction in creditTransactions where transaction.transactionType == .balanceAdjustment &&
+                transaction.creditID == credit.creditUniqueID {
+                let converted = await convertAmount(
+                    value: transaction.amount,
+                    from: transaction.currency,
+                    to: accountCurrency
+                )
+                totalAdjustments += converted
             }
+            baseAmount = credit.remainingAmount - totalAdjustments
         }
         
         // Применяем транзакции balanceAdjustment с датой <= запрашиваемой даты
@@ -1545,18 +1523,13 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             }
             .sorted(by: { $0.transactionDate < $1.transactionDate })
         
+        var remainingAmount = baseAmount
         for transaction in balanceAdjustmentTransactions {
-            // Применяем изменение условного "баланса" кредита
-            // Положительное amount = погашение долга (уменьшение remainingAmount)
-            // Отрицательное amount = увеличение долга (увеличение remainingAmount)
             let converted = await convertAmount(
                 value: transaction.amount,
                 from: transaction.currency,
                 to: accountCurrency
             )
-            // Формула: remainingAmount - converted работает для обоих случаев
-            // Если amount > 0 (погашение), то remainingAmount уменьшается
-            // Если amount < 0 (рост долга), то remainingAmount - (-x) = remainingAmount + x увеличивается
             remainingAmount = max(0, remainingAmount - converted)
         }
         

@@ -379,6 +379,10 @@ final class CreditViewModel: ViewModelProtocol {
             if existing.uniqueID.isEmpty {
                 _ = existing.creditUniqueID
             }
+            if !existing.hasInitialRemainingAmount {
+                existing.initialRemainingAmount = existing.remainingAmount
+                existing.hasInitialRemainingAmount = true
+            }
             // Обновляем существующий кредит
             existing.name = name
             existing.amount = amount

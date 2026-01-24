@@ -72,6 +72,12 @@ final class Credit: Persistable {
     
     /// Остаток долга (вычисляется автоматически)
     var remainingAmount: Double = 0.0
+
+    /// Изначальный остаток долга для истории (не меняется при редактировании)
+    var initialRemainingAmount: Double = 0.0
+
+    /// Флаг, что initialRemainingAmount установлен
+    var hasInitialRemainingAmount: Bool = false
     
     /// Сумма досрочных платежей (для расчета)
     var earlyPaymentsAmount: Double = 0.0
@@ -224,6 +230,8 @@ final class Credit: Persistable {
         self.creditTypeRaw = creditType.rawValue
         self.endDate = endDate
         self.remainingAmount = amount // Изначально остаток равен сумме кредита
+        self.initialRemainingAmount = self.remainingAmount
+        self.hasInitialRemainingAmount = true
         self.includeInTotal = includeInTotal
         self.createdAt = Date()
         self.updatedAt = Date()
@@ -395,6 +403,8 @@ final class Credit: Persistable {
             "bankRaw": bankRaw,
             "creditTypeRaw": creditTypeRaw,
             "remainingAmount": remainingAmount,
+            "initialRemainingAmount": initialRemainingAmount,
+            "hasInitialRemainingAmount": hasInitialRemainingAmount,
             "earlyPaymentsAmount": earlyPaymentsAmount,
             "isClosed": isClosed,
             "isFavorite": isFavorite,
