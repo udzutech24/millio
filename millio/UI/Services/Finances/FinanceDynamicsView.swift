@@ -941,6 +941,13 @@ private struct FinanceDynamicsContentView: View {
         formatter.maximumFractionDigits = 2
         return formatter.string(from: NSNumber(value: amount)) ?? "0.00"
     }
+
+    private func deltaLineText(delta: Double, percent: Double) -> String {
+        let deltaSign = delta >= 0 ? "+" : "-"
+        let percentSign = percent >= 0 ? "+" : "-"
+        let percentText = abs(percent) >= 999999.0 ? "∞" : String(format: "%.1f", abs(percent))
+        return "\(deltaSign) \(formatBalance(abs(delta))) • \(percentSign) \(percentText) %"
+    }
     
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
@@ -1098,28 +1105,11 @@ private struct FinanceDynamicsContentView: View {
                                 let displayDelta = item.delta
                                 let displayDeltaPercent = item.deltaPercent
                                 
-                                HStack(spacing: 4) {
-                                    Text(displayDelta >= 0 ? "+" : "")
-                                        .font(.system(size: 11, weight: .medium))
-                                    Text(formatBalance(abs(displayDelta)))
-                                        .font(.system(size: 11, weight: .medium))
-                                }
-                                .foregroundStyle(displayDelta >= 0 ? Color.green : AppColors.error)
-                                
-                                HStack(spacing: 4) {
-                                    if abs(displayDeltaPercent) >= 999999.0 {
-                                        Text("∞")
-                                            .font(.system(size: 10))
-                                    } else {
-                                        Text(displayDeltaPercent >= 0 ? "+" : "")
-                                            .font(.system(size: 10))
-                                        Text(String(format: "%.1f", abs(displayDeltaPercent)))
-                                            .font(.system(size: 10))
-                                        Text("%")
-                                            .font(.system(size: 10))
-                                    }
-                                }
-                                .foregroundStyle(displayDeltaPercent >= 0 ? Color.green : AppColors.error)
+                                Text(deltaLineText(delta: displayDelta, percent: displayDeltaPercent))
+                                    .font(.system(size: 11, weight: .medium))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
+                                    .foregroundStyle(displayDelta >= 0 ? Color.green : AppColors.error)
                             }
                             .frame(width: 100, alignment: .trailing)
                         }
