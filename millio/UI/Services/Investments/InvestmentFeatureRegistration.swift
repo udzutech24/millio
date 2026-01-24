@@ -57,6 +57,9 @@ struct InvestmentImporter: ModelImporter {
         
         // Если инвестиция уже существует, обновляем ее данные вместо создания новой
         if let existingInvestment = try? context.fetch(existingInvestmentDescriptor).first {
+            if let uniqueID = data["investmentUniqueID"] as? String, !uniqueID.isEmpty {
+                existingInvestment.uniqueID = uniqueID
+            }
             existingInvestment.isFavorite = data["isFavorite"] as? Bool ?? false
             existingInvestment.priority = priority
             existingInvestment.includeInTotal = includeInTotal
@@ -80,6 +83,9 @@ struct InvestmentImporter: ModelImporter {
         
         investment.createdAt = Date(timeIntervalSince1970: createdAt)
         investment.updatedAt = Date(timeIntervalSince1970: updatedAt)
+        if let uniqueID = data["investmentUniqueID"] as? String, !uniqueID.isEmpty {
+            investment.uniqueID = uniqueID
+        }
         
         context.insert(investment)
     }

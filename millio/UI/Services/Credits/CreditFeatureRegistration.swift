@@ -58,6 +58,9 @@ struct CreditImporter: ModelImporter {
         
         // Если кредит уже существует, обновляем его данные вместо создания нового
         if let existingCredit = try? context.fetch(existingCreditDescriptor).first {
+            if let uniqueID = data["creditUniqueID"] as? String, !uniqueID.isEmpty {
+                existingCredit.uniqueID = uniqueID
+            }
             existingCredit.interestRate = interestRate
             existingCredit.monthlyPayment = monthlyPayment
             existingCredit.remainingAmount = remainingAmount
@@ -93,6 +96,9 @@ struct CreditImporter: ModelImporter {
         credit.includeInTotal = data["includeInTotal"] as? Bool ?? true
         credit.createdAt = Date(timeIntervalSince1970: createdAt)
         credit.updatedAt = Date(timeIntervalSince1970: updatedAt)
+        if let uniqueID = data["creditUniqueID"] as? String, !uniqueID.isEmpty {
+            credit.uniqueID = uniqueID
+        }
         
         context.insert(credit)
     }

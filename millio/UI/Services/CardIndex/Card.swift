@@ -146,6 +146,9 @@ final class Card: Persistable {
     
     /// Дата последнего обновления
     var updatedAt: Date = Date()
+
+    /// Стабильный идентификатор для связей между сущностями
+    var uniqueID: String = ""
     
     var bank: Bank {
         get { Bank(rawValue: bankRaw) ?? .other }
@@ -222,13 +225,20 @@ final class Card: Persistable {
         self.includeInTotal = includeInTotal
         self.createdAt = Date()
         self.updatedAt = Date()
+        self.uniqueID = UUID().uuidString
     }
     
     // MARK: - Exportable
     
     /// Уникальный идентификатор карты для восстановления связей при restore
     var cardUniqueID: String {
-        // Используем комбинацию полей для создания уникального идентификатора
+        if uniqueID.isEmpty {
+            uniqueID = legacyCardUniqueID()
+        }
+        return uniqueID
+    }
+
+    private func legacyCardUniqueID() -> String {
         "\(name)|\(cardNumber)|\(bankRaw)|\(cardTypeRaw)|\(currency)|\(createdAt.timeIntervalSince1970)"
     }
     

@@ -122,6 +122,9 @@ final class Investment: Persistable {
     
     /// Дата последнего обновления
     var updatedAt: Date = Date()
+
+    /// Стабильный идентификатор для связей между сущностями
+    var uniqueID: String = ""
     
     var investmentType: InvestmentType {
         get { InvestmentType(rawValue: investmentTypeRaw) ?? .positive }
@@ -158,12 +161,20 @@ final class Investment: Persistable {
         self.isFavorite = isFavorite
         self.createdAt = Date()
         self.updatedAt = Date()
+        self.uniqueID = UUID().uuidString
     }
     
     // MARK: - Exportable
     
     /// Уникальный идентификатор инвестиции для восстановления связей при restore
     var investmentUniqueID: String {
+        if uniqueID.isEmpty {
+            uniqueID = legacyInvestmentUniqueID()
+        }
+        return uniqueID
+    }
+
+    private func legacyInvestmentUniqueID() -> String {
         "\(name)|\(investmentTypeRaw)|\(categoryRaw)|\(amount)|\(currency)|\(createdAt.timeIntervalSince1970)"
     }
     

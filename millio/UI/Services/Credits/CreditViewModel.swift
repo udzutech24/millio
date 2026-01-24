@@ -376,6 +376,9 @@ final class CreditViewModel: ViewModelProtocol {
         let interestRate = state.editingCredit?.interestRate ?? 0.0
         
         if let existing = state.editingCredit {
+            if existing.uniqueID.isEmpty {
+                _ = existing.creditUniqueID
+            }
             // Обновляем существующий кредит
             existing.name = name
             existing.amount = amount

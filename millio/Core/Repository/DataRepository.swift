@@ -291,8 +291,8 @@ final class DataRepository: DataRepositoryProtocol {
                    let cardTypeRaw = modelData["cardTypeRaw"] as? String,
                    let currency = modelData["currency"] as? String,
                    let createdAt = modelData["createdAt"] as? TimeInterval {
-                    // Создаем cardUniqueID из данных
-                    let cardUniqueID = "\(name)|\(cardNumber)|\(bankRaw)|\(cardTypeRaw)|\(currency)|\(createdAt)"
+                    let legacyCardUniqueID = "\(name)|\(cardNumber)|\(bankRaw)|\(cardTypeRaw)|\(currency)|\(createdAt)"
+                    let cardUniqueID = (modelData["cardUniqueID"] as? String) ?? legacyCardUniqueID
                     
                     // Ищем карту по содержимому (без проверки createdAt, так как комбинация других полей уникальна)
                     let cardDescriptor = FetchDescriptor<Card>(

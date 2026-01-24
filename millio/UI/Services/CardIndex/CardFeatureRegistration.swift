@@ -57,6 +57,9 @@ struct CardImporter: ModelImporter {
         // Если карта уже существует, обновляем её данные вместо создания новой
         if let existingCard = try? context.fetch(existingCardDescriptor).first {
             // Обновляем существующую карту
+            if let uniqueID = data["cardUniqueID"] as? String, !uniqueID.isEmpty {
+                existingCard.uniqueID = uniqueID
+            }
             existingCard.balance = balance
             existingCard.priority = priority
             existingCard.creditLimit = data["creditLimit"] as? Double
@@ -101,6 +104,9 @@ struct CardImporter: ModelImporter {
         // Восстанавливаем даты
         card.createdAt = Date(timeIntervalSince1970: createdAt)
         card.updatedAt = Date(timeIntervalSince1970: updatedAt)
+        if let uniqueID = data["cardUniqueID"] as? String, !uniqueID.isEmpty {
+            card.uniqueID = uniqueID
+        }
         
         // Восстанавливаем зашифрованные данные, если есть
         if let encryptedFullNumberStr = data["encryptedFullNumber"] as? String,

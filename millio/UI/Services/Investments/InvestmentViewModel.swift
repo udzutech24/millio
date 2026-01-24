@@ -257,6 +257,9 @@ final class InvestmentViewModel: ViewModelProtocol {
         isFavorite: Bool
     ) {
         if let existing = state.editingInvestment {
+            if existing.uniqueID.isEmpty {
+                _ = existing.investmentUniqueID
+            }
             // Обновляем существующую инвестицию
             existing.name = name
             existing.investmentType = investmentType

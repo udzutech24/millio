@@ -90,6 +90,9 @@ final class Credit: Persistable {
     
     /// Дата последнего обновления
     var updatedAt: Date = Date()
+
+    /// Стабильный идентификатор для связей между сущностями
+    var uniqueID: String = ""
     
     var bank: Bank {
         get { Bank(rawValue: bankRaw) ?? .other }
@@ -224,6 +227,7 @@ final class Credit: Persistable {
         self.includeInTotal = includeInTotal
         self.createdAt = Date()
         self.updatedAt = Date()
+        self.uniqueID = UUID().uuidString
     }
     
     /// Обновить остаток долга на основе прошедших месяцев
@@ -367,6 +371,13 @@ final class Credit: Persistable {
     
     /// Уникальный идентификатор кредита для восстановления связей при restore
     var creditUniqueID: String {
+        if uniqueID.isEmpty {
+            uniqueID = legacyCreditUniqueID()
+        }
+        return uniqueID
+    }
+
+    private func legacyCreditUniqueID() -> String {
         "\(name)|\(amount)|\(interestRate)|\(startDate.timeIntervalSince1970)|\(termMonths)|\(currency)|\(bankRaw)|\(creditTypeRaw)"
     }
     

@@ -319,6 +319,9 @@ final class CardViewModel: ViewModelProtocol {
     
     private func updateCard(_ card: Card) {
         if let existing = state.editingCard {
+            if existing.uniqueID.isEmpty {
+                _ = existing.cardUniqueID
+            }
             // Обновляем существующую карту
             existing.name = card.name
             existing.cardNumber = card.cardNumber
