@@ -1203,6 +1203,7 @@ private struct FinanceAddAccountView: View {
     @State private var cardData: Card?
     @State private var creditData: (name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, includeInTotal: Bool)?
     @State private var investmentData: (name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool)?
+    @State private var isCreatingNew: Bool = true // Переключатель: создать новый или выбрать существующий
     
     var targetGroup: FinanceGroup? {
         if let selectedGroupID = selectedGroupID {
@@ -1360,20 +1361,46 @@ private struct FinanceAddAccountView: View {
     @ViewBuilder
     private var accountSection: some View {
         Section {
-            switch selectedAccountType {
-            case .card:
-                cardAccountContent
-            case .credit:
-                creditAccountContent
-            case .investment:
-                investmentAccountContent
+            // Переключатель между созданием нового и выбором существующего
+            if hasUnattachedProducts {
+                Picker("Режим", selection: $isCreatingNew) {
+                    Text("Новый").tag(true)
+                    Text("Готовый").tag(false)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
             }
+            
+            if isCreatingNew {
+                EmptyView()
+            } else {
+                switch selectedAccountType {
+                case .card:
+                    cardAccountContent
+                case .credit:
+                    creditAccountContent
+                case .investment:
+                    investmentAccountContent
+                }
+            }
+        }
+    }
+    
+    private var hasUnattachedProducts: Bool {
+        switch selectedAccountType {
+        case .card:
+            return !viewModel.state.unattachedCards.isEmpty
+        case .credit:
+            return !viewModel.state.unattachedCredits.isEmpty
+        case .investment:
+            return !viewModel.state.unattachedInvestments.isEmpty
         }
     }
     
     @ViewBuilder
     private var createFormSections: some View {
-        if shouldShowCreateForm() {
+        if isCreatingNew {
             switch selectedAccountType {
             case .card:
                 if cardViewModel == nil {
@@ -1750,7 +1777,8 @@ private struct FinanceAddAccountView: View {
     var body: some View {
         NavigationStack {
             navigationContent
-                .modifier(SelectedAccountTypeChangeHandler(selectedAccountType: $selectedAccountType, cardViewModel: $cardViewModel, creditViewModel: $creditViewModel, investmentViewModel: $investmentViewModel))
+                .modifier(SelectedAccountTypeChangeHandler(selectedAccountType: $selectedAccountType, cardViewModel: $cardViewModel, creditViewModel: $creditViewModel, investmentViewModel: $investmentViewModel, isCreatingNew: $isCreatingNew))
+                .modifier(CreatingModeChangeHandler(isCreatingNew: $isCreatingNew, cardViewModel: $cardViewModel, creditViewModel: $creditViewModel, investmentViewModel: $investmentViewModel, selectedAccountType: selectedAccountType))
                 .modifier(UnattachedCardsChangeHandler(selectedCardID: $selectedCardID, unattachedCards: viewModel.state.unattachedCards))
                 .modifier(UnattachedCreditsChangeHandler(selectedCreditID: $selectedCreditID, unattachedCredits: viewModel.state.unattachedCredits))
                 .modifier(UnattachedInvestmentsChangeHandler(selectedInvestmentID: $selectedInvestmentID, unattachedInvestments: viewModel.state.unattachedInvestments))
@@ -1759,35 +1787,32 @@ private struct FinanceAddAccountView: View {
     
     private var isValid: Bool {
         guard targetGroup != nil else { return false }
-        switch selectedAccountType {
-        case .card:
-            if viewModel.state.unattachedCards.isEmpty {
-                // Проверяем форму создания карты
+        
+        if isCreatingNew {
+            // Проверяем форму создания
+            switch selectedAccountType {
+            case .card:
                 return cardData != nil && !(cardData?.name.isEmpty ?? true) && !(cardData?.cardNumber.isEmpty ?? true)
-            }
-            return selectedCardID != nil
-        case .credit:
-            if viewModel.state.unattachedCredits.isEmpty {
+            case .credit:
                 return creditData != nil
-            }
-            return selectedCreditID != nil
-        case .investment:
-            if viewModel.state.unattachedInvestments.isEmpty {
+            case .investment:
                 return investmentData != nil
             }
-            return selectedInvestmentID != nil
+        } else {
+            // Проверяем выбор существующего
+            switch selectedAccountType {
+            case .card:
+                return selectedCardID != nil
+            case .credit:
+                return selectedCreditID != nil
+            case .investment:
+                return selectedInvestmentID != nil
+            }
         }
     }
     
     private func shouldShowCreateForm() -> Bool {
-        switch selectedAccountType {
-        case .card:
-            return viewModel.state.unattachedCards.isEmpty
-        case .credit:
-            return viewModel.state.unattachedCredits.isEmpty
-        case .investment:
-            return viewModel.state.unattachedInvestments.isEmpty
-        }
+        return isCreatingNew
     }
     
     private func addAccount() {
@@ -1932,11 +1957,13 @@ private struct SelectedAccountTypeChangeHandler: ViewModifier {
     @Binding var cardViewModel: CardViewModel?
     @Binding var creditViewModel: CreditViewModel?
     @Binding var investmentViewModel: InvestmentViewModel?
+    @Binding var isCreatingNew: Bool
 
     func body(content: Content) -> some View {
         content
             .onChange(of: selectedAccountType) { oldValue, newValue in
                 if oldValue != newValue {
+                    // Сбрасываем viewModels при смене типа
                     switch oldValue {
                     case .card:
                         cardViewModel = nil
@@ -1945,6 +1972,8 @@ private struct SelectedAccountTypeChangeHandler: ViewModifier {
                     case .investment:
                         investmentViewModel = nil
                     }
+                    // Возвращаемся в режим создания нового
+                    isCreatingNew = true
                 }
             }
     }
@@ -2010,6 +2039,31 @@ private struct UnattachedInvestmentsChangeHandler: ViewModifier {
                     let newInvestmentsOnly = newInvestments.filter { !oldInvestmentIDs.contains($0.investmentUniqueID) }
                     if let newInvestment = newInvestmentsOnly.first {
                         selectedInvestmentID = newInvestment.investmentUniqueID
+                    }
+                }
+            }
+    }
+}
+
+private struct CreatingModeChangeHandler: ViewModifier {
+    @Binding var isCreatingNew: Bool
+    @Binding var cardViewModel: CardViewModel?
+    @Binding var creditViewModel: CreditViewModel?
+    @Binding var investmentViewModel: InvestmentViewModel?
+    let selectedAccountType: FinanceAccountType
+    
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: isCreatingNew) { oldValue, newValue in
+                if oldValue && !newValue {
+                    // Переключились с создания на выбор - сбрасываем viewModels
+                    switch selectedAccountType {
+                    case .card:
+                        cardViewModel = nil
+                    case .credit:
+                        creditViewModel = nil
+                    case .investment:
+                        investmentViewModel = nil
                     }
                 }
             }
