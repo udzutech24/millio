@@ -486,7 +486,10 @@ private struct InvestmentRow: View {
 
 struct InvestmentEditorView: View {
     @ObservedObject var viewModel: InvestmentViewModel
+    let onClose: (() -> Void)?
+    let onDelete: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
+    @State private var showDeleteConfirmation = false
     
     @State private var name: String = ""
     @State private var selectedInvestmentType: InvestmentType = .positive
@@ -498,7 +501,13 @@ struct InvestmentEditorView: View {
     @State private var isFavorite: Bool = false
     @State private var availableCurrencies: [String] = ["RUB", "USD", "EUR"]
     @State private var isLoadingCurrencies: Bool = false
-    
+
+    init(viewModel: InvestmentViewModel, onClose: (() -> Void)? = nil, onDelete: (() -> Void)? = nil) {
+        self.viewModel = viewModel
+        self.onClose = onClose
+        self.onDelete = onDelete
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -586,7 +595,11 @@ struct InvestmentEditorView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Отмена") {
-                        dismiss()
+                        if let onClose {
+                            onClose()
+                        } else {
+                            dismiss()
+                        }
                     }
                     .foregroundStyle(AppColors.textPrimary)
                 }
@@ -604,6 +617,20 @@ struct InvestmentEditorView: View {
                     )
                     .disabled(!isValid)
                 }
+                
+                if onDelete != nil, viewModel.state.editingInvestment != nil {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("Удалить", role: .destructive) {
+                            showDeleteConfirmation = true
+                        }
+                    }
+                }
+            }
+            .confirmationDialog("Удалить счет полностью?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
+                Button("Удалить", role: .destructive) {
+                    onDelete?()
+                }
+                Button("Отмена", role: .cancel) {}
             }
             .onAppear {
                 if let editing = viewModel.state.editingInvestment {
@@ -692,7 +719,11 @@ struct InvestmentEditorView: View {
             isFavorite: isFavorite
         ))
         
-        dismiss()
+        if let onClose {
+            onClose()
+        } else {
+            dismiss()
+        }
     }
 }
 

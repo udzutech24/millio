@@ -27,6 +27,9 @@ struct FinanceDynamicsView: View {
     
     /// Валюта счета для предустановки (опционально)
     var initialAccountCurrency: String? = nil
+
+    /// Счет для действий (редактирование/удаление) в режиме одного счета
+    var initialAccount: FinanceAccount? = nil
     
     /// Нужно ли оборачивать в NavigationStack (для sheet'ов нужен, для navigationDestination - нет)
     var wrapInNavigationStack: Bool = true
@@ -39,7 +42,8 @@ struct FinanceDynamicsView: View {
                     appState: appState,
                     showSubscriptionSheet: $showSubscriptionSheet,
                     financeViewModel: financeViewModel,
-                    initialAccountID: initialAccountID
+                    initialAccountID: initialAccountID,
+                    initialAccount: initialAccount
                 )
             } else {
                 ProgressView()
@@ -99,29 +103,47 @@ private struct FinanceDynamicsContentView: View {
     @Binding var showSubscriptionSheet: Bool
     @ObservedObject var financeViewModel: FinanceViewModel
     var initialAccountID: String? = nil
+    var initialAccount: FinanceAccount? = nil
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var showEditForm = false
     
     var body: some View {
         ZStack {
             GradientBackground()
             
-            ScrollView {
-                VStack(spacing: 24) {
-                    // Верхняя панель с балансом и дельтой
-                    topPanel
-                    
-                    // График
-                    chartSection
-                    
-                    // Список динамики
-                    dynamicsList
+            if showEditForm, viewModel.state.isSingleAccountMode, let account = initialAccount {
+                editForm(for: account)
+            } else {
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // Верхняя панель с балансом и дельтой
+                        topPanel
+                        
+                        // График
+                        chartSection
+                        
+                        // Список динамики
+                        dynamicsList
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 16)
+                    .padding(.bottom, 32)
                 }
-                .padding(.horizontal, 24)
-                .padding(.top, 16)
-                .padding(.bottom, 32)
             }
         }
         .navigationTitle("Динамика")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if viewModel.state.isSingleAccountMode, initialAccount != nil {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(showEditForm ? "Динамика" : "Редактировать") {
+                        showEditForm.toggle()
+                    }
+                    .foregroundStyle(AppColors.textPrimary)
+                }
+            }
+        }
         .sheet(isPresented: Binding(
             get: { viewModel.state.showFilterSheet },
             set: { if !$0 { viewModel.handle(.hideFilterSheet) } }
@@ -164,6 +186,45 @@ private struct FinanceDynamicsContentView: View {
                 FinanceEditInvestmentView(investment: investment, viewModel: financeViewModel)
             }
         }
+    }
+
+    @ViewBuilder
+    private func editForm(for account: FinanceAccount) -> some View {
+        switch account.accountType {
+        case .card:
+            if let card = financeViewModel.state.availableCards.first(where: { $0.cardUniqueID == account.accountID }) {
+                FinanceEditCardView(
+                    card: card,
+                    viewModel: financeViewModel,
+                    onClose: { showEditForm = false },
+                    onDelete: { deleteAccountAndDismiss(account) }
+                )
+            }
+        case .credit:
+            if let credit = financeViewModel.state.availableCredits.first(where: { $0.creditUniqueID == account.accountID }) {
+                FinanceEditCreditView(
+                    credit: credit,
+                    viewModel: financeViewModel,
+                    onClose: { showEditForm = false },
+                    onDelete: { deleteAccountAndDismiss(account) }
+                )
+            }
+        case .investment:
+            if let investment = financeViewModel.state.availableInvestments.first(where: { $0.investmentUniqueID == account.accountID }) {
+                FinanceEditInvestmentView(
+                    investment: investment,
+                    viewModel: financeViewModel,
+                    onClose: { showEditForm = false },
+                    onDelete: { deleteAccountAndDismiss(account) }
+                )
+            }
+        }
+    }
+
+    private func deleteAccountAndDismiss(_ account: FinanceAccount) {
+        financeViewModel.handle(.deleteAccountPermanently(account))
+        financeViewModel.handle(.hideAccountDynamics)
+        dismiss()
     }
     
     // MARK: - Filter Sheet View

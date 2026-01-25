@@ -554,9 +554,6 @@ private struct FinanceGroupRow: View {
                             onEdit: {
                                 viewModel.handle(.showAccountDynamics(account))
                             },
-                            onDelete: {
-                                viewModel.handle(.removeAccountFromGroup(account))
-                            },
                             onQuickEditAmount: {
                                 viewModel.handle(.showQuickEditAccountSheet(account))
                             }
@@ -735,7 +732,6 @@ private struct FinanceAccountRow: View {
     let accountType: FinanceAccountType
     let isCreditCardDebt: Bool
     let onEdit: () -> Void
-    let onDelete: () -> Void
     let onQuickEditAmount: () -> Void
     
     var body: some View {
@@ -916,7 +912,8 @@ private struct SheetsModifier: ViewModifier {
                     FinanceDynamicsView(
                         financeViewModel: viewModel,
                         initialAccountID: account.accountUniqueID,
-                        initialAccountCurrency: viewModel.getAccountInfo(account: account)?.currency
+                        initialAccountCurrency: viewModel.getAccountInfo(account: account)?.currency,
+                        initialAccount: account
                     )
                 }
             }
@@ -2136,21 +2133,39 @@ private struct FinanceInvestmentEditorWrapper: View {
 struct FinanceEditCardView: View {
     let card: Card
     @ObservedObject var viewModel: FinanceViewModel
+    let onClose: (() -> Void)?
+    let onDelete: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     
     @State private var cardViewModel: CardViewModel?
+
+    init(
+        card: Card,
+        viewModel: FinanceViewModel,
+        onClose: (() -> Void)? = nil,
+        onDelete: (() -> Void)? = nil
+    ) {
+        self.card = card
+        self.viewModel = viewModel
+        self.onClose = onClose
+        self.onDelete = onDelete
+    }
     
     var body: some View {
         Group {
             if let cardViewModel = cardViewModel {
-                CardEditorView(viewModel: cardViewModel)
+                CardEditorView(viewModel: cardViewModel, onClose: onClose, onDelete: onDelete)
                     .onChange(of: cardViewModel.state.showCardEditor) { oldValue, newValue in
                         if oldValue == true && newValue == false {
                             viewModel.handle(.loadAccounts)
                             viewModel.handle(.loadGroups)
                             Task { await recalculateAllGroupTotals() }
-                            dismiss()
+                            if let onClose {
+                                onClose()
+                            } else {
+                                dismiss()
+                            }
                         }
                     }
             } else {
@@ -2177,21 +2192,39 @@ struct FinanceEditCardView: View {
 struct FinanceEditCreditView: View {
     let credit: Credit
     @ObservedObject var viewModel: FinanceViewModel
+    let onClose: (() -> Void)?
+    let onDelete: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     
     @State private var creditViewModel: CreditViewModel?
+
+    init(
+        credit: Credit,
+        viewModel: FinanceViewModel,
+        onClose: (() -> Void)? = nil,
+        onDelete: (() -> Void)? = nil
+    ) {
+        self.credit = credit
+        self.viewModel = viewModel
+        self.onClose = onClose
+        self.onDelete = onDelete
+    }
     
     var body: some View {
         Group {
             if let creditViewModel = creditViewModel {
-                CreditEditorView(viewModel: creditViewModel)
+                CreditEditorView(viewModel: creditViewModel, onClose: onClose, onDelete: onDelete)
                     .onChange(of: creditViewModel.state.showCreditEditor) { oldValue, newValue in
                         if oldValue == true && newValue == false {
                             viewModel.handle(.loadAccounts)
                             viewModel.handle(.loadGroups)
                             Task { await recalculateAllGroupTotals() }
-                            dismiss()
+                            if let onClose {
+                                onClose()
+                            } else {
+                                dismiss()
+                            }
                         }
                     }
             } else {
@@ -2218,21 +2251,39 @@ struct FinanceEditCreditView: View {
 struct FinanceEditInvestmentView: View {
     let investment: Investment
     @ObservedObject var viewModel: FinanceViewModel
+    let onClose: (() -> Void)?
+    let onDelete: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     
     @State private var investmentViewModel: InvestmentViewModel?
+
+    init(
+        investment: Investment,
+        viewModel: FinanceViewModel,
+        onClose: (() -> Void)? = nil,
+        onDelete: (() -> Void)? = nil
+    ) {
+        self.investment = investment
+        self.viewModel = viewModel
+        self.onClose = onClose
+        self.onDelete = onDelete
+    }
     
     var body: some View {
         Group {
             if let investmentViewModel = investmentViewModel {
-                InvestmentEditorView(viewModel: investmentViewModel)
+                InvestmentEditorView(viewModel: investmentViewModel, onClose: onClose, onDelete: onDelete)
                     .onChange(of: investmentViewModel.state.showInvestmentEditor) { oldValue, newValue in
                         if oldValue == true && newValue == false {
                             viewModel.handle(.loadAccounts)
                             viewModel.handle(.loadGroups)
                             Task { await recalculateAllGroupTotals() }
-                            dismiss()
+                            if let onClose {
+                                onClose()
+                            } else {
+                                dismiss()
+                            }
                         }
                     }
             } else {
@@ -2649,7 +2700,7 @@ private struct InlineCardCreateForm<GroupSection: View>: View {
     }
     
     var currentCard: Card {
-        var result = card
+        let result = card
         if result.cardType == .credit, let limit = Double(creditLimitText.replacingOccurrences(of: ",", with: ".")) {
             result.creditLimit = limit
         }

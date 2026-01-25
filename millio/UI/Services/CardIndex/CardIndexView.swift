@@ -509,17 +509,22 @@ private struct CardRow: View {
 
 struct CardEditorView: View {
     @ObservedObject var viewModel: CardViewModel
+    let onClose: (() -> Void)?
+    let onDelete: (() -> Void)?
     @State private var card: Card
     @State private var isNewCard: Bool
     
     @Environment(\.dismiss) private var dismiss
+    @State private var showDeleteConfirmation = false
     
     @State private var creditLimitText: String = ""
     @State private var availableCurrencies: [String] = ["RUB", "USD", "EUR"]
     @State private var isLoadingCurrencies: Bool = false
     
-    init(viewModel: CardViewModel) {
+    init(viewModel: CardViewModel, onClose: (() -> Void)? = nil, onDelete: (() -> Void)? = nil) {
         self.viewModel = viewModel
+        self.onClose = onClose
+        self.onDelete = onDelete
         if let editing = viewModel.state.editingCard {
             let newCard = Card(
                 name: editing.name,
@@ -670,7 +675,11 @@ struct CardEditorView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Отмена") {
-                        dismiss()
+                        if let onClose {
+                            onClose()
+                        } else {
+                            dismiss()
+                        }
                     }
                     .foregroundStyle(AppColors.textPrimary)
                 }
@@ -678,7 +687,11 @@ struct CardEditorView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Сохранить") {
                         viewModel.handle(.updateCard(card))
-                        dismiss()
+                        if let onClose {
+                            onClose()
+                        } else {
+                            dismiss()
+                        }
                     }
                     .foregroundStyle(
                         LinearGradient(
@@ -689,6 +702,20 @@ struct CardEditorView: View {
                     )
                     .disabled(card.name.isEmpty || card.cardNumber.isEmpty)
                 }
+                
+                if onDelete != nil, !isNewCard {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("Удалить", role: .destructive) {
+                            showDeleteConfirmation = true
+                        }
+                    }
+                }
+            }
+            .confirmationDialog("Удалить счет полностью?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
+                Button("Удалить", role: .destructive) {
+                    onDelete?()
+                }
+                Button("Отмена", role: .cancel) {}
             }
             .onAppear {
                 loadAvailableCurrencies()

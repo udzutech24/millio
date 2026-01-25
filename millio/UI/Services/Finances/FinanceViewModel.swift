@@ -149,6 +149,7 @@ enum FinanceAction {
     case hideAddAccountSheet
     case addAccountToGroup(accountType: FinanceAccountType, accountID: String, group: FinanceGroup?)
     case removeAccountFromGroup(FinanceAccount)
+    case deleteAccountPermanently(FinanceAccount)
     case showCreateCardSheet
     case hideCreateCardSheet
     case showCreateCreditSheet
@@ -273,6 +274,8 @@ final class FinanceViewModel: ViewModelProtocol {
             
         case .removeAccountFromGroup(let account):
             removeAccountFromGroup(account)
+        case .deleteAccountPermanently(let account):
+            deleteAccountPermanently(account)
             
         case .showCreateCardSheet:
             state.showCreateCardSheet = true
@@ -840,6 +843,80 @@ final class FinanceViewModel: ViewModelProtocol {
             }
         } catch {
             AppLogger.log(.error, category: "Finance", "Failed to remove account: \(error.localizedDescription)")
+        }
+    }
+
+    private func deleteAccountPermanently(_ account: FinanceAccount) {
+        let accountGroup = state.groups.first { group in
+            group.accounts?.contains(where: { $0.accountUniqueID == account.accountUniqueID }) ?? false
+        }
+
+        switch account.accountType {
+        case .card:
+            if let card = state.availableCards.first(where: { $0.cardUniqueID == account.accountID }) {
+                let cardID = card.cardUniqueID
+                let descriptor = FetchDescriptor<CashflowTransaction>(
+                    predicate: #Predicate<CashflowTransaction> { transaction in
+                        transaction.cardID == cardID || transaction.toCardID == cardID
+                    }
+                )
+                if let transactions = try? modelContext.fetch(descriptor) {
+                    for transaction in transactions {
+                        modelContext.delete(transaction)
+                    }
+                }
+                modelContext.delete(card)
+            }
+        case .credit:
+            if let credit = state.availableCredits.first(where: { $0.creditUniqueID == account.accountID }) {
+                let creditID = credit.creditUniqueID
+                let descriptor = FetchDescriptor<CashflowTransaction>(
+                    predicate: #Predicate<CashflowTransaction> { transaction in
+                        transaction.creditID == creditID
+                    }
+                )
+                if let transactions = try? modelContext.fetch(descriptor) {
+                    for transaction in transactions {
+                        modelContext.delete(transaction)
+                    }
+                }
+                modelContext.delete(credit)
+            }
+        case .investment:
+            if let investment = state.availableInvestments.first(where: { $0.investmentUniqueID == account.accountID }) {
+                let investmentID = investment.investmentUniqueID
+                let descriptor = FetchDescriptor<CashflowTransaction>(
+                    predicate: #Predicate<CashflowTransaction> { transaction in
+                        transaction.investmentID == investmentID
+                    }
+                )
+                if let transactions = try? modelContext.fetch(descriptor) {
+                    for transaction in transactions {
+                        modelContext.delete(transaction)
+                    }
+                }
+                modelContext.delete(investment)
+            }
+        }
+
+        modelContext.delete(account)
+
+        do {
+            try modelContext.save()
+            loadGroups()
+            loadAccounts()
+            updateUnattachedItems()
+            calculateTotalAmount()
+
+            if let group = accountGroup {
+                Task {
+                    let currency = group.displayCurrency ?? state.displayCurrency
+                    let total = await calculateGroupTotal(group: group, in: currency)
+                    state.groupTotals[group.groupUniqueID] = total
+                }
+            }
+        } catch {
+            AppLogger.log(.error, category: "Finance", "Failed to delete account permanently: \(error.localizedDescription)")
         }
     }
     

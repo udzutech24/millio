@@ -889,7 +889,10 @@ private struct DisplayCurrencySheet: View {
 
 struct CreditEditorView: View {
     @ObservedObject var viewModel: CreditViewModel
+    let onClose: (() -> Void)?
+    let onDelete: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
+    @State private var showDeleteConfirmation = false
     
     @State private var name: String = ""
     @State private var amountText: String = ""
@@ -903,7 +906,13 @@ struct CreditEditorView: View {
     @State private var includeInTotal: Bool = true
     @State private var availableCurrencies: [String] = ["RUB", "USD", "EUR"]
     @State private var isLoadingCurrencies: Bool = false
-    
+
+    init(viewModel: CreditViewModel, onClose: (() -> Void)? = nil, onDelete: (() -> Void)? = nil) {
+        self.viewModel = viewModel
+        self.onClose = onClose
+        self.onDelete = onDelete
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -1012,7 +1021,11 @@ struct CreditEditorView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Отмена") {
-                        dismiss()
+                        if let onClose {
+                            onClose()
+                        } else {
+                            dismiss()
+                        }
                     }
                     .foregroundStyle(AppColors.textPrimary)
                 }
@@ -1030,6 +1043,20 @@ struct CreditEditorView: View {
                     )
                     .disabled(!isValid)
                 }
+                
+                if onDelete != nil, viewModel.state.editingCredit != nil {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("Удалить", role: .destructive) {
+                            showDeleteConfirmation = true
+                        }
+                    }
+                }
+            }
+            .confirmationDialog("Удалить счет полностью?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
+                Button("Удалить", role: .destructive) {
+                    onDelete?()
+                }
+                Button("Отмена", role: .cancel) {}
             }
             .onAppear {
                 if let editing = viewModel.state.editingCredit {
@@ -1157,7 +1184,11 @@ struct CreditEditorView: View {
             includeInTotal: includeInTotal
         ))
         
-        dismiss()
+        if let onClose {
+            onClose()
+        } else {
+            dismiss()
+        }
     }
 }
 
