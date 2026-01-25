@@ -1011,18 +1011,16 @@ final class FinanceViewModel: ViewModelProtocol {
                 do {
                     try modelContext.save()
                     
-                    // Создаем транзакцию для ручного изменения баланса
+                    // Создаем транзакцию для ручного изменения стоимости актива
                     let difference = newAmount - oldAmount
-                    if abs(difference) > 0.01 { // Создаем транзакцию только если есть изменение
-                        // Для инвестиций: положительное значение = увеличение баланса (income), отрицательное = уменьшение (expense)
-                        // Сохраняем знак difference для правильной обработки в FinanceDynamicsViewModel
+                    if abs(difference) > 0.01 {
                         let transaction = CashflowTransaction(
                             transactionType: .balanceAdjustment,
-                            amount: difference, // Сохраняем знак для определения направления
+                            amount: difference,
                             currency: investment.currency,
                             transactionDate: Date(),
                             investmentID: investment.investmentUniqueID,
-                            note: "Ручное изменение баланса"
+                            note: "Ручное изменение стоимости актива"
                         )
                         modelContext.insert(transaction)
                         try modelContext.save()

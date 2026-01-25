@@ -1349,8 +1349,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 accountCurrency = investment.currency
                 shouldInclude = true
                 
-                // Начальный баланс = значение при создании инвестиции
-                // Если initialAmount нет, восстанавливаем базу из текущей суммы и всех balanceAdjustment
+                // Активы = оценочная стоимость + история изменений
                 var baseAmount = investment.hasInitialAmount ? investment.initialAmount : investment.amount
                 let investmentTransactions = transactionsByInvestmentCache[investment.investmentUniqueID] ?? []
                 if !investment.hasInitialAmount {
@@ -1386,7 +1385,6 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                         .sorted(by: { $0.transactionDate < $1.transactionDate })
                     
                     for transaction in balanceAdjustmentTransactions {
-                        // Для инвестиций: положительное amount (income) увеличивает баланс, отрицательное (expense) уменьшает
                         let converted = await convertAmount(
                             value: transaction.amount,
                             from: transaction.currency,

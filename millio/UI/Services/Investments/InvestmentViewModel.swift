@@ -305,7 +305,7 @@ final class InvestmentViewModel: ViewModelProtocol {
                         currency: existing.currency,
                         transactionDate: Date(),
                         investmentID: existing.investmentUniqueID,
-                        note: "Ручное изменение баланса"
+                        note: "Ручное изменение стоимости актива"
                     )
                     modelContext.insert(transaction)
                     try modelContext.save()
