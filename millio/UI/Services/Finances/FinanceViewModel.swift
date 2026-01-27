@@ -196,6 +196,11 @@ final class FinanceViewModel: ViewModelProtocol {
     let currencyService: CurrencyRateServiceProtocol
 
     private let defaults = UserDefaults.standard
+
+    /// Быстрые словари для поиска счетов по ID (O(1) вместо O(n))
+    private var cardByID: [String: Card] = [:]
+    private var creditByID: [String: Credit] = [:]
+    private var investmentByID: [String: Investment] = [:]
     
     private var storedDisplayCurrency: String {
         get { defaults.string(forKey: "finance_display_currency") ?? "RUB" }
@@ -455,6 +460,9 @@ final class FinanceViewModel: ViewModelProtocol {
         
         let investmentDescriptor = FetchDescriptor<Investment>()
         state.availableInvestments = (try? modelContext.fetch(investmentDescriptor)) ?? []
+
+        rebuildAccountCaches()
+        cleanupInvalidFinanceAccounts()
         
         // Обновляем менеджеры
         CardManager.shared.setup(modelContext: modelContext)
@@ -490,6 +498,68 @@ final class FinanceViewModel: ViewModelProtocol {
         state.unattachedCards = state.availableCards.filter { !attachedCardIDs.contains($0.cardUniqueID) }
         state.unattachedCredits = state.availableCredits.filter { !attachedCreditIDs.contains($0.creditUniqueID) }
         state.unattachedInvestments = state.availableInvestments.filter { !attachedInvestmentIDs.contains($0.investmentUniqueID) }
+    }
+
+    /// Перестраиваем кэш счетов по ID после загрузки данных
+    private func rebuildAccountCaches() {
+        cardByID = [:]
+        creditByID = [:]
+        investmentByID = [:]
+
+        for card in state.availableCards {
+            cardByID[card.cardUniqueID] = card
+        }
+        for credit in state.availableCredits {
+            creditByID[credit.creditUniqueID] = credit
+        }
+        for investment in state.availableInvestments {
+            investmentByID[investment.investmentUniqueID] = investment
+        }
+    }
+
+    /// Удаляем "сиротские" связи, чтобы не накапливать мусор в базе
+    private func cleanupInvalidFinanceAccounts() {
+        let descriptor = FetchDescriptor<FinanceAccount>()
+        guard let accounts = try? modelContext.fetch(descriptor) else { return }
+
+        var removedCount = 0
+
+        for account in accounts {
+            // Если счет больше не связан с группой — удаляем запись связи
+            if account.group == nil {
+                modelContext.delete(account)
+                removedCount += 1
+                continue
+            }
+
+            // Если целевой объект не найден — удаляем связь
+            switch account.accountType {
+            case .card:
+                if cardByID[account.accountID] == nil {
+                    modelContext.delete(account)
+                    removedCount += 1
+                }
+            case .credit:
+                if creditByID[account.accountID] == nil {
+                    modelContext.delete(account)
+                    removedCount += 1
+                }
+            case .investment:
+                if investmentByID[account.accountID] == nil {
+                    modelContext.delete(account)
+                    removedCount += 1
+                }
+            }
+        }
+
+        guard removedCount > 0 else { return }
+
+        do {
+            try modelContext.save()
+            AppLogger.log(.info, category: "Finance", "Removed \(removedCount) invalid finance account links")
+        } catch {
+            AppLogger.log(.error, category: "Finance", "Failed to cleanup finance accounts: \(error.localizedDescription)")
+        }
     }
     
     private func calculateTotalAmount() {
@@ -639,7 +709,7 @@ final class FinanceViewModel: ViewModelProtocol {
     private func getAccountAmount(account: FinanceAccount) async -> (value: Double, currency: String) {
         switch account.accountType {
         case .card:
-            if let card = state.availableCards.first(where: { $0.cardUniqueID == account.accountID }) {
+            if let card = cardByID[account.accountID] {
                 // Учитываем только если includeInTotal = true
                 guard card.includeInTotal else { return (0.0, card.currency) }
                 
@@ -654,7 +724,7 @@ final class FinanceViewModel: ViewModelProtocol {
             }
             
         case .credit:
-            if let credit = state.availableCredits.first(where: { $0.creditUniqueID == account.accountID }) {
+            if let credit = creditByID[account.accountID] {
                 // Учитываем только если includeInTotal = true
                 guard credit.includeInTotal else { return (0.0, credit.currency) }
                 
@@ -663,7 +733,7 @@ final class FinanceViewModel: ViewModelProtocol {
             }
             
         case .investment:
-            if let investment = state.availableInvestments.first(where: { $0.investmentUniqueID == account.accountID }) {
+            if let investment = investmentByID[account.accountID] {
                 // Учитываем только если includeInTotal = true
                 if investment.includeInTotal {
                     let value = investment.investmentType == .positive ? investment.amount : -investment.amount
@@ -679,7 +749,7 @@ final class FinanceViewModel: ViewModelProtocol {
     func getAccountInfo(account: FinanceAccount) -> (name: String, amount: Double, currency: String, icon: String, isCreditCardDebt: Bool)? {
         switch account.accountType {
         case .card:
-            if let card = state.availableCards.first(where: { $0.cardUniqueID == account.accountID }) {
+            if let card = cardByID[account.accountID] {
                 // Для кредитных карт показываем задолженность (debt)
                 let amount: Double
                 let isCreditCardDebt: Bool
@@ -697,12 +767,12 @@ final class FinanceViewModel: ViewModelProtocol {
             }
             
         case .credit:
-            if let credit = state.availableCredits.first(where: { $0.creditUniqueID == account.accountID }) {
+            if let credit = creditByID[account.accountID] {
                 return (credit.name, credit.remainingAmount, credit.currency, credit.creditType.icon, false)
             }
             
         case .investment:
-            if let investment = state.availableInvestments.first(where: { $0.investmentUniqueID == account.accountID }) {
+            if let investment = investmentByID[account.accountID] {
                 return (investment.name, investment.amount, investment.currency, investment.category.icon, false)
             }
         }
@@ -859,7 +929,7 @@ final class FinanceViewModel: ViewModelProtocol {
 
         switch account.accountType {
         case .card:
-            if let card = state.availableCards.first(where: { $0.cardUniqueID == account.accountID }) {
+            if let card = cardByID[account.accountID] {
                 let cardID = card.cardUniqueID
                 let descriptor = FetchDescriptor<CashflowTransaction>(
                     predicate: #Predicate<CashflowTransaction> { transaction in
@@ -874,7 +944,7 @@ final class FinanceViewModel: ViewModelProtocol {
                 modelContext.delete(card)
             }
         case .credit:
-            if let credit = state.availableCredits.first(where: { $0.creditUniqueID == account.accountID }) {
+            if let credit = creditByID[account.accountID] {
                 let creditID = credit.creditUniqueID
                 let descriptor = FetchDescriptor<CashflowTransaction>(
                     predicate: #Predicate<CashflowTransaction> { transaction in
@@ -889,7 +959,7 @@ final class FinanceViewModel: ViewModelProtocol {
                 modelContext.delete(credit)
             }
         case .investment:
-            if let investment = state.availableInvestments.first(where: { $0.investmentUniqueID == account.accountID }) {
+            if let investment = investmentByID[account.accountID] {
                 let investmentID = investment.investmentUniqueID
                 let descriptor = FetchDescriptor<CashflowTransaction>(
                     predicate: #Predicate<CashflowTransaction> { transaction in
@@ -950,7 +1020,7 @@ final class FinanceViewModel: ViewModelProtocol {
         
         switch account.accountType {
         case .card:
-            if let card = state.availableCards.first(where: { $0.cardUniqueID == account.accountID }) {
+            if let card = cardByID[account.accountID] {
                 // Сохраняем старое значение для создания транзакции
                 let oldBalance = card.balance
                 if !card.hasInitialBalance {
@@ -1028,7 +1098,7 @@ final class FinanceViewModel: ViewModelProtocol {
             }
             
         case .credit:
-            if let credit = state.availableCredits.first(where: { $0.creditUniqueID == account.accountID }) {
+            if let credit = creditByID[account.accountID] {
                 // Сохраняем старое значение для создания транзакции
                 let oldAmount = credit.remainingAmount
                 if !credit.hasInitialRemainingAmount {
@@ -1080,7 +1150,7 @@ final class FinanceViewModel: ViewModelProtocol {
             }
             
         case .investment:
-            if let investment = state.availableInvestments.first(where: { $0.investmentUniqueID == account.accountID }) {
+            if let investment = investmentByID[account.accountID] {
                 // Сохраняем старое значение для создания транзакции
                 let oldAmount = investment.amount
                 if !investment.hasInitialAmount {

@@ -143,8 +143,7 @@ struct FinanceViewModelTests {
             currencyService: mockRateService,
             skipInitialLoad: true
         )
-        viewModel.state.availableCards = [cardRUB, cardUSD]
-        viewModel.state.availableInvestments = [investmentEUR]
+        viewModel.handle(.loadAccounts)
 
         // Рассчитываем сумму группы в RUB
         // Ожидаемый результат:
@@ -235,8 +234,7 @@ struct FinanceViewModelTests {
             currencyService: mockRateService,
             skipInitialLoad: true
         )
-        viewModel.state.availableCards = [cardRUB, cardEUR]
-        viewModel.state.availableCredits = [creditUSD]
+        viewModel.handle(.loadAccounts)
 
         // Рассчитываем сумму группы в USD
         let total = await viewModel.calculateGroupTotal(group: group, in: "USD")
@@ -308,7 +306,7 @@ struct FinanceViewModelTests {
             currencyService: mockRateService,
             skipInitialLoad: true
         )
-        viewModel.state.availableCards = [cardRUB, cardUnknown]
+        viewModel.handle(.loadAccounts)
 
         // Рассчитываем сумму группы
         let total = await viewModel.calculateGroupTotal(group: group, in: "RUB")
@@ -316,5 +314,119 @@ struct FinanceViewModelTests {
         // Сумма должна включать только RUB (XXX пропущена)
         #expect(total >= 1000.0, "Сумма должна включать хотя бы сумму в RUB")
         #expect(total <= 1000.0 + 0.01, "Сумма не должна включать сумму в валюте без курса конвертации")
+    }
+
+    @Test("Невалидные связи FinanceAccount очищаются при загрузке счетов")
+    func testCleanupInvalidFinanceAccounts() throws {
+        let modelContext = try createTestModelContext()
+
+        let group = FinanceGroup(name: "Тестовая группа", colorHex: "#123456")
+        modelContext.insert(group)
+
+        let card = Card(
+            name: "Карта",
+            cardNumber: "9999",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 100.0
+        )
+        modelContext.insert(card)
+
+        let validAccount = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        validAccount.group = group
+        modelContext.insert(validAccount)
+
+        let missingCardAccount = FinanceAccount(accountType: .card, accountID: "missing-card-id")
+        missingCardAccount.group = group
+        modelContext.insert(missingCardAccount)
+
+        let noGroupAccount = FinanceAccount(accountType: .credit, accountID: "missing-credit-id")
+        modelContext.insert(noGroupAccount)
+
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+
+        viewModel.handle(.loadAccounts)
+
+        let descriptor = FetchDescriptor<FinanceAccount>()
+        let accounts = (try? modelContext.fetch(descriptor)) ?? []
+
+        #expect(accounts.count == 1, "Должна остаться только валидная связь")
+        #expect(accounts.first?.accountID == card.cardUniqueID, "Оставшаяся связь должна вести на существующую карту")
+    }
+
+    @Test("Валидные связи разных типов сохраняются при очистке")
+    func testCleanupKeepsValidAccountsForAllTypes() throws {
+        let modelContext = try createTestModelContext()
+
+        let group = FinanceGroup(name: "Группа", colorHex: "#ABCDEF")
+        modelContext.insert(group)
+
+        let card = Card(
+            name: "Карта",
+            cardNumber: "1111",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 100.0
+        )
+        let credit = Credit(
+            name: "Кредит",
+            amount: 1000.0,
+            interestRate: 10.0,
+            monthlyPayment: 100.0,
+            startDate: Date(),
+            termMonths: 12,
+            currency: "RUB",
+            bank: .other,
+            creditType: .consumer
+        )
+        let investment = Investment(
+            name: "Актив",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 500.0,
+            currency: "RUB"
+        )
+
+        modelContext.insert(card)
+        modelContext.insert(credit)
+        modelContext.insert(investment)
+
+        let cardAccount = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        cardAccount.group = group
+        let creditAccount = FinanceAccount(accountType: .credit, accountID: credit.creditUniqueID)
+        creditAccount.group = group
+        let investmentAccount = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+        investmentAccount.group = group
+
+        modelContext.insert(cardAccount)
+        modelContext.insert(creditAccount)
+        modelContext.insert(investmentAccount)
+
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+
+        viewModel.handle(.loadAccounts)
+
+        let descriptor = FetchDescriptor<FinanceAccount>()
+        let accounts = (try? modelContext.fetch(descriptor)) ?? []
+        let accountIDs = Set(accounts.map { $0.accountID })
+
+        #expect(accounts.count == 3, "Все валидные связи должны сохраниться")
+        #expect(accountIDs.contains(card.cardUniqueID))
+        #expect(accountIDs.contains(credit.creditUniqueID))
+        #expect(accountIDs.contains(investment.investmentUniqueID))
     }
 }
