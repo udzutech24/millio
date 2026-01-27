@@ -47,13 +47,6 @@ struct ServiceItem: Identifiable, Equatable {
                 gradientColors: AppColors.creditsGradient
             ),
             ServiceItem(
-                id: "habits",
-                route: .habits,
-                title: "Привычки",
-                icon: "habits",
-                gradientColors: AppColors.habitsGradient
-            ),
-            ServiceItem(
                 id: "cards",
                 route: .cardIndex,
                 title: "Картотека",
@@ -61,25 +54,11 @@ struct ServiceItem: Identifiable, Equatable {
                 gradientColors: AppColors.cardIndexGradient
             ),
             ServiceItem(
-                id: "debts",
-                route: .debts,
-                title: "Долги",
-                icon: "loans",
-                gradientColors: AppColors.debtsGradient
-            ),
-            ServiceItem(
                 id: "investments",
                 route: .investments,
                 title: "Активы",
                 icon: "loans",
                 gradientColors: AppColors.investmentsGradient
-            ),
-            ServiceItem(
-                id: "plannedExpenses",
-                route: .plannedExpenses,
-                title: "Планировщик",
-                icon: "loans",
-                gradientColors: AppColors.plannedExpensesGradient
             ),
             ServiceItem(
                 id: "cashflow",

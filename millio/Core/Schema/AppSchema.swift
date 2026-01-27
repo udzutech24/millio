@@ -46,29 +46,9 @@ struct AppSchema {
             modelTypes.append(Credit.self)
         }
         
-        // Явно добавляем модели Habit
-        if !modelTypes.contains(where: { $0 == Habit.self }) {
-            modelTypes.append(Habit.self)
-        }
-        
-        // Явно добавляем модели HabitEntry
-        if !modelTypes.contains(where: { $0 == HabitEntry.self }) {
-            modelTypes.append(HabitEntry.self)
-        }
-        
-        // Явно добавляем модели Debt
-        if !modelTypes.contains(where: { $0 == Debt.self }) {
-            modelTypes.append(Debt.self)
-        }
-        
         // Явно добавляем модели Investment
         if !modelTypes.contains(where: { $0 == Investment.self }) {
             modelTypes.append(Investment.self)
-        }
-        
-        // Явно добавляем модели PlannedExpense
-        if !modelTypes.contains(where: { $0 == PlannedExpense.self }) {
-            modelTypes.append(PlannedExpense.self)
         }
         
         // Явно добавляем модели FinanceGroup

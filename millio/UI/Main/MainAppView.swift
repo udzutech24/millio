@@ -172,16 +172,10 @@ struct MainAppView: View {
             CashbackView()
         case .credits:
             CreditsView()
-        case .habits:
-            HabitsView()
         case .cardIndex:
             CardIndexView()
-        case .debts:
-            DebtsView()
         case .investments:
             InvestmentsView()
-        case .plannedExpenses:
-            PlannedExpensesView()
         case .cashflow:
             CashflowView()
         case .profile:
