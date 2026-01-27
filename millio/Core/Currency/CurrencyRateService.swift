@@ -7,16 +7,22 @@
 
 import Foundation
 
+// MARK: - Currency Rate Service Protocol
+
+/// Протокол сервиса курсов валют для dependency injection
+@MainActor
+protocol CurrencyRateServiceProtocol {
+    func getRate(from: String, to: String) async -> Double?
+    func convert(amount: Double, from: String, to: String) async -> Double?
+    func forceRefreshRates() async
+}
+
 // MARK: - Currency Rate Service
 
 /// Общий сервис для получения курсов валют
-/// Использует тот же источник курсов, что и конвертер валют
 /// Соответствует принципам Offline-First: кэширует курсы и работает без интернета
-
-/// Общий сервис для получения курсов валют
-/// Использует тот же источник курсов, что и конвертер валют
 @MainActor
-final class CurrencyRateService {
+final class CurrencyRateService: CurrencyRateServiceProtocol {
     static let shared = CurrencyRateService()
     
     private var cachedRates: [String: Double] = ["USD": 1.0]

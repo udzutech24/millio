@@ -191,7 +191,10 @@ final class FinanceViewModel: ViewModelProtocol {
     @Published var state = FinanceState()
     
     let modelContext: ModelContext
-    
+
+    /// Сервис курсов валют (внедряется для тестируемости)
+    let currencyService: CurrencyRateServiceProtocol
+
     private let defaults = UserDefaults.standard
     
     private var storedDisplayCurrency: String {
@@ -223,16 +226,19 @@ final class FinanceViewModel: ViewModelProtocol {
         set { defaults.set(newValue, forKey: "finance_amount_hidden") }
     }
     
-    init(modelContext: ModelContext) {
+    init(modelContext: ModelContext, currencyService: CurrencyRateServiceProtocol? = nil, skipInitialLoad: Bool = false) {
         self.modelContext = modelContext
+        self.currencyService = currencyService ?? CurrencyRateService.shared
         state.displayCurrency = storedDisplayCurrency
         // По умолчанию дополнительная валюта - USD
         state.secondaryDisplayCurrency = storedSecondaryDisplayCurrency
         state.isSavingsGoalEnabled = storedSavingsGoalEnabled
         state.savingsGoalAmount = storedSavingsGoalAmount
         state.isAmountHidden = storedAmountHidden
-        loadGroups()
-        loadAccounts()
+        if !skipInitialLoad {
+            loadGroups()
+            loadAccounts()
+        }
     }
     
     func handle(_ action: FinanceAction) {
@@ -508,7 +514,7 @@ final class FinanceViewModel: ViewModelProtocol {
             if groupCurrency == displayCurrency {
                 total += groupTotalInGroupCurrency
             } else {
-                if let rate = await CurrencyRateService.shared.getRate(from: groupCurrency, to: displayCurrency), rate > 0 {
+                if let rate = await currencyService.getRate(from: groupCurrency, to: displayCurrency), rate > 0 {
                     total += groupTotalInGroupCurrency * rate
                 } else {
                     // Если курс недоступен, просто пропускаем сумму этой группы и добавляем предупреждение
@@ -534,7 +540,7 @@ final class FinanceViewModel: ViewModelProtocol {
                 if groupCurrency == secondaryCurrency {
                     secondaryTotal += groupTotalInGroupCurrency
                 } else {
-                    if let rate = await CurrencyRateService.shared.getRate(from: groupCurrency, to: secondaryCurrency), rate > 0 {
+                    if let rate = await currencyService.getRate(from: groupCurrency, to: secondaryCurrency), rate > 0 {
                         secondaryTotal += groupTotalInGroupCurrency * rate
                     } else {
                         warnings.append("Курс конвертации \(groupCurrency) → \(secondaryCurrency) недоступен. Некоторые суммы не учтены, потому что выбранная API не поддерживает эти валюты.")
@@ -573,7 +579,7 @@ final class FinanceViewModel: ViewModelProtocol {
         // Это гарантирует, что все необходимые курсы будут доступны перед расчетом
         if !allCurrenciesNeeded.isEmpty && allCurrenciesNeeded.count > 1 {
             // Принудительно обновляем курсы из API перед расчетом
-            await CurrencyRateService.shared.forceRefreshRates()
+            await currencyService.forceRefreshRates()
         }
         
         // Предзагружаем курсы для всех необходимых валют через USD
@@ -581,7 +587,7 @@ final class FinanceViewModel: ViewModelProtocol {
         for neededCurrency in allCurrenciesNeeded {
             if neededCurrency != "USD" {
                 // Запрашиваем курс, что автоматически загрузит его из API, если нужно
-                _ = await CurrencyRateService.shared.getRate(from: "USD", to: neededCurrency)
+                _ = await currencyService.getRate(from: "USD", to: neededCurrency)
             }
         }
         
@@ -597,7 +603,7 @@ final class FinanceViewModel: ViewModelProtocol {
             } else {
                 // Конвертируем валюту в целевую валюту группы
                 // Сначала проверяем доступность курса
-                let rate = await CurrencyRateService.shared.getRate(from: amount.currency, to: currency)
+                let rate = await currencyService.getRate(from: amount.currency, to: currency)
                 
                 if let rate = rate, rate > 0 {
                     // Курс доступен - выполняем конвертацию
@@ -708,7 +714,7 @@ final class FinanceViewModel: ViewModelProtocol {
         state.isLoadingRates = true
         defer { state.isLoadingRates = false }
         
-        _ = await CurrencyRateService.shared.getRate(from: "USD", to: "RUB")
+        _ = await currencyService.getRate(from: "USD", to: "RUB")
         await calculateTotalAmountAsync()
     }
     
