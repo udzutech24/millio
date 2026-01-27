@@ -38,7 +38,7 @@
 
 3. **ModelContext в View слое**
    - Во многих экранах `ModelContext` используется для инициализации ViewModel/репозиториев
-     (например, `ProfileView`, `RestoreView`, `CardIndexView`).
+     (например, `ProfileView`, `RestoreView`, `FinancesView`).
 
 4. **Restore не запускается автоматически**
    - Экран восстановления открывается вручную из профиля.

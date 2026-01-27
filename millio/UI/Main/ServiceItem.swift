@@ -40,27 +40,6 @@ struct ServiceItem: Identifiable, Equatable {
                 gradientColors: AppColors.cashbackGradient
             ),
             ServiceItem(
-                id: "credits",
-                route: .credits,
-                title: "Кредиты",
-                icon: "loans",
-                gradientColors: AppColors.creditsGradient
-            ),
-            ServiceItem(
-                id: "cards",
-                route: .cardIndex,
-                title: "Картотека",
-                icon: "files",
-                gradientColors: AppColors.cardIndexGradient
-            ),
-            ServiceItem(
-                id: "investments",
-                route: .investments,
-                title: "Активы",
-                icon: "loans",
-                gradientColors: AppColors.investmentsGradient
-            ),
-            ServiceItem(
                 id: "cashflow",
                 route: .cashflow,
                 title: "Кэшфлоу",
