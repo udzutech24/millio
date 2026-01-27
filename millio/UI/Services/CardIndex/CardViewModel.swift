@@ -300,6 +300,7 @@ final class CardViewModel: ViewModelProtocol {
         do {
             try modelContext.save()
             loadCards()
+            EventBus.shared.publish(FinanceEvent.cardsUpdated)
         } catch {
             AppLogger.log(.error, category: "Card", "Failed to delete card: \(error.localizedDescription)")
         }
@@ -312,6 +313,7 @@ final class CardViewModel: ViewModelProtocol {
         do {
             try modelContext.save()
             loadCards()
+            EventBus.shared.publish(FinanceEvent.cardsUpdated)
         } catch {
             AppLogger.log(.error, category: "Card", "Failed to toggle favorite: \(error.localizedDescription)")
         }
@@ -366,6 +368,7 @@ final class CardViewModel: ViewModelProtocol {
             loadCards()
             state.showCardEditor = false
             state.editingCard = nil
+            EventBus.shared.publish(FinanceEvent.cardsUpdated)
         } catch {
             AppLogger.log(.error, category: "Card", "Failed to save card: \(error.localizedDescription)")
         }

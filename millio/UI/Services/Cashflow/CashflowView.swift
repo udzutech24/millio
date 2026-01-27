@@ -32,6 +32,9 @@ struct CashflowView: View {
             if viewModel == nil {
                 viewModel = CashflowViewModel(modelContext: modelContext)
             }
+            // Перезагружаем данные при каждом появлении экрана
+            viewModel?.handle(.loadCards)
+            viewModel?.handle(.loadTransactions)
         }
     }
 }
@@ -671,4 +674,3 @@ private struct CashflowActionButton: View {
         .buttonStyle(.plain)
     }
 }
-

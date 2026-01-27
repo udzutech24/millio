@@ -429,4 +429,46 @@ struct FinanceViewModelTests {
         #expect(accountIDs.contains(credit.creditUniqueID))
         #expect(accountIDs.contains(investment.investmentUniqueID))
     }
+
+    @Test("Удаление карты из финансов публикует событие обновления карт")
+    func testDeleteCardPublishesCardsUpdatedEvent() throws {
+        let modelContext = try createTestModelContext()
+
+        let group = FinanceGroup(name: "Группа", colorHex: "#123456")
+        modelContext.insert(group)
+
+        let card = Card(
+            name: "Карта для удаления",
+            cardNumber: "0000",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 10.0
+        )
+        modelContext.insert(card)
+
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        modelContext.insert(account)
+
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+
+        var didPublish = false
+        let subscriptionID = EventBus.shared.subscribe { event in
+            if case FinanceEvent.cardsUpdated = event {
+                didPublish = true
+            }
+        }
+        defer { EventBus.shared.unsubscribe(subscriptionID) }
+
+        viewModel.handle(.deleteAccountPermanently(account))
+
+        #expect(didPublish, "При удалении карты должно публиковаться событие обновления списка карт")
+    }
 }

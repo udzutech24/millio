@@ -926,6 +926,7 @@ final class FinanceViewModel: ViewModelProtocol {
         let accountGroup = state.groups.first { group in
             group.accounts?.contains(where: { $0.accountUniqueID == account.accountUniqueID }) ?? false
         }
+        let isCardAccount = account.accountType == .card
 
         switch account.accountType {
         case .card:
@@ -990,6 +991,9 @@ final class FinanceViewModel: ViewModelProtocol {
                     let total = await calculateGroupTotal(group: group, in: currency)
                     state.groupTotals[group.groupUniqueID] = total
                 }
+            }
+            if isCardAccount {
+                EventBus.shared.publish(FinanceEvent.cardsUpdated)
             }
         } catch {
             AppLogger.log(.error, category: "Finance", "Failed to delete account permanently: \(error.localizedDescription)")

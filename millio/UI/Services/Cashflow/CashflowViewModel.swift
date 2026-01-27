@@ -161,6 +161,7 @@ final class CashflowViewModel: ViewModelProtocol {
     let modelContext: ModelContext
     
     private let defaults = UserDefaults.standard
+    private var eventSubscriptionID: UUID?
     
     private var storedDisplayCurrency: String {
         get { defaults.string(forKey: "cashflow_display_currency") ?? "RUB" }
@@ -173,6 +174,15 @@ final class CashflowViewModel: ViewModelProtocol {
         loadTransactions()
         loadCards()
         loadAvailableCurrencies()
+        subscribeToFinanceEvents()
+    }
+
+    deinit {
+        if let id = eventSubscriptionID {
+            Task { @MainActor in
+                EventBus.shared.unsubscribe(id)
+            }
+        }
     }
     
     func handle(_ action: CashflowAction) {
@@ -181,11 +191,15 @@ final class CashflowViewModel: ViewModelProtocol {
             loadTransactions()
             
         case .addTransaction(let type):
+            // Обновляем список карт перед открытием редактора, чтобы видеть актуальные данные
+            loadCards()
             state.creatingTransactionType = type
             state.editingTransaction = nil
             state.showTransactionEditor = true
             
         case .editTransaction(let transaction):
+            // Обновляем список карт перед редактированием на случай изменений в финансах
+            loadCards()
             state.editingTransaction = transaction
             state.creatingTransactionType = nil
             state.showTransactionEditor = true
@@ -267,6 +281,15 @@ final class CashflowViewModel: ViewModelProtocol {
     private func loadCards() {
         let descriptor = FetchDescriptor<Card>()
         state.availableCards = (try? modelContext.fetch(descriptor)) ?? []
+    }
+
+    private func subscribeToFinanceEvents() {
+        eventSubscriptionID = EventBus.shared.subscribe { [weak self] event in
+            guard let self else { return }
+            if case FinanceEvent.cardsUpdated = event {
+                self.loadCards()
+            }
+        }
     }
     
     private func loadAvailableCurrencies() {
