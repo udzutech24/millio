@@ -71,7 +71,7 @@ struct CardEditorView: View {
                         TextField("Название карты", text: $card.name)
                             .foregroundStyle(AppColors.textPrimary)
 
-                        TextField("Номер карты (последние 4 цифры)", text: Binding(
+                        TextField("Номер карты (последние 4 цифры, необязательно)", text: Binding(
                             get: { card.cardNumber },
                             set: { newValue in
                                 let filtered = newValue.filter { $0.isNumber }
@@ -200,7 +200,7 @@ struct CardEditorView: View {
                             endPoint: .trailing
                         )
                     )
-                    .disabled(card.name.isEmpty || card.cardNumber.isEmpty)
+                    .disabled(card.name.isEmpty)
                 }
 
                 if onDelete != nil, !isNewCard {

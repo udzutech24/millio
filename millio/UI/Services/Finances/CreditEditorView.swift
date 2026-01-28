@@ -18,8 +18,6 @@ struct CreditEditorView: View {
 
     @State private var name: String = ""
     @State private var amountText: String = ""
-    @State private var monthlyPaymentText: String = ""
-    @State private var endDate: Date = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
     @State private var remainingAmountText: String = ""
     @State private var selectedCurrency: String = "RUB"
     @State private var selectedBank: Bank = .other
@@ -60,20 +58,6 @@ struct CreditEditorView: View {
                         ))
                         .keyboardType(.decimalPad)
                         .foregroundStyle(AppColors.textPrimary)
-
-                        TextField("Ежемесячный платеж", text: Binding(
-                            get: { formatNumberForDisplay(monthlyPaymentText) },
-                            set: { newValue in
-                                let normalized = newValue.replacingOccurrences(of: " ", with: "")
-                                    .replacingOccurrences(of: ",", with: ".")
-                                monthlyPaymentText = normalized
-                            }
-                        ))
-                        .keyboardType(.decimalPad)
-                        .foregroundStyle(AppColors.textPrimary)
-
-                        DatePicker("Дата окончания", selection: $endDate, displayedComponents: .date)
-                            .foregroundStyle(AppColors.textPrimary)
 
                         TextField("Остаток долга", text: Binding(
                             get: { formatNumberForDisplay(remainingAmountText) },
@@ -181,16 +165,12 @@ struct CreditEditorView: View {
                 if let editing = viewModel.state.editingCredit {
                     name = editing.name
                     amountText = String(format: "%.2f", editing.amount)
-                    monthlyPaymentText = String(format: "%.2f", editing.monthlyPayment)
-                    endDate = editing.endDate ?? Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
                     remainingAmountText = String(format: "%.2f", editing.remainingAmount)
                     selectedCurrency = editing.currency
                     selectedBank = editing.bank
                     selectedCreditType = editing.creditType
                     isFavorite = editing.isFavorite
                     includeInTotal = editing.includeInTotal
-                } else {
-                    endDate = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
                 }
 
                 loadAvailableCurrencies()
@@ -201,7 +181,6 @@ struct CreditEditorView: View {
     private var isValid: Bool {
         !name.isEmpty &&
         parseNumber(amountText) != nil && parseNumber(amountText)! > 0 &&
-        parseNumber(monthlyPaymentText) != nil && parseNumber(monthlyPaymentText)! > 0 &&
         parseNumber(remainingAmountText) != nil && parseNumber(remainingAmountText)! >= 0
     }
 
@@ -269,10 +248,11 @@ struct CreditEditorView: View {
 
     private func saveCredit() {
         guard let amount = parseNumber(amountText),
-              let monthlyPayment = parseNumber(monthlyPaymentText),
               let remainingAmount = parseNumber(remainingAmountText) else {
             return
         }
+        let endDate = resolvedEndDate()
+        let monthlyPayment = resolvedMonthlyPayment(for: amount)
 
         viewModel.handle(.updateCredit(
             name: name,
@@ -292,5 +272,19 @@ struct CreditEditorView: View {
         } else {
             dismiss()
         }
+    }
+
+    private func resolvedEndDate() -> Date {
+        if let editing = viewModel.state.editingCredit, let endDate = editing.endDate {
+            return endDate
+        }
+        return Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
+    }
+
+    private func resolvedMonthlyPayment(for amount: Double) -> Double {
+        if let editing = viewModel.state.editingCredit {
+            return editing.monthlyPayment
+        }
+        return amount / 12.0
     }
 }

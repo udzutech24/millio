@@ -1792,7 +1792,7 @@ private struct FinanceAddAccountView: View {
             // Проверяем форму создания
             switch selectedAccountType {
             case .card:
-                return cardData != nil && !(cardData?.name.isEmpty ?? true) && !(cardData?.cardNumber.isEmpty ?? true)
+                return cardData != nil && !(cardData?.name.isEmpty ?? true)
             case .credit:
                 return creditData != nil
             case .investment:
@@ -2761,7 +2761,7 @@ private struct InlineCardCreateForm<GroupSection: View>: View {
         return result
     }
     
-    var isValid: Bool { !card.name.isEmpty && !card.cardNumber.isEmpty }
+    var isValid: Bool { !card.name.isEmpty }
     
     var mainContent: some View {
         Group {
@@ -2769,7 +2769,7 @@ private struct InlineCardCreateForm<GroupSection: View>: View {
                 TextField("Название карты", text: $card.name)
                     .foregroundStyle(AppColors.textPrimary)
                 
-                TextField("Номер карты (последние 4 цифры)", text: Binding(
+                TextField("Номер карты (последние 4 цифры, необязательно)", text: Binding(
                     get: { card.cardNumber },
                     set: { newValue in
                         let filtered = newValue.filter { $0.isNumber }
@@ -2908,8 +2908,6 @@ private struct InlineCreditCreateForm<GroupSection: View>: View {
     
     @State private var name: String = ""
     @State private var amountText: String = ""
-    @State private var monthlyPaymentText: String = ""
-    @State private var endDate: Date = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
     @State private var remainingAmountText: String = ""
     @State private var selectedCurrency: String = "RUB"
     @State private var selectedBank: Bank = .other
@@ -2932,14 +2930,15 @@ private struct InlineCreditCreateForm<GroupSection: View>: View {
     var isValid: Bool {
         !name.isEmpty &&
         parseNumber(amountText) != nil && parseNumber(amountText)! > 0 &&
-        parseNumber(monthlyPaymentText) != nil && parseNumber(monthlyPaymentText)! > 0 &&
         parseNumber(remainingAmountText) != nil && parseNumber(remainingAmountText)! >= 0
     }
     
     func getCreditData() -> (name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, includeInTotal: Bool)? {
         guard let amount = parseNumber(amountText),
-              let monthlyPayment = parseNumber(monthlyPaymentText),
               let remainingAmount = parseNumber(remainingAmountText) else { return nil }
+        // Дефолты для упрощенной формы: срок 12 месяцев от текущей даты
+        let endDate = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
+        let monthlyPayment = amount / 12.0
         return (name, amount, monthlyPayment, endDate, remainingAmount, selectedCurrency, selectedBank, selectedCreditType, isFavorite, includeInTotal)
     }
     
@@ -2964,20 +2963,6 @@ private struct InlineCreditCreateForm<GroupSection: View>: View {
                 ))
                 .keyboardType(.decimalPad)
                 .foregroundStyle(AppColors.textPrimary)
-                
-                TextField("Ежемесячный платеж", text: Binding(
-                    get: { formatNumberForDisplay(monthlyPaymentText) },
-                    set: { newValue in
-                        let normalized = newValue.replacingOccurrences(of: " ", with: "")
-                            .replacingOccurrences(of: ",", with: ".")
-                        monthlyPaymentText = normalized
-                    }
-                ))
-                .keyboardType(.decimalPad)
-                .foregroundStyle(AppColors.textPrimary)
-                
-                DatePicker("Дата окончания", selection: $endDate, displayedComponents: .date)
-                    .foregroundStyle(AppColors.textPrimary)
                 
                 TextField("Остаток долга", text: Binding(
                     get: { formatNumberForDisplay(remainingAmountText) },
@@ -3050,8 +3035,6 @@ private struct InlineCreditCreateForm<GroupSection: View>: View {
         .onAppear { loadAvailableCurrencies() }
         .onChange(of: name) { _, _ in onCreditDataChanged(getCreditData()) }
         .onChange(of: amountText) { _, _ in onCreditDataChanged(getCreditData()) }
-        .onChange(of: monthlyPaymentText) { _, _ in onCreditDataChanged(getCreditData()) }
-        .onChange(of: endDate) { _, _ in onCreditDataChanged(getCreditData()) }
         .onChange(of: remainingAmountText) { _, _ in onCreditDataChanged(getCreditData()) }
         .onChange(of: selectedCurrency) { _, _ in onCreditDataChanged(getCreditData()) }
         .onChange(of: selectedBank) { _, _ in onCreditDataChanged(getCreditData()) }
