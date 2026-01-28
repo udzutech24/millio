@@ -152,7 +152,17 @@ struct FinanceQuickEditAccountView: View {
         formatter.groupingSeparator = " "
         formatter.usesGroupingSeparator = true
         formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 0
+        
+        // Динамически определяем количество знаков после запятой
+        let fractionalPart = abs(amount.truncatingRemainder(dividingBy: 1))
+        if fractionalPart < 0.0001 {
+            // Целое число - без десятичных знаков
+            formatter.maximumFractionDigits = 0
+        } else {
+            // Для чисел с дробной частью используем 2 знака (стандарт для денежных сумм)
+            formatter.maximumFractionDigits = 2
+        }
+        
         return formatter.string(from: NSNumber(value: amount)) ?? "0"
     }
     

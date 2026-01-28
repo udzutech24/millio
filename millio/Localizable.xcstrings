@@ -698,6 +698,12 @@
             "state" : "new",
             "value" : "Осталось накопить: %1$@ %2$@"
           }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Remaining to save: %1$@ %2$@"
+          }
         }
       }
     },
@@ -709,6 +715,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Осталось: %1$@ %2$@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Remaining: %1$@ %2$@"
           }
         }
       }
@@ -1006,6 +1018,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Текущая сумма: %1$@ %2$@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Current amount: %1$@ %2$@"
           }
         }
       }

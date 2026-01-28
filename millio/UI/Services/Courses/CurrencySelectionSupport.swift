@@ -294,15 +294,55 @@ public struct CurrencyPickerView: View {
     }
 
     @ViewBuilder
-    private func row(code: String, showStar: Bool) -> some View {
+    private func currencyIcon(for code: String) -> some View {
         let c = code.uppercased()
-
-        HStack(spacing: 12) {
+        
+        if CurrencySelectionSupport.isCrypto(c) {
+            // Для криптовалют используем эмодзи через Text
+            let emoji = CurrencySelectionSupport.emoji(for: c)
+            if !emoji.isEmpty {
+                Text(emoji)
+                    .frame(width: 16, height: 16)
+            } else {
+                Image("flag")
+                    .resizable()
+                    .renderingMode(.template)
+                    .foregroundStyle(AppColors.textPrimary)
+                    .frame(width: 16, height: 16)
+            }
+        } else {
+            // Для фиатных валют пытаемся загрузить флаг по коду
+            let flagName = "flag_\(c.lowercased())"
+            #if os(iOS)
+            if UIImage(named: flagName) != nil {
+                Image(flagName)
+                    .resizable()
+                    .renderingMode(.template)
+                    .foregroundStyle(AppColors.textPrimary)
+                    .frame(width: 16, height: 16)
+            } else {
+                Image("flag")
+                    .resizable()
+                    .renderingMode(.template)
+                    .foregroundStyle(AppColors.textPrimary)
+                    .frame(width: 16, height: 16)
+            }
+            #else
             Image("flag")
                 .resizable()
                 .renderingMode(.template)
                 .foregroundStyle(AppColors.textPrimary)
                 .frame(width: 16, height: 16)
+            #endif
+        }
+    }
+
+    @ViewBuilder
+    private func row(code: String, showStar: Bool) -> some View {
+        let c = code.uppercased()
+
+        HStack(spacing: 12) {
+            currencyIcon(for: c)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(c)
