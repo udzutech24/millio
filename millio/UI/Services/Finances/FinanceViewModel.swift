@@ -41,11 +41,20 @@ struct FinanceState {
     /// Показывать ли sheet выбора валюты для отображения
     var showDisplayCurrencySheet: Bool = false
     
+    /// Показывать ли sheet выбора дополнительной валюты для отображения
+    var showSecondaryDisplayCurrencySheet: Bool = false
+    
     /// Валюта для отображения
     var displayCurrency: String = "RUB"
     
+    /// Дополнительная валюта для отображения
+    var secondaryDisplayCurrency: String? = nil
+    
     /// Общая сумма всех групп (в выбранной валюте)
     var totalAmount: Double = 0.0
+    
+    /// Общая сумма всех групп (в дополнительной валюте)
+    var secondaryTotalAmount: Double = 0.0
     
     /// Флаг загрузки курсов
     var isLoadingRates: Bool = false
@@ -59,8 +68,14 @@ struct FinanceState {
     /// Доступные активы
     var availableInvestments: [Investment] = []
     
-    /// ID группы с открытым свайпом (nil = нет открытого свайпа)
-    var openedSwipeGroupID: String? = nil
+    /// Непривязанные карты (не добавленные ни в одну группу)
+    var unattachedCards: [Card] = []
+    
+    /// Непривязанные кредиты (не добавленные ни в одну группу)
+    var unattachedCredits: [Credit] = []
+    
+    /// Непривязанные активы (не добавленные ни в одну группу)
+    var unattachedInvestments: [Investment] = []
     
     /// Показывать ли редактор карты для редактирования
     var showEditCardSheet: Bool = false
@@ -85,6 +100,39 @@ struct FinanceState {
     
     /// Словарь сумм групп по их ID
     var groupTotals: [String: Double] = [:]
+    
+    /// Показывать ли sheet быстрого редактирования суммы счета
+    var showQuickEditAccountSheet: Bool = false
+    
+    /// Счет для быстрого редактирования суммы
+    var quickEditAccount: FinanceAccount? = nil
+    
+    /// Показывать ли динамику группы
+    var showGroupDynamics: Bool = false
+    
+    /// Группа для отображения динамики
+    var selectedGroupForDynamics: FinanceGroup? = nil
+    
+    /// Показывать ли динамику счета
+    var showAccountDynamics: Bool = false
+    
+    /// Счет для отображения динамики
+    var selectedAccountForDynamics: FinanceAccount? = nil
+    
+    /// Показывать ли sheet настроек цели накопления
+    var showSavingsGoalSheet: Bool = false
+    
+    /// Включена ли цель накопления
+    var isSavingsGoalEnabled: Bool = false
+    
+    /// Сумма цели накопления
+    var savingsGoalAmount: Double = 0.0
+    
+    /// Скрыты ли суммы денег (показывать точки вместо цифр)
+    var isAmountHidden: Bool = false
+    
+    /// Сообщение об ошибке или предупреждении при конвертации валют
+    var currencyConversionWarning: String? = nil
 }
 
 // MARK: - Finance Actions
@@ -95,12 +143,13 @@ enum FinanceAction {
     case addGroup
     case editGroup(FinanceGroup)
     case deleteGroup(FinanceGroup)
-    case updateGroup(name: String, colorHex: String, displayCurrency: String?)
+    case updateGroup(name: String, colorHex: String, displayCurrency: String?, isFavorite: Bool, priority: GroupPriority)
     case hideGroupEditor
     case showAddAccountSheet(FinanceGroup?)
     case hideAddAccountSheet
     case addAccountToGroup(accountType: FinanceAccountType, accountID: String, group: FinanceGroup?)
     case removeAccountFromGroup(FinanceAccount)
+    case deleteAccountPermanently(FinanceAccount)
     case showCreateCardSheet
     case hideCreateCardSheet
     case showCreateCreditSheet
@@ -110,14 +159,29 @@ enum FinanceAction {
     case showDisplayCurrencySheet
     case hideDisplayCurrencySheet
     case setDisplayCurrency(String)
-    case setOpenedSwipeGroupID(String?)
-    case moveGroup(from: Int, to: Int)
+    case showSecondaryDisplayCurrencySheet
+    case hideSecondaryDisplayCurrencySheet
+    case setSecondaryDisplayCurrency(String?)
     case toggleGroupExpanded(String)
+    case toggleGroupFavorite(FinanceGroup)
+    case setGroupPriority(FinanceGroup, GroupPriority)
     case setGroupTotal(String, Double)
     case editAccount(FinanceAccount)
     case hideEditCardSheet
     case hideEditCreditSheet
     case hideEditInvestmentSheet
+    case showQuickEditAccountSheet(FinanceAccount)
+    case hideQuickEditAccountSheet
+    case updateAccountAmount(FinanceAccount, Double)
+    case showGroupDynamics(FinanceGroup)
+    case hideGroupDynamics
+    case showAccountDynamics(FinanceAccount)
+    case hideAccountDynamics
+    case showSavingsGoalSheet
+    case hideSavingsGoalSheet
+    case setSavingsGoalEnabled(Bool)
+    case setSavingsGoalAmount(Double)
+    case toggleAmountVisibility
 }
 
 // MARK: - Finance ViewModel
@@ -127,19 +191,56 @@ final class FinanceViewModel: ViewModelProtocol {
     @Published var state = FinanceState()
     
     let modelContext: ModelContext
-    
+
+    /// Сервис курсов валют (внедряется для тестируемости)
+    let currencyService: CurrencyRateServiceProtocol
+
     private let defaults = UserDefaults.standard
+
+    /// Быстрые словари для поиска счетов по ID (O(1) вместо O(n))
+    private var cardByID: [String: Card] = [:]
+    private var creditByID: [String: Credit] = [:]
+    private var investmentByID: [String: Investment] = [:]
     
     private var storedDisplayCurrency: String {
         get { defaults.string(forKey: "finance_display_currency") ?? "RUB" }
         set { defaults.set(newValue, forKey: "finance_display_currency") }
     }
     
-    init(modelContext: ModelContext) {
+    private var storedSecondaryDisplayCurrency: String? {
+        get {
+            defaults.string(forKey: "finance_secondary_display_currency")
+        }
+        set { defaults.set(newValue, forKey: "finance_secondary_display_currency") }
+    }
+    
+    private var storedSavingsGoalEnabled: Bool {
+        get { defaults.bool(forKey: "finance_savings_goal_enabled") }
+        set { defaults.set(newValue, forKey: "finance_savings_goal_enabled") }
+    }
+    
+    private var storedSavingsGoalAmount: Double {
+        get { defaults.double(forKey: "finance_savings_goal_amount") }
+        set { defaults.set(newValue, forKey: "finance_savings_goal_amount") }
+    }
+    
+    private var storedAmountHidden: Bool {
+        get { defaults.bool(forKey: "finance_amount_hidden") }
+        set { defaults.set(newValue, forKey: "finance_amount_hidden") }
+    }
+    
+    init(modelContext: ModelContext, currencyService: CurrencyRateServiceProtocol? = nil, skipInitialLoad: Bool = false) {
         self.modelContext = modelContext
+        self.currencyService = currencyService ?? CurrencyRateService.shared
         state.displayCurrency = storedDisplayCurrency
-        loadGroups()
-        loadAccounts()
+        state.secondaryDisplayCurrency = storedSecondaryDisplayCurrency
+        state.isSavingsGoalEnabled = storedSavingsGoalEnabled
+        state.savingsGoalAmount = storedSavingsGoalAmount
+        state.isAmountHidden = storedAmountHidden
+        if !skipInitialLoad {
+            loadGroups()
+            loadAccounts()
+        }
     }
     
     func handle(_ action: FinanceAction) {
@@ -161,8 +262,8 @@ final class FinanceViewModel: ViewModelProtocol {
         case .deleteGroup(let group):
             deleteGroup(group)
             
-        case .updateGroup(let name, let colorHex, let displayCurrency):
-            updateGroup(name: name, colorHex: colorHex, displayCurrency: displayCurrency)
+        case .updateGroup(let name, let colorHex, let displayCurrency, let isFavorite, let priority):
+            updateGroup(name: name, colorHex: colorHex, displayCurrency: displayCurrency, isFavorite: isFavorite, priority: priority)
             
         case .hideGroupEditor:
             state.showGroupEditor = false
@@ -181,6 +282,8 @@ final class FinanceViewModel: ViewModelProtocol {
             
         case .removeAccountFromGroup(let account):
             removeAccountFromGroup(account)
+        case .deleteAccountPermanently(let account):
+            deleteAccountPermanently(account)
             
         case .showCreateCardSheet:
             state.showCreateCardSheet = true
@@ -206,16 +309,27 @@ final class FinanceViewModel: ViewModelProtocol {
         case .hideDisplayCurrencySheet:
             state.showDisplayCurrencySheet = false
             
+        case .showSecondaryDisplayCurrencySheet:
+            state.showSecondaryDisplayCurrencySheet = true
+            
+        case .hideSecondaryDisplayCurrencySheet:
+            state.showSecondaryDisplayCurrencySheet = false
+            
         case .setDisplayCurrency(let currency):
             state.displayCurrency = currency
             storedDisplayCurrency = currency
-            calculateTotalAmount()
+            Task {
+                await refreshRates()
+                await calculateTotalAmountAsync()
+            }
             
-        case .setOpenedSwipeGroupID(let groupID):
-            state.openedSwipeGroupID = groupID
-            
-        case .moveGroup(let from, let to):
-            moveGroup(from: from, to: to)
+        case .setSecondaryDisplayCurrency(let currency):
+            state.secondaryDisplayCurrency = currency
+            storedSecondaryDisplayCurrency = currency
+            Task {
+                await refreshRates()
+                await calculateTotalAmountAsync()
+            }
             
         case .toggleGroupExpanded(let groupID):
             if state.expandedGroupIDs.contains(groupID) {
@@ -241,42 +355,95 @@ final class FinanceViewModel: ViewModelProtocol {
         case .hideEditInvestmentSheet:
             state.showEditInvestmentSheet = false
             state.editingInvestmentID = nil
+            
+        case .showQuickEditAccountSheet(let account):
+            state.quickEditAccount = account
+            state.showQuickEditAccountSheet = true
+            
+        case .hideQuickEditAccountSheet:
+            state.showQuickEditAccountSheet = false
+            state.quickEditAccount = nil
+            
+        case .updateAccountAmount(let account, let newAmount):
+            updateAccountAmount(account: account, newAmount: newAmount)
+            
+        case .toggleGroupFavorite(let group):
+            group.isFavorite.toggle()
+            group.updatedAt = Date()
+            do {
+                try modelContext.save()
+                loadGroups()
+            } catch {
+                AppLogger.log(.error, category: "Finance", "Failed to toggle group favorite: \(error.localizedDescription)")
+            }
+            
+        case .setGroupPriority(let group, let priority):
+            group.priority = priority
+            group.updatedAt = Date()
+            do {
+                try modelContext.save()
+                loadGroups()
+            } catch {
+                AppLogger.log(.error, category: "Finance", "Failed to set group priority: \(error.localizedDescription)")
+            }
+            
+        case .showGroupDynamics(let group):
+            state.selectedGroupForDynamics = group
+            state.showGroupDynamics = true
+            
+        case .hideGroupDynamics:
+            state.showGroupDynamics = false
+            state.selectedGroupForDynamics = nil
+            
+        case .showAccountDynamics(let account):
+            state.selectedAccountForDynamics = account
+            state.showAccountDynamics = true
+            
+        case .hideAccountDynamics:
+            state.showAccountDynamics = false
+            state.selectedAccountForDynamics = nil
+            
+        case .showSavingsGoalSheet:
+            state.showSavingsGoalSheet = true
+            
+        case .hideSavingsGoalSheet:
+            state.showSavingsGoalSheet = false
+            
+        case .setSavingsGoalEnabled(let enabled):
+            state.isSavingsGoalEnabled = enabled
+            storedSavingsGoalEnabled = enabled
+            
+        case .setSavingsGoalAmount(let amount):
+            state.savingsGoalAmount = amount
+            storedSavingsGoalAmount = amount
+            
+        case .toggleAmountVisibility:
+            state.isAmountHidden.toggle()
+            storedAmountHidden = state.isAmountHidden
     }
     }
     
     // MARK: - Private Methods
     
     private func loadGroups() {
-        let descriptor = FetchDescriptor<FinanceGroup>(
-            sortBy: [
-                SortDescriptor(\.order, order: .forward),
-                SortDescriptor(\.createdAt, order: .forward)
-            ]
-        )
+        let descriptor = FetchDescriptor<FinanceGroup>()
         if let groups = try? modelContext.fetch(descriptor) {
-            state.groups = groups
+            // Сортируем: сначала избранные, потом по приоритету, потом по дате создания
+            state.groups = groups.sorted { group1, group2 in
+                // Сначала избранные
+                if group1.isFavorite != group2.isFavorite {
+                    return group1.isFavorite
+                }
+                // Потом по приоритету
+                if group1.priority.sortOrder != group2.priority.sortOrder {
+                    return group1.priority.sortOrder < group2.priority.sortOrder
+                }
+                // Потом по дате создания
+                return group1.createdAt < group2.createdAt
+            }
+            // Обновляем списки непривязанных элементов после загрузки групп
+            updateUnattachedItems()
             calculateTotalAmount()
-        }
-    }
-    
-    private func moveGroup(from: Int, to: Int) {
-        guard from >= 0, to >= 0, from < state.groups.count, to < state.groups.count, from != to else {
-            return
-        }
-        
-        let group = state.groups[from]
-        state.groups.remove(at: from)
-        state.groups.insert(group, at: to)
-        
-        // Обновляем порядок всех групп
-        for (index, group) in state.groups.enumerated() {
-            group.order = index
-        }
-        
-        do {
-            try modelContext.save()
-        } catch {
-            AppLogger.log(.error, category: "Finance", "Failed to save group order: \(error.localizedDescription)")
         }
     }
     
@@ -290,11 +457,106 @@ final class FinanceViewModel: ViewModelProtocol {
         
         let investmentDescriptor = FetchDescriptor<Investment>()
         state.availableInvestments = (try? modelContext.fetch(investmentDescriptor)) ?? []
+
+        rebuildAccountCaches()
+        cleanupInvalidFinanceAccounts()
         
         // Обновляем менеджеры
         CardManager.shared.setup(modelContext: modelContext)
         CreditManager.shared.setup(modelContext: modelContext)
         InvestmentManager.shared.setup(modelContext: modelContext)
+        
+        // Вычисляем непривязанные элементы
+        updateUnattachedItems()
+    }
+    
+    /// Обновить списки непривязанных элементов
+    private func updateUnattachedItems() {
+        // Получаем все привязанные счета из всех групп
+        var attachedCardIDs: Set<String> = []
+        var attachedCreditIDs: Set<String> = []
+        var attachedInvestmentIDs: Set<String> = []
+        
+        for group in state.groups {
+            guard let accounts = group.accounts else { continue }
+            for account in accounts {
+                switch account.accountType {
+                case .card:
+                    attachedCardIDs.insert(account.accountID)
+                case .credit:
+                    attachedCreditIDs.insert(account.accountID)
+                case .investment:
+                    attachedInvestmentIDs.insert(account.accountID)
+                }
+            }
+        }
+        
+        // Фильтруем непривязанные элементы
+        state.unattachedCards = state.availableCards.filter { !attachedCardIDs.contains($0.cardUniqueID) }
+        state.unattachedCredits = state.availableCredits.filter { !attachedCreditIDs.contains($0.creditUniqueID) }
+        state.unattachedInvestments = state.availableInvestments.filter { !attachedInvestmentIDs.contains($0.investmentUniqueID) }
+    }
+
+    /// Перестраиваем кэш счетов по ID после загрузки данных
+    private func rebuildAccountCaches() {
+        cardByID = [:]
+        creditByID = [:]
+        investmentByID = [:]
+
+        for card in state.availableCards {
+            cardByID[card.cardUniqueID] = card
+        }
+        for credit in state.availableCredits {
+            creditByID[credit.creditUniqueID] = credit
+        }
+        for investment in state.availableInvestments {
+            investmentByID[investment.investmentUniqueID] = investment
+        }
+    }
+
+    /// Удаляем "сиротские" связи, чтобы не накапливать мусор в базе
+    private func cleanupInvalidFinanceAccounts() {
+        let descriptor = FetchDescriptor<FinanceAccount>()
+        guard let accounts = try? modelContext.fetch(descriptor) else { return }
+
+        var removedCount = 0
+
+        for account in accounts {
+            // Если счет больше не связан с группой — удаляем запись связи
+            if account.group == nil {
+                modelContext.delete(account)
+                removedCount += 1
+                continue
+            }
+
+            // Если целевой объект не найден — удаляем связь
+            switch account.accountType {
+            case .card:
+                if cardByID[account.accountID] == nil {
+                    modelContext.delete(account)
+                    removedCount += 1
+                }
+            case .credit:
+                if creditByID[account.accountID] == nil {
+                    modelContext.delete(account)
+                    removedCount += 1
+                }
+            case .investment:
+                if investmentByID[account.accountID] == nil {
+                    modelContext.delete(account)
+                    removedCount += 1
+                }
+            }
+        }
+
+        guard removedCount > 0 else { return }
+
+        do {
+            try modelContext.save()
+            AppLogger.log(.info, category: "Finance", "Removed \(removedCount) invalid finance account links")
+        } catch {
+            AppLogger.log(.error, category: "Finance", "Failed to cleanup finance accounts: \(error.localizedDescription)")
+        }
     }
     
     private func calculateTotalAmount() {
@@ -306,14 +568,86 @@ final class FinanceViewModel: ViewModelProtocol {
     func calculateTotalAmountAsync() async {
         let displayCurrency = state.displayCurrency
         var total: Double = 0.0
+        var warnings: [String] = []
         
-        // Проходим по всем группам
+        state.currencyConversionWarning = nil
+        
+        // Собираем все валюты из всех групп
+        var allCurrenciesNeeded = Set<String>()
         for group in state.groups {
-            let groupTotal = await calculateGroupTotal(group: group, in: displayCurrency)
-            total += groupTotal
+            let currencies = await collectCurrenciesFromGroup(group: group)
+            allCurrenciesNeeded.formUnion(currencies)
+            // Добавляем валюту группы
+            let groupCurrency = group.displayCurrency ?? state.displayCurrency
+            allCurrenciesNeeded.insert(groupCurrency)
+        }
+        // Добавляем displayCurrency
+        allCurrenciesNeeded.insert(displayCurrency)
+        // Добавляем secondaryDisplayCurrency, если задан
+        if let secondaryCurrency = state.secondaryDisplayCurrency {
+            allCurrenciesNeeded.insert(secondaryCurrency)
+        }
+        
+        // Если есть несколько валют, обновляем курсы один раз
+        if allCurrenciesNeeded.count > 1 {
+            await currencyService.forceRefreshRates()
+        }
+        
+        // Для каждого group вычисляем сумму в его валюте (или в state.displayCurrency, если не задана)
+        for group in state.groups {
+            let groupCurrency = group.displayCurrency ?? state.displayCurrency
+            let groupTotalInGroupCurrency = await calculateGroupTotal(group: group, in: groupCurrency)
+            
+            // Конвертируем сумму группы в displayCurrency если нужно
+            if groupCurrency == displayCurrency {
+                total += groupTotalInGroupCurrency
+            } else {
+                if let rate = await currencyService.getRate(from: groupCurrency, to: displayCurrency), rate > 0 {
+                    total += groupTotalInGroupCurrency * rate
+                } else {
+                    // Если курс недоступен, просто пропускаем сумму этой группы и добавляем предупреждение
+                    warnings.append("Курс конвертации \(groupCurrency) → \(displayCurrency) недоступен. Некоторые суммы не учтены, потому что выбранная API не поддерживает эти валюты.")
+                    AppLogger.log(
+                        .warning,
+                        category: "Finance",
+                        "[Конвертация] Не удалось конвертировать сумму группы \"\(group.name)\" из \(groupCurrency) в \(displayCurrency). Сумма проигнорирована."
+                    )
+                }
+            }
         }
         
         state.totalAmount = total
+        
+        // Рассчитываем сумму в дополнительной валюте, если она задана
+        if let secondaryCurrency = state.secondaryDisplayCurrency {
+            var secondaryTotal: Double = 0.0
+            for group in state.groups {
+                let groupCurrency = group.displayCurrency ?? state.displayCurrency
+                let groupTotalInGroupCurrency = await calculateGroupTotal(group: group, in: groupCurrency)
+                
+                if groupCurrency == secondaryCurrency {
+                    secondaryTotal += groupTotalInGroupCurrency
+                } else {
+                    if let rate = await currencyService.getRate(from: groupCurrency, to: secondaryCurrency), rate > 0 {
+                        secondaryTotal += groupTotalInGroupCurrency * rate
+                    } else {
+                        warnings.append("Курс конвертации \(groupCurrency) → \(secondaryCurrency) недоступен. Некоторые суммы не учтены, потому что выбранная API не поддерживает эти валюты.")
+                        AppLogger.log(
+                            .warning,
+                            category: "Finance",
+                            "[Конвертация] Не удалось конвертировать сумму группы \"\(group.name)\" из \(groupCurrency) в \(secondaryCurrency). Сумма проигнорирована."
+                        )
+                    }
+                }
+            }
+            state.secondaryTotalAmount = secondaryTotal
+        } else {
+            state.secondaryTotalAmount = 0.0
+        }
+        
+        if !warnings.isEmpty {
+            state.currencyConversionWarning = warnings.joined(separator: "\n")
+        }
     }
     
     /// Подсчитать сумму группы в указанной валюте
@@ -322,19 +656,42 @@ final class FinanceViewModel: ViewModelProtocol {
         
         guard let accounts = group.accounts else { return 0.0 }
         
+        // Собираем все уникальные валюты из счетов группы
+        let currencies = await collectCurrenciesFromGroup(group: group)
+        
+        // Собираем все валюты, для которых нужны курсы (включая целевую)
+        var allCurrenciesNeeded = Set(currencies)
+        allCurrenciesNeeded.insert(currency)
+        
+        // Предзагружаем курсы для всех необходимых валют через USD
+        // Курсы уже обновлены на верхнем уровне, здесь только предзагрузка
+        for neededCurrency in allCurrenciesNeeded {
+            if neededCurrency != "USD" {
+                // Запрашиваем курс, что автоматически загрузит его из API, если нужно
+                _ = await currencyService.getRate(from: "USD", to: neededCurrency)
+            }
+        }
+        
         for account in accounts {
             let amount = await getAccountAmount(account: account)
+            
+            // Пропускаем нулевые значения
+            guard abs(amount.value) > 0.01 else { continue }
+            
             if amount.currency == currency {
+                // Валюта совпадает с целевой - добавляем напрямую
                 total += amount.value
             } else {
-                if let converted = await CurrencyRateService.shared.convert(
-                    amount: amount.value,
-                    from: amount.currency,
-                    to: currency
-                ) {
+                // Конвертируем валюту в целевую валюту группы
+                // Сначала проверяем доступность курса
+                let rate = await currencyService.getRate(from: amount.currency, to: currency)
+                
+                if let rate = rate, rate > 0 {
+                    // Курс доступен - выполняем конвертацию
+                    let converted = amount.value * rate
                     total += converted
                 } else {
-                    total += amount.value
+                    // Курс недоступен - пропускаем сумму
                 }
             }
         }
@@ -342,24 +699,43 @@ final class FinanceViewModel: ViewModelProtocol {
         return total
     }
     
+    /// Собрать все уникальные валюты из счетов группы
+    private func collectCurrenciesFromGroup(group: FinanceGroup) async -> Set<String> {
+        var currencies: Set<String> = []
+        
+        guard let accounts = group.accounts else { return currencies }
+        
+        for account in accounts {
+            let amount = await getAccountAmount(account: account)
+            // Добавляем валюту только если сумма не нулевая
+            if abs(amount.value) > 0.01 {
+                currencies.insert(amount.currency)
+            }
+        }
+        
+        return currencies
+    }
+    
     /// Получить сумму счета
     private func getAccountAmount(account: FinanceAccount) async -> (value: Double, currency: String) {
         switch account.accountType {
         case .card:
-            if let card = state.availableCards.first(where: { $0.cardUniqueID == account.accountID }) {
+            if let card = cardByID[account.accountID] {
                 // Учитываем только если includeInTotal = true
                 guard card.includeInTotal else { return (0.0, card.currency) }
                 
-                // Для кредитных карт учитываем долг (лимит - баланс)
+                // Для кредитных карт учитываем задолженность как отрицательное значение (вычитаем из общего счета)
                 if card.cardType == .credit, let limit = card.creditLimit {
                     let debt = max(0, limit - card.balance)
-                    return (card.balance - debt, card.currency)
+                    // Вычитаем задолженность из общего счета
+                    return (-debt, card.currency)
                 }
+                // Для дебетовых карт учитываем баланс как положительное значение
                 return (card.balance, card.currency)
             }
             
         case .credit:
-            if let credit = state.availableCredits.first(where: { $0.creditUniqueID == account.accountID }) {
+            if let credit = creditByID[account.accountID] {
                 // Учитываем только если includeInTotal = true
                 guard credit.includeInTotal else { return (0.0, credit.currency) }
                 
@@ -368,7 +744,7 @@ final class FinanceViewModel: ViewModelProtocol {
             }
             
         case .investment:
-            if let investment = state.availableInvestments.first(where: { $0.investmentUniqueID == account.accountID }) {
+            if let investment = investmentByID[account.accountID] {
                 // Учитываем только если includeInTotal = true
                 if investment.includeInTotal {
                     let value = investment.investmentType == .positive ? investment.amount : -investment.amount
@@ -381,23 +757,34 @@ final class FinanceViewModel: ViewModelProtocol {
     }
     
     /// Получить информацию о счете для отображения
-    func getAccountInfo(account: FinanceAccount) -> (name: String, amount: Double, currency: String, icon: String)? {
+    func getAccountInfo(account: FinanceAccount) -> (name: String, amount: Double, currency: String, icon: String, isCreditCardDebt: Bool)? {
         switch account.accountType {
         case .card:
-            if let card = state.availableCards.first(where: { $0.cardUniqueID == account.accountID }) {
-                let amount = card.cardType == .credit && card.creditLimit != nil ? 
-                    card.balance - max(0, card.creditLimit! - card.balance) : card.balance
-                return (card.name, amount, card.currency, card.cardType.icon)
+            if let card = cardByID[account.accountID] {
+                // Для кредитных карт показываем задолженность (debt)
+                let amount: Double
+                let isCreditCardDebt: Bool
+                if card.cardType == .credit, let limit = card.creditLimit {
+                    // Для кредитных карт используем актуальный сохраненный баланс
+                    // Задолженность = лимит - баланс
+                    amount = max(0, limit - card.balance)
+                    isCreditCardDebt = true
+                } else {
+                    // Для дебетовых карт показываем баланс
+                    amount = card.balance
+                    isCreditCardDebt = false
+                }
+                return (card.name, amount, card.currency, card.cardType.icon, isCreditCardDebt)
             }
             
         case .credit:
-            if let credit = state.availableCredits.first(where: { $0.creditUniqueID == account.accountID }) {
-                return (credit.name, credit.remainingAmount, credit.currency, credit.creditType.icon)
+            if let credit = creditByID[account.accountID] {
+                return (credit.name, credit.remainingAmount, credit.currency, credit.creditType.icon, false)
             }
             
         case .investment:
-            if let investment = state.availableInvestments.first(where: { $0.investmentUniqueID == account.accountID }) {
-                return (investment.name, investment.amount, investment.currency, investment.category.icon)
+            if let investment = investmentByID[account.accountID] {
+                return (investment.name, investment.amount, investment.currency, investment.category.icon, false)
             }
         }
         
@@ -408,21 +795,15 @@ final class FinanceViewModel: ViewModelProtocol {
         state.isLoadingRates = true
         defer { state.isLoadingRates = false }
         
-        _ = await CurrencyRateService.shared.getRate(from: "USD", to: "RUB")
+        _ = await currencyService.getRate(from: "USD", to: "RUB")
         await calculateTotalAmountAsync()
     }
     
     private func deleteGroup(_ group: FinanceGroup) {
-        // Перемещаем все счета из удаляемой группы в первую доступную группу
-        if let accounts = group.accounts, !accounts.isEmpty {
-            // Находим первую доступную группу (не удаляемую)
-            if let targetGroup = state.groups.first(where: { $0.id != group.id }) {
-                for account in accounts {
-                    account.group = targetGroup
-                }
-            } else {
-                // Если нет других групп, удаляем счета вместе с группой
-                // (они будут удалены каскадно через deleteRule: .cascade)
+        // Отвязываем все счета от группы (но не удаляем их)
+        if let accounts = group.accounts {
+            for account in accounts {
+                account.group = nil
             }
         }
         
@@ -431,23 +812,26 @@ final class FinanceViewModel: ViewModelProtocol {
         do {
             try modelContext.save()
             loadGroups()
+            updateUnattachedItems() // Обновляем списки непривязанных элементов после удаления группы
         } catch {
             AppLogger.log(.error, category: "Finance", "Failed to delete group: \(error.localizedDescription)")
         }
     }
     
-    private func updateGroup(name: String, colorHex: String, displayCurrency: String?) {
+    private func updateGroup(name: String, colorHex: String, displayCurrency: String?, isFavorite: Bool, priority: GroupPriority) {
         let groupToUpdate: FinanceGroup
         if let existing = state.editingGroup {
             existing.name = name
             existing.colorHex = colorHex
             existing.displayCurrency = displayCurrency
+            existing.isFavorite = isFavorite
+            existing.priority = priority
             existing.updatedAt = Date()
             groupToUpdate = existing
         } else {
             // Находим максимальный order
             let maxOrder = state.groups.map { $0.order }.max() ?? -1
-            let newGroup = FinanceGroup(name: name, colorHex: colorHex, order: maxOrder + 1)
+            let newGroup = FinanceGroup(name: name, colorHex: colorHex, order: maxOrder + 1, isFavorite: isFavorite, priority: priority)
             newGroup.displayCurrency = displayCurrency
             modelContext.insert(newGroup)
             groupToUpdate = newGroup
@@ -503,6 +887,17 @@ final class FinanceViewModel: ViewModelProtocol {
         do {
             try modelContext.save()
             loadGroups()
+            loadAccounts() // Обновляем список счетов
+            updateUnattachedItems() // Обновляем списки непривязанных элементов
+            calculateTotalAmount() // Пересчитываем общую сумму
+            
+            // Пересчитываем сумму группы, в которую был добавлен счет
+            Task {
+                let currency = targetGroup.displayCurrency ?? state.displayCurrency
+                let total = await calculateGroupTotal(group: targetGroup, in: currency)
+                state.groupTotals[targetGroup.groupUniqueID] = total
+            }
+            
             state.showAddAccountSheet = false
             state.selectedGroupForAccount = nil
         } catch {
@@ -511,13 +906,108 @@ final class FinanceViewModel: ViewModelProtocol {
     }
     
     private func removeAccountFromGroup(_ account: FinanceAccount) {
+        // Находим группу, к которой принадлежал счет
+        let accountGroup = state.groups.first { group in
+            group.accounts?.contains(where: { $0.accountUniqueID == account.accountUniqueID }) ?? false
+        }
+        
         modelContext.delete(account)
         
         do {
             try modelContext.save()
             loadGroups()
+            loadAccounts() // Обновляем список счетов
+            updateUnattachedItems() // Обновляем списки непривязанных элементов
+            calculateTotalAmount() // Пересчитываем общую сумму
+            
+            // Пересчитываем сумму группы, из которой был удален счет
+            if let group = accountGroup {
+                Task {
+                    let currency = group.displayCurrency ?? state.displayCurrency
+                    let total = await calculateGroupTotal(group: group, in: currency)
+                    state.groupTotals[group.groupUniqueID] = total
+                }
+            }
         } catch {
             AppLogger.log(.error, category: "Finance", "Failed to remove account: \(error.localizedDescription)")
+        }
+    }
+
+    private func deleteAccountPermanently(_ account: FinanceAccount) {
+        let accountGroup = state.groups.first { group in
+            group.accounts?.contains(where: { $0.accountUniqueID == account.accountUniqueID }) ?? false
+        }
+        let isCardAccount = account.accountType == .card
+
+        switch account.accountType {
+        case .card:
+            if let card = cardByID[account.accountID] {
+                let cardID = card.cardUniqueID
+                let descriptor = FetchDescriptor<CashflowTransaction>(
+                    predicate: #Predicate<CashflowTransaction> { transaction in
+                        transaction.cardID == cardID || transaction.toCardID == cardID
+                    }
+                )
+                if let transactions = try? modelContext.fetch(descriptor) {
+                    for transaction in transactions {
+                        modelContext.delete(transaction)
+                    }
+                }
+                modelContext.delete(card)
+            }
+        case .credit:
+            if let credit = creditByID[account.accountID] {
+                let creditID = credit.creditUniqueID
+                let descriptor = FetchDescriptor<CashflowTransaction>(
+                    predicate: #Predicate<CashflowTransaction> { transaction in
+                        transaction.creditID == creditID
+                    }
+                )
+                if let transactions = try? modelContext.fetch(descriptor) {
+                    for transaction in transactions {
+                        modelContext.delete(transaction)
+                    }
+                }
+                modelContext.delete(credit)
+            }
+        case .investment:
+            if let investment = investmentByID[account.accountID] {
+                let investmentID = investment.investmentUniqueID
+                let descriptor = FetchDescriptor<CashflowTransaction>(
+                    predicate: #Predicate<CashflowTransaction> { transaction in
+                        transaction.investmentID == investmentID
+                    }
+                )
+                if let transactions = try? modelContext.fetch(descriptor) {
+                    for transaction in transactions {
+                        modelContext.delete(transaction)
+                    }
+                }
+                modelContext.delete(investment)
+            }
+        }
+
+        modelContext.delete(account)
+
+        do {
+            try modelContext.save()
+            loadGroups()
+            loadAccounts()
+            updateUnattachedItems()
+            calculateTotalAmount()
+
+            if let group = accountGroup {
+                Task {
+                    let currency = group.displayCurrency ?? state.displayCurrency
+                    let total = await calculateGroupTotal(group: group, in: currency)
+                    state.groupTotals[group.groupUniqueID] = total
+                }
+            }
+            if isCardAccount {
+                EventBus.shared.publish(FinanceEvent.cardsUpdated)
+            }
+        } catch {
+            AppLogger.log(.error, category: "Finance", "Failed to delete account permanently: \(error.localizedDescription)")
         }
     }
     
@@ -534,6 +1024,194 @@ final class FinanceViewModel: ViewModelProtocol {
         case .investment:
             state.editingInvestmentID = account.accountID
             state.showEditInvestmentSheet = true
+        }
+    }
+    
+    private func updateAccountAmount(account: FinanceAccount, newAmount: Double) {
+        // Находим группу, к которой принадлежит счет
+        let accountGroup = state.groups.first { group in
+            group.accounts?.contains(where: { $0.accountUniqueID == account.accountUniqueID }) ?? false
+        }
+        
+        switch account.accountType {
+        case .card:
+            if let card = cardByID[account.accountID] {
+                // Сохраняем старое значение для создания транзакции
+                let oldBalance = card.balance
+                if !card.hasInitialBalance {
+                    card.initialBalance = card.balance
+                    card.hasInitialBalance = true
+                }
+                let oldAmount: Double
+                if card.cardType == .credit, let limit = card.creditLimit {
+                    // Для кредитных карт старое значение - это задолженность
+                    oldAmount = max(0, limit - oldBalance)
+                } else {
+                    // Для дебетовых карт старое значение - это баланс
+                    oldAmount = oldBalance
+                }
+                
+                // Для кредитных карт меняем задолженность (т.е. меняем balance так, чтобы debt = newAmount)
+                if card.cardType == .credit, let limit = card.creditLimit {
+                    // debt = limit - balance
+                    // newAmount = limit - newBalance
+                    // newBalance = limit - newAmount
+                    card.balance = max(0, limit - newAmount)
+                } else {
+                    // Для дебетовых карт меняем баланс напрямую
+                    card.balance = newAmount
+                }
+                card.updatedAt = Date()
+                
+                do {
+                    // Создаем транзакцию для ручного изменения баланса
+                    let difference = newAmount - oldAmount
+                    if abs(difference) > 0.01 { // Создаем транзакцию только если есть изменение
+                        // Для кредитных карт newAmount - это ДОЛГ
+                        // Увеличение долга = УМЕНЬШЕНИЕ баланса = отрицательная транзакция
+                        // Уменьшение долга = УВЕЛИЧЕНИЕ баланса = положительная транзакция
+                        // Для дебетовых карт: положительное значение = увеличение баланса, отрицательное = уменьшение
+                        let transactionAmount: Double
+                        let transactionNote: String
+                        let transactionType: CashflowTransactionType
+
+                        if card.cardType == .credit {
+                            transactionAmount = -difference
+                            transactionNote = "Быстрое изменение задолженности"
+                            transactionType = .creditDebtAdjustment
+                        } else {
+                            transactionAmount = difference
+                            transactionNote = "Быстрое изменение баланса"
+                            transactionType = .cardBalanceAdjustment
+                        }
+
+                        let transaction = CashflowTransaction(
+                            transactionType: transactionType,
+                            amount: transactionAmount,
+                            currency: card.currency,
+                            transactionDate: Date(),
+                            cardID: card.cardUniqueID,
+                            note: transactionNote
+                        )
+                        modelContext.insert(transaction)
+                    }
+                    
+                    // Атомарное сохранение обновления карты и транзакции (если она была создана)
+                    try modelContext.save()
+                    
+                    loadAccounts()
+                    calculateTotalAmount()
+                    
+                    // Пересчитываем сумму группы, к которой принадлежит счет
+                    if let group = accountGroup {
+                        Task {
+                            let currency = group.displayCurrency ?? state.displayCurrency
+                            let total = await calculateGroupTotal(group: group, in: currency)
+                            state.groupTotals[group.groupUniqueID] = total
+                        }
+                    }
+                } catch {
+                    AppLogger.log(.error, category: "Finance", "Failed to update card amount: \(error.localizedDescription)")
+                }
+            }
+            
+        case .credit:
+            if let credit = creditByID[account.accountID] {
+                // Сохраняем старое значение для создания транзакции
+                let oldAmount = credit.remainingAmount
+                if !credit.hasInitialRemainingAmount {
+                    credit.initialRemainingAmount = credit.remainingAmount
+                    credit.hasInitialRemainingAmount = true
+                }
+                
+                credit.remainingAmount = newAmount
+                credit.updatedAt = Date()
+                
+                do {
+                    // Создаем транзакцию для ручного изменения баланса
+                    let difference = newAmount - oldAmount
+                    if abs(difference) > 0.01 { // Создаем транзакцию только если есть изменение
+                        // Для кредитов newAmount - это ОСТАТОК ДОЛГА
+                        // Увеличение долга = отрицательная транзакция
+                        // Уменьшение долга (погашение) = положительная транзакция
+                        // Это обеспечивает единую семантику для всех типов счетов
+                        let balanceChange = -difference
+
+                        let transaction = CashflowTransaction(
+                            transactionType: .creditDebtAdjustment,
+                            amount: balanceChange,
+                            currency: credit.currency,
+                            transactionDate: Date(),
+                            creditID: credit.creditUniqueID,
+                            note: "Быстрое изменение остатка долга"
+                        )
+                        modelContext.insert(transaction)
+                    }
+                    
+                    // Атомарное сохранение обновления кредита и транзакции (если она была создана)
+                    try modelContext.save()
+                    
+                    loadAccounts()
+                    calculateTotalAmount()
+                    
+                    // Пересчитываем сумму группы, к которой принадлежит счет
+                    if let group = accountGroup {
+                        Task {
+                            let currency = group.displayCurrency ?? state.displayCurrency
+                            let total = await calculateGroupTotal(group: group, in: currency)
+                            state.groupTotals[group.groupUniqueID] = total
+                        }
+                    }
+                } catch {
+                    AppLogger.log(.error, category: "Finance", "Failed to update credit amount: \(error.localizedDescription)")
+                }
+            }
+            
+        case .investment:
+            if let investment = investmentByID[account.accountID] {
+                // Сохраняем старое значение для создания транзакции
+                let oldAmount = investment.amount
+                if !investment.hasInitialAmount {
+                    investment.initialAmount = investment.amount
+                    investment.hasInitialAmount = true
+                }
+                
+                investment.amount = newAmount
+                investment.updatedAt = Date()
+                
+                do {
+                    // Создаем транзакцию для ручного изменения стоимости актива
+                    let difference = newAmount - oldAmount
+                    if abs(difference) > 0.01 {
+                        let transaction = CashflowTransaction(
+                            transactionType: .balanceAdjustment,
+                            amount: difference,
+                            currency: investment.currency,
+                            transactionDate: Date(),
+                            investmentID: investment.investmentUniqueID,
+                            note: "Ручное изменение стоимости актива"
+                        )
+                        modelContext.insert(transaction)
+                    }
+                    
+                    // Атомарное сохранение обновления инвестиции и транзакции (если она была создана)
+                    try modelContext.save()
+                    
+                    loadAccounts()
+                    calculateTotalAmount()
+                    
+                    // Пересчитываем сумму группы, к которой принадлежит счет
+                    if let group = accountGroup {
+                        Task {
+                            let currency = group.displayCurrency ?? state.displayCurrency
+                            let total = await calculateGroupTotal(group: group, in: currency)
+                            state.groupTotals[group.groupUniqueID] = total
+                        }
+                    }
+                } catch {
+                    AppLogger.log(.error, category: "Finance", "Failed to update investment amount: \(error.localizedDescription)")
+                }
+            }
         }
     }
 }

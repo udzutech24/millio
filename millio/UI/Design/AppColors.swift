@@ -7,6 +7,32 @@
 
 import SwiftUI
 
+extension Color {
+    init(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        let a, r, g, b: UInt64
+        switch hex.count {
+        case 3: // RGB (12-bit)
+            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
+        case 6: // RGB (24-bit)
+            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+        case 8: // ARGB (32-bit)
+            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+        default:
+            (a, r, g, b) = (255, 0, 0, 0)
+        }
+        self.init(
+            .sRGB,
+            red: Double(r) / 255,
+            green: Double(g) / 255,
+            blue: Double(b) / 255,
+            opacity: Double(a) / 255
+        )
+    }
+}
+
 /// Цветовая палитра приложения
 /// Все цвета определены для темной темы
 enum AppColors {
@@ -21,14 +47,14 @@ enum AppColors {
         ]
     }
     
-    /// Верхняя точка градиента (темно-синий)
-    static let backgroundTop = Color(red: 0.1, green: 0.2, blue: 0.35)
+    /// Верхняя точка градиента (черный)
+    static let backgroundTop = Color.black
     
-    /// Средняя точка градиента (сине-зеленый)
-    static let backgroundMiddle = Color(red: 0.15, green: 0.25, blue: 0.4)
+    /// Средняя точка градиента (черный)
+    static let backgroundMiddle = Color.black
     
-    /// Нижняя точка градиента (темно-фиолетовый)
-    static let backgroundBottom = Color(red: 0.2, green: 0.15, blue: 0.3)
+    /// Нижняя точка градиента (черный)
+    static let backgroundBottom = Color.black
     
     // MARK: - Text Colors
     
@@ -58,20 +84,13 @@ enum AppColors {
     /// Градиент для кнопки "Вода"
     static let waterGradient = [Color.cyan, Color.blue]
     
-    /// Градиент для кнопки "Привычки"
-    static let habitsGradient = [Color.indigo, Color.purple]
-    
     /// Градиент для кнопки "Карты"
     static let cardIndexGradient = [Color.orange, Color.brown]
     
-    /// Градиент для кнопки "Долги"
-    static let debtsGradient = [Color.red, Color.orange]
     
     /// Градиент для кнопки "Активы"
     static let investmentsGradient = [Color.yellow, Color.orange]
     
-    /// Градиент для кнопки "Планировщик"
-    static let plannedExpensesGradient = [Color.teal, Color.cyan]
     
     /// Градиент для кнопки "Кэшфлоу"
     static let cashflowGradient = [Color.blue, Color.purple]
@@ -81,11 +100,11 @@ enum AppColors {
     
     // MARK: - Action Button Gradients
     
-    /// Градиент для кнопки "Расход"
-    static let expenseGradient = [Color.purple, Color.pink]
+    /// Градиент для кнопки "Расход" (синий -> розовый)
+    static let expenseGradient = [Color(hex: "197CE6").opacity(0.5), Color(hex: "FF02A6").opacity(0.5)]
     
-    /// Градиент для кнопки "Доход"
-    static let incomeGradient = [Color.blue, Color.cyan]
+    /// Градиент для кнопки "Доход" (зеленый -> синий)
+    static let incomeGradient = [Color(hex: "19E694").opacity(0.5), Color(hex: "0947E4").opacity(0.5)]
     
     // MARK: - UI Elements
     

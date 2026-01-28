@@ -20,10 +20,7 @@ struct millioApp: App {
         CardFeatureRegistration.register()
         CashbackFeatureRegistration.register()
         CreditFeatureRegistration.register()
-        HabitFeatureRegistration.register()
-        DebtFeatureRegistration.register()
         InvestmentFeatureRegistration.register()
-        PlannedExpenseFeatureRegistration.register()
         FinanceFeatureRegistration.register()
         CashflowFeatureRegistration.register()
         

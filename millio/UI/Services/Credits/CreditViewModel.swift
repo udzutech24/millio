@@ -376,6 +376,16 @@ final class CreditViewModel: ViewModelProtocol {
         let interestRate = state.editingCredit?.interestRate ?? 0.0
         
         if let existing = state.editingCredit {
+            let oldRemainingAmount = existing.remainingAmount
+            let remainingAmountChanged = abs(remainingAmount - oldRemainingAmount) > 0.01
+
+            if existing.uniqueID.isEmpty {
+                _ = existing.creditUniqueID
+            }
+            if !existing.hasInitialRemainingAmount {
+                existing.initialRemainingAmount = existing.remainingAmount
+                existing.hasInitialRemainingAmount = true
+            }
             // Обновляем существующий кредит
             existing.name = name
             existing.amount = amount
@@ -397,6 +407,20 @@ final class CreditViewModel: ViewModelProtocol {
             }
             // startDate и interestRate оставляем как есть (не меняем при редактировании)
             existing.updatedAt = Date()
+
+            // Корректировка остатка долга через форму редактирования = транзакция
+            if remainingAmountChanged {
+                let balanceChange = -(remainingAmount - oldRemainingAmount)
+                let transaction = CashflowTransaction(
+                    transactionType: .creditDebtAdjustment,
+                    amount: balanceChange,
+                    currency: existing.currency,
+                    transactionDate: Date(),
+                    creditID: existing.creditUniqueID,
+                    note: "Редактирование остатка долга"
+                )
+                modelContext.insert(transaction)
+            }
         } else {
             // Создаем новый кредит
             let newCredit = Credit(

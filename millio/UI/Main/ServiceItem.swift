@@ -22,70 +22,28 @@ struct ServiceItem: Identifiable, Equatable {
                 id: "finances",
                 route: .finances,
                 title: "Финансы",
-                icon: "wallet.pass.fill",
+                icon: "finance",
                 gradientColors: AppColors.financesGradient
             ),
             ServiceItem(
                 id: "courses",
                 route: .courses,
                 title: "Курсы",
-                icon: "briefcase.fill",
+                icon: "courses",
                 gradientColors: AppColors.coursesGradient
             ),
             ServiceItem(
                 id: "cashback",
                 route: .cashback,
                 title: "Кешбэк",
-                icon: "percent",
+                icon: "cashback",
                 gradientColors: AppColors.cashbackGradient
-            ),
-            ServiceItem(
-                id: "credits",
-                route: .credits,
-                title: "Кредиты",
-                icon: "creditcard.fill",
-                gradientColors: AppColors.creditsGradient
-            ),
-            ServiceItem(
-                id: "habits",
-                route: .habits,
-                title: "Привычки",
-                icon: "clock.fill",
-                gradientColors: AppColors.habitsGradient
-            ),
-            ServiceItem(
-                id: "cards",
-                route: .cardIndex,
-                title: "Карты",
-                icon: "archivebox.fill",
-                gradientColors: AppColors.cardIndexGradient
-            ),
-            ServiceItem(
-                id: "debts",
-                route: .debts,
-                title: "Долги",
-                icon: "list.bullet.rectangle",
-                gradientColors: AppColors.debtsGradient
-            ),
-            ServiceItem(
-                id: "investments",
-                route: .investments,
-                title: "Активы",
-                icon: "chart.line.uptrend.xyaxis",
-                gradientColors: AppColors.investmentsGradient
-            ),
-            ServiceItem(
-                id: "plannedExpenses",
-                route: .plannedExpenses,
-                title: "Планировщик",
-                icon: "calendar.badge.clock",
-                gradientColors: AppColors.plannedExpensesGradient
             ),
             ServiceItem(
                 id: "cashflow",
                 route: .cashflow,
                 title: "Кэшфлоу",
-                icon: "arrow.left.arrow.right.circle.fill",
+                icon: "loans",
                 gradientColors: AppColors.cashflowGradient
             )
         ]

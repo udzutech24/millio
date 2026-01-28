@@ -161,6 +161,7 @@ final class CashflowViewModel: ViewModelProtocol {
     let modelContext: ModelContext
     
     private let defaults = UserDefaults.standard
+    private var eventSubscriptionID: UUID?
     
     private var storedDisplayCurrency: String {
         get { defaults.string(forKey: "cashflow_display_currency") ?? "RUB" }
@@ -173,6 +174,15 @@ final class CashflowViewModel: ViewModelProtocol {
         loadTransactions()
         loadCards()
         loadAvailableCurrencies()
+        subscribeToFinanceEvents()
+    }
+
+    deinit {
+        if let id = eventSubscriptionID {
+            Task { @MainActor in
+                EventBus.shared.unsubscribe(id)
+            }
+        }
     }
     
     func handle(_ action: CashflowAction) {
@@ -181,11 +191,15 @@ final class CashflowViewModel: ViewModelProtocol {
             loadTransactions()
             
         case .addTransaction(let type):
+            // Обновляем список карт перед открытием редактора, чтобы видеть актуальные данные
+            loadCards()
             state.creatingTransactionType = type
             state.editingTransaction = nil
             state.showTransactionEditor = true
             
         case .editTransaction(let transaction):
+            // Обновляем список карт перед редактированием на случай изменений в финансах
+            loadCards()
             state.editingTransaction = transaction
             state.creatingTransactionType = nil
             state.showTransactionEditor = true
@@ -268,6 +282,15 @@ final class CashflowViewModel: ViewModelProtocol {
         let descriptor = FetchDescriptor<Card>()
         state.availableCards = (try? modelContext.fetch(descriptor)) ?? []
     }
+
+    private func subscribeToFinanceEvents() {
+        eventSubscriptionID = EventBus.shared.subscribe { [weak self] event in
+            guard let self else { return }
+            if case FinanceEvent.cardsUpdated = event {
+                self.loadCards()
+            }
+        }
+    }
     
     private func loadAvailableCurrencies() {
         Task {
@@ -336,8 +359,8 @@ final class CashflowViewModel: ViewModelProtocol {
                 
             case .transfer:
                 break // Переводы не учитываем в графике
-            case .exchange:
-                break // Обмены валют не учитываем в графике
+            case .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
+                break // Ручные изменения баланса не учитываем в графике доходов/расходов
             }
         }
         
@@ -395,7 +418,9 @@ final class CashflowViewModel: ViewModelProtocol {
                 )
                 totalExpense += converted
                 
-            case .transfer, .exchange:
+            case .transfer, .balanceAdjustment:
+                break
+            case .cardBalanceAdjustment, .creditDebtAdjustment:
                 break
             }
         }
@@ -487,10 +512,6 @@ final class CashflowViewModel: ViewModelProtocol {
             existing.toCardID = transaction.toCardID
             existing.incomeCategoryRaw = transaction.incomeCategoryRaw
             existing.expenseCategoryRaw = transaction.expenseCategoryRaw
-            existing.exchangeFromCurrency = transaction.exchangeFromCurrency
-            existing.exchangeToCurrency = transaction.exchangeToCurrency
-            existing.exchangeFromAmount = transaction.exchangeFromAmount
-            existing.exchangeToAmount = transaction.exchangeToAmount
             existing.note = transaction.note
             existing.updatedAt = Date()
         } else {
@@ -504,10 +525,6 @@ final class CashflowViewModel: ViewModelProtocol {
                 toCardID: transaction.toCardID,
                 incomeCategory: transaction.incomeCategory,
                 expenseCategory: transaction.expenseCategory,
-                exchangeFromCurrency: transaction.exchangeFromCurrency,
-                exchangeToCurrency: transaction.exchangeToCurrency,
-                exchangeFromAmount: transaction.exchangeFromAmount,
-                exchangeToAmount: transaction.exchangeToAmount,
                 note: transaction.note
             )
             modelContext.insert(newTransaction)
@@ -594,9 +611,12 @@ final class CashflowViewModel: ViewModelProtocol {
                 }
             }
             
-        case .exchange:
-            // Обмен валют не влияет на баланс карт напрямую
-            // Пользователь может вручную обновить балансы карт после обмена
+        case .balanceAdjustment:
+            // Ручное изменение баланса уже было применено к карте
+            // Не нужно обновлять баланс повторно
+            break
+        case .cardBalanceAdjustment, .creditDebtAdjustment:
+            // Корректировки баланса/долга не изменяют баланс повторно
             break
         }
     }

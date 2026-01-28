@@ -45,7 +45,7 @@ struct ProfileView: View {
                         
                         // Backup settings
                         VStack(spacing: 16) {
-                            Section {
+                            Section(content: {
                                 Toggle("Резервное копирование", isOn: Binding(
                                     get: { appState.isBackupEnabled },
                                     set: { newValue in
@@ -151,12 +151,12 @@ struct ProfileView: View {
                                         }
                                     }
                                 }
-                            } header: {
+                            }, header: {
                                 Text("Настройки")
                                     .font(.system(size: 18, weight: .semibold))
                                     .foregroundStyle(AppColors.textSecondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                            }
+                            })
                         }
                         .padding(.horizontal, 24)
                         .padding(.vertical, 20)
@@ -168,7 +168,7 @@ struct ProfileView: View {
                         
                         // Language selection
                         VStack(spacing: 16) {
-                            Section {
+                            Section(content: {
                                 NavigationLink {
                                     LanguageSelectionView(selectedLanguage: Binding(
                                         get: { appState.selectedLanguage },
@@ -186,12 +186,12 @@ struct ProfileView: View {
                                             .foregroundStyle(AppColors.textTertiary)
                                     }
                                 }
-                            } header: {
+                            }, header: {
                                 Text("Язык и регион")
                                     .font(.system(size: 18, weight: .semibold))
                                     .foregroundStyle(AppColors.textSecondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                            }
+                            })
                         }
                         .padding(.horizontal, 24)
                         .padding(.vertical, 20)
@@ -203,7 +203,7 @@ struct ProfileView: View {
                         
                         // App info
                         VStack(spacing: 16) {
-                            Section {
+                            Section(content: {
                                 HStack {
                                     Text("Версия")
                                         .foregroundStyle(AppColors.textPrimary)
@@ -211,12 +211,12 @@ struct ProfileView: View {
                                     Text(appVersion)
                                         .foregroundStyle(AppColors.textTertiary)
                                 }
-                            } header: {
+                            }, header: {
                                 Text("О приложении")
                                     .font(.system(size: 18, weight: .semibold))
                                     .foregroundStyle(AppColors.textSecondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                            }
+                            })
                         }
                         .padding(.horizontal, 24)
                         .padding(.vertical, 20)
@@ -225,6 +225,40 @@ struct ProfileView: View {
                                 .fill(.ultraThinMaterial)
                         }
                         .padding(.horizontal, 24)
+                        
+                        #if DEBUG
+                        // Debug section
+                        VStack(spacing: 16) {
+                            Section(content: {
+                                Toggle("Премиум доступ", isOn: Binding(
+                                    get: { appState.isPro },
+                                    set: { newValue in
+                                        if newValue {
+                                            SubscriptionManager.shared.grantDebugPremium()
+                                        } else {
+                                            SubscriptionManager.shared.revokeDebugPremium()
+                                        }
+                                        appState.subscriptionStatus = SubscriptionManager.shared.status
+                                        appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
+                                        appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+                                    }
+                                ))
+                                .tint(.blue)
+                            }, header: {
+                                Text("Отладка")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(AppColors.textSecondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            })
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 20)
+                        .background {
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(.ultraThinMaterial)
+                        }
+                        .padding(.horizontal, 24)
+                        #endif
                     }
                 }
                 .padding(.bottom, 40)
@@ -336,3 +370,4 @@ struct ProfileView: View {
             .environment(AppState())
     }
 }
+

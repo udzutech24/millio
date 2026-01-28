@@ -99,8 +99,8 @@ final class Card: Persistable {
     /// Название карты (например, "Основная карта")
     var name: String = ""
     
-    /// Номер карты (последние 4 цифры для отображения, полный номер зашифрован)
-    var cardNumber: String = "" // Храним последние 4 цифры для отображения
+    /// Номер карты (последние 4 цифры для отображения, поле опционально)
+    var cardNumber: String = "" // Храним последние 4 цифры, может быть пустым
     
     /// Полный номер карты (зашифрован, опционально)
     var encryptedFullNumber: Data?
@@ -119,6 +119,12 @@ final class Card: Persistable {
     
     /// Баланс на карте
     var balance: Double = 0.0
+
+    /// Изначальный баланс для истории (не меняется при редактировании)
+    var initialBalance: Double = 0.0
+
+    /// Флаг, что initialBalance установлен
+    var hasInitialBalance: Bool = false
     
     /// Кредитный лимит (только для кредитных карт)
     var creditLimit: Double?
@@ -146,6 +152,9 @@ final class Card: Persistable {
     
     /// Дата последнего обновления
     var updatedAt: Date = Date()
+
+    /// Стабильный идентификатор для связей между сущностями
+    var uniqueID: String = ""
     
     var bank: Bank {
         get { Bank(rawValue: bankRaw) ?? .other }
@@ -214,6 +223,8 @@ final class Card: Persistable {
         self.priorityRaw = priority.rawValue
         self.currency = currency
         self.balance = balance
+        self.initialBalance = balance
+        self.hasInitialBalance = true
         self.creditLimit = creditLimit
         self.expiryDate = expiryDate
         self.cardholderName = cardholderName
@@ -222,13 +233,17 @@ final class Card: Persistable {
         self.includeInTotal = includeInTotal
         self.createdAt = Date()
         self.updatedAt = Date()
+        self.uniqueID = UUID().uuidString
     }
     
     // MARK: - Exportable
     
     /// Уникальный идентификатор карты для восстановления связей при restore
     var cardUniqueID: String {
-        // Используем комбинацию полей для создания уникального идентификатора
+        uniqueID.isEmpty ? legacyCardUniqueID() : uniqueID
+    }
+
+    private func legacyCardUniqueID() -> String {
         "\(name)|\(cardNumber)|\(bankRaw)|\(cardTypeRaw)|\(currency)|\(createdAt.timeIntervalSince1970)"
     }
     
@@ -242,6 +257,8 @@ final class Card: Persistable {
             "priorityRaw": priorityRaw,
             "currency": currency,
             "balance": balance,
+            "initialBalance": initialBalance,
+            "hasInitialBalance": hasInitialBalance,
             "creditLimit": creditLimit ?? NSNull(),
             "expiryDate": expiryDate ?? NSNull(),
             "cardholderName": cardholderName ?? NSNull(),

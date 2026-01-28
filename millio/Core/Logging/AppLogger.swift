@@ -11,6 +11,7 @@ import OSLog
 enum LogLevel {
     case debug
     case info
+    case warning
     case error
 }
 
@@ -29,6 +30,8 @@ struct AppLogger {
             logger.debug("\(message)")
         case .info:
             logger.info("\(message)")
+        case .warning:
+            logger.warning("\(message)")
         case .error:
             logger.error("\(message)")
         }

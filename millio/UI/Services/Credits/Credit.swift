@@ -13,7 +13,6 @@ enum CreditType: String, Codable, CaseIterable {
     case consumer = "consumer" // Потребительский
     case mortgage = "mortgage" // Ипотека
     case auto = "auto" // Автокредит
-    case creditCard = "credit_card" // Кредитная карта
     case refinancing = "refinancing" // Рефинансирование
     case other = "other" // Другое
     
@@ -22,7 +21,6 @@ enum CreditType: String, Codable, CaseIterable {
         case .consumer: return "Потребительский"
         case .mortgage: return "Ипотека"
         case .auto: return "Автокредит"
-        case .creditCard: return "Кредитная карта"
         case .refinancing: return "Рефинансирование"
         case .other: return "Другое"
         }
@@ -33,7 +31,6 @@ enum CreditType: String, Codable, CaseIterable {
         case .consumer: return "creditcard.fill"
         case .mortgage: return "house.fill"
         case .auto: return "car.fill"
-        case .creditCard: return "creditcard.trianglebadge.exclamationmark.fill"
         case .refinancing: return "arrow.triangle.2.circlepath"
         case .other: return "doc.text.fill"
         }
@@ -75,6 +72,12 @@ final class Credit: Persistable {
     
     /// Остаток долга (вычисляется автоматически)
     var remainingAmount: Double = 0.0
+
+    /// Изначальный остаток долга для истории (не меняется при редактировании)
+    var initialRemainingAmount: Double = 0.0
+
+    /// Флаг, что initialRemainingAmount установлен
+    var hasInitialRemainingAmount: Bool = false
     
     /// Сумма досрочных платежей (для расчета)
     var earlyPaymentsAmount: Double = 0.0
@@ -93,6 +96,9 @@ final class Credit: Persistable {
     
     /// Дата последнего обновления
     var updatedAt: Date = Date()
+
+    /// Стабильный идентификатор для связей между сущностями
+    var uniqueID: String = ""
     
     var bank: Bank {
         get { Bank(rawValue: bankRaw) ?? .other }
@@ -224,9 +230,12 @@ final class Credit: Persistable {
         self.creditTypeRaw = creditType.rawValue
         self.endDate = endDate
         self.remainingAmount = amount // Изначально остаток равен сумме кредита
+        self.initialRemainingAmount = self.remainingAmount
+        self.hasInitialRemainingAmount = true
         self.includeInTotal = includeInTotal
         self.createdAt = Date()
         self.updatedAt = Date()
+        self.uniqueID = UUID().uuidString
     }
     
     /// Обновить остаток долга на основе прошедших месяцев
@@ -337,7 +346,6 @@ final class Credit: Persistable {
         guard amount > 0, remainingAmount > 0, !isClosed else { return }
         
         // Сначала обновляем остаток
-        let oldRemaining = remainingAmount
         remainingAmount -= amount
         earlyPaymentsAmount += amount
         
@@ -371,11 +379,22 @@ final class Credit: Persistable {
     
     /// Уникальный идентификатор кредита для восстановления связей при restore
     var creditUniqueID: String {
+        return uniqueID.isEmpty ? legacyCreditUniqueID() : uniqueID
+    }
+    
+    /// Убедиться, что uniqueID установлен (миграция для старых данных)
+    func ensureUniqueID() {
+        if uniqueID.isEmpty {
+            uniqueID = legacyCreditUniqueID()
+        }
+    }
+
+    private func legacyCreditUniqueID() -> String {
         "\(name)|\(amount)|\(interestRate)|\(startDate.timeIntervalSince1970)|\(termMonths)|\(currency)|\(bankRaw)|\(creditTypeRaw)"
     }
     
     func export() throws -> Data {
-        var dict: [String: Any] = [
+        let dict: [String: Any] = [
             "type": "Credit",
             "name": name,
             "amount": amount,
@@ -388,6 +407,8 @@ final class Credit: Persistable {
             "bankRaw": bankRaw,
             "creditTypeRaw": creditTypeRaw,
             "remainingAmount": remainingAmount,
+            "initialRemainingAmount": initialRemainingAmount,
+            "hasInitialRemainingAmount": hasInitialRemainingAmount,
             "earlyPaymentsAmount": earlyPaymentsAmount,
             "isClosed": isClosed,
             "isFavorite": isFavorite,

@@ -20,6 +20,11 @@ enum BackupEvent: AppEvent {
     case restoreFailed(AppError)
 }
 
+/// События финансовых сущностей
+enum FinanceEvent: AppEvent {
+    case cardsUpdated
+}
+
 /// Event Bus для слабой связанности между компонентами
 @MainActor
 final class EventBus {

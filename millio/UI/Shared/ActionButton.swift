@@ -16,42 +16,62 @@ struct ActionButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
+                
+                // MARK: Glass Icon Circle
                 ZStack {
                     Circle()
-                        .fill(AppColors.iconBackground)
-                        .frame(width: 32, height: 32)
+                        .fill(Color.clear)
+                        .overlay(
+                            Circle()
+                                .stroke(
+                                    LinearGradient(
+                                        colors: gradientColors,
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1
+                                )
+                        )
+                        .frame(width: 48, height: 48)
+                        
                     
-                    Image(systemName: icon)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppColors.iconColor)
+                    Image(icon)
+                        .renderingMode(.template)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 16, height: 16)
+                        .foregroundStyle(.white)
                 }
+                .padding(.leading, 10)
                 
                 Text(title)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 15, weight: .regular))
                     .foregroundStyle(AppColors.textPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 
                 Spacer()
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 18)
+            .frame(height: 68) 
             .background {
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(
-                                LinearGradient(
-                                    colors: gradientColors,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ),
-                                lineWidth: 2
-                            )
-                    }
+                ZStack {
+
+                    
+                    // Gradient stroke
+                    RoundedRectangle(cornerRadius: 999)
+                        .stroke(
+                            LinearGradient(
+                                colors: gradientColors,
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ),
+                            lineWidth: 1
+                        )
+                }
             }
         }
         .buttonStyle(.plain)
     }
 }
+
+

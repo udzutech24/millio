@@ -57,6 +57,16 @@ struct CardImporter: ModelImporter {
         // Если карта уже существует, обновляем её данные вместо создания новой
         if let existingCard = try? context.fetch(existingCardDescriptor).first {
             // Обновляем существующую карту
+            if let uniqueID = data["cardUniqueID"] as? String, !uniqueID.isEmpty {
+                existingCard.uniqueID = uniqueID
+            } else if existingCard.uniqueID.isEmpty {
+                // Устанавливаем uniqueID из legacy значений на основе замороженных данных из backup
+                existingCard.uniqueID = "\(name)|\(cardNumber)|\(bankRaw)|\(cardTypeRaw)|\(currency)|\(createdAt)"
+            }
+            if let initialBalance = data["initialBalance"] as? Double {
+                existingCard.initialBalance = initialBalance
+                existingCard.hasInitialBalance = data["hasInitialBalance"] as? Bool ?? true
+            }
             existingCard.balance = balance
             existingCard.priority = priority
             existingCard.creditLimit = data["creditLimit"] as? Double
@@ -101,6 +111,19 @@ struct CardImporter: ModelImporter {
         // Восстанавливаем даты
         card.createdAt = Date(timeIntervalSince1970: createdAt)
         card.updatedAt = Date(timeIntervalSince1970: updatedAt)
+        if let initialBalance = data["initialBalance"] as? Double {
+            card.initialBalance = initialBalance
+            card.hasInitialBalance = data["hasInitialBalance"] as? Bool ?? true
+        } else {
+            card.initialBalance = balance
+            card.hasInitialBalance = true
+        }
+        if let uniqueID = data["cardUniqueID"] as? String, !uniqueID.isEmpty {
+            card.uniqueID = uniqueID
+        } else {
+            // Устанавливаем uniqueID из legacy значений на основе замороженных данных из backup
+            card.uniqueID = "\(name)|\(cardNumber)|\(bankRaw)|\(cardTypeRaw)|\(currency)|\(createdAt)"
+        }
         
         // Восстанавливаем зашифрованные данные, если есть
         if let encryptedFullNumberStr = data["encryptedFullNumber"] as? String,

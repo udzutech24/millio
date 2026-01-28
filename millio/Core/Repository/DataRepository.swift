@@ -116,51 +116,6 @@ final class DataRepository: DataRepositoryProtocol {
                 }
             }
             
-            // Экспортируем Habit
-            if typeName == "Habit" {
-                let habitDescriptor = FetchDescriptor<Habit>()
-                let habits = try modelContext.fetch(habitDescriptor)
-                
-                for habit in habits {
-                    let data = try habit.export()
-                    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                        var habitDict = json
-                        habitDict["_type"] = typeName
-                        modelsData.append(habitDict)
-                    }
-                }
-            }
-            
-            // Экспортируем HabitEntry
-            if typeName == "HabitEntry" {
-                let entryDescriptor = FetchDescriptor<HabitEntry>()
-                let entries = try modelContext.fetch(entryDescriptor)
-                
-                for entry in entries {
-                    let data = try entry.export()
-                    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                        var entryDict = json
-                        entryDict["_type"] = typeName
-                        modelsData.append(entryDict)
-                    }
-                }
-            }
-            
-            // Экспортируем Debt
-            if typeName == "Debt" {
-                let debtDescriptor = FetchDescriptor<Debt>()
-                let debts = try modelContext.fetch(debtDescriptor)
-                
-                for debt in debts {
-                    let data = try debt.export()
-                    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                        var debtDict = json
-                        debtDict["_type"] = typeName
-                        modelsData.append(debtDict)
-                    }
-                }
-            }
-            
             // Экспортируем Investment
             if typeName == "Investment" {
                 let investmentDescriptor = FetchDescriptor<Investment>()
@@ -172,21 +127,6 @@ final class DataRepository: DataRepositoryProtocol {
                         var investmentDict = json
                         investmentDict["_type"] = typeName
                         modelsData.append(investmentDict)
-                    }
-                }
-            }
-            
-            // Экспортируем PlannedExpense
-            if typeName == "PlannedExpense" {
-                let expenseDescriptor = FetchDescriptor<PlannedExpense>()
-                let expenses = try modelContext.fetch(expenseDescriptor)
-                
-                for expense in expenses {
-                    let data = try expense.export()
-                    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                        var expenseDict = json
-                        expenseDict["_type"] = typeName
-                        modelsData.append(expenseDict)
                     }
                 }
             }
@@ -291,8 +231,8 @@ final class DataRepository: DataRepositoryProtocol {
                    let cardTypeRaw = modelData["cardTypeRaw"] as? String,
                    let currency = modelData["currency"] as? String,
                    let createdAt = modelData["createdAt"] as? TimeInterval {
-                    // Создаем cardUniqueID из данных
-                    let cardUniqueID = "\(name)|\(cardNumber)|\(bankRaw)|\(cardTypeRaw)|\(currency)|\(createdAt)"
+                    let legacyCardUniqueID = "\(name)|\(cardNumber)|\(bankRaw)|\(cardTypeRaw)|\(currency)|\(createdAt)"
+                    let cardUniqueID = (modelData["cardUniqueID"] as? String) ?? legacyCardUniqueID
                     
                     // Ищем карту по содержимому (без проверки createdAt, так как комбинация других полей уникальна)
                     let cardDescriptor = FetchDescriptor<Card>(
@@ -350,9 +290,9 @@ final class DataRepository: DataRepositoryProtocol {
             
             // Если это FinanceAccount, восстанавливаем связь с группой
             if typeName == "FinanceAccount" {
-                var accountData = modelData
+                let accountData = modelData
                 if let groupUniqueID = accountData["groupUniqueID"] as? String,
-                   let group = groupUniqueIDMapping[groupUniqueID] {
+                   let _ = groupUniqueIDMapping[groupUniqueID] {
                     // Связь будет установлена через импортер
                 }
                 
@@ -442,35 +382,11 @@ final class DataRepository: DataRepositoryProtocol {
                 for credit in credits {
                     modelContext.delete(credit)
                 }
-            } else if typeName == "HabitEntry" {
-                let entryDescriptor = FetchDescriptor<HabitEntry>()
-                let entries = try modelContext.fetch(entryDescriptor)
-                for entry in entries {
-                    modelContext.delete(entry)
-                }
-            } else if typeName == "Habit" {
-                let habitDescriptor = FetchDescriptor<Habit>()
-                let habits = try modelContext.fetch(habitDescriptor)
-                for habit in habits {
-                    modelContext.delete(habit)
-                }
-            } else if typeName == "Debt" {
-                let debtDescriptor = FetchDescriptor<Debt>()
-                let debts = try modelContext.fetch(debtDescriptor)
-                for debt in debts {
-                    modelContext.delete(debt)
-                }
             } else if typeName == "Investment" {
                 let investmentDescriptor = FetchDescriptor<Investment>()
                 let investments = try modelContext.fetch(investmentDescriptor)
                 for investment in investments {
                     modelContext.delete(investment)
-                }
-            } else if typeName == "PlannedExpense" {
-                let expenseDescriptor = FetchDescriptor<PlannedExpense>()
-                let expenses = try modelContext.fetch(expenseDescriptor)
-                for expense in expenses {
-                    modelContext.delete(expense)
                 }
             } else if typeName == "FinanceAccount" {
                 let accountDescriptor = FetchDescriptor<FinanceAccount>()

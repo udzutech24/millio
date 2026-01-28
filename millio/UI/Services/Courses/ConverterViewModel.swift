@@ -708,7 +708,7 @@ final class ConverterViewModel: ViewModelProtocol {
     func getShareData() -> (rows: [ShareRowModel], dateString: String, highlightedCode: String) {
         let rows: [ShareRowModel] = state.selectedCurrencies.map { code in
             ShareRowModel(
-                flag: CurrencySelectionSupport.emoji(for: code),
+                flag: "", // Флаги больше не используются, используется Image("flag")
                 code: code,
                 value: displayValue(for: code)
             )

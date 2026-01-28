@@ -104,6 +104,12 @@ final class Investment: Persistable {
     
     /// Стоимость/сумма инвестиции
     var amount: Double = 0.0
+
+    /// Изначальная сумма для истории (не меняется при редактировании)
+    var initialAmount: Double = 0.0
+
+    /// Флаг, что initialAmount установлен
+    var hasInitialAmount: Bool = false
     
     /// Валюта
     var currency: String = "RUB"
@@ -122,6 +128,9 @@ final class Investment: Persistable {
     
     /// Дата последнего обновления
     var updatedAt: Date = Date()
+
+    /// Стабильный идентификатор для связей между сущностями
+    var uniqueID: String = ""
     
     var investmentType: InvestmentType {
         get { InvestmentType(rawValue: investmentTypeRaw) ?? .positive }
@@ -152,18 +161,32 @@ final class Investment: Persistable {
         self.investmentTypeRaw = investmentType.rawValue
         self.categoryRaw = category.rawValue
         self.amount = amount
+        self.initialAmount = amount
+        self.hasInitialAmount = true
         self.currency = currency
         self.includeInTotal = includeInTotal
         self.priorityRaw = priority.rawValue
         self.isFavorite = isFavorite
         self.createdAt = Date()
         self.updatedAt = Date()
+        self.uniqueID = UUID().uuidString
     }
     
     // MARK: - Exportable
     
     /// Уникальный идентификатор инвестиции для восстановления связей при restore
     var investmentUniqueID: String {
+        return uniqueID.isEmpty ? legacyInvestmentUniqueID() : uniqueID
+    }
+    
+    /// Убедиться, что uniqueID установлен (миграция для старых данных)
+    func ensureUniqueID() {
+        if uniqueID.isEmpty {
+            uniqueID = legacyInvestmentUniqueID()
+        }
+    }
+
+    private func legacyInvestmentUniqueID() -> String {
         "\(name)|\(investmentTypeRaw)|\(categoryRaw)|\(amount)|\(currency)|\(createdAt.timeIntervalSince1970)"
     }
     
@@ -174,6 +197,8 @@ final class Investment: Persistable {
             "investmentTypeRaw": investmentTypeRaw,
             "categoryRaw": categoryRaw,
             "amount": amount,
+            "initialAmount": initialAmount,
+            "hasInitialAmount": hasInitialAmount,
             "currency": currency,
             "includeInTotal": includeInTotal,
             "priorityRaw": priorityRaw,

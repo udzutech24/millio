@@ -54,29 +54,28 @@ struct ConverterView: View {
 #endif
         let headerH: CGFloat = 52
         let topPadding: CGFloat = 8
-        let bottomPadding: CGFloat = 4
         
         // Минимальные размеры для клавиатуры
         let minKeyHeight: CGFloat = 44
         let minKeySpacing: CGFloat = 6
         let keypadRows: Int = 5
         
-        // Вычисляем минимальную высоту клавиатуры
-        let minKeypadHeight = CGFloat(keypadRows) * minKeyHeight + CGFloat(keypadRows - 1) * minKeySpacing + bottomSafe + bottomPadding
+        // Вычисляем минимальную высоту клавиатуры (без лишних отступов)
+        let minKeypadHeight = CGFloat(keypadRows) * minKeyHeight + CGFloat(keypadRows - 1) * minKeySpacing + bottomSafe
         
         // Доступная высота для контента (исключая header и клавиатуру)
-        let availableForContent = totalH - headerH - minKeypadHeight - topPadding
+        let availableForContent = max(0, totalH - headerH - minKeypadHeight - topPadding)
         
         // Адаптируем размеры клавиатуры под доступное место
-        let keypadAvailableHeight = totalH - headerH - availableForContent - topPadding - bottomPadding
+        let keypadAvailableHeight = max(minKeypadHeight, totalH - headerH - availableForContent - topPadding)
         
         // Вычисляем размеры кнопок и отступы с учетом доступного места
-        let keypadContentHeight = keypadAvailableHeight - bottomSafe - bottomPadding
-        let keyH = max(minKeyHeight, floor((keypadContentHeight - CGFloat(keypadRows - 1) * minKeySpacing) / CGFloat(keypadRows)))
+        let keypadContentHeight = max(0, keypadAvailableHeight - bottomSafe)
+        let keyH = max(minKeyHeight, floor(max(0, (keypadContentHeight - CGFloat(keypadRows - 1) * minKeySpacing) / CGFloat(keypadRows))))
         
         // Адаптируем spacing между кнопками
         let actualKeypadContentHeight = CGFloat(keypadRows) * keyH
-        let remainingSpace = keypadContentHeight - actualKeypadContentHeight
+        let remainingSpace = max(0, keypadContentHeight - actualKeypadContentHeight)
         let keySpacing = minKeySpacing + (remainingSpace > 0 ? floor(remainingSpace / CGFloat(keypadRows - 1)) : 0)
         
         // Размер шрифта зависит от высоты кнопки
@@ -88,26 +87,39 @@ struct ConverterView: View {
         let minRowHeight: CGFloat = 58
         let maxRowHeight: CGFloat = 80
         
-        // Вычисляем высоту строки списка валют
-        let listAvailableHeight = max(availableForContent - topPadding * 2, minRowHeight * CGFloat(desiredRows))
-        let rowH = min(maxRowHeight, max(minRowHeight, floor((listAvailableHeight - CGFloat(desiredRows - 1) * rowSpacing) / CGFloat(desiredRows))))
+        // Вычисляем высоту строки списка валют (гарантируем, что все 6 ячеек влезут)
+        let listAvailableHeight = max(0, availableForContent - topPadding)
+        let calculatedRowH = (listAvailableHeight - CGFloat(desiredRows - 1) * rowSpacing) / CGFloat(desiredRows)
+        let rowH = min(maxRowHeight, max(minRowHeight, floor(max(0, calculatedRowH))))
+        
+        // Гарантируем, что все значения конечные и положительные
+        let safeKeyH = keyH.isFinite && keyH > 0 ? keyH : minKeyHeight
+        let safeKeySpacing = keySpacing.isFinite && keySpacing >= 0 ? keySpacing : minKeySpacing
+        let safeRowH = rowH.isFinite && rowH > 0 ? rowH : minRowHeight
+        let safeRowSpacing = rowSpacing.isFinite && rowSpacing >= 0 ? rowSpacing : 8
+        let safeFontSize = fontSize.isFinite && fontSize > 0 ? fontSize : 18
         
         return Layout(
             totalH: totalH,
             bottomSafe: bottomSafe,
             headerH: headerH,
-            keySpacing: keySpacing,
+            keySpacing: safeKeySpacing,
             desiredRows: desiredRows,
-            rowSpacing: rowSpacing,
-            rowH: rowH,
-            keyH: keyH,
-            fontSize: fontSize
+            rowSpacing: safeRowSpacing,
+            rowH: safeRowH,
+            keyH: safeKeyH,
+            fontSize: safeFontSize
         )
     }
     
     var body: some View {
         ZStack {
-            GradientBackground()
+            GradientBackground(
+                topGradientColor: "F78C3B",
+                topGradientFadeColor: "1942E6",
+                bottomGradientColor: "1942E6",
+                bottomGradientFadeColor: "F78C3B"
+            )
             
             GeometryReader { geo in
                 let layout = makeLayout(totalH: geo.size.height)
@@ -191,7 +203,7 @@ struct ConverterView: View {
                 keypad(height: layout.keyH, spacing: layout.keySpacing, fontSize: layout.fontSize)
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
-                    .padding(.bottom, max(4, layout.bottomSafe))
+                    .padding(.bottom, layout.bottomSafe) // Минимальный отступ только для safe area
             }
             .background(Color.clear)
         }
@@ -199,19 +211,24 @@ struct ConverterView: View {
     
     @ViewBuilder
     private func currencyList(layout: Layout) -> some View {
-        VStack(spacing: layout.rowSpacing) {
+        // Гарантируем валидные значения
+        let safeRowH = layout.rowH.isFinite && layout.rowH > 0 ? layout.rowH : 58
+        let safeRowSpacing = layout.rowSpacing.isFinite && layout.rowSpacing >= 0 ? layout.rowSpacing : 8
+        
+        VStack(spacing: safeRowSpacing) {
             ForEach(Array(viewModel.state.selectedCurrencies.enumerated()), id: \.offset) { idx, code in
                 let isActive = (viewModel.state.activeCode == code)
-                let effectiveRowH = isActive ? layout.rowH * 1.20 : layout.rowH
+                let effectiveRowH = isActive ? safeRowH * 1.20 : safeRowH
+                let finalRowH = effectiveRowH.isFinite && effectiveRowH > 0 ? effectiveRowH : safeRowH
                 currencyRow(index: idx,
                             code: code,
                             valueText: viewModel.displayValue(for: code),
                             isActive: isActive,
-                            rowHeight: effectiveRowH)
+                            rowHeight: finalRowH)
             }
             let placeholders = max(0, layout.desiredRows - viewModel.state.selectedCurrencies.count)
             ForEach(0..<placeholders, id: \.self) { _ in
-                placeholderRow(rowHeight: layout.rowH)
+                placeholderRow(rowHeight: safeRowH)
                     .onTapGesture {
                         viewModel.handle(.addCurrency)
                     }
@@ -437,13 +454,18 @@ struct ConverterView: View {
     
     // MARK: - Currency row
     private func currencyRow(index: Int, code: String, valueText: String, isActive: Bool, rowHeight: CGFloat) -> some View {
-        HStack(spacing: 10) {
+        let safeRowHeight = rowHeight.isFinite && rowHeight > 0 ? rowHeight : 58
+        
+        return HStack(spacing: 10) {
             Button {
                 viewModel.handle(.replaceCurrency(index))
             } label: {
-                Text(CurrencySelectionSupport.emoji(for: code))
-                    .font(.system(size: 20))
-                    .frame(width: 60, height: rowHeight)
+                Image("flag")
+                    .resizable()
+                    .renderingMode(.template)
+                    .foregroundStyle(AppColors.textPrimary)
+                    .frame(width: 24, height: 24)
+                    .frame(width: 60, height: safeRowHeight)
                     .background(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
                             .fill(.ultraThinMaterial)
@@ -533,7 +555,7 @@ struct ConverterView: View {
                     }
                 }
                 .padding(.horizontal, 12)
-                .frame(height: rowHeight)
+                .frame(height: safeRowHeight)
                 .background(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .fill(.ultraThinMaterial)
@@ -574,11 +596,13 @@ struct ConverterView: View {
     }
     
     private func placeholderRow(rowHeight: CGFloat) -> some View {
-        HStack(spacing: 10) {
+        let safeRowHeight = rowHeight.isFinite && rowHeight > 0 ? rowHeight : 58
+        
+        return HStack(spacing: 10) {
             Image(systemName: "plus.circle.fill")
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(AppColors.textTertiary)
-                .frame(width: 60, height: rowHeight)
+                .frame(width: 60, height: safeRowHeight)
                 .background(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(.ultraThinMaterial)
@@ -590,7 +614,7 @@ struct ConverterView: View {
                 Spacer()
             }
             .padding(.horizontal, 12)
-            .frame(height: rowHeight)
+                .frame(height: safeRowHeight)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(.ultraThinMaterial)
@@ -605,23 +629,12 @@ struct ConverterView: View {
     
     
     // MARK: - Keypad (нижний ряд заполняет ширину)
-    private enum KeyKind { case dark, gray, accent }
+    private enum KeyKind { case dark, gray, grayTop, accent }
     
     @ViewBuilder
     private func neonCapsule(background: Color, corner: CGFloat = 28) -> some View {
         Capsule(style: .continuous)
             .fill(background)
-            .overlay(
-                Capsule(style: .continuous)
-                    .stroke(
-                        LinearGradient(
-                            colors: AppColors.coursesGradient,
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        ),
-                        lineWidth: 1.0
-                    )
-            )
     }
     
     private struct NeonPressStyle: ButtonStyle {
@@ -633,41 +646,56 @@ struct ConverterView: View {
     }
     
     private func keypad(height: CGFloat, spacing: CGFloat, fontSize: CGFloat) -> some View {
-        VStack(spacing: spacing) {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: spacing), count: 4), spacing: spacing) {
-                // Row 1
-                key("C", kind: .gray, height: height, fontSize: fontSize) { viewModel.handle(.clearAll) }
-                iconKey("delete.left", kind: .gray, height: height, fontSize: fontSize) { viewModel.handle(.backspace) }
-                key("%", kind: .gray, height: height, fontSize: fontSize) { viewModel.handle(.percent) }
-                iconKey("divide", kind: .accent, height: height, fontSize: fontSize) { viewModel.handle(.operation("/")) }
-                
-                // Row 2
-                key("7", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("7")) }
-                key("8", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("8")) }
-                key("9", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("9")) }
-                iconKey("multiply", kind: .accent, height: height, fontSize: fontSize) { viewModel.handle(.operation("*")) }
-                
-                // Row 3
-                key("4", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("4")) }
-                key("5", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("5")) }
-                key("6", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("6")) }
-                iconKey("minus", kind: .accent, height: height, fontSize: fontSize) { viewModel.handle(.operation("-")) }
-                
-                // Row 4
-                key("1", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("1")) }
-                key("2", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("2")) }
-                key("3", height: height, fontSize: fontSize) { viewModel.handle(.appendDigit("3")) }
-                iconKey("plus", kind: .accent, height: height, fontSize: fontSize) { viewModel.handle(.operation("+")) }
-            }
+        GeometryReader { geometry in
+            // Гарантируем валидные значения
+            let safeHeight = height.isFinite && height > 0 ? height : 44
+            let safeSpacing = spacing.isFinite && spacing >= 0 ? spacing : 6
+            let safeFontSize = fontSize.isFinite && fontSize > 0 ? fontSize : 18
+            let safeWidth = max(0, geometry.size.width - safeSpacing * 3)
+            let buttonWidth = max(44, safeWidth / 4) // Минимум 44 для кнопки
             
-            // Row 5 — заполняет ширину
-            HStack(spacing: spacing) {
-                key("0", height: height, fontSize: fontSize) { viewModel.handle(.appendZero) }
-                    .frame(maxWidth: .infinity)
-                key(decSep, height: height, fontSize: fontSize) { viewModel.handle(.appendComma) }
-                    .frame(maxWidth: .infinity)
-                key("=", kind: .accent, height: height, fontSize: fontSize) { viewModel.handle(.equal) }
-                    .frame(maxWidth: .infinity)
+            VStack(spacing: safeSpacing) {
+                // Rows 1-4 в сетке 4x4
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: safeSpacing), count: 4), spacing: safeSpacing) {
+                // Row 1
+                iconKey("delete.left", kind: .grayTop, height: safeHeight, fontSize: safeFontSize) { viewModel.handle(.backspace) }
+                key("C", kind: .grayTop, height: safeHeight, fontSize: safeFontSize) { viewModel.handle(.clearAll) }
+                key("%", kind: .grayTop, height: safeHeight, fontSize: safeFontSize) { viewModel.handle(.percent) }
+                iconKey("divide", kind: .accent, height: safeHeight, fontSize: safeFontSize) { viewModel.handle(.operation("/")) }
+                    
+                    // Row 2
+                    key("7", height: safeHeight, fontSize: safeFontSize) { viewModel.handle(.appendDigit("7")) }
+                    key("8", height: safeHeight, fontSize: safeFontSize) { viewModel.handle(.appendDigit("8")) }
+                    key("9", height: safeHeight, fontSize: safeFontSize) { viewModel.handle(.appendDigit("9")) }
+                    iconKey("multiply", kind: .accent, height: safeHeight, fontSize: safeFontSize) { viewModel.handle(.operation("*")) }
+                    
+                    // Row 3
+                    key("4", height: safeHeight, fontSize: safeFontSize) { viewModel.handle(.appendDigit("4")) }
+                    key("5", height: safeHeight, fontSize: safeFontSize) { viewModel.handle(.appendDigit("5")) }
+                    key("6", height: safeHeight, fontSize: safeFontSize) { viewModel.handle(.appendDigit("6")) }
+                    iconKey("minus", kind: .accent, height: safeHeight, fontSize: safeFontSize) { viewModel.handle(.operation("-")) }
+                    
+                    // Row 4
+                    key("1", height: safeHeight, fontSize: safeFontSize) { viewModel.handle(.appendDigit("1")) }
+                    key("2", height: safeHeight, fontSize: safeFontSize) { viewModel.handle(.appendDigit("2")) }
+                    key("3", height: safeHeight, fontSize: safeFontSize) { viewModel.handle(.appendDigit("3")) }
+                    iconKey("plus", kind: .accent, height: safeHeight, fontSize: safeFontSize) { viewModel.handle(.operation("+")) }
+                }
+                
+                // Row 5 — 0 и запятая стандартного размера, = занимает 2 слота
+                HStack(spacing: safeSpacing) {
+                    // Кнопка 0 - стандартный размер (1 слот)
+                    key("0", height: safeHeight, fontSize: safeFontSize) { viewModel.handle(.appendZero) }
+                        .frame(width: buttonWidth)
+                    
+                    // Кнопка запятой - стандартный размер (1 слот)
+                    key(decSep, height: safeHeight, fontSize: safeFontSize) { viewModel.handle(.appendComma) }
+                        .frame(width: buttonWidth)
+                    
+                    // Кнопка = - занимает 2 слота (2 колонки)
+                    key("=", kind: .accent, height: safeHeight, fontSize: safeFontSize) { viewModel.handle(.equal) }
+                        .frame(width: buttonWidth * 2 + safeSpacing)
+                }
             }
         }
     }
@@ -722,9 +750,10 @@ struct ConverterView: View {
     
     private func backgroundColor(for kind: KeyKind) -> Color {
         switch kind {
-        case .dark: return Color.black.opacity(0.3)
-        case .gray: return AppColors.iconBackground
-        case .accent: return Color.black.opacity(0.4)
+        case .dark: return Color(hex: "D9D9D9").opacity(0.2) // Светло-серый с opacity 20% для цифр
+        case .gray: return Color(hex: "D9D9D9").opacity(0.2) // Светло-серый с opacity 20% для запятой
+        case .grayTop: return Color(hex: "D9D9D9").opacity(0.4) // Светло-серый с opacity 40% для первых трех кнопок (удаление, C, %)
+        case .accent: return Color(hex: "68A5FF").opacity(0.6) // Синий с opacity 60% для операторов и =
         }
     }
     

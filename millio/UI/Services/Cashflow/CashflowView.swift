@@ -32,6 +32,9 @@ struct CashflowView: View {
             if viewModel == nil {
                 viewModel = CashflowViewModel(modelContext: modelContext)
             }
+            // Перезагружаем данные при каждом появлении экрана
+            viewModel?.handle(.loadCards)
+            viewModel?.handle(.loadTransactions)
         }
     }
 }
@@ -140,15 +143,6 @@ private struct CashflowContentView: View {
                 gradientColors: AppColors.cashflowGradient
             ) {
                 viewModel.handle(.addTransaction(.transfer))
-            }
-            
-            // Кнопка Обмен
-            CashflowActionButton(
-                title: "Обмен",
-                icon: "arrow.triangle.2.circlepath.circle.fill",
-                gradientColors: AppColors.coursesGradient
-            ) {
-                viewModel.handle(.addTransaction(.exchange))
             }
         }
     }
@@ -671,4 +665,3 @@ private struct CashflowActionButton: View {
         .buttonStyle(.plain)
     }
 }
-

@@ -17,12 +17,6 @@ enum AppRoute: Hashable {
     case finances
     case courses
     case cashback
-    case credits
-    case habits
-    case cardIndex
-    case debts
-    case investments
-    case plannedExpenses
     case cashflow
     
     // Other screens

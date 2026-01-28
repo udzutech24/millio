@@ -42,6 +42,8 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
     private let subscriptionStatusKey = "subscription_status"
     private let subscriptionExpirationKey = "subscription_expiration"
     private let trialStartDateKey = "trial_start_date"
+    private let debugPremiumKey = "debug_premium_enabled"
+    private let debugSubscriptionExpirationKey = "debug_subscription_expiration"
     private let trialDurationDays = 7
     
     // Product IDs (нужно будет настроить в App Store Connect)
@@ -76,51 +78,58 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
     func checkSubscriptionStatus() async {
         logger.info("Checking subscription status...")
         
+        #if DEBUG
+        // Если включен дебаг-премиум, не проверяем StoreKit
+        if defaults.bool(forKey: debugPremiumKey),
+           let expiration = defaults.object(forKey: debugSubscriptionExpirationKey) as? Date,
+           expiration > Date() {
+            self.status = .subscribed
+            self.expirationDate = expiration
+            self.isTrialActive = false
+            logger.info("Debug premium is active, expires: \(expiration)")
+            return
+        }
+        #endif
+        
         // Проверяем локальный статус триала
         checkTrialStatus()
         
         // Проверяем активные подписки через StoreKit
-        do {
-            var hasActiveSubscription = false
-            var latestExpirationDate: Date?
-            
-            // Получаем все активные подписки
-            for await result in Transaction.currentEntitlements {
-                switch result {
-                case .verified(let transaction):
-                    if let expirationDate = transaction.expirationDate,
-                       expirationDate > Date() {
-                        hasActiveSubscription = true
-                        if latestExpirationDate == nil || expirationDate > latestExpirationDate! {
-                            latestExpirationDate = expirationDate
-                        }
+        var hasActiveSubscription = false
+        var latestExpirationDate: Date?
+        
+        // Получаем все активные подписки
+        for await result in Transaction.currentEntitlements {
+            switch result {
+            case .verified(let transaction):
+                if let expirationDate = transaction.expirationDate,
+                   expirationDate > Date() {
+                    hasActiveSubscription = true
+                    if latestExpirationDate == nil || expirationDate > latestExpirationDate! {
+                        latestExpirationDate = expirationDate
                     }
-                case .unverified:
-                    continue
                 }
+            case .unverified:
+                continue
             }
-            
-            if hasActiveSubscription, let expiration = latestExpirationDate {
-                self.status = .subscribed
-                self.expirationDate = expiration
-                self.isTrialActive = false
-                saveLocalStatus()
-                logger.info("Active subscription found, expires: \(expiration)")
+        }
+        
+        if hasActiveSubscription, let expiration = latestExpirationDate {
+            self.status = .subscribed
+            self.expirationDate = expiration
+            self.isTrialActive = false
+            saveLocalStatus()
+            logger.info("Active subscription found, expires: \(expiration)")
+        } else {
+            // Если нет активной подписки, проверяем триал
+            if isTrialActive {
+                self.status = .trial
             } else {
-                // Если нет активной подписки, проверяем триал
-                if isTrialActive {
-                    self.status = .trial
-                } else {
-                    self.status = .notSubscribed
-                }
-                self.expirationDate = nil
-                saveLocalStatus()
-                logger.info("No active subscription found")
+                self.status = .notSubscribed
             }
-        } catch {
-            logger.error("Failed to check subscription status: \(error.localizedDescription)")
-            // В случае ошибки используем локально сохраненный статус (offline-first)
-            loadLocalStatus()
+            self.expirationDate = nil
+            saveLocalStatus()
+            logger.info("No active subscription found")
         }
     }
     
@@ -188,9 +197,60 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         logger.info("Trial started, expires: \(trialStartDate.addingTimeInterval(TimeInterval(self.trialDurationDays * 24 * 60 * 60)))")
     }
     
+    #if DEBUG
+    func grantDebugPremium() {
+        logger.info("Granting debug premium access...")
+        
+        // Устанавливаем премиум доступ на год вперед
+        let expirationDate = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
+        defaults.set(true, forKey: debugPremiumKey)
+        defaults.set(expirationDate, forKey: debugSubscriptionExpirationKey)
+        self.status = .subscribed
+        self.expirationDate = expirationDate
+        self.isTrialActive = false
+        // Не вызываем saveLocalStatus(), чтобы не перезаписать реальную дату подписки
+        
+        logger.info("Debug premium granted, expires: \(expirationDate)")
+    }
+    
+    func revokeDebugPremium() {
+        logger.info("Revoking debug premium access...")
+        
+        // Очищаем только debug ключи, не трогая реальную подписку
+        defaults.set(false, forKey: debugPremiumKey)
+        defaults.removeObject(forKey: debugSubscriptionExpirationKey)
+        self.status = .notSubscribed
+        self.expirationDate = nil  // Очищаем память от debug значения
+        self.isTrialActive = false
+        // Не вызываем saveLocalStatus(), чтобы не затереть реальную дату истечения подписки StoreKit
+        // Если есть реальная подписка, вызывающий код должен вызвать checkSubscriptionStatus()
+        
+        logger.info("Debug premium revoked")
+    }
+    
+    var isDebugPremiumActive: Bool {
+        defaults.bool(forKey: debugPremiumKey) && 
+        status == .subscribed && 
+        expirationDate != nil && 
+        expirationDate! > Date()
+    }
+    #endif
+    
     // MARK: - Private Methods
     
     private func loadLocalStatus() {
+        #if DEBUG
+        // Если включен дебаг-премиум, загружаем его статус из debug ключа
+        if defaults.bool(forKey: debugPremiumKey),
+           let expiration = defaults.object(forKey: debugSubscriptionExpirationKey) as? Date,
+           expiration > Date() {
+            self.status = .subscribed
+            self.expirationDate = expiration
+            self.isTrialActive = false
+            return
+        }
+        #endif
+        
         if let statusRaw = defaults.string(forKey: subscriptionStatusKey),
            let status = SubscriptionStatus(rawValue: statusRaw) {
             self.status = status
@@ -208,7 +268,15 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
     
     private func saveLocalStatus() {
         defaults.set(status.rawValue, forKey: subscriptionStatusKey)
+        // Не сохраняем expirationDate в subscriptionExpirationKey если включен debug premium,
+        // чтобы не перезаписать реальную дату истечения подписки StoreKit
+        #if DEBUG
+        if !defaults.bool(forKey: debugPremiumKey) {
+            defaults.set(expirationDate, forKey: subscriptionExpirationKey)
+        }
+        #else
         defaults.set(expirationDate, forKey: subscriptionExpirationKey)
+        #endif
     }
     
     private func checkTrialStatus() {
@@ -234,17 +302,13 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
     private func listenForTransactions() -> Task<Void, Never> {
         return Task.detached { [weak self] in
             for await result in Transaction.updates {
-                do {
-                    switch result {
-                    case .verified(let transaction):
-                        await transaction.finish()
-                        await self?.checkSubscriptionStatus()
-                    case .unverified:
-                        // Пропускаем непроверенные транзакции
-                        continue
-                    }
-                } catch {
-                    self?.logger.error("Transaction verification failed: \(error.localizedDescription)")
+                switch result {
+                case .verified(let transaction):
+                    await transaction.finish()
+                    await self?.checkSubscriptionStatus()
+                case .unverified:
+                    // Пропускаем непроверенные транзакции
+                    continue
                 }
             }
         }

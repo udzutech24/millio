@@ -14,14 +14,23 @@ enum CashflowTransactionType: String, Codable, CaseIterable {
     case income = "income"      // Доход
     case expense = "expense"    // Расход
     case transfer = "transfer"  // Перевод
-    case exchange = "exchange"  // Обмен валют
-    
+    case balanceAdjustment = "balance_adjustment"  // Ручное изменение баланса
+    case cardBalanceAdjustment = "card_balance_adjustment" // Корректировка баланса карты
+    case creditDebtAdjustment = "credit_debt_adjustment"   // Корректировка долга
+
+    static var allCases: [CashflowTransactionType] {
+        // Пользовательские типы для ручного создания операций
+        [.income, .expense, .transfer]
+    }
+
     var displayName: String {
         switch self {
         case .income: return "Доход"
         case .expense: return "Расход"
         case .transfer: return "Перевод"
-        case .exchange: return "Обмен"
+        case .balanceAdjustment: return "Изменение баланса"
+        case .cardBalanceAdjustment: return "Корректировка баланса"
+        case .creditDebtAdjustment: return "Корректировка долга"
         }
     }
     
@@ -30,7 +39,9 @@ enum CashflowTransactionType: String, Codable, CaseIterable {
         case .income: return "arrow.down.circle.fill"
         case .expense: return "arrow.up.circle.fill"
         case .transfer: return "arrow.left.arrow.right.circle.fill"
-        case .exchange: return "arrow.triangle.2.circlepath.circle.fill"
+        case .balanceAdjustment: return "pencil.circle.fill"
+        case .cardBalanceAdjustment: return "creditcard.circle.fill"
+        case .creditDebtAdjustment: return "exclamationmark.circle.fill"
         }
     }
 }
@@ -138,17 +149,11 @@ final class CashflowTransaction: Persistable {
     /// ID карты-получателя для перевода
     var toCardID: String?
     
-    /// Валюта обмена "из" (для обмена валют)
-    var exchangeFromCurrency: String?
+    /// ID кредита (для транзакций связанных с кредитами)
+    var creditID: String?
     
-    /// Валюта обмена "в" (для обмена валют)
-    var exchangeToCurrency: String?
-    
-    /// Сумма обмена "из" (для обмена валют)
-    var exchangeFromAmount: Double?
-    
-    /// Сумма обмена "в" (для обмена валют)
-    var exchangeToAmount: Double?
+    /// ID инвестиции (для транзакций связанных с инвестициями)
+    var investmentID: String?
     
     /// Описание/комментарий
     var note: String?
@@ -187,12 +192,10 @@ final class CashflowTransaction: Persistable {
         transactionDate: Date,
         cardID: String? = nil,
         toCardID: String? = nil,
+        creditID: String? = nil,
+        investmentID: String? = nil,
         incomeCategory: IncomeCategory? = nil,
         expenseCategory: ExpenseCategory? = nil,
-        exchangeFromCurrency: String? = nil,
-        exchangeToCurrency: String? = nil,
-        exchangeFromAmount: Double? = nil,
-        exchangeToAmount: Double? = nil,
         note: String? = nil
     ) {
         self.transactionTypeRaw = transactionType.rawValue
@@ -201,12 +204,10 @@ final class CashflowTransaction: Persistable {
         self.transactionDate = transactionDate
         self.cardID = cardID
         self.toCardID = toCardID
+        self.creditID = creditID
+        self.investmentID = investmentID
         self.incomeCategoryRaw = incomeCategory?.rawValue
         self.expenseCategoryRaw = expenseCategory?.rawValue
-        self.exchangeFromCurrency = exchangeFromCurrency
-        self.exchangeToCurrency = exchangeToCurrency
-        self.exchangeFromAmount = exchangeFromAmount
-        self.exchangeToAmount = exchangeToAmount
         self.note = note
         self.createdAt = Date()
         self.updatedAt = Date()
@@ -242,17 +243,11 @@ final class CashflowTransaction: Persistable {
         if let toCardID = toCardID {
             dict["toCardID"] = toCardID
         }
-        if let exchangeFromCurrency = exchangeFromCurrency {
-            dict["exchangeFromCurrency"] = exchangeFromCurrency
+        if let creditID = creditID {
+            dict["creditID"] = creditID
         }
-        if let exchangeToCurrency = exchangeToCurrency {
-            dict["exchangeToCurrency"] = exchangeToCurrency
-        }
-        if let exchangeFromAmount = exchangeFromAmount {
-            dict["exchangeFromAmount"] = exchangeFromAmount
-        }
-        if let exchangeToAmount = exchangeToAmount {
-            dict["exchangeToAmount"] = exchangeToAmount
+        if let investmentID = investmentID {
+            dict["investmentID"] = investmentID
         }
         if let note = note {
             dict["note"] = note

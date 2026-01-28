@@ -232,7 +232,7 @@ final class CardViewModel: ViewModelProtocol {
     }
     
     private func applyFilters() {
-        var filtered = state.cards
+        let filtered = state.cards
         
         // Показываем все карты без фильтрации
         state.filteredCards = filtered
@@ -300,6 +300,7 @@ final class CardViewModel: ViewModelProtocol {
         do {
             try modelContext.save()
             loadCards()
+            EventBus.shared.publish(FinanceEvent.cardsUpdated)
         } catch {
             AppLogger.log(.error, category: "Card", "Failed to delete card: \(error.localizedDescription)")
         }
@@ -312,13 +313,26 @@ final class CardViewModel: ViewModelProtocol {
         do {
             try modelContext.save()
             loadCards()
+            EventBus.shared.publish(FinanceEvent.cardsUpdated)
         } catch {
             AppLogger.log(.error, category: "Card", "Failed to toggle favorite: \(error.localizedDescription)")
         }
     }
     
     private func updateCard(_ card: Card) {
-        if let existing = state.editingCard {
+        // Ищем существующую карту: сначала по state.editingCard, затем по uniqueID
+        let existing = state.editingCard ?? state.cards.first { $0.uniqueID == card.uniqueID && !card.uniqueID.isEmpty }
+        
+        if let existing = existing {
+            // Сохраняем старые значения для корректировки
+            let oldBalance = existing.balance
+            let newCardType = card.cardType
+            let balanceChanged = abs(card.balance - oldBalance) > 0.01
+
+            if !existing.hasInitialBalance {
+                existing.initialBalance = existing.balance
+                existing.hasInitialBalance = true
+            }
             // Обновляем существующую карту
             existing.name = card.name
             existing.cardNumber = card.cardNumber
@@ -334,6 +348,34 @@ final class CardViewModel: ViewModelProtocol {
             existing.isFavorite = card.isFavorite
             existing.includeInTotal = card.includeInTotal
             existing.updatedAt = Date()
+
+            // Корректировка баланса через форму редактирования = транзакция
+            if balanceChanged {
+                let balanceDelta = card.balance - oldBalance
+                let transactionType: CashflowTransactionType
+                let transactionAmount: Double
+                let transactionNote: String
+
+                if newCardType == .credit {
+                    transactionType = .creditDebtAdjustment
+                    transactionAmount = balanceDelta
+                    transactionNote = "Редактирование задолженности кредитной карты"
+                } else {
+                    transactionType = .cardBalanceAdjustment
+                    transactionAmount = balanceDelta
+                    transactionNote = "Редактирование баланса карты"
+                }
+
+                let transaction = CashflowTransaction(
+                    transactionType: transactionType,
+                    amount: transactionAmount,
+                    currency: existing.currency,
+                    transactionDate: Date(),
+                    cardID: existing.cardUniqueID,
+                    note: transactionNote
+                )
+                modelContext.insert(transaction)
+            }
         } else {
             // Создаем новую карту
             let newCard = Card(
@@ -359,6 +401,7 @@ final class CardViewModel: ViewModelProtocol {
             loadCards()
             state.showCardEditor = false
             state.editingCard = nil
+            EventBus.shared.publish(FinanceEvent.cardsUpdated)
         } catch {
             AppLogger.log(.error, category: "Card", "Failed to save card: \(error.localizedDescription)")
         }

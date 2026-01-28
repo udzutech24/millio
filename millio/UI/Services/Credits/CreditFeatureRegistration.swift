@@ -58,6 +58,13 @@ struct CreditImporter: ModelImporter {
         
         // Если кредит уже существует, обновляем его данные вместо создания нового
         if let existingCredit = try? context.fetch(existingCreditDescriptor).first {
+            if let uniqueID = data["creditUniqueID"] as? String, !uniqueID.isEmpty {
+                existingCredit.uniqueID = uniqueID
+            }
+            if let initialRemainingAmount = data["initialRemainingAmount"] as? Double {
+                existingCredit.initialRemainingAmount = initialRemainingAmount
+                existingCredit.hasInitialRemainingAmount = data["hasInitialRemainingAmount"] as? Bool ?? true
+            }
             existingCredit.interestRate = interestRate
             existingCredit.monthlyPayment = monthlyPayment
             existingCredit.remainingAmount = remainingAmount
@@ -67,6 +74,7 @@ struct CreditImporter: ModelImporter {
             existingCredit.includeInTotal = data["includeInTotal"] as? Bool ?? true
             existingCredit.updatedAt = Date(timeIntervalSince1970: updatedAt)
             existingCredit.updateRemainingAmount()
+            existingCredit.ensureUniqueID()
             
             AppLogger.log(.info, category: "CreditImporter", "Updated existing credit '\(name)' instead of creating duplicate")
             return
@@ -87,12 +95,23 @@ struct CreditImporter: ModelImporter {
         
         credit.endDate = endDate > 0 ? Date(timeIntervalSince1970: endDate) : nil
         credit.remainingAmount = remainingAmount
+        if let initialRemainingAmount = data["initialRemainingAmount"] as? Double {
+            credit.initialRemainingAmount = initialRemainingAmount
+            credit.hasInitialRemainingAmount = data["hasInitialRemainingAmount"] as? Bool ?? true
+        } else {
+            credit.initialRemainingAmount = remainingAmount
+            credit.hasInitialRemainingAmount = true
+        }
         credit.earlyPaymentsAmount = data["earlyPaymentsAmount"] as? Double ?? 0.0
         credit.isClosed = data["isClosed"] as? Bool ?? false
         credit.isFavorite = data["isFavorite"] as? Bool ?? false
         credit.includeInTotal = data["includeInTotal"] as? Bool ?? true
         credit.createdAt = Date(timeIntervalSince1970: createdAt)
         credit.updatedAt = Date(timeIntervalSince1970: updatedAt)
+        if let uniqueID = data["creditUniqueID"] as? String, !uniqueID.isEmpty {
+            credit.uniqueID = uniqueID
+        }
+        credit.ensureUniqueID()
         
         context.insert(credit)
     }

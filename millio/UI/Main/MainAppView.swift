@@ -13,12 +13,9 @@ struct MainAppView: View {
     @Environment(\.modelContext) private var modelContext
     @StateObject private var viewModel: MainAppViewModel
     @State private var services: [ServiceItem] = []
-    @State private var draggedItem: ServiceItem?
     @State private var cashflowViewModel: CashflowViewModel?
     @State private var showExpenseSheet = false
     @State private var showIncomeSheet = false
-    
-    private let orderManager = ServiceOrderManager()
     
     init(router: AppRouter) {
         self.router = router
@@ -33,51 +30,35 @@ struct MainAppView: View {
                 VStack(spacing: 0) {
                     // Header
                     HStack {
+                        // Иконка профиля слева
                         Button {
                             viewModel.handle(.navigateToProfile)
                         } label: {
-                            Image(systemName: "person.circle")
-                                .font(.system(size: 28))
-                                .foregroundStyle(AppColors.textPrimary)
+                            Image("profile")
                         }
                         
                         Spacer()
                         
+                        // Кнопка PRO справа
                         Button {
                             viewModel.handle(.navigateToSubscription)
                         } label: {
-                            HStack(spacing: 6) {
+                            HStack(spacing: 8) {
                                 Image(systemName: appState.isPro ? "star.fill" : "star")
                                     .font(.system(size: 14))
-                                Text(appState.isPro ? "PRO" : "PRO")
-                                    .font(.system(size: 14, weight: .semibold))
+                                Text("PRO")
+                                    .font(.system(size: 15, weight: .medium))
                             }
-                            .foregroundStyle(
-                                appState.isPro
-                                ? LinearGradient(
-                                    colors: AppColors.incomeGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                                : LinearGradient(
-                                    colors: [AppColors.textPrimary],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
                             .background {
                                 Capsule()
                                     .stroke(
-                                        appState.isPro
-                                        ? LinearGradient(
-                                            colors: AppColors.incomeGradient,
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                        : LinearGradient(
-                                            colors: [AppColors.textPrimary],
+                                        LinearGradient(
+                                            colors: appState.isPro
+                                                ? AppColors.incomeGradient
+                                                : [AppColors.textPrimary.opacity(0.3)],
                                             startPoint: .leading,
                                             endPoint: .trailing
                                         ),
@@ -89,22 +70,10 @@ struct MainAppView: View {
                     .padding(.horizontal, 24)
                     .padding(.top, 16)
                     
-                    // Title and slogan
-                    VStack(spacing: 8) {
-                        Text("millio")
-                            .font(.system(size: 42, weight: .bold))
-                            .foregroundStyle(AppColors.textPrimary)
-                        
-                        Text("ваш лучший помощник")
-                            .font(.system(size: 16, weight: .regular))
-                            .foregroundStyle(AppColors.textSecondary)
-                    }
-                    .padding(.top, 32)
-                    .padding(.bottom, 40)
-                    
                     // Service buttons grid
                     servicesGrid
                         .padding(.horizontal, 24)
+                        .padding(.top, 24)
                     
                     Spacer()
                     
@@ -169,9 +138,9 @@ struct MainAppView: View {
     // MARK: - Services Grid
     
     private var servicesGrid: some View {
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: 2)
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 2)
         
-        return LazyVGrid(columns: columns, spacing: 16) {
+        return LazyVGrid(columns: columns, spacing: 8) {
             ForEach(services) { service in
                 ServiceButton(
                     title: service.title,
@@ -180,31 +149,6 @@ struct MainAppView: View {
                 ) {
                     viewModel.handle(.navigateToService(service.route))
                 }
-                .draggable(service.id) {
-                    ServiceButton(
-                        title: service.title,
-                        icon: service.icon,
-                        gradientColors: service.gradientColors
-                    ) {
-                        // Пустой action для drag preview
-                    }
-                    .opacity(0.8)
-                }
-                .dropDestination(for: String.self) { droppedIDs, location in
-                    guard let droppedID = droppedIDs.first,
-                          droppedID != service.id,
-                          let draggedIndex = services.firstIndex(where: { $0.id == droppedID }),
-                          let targetIndex = services.firstIndex(where: { $0.id == service.id }) else {
-                        return false
-                    }
-                    
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        services.move(fromOffsets: IndexSet(integer: draggedIndex), toOffset: targetIndex > draggedIndex ? targetIndex + 1 : targetIndex)
-                        saveServicesOrder()
-                    }
-                    
-                    return true
-                }
             }
         }
     }
@@ -212,12 +156,8 @@ struct MainAppView: View {
     // MARK: - Helpers
     
     private func loadServices() {
-        services = orderManager.getOrderedServices()
-    }
-    
-    private func saveServicesOrder() {
-        let order = services.map { $0.id }
-        orderManager.saveOrder(order)
+        // Показываем только актуальные сервисы
+        services = ServiceItem.allServices()
     }
     
     @ViewBuilder
@@ -229,18 +169,6 @@ struct MainAppView: View {
             CoursesView()
         case .cashback:
             CashbackView()
-        case .credits:
-            CreditsView()
-        case .habits:
-            HabitsView()
-        case .cardIndex:
-            CardIndexView()
-        case .debts:
-            DebtsView()
-        case .investments:
-            InvestmentsView()
-        case .plannedExpenses:
-            PlannedExpensesView()
         case .cashflow:
             CashflowView()
         case .profile:
