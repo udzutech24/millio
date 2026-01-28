@@ -240,7 +240,7 @@ final class Card: Persistable {
     
     /// Уникальный идентификатор карты для восстановления связей при restore
     var cardUniqueID: String {
-        return uniqueID
+        uniqueID.isEmpty ? legacyCardUniqueID() : uniqueID
     }
 
     private func legacyCardUniqueID() -> String {

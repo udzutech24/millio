@@ -188,17 +188,24 @@ struct CreditEditorView: View {
 
     private func loadAvailableCurrencies() {
         Task {
-            isLoadingCurrencies = true
-            defer { isLoadingCurrencies = false }
+            let currentSelectedCurrency = await MainActor.run {
+                isLoadingCurrencies = true
+                return selectedCurrency
+            }
 
             _ = await CurrencyRateService.shared.getRate(from: "USD", to: "RUB")
 
             let fromRateSource = Set(CurrencyRateService.shared.getAvailableCurrencies())
             var currencies = Array(fromRateSource)
-            if !currencies.contains(selectedCurrency) {
-                currencies.append(selectedCurrency)
+            if !currencies.contains(currentSelectedCurrency) {
+                currencies.append(currentSelectedCurrency)
             }
-            availableCurrencies = currencies.sorted()
+            let sortedCurrencies = currencies.sorted()
+
+            await MainActor.run {
+                availableCurrencies = sortedCurrencies
+                isLoadingCurrencies = false
+            }
         }
     }
 

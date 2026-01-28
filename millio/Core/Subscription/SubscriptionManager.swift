@@ -43,6 +43,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
     private let subscriptionExpirationKey = "subscription_expiration"
     private let trialStartDateKey = "trial_start_date"
     private let debugPremiumKey = "debug_premium_enabled"
+    private let debugSubscriptionExpirationKey = "debug_subscription_expiration"
     private let trialDurationDays = 7
     
     // Product IDs (нужно будет настроить в App Store Connect)
@@ -80,7 +81,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         #if DEBUG
         // Если включен дебаг-премиум, не проверяем StoreKit
         if defaults.bool(forKey: debugPremiumKey),
-           let expiration = defaults.object(forKey: subscriptionExpirationKey) as? Date,
+           let expiration = defaults.object(forKey: debugSubscriptionExpirationKey) as? Date,
            expiration > Date() {
             self.status = .subscribed
             self.expirationDate = expiration
@@ -203,10 +204,11 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         // Устанавливаем премиум доступ на год вперед
         let expirationDate = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
         defaults.set(true, forKey: debugPremiumKey)
+        defaults.set(expirationDate, forKey: debugSubscriptionExpirationKey)
         self.status = .subscribed
         self.expirationDate = expirationDate
         self.isTrialActive = false
-        saveLocalStatus()
+        // Не вызываем saveLocalStatus(), чтобы не перезаписать реальную дату подписки
         
         logger.info("Debug premium granted, expires: \(expirationDate)")
     }
@@ -214,11 +216,14 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
     func revokeDebugPremium() {
         logger.info("Revoking debug premium access...")
         
+        // Очищаем только debug ключи, не трогая реальную подписку
         defaults.set(false, forKey: debugPremiumKey)
+        defaults.removeObject(forKey: debugSubscriptionExpirationKey)
         self.status = .notSubscribed
-        self.expirationDate = nil
+        self.expirationDate = nil  // Очищаем память от debug значения
         self.isTrialActive = false
-        saveLocalStatus()
+        // Не вызываем saveLocalStatus(), чтобы не затереть реальную дату истечения подписки StoreKit
+        // Если есть реальная подписка, вызывающий код должен вызвать checkSubscriptionStatus()
         
         logger.info("Debug premium revoked")
     }
@@ -235,9 +240,9 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
     
     private func loadLocalStatus() {
         #if DEBUG
-        // Если включен дебаг-премиум, загружаем его статус
+        // Если включен дебаг-премиум, загружаем его статус из debug ключа
         if defaults.bool(forKey: debugPremiumKey),
-           let expiration = defaults.object(forKey: subscriptionExpirationKey) as? Date,
+           let expiration = defaults.object(forKey: debugSubscriptionExpirationKey) as? Date,
            expiration > Date() {
             self.status = .subscribed
             self.expirationDate = expiration
@@ -263,7 +268,15 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
     
     private func saveLocalStatus() {
         defaults.set(status.rawValue, forKey: subscriptionStatusKey)
+        // Не сохраняем expirationDate в subscriptionExpirationKey если включен debug premium,
+        // чтобы не перезаписать реальную дату истечения подписки StoreKit
+        #if DEBUG
+        if !defaults.bool(forKey: debugPremiumKey) {
+            defaults.set(expirationDate, forKey: subscriptionExpirationKey)
+        }
+        #else
         defaults.set(expirationDate, forKey: subscriptionExpirationKey)
+        #endif
     }
     
     private func checkTrialStatus() {

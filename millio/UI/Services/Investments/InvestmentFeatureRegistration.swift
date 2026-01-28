@@ -70,6 +70,7 @@ struct InvestmentImporter: ModelImporter {
             existingInvestment.priority = priority
             existingInvestment.includeInTotal = includeInTotal
             existingInvestment.updatedAt = Date(timeIntervalSince1970: updatedAt)
+            existingInvestment.ensureUniqueID()
             
             AppLogger.log(.info, category: "InvestmentImporter", "Updated existing investment '\(name)' instead of creating duplicate")
             return
@@ -99,6 +100,7 @@ struct InvestmentImporter: ModelImporter {
         if let uniqueID = data["investmentUniqueID"] as? String, !uniqueID.isEmpty {
             investment.uniqueID = uniqueID
         }
+        investment.ensureUniqueID()
         
         context.insert(investment)
     }

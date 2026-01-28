@@ -261,7 +261,7 @@ final class InvestmentViewModel: ViewModelProtocol {
         
         if let existing = state.editingInvestment {
             if existing.uniqueID.isEmpty {
-                _ = existing.investmentUniqueID
+                existing.ensureUniqueID()
             }
             if !existing.hasInitialAmount {
                 existing.initialAmount = existing.amount

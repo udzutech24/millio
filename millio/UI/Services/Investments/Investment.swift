@@ -176,10 +176,14 @@ final class Investment: Persistable {
     
     /// Уникальный идентификатор инвестиции для восстановления связей при restore
     var investmentUniqueID: String {
+        return uniqueID.isEmpty ? legacyInvestmentUniqueID() : uniqueID
+    }
+    
+    /// Убедиться, что uniqueID установлен (миграция для старых данных)
+    func ensureUniqueID() {
         if uniqueID.isEmpty {
             uniqueID = legacyInvestmentUniqueID()
         }
-        return uniqueID
     }
 
     private func legacyInvestmentUniqueID() -> String {

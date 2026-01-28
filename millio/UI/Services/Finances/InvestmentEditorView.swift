@@ -181,17 +181,28 @@ struct InvestmentEditorView: View {
 
     private func loadAvailableCurrencies() {
         Task {
-            isLoadingCurrencies = true
-            defer { isLoadingCurrencies = false }
-
+            // Устанавливаем состояние загрузки на главном акторе
+            await MainActor.run {
+                isLoadingCurrencies = true
+            }
+            
+            // Выполняем сетевой вызов вне главного потока
             _ = await CurrencyRateService.shared.getRate(from: "USD", to: "RUB")
-
+            
+            // Получаем валюты из источника (синхронный метод)
             let fromRateSource = Set(CurrencyRateService.shared.getAvailableCurrencies())
             var currencies = Array(fromRateSource)
+            
+            // Добавляем выбранную валюту, если её нет
             if !currencies.contains(selectedCurrency) {
                 currencies.append(selectedCurrency)
             }
-            availableCurrencies = currencies.sorted()
+            
+            // Обновляем состояние на главном акторе
+            await MainActor.run {
+                availableCurrencies = currencies.sorted()
+                isLoadingCurrencies = false
+            }
         }
     }
 
