@@ -123,7 +123,7 @@ enum MonetaCurrency: String, Codable, CaseIterable, Identifiable {
         case .PLN: return "zł"
         case .CZK: return "Kč"
         case .HUF: return "Ft"
-        case .SEK, .NOK, .DKK: return "kr"
+        case .SEK, .NOK, .DKK, .ISK: return "kr"
         default:
             return rawValue
         }

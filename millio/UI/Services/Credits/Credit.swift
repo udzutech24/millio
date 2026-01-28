@@ -379,10 +379,14 @@ final class Credit: Persistable {
     
     /// Уникальный идентификатор кредита для восстановления связей при restore
     var creditUniqueID: String {
+        return uniqueID.isEmpty ? legacyCreditUniqueID() : uniqueID
+    }
+    
+    /// Убедиться, что uniqueID установлен (миграция для старых данных)
+    func ensureUniqueID() {
         if uniqueID.isEmpty {
             uniqueID = legacyCreditUniqueID()
         }
-        return uniqueID
     }
 
     private func legacyCreditUniqueID() -> String {

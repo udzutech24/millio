@@ -43,6 +43,7 @@ struct CardEditorView: View {
                 isFavorite: editing.isFavorite,
                 includeInTotal: editing.includeInTotal
             )
+            newCard.uniqueID = editing.uniqueID
             _card = State(initialValue: newCard)
             _creditLimitText = State(initialValue: editing.creditLimit.map { String(format: "%.2f", $0) } ?? "")
             _isNewCard = State(initialValue: false)

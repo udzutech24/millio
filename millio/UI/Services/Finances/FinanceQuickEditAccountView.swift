@@ -157,8 +157,15 @@ struct FinanceQuickEditAccountView: View {
     }
     
     private func parseAmount(_ text: String) -> Double? {
-        let cleaned = text.replacingOccurrences(of: " ", with: "")
-        return Double(cleaned)
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.locale = Locale.current
+        
+        let cleaned = text
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "\u{00A0}", with: "")
+        
+        return formatter.number(from: cleaned)?.doubleValue
     }
     
     private func saveAmount() {

@@ -209,9 +209,7 @@ final class FinanceViewModel: ViewModelProtocol {
     
     private var storedSecondaryDisplayCurrency: String? {
         get {
-            let value = defaults.string(forKey: "finance_secondary_display_currency")
-            // Если значение не задано, возвращаем USD по умолчанию
-            return value ?? "USD"
+            defaults.string(forKey: "finance_secondary_display_currency")
         }
         set { defaults.set(newValue, forKey: "finance_secondary_display_currency") }
     }
@@ -235,7 +233,6 @@ final class FinanceViewModel: ViewModelProtocol {
         self.modelContext = modelContext
         self.currencyService = currencyService ?? CurrencyRateService.shared
         state.displayCurrency = storedDisplayCurrency
-        // По умолчанию дополнительная валюта - USD
         state.secondaryDisplayCurrency = storedSecondaryDisplayCurrency
         state.isSavingsGoalEnabled = storedSavingsGoalEnabled
         state.savingsGoalAmount = storedSavingsGoalAmount
@@ -575,6 +572,27 @@ final class FinanceViewModel: ViewModelProtocol {
         
         state.currencyConversionWarning = nil
         
+        // Собираем все валюты из всех групп
+        var allCurrenciesNeeded = Set<String>()
+        for group in state.groups {
+            let currencies = await collectCurrenciesFromGroup(group: group)
+            allCurrenciesNeeded.formUnion(currencies)
+            // Добавляем валюту группы
+            let groupCurrency = group.displayCurrency ?? state.displayCurrency
+            allCurrenciesNeeded.insert(groupCurrency)
+        }
+        // Добавляем displayCurrency
+        allCurrenciesNeeded.insert(displayCurrency)
+        // Добавляем secondaryDisplayCurrency, если задан
+        if let secondaryCurrency = state.secondaryDisplayCurrency {
+            allCurrenciesNeeded.insert(secondaryCurrency)
+        }
+        
+        // Если есть несколько валют, обновляем курсы один раз
+        if allCurrenciesNeeded.count > 1 {
+            await currencyService.forceRefreshRates()
+        }
+        
         // Для каждого group вычисляем сумму в его валюте (или в state.displayCurrency, если не задана)
         for group in state.groups {
             let groupCurrency = group.displayCurrency ?? state.displayCurrency
@@ -645,15 +663,8 @@ final class FinanceViewModel: ViewModelProtocol {
         var allCurrenciesNeeded = Set(currencies)
         allCurrenciesNeeded.insert(currency)
         
-        // Если есть валюты, отличные от USD, явно загружаем курсы из API
-        // Это гарантирует, что все необходимые курсы будут доступны перед расчетом
-        if !allCurrenciesNeeded.isEmpty && allCurrenciesNeeded.count > 1 {
-            // Принудительно обновляем курсы из API перед расчетом
-            await currencyService.forceRefreshRates()
-        }
-        
         // Предзагружаем курсы для всех необходимых валют через USD
-        // Это гарантирует, что все необходимые курсы будут загружены перед расчетом
+        // Курсы уже обновлены на верхнем уровне, здесь только предзагрузка
         for neededCurrency in allCurrenciesNeeded {
             if neededCurrency != "USD" {
                 // Запрашиваем курс, что автоматически загрузит его из API, если нужно
@@ -1053,8 +1064,6 @@ final class FinanceViewModel: ViewModelProtocol {
                 card.updatedAt = Date()
                 
                 do {
-                    try modelContext.save()
-                    
                     // Создаем транзакцию для ручного изменения баланса
                     let difference = newAmount - oldAmount
                     if abs(difference) > 0.01 { // Создаем транзакцию только если есть изменение
@@ -1085,8 +1094,10 @@ final class FinanceViewModel: ViewModelProtocol {
                             note: transactionNote
                         )
                         modelContext.insert(transaction)
-                        try modelContext.save()
                     }
+                    
+                    // Атомарное сохранение обновления карты и транзакции (если она была создана)
+                    try modelContext.save()
                     
                     loadAccounts()
                     calculateTotalAmount()
@@ -1117,8 +1128,6 @@ final class FinanceViewModel: ViewModelProtocol {
                 credit.updatedAt = Date()
                 
                 do {
-                    try modelContext.save()
-                    
                     // Создаем транзакцию для ручного изменения баланса
                     let difference = newAmount - oldAmount
                     if abs(difference) > 0.01 { // Создаем транзакцию только если есть изменение
@@ -1137,8 +1146,10 @@ final class FinanceViewModel: ViewModelProtocol {
                             note: "Быстрое изменение остатка долга"
                         )
                         modelContext.insert(transaction)
-                        try modelContext.save()
                     }
+                    
+                    // Атомарное сохранение обновления кредита и транзакции (если она была создана)
+                    try modelContext.save()
                     
                     loadAccounts()
                     calculateTotalAmount()
@@ -1169,8 +1180,6 @@ final class FinanceViewModel: ViewModelProtocol {
                 investment.updatedAt = Date()
                 
                 do {
-                    try modelContext.save()
-                    
                     // Создаем транзакцию для ручного изменения стоимости актива
                     let difference = newAmount - oldAmount
                     if abs(difference) > 0.01 {
@@ -1183,8 +1192,10 @@ final class FinanceViewModel: ViewModelProtocol {
                             note: "Ручное изменение стоимости актива"
                         )
                         modelContext.insert(transaction)
-                        try modelContext.save()
                     }
+                    
+                    // Атомарное сохранение обновления инвестиции и транзакции (если она была создана)
+                    try modelContext.save()
                     
                     loadAccounts()
                     calculateTotalAmount()

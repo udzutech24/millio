@@ -752,7 +752,7 @@ struct ConverterView: View {
         switch kind {
         case .dark: return Color(hex: "D9D9D9").opacity(0.2) // Светло-серый с opacity 20% для цифр
         case .gray: return Color(hex: "D9D9D9").opacity(0.2) // Светло-серый с opacity 20% для запятой
-        case .grayTop: return Color(hex: "#D9D9D9").opacity(0.4) // Светло-серый с opacity 40% для первых трех кнопок (удаление, C, %)
+        case .grayTop: return Color(hex: "D9D9D9").opacity(0.4) // Светло-серый с opacity 40% для первых трех кнопок (удаление, C, %)
         case .accent: return Color(hex: "68A5FF").opacity(0.6) // Синий с opacity 60% для операторов и =
         }
     }

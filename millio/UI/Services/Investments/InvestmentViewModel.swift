@@ -294,23 +294,25 @@ final class InvestmentViewModel: ViewModelProtocol {
             modelContext.insert(newInvestment)
         }
         
+        // Создание CashflowTransaction если нужно (перед save для атомарности)
+        if let existing = editedInvestment {
+            let delta = amount - oldAmount
+            if abs(delta) > 0.01 {
+                let transaction = CashflowTransaction(
+                    transactionType: .balanceAdjustment,
+                    amount: delta,
+                    currency: existing.currency,
+                    transactionDate: Date(),
+                    investmentID: existing.investmentUniqueID,
+                    note: "Ручное изменение стоимости актива"
+                )
+                modelContext.insert(transaction)
+            }
+        }
+        
+        // Атомарное сохранение всех изменений (Investment и CashflowTransaction)
         do {
             try modelContext.save()
-            if let existing = editedInvestment {
-                let delta = amount - oldAmount
-                if abs(delta) > 0.01 {
-                    let transaction = CashflowTransaction(
-                        transactionType: .balanceAdjustment,
-                        amount: delta,
-                        currency: existing.currency,
-                        transactionDate: Date(),
-                        investmentID: existing.investmentUniqueID,
-                        note: "Ручное изменение стоимости актива"
-                    )
-                    modelContext.insert(transaction)
-                    try modelContext.save()
-                }
-            }
             loadInvestments()
             state.showInvestmentEditor = false
             state.editingInvestment = nil

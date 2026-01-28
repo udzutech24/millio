@@ -155,7 +155,7 @@ struct CreditEditorView: View {
                     }
                 }
             }
-            .confirmationDialog("Удалить счет полностью?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
+            .confirmationDialog("Удалить кредит полностью?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
                 Button("Удалить", role: .destructive) {
                     onDelete?()
                 }

@@ -483,6 +483,13 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             return (customPeriod.start, customPeriod.end)
         }
         
+        // Fallback для случая, когда period == .custom, но customPeriod == nil
+        if state.period == .custom {
+            // Возвращаем последние 30 дней как разумное значение по умолчанию
+            let defaultStartDate = calendar.date(byAdding: .day, value: -30, to: endDate) ?? endDate
+            return (defaultStartDate, endDate)
+        }
+        
         switch state.period {
         case .week, .month, .year:
             if let days = state.period.days {
@@ -509,10 +516,9 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             }
             startDate = earliestDate
         case .custom:
-            if let customPeriod = state.customPeriod {
-                return (customPeriod.start, customPeriod.end)
-            }
-            startDate = endDate
+            // Этот кейс никогда не должен выполняться, так как он обработан выше через ранний возврат
+            // Используем разумное значение по умолчанию на случай изменения логики
+            startDate = calendar.date(byAdding: .day, value: -30, to: endDate) ?? endDate
         }
         
         return (startDate, endDate)
@@ -1162,7 +1168,9 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         includeInitialBeforeCreation: Bool = false
     ) async -> Double {
         // Проверяем кэш
-        let cacheKey = "\(accounts.map { $0.accountUniqueID }.joined(separator: "_"))_\(date.timeIntervalSince1970)_\(debtAsNegative ? "net" : "raw")_\(includeInitialBeforeCreation ? "init" : "strict")"
+        let sortedIDs = accounts.map { $0.accountUniqueID }.sorted()
+        let idsHash = sortedIDs.joined().hashValue
+        let cacheKey = "balance_\(idsHash)_\(date.timeIntervalSince1970)_\(debtAsNegative ? "net" : "raw")_\(includeInitialBeforeCreation ? "init" : "strict")"
         if let cached = balanceCache[cacheKey] {
             return cached
         }

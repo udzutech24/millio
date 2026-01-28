@@ -320,15 +320,15 @@ final class CardViewModel: ViewModelProtocol {
     }
     
     private func updateCard(_ card: Card) {
-        if let existing = state.editingCard {
+        // Ищем существующую карту: сначала по state.editingCard, затем по uniqueID
+        let existing = state.editingCard ?? state.cards.first { $0.uniqueID == card.uniqueID && !card.uniqueID.isEmpty }
+        
+        if let existing = existing {
             // Сохраняем старые значения для корректировки
             let oldBalance = existing.balance
             let newCardType = card.cardType
             let balanceChanged = abs(card.balance - oldBalance) > 0.01
 
-            if existing.uniqueID.isEmpty {
-                _ = existing.cardUniqueID
-            }
             if !existing.hasInitialBalance {
                 existing.initialBalance = existing.balance
                 existing.hasInitialBalance = true

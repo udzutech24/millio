@@ -59,6 +59,9 @@ struct CardImporter: ModelImporter {
             // Обновляем существующую карту
             if let uniqueID = data["cardUniqueID"] as? String, !uniqueID.isEmpty {
                 existingCard.uniqueID = uniqueID
+            } else if existingCard.uniqueID.isEmpty {
+                // Устанавливаем uniqueID из legacy значений на основе замороженных данных из backup
+                existingCard.uniqueID = "\(name)|\(cardNumber)|\(bankRaw)|\(cardTypeRaw)|\(currency)|\(createdAt)"
             }
             if let initialBalance = data["initialBalance"] as? Double {
                 existingCard.initialBalance = initialBalance
@@ -117,6 +120,9 @@ struct CardImporter: ModelImporter {
         }
         if let uniqueID = data["cardUniqueID"] as? String, !uniqueID.isEmpty {
             card.uniqueID = uniqueID
+        } else {
+            // Устанавливаем uniqueID из legacy значений на основе замороженных данных из backup
+            card.uniqueID = "\(name)|\(cardNumber)|\(bankRaw)|\(cardTypeRaw)|\(currency)|\(createdAt)"
         }
         
         // Восстанавливаем зашифрованные данные, если есть

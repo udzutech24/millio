@@ -44,7 +44,7 @@ struct MainAppView: View {
                             viewModel.handle(.navigateToSubscription)
                         } label: {
                             HStack(spacing: 8) {
-                                Image(appState.isPro ? "star" : "star")
+                                Image(systemName: appState.isPro ? "star.fill" : "star")
                                     .font(.system(size: 14))
                                 Text("PRO")
                                     .font(.system(size: 15, weight: .medium))
@@ -57,8 +57,8 @@ struct MainAppView: View {
                                     .stroke(
                                         LinearGradient(
                                             colors: appState.isPro
-                                                ? [Color(hex: "19E694").opacity(0.5), Color(hex: "BD00E7").opacity(0.5)]
-                                            : [Color(hex: "19E694").opacity(0.5), Color(hex: "BD00E7").opacity(0.5)],
+                                                ? AppColors.incomeGradient
+                                                : [AppColors.textPrimary.opacity(0.3)],
                                             startPoint: .leading,
                                             endPoint: .trailing
                                         ),

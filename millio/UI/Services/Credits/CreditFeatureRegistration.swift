@@ -74,6 +74,7 @@ struct CreditImporter: ModelImporter {
             existingCredit.includeInTotal = data["includeInTotal"] as? Bool ?? true
             existingCredit.updatedAt = Date(timeIntervalSince1970: updatedAt)
             existingCredit.updateRemainingAmount()
+            existingCredit.ensureUniqueID()
             
             AppLogger.log(.info, category: "CreditImporter", "Updated existing credit '\(name)' instead of creating duplicate")
             return
@@ -110,6 +111,7 @@ struct CreditImporter: ModelImporter {
         if let uniqueID = data["creditUniqueID"] as? String, !uniqueID.isEmpty {
             credit.uniqueID = uniqueID
         }
+        credit.ensureUniqueID()
         
         context.insert(credit)
     }

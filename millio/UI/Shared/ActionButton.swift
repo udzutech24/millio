@@ -36,7 +36,10 @@ struct ActionButton: View {
                         
                     
                     Image(icon)
-                        .font(.system(size: 16, weight: .regular))
+                        .renderingMode(.template)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 16, height: 16)
                         .foregroundStyle(.white)
                 }
                 .padding(.leading, 10)
