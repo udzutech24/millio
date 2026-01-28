@@ -144,15 +144,6 @@ private struct CashflowContentView: View {
             ) {
                 viewModel.handle(.addTransaction(.transfer))
             }
-            
-            // Кнопка Обмен
-            CashflowActionButton(
-                title: "Обмен",
-                icon: "arrow.triangle.2.circlepath.circle.fill",
-                gradientColors: AppColors.coursesGradient
-            ) {
-                viewModel.handle(.addTransaction(.exchange))
-            }
         }
     }
     

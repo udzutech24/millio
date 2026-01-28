@@ -965,15 +965,6 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 if let cardID = transaction.cardID, accountCardIDs.contains(cardID) {
                     affectsAccount = true
                 }
-                // Проверяем кредиты и инвестиции для транзакций типа balanceAdjustment
-                if transaction.transactionType == .balanceAdjustment {
-                    if let creditID = transaction.creditID, accountCreditIDs.contains(creditID) {
-                        affectsAccount = true
-                    }
-                    if let investmentID = transaction.investmentID, accountInvestmentIDs.contains(investmentID) {
-                        affectsAccount = true
-                    }
-                }
             case .transfer:
                 if let fromCardID = transaction.cardID, accountCardIDs.contains(fromCardID) {
                     affectsAccount = true
@@ -981,11 +972,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 if let toCardID = transaction.toCardID, accountCardIDs.contains(toCardID) {
                     affectsAccount = true
                 }
-            case .exchange:
-                // Обмен валют не влияет напрямую на балансы карт
-                break
-            case .balanceAdjustment:
-                // Ручное изменение баланса может быть для карт, кредитов или инвестиций
+            case .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
+                // Ручное изменение баланса/долга может быть для карт, кредитов или инвестиций
                 if let cardID = transaction.cardID, accountCardIDs.contains(cardID) {
                     affectsAccount = true
                 }
@@ -1271,30 +1259,9 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                                 cardBalance += converted
                             }
                             
-                        case .exchange:
-                            // Для обмена валют учитываем изменения баланса
-                            if transaction.cardID == account.accountID {
-                                if let fromAmount = transaction.exchangeFromAmount {
-                                    let converted = await convertAmount(
-                                        value: fromAmount,
-                                        from: transaction.exchangeFromCurrency ?? accountCurrency,
-                                        to: accountCurrency
-                                    )
-                                    cardBalance = max(0, cardBalance - converted)
-                                }
-                                if let toAmount = transaction.exchangeToAmount {
-                                    let converted = await convertAmount(
-                                        value: toAmount,
-                                        from: transaction.exchangeToCurrency ?? accountCurrency,
-                                        to: accountCurrency
-                                    )
-                                    cardBalance += converted
-                                }
-                            }
-                            
-                        case .balanceAdjustment:
-                            // Применяем изменение баланса: положительное = увеличение баланса, отрицательное = уменьшение
-                            // Для кредитных карт: увеличение баланса снижает задолженность (debt = limit - balance)
+                        case .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
+                            // Применяем изменение баланса/долга: положительное = увеличение баланса, отрицательное = уменьшение
+                            // Для кредитных карт это меняет доступный баланс (debt = limit - balance)
                             if transaction.cardID == account.accountID {
                                 let converted = await convertAmount(
                                     value: transaction.amount,
@@ -1329,7 +1296,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 accountCurrency = credit.currency
                 shouldInclude = true
                 
-                // Рассчитываем остаток долга на нужную дату с учетом транзакций balanceAdjustment
+                // Рассчитываем остаток долга на нужную дату с учетом транзакций корректировки
                 accountBalance = await calculateCreditRemainingAmount(
                     credit: credit,
                     at: date,
@@ -1466,7 +1433,10 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         // Восстанавливаем базу, чтобы ручные правки не "сдвигали" историю
         let cardTransactions = transactionsByCardCache[card.cardUniqueID] ?? []
         var totalAdjustments: Double = 0.0
-        for transaction in cardTransactions where transaction.transactionType == .balanceAdjustment &&
+        for transaction in cardTransactions where
+            (transaction.transactionType == .balanceAdjustment ||
+             transaction.transactionType == .cardBalanceAdjustment ||
+             transaction.transactionType == .creditDebtAdjustment) &&
             transaction.cardID == card.cardUniqueID {
             let converted = await convertAmount(
                 value: transaction.amount,
@@ -1478,7 +1448,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         return card.balance - totalAdjustments
     }
     
-    /// Рассчитать остаток долга по кредиту на конкретную дату с учетом транзакций balanceAdjustment
+    /// Рассчитать остаток долга по кредиту на конкретную дату с учетом транзакций корректировки
     func calculateCreditRemainingAmount(credit: Credit, at date: Date, accountCurrency: String) async -> Double {
         // Базовый остаток (фиксируем, чтобы ручные правки не сдвигали историю)
         var baseAmount: Double
@@ -1487,7 +1457,9 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         } else {
             let creditTransactions = transactionsByCreditCache[credit.creditUniqueID] ?? []
             var totalAdjustments: Double = 0.0
-            for transaction in creditTransactions where transaction.transactionType == .balanceAdjustment &&
+            for transaction in creditTransactions where
+                (transaction.transactionType == .balanceAdjustment ||
+                 transaction.transactionType == .creditDebtAdjustment) &&
                 transaction.creditID == credit.creditUniqueID {
                 let converted = await convertAmount(
                     value: transaction.amount,
@@ -1499,11 +1471,12 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             baseAmount = credit.remainingAmount - totalAdjustments
         }
         
-        // Применяем транзакции balanceAdjustment с датой <= запрашиваемой даты
+        // Применяем транзакции корректировки с датой <= запрашиваемой даты
         let creditTransactions = transactionsByCreditCache[credit.creditUniqueID] ?? []
         let balanceAdjustmentTransactions = creditTransactions
             .filter { transaction in
-                transaction.transactionType == .balanceAdjustment &&
+                (transaction.transactionType == .balanceAdjustment ||
+                 transaction.transactionType == .creditDebtAdjustment) &&
                 transaction.creditID == credit.creditUniqueID &&
                 transaction.transactionDate <= date
             }

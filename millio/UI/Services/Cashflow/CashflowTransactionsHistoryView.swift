@@ -147,10 +147,12 @@ private struct CashflowTransactionRow: View {
             return AppColors.expenseGradient
         case .transfer:
             return AppColors.cashflowGradient
-        case .exchange:
-            return AppColors.coursesGradient
         case .balanceAdjustment:
             return AppColors.cardIndexGradient
+        case .cardBalanceAdjustment:
+            return AppColors.cardIndexGradient
+        case .creditDebtAdjustment:
+            return AppColors.creditsGradient
         }
     }
     
@@ -162,14 +164,12 @@ private struct CashflowTransactionRow: View {
             return transaction.expenseCategory?.displayName ?? "Расход"
         case .transfer:
             return "Перевод"
-        case .exchange:
-            if let fromCurrency = transaction.exchangeFromCurrency,
-               let toCurrency = transaction.exchangeToCurrency {
-                return "\(fromCurrency) → \(toCurrency)"
-            }
-            return "Обмен"
         case .balanceAdjustment:
             return "Изменение баланса"
+        case .cardBalanceAdjustment:
+            return "Корректировка баланса"
+        case .creditDebtAdjustment:
+            return "Корректировка долга"
         }
     }
     
@@ -191,23 +191,6 @@ private struct CashflowTransactionRow: View {
             }
             return nil
             
-        case .exchange:
-            if let fromAmount = transaction.exchangeFromAmount,
-               let toAmount = transaction.exchangeToAmount,
-               let fromCurrency = transaction.exchangeFromCurrency,
-               let toCurrency = transaction.exchangeToCurrency {
-                let formatter = NumberFormatter()
-                formatter.numberStyle = .decimal
-                formatter.groupingSeparator = " "
-                formatter.usesGroupingSeparator = true
-                formatter.minimumFractionDigits = 2
-                formatter.maximumFractionDigits = 2
-                let fromFormatted = formatter.string(from: NSNumber(value: fromAmount)) ?? "0.00"
-                let toFormatted = formatter.string(from: NSNumber(value: toAmount)) ?? "0.00"
-                return "\(fromFormatted) \(fromCurrency) → \(toFormatted) \(toCurrency)"
-            }
-            return nil
-            
         case .balanceAdjustment:
             // Для ручного изменения баланса показываем имя карты, если есть
             if let cardID = transaction.cardID,
@@ -215,6 +198,18 @@ private struct CashflowTransactionRow: View {
                 return card.name
             }
             // Для кредитов и инвестиций возвращаем nil, так как нет доступа к их данным в этом ViewModel
+            return nil
+        case .cardBalanceAdjustment:
+            if let cardID = transaction.cardID,
+               let card = viewModel.state.availableCards.first(where: { $0.cardUniqueID == cardID }) {
+                return card.name
+            }
+            return nil
+        case .creditDebtAdjustment:
+            if let cardID = transaction.cardID,
+               let card = viewModel.state.availableCards.first(where: { $0.cardUniqueID == cardID }) {
+                return card.name
+            }
             return nil
         }
     }

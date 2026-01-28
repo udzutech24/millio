@@ -321,6 +321,11 @@ final class CardViewModel: ViewModelProtocol {
     
     private func updateCard(_ card: Card) {
         if let existing = state.editingCard {
+            // Сохраняем старые значения для корректировки
+            let oldBalance = existing.balance
+            let newCardType = card.cardType
+            let balanceChanged = abs(card.balance - oldBalance) > 0.01
+
             if existing.uniqueID.isEmpty {
                 _ = existing.cardUniqueID
             }
@@ -343,6 +348,34 @@ final class CardViewModel: ViewModelProtocol {
             existing.isFavorite = card.isFavorite
             existing.includeInTotal = card.includeInTotal
             existing.updatedAt = Date()
+
+            // Корректировка баланса через форму редактирования = транзакция
+            if balanceChanged {
+                let balanceDelta = card.balance - oldBalance
+                let transactionType: CashflowTransactionType
+                let transactionAmount: Double
+                let transactionNote: String
+
+                if newCardType == .credit {
+                    transactionType = .creditDebtAdjustment
+                    transactionAmount = balanceDelta
+                    transactionNote = "Редактирование задолженности кредитной карты"
+                } else {
+                    transactionType = .cardBalanceAdjustment
+                    transactionAmount = balanceDelta
+                    transactionNote = "Редактирование баланса карты"
+                }
+
+                let transaction = CashflowTransaction(
+                    transactionType: transactionType,
+                    amount: transactionAmount,
+                    currency: existing.currency,
+                    transactionDate: Date(),
+                    cardID: existing.cardUniqueID,
+                    note: transactionNote
+                )
+                modelContext.insert(transaction)
+            }
         } else {
             // Создаем новую карту
             let newCard = Card(

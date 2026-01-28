@@ -1064,17 +1064,20 @@ final class FinanceViewModel: ViewModelProtocol {
                         // Для дебетовых карт: положительное значение = увеличение баланса, отрицательное = уменьшение
                         let transactionAmount: Double
                         let transactionNote: String
+                        let transactionType: CashflowTransactionType
 
                         if card.cardType == .credit {
                             transactionAmount = -difference
-                            transactionNote = "Ручное изменение задолженности"
+                            transactionNote = "Быстрое изменение задолженности"
+                            transactionType = .creditDebtAdjustment
                         } else {
                             transactionAmount = difference
-                            transactionNote = "Ручное изменение баланса"
+                            transactionNote = "Быстрое изменение баланса"
+                            transactionType = .cardBalanceAdjustment
                         }
 
                         let transaction = CashflowTransaction(
-                            transactionType: .balanceAdjustment,
+                            transactionType: transactionType,
                             amount: transactionAmount,
                             currency: card.currency,
                             transactionDate: Date(),
@@ -1126,12 +1129,12 @@ final class FinanceViewModel: ViewModelProtocol {
                         let balanceChange = -difference
 
                         let transaction = CashflowTransaction(
-                            transactionType: .balanceAdjustment,
+                            transactionType: .creditDebtAdjustment,
                             amount: balanceChange,
                             currency: credit.currency,
                             transactionDate: Date(),
                             creditID: credit.creditUniqueID,
-                            note: "Ручное изменение остатка долга"
+                            note: "Быстрое изменение остатка долга"
                         )
                         modelContext.insert(transaction)
                         try modelContext.save()

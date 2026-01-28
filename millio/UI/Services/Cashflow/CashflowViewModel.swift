@@ -359,9 +359,7 @@ final class CashflowViewModel: ViewModelProtocol {
                 
             case .transfer:
                 break // Переводы не учитываем в графике
-            case .exchange:
-                break // Обмены валют не учитываем в графике
-            case .balanceAdjustment:
+            case .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
                 break // Ручные изменения баланса не учитываем в графике доходов/расходов
             }
         }
@@ -420,7 +418,9 @@ final class CashflowViewModel: ViewModelProtocol {
                 )
                 totalExpense += converted
                 
-            case .transfer, .exchange, .balanceAdjustment:
+            case .transfer, .balanceAdjustment:
+                break
+            case .cardBalanceAdjustment, .creditDebtAdjustment:
                 break
             }
         }
@@ -512,10 +512,6 @@ final class CashflowViewModel: ViewModelProtocol {
             existing.toCardID = transaction.toCardID
             existing.incomeCategoryRaw = transaction.incomeCategoryRaw
             existing.expenseCategoryRaw = transaction.expenseCategoryRaw
-            existing.exchangeFromCurrency = transaction.exchangeFromCurrency
-            existing.exchangeToCurrency = transaction.exchangeToCurrency
-            existing.exchangeFromAmount = transaction.exchangeFromAmount
-            existing.exchangeToAmount = transaction.exchangeToAmount
             existing.note = transaction.note
             existing.updatedAt = Date()
         } else {
@@ -529,10 +525,6 @@ final class CashflowViewModel: ViewModelProtocol {
                 toCardID: transaction.toCardID,
                 incomeCategory: transaction.incomeCategory,
                 expenseCategory: transaction.expenseCategory,
-                exchangeFromCurrency: transaction.exchangeFromCurrency,
-                exchangeToCurrency: transaction.exchangeToCurrency,
-                exchangeFromAmount: transaction.exchangeFromAmount,
-                exchangeToAmount: transaction.exchangeToAmount,
                 note: transaction.note
             )
             modelContext.insert(newTransaction)
@@ -619,14 +611,12 @@ final class CashflowViewModel: ViewModelProtocol {
                 }
             }
             
-        case .exchange:
-            // Обмен валют не влияет на баланс карт напрямую
-            // Пользователь может вручную обновить балансы карт после обмена
-            break
-            
         case .balanceAdjustment:
             // Ручное изменение баланса уже было применено к карте
             // Не нужно обновлять баланс повторно
+            break
+        case .cardBalanceAdjustment, .creditDebtAdjustment:
+            // Корректировки баланса/долга не изменяют баланс повторно
             break
         }
     }
