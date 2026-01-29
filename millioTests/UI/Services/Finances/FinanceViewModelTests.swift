@@ -430,6 +430,55 @@ struct FinanceViewModelTests {
         #expect(accountIDs.contains(investment.investmentUniqueID))
     }
 
+    @Test("Событие обновления кредитов пересчитывает суммы групп")
+    func testCreditsUpdatedEventRecalculatesGroupTotals() async throws {
+        let modelContext = try createTestModelContext()
+
+        let group = FinanceGroup(name: "Группа", colorHex: "#123456")
+        modelContext.insert(group)
+
+        let credit = Credit(
+            name: "Кредит",
+            amount: 1000.0,
+            interestRate: 0.0,
+            monthlyPayment: 100.0,
+            startDate: Date(),
+            termMonths: 12,
+            currency: "RUB",
+            bank: .other,
+            creditType: .consumer
+        )
+        credit.remainingAmount = 1000.0
+        credit.includeInTotal = true
+        modelContext.insert(credit)
+
+        let account = FinanceAccount(accountType: .credit, accountID: credit.creditUniqueID)
+        account.group = group
+        modelContext.insert(account)
+
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadGroups)
+        viewModel.handle(.loadAccounts)
+
+        credit.remainingAmount = 500.0
+        credit.updatedAt = Date()
+        try modelContext.save()
+
+        EventBus.shared.publish(FinanceEvent.creditsUpdated)
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        let groupTotal = viewModel.state.groupTotals[group.groupUniqueID] ?? 0.0
+        #expect(abs(groupTotal + 500.0) < 0.01)
+        #expect(abs(viewModel.state.totalAmount + 500.0) < 0.01)
+    }
+
     @Test("Удаление карты из финансов публикует событие обновления карт")
     func testDeleteCardPublishesCardsUpdatedEvent() throws {
         let modelContext = try createTestModelContext()

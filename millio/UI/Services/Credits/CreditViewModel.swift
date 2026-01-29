@@ -391,7 +391,7 @@ final class CreditViewModel: ViewModelProtocol {
             existing.amount = amount
             existing.monthlyPayment = monthlyPayment
             existing.endDate = endDate
-            existing.remainingAmount = remainingAmount
+            existing.applyManualRemainingAmount(remainingAmount)
             existing.currency = currency
             existing.bank = bank
             existing.creditType = creditType
@@ -434,15 +434,15 @@ final class CreditViewModel: ViewModelProtocol {
                 bank: bank,
                 creditType: creditType,
                 includeInTotal: includeInTotal
-            )
-            newCredit.endDate = endDate
-            newCredit.remainingAmount = remainingAmount
-            newCredit.isFavorite = isFavorite
-            // Если остаток = 0, помечаем кредит как закрытый
-            if remainingAmount <= 0 {
-                newCredit.isClosed = true
-                newCredit.remainingAmount = 0
-            }
+        )
+        newCredit.endDate = endDate
+        newCredit.applyManualRemainingAmount(remainingAmount)
+        newCredit.isFavorite = isFavorite
+        // Если остаток = 0, помечаем кредит как закрытый
+        if remainingAmount <= 0 {
+            newCredit.isClosed = true
+            newCredit.remainingAmount = 0
+        }
             modelContext.insert(newCredit)
         }
         
@@ -451,6 +451,7 @@ final class CreditViewModel: ViewModelProtocol {
             loadCredits()
             state.showCreditEditor = false
             state.editingCredit = nil
+            EventBus.shared.publish(FinanceEvent.creditsUpdated)
         } catch {
             AppLogger.log(.error, category: "Credit", "Failed to save credit: \(error.localizedDescription)")
         }

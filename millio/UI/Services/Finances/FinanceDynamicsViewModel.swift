@@ -1458,12 +1458,12 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     
     /// Рассчитать остаток долга по кредиту на конкретную дату с учетом транзакций корректировки
     func calculateCreditRemainingAmount(credit: Credit, at date: Date, accountCurrency: String) async -> Double {
+        let creditTransactions = transactionsByCreditCache[credit.creditUniqueID] ?? []
         // Базовый остаток (фиксируем, чтобы ручные правки не сдвигали историю)
         var baseAmount: Double
         if credit.hasInitialRemainingAmount {
             baseAmount = credit.initialRemainingAmount
         } else {
-            let creditTransactions = transactionsByCreditCache[credit.creditUniqueID] ?? []
             var totalAdjustments: Double = 0.0
             for transaction in creditTransactions where
                 (transaction.transactionType == .balanceAdjustment ||
@@ -1480,7 +1480,6 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
         
         // Применяем транзакции корректировки с датой <= запрашиваемой даты
-        let creditTransactions = transactionsByCreditCache[credit.creditUniqueID] ?? []
         let balanceAdjustmentTransactions = creditTransactions
             .filter { transaction in
                 (transaction.transactionType == .balanceAdjustment ||
@@ -1498,6 +1497,15 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 to: accountCurrency
             )
             remainingAmount = max(0, remainingAmount - converted)
+        }
+
+        // Если итог расходится с текущим остатком, фиксируем актуальное значение
+        // на дату последнего изменения (legacy/ручные правки без полной истории транзакций).
+        if date >= credit.updatedAt {
+            let deltaToActual = credit.remainingAmount - remainingAmount
+            if abs(deltaToActual) > 0.01 {
+                remainingAmount = max(0, remainingAmount + deltaToActual)
+            }
         }
         
         return remainingAmount

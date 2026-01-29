@@ -196,6 +196,7 @@ final class FinanceViewModel: ViewModelProtocol {
     let currencyService: CurrencyRateServiceProtocol
 
     private let defaults = UserDefaults.standard
+    private var financeEventsSubscriptionID: UUID?
 
     /// Быстрые словари для поиска счетов по ID (O(1) вместо O(n))
     private var cardByID: [String: Card] = [:]
@@ -237,9 +238,18 @@ final class FinanceViewModel: ViewModelProtocol {
         state.isSavingsGoalEnabled = storedSavingsGoalEnabled
         state.savingsGoalAmount = storedSavingsGoalAmount
         state.isAmountHidden = storedAmountHidden
+        subscribeToFinanceEvents()
         if !skipInitialLoad {
             loadGroups()
             loadAccounts()
+        }
+    }
+
+    deinit {
+        if let subscriptionID = financeEventsSubscriptionID {
+            Task { @MainActor in
+                EventBus.shared.unsubscribe(subscriptionID)
+            }
         }
     }
     
@@ -495,6 +505,31 @@ final class FinanceViewModel: ViewModelProtocol {
         state.unattachedCards = state.availableCards.filter { !attachedCardIDs.contains($0.cardUniqueID) }
         state.unattachedCredits = state.availableCredits.filter { !attachedCreditIDs.contains($0.creditUniqueID) }
         state.unattachedInvestments = state.availableInvestments.filter { !attachedInvestmentIDs.contains($0.investmentUniqueID) }
+    }
+
+    private func subscribeToFinanceEvents() {
+        financeEventsSubscriptionID = EventBus.shared.subscribe { [weak self] event in
+            guard let self else { return }
+            if case FinanceEvent.creditsUpdated = event {
+                handleCreditsUpdated()
+            }
+        }
+    }
+
+    private func handleCreditsUpdated() {
+        loadAccounts()
+        Task {
+            await refreshGroupTotalsAndAmounts()
+        }
+    }
+
+    private func refreshGroupTotalsAndAmounts() async {
+        for group in state.groups {
+            let currency = group.displayCurrency ?? state.displayCurrency
+            let total = await calculateGroupTotal(group: group, in: currency)
+            state.groupTotals[group.groupUniqueID] = total
+        }
+        await calculateTotalAmountAsync()
     }
 
     /// Перестраиваем кэш счетов по ID после загрузки данных
@@ -1124,7 +1159,8 @@ final class FinanceViewModel: ViewModelProtocol {
                     credit.hasInitialRemainingAmount = true
                 }
                 
-                credit.remainingAmount = newAmount
+                credit.applyManualRemainingAmount(newAmount)
+                credit.isClosed = newAmount <= 0
                 credit.updatedAt = Date()
                 
                 do {
