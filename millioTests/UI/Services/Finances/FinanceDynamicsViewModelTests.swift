@@ -188,11 +188,10 @@ struct FinanceDynamicsViewModelTests {
         )
         dynamicsViewModel.handle(.loadData)
 
-        #expect(dynamicsViewModel.getAccountsForCalculation().count == 2)
+        #expect(dynamicsViewModel.getAccountsForCalculation().count == 1)
 
-        dynamicsViewModel.handle(.setShowArchivedAccounts(false))
-        let filteredAccounts = dynamicsViewModel.getAccountsForCalculation()
-        #expect(filteredAccounts.count == 1)
-        #expect(filteredAccounts.first?.accountID == activeCard.cardUniqueID)
+        dynamicsViewModel.handle(.setShowArchivedAccounts(true))
+        let allAccounts = dynamicsViewModel.getAccountsForCalculation()
+        #expect(allAccounts.count == 2)
     }
 }

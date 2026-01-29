@@ -429,6 +429,42 @@ final class CashflowViewModel: ViewModelProtocol {
         let rateDate: Date?
         let rateCurrency: String?
     }
+
+    func isAmountAvailable(amount: Double, currency: String, fromCardID: String, on date: Date) async -> Bool {
+        guard let card = state.availableCards.first(where: { $0.cardUniqueID == fromCardID }) else {
+            return true
+        }
+        
+        let convertedAmount = await convertAmountForValidation(
+            amount: amount,
+            from: currency,
+            to: card.currency,
+            on: date
+        )
+        
+        return convertedAmount <= card.balance + 0.0001
+    }
+
+    private func convertAmountForValidation(amount: Double, from: String, to: String, on date: Date) async -> Double {
+        if from == to {
+            return amount
+        }
+        
+        let result = await historicalRateStore.getRate(on: date, from: from, to: to)
+        if let rate = result.rate {
+            return amount * rate
+        }
+        
+        if let converted = await CurrencyRateService.shared.convert(
+            amount: amount,
+            from: from,
+            to: to
+        ) {
+            return converted
+        }
+        
+        return amount
+    }
     
     private func resolveExchangeInfo(for transaction: CashflowTransaction) async -> ExchangeInfo {
         let targetCurrency = state.displayCurrency
@@ -505,6 +541,21 @@ final class CashflowViewModel: ViewModelProtocol {
     private func updateTransactionAsync(_ transaction: CashflowTransaction) async {
         let isNewTransaction = state.editingTransaction == nil
         let exchangeInfo = await resolveExchangeInfo(for: transaction)
+
+        if isNewTransaction,
+           (transaction.transactionType == .expense || transaction.transactionType == .transfer),
+           let fromCardID = transaction.cardID {
+            let isAvailable = await isAmountAvailable(
+                amount: transaction.amount,
+                currency: transaction.currency,
+                fromCardID: fromCardID,
+                on: transaction.transactionDate
+            )
+            if !isAvailable {
+                AppLogger.log(.warning, category: "Cashflow", "Insufficient funds for transaction")
+                return
+            }
+        }
         
         if let existing = state.editingTransaction {
             // Обновляем существующую транзакцию

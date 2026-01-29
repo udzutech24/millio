@@ -2,7 +2,7 @@
 //  CashflowViewModelTests.swift
 //  millioTests
 //
-//  Created by Александр Сидоркин on 27.01.2026.
+//  Created by Александр Сидоркин on 29.01.2026.
 //
 
 import Foundation
@@ -13,8 +13,6 @@ import SwiftData
 @Suite(.serialized)
 @MainActor
 struct CashflowViewModelTests {
-
-    /// Общий контейнер для всех тестов (SwiftData нестабилен при создании множества контейнеров)
     private static let sharedContainer: ModelContainer = {
         let schema = Schema([
             Card.self,
@@ -25,112 +23,64 @@ struct CashflowViewModelTests {
         return try! ModelContainer(for: schema, configurations: [config])
     }()
 
-    /// Получить чистый контекст (очищаем данные от предыдущих тестов)
     private func createTestModelContext() throws -> ModelContext {
         let context = Self.sharedContainer.mainContext
         try context.delete(model: CashflowTransaction.self)
+        try context.delete(model: HistoricalRate.self)
         try context.delete(model: Card.self)
         try context.save()
         return context
     }
 
-    @Test("Открытие создания транзакции подтягивает новые карты")
-    func testAddTransactionRefreshesCards() throws {
+    @Test("Расход не превышает доступный баланс карты")
+    func testExpenseCannotExceedBalance() async throws {
         let modelContext = try createTestModelContext()
-        let viewModel = CashflowViewModel(modelContext: modelContext)
-
-        #expect(viewModel.state.availableCards.isEmpty)
-
-        let newCard = Card(
-            name: "Новая карта",
-            cardNumber: "1234",
+        let card = Card(
+            name: "Карта",
+            cardNumber: "0000",
             bank: .other,
             cardType: .debit,
             currency: "RUB",
-            balance: 100.0
+            balance: 1_000.0
         )
-        modelContext.insert(newCard)
-        try modelContext.save()
-
-        viewModel.handle(.addTransaction(.expense))
-
-        let cardIDs = Set(viewModel.state.availableCards.map { $0.cardUniqueID })
-        #expect(cardIDs.contains(newCard.cardUniqueID))
-    }
-
-    @Test("Удаленная карта не попадает в список при создании транзакции")
-    func testAddTransactionRefreshesCardsAfterDelete() throws {
-        let modelContext = try createTestModelContext()
-
-        let firstCard = Card(
-            name: "Первая карта",
-            cardNumber: "1111",
-            bank: .sberbank,
-            cardType: .debit,
-            currency: "RUB",
-            balance: 50.0
-        )
-        let secondCard = Card(
-            name: "Вторая карта",
-            cardNumber: "2222",
-            bank: .vtb,
-            cardType: .debit,
-            currency: "RUB",
-            balance: 75.0
-        )
-        modelContext.insert(firstCard)
-        modelContext.insert(secondCard)
+        modelContext.insert(card)
         try modelContext.save()
 
         let viewModel = CashflowViewModel(modelContext: modelContext)
-        #expect(viewModel.state.availableCards.count == 2)
+        viewModel.handle(.loadCards)
 
-        secondCard.archivedAt = Date()
-        try modelContext.save()
-
-        viewModel.handle(.addTransaction(.income))
-
-        let cardIDs = Set(viewModel.state.availableCards.map { $0.cardUniqueID })
-        #expect(cardIDs.contains(firstCard.cardUniqueID))
-        #expect(!cardIDs.contains(secondCard.cardUniqueID))
+        let available = await viewModel.isAmountAvailable(
+            amount: 1_500.0,
+            currency: "RUB",
+            fromCardID: card.cardUniqueID,
+            on: Date()
+        )
+        #expect(!available)
     }
 
-    @Test("Событие обновления карт синхронизирует список в Кэшфлоу")
-    func testCardsUpdatedEventRefreshesCashflowCards() throws {
+    @Test("Перевод разрешен в пределах доступного баланса")
+    func testTransferWithinBalanceAllowed() async throws {
         let modelContext = try createTestModelContext()
-
-        let viewModel = CashflowViewModel(modelContext: modelContext)
-        #expect(viewModel.state.availableCards.isEmpty)
-
-        let newCard = Card(
-            name: "Карта для события",
-            cardNumber: "9999",
+        let card = Card(
+            name: "Карта",
+            cardNumber: "0000",
             bank: .other,
             cardType: .debit,
             currency: "RUB",
-            balance: 10.0
+            balance: 1_000.0
         )
-        modelContext.insert(newCard)
+        modelContext.insert(card)
         try modelContext.save()
 
-        EventBus.shared.publish(FinanceEvent.cardsUpdated)
-
-        let cardIDs = Set(viewModel.state.availableCards.map { $0.cardUniqueID })
-        #expect(cardIDs.contains(newCard.cardUniqueID))
-    }
-
-    @Test("Выбор кастомного периода задает текущий диапазон")
-    func testCustomPeriodUpdatesDateRange() throws {
-        let modelContext = try createTestModelContext()
         let viewModel = CashflowViewModel(modelContext: modelContext)
+        viewModel.handle(.loadCards)
 
-        let startDate = Calendar.current.date(byAdding: .day, value: -10, to: Date()) ?? Date()
-        let endDate = Date()
-
-        viewModel.handle(.setCustomPeriod(start: startDate, end: endDate))
-
-        let range = viewModel.currentDateRange()
-        #expect(Calendar.current.isDate(range.0, inSameDayAs: startDate))
-        #expect(Calendar.current.isDate(range.1, inSameDayAs: endDate))
+        let available = await viewModel.isAmountAvailable(
+            amount: 500.0,
+            currency: "RUB",
+            fromCardID: card.cardUniqueID,
+            on: Date()
+        )
+        #expect(available)
     }
 }

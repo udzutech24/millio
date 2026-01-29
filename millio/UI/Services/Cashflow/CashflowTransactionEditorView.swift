@@ -27,6 +27,7 @@ struct CashflowTransactionEditorView: View {
     @State private var note: String = ""
     @State private var availableCurrencies: [String] = []
     @State private var isLoadingCurrencies: Bool = false
+    @State private var isAmountOverBalance: Bool = false
     
     init(viewModel: CashflowViewModel, transactionType: CashflowTransactionType? = nil, transaction: CashflowTransaction? = nil) {
         self.viewModel = viewModel
@@ -192,6 +193,18 @@ struct CashflowTransactionEditorView: View {
                                     }
                                 }
                                 .foregroundStyle(AppColors.textPrimary)
+                                
+                                if shouldValidateBalance, let availableText = availableBalanceText {
+                                    Text(availableText)
+                                        .font(.caption)
+                                        .foregroundStyle(AppColors.textSecondary)
+                                }
+                                
+                                if isAmountOverBalance {
+                                    Text("Недостаточно средств")
+                                        .font(.caption)
+                                        .foregroundStyle(AppColors.error)
+                                }
                             }
                         } header: {
                             Text("Карта")
@@ -211,18 +224,30 @@ struct CashflowTransactionEditorView: View {
                                     set: { selectedCardID = $0.isEmpty ? nil : $0 }
                                 )) {
                                     Text("Выберите карту").tag("")
-                                    ForEach(viewModel.state.availableCards) { card in
+                                    ForEach(viewModel.state.availableCards.filter { $0.cardUniqueID != selectedToCardID }) { card in
                                         Text(card.name).tag(card.cardUniqueID)
                                     }
                                 }
                                 .foregroundStyle(AppColors.textPrimary)
+
+                                if shouldValidateBalance, let availableText = availableBalanceText {
+                                    Text(availableText)
+                                        .font(.caption)
+                                        .foregroundStyle(AppColors.textSecondary)
+                                }
+                                
+                                if isAmountOverBalance {
+                                    Text("Недостаточно средств")
+                                        .font(.caption)
+                                        .foregroundStyle(AppColors.error)
+                                }
                                 
                                 Picker("На карту", selection: Binding(
                                     get: { selectedToCardID ?? "" },
                                     set: { selectedToCardID = $0.isEmpty ? nil : $0 }
                                 )) {
                                     Text("Выберите карту").tag("")
-                                    ForEach(viewModel.state.availableCards) { card in
+                                    ForEach(viewModel.state.availableCards.filter { $0.cardUniqueID != selectedCardID }) { card in
                                         Text(card.name).tag(card.cardUniqueID)
                                     }
                                 }
@@ -276,6 +301,30 @@ struct CashflowTransactionEditorView: View {
                 if selectedCardID == nil && !viewModel.state.availableCards.isEmpty {
                     selectedCardID = viewModel.state.availableCards.first?.cardUniqueID
                 }
+                validateAvailableBalance()
+            }
+            .onChange(of: selectedCardID) { _, _ in
+                if selectedCardID == selectedToCardID {
+                    selectedToCardID = nil
+                }
+                validateAvailableBalance()
+            }
+            .onChange(of: selectedToCardID) { _, _ in
+                if selectedToCardID == selectedCardID {
+                    selectedToCardID = nil
+                }
+            }
+            .onChange(of: selectedCurrency) { _, _ in
+                validateAvailableBalance()
+            }
+            .onChange(of: amountText) { _, _ in
+                validateAvailableBalance()
+            }
+            .onChange(of: transactionDate) { _, _ in
+                validateAvailableBalance()
+            }
+            .onChange(of: selectedTransactionType) { _, _ in
+                validateAvailableBalance()
             }
         }
     }
@@ -289,9 +338,9 @@ struct CashflowTransactionEditorView: View {
         
         switch selectedTransactionType {
         case .income, .expense:
-            return selectedCardID != nil
+            return selectedCardID != nil && !isAmountOverBalance
         case .transfer:
-            return selectedCardID != nil && selectedToCardID != nil && selectedCardID != selectedToCardID
+            return selectedCardID != nil && selectedToCardID != nil && selectedCardID != selectedToCardID && !isAmountOverBalance
         case .balanceAdjustment, .cardBalanceAdjustment:
             // Ручное изменение баланса возможно для карт/инвестиций (и legacy для кредитов)
             return selectedCardID != nil || editingTransaction?.creditID != nil || editingTransaction?.investmentID != nil
@@ -392,5 +441,47 @@ struct CashflowTransactionEditorView: View {
         }
         
         return value
+    }
+
+    private var shouldValidateBalance: Bool {
+        selectedTransactionType == .expense || selectedTransactionType == .transfer
+    }
+    
+    private var availableBalanceText: String? {
+        guard shouldValidateBalance,
+              let cardID = selectedCardID,
+              let card = viewModel.state.availableCards.first(where: { $0.cardUniqueID == cardID }) else {
+            return nil
+        }
+        
+        let formatted = formatNumberForDisplay(card.balance)
+        return "Доступно: \(formatted) \(card.currency)"
+    }
+    
+    private func parseAmount() -> Double? {
+        let normalized = amountText.replacingOccurrences(of: ",", with: ".")
+        return Double(normalized)
+    }
+    
+    private func validateAvailableBalance() {
+        guard shouldValidateBalance,
+              let cardID = selectedCardID,
+              let amount = parseAmount(),
+              amount > 0 else {
+            isAmountOverBalance = false
+            return
+        }
+        
+        Task {
+            let isAvailable = await viewModel.isAmountAvailable(
+                amount: amount,
+                currency: selectedCurrency,
+                fromCardID: cardID,
+                on: transactionDate
+            )
+            await MainActor.run {
+                isAmountOverBalance = !isAvailable
+            }
+        }
     }
 }
