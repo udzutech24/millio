@@ -217,3 +217,91 @@ func export() throws -> Data {
 
 - При экспорте `DataRepository` **добавляет `groupUniqueID`** к `FinanceAccount` (если есть группа), чтобы восстановить связь.
 - При импорте `DataRepository` сначала импортирует `FinanceGroup`, строит маппинг `groupUniqueID → FinanceGroup`, затем импортирует `FinanceAccount` и восстанавливает связи.
+
+---
+
+## Экран динамики финансов
+
+### Обзор
+
+Экран динамики (`FinanceDynamicsView`) отображает историю изменения балансов счетов в виде интерактивного графика.
+
+### UI-компоненты
+
+#### FinanceChartContainerView
+
+Переиспользуемый компонент графика (`UI/Shared/FinanceChartContainerView.swift`):
+
+- **AreaMark + LineMark** с градиентной заливкой и плавной интерполяцией (Catmull-Rom)
+- **Интерактивный выбор точки** — drag gesture с bubble-аннотацией
+- **Автоматическая шкала Y** — `NiceYScale` рассчитывает красивые значения для осей
+- **Компактное форматирование** — суммы отображаются как "1.5 млн", "500 тыс"
+
+```swift
+FinanceChartContainerView(
+    points: chartData,
+    selectedPoint: selectedPoint,
+    seriesColor: .orange,
+    niceY: NiceYScale.make(values: values),
+    xDomain: startDate...endDate,
+    xAxisStride: .day,
+    xAxisCount: 7,
+    currencyCode: "RUB",
+    onSelectPoint: { point in ... }
+)
+```
+
+#### CalendarRangeMonthView
+
+Компонент выбора диапазона дат (`UI/Shared/CalendarRangeMonthView.swift`):
+
+- Визуальное выделение выбранного диапазона
+- Навигация по месяцам
+- Блокировка будущих дат
+- Градиентная подсветка начала/конца периода
+
+```swift
+CalendarRangeMonthView(startDate: $start, endDate: $end)
+```
+
+### Функциональность
+
+#### Периоды
+
+- **1W** — последние 7 дней
+- **1M** — последние 30 дней
+- **1Y** — последние 365 дней
+- **All** — с самой ранней даты создания счета/транзакции
+- **Custom** — произвольный диапазон через календарь
+
+#### Фильтрация
+
+- По группам счетов
+- По отдельным счетам внутри групп
+- По валюте отображения (конвертация через CurrencyRateService)
+
+#### Режимы просмотра списка
+
+- **Группы** — динамика по группам счетов
+- **Счета** — динамика по каждому счету отдельно
+
+### Collapsing Header
+
+При прокрутке график плавно сворачивается:
+
+```swift
+.onPreferenceChange(ScrollOffsetKey.self) { y in
+    let threshold: CGFloat = 140
+    let p = min(max(-y / threshold, 0), 1)
+    collapseProgress = p
+}
+```
+
+### Кэширование
+
+`FinanceDynamicsViewModel` использует несколько уровней кэшей для оптимизации:
+
+- `cardsCache`, `creditsCache`, `investmentsCache` — O(1) поиск по ID
+- `transactionsByCardCache` — транзакции сгруппированы по карте
+- `balanceCache` — результаты расчета баланса на дату
+- `initialBalancesCache` — начальные балансы счетов
