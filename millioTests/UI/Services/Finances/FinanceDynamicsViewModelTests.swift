@@ -23,7 +23,11 @@ final class MockDynamicsCurrencyRateService: CurrencyRateServiceProtocol {
 struct FinanceDynamicsViewModelTests {
     private static let sharedContainer: ModelContainer = {
         let schema = Schema([
+            Card.self,
             Credit.self,
+            Investment.self,
+            FinanceGroup.self,
+            FinanceAccount.self,
             CashflowTransaction.self,
             HistoricalRate.self
         ])
@@ -33,8 +37,13 @@ struct FinanceDynamicsViewModelTests {
 
     private func createTestModelContext() throws -> ModelContext {
         let context = Self.sharedContainer.mainContext
+        try context.delete(model: FinanceAccount.self)
+        try context.delete(model: FinanceGroup.self)
         try context.delete(model: CashflowTransaction.self)
+        try context.delete(model: Investment.self)
         try context.delete(model: Credit.self)
+        try context.delete(model: Card.self)
+        try context.delete(model: HistoricalRate.self)
         try context.save()
         return context
     }
@@ -143,5 +152,47 @@ struct FinanceDynamicsViewModelTests {
         )
 
         #expect(abs(endAmount - 40_000.0) < 0.01)
+    }
+
+    @Test("Архивные счета скрываются при выключенном фильтре")
+    func testArchivedAccountsHiddenWhenFilterOff() async throws {
+        let modelContext = try createTestModelContext()
+
+        let activeCard = Card(name: "Активная", cardNumber: "0000", bank: .other, cardType: .debit, currency: "RUB")
+        let archivedCard = Card(name: "Архивная", cardNumber: "9999", bank: .other, cardType: .debit, currency: "RUB")
+        archivedCard.archivedAt = Date()
+
+        let group = FinanceGroup(name: "Основная", colorHex: "#FFFFFF")
+        let activeAccount = FinanceAccount(accountType: .card, accountID: activeCard.cardUniqueID)
+        let archivedAccount = FinanceAccount(accountType: .card, accountID: archivedCard.cardUniqueID)
+        activeAccount.group = group
+        archivedAccount.group = group
+        group.accounts = [activeAccount, archivedAccount]
+
+        modelContext.insert(activeCard)
+        modelContext.insert(archivedCard)
+        modelContext.insert(group)
+        modelContext.insert(activeAccount)
+        modelContext.insert(archivedAccount)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: false
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+
+        #expect(dynamicsViewModel.getAccountsForCalculation().count == 2)
+
+        dynamicsViewModel.handle(.setShowArchivedAccounts(false))
+        let filteredAccounts = dynamicsViewModel.getAccountsForCalculation()
+        #expect(filteredAccounts.count == 1)
+        #expect(filteredAccounts.first?.accountID == activeCard.cardUniqueID)
     }
 }

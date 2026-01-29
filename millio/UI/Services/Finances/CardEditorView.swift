@@ -17,7 +17,6 @@ struct CardEditorView: View {
     @State private var isNewCard: Bool
 
     @Environment(\.dismiss) private var dismiss
-    @State private var showDeleteConfirmation = false
 
     @State private var creditLimitText: String = ""
     @State private var availableCurrencies: [String] = ["RUB", "USD", "EUR"]
@@ -207,16 +206,10 @@ struct CardEditorView: View {
                 if onDelete != nil, !isNewCard {
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button("Удалить", role: .destructive) {
-                            showDeleteConfirmation = true
+                            onDelete?()
                         }
                     }
                 }
-            }
-            .confirmationDialog("Удалить счет полностью?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
-                Button("Удалить", role: .destructive) {
-                    onDelete?()
-                }
-                Button("Отмена", role: .cancel) {}
             }
             .onAppear {
                 loadAvailableCurrencies()

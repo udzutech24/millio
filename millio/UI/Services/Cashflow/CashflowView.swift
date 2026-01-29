@@ -50,6 +50,10 @@ private struct CashflowContentView: View {
 
                     // Статистика за период
                     periodStatsSection
+
+                    if let warning = viewModel.state.currencyConversionWarning {
+                        currencyWarningView(text: warning)
+                    }
                     
                     // Кнопки действий
                     actionButtonsSection
@@ -274,6 +278,29 @@ private struct CashflowContentView: View {
                     .fill(Color.black.opacity(0.3))
             )
         }
+    }
+
+    private func currencyWarningView(text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(AppColors.warning)
+
+            Text(text)
+                .font(.system(size: 12))
+                .foregroundStyle(AppColors.textSecondary)
+                .lineLimit(3)
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppColors.warning.opacity(0.12))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(AppColors.warning.opacity(0.4), lineWidth: 1)
+        }
+        .accessibilityLabel(Text(text))
     }
     
     // MARK: - Period Selection Section

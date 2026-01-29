@@ -973,7 +973,8 @@ final class FinanceViewModel: ViewModelProtocol {
         let accountGroup = state.groups.first { group in
             group.accounts?.contains(where: { $0.accountUniqueID == account.accountUniqueID }) ?? false
         }
-        
+
+        let isCardAccount = archiveUnderlyingAccount(for: account)
         modelContext.delete(account)
         
         do {
@@ -991,6 +992,9 @@ final class FinanceViewModel: ViewModelProtocol {
                     state.groupTotals[group.groupUniqueID] = total
                 }
             }
+            if isCardAccount {
+                EventBus.shared.publish(FinanceEvent.cardsUpdated)
+            }
         } catch {
             AppLogger.log(.error, category: "Finance", "Failed to remove account: \(error.localizedDescription)")
         }
@@ -1000,25 +1004,7 @@ final class FinanceViewModel: ViewModelProtocol {
         let accountGroup = state.groups.first { group in
             group.accounts?.contains(where: { $0.accountUniqueID == account.accountUniqueID }) ?? false
         }
-        let isCardAccount = account.accountType == .card
-
-        switch account.accountType {
-        case .card:
-            if let card = allCardByID[account.accountID] {
-                card.archivedAt = Date()
-                card.updatedAt = Date()
-            }
-        case .credit:
-            if let credit = allCreditByID[account.accountID] {
-                credit.archivedAt = Date()
-                credit.updatedAt = Date()
-            }
-        case .investment:
-            if let investment = allInvestmentByID[account.accountID] {
-                investment.archivedAt = Date()
-                investment.updatedAt = Date()
-            }
-        }
+        let isCardAccount = archiveUnderlyingAccount(for: account)
 
         do {
             try modelContext.save()
@@ -1040,6 +1026,30 @@ final class FinanceViewModel: ViewModelProtocol {
         } catch {
             AppLogger.log(.error, category: "Finance", "Failed to delete account permanently: \(error.localizedDescription)")
         }
+    }
+
+    private func archiveUnderlyingAccount(for account: FinanceAccount) -> Bool {
+        let isCardAccount = account.accountType == .card
+
+        switch account.accountType {
+        case .card:
+            if let card = allCardByID[account.accountID] {
+                card.archivedAt = Date()
+                card.updatedAt = Date()
+            }
+        case .credit:
+            if let credit = allCreditByID[account.accountID] {
+                credit.archivedAt = Date()
+                credit.updatedAt = Date()
+            }
+        case .investment:
+            if let investment = allInvestmentByID[account.accountID] {
+                investment.archivedAt = Date()
+                investment.updatedAt = Date()
+            }
+        }
+
+        return isCardAccount
     }
     
     private func editAccount(_ account: FinanceAccount) {

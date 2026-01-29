@@ -75,6 +75,9 @@ struct CashflowState {
     
     /// Баланс за выбранный период (доходы - расходы)
     var periodBalance: Double = 0.0
+
+    /// Предупреждение о конвертации валют в истории
+    var currencyConversionWarning: String? = nil
     
     /// Флаг загрузки данных
     var isLoading: Bool = false
@@ -314,6 +317,7 @@ final class CashflowViewModel: ViewModelProtocol {
     }
     
     private func updateChartData() {
+        state.currencyConversionWarning = nil
         Task {
             await updateChartDataAsync()
         }
@@ -462,6 +466,12 @@ final class CashflowViewModel: ViewModelProtocol {
             from: transaction.currency,
             to: currency
         )
+
+        if result.resolution != .exact {
+            if state.currencyConversionWarning == nil {
+                state.currencyConversionWarning = "Часть значений рассчитана по оценочному курсу."
+            }
+        }
         
         if let rate = result.rate {
             return transaction.amount * rate
@@ -472,9 +482,12 @@ final class CashflowViewModel: ViewModelProtocol {
             from: transaction.currency,
             to: currency
         ) {
+            if state.currencyConversionWarning == nil {
+                state.currencyConversionWarning = "Часть значений рассчитана по оценочному курсу."
+            }
             return converted
         }
-        
+
         return transaction.amount
     }
     

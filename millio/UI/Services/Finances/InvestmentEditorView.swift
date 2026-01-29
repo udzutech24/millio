@@ -14,7 +14,6 @@ struct InvestmentEditorView: View {
     let onClose: (() -> Void)?
     let onDelete: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
-    @State private var showDeleteConfirmation = false
 
     @State private var name: String = ""
     @State private var selectedInvestmentType: InvestmentType = .positive
@@ -146,16 +145,10 @@ struct InvestmentEditorView: View {
                 if onDelete != nil, viewModel.state.editingInvestment != nil {
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button("Удалить", role: .destructive) {
-                            showDeleteConfirmation = true
+                            onDelete?()
                         }
                     }
                 }
-            }
-            .confirmationDialog("Удалить счет полностью?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
-                Button("Удалить", role: .destructive) {
-                    onDelete?()
-                }
-                Button("Отмена", role: .cancel) {}
             }
             .onAppear {
                 if let editing = viewModel.state.editingInvestment {

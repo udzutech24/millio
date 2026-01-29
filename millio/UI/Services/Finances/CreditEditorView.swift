@@ -14,7 +14,6 @@ struct CreditEditorView: View {
     let onClose: (() -> Void)?
     let onDelete: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
-    @State private var showDeleteConfirmation = false
 
     @State private var name: String = ""
     @State private var amountText: String = ""
@@ -150,16 +149,10 @@ struct CreditEditorView: View {
                 if onDelete != nil, viewModel.state.editingCredit != nil {
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button("Удалить", role: .destructive) {
-                            showDeleteConfirmation = true
+                            onDelete?()
                         }
                     }
                 }
-            }
-            .confirmationDialog("Удалить кредит полностью?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
-                Button("Удалить", role: .destructive) {
-                    onDelete?()
-                }
-                Button("Отмена", role: .cancel) {}
             }
             .onAppear {
                 if let editing = viewModel.state.editingCredit {

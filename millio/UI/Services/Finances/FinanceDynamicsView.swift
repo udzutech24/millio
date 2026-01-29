@@ -148,6 +148,10 @@ private struct FinanceDynamicsContentView: View {
                         // Карточка графика
                         chartCard
 
+                        if let warning = viewModel.state.currencyConversionWarning {
+                            currencyWarningView(text: warning)
+                        }
+
                         // Список динамики
                         dynamicsListCard
                     }
@@ -340,7 +344,7 @@ private struct FinanceDynamicsContentView: View {
             // Бейдж счета (если выбран один счет)
             if case .singleAccount(let accountID) = viewModel.state.dynamicsMode,
                let account = viewModel.getAccountsForSelectedGroups().first(where: { $0.accountUniqueID == accountID }),
-               let accountInfo = financeViewModel.getAccountInfo(account: account) {
+               let accountInfo = viewModel.getAccountInfoForDynamics(account: account) {
                 HStack(spacing: 6) {
                     Image(systemName: accountInfo.icon)
                         .font(.caption)
@@ -640,6 +644,15 @@ private struct FinanceDynamicsContentView: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .foregroundStyle(AppColors.textPrimary)
+                
+                if item.isArchived {
+                    Text("архив")
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Color.white.opacity(0.08)))
+                        .foregroundStyle(AppColors.textSecondary)
+                }
 
                 Spacer(minLength: 12)
 
@@ -724,7 +737,8 @@ private struct FinanceDynamicsContentView: View {
             deltaPercent: percent,
             icon: nil,
             accountType: nil,
-            isCreditCard: false
+            isCreditCard: false,
+            isArchived: false
         )
     }
 
@@ -887,6 +901,25 @@ private struct FinanceDynamicsContentView: View {
             return item.delta >= 0 ? .green : AppColors.error
         }
     }
+
+    private func currencyWarningView(text: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 14))
+                .foregroundStyle(AppColors.textSecondary)
+            Text(text)
+                .font(.system(size: 13))
+                .foregroundStyle(AppColors.textSecondary)
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.white.opacity(0.05))
+        )
+        .padding(.horizontal, 16)
+    }
 }
 
 // MARK: - Filter Sheet
@@ -912,6 +945,8 @@ private struct FinanceDynamicsFilterSheet: View {
                            (!viewModel.state.selectedGroupIDs.isEmpty || viewModel.state.isSingleGroupMode) {
                             accountsFilterSection
                         }
+                        
+                        archivedToggleSection
                     }
                     .padding(.horizontal, 24)
                     .padding(.top, 16)
@@ -1082,7 +1117,7 @@ private struct FinanceDynamicsFilterSheet: View {
             } else {
                 VStack(spacing: 8) {
                     ForEach(accounts) { account in
-                        if let accountInfo = viewModel.financeViewModel.getAccountInfo(account: account) {
+                        if let accountInfo = viewModel.getAccountInfoForDynamics(account: account) {
                             Button {
                                 viewModel.handle(.toggleAccount(account.accountUniqueID))
                             } label: {
@@ -1105,6 +1140,25 @@ private struct FinanceDynamicsFilterSheet: View {
                     }
                 }
             }
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.black.opacity(0.3))
+        )
+    }
+
+    private var archivedToggleSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Архив")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(AppColors.textPrimary)
+            
+            Toggle("Показывать архивные счета", isOn: Binding(
+                get: { viewModel.state.showArchivedAccounts },
+                set: { viewModel.handle(.setShowArchivedAccounts($0)) }
+            ))
+            .tint(AppColors.textPrimary)
         }
         .padding(20)
         .background(

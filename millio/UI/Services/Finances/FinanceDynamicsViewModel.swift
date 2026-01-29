@@ -89,6 +89,12 @@ struct FinanceDynamicsState {
     
     /// Показывать ли sheet с выбором периода
     var showPeriodSelector: Bool = false
+
+    /// Показывать ли архивные счета в динамике
+    var showArchivedAccounts: Bool = true
+
+    /// Предупреждение о конвертации валют в истории
+    var currencyConversionWarning: String? = nil
 }
 
 // MARK: - Dynamics Period
@@ -151,6 +157,7 @@ struct DynamicsBreakdownItem: Identifiable {
     let icon: String?
     let accountType: FinanceAccountType?
     let isCreditCard: Bool
+    let isArchived: Bool
 }
 
 // MARK: - Finance Dynamics Actions
@@ -175,6 +182,7 @@ enum FinanceDynamicsAction {
     case deselectAllAccounts
     case showPeriodSelector
     case hidePeriodSelector
+    case setShowArchivedAccounts(Bool)
 }
 
 // MARK: - Finance Dynamics ViewModel
@@ -210,7 +218,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         initialGroupCurrency: String? = nil,
         initialAccountID: String? = nil,
         initialAccountCurrency: String? = nil,
-        currencyService: CurrencyRateServiceProtocol = CurrencyRateService.shared
+        currencyService: CurrencyRateServiceProtocol
     ) {
         self.modelContext = modelContext
         self.financeViewModel = financeViewModel
@@ -243,6 +251,25 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         if state.period == .custom && state.customPeriod == nil {
             state.period = .month
         }
+    }
+
+    convenience init(
+        modelContext: ModelContext,
+        financeViewModel: FinanceViewModel,
+        initialGroupID: String? = nil,
+        initialGroupCurrency: String? = nil,
+        initialAccountID: String? = nil,
+        initialAccountCurrency: String? = nil
+    ) {
+        self.init(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            initialGroupID: initialGroupID,
+            initialGroupCurrency: initialGroupCurrency,
+            initialAccountID: initialAccountID,
+            initialAccountCurrency: initialAccountCurrency,
+            currencyService: CurrencyRateService.shared
+        )
     }
     
     func handle(_ action: FinanceDynamicsAction) {
@@ -308,6 +335,10 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             
         case .hidePeriodSelector:
             state.showPeriodSelector = false
+
+        case .setShowArchivedAccounts(let isOn):
+            state.showArchivedAccounts = isOn
+            updateChartData()
             
         case .selectAllGroups:
             state.selectedGroupIDs = Set(state.groups.map { $0.groupUniqueID })
@@ -478,6 +509,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     }
     
     func updateChartData() {
+        state.currencyConversionWarning = nil
         Task {
             await updateChartDataAsync()
             await updateCurrentBalanceAndDelta()
@@ -620,13 +652,19 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         
         // Убираем дубликаты
         var seenIDs: Set<String> = []
-        return accounts.filter { account in
+        let uniqueAccounts = accounts.filter { account in
             if seenIDs.contains(account.accountUniqueID) {
                 return false
             }
             seenIDs.insert(account.accountUniqueID)
             return true
         }
+        
+        guard state.showArchivedAccounts == false else {
+            return uniqueAccounts
+        }
+        
+        return uniqueAccounts.filter { !isAccountArchived($0) }
     }
     
     /// Обновить список динамики
@@ -731,7 +769,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                             deltaPercent: percent,
                             icon: nil,
                             accountType: nil,
-                            isCreditCard: false
+                            isCreditCard: false,
+                            isArchived: false
                         )
                     }
                 }
@@ -747,14 +786,15 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             // Показываем каждый счет отдельно - вычисляем параллельно
             // Подготавливаем данные для счетов до входа в TaskGroup
             let accountsData = await MainActor.run {
-                accounts.compactMap { account -> (String, String, String, String, Bool)? in
-                    guard let accountInfo = self.financeViewModel.getAccountInfo(account: account) else {
+                accounts.compactMap { account -> (String, String, String, String, Bool, Bool)? in
+                    guard let accountInfo = self.getAccountInfoForDynamics(account: account) else {
                         return nil
                     }
                     let accountID = account.accountUniqueID
                     let accountCardID = account.accountID
                     let isCard = account.accountType == .card
-                    return (accountID, accountInfo.name, accountCardID, accountID, isCard)
+                    let isArchived = self.isAccountArchived(account)
+                    return (accountID, accountInfo.name, accountCardID, accountID, isCard, isArchived)
                 }
             }
             
@@ -765,7 +805,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             }
             
             await withTaskGroup(of: DynamicsBreakdownItem?.self) { group in
-                for (accountUniqueID, accountName, accountCardID, _, isCard) in accountsData {
+                for (accountUniqueID, accountName, accountCardID, _, isCard, isArchived) in accountsData {
                     group.addTask { @MainActor in
                         let accountCardIDs = isCard ? Set([accountCardID]) : Set<String>()
                         
@@ -832,7 +872,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                         let percent = self.calculateDeltaPercent(delta: delta, startBalance: startBalance)
                         
                         // Получаем информацию о счете для иконки
-                        guard let accountInfo = self.financeViewModel.getAccountInfo(account: account) else {
+                        guard let accountInfo = self.getAccountInfoForDynamics(account: account) else {
                             return nil
                         }
                         
@@ -845,7 +885,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                             deltaPercent: percent,
                             icon: accountInfo.icon,
                             accountType: account.accountType,
-                            isCreditCard: isCreditCard
+                            isCreditCard: isCreditCard,
+                            isArchived: isArchived
                         )
                     }
                 }
@@ -887,7 +928,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     accounts: [account],
                     startDate: getPeriodDates().start,
                     endDate: getPeriodDates().end,
-                    label: financeViewModel.getAccountInfo(account: account)?.name ?? "Счет",
+                    label: getAccountInfoForDynamics(account: account)?.name ?? "Счет",
                     debtAsNegative: false
                 )
                 allDataPoints.append(contentsOf: accountData)
@@ -901,7 +942,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     accounts: [account],
                     startDate: getPeriodDates().start,
                     endDate: getPeriodDates().end,
-                    label: financeViewModel.getAccountInfo(account: account)?.name ?? "Счет",
+                    label: getAccountInfoForDynamics(account: account)?.name ?? "Счет",
                     debtAsNegative: false
                 )
             } else {
@@ -1560,7 +1601,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         guard let accounts = group.accounts else { return 0.0 }
         
         for account in accounts {
-            if let accountInfo = financeViewModel.getAccountInfo(account: account) {
+            if let accountInfo = getAccountInfoForDynamics(account: account) {
                 let converted = await convertAmount(
                     value: accountInfo.amount,
                     from: accountInfo.currency,
@@ -1572,6 +1613,29 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         
         return total
     }
+
+    func getAccountInfoForDynamics(account: FinanceAccount) -> (name: String, amount: Double, currency: String, icon: String, isCreditCardDebt: Bool)? {
+        switch account.accountType {
+        case .card:
+            if let card = cardsCache[account.accountID] {
+                if card.cardType == .credit, let limit = card.creditLimit {
+                    let amount = max(0, limit - card.balance)
+                    return (card.name, amount, card.currency, card.cardType.icon, true)
+                }
+                return (card.name, card.balance, card.currency, card.cardType.icon, false)
+            }
+        case .credit:
+            if let credit = creditsCache[account.accountID] {
+                return (credit.name, credit.remainingAmount, credit.currency, credit.creditType.icon, false)
+            }
+        case .investment:
+            if let investment = investmentsCache[account.accountID] {
+                return (investment.name, investment.amount, investment.currency, investment.category.icon, false)
+            }
+        }
+        
+        return nil
+    }
     
     func convertAmount(value: Double, from: String, to: String, at date: Date? = nil) async -> Double {
         if from == to {
@@ -1580,6 +1644,11 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         
         if let date = date {
             let result = await historicalRateStore.getRate(on: date, from: from, to: to)
+            if result.resolution != .exact {
+                if state.currencyConversionWarning == nil {
+                    state.currencyConversionWarning = "Часть значений рассчитана по оценочному курсу."
+                }
+            }
             if let rate = result.rate {
                 return value * rate
             }
@@ -1590,6 +1659,9 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             from: from,
             to: to
         ) {
+            if state.currencyConversionWarning == nil {
+                state.currencyConversionWarning = "Часть значений рассчитана по оценочному курсу."
+            }
             return converted
         }
         
@@ -1609,6 +1681,21 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             }
         }
         
-        return accounts
+        guard state.showArchivedAccounts == false else {
+            return accounts
+        }
+        
+        return accounts.filter { !isAccountArchived($0) }
+    }
+
+    private func isAccountArchived(_ account: FinanceAccount) -> Bool {
+        switch account.accountType {
+        case .card:
+            return cardsCache[account.accountID]?.archivedAt != nil
+        case .credit:
+            return creditsCache[account.accountID]?.archivedAt != nil
+        case .investment:
+            return investmentsCache[account.accountID]?.archivedAt != nil
+        }
     }
 }

@@ -29,10 +29,14 @@ final class HistoricalRateStore {
     
     init(
         modelContext: ModelContext,
-        currencyService: CurrencyRateServiceProtocol = CurrencyRateService.shared
+        currencyService: CurrencyRateServiceProtocol
     ) {
         self.modelContext = modelContext
         self.currencyService = currencyService
+    }
+
+    convenience init(modelContext: ModelContext) {
+        self.init(modelContext: modelContext, currencyService: CurrencyRateService.shared)
     }
     
     func getRate(on date: Date, from: String, to: String) async -> HistoricalRateResult {
