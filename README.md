@@ -10,6 +10,7 @@ Millio — iOS-приложение с локальным хранением д�
 - `docs/CORE_STATUS.md` — текущее состояние и компромиссы
 - `docs/BACKUP_RESTORE_SCHEMA.md` — backup/restore
 - `docs/FINANCE_DATA_STORAGE.md` — хранение данных по финансам
+- `docs/FINANCE_HISTORY_PLAN.md` — план исторических курсов и архивных счетов
 - `CLAUDE.md` — проектные правила для ассистента
 
 ## Ключевые принципы

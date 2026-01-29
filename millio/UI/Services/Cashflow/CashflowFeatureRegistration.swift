@@ -48,6 +48,9 @@ struct CashflowTransactionImporter: ModelImporter {
         let creditID = dict["creditID"] as? String
         let investmentID = dict["investmentID"] as? String
         let note = dict["note"] as? String
+        let exchangeRate = dict["exchangeRate"] as? Double
+        let exchangeRateDate = (dict["exchangeRateDate"] as? TimeInterval).map { Date(timeIntervalSince1970: $0) }
+        let exchangeRateCurrency = dict["exchangeRateCurrency"] as? String
         
         let incomeCategory = incomeCategoryRaw.flatMap { IncomeCategory(rawValue: $0) }
         let expenseCategory = expenseCategoryRaw.flatMap { ExpenseCategory(rawValue: $0) }
@@ -74,6 +77,9 @@ struct CashflowTransactionImporter: ModelImporter {
                 existing.incomeCategoryRaw = incomeCategoryRaw
                 existing.expenseCategoryRaw = expenseCategoryRaw
                 existing.note = note
+                existing.exchangeRate = exchangeRate
+                existing.exchangeRateDate = exchangeRateDate
+                existing.exchangeRateCurrency = exchangeRateCurrency
                 existing.updatedAt = updatedAt
                 return
             }
@@ -95,6 +101,9 @@ struct CashflowTransactionImporter: ModelImporter {
         )
         transaction.createdAt = createdAt
         transaction.updatedAt = updatedAt
+        transaction.exchangeRate = exchangeRate
+        transaction.exchangeRateDate = exchangeRateDate
+        transaction.exchangeRateCurrency = exchangeRateCurrency
         
         context.insert(transaction)
     }

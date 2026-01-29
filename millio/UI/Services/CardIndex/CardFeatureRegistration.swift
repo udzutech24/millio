@@ -76,6 +76,9 @@ struct CardImporter: ModelImporter {
             existingCard.isFavorite = data["isFavorite"] as? Bool ?? false
             existingCard.includeInTotal = data["includeInTotal"] as? Bool ?? true
             existingCard.updatedAt = Date(timeIntervalSince1970: updatedAt)
+            if let archivedAt = data["archivedAt"] as? TimeInterval {
+                existingCard.archivedAt = Date(timeIntervalSince1970: archivedAt)
+            }
             
             // Обновляем зашифрованные данные, если есть
             if let encryptedFullNumberStr = data["encryptedFullNumber"] as? String,
@@ -111,6 +114,9 @@ struct CardImporter: ModelImporter {
         // Восстанавливаем даты
         card.createdAt = Date(timeIntervalSince1970: createdAt)
         card.updatedAt = Date(timeIntervalSince1970: updatedAt)
+        if let archivedAt = data["archivedAt"] as? TimeInterval {
+            card.archivedAt = Date(timeIntervalSince1970: archivedAt)
+        }
         if let initialBalance = data["initialBalance"] as? Double {
             card.initialBalance = initialBalance
             card.hasInitialBalance = data["hasInitialBalance"] as? Bool ?? true

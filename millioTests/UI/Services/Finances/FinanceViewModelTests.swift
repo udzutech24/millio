@@ -29,6 +29,10 @@ final class MockCurrencyRateService: CurrencyRateServiceProtocol {
         return rates[from]?[to]
     }
 
+    func getHistoricalRate(on date: Date, from: String, to: String) async -> Double? {
+        return await getRate(from: from, to: to)
+    }
+
     func convert(amount: Double, from: String, to: String) async -> Double? {
         guard let rate = await getRate(from: from, to: to) else { return nil }
         return amount * rate

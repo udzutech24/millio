@@ -188,6 +188,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     
     let modelContext: ModelContext
     let financeViewModel: FinanceViewModel
+    let currencyService: CurrencyRateServiceProtocol
+    private let historicalRateStore: HistoricalRateStore
     
     let defaults = UserDefaults.standard
     
@@ -201,9 +203,19 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     var initialBalancesCache: [String: Double] = [:]
     var balanceCache: [String: Double] = [:] // Кэш для calculateBalanceAtDate: "accountID_date" -> balance
     
-    init(modelContext: ModelContext, financeViewModel: FinanceViewModel, initialGroupID: String? = nil, initialGroupCurrency: String? = nil, initialAccountID: String? = nil, initialAccountCurrency: String? = nil) {
+    init(
+        modelContext: ModelContext,
+        financeViewModel: FinanceViewModel,
+        initialGroupID: String? = nil,
+        initialGroupCurrency: String? = nil,
+        initialAccountID: String? = nil,
+        initialAccountCurrency: String? = nil,
+        currencyService: CurrencyRateServiceProtocol = CurrencyRateService.shared
+    ) {
         self.modelContext = modelContext
         self.financeViewModel = financeViewModel
+        self.currencyService = currencyService
+        self.historicalRateStore = HistoricalRateStore(modelContext: modelContext, currencyService: currencyService)
         
         // Если передан initialAccountID, устанавливаем его как выбранный счет и включаем режим одного счета
         if let accountID = initialAccountID {
@@ -1189,6 +1201,10 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     continue
                 }
                 
+                if let archivedAt = card.archivedAt, date > archivedAt {
+                    continue
+                }
+                
                 guard card.includeInTotal else {
                     continue
                 }
@@ -1235,7 +1251,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                                 let converted = await convertAmount(
                                     value: transaction.amount,
                                     from: transaction.currency,
-                                    to: accountCurrency
+                                    to: accountCurrency,
+                                    at: transaction.transactionDate
                                 )
                                 cardBalance += converted
                             }
@@ -1245,7 +1262,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                                 let converted = await convertAmount(
                                     value: transaction.amount,
                                     from: transaction.currency,
-                                    to: accountCurrency
+                                    to: accountCurrency,
+                                    at: transaction.transactionDate
                                 )
                                 cardBalance = max(0, cardBalance - converted)
                             }
@@ -1255,14 +1273,16 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                                 let converted = await convertAmount(
                                     value: transaction.amount,
                                     from: transaction.currency,
-                                    to: accountCurrency
+                                    to: accountCurrency,
+                                    at: transaction.transactionDate
                                 )
                                 cardBalance = max(0, cardBalance - converted)
                             } else if transaction.toCardID == account.accountID {
                                 let converted = await convertAmount(
                                     value: transaction.amount,
                                     from: transaction.currency,
-                                    to: accountCurrency
+                                    to: accountCurrency,
+                                    at: transaction.transactionDate
                                 )
                                 cardBalance += converted
                             }
@@ -1274,7 +1294,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                                 let converted = await convertAmount(
                                     value: transaction.amount,
                                     from: transaction.currency,
-                                    to: accountCurrency
+                                    to: accountCurrency,
+                                    at: transaction.transactionDate
                                 )
                                 cardBalance += converted
                             }
@@ -1294,6 +1315,10 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             case .credit:
                 // Используем кэш вместо first(where:) для O(1) поиска
                 guard let credit = creditsCache[account.accountID] else {
+                    continue
+                }
+                
+                if let archivedAt = credit.archivedAt, date > archivedAt {
                     continue
                 }
                 
@@ -1317,6 +1342,10 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     continue
                 }
                 
+                if let archivedAt = investment.archivedAt, date > archivedAt {
+                    continue
+                }
+                
                 guard investment.includeInTotal else {
                     continue
                 }
@@ -1334,7 +1363,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                         let converted = await convertAmount(
                             value: transaction.amount,
                             from: transaction.currency,
-                            to: accountCurrency
+                            to: accountCurrency,
+                            at: transaction.transactionDate
                         )
                         totalDelta += converted
                     }
@@ -1363,7 +1393,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                         let converted = await convertAmount(
                             value: transaction.amount,
                             from: transaction.currency,
-                            to: accountCurrency
+                            to: accountCurrency,
+                            at: transaction.transactionDate
                         )
                         investmentBalance += converted
                     }
@@ -1377,7 +1408,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 let converted = await convertAmount(
                     value: accountBalance,
                     from: accountCurrency,
-                    to: state.displayCurrency
+                    to: state.displayCurrency,
+                    at: date
                 )
                 let isLiability = debtAsNegative && isLiabilityAccount(account)
                 if isLiability {
@@ -1449,7 +1481,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             let converted = await convertAmount(
                 value: transaction.amount,
                 from: transaction.currency,
-                to: accountCurrency
+                to: accountCurrency,
+                at: transaction.transactionDate
             )
             totalAdjustments += converted
         }
@@ -1472,7 +1505,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 let converted = await convertAmount(
                     value: transaction.amount,
                     from: transaction.currency,
-                    to: accountCurrency
+                    to: accountCurrency,
+                    at: transaction.transactionDate
                 )
                 totalAdjustments += converted
             }
@@ -1494,7 +1528,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             let converted = await convertAmount(
                 value: transaction.amount,
                 from: transaction.currency,
-                to: accountCurrency
+                to: accountCurrency,
+                at: transaction.transactionDate
             )
             remainingAmount = max(0, remainingAmount - converted)
         }
@@ -1538,12 +1573,19 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         return total
     }
     
-    func convertAmount(value: Double, from: String, to: String) async -> Double {
+    func convertAmount(value: Double, from: String, to: String, at date: Date? = nil) async -> Double {
         if from == to {
             return value
         }
         
-        if let converted = await CurrencyRateService.shared.convert(
+        if let date = date {
+            let result = await historicalRateStore.getRate(on: date, from: from, to: to)
+            if let rate = result.rate {
+                return value * rate
+            }
+        }
+        
+        if let converted = await currencyService.convert(
             amount: value,
             from: from,
             to: to

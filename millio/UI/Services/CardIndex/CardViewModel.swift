@@ -210,8 +210,9 @@ final class CardViewModel: ViewModelProtocol {
     private func loadCards() {
         let descriptor = FetchDescriptor<Card>()
         if let cards = try? modelContext.fetch(descriptor) {
+            let activeCards = cards.filter { $0.archivedAt == nil }
             // Сортируем: сначала избранные, потом по приоритету, потом по дате обновления
-            state.cards = cards.sorted { card1, card2 in
+            state.cards = activeCards.sorted { card1, card2 in
                 // Сначала избранные
                 if card1.isFavorite != card2.isFavorite {
                     return card1.isFavorite
@@ -295,7 +296,8 @@ final class CardViewModel: ViewModelProtocol {
     }
     
     private func deleteCard(_ card: Card) {
-        modelContext.delete(card)
+        card.archivedAt = Date()
+        card.updatedAt = Date()
         
         do {
             try modelContext.save()

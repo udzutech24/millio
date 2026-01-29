@@ -13,6 +13,7 @@ import Foundation
 @MainActor
 protocol CurrencyRateServiceProtocol {
     func getRate(from: String, to: String) async -> Double?
+    func getHistoricalRate(on date: Date, from: String, to: String) async -> Double?
     func convert(amount: Double, from: String, to: String) async -> Double?
     func forceRefreshRates() async
 }
@@ -68,6 +69,21 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
     func convert(amount: Double, from: String, to: String) async -> Double? {
         guard let rate = await getRate(from: from, to: to) else { return nil }
         return amount * rate
+    }
+    
+    /// Получить исторический курс на дату (дневная гранулярность)
+    func getHistoricalRate(on date: Date, from: String, to: String) async -> Double? {
+        let f = from.uppercased()
+        let t = to.uppercased()
+        
+        if f == t { return 1.0 }
+        
+        if Calendar.current.isDateInToday(date) {
+            return await getRate(from: f, to: t)
+        }
+        
+        // Исторические курсы берем через Frankfurter (ECB)
+        return await fetchFrankfurterRate(on: date, from: f, to: t)
     }
     
     /// Получить список доступных валют из текущего источника
@@ -163,5 +179,37 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
             // Оставляем старые значения в кэше
             AppLogger.log(.error, category: "CurrencyRateService", "Failed to refresh rates: \(error.localizedDescription)")
         }
+    }
+    
+    private func fetchFrankfurterRate(on date: Date, from: String, to: String) async -> Double? {
+        let dateString = formatDateForFrankfurter(date)
+        guard let url = URL(string: "https://api.frankfurter.app/\(dateString)?from=\(from)&to=\(to)") else {
+            return nil
+        }
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                throw URLError(.badServerResponse)
+            }
+            
+            struct FrankfurterResponse: Decodable {
+                let rates: [String: Double]
+            }
+            let decoded = try JSONDecoder().decode(FrankfurterResponse.self, from: data)
+            return decoded.rates[to]
+        } catch {
+            AppLogger.log(.error, category: "CurrencyRateService", "Failed to fetch historical rate: \(error.localizedDescription)")
+            return nil
+        }
+    }
+    
+    private func formatDateForFrankfurter(_ date: Date) -> String {
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.year, .month, .day], from: date)
+        let year = components.year ?? 1970
+        let month = components.month ?? 1
+        let day = components.day ?? 1
+        return String(format: "%04d-%02d-%02d", year, month, day)
     }
 }

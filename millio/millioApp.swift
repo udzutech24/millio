@@ -17,6 +17,7 @@ struct millioApp: App {
     
     var sharedModelContainer: ModelContainer? = {
         // Регистрируем фичи ДО создания схемы
+        CurrencyFeatureRegistration.register()
         CardFeatureRegistration.register()
         CashbackFeatureRegistration.register()
         CreditFeatureRegistration.register()

@@ -16,7 +16,7 @@ struct BackupMetadata: Codable {
     init(
         version: BackupVersion = .current,
         timestamp: Date = Date(),
-        schemaVersion: String = "1.0",
+        schemaVersion: String = "2.0",
         modelCount: Int = 0
     ) {
         self.version = version

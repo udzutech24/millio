@@ -99,6 +99,9 @@ final class Credit: Persistable {
     
     /// Дата последнего обновления
     var updatedAt: Date = Date()
+    
+    /// Дата архивирования (nil = активный кредит)
+    var archivedAt: Date?
 
     /// Стабильный идентификатор для связей между сущностями
     var uniqueID: String = ""
@@ -406,7 +409,7 @@ final class Credit: Persistable {
     }
     
     func export() throws -> Data {
-        let dict: [String: Any] = [
+        var dict: [String: Any] = [
             "type": "Credit",
             "name": name,
             "amount": amount,
@@ -430,6 +433,10 @@ final class Credit: Persistable {
             "updatedAt": updatedAt.timeIntervalSince1970,
             "creditUniqueID": creditUniqueID
         ]
+        
+        if let archivedAt = archivedAt {
+            dict["archivedAt"] = archivedAt.timeIntervalSince1970
+        }
         
         return try JSONSerialization.data(withJSONObject: dict)
     }

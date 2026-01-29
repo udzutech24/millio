@@ -19,6 +19,7 @@ struct CashflowViewModelTests {
         let schema = Schema([
             Card.self,
             CashflowTransaction.self,
+            HistoricalRate.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         return try! ModelContainer(for: schema, configurations: [config])
@@ -84,7 +85,7 @@ struct CashflowViewModelTests {
         let viewModel = CashflowViewModel(modelContext: modelContext)
         #expect(viewModel.state.availableCards.count == 2)
 
-        modelContext.delete(secondCard)
+        secondCard.archivedAt = Date()
         try modelContext.save()
 
         viewModel.handle(.addTransaction(.income))

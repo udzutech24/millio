@@ -66,6 +66,11 @@ struct AppSchema {
             modelTypes.append(CashflowTransaction.self)
         }
         
+        // Явно добавляем модели HistoricalRate
+        if !modelTypes.contains(where: { $0 == HistoricalRate.self }) {
+            modelTypes.append(HistoricalRate.self)
+        }
+        
         return Schema(modelTypes)
     }
 }

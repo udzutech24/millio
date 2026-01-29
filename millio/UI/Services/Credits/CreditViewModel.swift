@@ -232,8 +232,9 @@ final class CreditViewModel: ViewModelProtocol {
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
         if let credits = try? modelContext.fetch(descriptor) {
+            let activeCredits = credits.filter { $0.archivedAt == nil }
             // Обновляем остатки долга только для незакрытых кредитов
-            for credit in credits {
+            for credit in activeCredits {
                 // Не пересчитываем остаток для закрытых кредитов (где остаток был установлен вручную = 0)
                 if !credit.isClosed {
                     credit.updateRemainingAmount()
@@ -241,7 +242,7 @@ final class CreditViewModel: ViewModelProtocol {
             }
             try? modelContext.save()
             
-            state.credits = credits
+            state.credits = activeCredits
             applyFilters()
             calculateStats()
         }
@@ -331,7 +332,8 @@ final class CreditViewModel: ViewModelProtocol {
     }
     
     private func deleteCredit(_ credit: Credit) {
-        modelContext.delete(credit)
+        credit.archivedAt = Date()
+        credit.updatedAt = Date()
         
         do {
             try modelContext.save()

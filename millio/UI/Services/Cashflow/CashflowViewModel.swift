@@ -31,6 +31,9 @@ struct CashflowState {
     /// Доступные карты
     var availableCards: [Card] = []
     
+    /// Все карты (включая архивные) для истории
+    var allCards: [Card] = []
+    
     /// Период для графика
     var chartPeriod: ChartPeriod = .month
     
@@ -144,6 +147,7 @@ final class CashflowViewModel: ViewModelProtocol {
     @Published var state = CashflowState()
     
     let modelContext: ModelContext
+    private let historicalRateStore: HistoricalRateStore
     
     private let defaults = UserDefaults.standard
     private var eventSubscriptionID: UUID?
@@ -155,6 +159,7 @@ final class CashflowViewModel: ViewModelProtocol {
     
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
+        self.historicalRateStore = HistoricalRateStore(modelContext: modelContext)
         state.displayCurrency = storedDisplayCurrency
         loadTransactions()
         loadCards()
@@ -193,7 +198,9 @@ final class CashflowViewModel: ViewModelProtocol {
             deleteTransaction(transaction)
             
         case .updateTransaction(let transaction):
-            updateTransaction(transaction)
+            Task { @MainActor in
+                await updateTransactionAsync(transaction)
+            }
             
         case .hideTransactionEditor:
             state.showTransactionEditor = false
@@ -265,7 +272,9 @@ final class CashflowViewModel: ViewModelProtocol {
     
     private func loadCards() {
         let descriptor = FetchDescriptor<Card>()
-        state.availableCards = (try? modelContext.fetch(descriptor)) ?? []
+        let allCards = (try? modelContext.fetch(descriptor)) ?? []
+        state.allCards = allCards
+        state.availableCards = allCards.filter { $0.archivedAt == nil }
     }
 
     private func subscribeToFinanceEvents() {
@@ -324,17 +333,15 @@ final class CashflowViewModel: ViewModelProtocol {
             
             switch transaction.transactionType {
             case .income:
-                let converted = await convertAmount(
-                    value: transaction.amount,
-                    from: transaction.currency,
+                let converted = await convertAmountForTransaction(
+                    transaction,
                     to: state.displayCurrency
                 )
                 totalIncome += converted
                 
             case .expense:
-                let converted = await convertAmount(
-                    value: transaction.amount,
-                    from: transaction.currency,
+                let converted = await convertAmountForTransaction(
+                    transaction,
                     to: state.displayCurrency
                 )
                 totalExpense += converted
@@ -412,6 +419,64 @@ final class CashflowViewModel: ViewModelProtocol {
         
         return value
     }
+
+    private struct ExchangeInfo {
+        let rate: Double?
+        let rateDate: Date?
+        let rateCurrency: String?
+    }
+    
+    private func resolveExchangeInfo(for transaction: CashflowTransaction) async -> ExchangeInfo {
+        let targetCurrency = state.displayCurrency
+        
+        guard transaction.currency != targetCurrency else {
+            return ExchangeInfo(rate: 1.0, rateDate: Calendar.current.startOfDay(for: transaction.transactionDate), rateCurrency: targetCurrency)
+        }
+        
+        let result = await historicalRateStore.getRate(
+            on: transaction.transactionDate,
+            from: transaction.currency,
+            to: targetCurrency
+        )
+        
+        return ExchangeInfo(
+            rate: result.rate,
+            rateDate: result.rateDate,
+            rateCurrency: result.rate != nil ? targetCurrency : nil
+        )
+    }
+    
+    private func convertAmountForTransaction(_ transaction: CashflowTransaction, to currency: String) async -> Double {
+        if transaction.currency == currency {
+            return transaction.amount
+        }
+        
+        if let rate = transaction.exchangeRate,
+           let rateCurrency = transaction.exchangeRateCurrency,
+           rateCurrency == currency {
+            return transaction.amount * rate
+        }
+        
+        let result = await historicalRateStore.getRate(
+            on: transaction.transactionDate,
+            from: transaction.currency,
+            to: currency
+        )
+        
+        if let rate = result.rate {
+            return transaction.amount * rate
+        }
+        
+        if let converted = await CurrencyRateService.shared.convert(
+            amount: transaction.amount,
+            from: transaction.currency,
+            to: currency
+        ) {
+            return converted
+        }
+        
+        return transaction.amount
+    }
     
     private func deleteTransaction(_ transaction: CashflowTransaction) {
         modelContext.delete(transaction)
@@ -424,8 +489,9 @@ final class CashflowViewModel: ViewModelProtocol {
         }
     }
     
-    private func updateTransaction(_ transaction: CashflowTransaction) {
+    private func updateTransactionAsync(_ transaction: CashflowTransaction) async {
         let isNewTransaction = state.editingTransaction == nil
+        let exchangeInfo = await resolveExchangeInfo(for: transaction)
         
         if let existing = state.editingTransaction {
             // Обновляем существующую транзакцию
@@ -438,6 +504,9 @@ final class CashflowViewModel: ViewModelProtocol {
             existing.incomeCategoryRaw = transaction.incomeCategoryRaw
             existing.expenseCategoryRaw = transaction.expenseCategoryRaw
             existing.note = transaction.note
+            existing.exchangeRate = exchangeInfo.rate
+            existing.exchangeRateDate = exchangeInfo.rateDate
+            existing.exchangeRateCurrency = exchangeInfo.rateCurrency
             existing.updatedAt = Date()
         } else {
             // Создаем новую транзакцию
@@ -452,6 +521,9 @@ final class CashflowViewModel: ViewModelProtocol {
                 expenseCategory: transaction.expenseCategory,
                 note: transaction.note
             )
+            newTransaction.exchangeRate = exchangeInfo.rate
+            newTransaction.exchangeRateDate = exchangeInfo.rateDate
+            newTransaction.exchangeRateCurrency = exchangeInfo.rateCurrency
             modelContext.insert(newTransaction)
         }
         

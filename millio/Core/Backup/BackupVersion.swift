@@ -13,7 +13,7 @@ nonisolated struct BackupVersion: Comparable, Codable {
     let patch: Int
     
     nonisolated static let current = BackupVersion(
-        major: 1,
+        major: 2,
         minor: 0,
         patch: 0
     )

@@ -177,7 +177,7 @@ private struct CashflowTransactionRow: View {
         switch transaction.transactionType {
         case .income, .expense:
             if let cardID = transaction.cardID,
-               let card = viewModel.state.availableCards.first(where: { $0.cardUniqueID == cardID }) {
+               let card = viewModel.state.allCards.first(where: { $0.cardUniqueID == cardID }) {
                 return card.name
             }
             return nil
@@ -185,8 +185,8 @@ private struct CashflowTransactionRow: View {
         case .transfer:
             if let fromCardID = transaction.cardID,
                let toCardID = transaction.toCardID,
-               let fromCard = viewModel.state.availableCards.first(where: { $0.cardUniqueID == fromCardID }),
-               let toCard = viewModel.state.availableCards.first(where: { $0.cardUniqueID == toCardID }) {
+               let fromCard = viewModel.state.allCards.first(where: { $0.cardUniqueID == fromCardID }),
+               let toCard = viewModel.state.allCards.first(where: { $0.cardUniqueID == toCardID }) {
                 return "\(fromCard.name) → \(toCard.name)"
             }
             return nil
@@ -194,20 +194,20 @@ private struct CashflowTransactionRow: View {
         case .balanceAdjustment:
             // Для ручного изменения баланса показываем имя карты, если есть
             if let cardID = transaction.cardID,
-               let card = viewModel.state.availableCards.first(where: { $0.cardUniqueID == cardID }) {
+               let card = viewModel.state.allCards.first(where: { $0.cardUniqueID == cardID }) {
                 return card.name
             }
             // Для кредитов и инвестиций возвращаем nil, так как нет доступа к их данным в этом ViewModel
             return nil
         case .cardBalanceAdjustment:
             if let cardID = transaction.cardID,
-               let card = viewModel.state.availableCards.first(where: { $0.cardUniqueID == cardID }) {
+               let card = viewModel.state.allCards.first(where: { $0.cardUniqueID == cardID }) {
                 return card.name
             }
             return nil
         case .creditDebtAdjustment:
             if let cardID = transaction.cardID,
-               let card = viewModel.state.availableCards.first(where: { $0.cardUniqueID == cardID }) {
+               let card = viewModel.state.allCards.first(where: { $0.cardUniqueID == cardID }) {
                 return card.name
             }
             return nil

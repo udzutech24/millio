@@ -151,8 +151,9 @@ final class InvestmentViewModel: ViewModelProtocol {
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
         if let investments = try? modelContext.fetch(descriptor) {
+            let activeInvestments = investments.filter { $0.archivedAt == nil }
             // Сортируем: сначала избранные, потом по приоритету, потом по дате
-            state.investments = investments.sorted { inv1, inv2 in
+            state.investments = activeInvestments.sorted { inv1, inv2 in
                 if inv1.isFavorite != inv2.isFavorite {
                     return inv1.isFavorite
                 }
@@ -224,7 +225,8 @@ final class InvestmentViewModel: ViewModelProtocol {
     }
     
     private func deleteInvestment(_ investment: Investment) {
-        modelContext.delete(investment)
+        investment.archivedAt = Date()
+        investment.updatedAt = Date()
         
         do {
             try modelContext.save()

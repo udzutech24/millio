@@ -27,7 +27,7 @@ final class DataRepository: DataRepositoryProtocol {
         let metadata = BackupMetadata(
             version: .current,
             timestamp: Date(),
-            schemaVersion: "1.0",
+            schemaVersion: "2.0",
             modelCount: 0
         )
         
@@ -160,6 +160,21 @@ final class DataRepository: DataRepositoryProtocol {
                         }
                         json["_type"] = typeName
                         modelsData.append(json)
+                    }
+                }
+            }
+            
+            // Экспортируем HistoricalRate
+            if typeName == "HistoricalRate" {
+                let rateDescriptor = FetchDescriptor<HistoricalRate>()
+                let rates = try modelContext.fetch(rateDescriptor)
+                
+                for rate in rates {
+                    let data = try rate.export()
+                    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                        var rateDict = json
+                        rateDict["_type"] = typeName
+                        modelsData.append(rateDict)
                     }
                 }
             }
@@ -399,6 +414,12 @@ final class DataRepository: DataRepositoryProtocol {
                 let groups = try modelContext.fetch(groupDescriptor)
                 for group in groups {
                     modelContext.delete(group)
+                }
+            } else if typeName == "HistoricalRate" {
+                let rateDescriptor = FetchDescriptor<HistoricalRate>()
+                let rates = try modelContext.fetch(rateDescriptor)
+                for rate in rates {
+                    modelContext.delete(rate)
                 }
             }
         }

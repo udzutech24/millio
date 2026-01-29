@@ -144,4 +144,30 @@ struct CardViewModelTests {
         #expect(transactions.first?.transactionType == .creditDebtAdjustment)
         #expect(abs((transactions.first?.amount ?? 0) - (-50.0)) < 0.01)
     }
+
+    @Test("Удаление карты переводит ее в архив и скрывает из списка")
+    func testDeleteCardArchivesCard() throws {
+        let modelContext = try createTestModelContext()
+        let viewModel = CardViewModel(modelContext: modelContext)
+
+        let card = Card(
+            name: "Архивная карта",
+            cardNumber: "0000",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 10.0
+        )
+        modelContext.insert(card)
+        try modelContext.save()
+
+        viewModel.handle(.deleteCard(card))
+
+        let descriptor = FetchDescriptor<Card>()
+        let cards = (try? modelContext.fetch(descriptor)) ?? []
+
+        #expect(cards.count == 1)
+        #expect(cards.first?.archivedAt != nil)
+        #expect(viewModel.state.cards.isEmpty)
+    }
 }

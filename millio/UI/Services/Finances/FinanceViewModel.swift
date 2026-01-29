@@ -202,6 +202,9 @@ final class FinanceViewModel: ViewModelProtocol {
     private var cardByID: [String: Card] = [:]
     private var creditByID: [String: Credit] = [:]
     private var investmentByID: [String: Investment] = [:]
+    private var allCardByID: [String: Card] = [:]
+    private var allCreditByID: [String: Credit] = [:]
+    private var allInvestmentByID: [String: Investment] = [:]
     
     private var storedDisplayCurrency: String {
         get { defaults.string(forKey: "finance_display_currency") ?? "RUB" }
@@ -460,15 +463,23 @@ final class FinanceViewModel: ViewModelProtocol {
     private func loadAccounts() {
         // Загружаем карты, кредиты и активы
         let cardDescriptor = FetchDescriptor<Card>()
-        state.availableCards = (try? modelContext.fetch(cardDescriptor)) ?? []
+        let allCards = (try? modelContext.fetch(cardDescriptor)) ?? []
+        state.availableCards = allCards.filter { $0.archivedAt == nil }
         
         let creditDescriptor = FetchDescriptor<Credit>()
-        state.availableCredits = (try? modelContext.fetch(creditDescriptor)) ?? []
+        let allCredits = (try? modelContext.fetch(creditDescriptor)) ?? []
+        state.availableCredits = allCredits.filter { $0.archivedAt == nil }
         
         let investmentDescriptor = FetchDescriptor<Investment>()
-        state.availableInvestments = (try? modelContext.fetch(investmentDescriptor)) ?? []
+        let allInvestments = (try? modelContext.fetch(investmentDescriptor)) ?? []
+        state.availableInvestments = allInvestments.filter { $0.archivedAt == nil }
 
         rebuildAccountCaches()
+        rebuildAllAccountCaches(
+            cards: allCards,
+            credits: allCredits,
+            investments: allInvestments
+        )
         cleanupInvalidFinanceAccounts()
         
         // Обновляем менеджеры
@@ -549,6 +560,23 @@ final class FinanceViewModel: ViewModelProtocol {
         }
     }
 
+    /// Перестраиваем кэш всех счетов (включая архивные) для валидности связей
+    private func rebuildAllAccountCaches(cards: [Card], credits: [Credit], investments: [Investment]) {
+        allCardByID = [:]
+        allCreditByID = [:]
+        allInvestmentByID = [:]
+        
+        for card in cards {
+            allCardByID[card.cardUniqueID] = card
+        }
+        for credit in credits {
+            allCreditByID[credit.creditUniqueID] = credit
+        }
+        for investment in investments {
+            allInvestmentByID[investment.investmentUniqueID] = investment
+        }
+    }
+
     /// Удаляем "сиротские" связи, чтобы не накапливать мусор в базе
     private func cleanupInvalidFinanceAccounts() {
         let descriptor = FetchDescriptor<FinanceAccount>()
@@ -567,17 +595,17 @@ final class FinanceViewModel: ViewModelProtocol {
             // Если целевой объект не найден — удаляем связь
             switch account.accountType {
             case .card:
-                if cardByID[account.accountID] == nil {
+                if allCardByID[account.accountID] == nil {
                     modelContext.delete(account)
                     removedCount += 1
                 }
             case .credit:
-                if creditByID[account.accountID] == nil {
+                if allCreditByID[account.accountID] == nil {
                     modelContext.delete(account)
                     removedCount += 1
                 }
             case .investment:
-                if investmentByID[account.accountID] == nil {
+                if allInvestmentByID[account.accountID] == nil {
                     modelContext.delete(account)
                     removedCount += 1
                 }
@@ -976,53 +1004,21 @@ final class FinanceViewModel: ViewModelProtocol {
 
         switch account.accountType {
         case .card:
-            if let card = cardByID[account.accountID] {
-                let cardID = card.cardUniqueID
-                let descriptor = FetchDescriptor<CashflowTransaction>(
-                    predicate: #Predicate<CashflowTransaction> { transaction in
-                        transaction.cardID == cardID || transaction.toCardID == cardID
-                    }
-                )
-                if let transactions = try? modelContext.fetch(descriptor) {
-                    for transaction in transactions {
-                        modelContext.delete(transaction)
-                    }
-                }
-                modelContext.delete(card)
+            if let card = allCardByID[account.accountID] {
+                card.archivedAt = Date()
+                card.updatedAt = Date()
             }
         case .credit:
-            if let credit = creditByID[account.accountID] {
-                let creditID = credit.creditUniqueID
-                let descriptor = FetchDescriptor<CashflowTransaction>(
-                    predicate: #Predicate<CashflowTransaction> { transaction in
-                        transaction.creditID == creditID
-                    }
-                )
-                if let transactions = try? modelContext.fetch(descriptor) {
-                    for transaction in transactions {
-                        modelContext.delete(transaction)
-                    }
-                }
-                modelContext.delete(credit)
+            if let credit = allCreditByID[account.accountID] {
+                credit.archivedAt = Date()
+                credit.updatedAt = Date()
             }
         case .investment:
-            if let investment = investmentByID[account.accountID] {
-                let investmentID = investment.investmentUniqueID
-                let descriptor = FetchDescriptor<CashflowTransaction>(
-                    predicate: #Predicate<CashflowTransaction> { transaction in
-                        transaction.investmentID == investmentID
-                    }
-                )
-                if let transactions = try? modelContext.fetch(descriptor) {
-                    for transaction in transactions {
-                        modelContext.delete(transaction)
-                    }
-                }
-                modelContext.delete(investment)
+            if let investment = allInvestmentByID[account.accountID] {
+                investment.archivedAt = Date()
+                investment.updatedAt = Date()
             }
         }
-
-        modelContext.delete(account)
 
         do {
             try modelContext.save()

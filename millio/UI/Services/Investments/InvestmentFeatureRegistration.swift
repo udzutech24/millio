@@ -70,6 +70,9 @@ struct InvestmentImporter: ModelImporter {
             existingInvestment.priority = priority
             existingInvestment.includeInTotal = includeInTotal
             existingInvestment.updatedAt = Date(timeIntervalSince1970: updatedAt)
+            if let archivedAt = data["archivedAt"] as? TimeInterval {
+                existingInvestment.archivedAt = Date(timeIntervalSince1970: archivedAt)
+            }
             existingInvestment.ensureUniqueID()
             
             AppLogger.log(.info, category: "InvestmentImporter", "Updated existing investment '\(name)' instead of creating duplicate")
@@ -90,6 +93,9 @@ struct InvestmentImporter: ModelImporter {
         
         investment.createdAt = Date(timeIntervalSince1970: createdAt)
         investment.updatedAt = Date(timeIntervalSince1970: updatedAt)
+        if let archivedAt = data["archivedAt"] as? TimeInterval {
+            investment.archivedAt = Date(timeIntervalSince1970: archivedAt)
+        }
         if let initialAmount = initialAmount {
             investment.initialAmount = initialAmount
             investment.hasInitialAmount = hasInitialAmount ?? true

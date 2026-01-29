@@ -74,6 +74,9 @@ struct CreditImporter: ModelImporter {
             existingCredit.isFavorite = data["isFavorite"] as? Bool ?? false
             existingCredit.includeInTotal = data["includeInTotal"] as? Bool ?? true
             existingCredit.updatedAt = Date(timeIntervalSince1970: updatedAt)
+            if let archivedAt = data["archivedAt"] as? TimeInterval {
+                existingCredit.archivedAt = Date(timeIntervalSince1970: archivedAt)
+            }
             existingCredit.updateRemainingAmount()
             existingCredit.ensureUniqueID()
             
@@ -110,6 +113,9 @@ struct CreditImporter: ModelImporter {
         credit.includeInTotal = data["includeInTotal"] as? Bool ?? true
         credit.createdAt = Date(timeIntervalSince1970: createdAt)
         credit.updatedAt = Date(timeIntervalSince1970: updatedAt)
+        if let archivedAt = data["archivedAt"] as? TimeInterval {
+            credit.archivedAt = Date(timeIntervalSince1970: archivedAt)
+        }
         if let uniqueID = data["creditUniqueID"] as? String, !uniqueID.isEmpty {
             credit.uniqueID = uniqueID
         }

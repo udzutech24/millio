@@ -128,6 +128,9 @@ final class Investment: Persistable {
     
     /// Дата последнего обновления
     var updatedAt: Date = Date()
+    
+    /// Дата архивирования (nil = активная инвестиция)
+    var archivedAt: Date?
 
     /// Стабильный идентификатор для связей между сущностями
     var uniqueID: String = ""
@@ -191,7 +194,7 @@ final class Investment: Persistable {
     }
     
     func export() throws -> Data {
-        let dict: [String: Any] = [
+        var dict: [String: Any] = [
             "type": "Investment",
             "name": name,
             "investmentTypeRaw": investmentTypeRaw,
@@ -207,6 +210,10 @@ final class Investment: Persistable {
             "updatedAt": updatedAt.timeIntervalSince1970,
             "investmentUniqueID": investmentUniqueID
         ]
+        
+        if let archivedAt = archivedAt {
+            dict["archivedAt"] = archivedAt.timeIntervalSince1970
+        }
         
         return try JSONSerialization.data(withJSONObject: dict)
     }

@@ -13,6 +13,7 @@ import SwiftData
 @MainActor
 final class MockDynamicsCurrencyRateService: CurrencyRateServiceProtocol {
     func getRate(from: String, to: String) async -> Double? { 1.0 }
+    func getHistoricalRate(on date: Date, from: String, to: String) async -> Double? { 1.0 }
     func convert(amount: Double, from: String, to: String) async -> Double? { amount }
     func forceRefreshRates() async {}
 }
@@ -23,7 +24,8 @@ struct FinanceDynamicsViewModelTests {
     private static let sharedContainer: ModelContainer = {
         let schema = Schema([
             Credit.self,
-            CashflowTransaction.self
+            CashflowTransaction.self,
+            HistoricalRate.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         return try! ModelContainer(for: schema, configurations: [config])
@@ -67,7 +69,8 @@ struct FinanceDynamicsViewModelTests {
         )
         let dynamicsViewModel = FinanceDynamicsViewModel(
             modelContext: modelContext,
-            financeViewModel: financeViewModel
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
         )
         dynamicsViewModel.handle(.loadData)
 
@@ -128,7 +131,8 @@ struct FinanceDynamicsViewModelTests {
         )
         let dynamicsViewModel = FinanceDynamicsViewModel(
             modelContext: modelContext,
-            financeViewModel: financeViewModel
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
         )
         dynamicsViewModel.handle(.loadData)
 
