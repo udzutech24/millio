@@ -16,6 +16,7 @@ struct MainAppView: View {
     @State private var cashflowViewModel: CashflowViewModel?
     @State private var showExpenseSheet = false
     @State private var showIncomeSheet = false
+    @State private var showCashflowHistory = false
     
     init(router: AppRouter) {
         self.router = router
@@ -39,33 +40,13 @@ struct MainAppView: View {
                         
                         Spacer()
                         
-                        // Кнопка PRO справа
+                        // История операций справа
                         Button {
-                            viewModel.handle(.navigateToSubscription)
+                            showCashflowHistory = true
                         } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: appState.isPro ? "star.fill" : "star")
-                                    .font(.system(size: 14))
-                                Text("PRO")
-                                    .font(.system(size: 15, weight: .medium))
-                            }
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .background {
-                                Capsule()
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: appState.isPro
-                                                ? AppColors.incomeGradient
-                                                : [AppColors.textPrimary.opacity(0.3)],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        ),
-                                        lineWidth: 1.5
-                                    )
-                            }
+                            Image("operations")  
                         }
+                        .accessibilityLabel("История операций")
                     }
                     .padding(.horizontal, 24)
                     .padding(.top, 16)
@@ -116,6 +97,11 @@ struct MainAppView: View {
                         viewModel: cashflowViewModel,
                         transactionType: .income
                     )
+                }
+            }
+            .sheet(isPresented: $showCashflowHistory) {
+                if let cashflowViewModel = cashflowViewModel {
+                    CashflowTransactionsHistoryView(viewModel: cashflowViewModel)
                 }
             }
             .onAppear {

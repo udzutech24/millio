@@ -349,16 +349,19 @@ private struct CashflowContentView: View {
                 } label: {
                     Image(systemName: "rublesign.circle.fill")
                         .font(.title3.weight(.semibold))
-                        .frame(width: 28, height: 28)
+                        .frame(width: 36, height: 36)
                 }
                 .accessibilityLabel("Выбор валюты отображения")
                 
                 Button {
                     viewModel.handle(.showTransactionsHistory)
                 } label: {
-                    Image(systemName: "list.bullet")
-                        .font(.title3.weight(.semibold))
+                    Image("operations")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
                         .frame(width: 28, height: 28)
+                        
                 }
                 .accessibilityLabel("История операций")
             }
