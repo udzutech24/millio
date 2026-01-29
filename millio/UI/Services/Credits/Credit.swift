@@ -344,9 +344,10 @@ final class Credit: Persistable {
 
     /// Применить ручную корректировку остатка долга (из формы/быстрого редактирования)
     func applyManualRemainingAmount(_ newAmount: Double) {
+        let clampedAmount = max(0, newAmount)
         let scheduledRemaining = calculateScheduledRemainingAmount()
-        remainingAmountAdjustment = newAmount - scheduledRemaining
-        remainingAmount = max(0, newAmount)
+        remainingAmountAdjustment = clampedAmount - scheduledRemaining
+        remainingAmount = clampedAmount
     }
     
     /// Применить досрочное погашение

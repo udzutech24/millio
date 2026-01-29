@@ -120,4 +120,30 @@ struct CreditViewModelTests {
         #expect(abs((updated?.remainingAmount ?? 0) - 850.0) < 0.01)
         #expect(abs((updated?.remainingAmountAdjustment ?? 0)) > 0.01)
     }
+
+    @Test("Отрицательное значение долга клампится в 0 и корректно пишет adjustment")
+    func testNegativeRemainingAmountIsClamped() throws {
+        let modelContext = try createTestModelContext()
+        _ = CreditViewModel(modelContext: modelContext)
+
+        let credit = Credit(
+            name: "Кредит",
+            amount: 1000.0,
+            interestRate: 0.0,
+            monthlyPayment: 100.0,
+            startDate: Date(),
+            termMonths: 12,
+            currency: "RUB",
+            bank: .other,
+            creditType: .consumer
+        )
+        credit.remainingAmount = 500.0
+        modelContext.insert(credit)
+        try modelContext.save()
+
+        credit.applyManualRemainingAmount(-100.0)
+
+        #expect(credit.remainingAmount == 0.0)
+        #expect(credit.remainingAmountAdjustment <= 0.0)
+    }
 }
