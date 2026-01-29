@@ -28,6 +28,7 @@ struct CashflowTransactionEditorView: View {
     @State private var availableCurrencies: [String] = []
     @State private var isLoadingCurrencies: Bool = false
     @State private var isAmountOverBalance: Bool = false
+    @State private var validationTask: Task<Void, Never>? = nil
     
     init(viewModel: CashflowViewModel, transactionType: CashflowTransactionType? = nil, transaction: CashflowTransaction? = nil) {
         self.viewModel = viewModel
@@ -472,16 +473,30 @@ struct CashflowTransactionEditorView: View {
             return
         }
         
-        Task {
-            let isAvailable = await viewModel.isAmountAvailable(
-                amount: amount,
-                currency: selectedCurrency,
-                fromCardID: cardID,
-                on: transactionDate
-            )
-            await MainActor.run {
-                isAmountOverBalance = !isAvailable
+        let currency = selectedCurrency
+        let card = cardID
+        let date = transactionDate
+        
+        validationTask?.cancel()
+        validationTask = Task {
+            do {
+                let isAvailable = try await viewModel.isAmountAvailable(
+                    amount: amount,
+                    currency: currency,
+                    fromCardID: card,
+                    on: date
+                )
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    isAmountOverBalance = !isAvailable
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    isAmountOverBalance = false
+                }
             }
+            validationTask = nil
         }
     }
 }

@@ -10,6 +10,21 @@ import SwiftData
 import SwiftUI
 import Combine
 
+// MARK: - Conversion Error
+
+enum ConversionError: Error {
+    case rateUnavailable(from: String, to: String, date: Date)
+}
+
+extension ConversionError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .rateUnavailable(let from, let to, let date):
+            return "Курс недоступен: \(from) → \(to) на \(date)"
+        }
+    }
+}
+
 // MARK: - Cashflow State
 
 struct CashflowState {
@@ -430,12 +445,13 @@ final class CashflowViewModel: ViewModelProtocol {
         let rateCurrency: String?
     }
 
-    func isAmountAvailable(amount: Double, currency: String, fromCardID: String, on date: Date) async -> Bool {
+    func isAmountAvailable(amount: Double, currency: String, fromCardID: String, on date: Date) async throws -> Bool {
         guard let card = state.availableCards.first(where: { $0.cardUniqueID == fromCardID }) else {
-            return true
+            AppLogger.log(.warning, category: "Cashflow", "isAmountAvailable: card not found for fromCardID: \(fromCardID)")
+            return false
         }
         
-        let convertedAmount = await convertAmountForValidation(
+        let convertedAmount = try await convertAmountForValidation(
             amount: amount,
             from: currency,
             to: card.currency,
@@ -445,7 +461,7 @@ final class CashflowViewModel: ViewModelProtocol {
         return convertedAmount <= card.balance + 0.0001
     }
 
-    private func convertAmountForValidation(amount: Double, from: String, to: String, on date: Date) async -> Double {
+    private func convertAmountForValidation(amount: Double, from: String, to: String, on date: Date) async throws -> Double {
         if from == to {
             return amount
         }
@@ -463,7 +479,8 @@ final class CashflowViewModel: ViewModelProtocol {
             return converted
         }
         
-        return amount
+        AppLogger.log(.error, category: "Cashflow", "Currency conversion failed: from=\(from) to=\(to) date=\(date), no rate from historical store or rate service")
+        throw ConversionError.rateUnavailable(from: from, to: to, date: date)
     }
     
     private func resolveExchangeInfo(for transaction: CashflowTransaction) async -> ExchangeInfo {
@@ -545,14 +562,19 @@ final class CashflowViewModel: ViewModelProtocol {
         if isNewTransaction,
            (transaction.transactionType == .expense || transaction.transactionType == .transfer),
            let fromCardID = transaction.cardID {
-            let isAvailable = await isAmountAvailable(
-                amount: transaction.amount,
-                currency: transaction.currency,
-                fromCardID: fromCardID,
-                on: transaction.transactionDate
-            )
-            if !isAvailable {
-                AppLogger.log(.warning, category: "Cashflow", "Insufficient funds for transaction")
+            do {
+                let isAvailable = try await isAmountAvailable(
+                    amount: transaction.amount,
+                    currency: transaction.currency,
+                    fromCardID: fromCardID,
+                    on: transaction.transactionDate
+                )
+                if !isAvailable {
+                    AppLogger.log(.warning, category: "Cashflow", "Insufficient funds for transaction")
+                    return
+                }
+            } catch {
+                AppLogger.log(.error, category: "Cashflow", "Balance validation failed: \(error.localizedDescription)")
                 return
             }
         }

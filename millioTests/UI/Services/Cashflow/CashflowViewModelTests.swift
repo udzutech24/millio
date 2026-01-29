@@ -49,7 +49,7 @@ struct CashflowViewModelTests {
         let viewModel = CashflowViewModel(modelContext: modelContext)
         viewModel.handle(.loadCards)
 
-        let available = await viewModel.isAmountAvailable(
+        let available = try await viewModel.isAmountAvailable(
             amount: 1_500.0,
             currency: "RUB",
             fromCardID: card.cardUniqueID,
@@ -75,7 +75,7 @@ struct CashflowViewModelTests {
         let viewModel = CashflowViewModel(modelContext: modelContext)
         viewModel.handle(.loadCards)
 
-        let available = await viewModel.isAmountAvailable(
+        let available = try await viewModel.isAmountAvailable(
             amount: 500.0,
             currency: "RUB",
             fromCardID: card.cardUniqueID,

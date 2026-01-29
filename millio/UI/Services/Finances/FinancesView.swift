@@ -1505,9 +1505,9 @@ private struct FinanceAddAccountView: View {
         case .card:
             return cardData != nil && !(cardData?.name.isEmpty ?? true)
         case .credit:
-            return creditData != nil
+            return creditData != nil && !(creditData?.name.isEmpty ?? true)
         case .investment:
-            return investmentData != nil
+            return investmentData != nil && !(investmentData?.name.isEmpty ?? true)
         }
     }
     
