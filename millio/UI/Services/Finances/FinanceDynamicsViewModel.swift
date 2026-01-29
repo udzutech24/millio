@@ -91,7 +91,7 @@ struct FinanceDynamicsState {
     var showPeriodSelector: Bool = false
 
     /// Показывать ли архивные счета в динамике
-    var showArchivedAccounts: Bool = true
+    var showArchivedAccounts: Bool = false
 
     /// Предупреждение о конвертации валют в истории
     var currencyConversionWarning: String? = nil

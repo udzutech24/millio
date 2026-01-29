@@ -1158,7 +1158,7 @@ private struct FinanceDynamicsFilterSheet: View {
                 get: { viewModel.state.showArchivedAccounts },
                 set: { viewModel.handle(.setShowArchivedAccounts($0)) }
             ))
-            .tint(AppColors.textPrimary)
+            .tint(.blue)
         }
         .padding(20)
         .background(
