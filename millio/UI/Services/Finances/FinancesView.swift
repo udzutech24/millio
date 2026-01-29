@@ -1192,9 +1192,6 @@ private struct FinanceAddAccountView: View {
     @Environment(\.modelContext) private var modelContext
     
     @State private var selectedAccountType: FinanceAccountType = .card
-    @State private var selectedCardID: String? = nil
-    @State private var selectedCreditID: String? = nil
-    @State private var selectedInvestmentID: String? = nil
     @State private var selectedGroupID: String? = nil
     @State private var showCreateGroup = false
     @State private var cardViewModel: CardViewModel?
@@ -1203,7 +1200,6 @@ private struct FinanceAddAccountView: View {
     @State private var cardData: Card?
     @State private var creditData: (name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, includeInTotal: Bool)?
     @State private var investmentData: (name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool)?
-    @State private var isCreatingNew: Bool = true // Переключатель: создать новый или выбрать существующий
     
     var targetGroup: FinanceGroup? {
         if let selectedGroupID = selectedGroupID {
@@ -1359,372 +1355,93 @@ private struct FinanceAddAccountView: View {
     }
     
     @ViewBuilder
-    private var accountSection: some View {
-        Section {
-            // Переключатель между созданием нового и выбором существующего
-            if hasUnattachedProducts {
-                Picker("Режим", selection: $isCreatingNew) {
-                    Text("Новый").tag(true)
-                    Text("Готовый").tag(false)
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-            }
-            
-            if isCreatingNew {
-                EmptyView()
-            } else {
-                switch selectedAccountType {
-                case .card:
-                    cardAccountContent
-                case .credit:
-                    creditAccountContent
-                case .investment:
-                    investmentAccountContent
-                }
-            }
-        }
-    }
-    
-    private var hasUnattachedProducts: Bool {
+    private var createFormSections: some View {
         switch selectedAccountType {
         case .card:
-            return !viewModel.state.unattachedCards.isEmpty
+            if cardViewModel == nil {
+                Section {
+                    ProgressView()
+                        .tint(AppColors.textPrimary)
+                        .task {
+                            let vm = CardViewModel(modelContext: modelContext)
+                            vm.handle(.addCard)
+                            cardViewModel = vm
+                        }
+                } header: {
+                    Text("Создать карту")
+                        .foregroundStyle(AppColors.textSecondary)
+                }
+                
+                groupSection
+            } else if let vm = cardViewModel {
+                InlineCardCreateForm(
+                    viewModel: vm,
+                    onCardDataChanged: { card in
+                        self.cardData = card
+                    }
+                ) {
+                    groupSection
+                }
+            }
         case .credit:
-            return !viewModel.state.unattachedCredits.isEmpty
+            if creditViewModel == nil {
+                Section {
+                    ProgressView()
+                        .tint(AppColors.textPrimary)
+                        .task {
+                            let vm = CreditViewModel(modelContext: modelContext)
+                            vm.handle(.addCredit)
+                            creditViewModel = vm
+                        }
+                } header: {
+                    Text("Создать кредит")
+                        .foregroundStyle(AppColors.textSecondary)
+                }
+                
+                groupSection
+            } else if let vm = creditViewModel {
+                InlineCreditCreateForm(
+                    viewModel: vm,
+                    onCreditDataChanged: { data in
+                        self.creditData = data
+                    }
+                ) {
+                    groupSection
+                }
+            }
         case .investment:
-            return !viewModel.state.unattachedInvestments.isEmpty
-        }
-    }
-    
-    @ViewBuilder
-    private var createFormSections: some View {
-        if isCreatingNew {
-            switch selectedAccountType {
-            case .card:
-                if cardViewModel == nil {
-                    Section {
-                        ProgressView()
-                            .tint(AppColors.textPrimary)
-                            .task {
-                                let vm = CardViewModel(modelContext: modelContext)
-                                vm.handle(.addCard)
-                                cardViewModel = vm
-                            }
-                    } header: {
-                        Text("Создать карту")
-                            .foregroundStyle(AppColors.textSecondary)
-                    }
-                    
-                    groupSection
-                } else if let vm = cardViewModel {
-                    InlineCardCreateForm(
-                        viewModel: vm,
-                        onCardDataChanged: { card in
-                            self.cardData = card
+            if investmentViewModel == nil {
+                Section {
+                    ProgressView()
+                        .tint(AppColors.textPrimary)
+                        .task {
+                            let vm = InvestmentViewModel(modelContext: modelContext)
+                            vm.handle(.addInvestment)
+                            investmentViewModel = vm
                         }
-                    ) {
-                        groupSection
-                    }
-                }
-            case .credit:
-                if creditViewModel == nil {
-                    Section {
-                        ProgressView()
-                            .tint(AppColors.textPrimary)
-                            .task {
-                                let vm = CreditViewModel(modelContext: modelContext)
-                                vm.handle(.addCredit)
-                                creditViewModel = vm
-                            }
-                    } header: {
-                        Text("Создать кредит")
-                            .foregroundStyle(AppColors.textSecondary)
-                    }
-                    
-                    groupSection
-                } else if let vm = creditViewModel {
-                    InlineCreditCreateForm(
-                        viewModel: vm,
-                        onCreditDataChanged: { data in
-                            self.creditData = data
-                        }
-                    ) {
-                        groupSection
-                    }
-                }
-            case .investment:
-                if investmentViewModel == nil {
-                    Section {
-                        ProgressView()
-                            .tint(AppColors.textPrimary)
-                            .task {
-                                let vm = InvestmentViewModel(modelContext: modelContext)
-                                vm.handle(.addInvestment)
-                                investmentViewModel = vm
-                            }
-                    } header: {
-                        Text("Создать актив")
-                            .foregroundStyle(AppColors.textSecondary)
-                    }
-                    
-                    groupSection
-                } else if let vm = investmentViewModel {
-                    InlineInvestmentCreateForm(
-                        viewModel: vm,
-                        onInvestmentDataChanged: { data in
-                            self.investmentData = data
-                        }
-                    ) {
-                        groupSection
-                    }
-                }
-            }
-        } else {
-            groupSection
-        }
-    }
-    
-    @ViewBuilder
-    private var cardAccountContent: some View {
-        if !viewModel.state.unattachedCards.isEmpty {
-            cardSelectionList
-        }
-    }
-    
-    @ViewBuilder
-    private var cardSelectionList: some View {
-        VStack(spacing: 0) {
-            Button {
-                selectedCardID = nil
-            } label: {
-                HStack {
-                    Text("Выберите карту")
+                } header: {
+                    Text("Создать актив")
                         .foregroundStyle(AppColors.textSecondary)
-                    
-                    Spacer()
-                    
-                    if selectedCardID == nil {
-                        Image(systemName: "checkmark")
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: AppColors.financesGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                    }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 12)
-                .padding(.horizontal, 16)
-            }
-            .buttonStyle(.plain)
-            
-            if !viewModel.state.unattachedCards.isEmpty {
-                Divider()
-                    .padding(.leading, 16)
-            }
-            
-            ForEach(viewModel.state.unattachedCards) { card in
-                Button {
-                    selectedCardID = card.cardUniqueID
-                } label: {
-                    HStack {
-                        Text(card.name)
-                            .foregroundStyle(AppColors.textPrimary)
-                        
-                        Spacer()
-                        
-                        if selectedCardID == card.cardUniqueID {
-                            Image(systemName: "checkmark")
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: AppColors.financesGradient,
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 12)
-                    .padding(.horizontal, 16)
-                }
-                .buttonStyle(.plain)
                 
-                if card.cardUniqueID != viewModel.state.unattachedCards.last?.cardUniqueID {
-                    Divider()
-                        .padding(.leading, 16)
-                }
-            }
-        }
-        .background(.ultraThinMaterial)
-        .cornerRadius(12)
-    }
-    
-    @ViewBuilder
-    private var creditAccountContent: some View {
-        if !viewModel.state.unattachedCredits.isEmpty {
-            creditSelectionList
-        }
-    }
-    
-    @ViewBuilder
-    private var creditSelectionList: some View {
-        VStack(spacing: 0) {
-            Button {
-                selectedCreditID = nil
-            } label: {
-                HStack {
-                    Text("Выберите кредит")
-                        .foregroundStyle(AppColors.textSecondary)
-                    
-                    Spacer()
-                    
-                    if selectedCreditID == nil {
-                        Image(systemName: "checkmark")
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: AppColors.financesGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
+                groupSection
+            } else if let vm = investmentViewModel {
+                InlineInvestmentCreateForm(
+                    viewModel: vm,
+                    onInvestmentDataChanged: { data in
+                        self.investmentData = data
                     }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 12)
-                .padding(.horizontal, 16)
-            }
-            .buttonStyle(.plain)
-            
-            if !viewModel.state.unattachedCredits.isEmpty {
-                Divider()
-                    .padding(.leading, 16)
-            }
-            
-            ForEach(viewModel.state.unattachedCredits) { credit in
-                Button {
-                    selectedCreditID = credit.creditUniqueID
-                } label: {
-                    HStack {
-                        Text(credit.name)
-                            .foregroundStyle(AppColors.textPrimary)
-                        
-                        Spacer()
-                        
-                        if selectedCreditID == credit.creditUniqueID {
-                            Image(systemName: "checkmark")
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: AppColors.financesGradient,
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 12)
-                    .padding(.horizontal, 16)
-                }
-                .buttonStyle(.plain)
-                
-                if credit.creditUniqueID != viewModel.state.unattachedCredits.last?.creditUniqueID {
-                    Divider()
-                        .padding(.leading, 16)
+                ) {
+                    groupSection
                 }
             }
         }
-        .background(.ultraThinMaterial)
-        .cornerRadius(12)
-    }
-    
-    @ViewBuilder
-    private var investmentAccountContent: some View {
-        if !viewModel.state.unattachedInvestments.isEmpty {
-            investmentSelectionList
-        }
-    }
-    
-    @ViewBuilder
-    private var investmentSelectionList: some View {
-        VStack(spacing: 0) {
-            Button {
-                selectedInvestmentID = nil
-            } label: {
-                HStack {
-                    Text("Выберите актив")
-                        .foregroundStyle(AppColors.textSecondary)
-                    
-                    Spacer()
-                    
-                    if selectedInvestmentID == nil {
-                        Image(systemName: "checkmark")
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: AppColors.financesGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 12)
-                .padding(.horizontal, 16)
-            }
-            .buttonStyle(.plain)
-            
-            if !viewModel.state.unattachedInvestments.isEmpty {
-                Divider()
-                    .padding(.leading, 16)
-            }
-            
-            ForEach(viewModel.state.unattachedInvestments) { investment in
-                Button {
-                    selectedInvestmentID = investment.investmentUniqueID
-                } label: {
-                    HStack {
-                        Text(investment.name)
-                            .foregroundStyle(AppColors.textPrimary)
-                        
-                        Spacer()
-                        
-                        if selectedInvestmentID == investment.investmentUniqueID {
-                            Image(systemName: "checkmark")
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: AppColors.financesGradient,
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 12)
-                    .padding(.horizontal, 16)
-                }
-                .buttonStyle(.plain)
-                
-                if investment.investmentUniqueID != viewModel.state.unattachedInvestments.last?.investmentUniqueID {
-                    Divider()
-                        .padding(.leading, 16)
-                }
-            }
-        }
-        .background(.ultraThinMaterial)
-        .cornerRadius(12)
     }
     
     @ViewBuilder
     private var formContent: some View {
         Form {
             accountTypeSection
-            accountSection
             createFormSections
         }
         .scrollContentBackground(.hidden)
@@ -1777,89 +1494,44 @@ private struct FinanceAddAccountView: View {
     var body: some View {
         NavigationStack {
             navigationContent
-                .modifier(SelectedAccountTypeChangeHandler(selectedAccountType: $selectedAccountType, cardViewModel: $cardViewModel, creditViewModel: $creditViewModel, investmentViewModel: $investmentViewModel, isCreatingNew: $isCreatingNew))
-                .modifier(CreatingModeChangeHandler(isCreatingNew: $isCreatingNew, cardViewModel: $cardViewModel, creditViewModel: $creditViewModel, investmentViewModel: $investmentViewModel, selectedAccountType: selectedAccountType))
-                .modifier(UnattachedCardsChangeHandler(selectedCardID: $selectedCardID, unattachedCards: viewModel.state.unattachedCards))
-                .modifier(UnattachedCreditsChangeHandler(selectedCreditID: $selectedCreditID, unattachedCredits: viewModel.state.unattachedCredits))
-                .modifier(UnattachedInvestmentsChangeHandler(selectedInvestmentID: $selectedInvestmentID, unattachedInvestments: viewModel.state.unattachedInvestments))
+                .modifier(SelectedAccountTypeChangeHandler(selectedAccountType: $selectedAccountType, cardViewModel: $cardViewModel, creditViewModel: $creditViewModel, investmentViewModel: $investmentViewModel))
         }
     }
     
     private var isValid: Bool {
         guard targetGroup != nil else { return false }
         
-        if isCreatingNew {
-            // Проверяем форму создания
-            switch selectedAccountType {
-            case .card:
-                return cardData != nil && !(cardData?.name.isEmpty ?? true)
-            case .credit:
-                return creditData != nil
-            case .investment:
-                return investmentData != nil
-            }
-        } else {
-            // Проверяем выбор существующего
-            switch selectedAccountType {
-            case .card:
-                return selectedCardID != nil
-            case .credit:
-                return selectedCreditID != nil
-            case .investment:
-                return selectedInvestmentID != nil
-            }
+        switch selectedAccountType {
+        case .card:
+            return cardData != nil && !(cardData?.name.isEmpty ?? true)
+        case .credit:
+            return creditData != nil
+        case .investment:
+            return investmentData != nil
         }
-    }
-    
-    private func shouldShowCreateForm() -> Bool {
-        return isCreatingNew
     }
     
     private func addAccount() {
         guard let targetGroup = targetGroup else { return }
         
-        // Если нужно создать новый счет, создаем его сначала
-        if shouldShowCreateForm() {
-            switch selectedAccountType {
-            case .card:
-                if let cardViewModel = cardViewModel {
-                    // Получаем данные из формы и создаем карту
-                    createCardAndAddToGroup(cardViewModel: cardViewModel, group: targetGroup)
-                    return
-                }
-            case .credit:
-                if let creditViewModel = creditViewModel {
-                    createCreditAndAddToGroup(creditViewModel: creditViewModel, group: targetGroup)
-                    return
-                }
-            case .investment:
-                if let investmentViewModel = investmentViewModel {
-                    createInvestmentAndAddToGroup(investmentViewModel: investmentViewModel, group: targetGroup)
-                    return
-                }
-            }
-        }
-        
-        // Если счет уже выбран, просто добавляем в группу
-        let accountID: String?
         switch selectedAccountType {
         case .card:
-            accountID = selectedCardID
+            if let cardViewModel = cardViewModel {
+                // Получаем данные из формы и создаем карту
+                createCardAndAddToGroup(cardViewModel: cardViewModel, group: targetGroup)
+                return
+            }
         case .credit:
-            accountID = selectedCreditID
+            if let creditViewModel = creditViewModel {
+                createCreditAndAddToGroup(creditViewModel: creditViewModel, group: targetGroup)
+                return
+            }
         case .investment:
-            accountID = selectedInvestmentID
+            if let investmentViewModel = investmentViewModel {
+                createInvestmentAndAddToGroup(investmentViewModel: investmentViewModel, group: targetGroup)
+                return
+            }
         }
-        
-        guard let accountID = accountID else { return }
-        
-        viewModel.handle(.addAccountToGroup(
-            accountType: selectedAccountType,
-            accountID: accountID,
-            group: targetGroup
-        ))
-        
-        dismiss()
     }
     
     private func createCardAndAddToGroup(cardViewModel: CardViewModel, group: FinanceGroup) {
@@ -1957,7 +1629,6 @@ private struct SelectedAccountTypeChangeHandler: ViewModifier {
     @Binding var cardViewModel: CardViewModel?
     @Binding var creditViewModel: CreditViewModel?
     @Binding var investmentViewModel: InvestmentViewModel?
-    @Binding var isCreatingNew: Bool
 
     func body(content: Content) -> some View {
         content
@@ -1965,99 +1636,6 @@ private struct SelectedAccountTypeChangeHandler: ViewModifier {
                 if oldValue != newValue {
                     // Сбрасываем viewModels при смене типа
                     switch oldValue {
-                    case .card:
-                        cardViewModel = nil
-                    case .credit:
-                        creditViewModel = nil
-                    case .investment:
-                        investmentViewModel = nil
-                    }
-                    // Возвращаемся в режим создания нового
-                    isCreatingNew = true
-                }
-            }
-    }
-}
-
-private struct UnattachedCardsChangeHandler: ViewModifier {
-    @Binding var selectedCardID: String?
-    let unattachedCards: [Card]
-
-    func body(content: Content) -> some View {
-        content
-            .onChange(of: unattachedCards) { oldCards, newCards in
-                if let selectedID = selectedCardID,
-                   !newCards.contains(where: { $0.cardUniqueID == selectedID }) {
-                    selectedCardID = nil
-                }
-                if selectedCardID == nil {
-                    let oldCardIDs = Set(oldCards.map { $0.cardUniqueID })
-                    let newCardsOnly = newCards.filter { !oldCardIDs.contains($0.cardUniqueID) }
-                    if let newCard = newCardsOnly.first {
-                        selectedCardID = newCard.cardUniqueID
-                    }
-                }
-            }
-    }
-}
-
-private struct UnattachedCreditsChangeHandler: ViewModifier {
-    @Binding var selectedCreditID: String?
-    let unattachedCredits: [Credit]
-
-    func body(content: Content) -> some View {
-        content
-            .onChange(of: unattachedCredits) { oldCredits, newCredits in
-                if let selectedID = selectedCreditID,
-                   !newCredits.contains(where: { $0.creditUniqueID == selectedID }) {
-                    selectedCreditID = nil
-                }
-                if selectedCreditID == nil {
-                    let oldCreditIDs = Set(oldCredits.map { $0.creditUniqueID })
-                    let newCreditsOnly = newCredits.filter { !oldCreditIDs.contains($0.creditUniqueID) }
-                    if let newCredit = newCreditsOnly.first {
-                        selectedCreditID = newCredit.creditUniqueID
-                    }
-                }
-            }
-    }
-}
-
-private struct UnattachedInvestmentsChangeHandler: ViewModifier {
-    @Binding var selectedInvestmentID: String?
-    let unattachedInvestments: [Investment]
-
-    func body(content: Content) -> some View {
-        content
-            .onChange(of: unattachedInvestments) { oldInvestments, newInvestments in
-                if let selectedID = selectedInvestmentID,
-                   !newInvestments.contains(where: { $0.investmentUniqueID == selectedID }) {
-                    selectedInvestmentID = nil
-                }
-                if selectedInvestmentID == nil {
-                    let oldInvestmentIDs = Set(oldInvestments.map { $0.investmentUniqueID })
-                    let newInvestmentsOnly = newInvestments.filter { !oldInvestmentIDs.contains($0.investmentUniqueID) }
-                    if let newInvestment = newInvestmentsOnly.first {
-                        selectedInvestmentID = newInvestment.investmentUniqueID
-                    }
-                }
-            }
-    }
-}
-
-private struct CreatingModeChangeHandler: ViewModifier {
-    @Binding var isCreatingNew: Bool
-    @Binding var cardViewModel: CardViewModel?
-    @Binding var creditViewModel: CreditViewModel?
-    @Binding var investmentViewModel: InvestmentViewModel?
-    let selectedAccountType: FinanceAccountType
-    
-    func body(content: Content) -> some View {
-        content
-            .onChange(of: isCreatingNew) { oldValue, newValue in
-                if oldValue && !newValue {
-                    // Переключились с создания на выбор - сбрасываем viewModels
-                    switch selectedAccountType {
                     case .card:
                         cardViewModel = nil
                     case .credit:
