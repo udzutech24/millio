@@ -7,21 +7,16 @@
 
 import SwiftUI
 import SwiftData
-import Charts
 
 struct CashflowView: View {
     @Environment(\.modelContext) private var modelContext
-    @Environment(AppState.self) private var appState
     @State private var viewModel: CashflowViewModel?
-    @State private var showSubscriptionSheet = false
     
     var body: some View {
         Group {
             if let viewModel = viewModel {
                 CashflowContentView(
-                    viewModel: viewModel,
-                    appState: appState,
-                    showSubscriptionSheet: $showSubscriptionSheet
+                    viewModel: viewModel
                 )
             } else {
                 ProgressView()
@@ -43,8 +38,6 @@ struct CashflowView: View {
 
 private struct CashflowContentView: View {
     @ObservedObject var viewModel: CashflowViewModel
-    @Bindable var appState: AppState
-    @Binding var showSubscriptionSheet: Bool
     
     var body: some View {
         ZStack {
@@ -52,11 +45,11 @@ private struct CashflowContentView: View {
             
             ScrollView {
                 VStack(spacing: 24) {
+                    // Выбор периода
+                    periodSelectionSection
+
                     // Статистика за период
                     periodStatsSection
-                    
-                    // График
-                    chartSection
                     
                     // Кнопки действий
                     actionButtonsSection
@@ -105,22 +98,15 @@ private struct CashflowContentView: View {
         )) {
             CashflowCurrencySelectorView(viewModel: viewModel)
         }
-        .sheet(isPresented: $showSubscriptionSheet) {
-            NavigationStack {
-                SubscriptionView()
-            }
-        }
     }
     
     // MARK: - Action Buttons Section
     
     private var actionButtonsSection: some View {
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 2)
-        
-        return LazyVGrid(columns: columns, spacing: 12) {
+        HStack(spacing: 12) {
             // Кнопка Доход
             CashflowActionButton(
-                title: "Доход",
+                accessibilityLabel: "Доход",
                 icon: "plus",
                 gradientColors: AppColors.incomeGradient
             ) {
@@ -129,7 +115,7 @@ private struct CashflowContentView: View {
             
             // Кнопка Расход
             CashflowActionButton(
-                title: "Расход",
+                accessibilityLabel: "Расход",
                 icon: "minus",
                 gradientColors: AppColors.expenseGradient
             ) {
@@ -138,7 +124,7 @@ private struct CashflowContentView: View {
             
             // Кнопка Перевод
             CashflowActionButton(
-                title: "Перевод",
+                accessibilityLabel: "Перевод",
                 icon: "arrow.left.arrow.right",
                 gradientColors: AppColors.cashflowGradient
             ) {
@@ -291,18 +277,17 @@ private struct CashflowContentView: View {
         }
     }
     
-    // MARK: - Chart Section
+    // MARK: - Period Selection Section
     
-    private var chartSection: some View {
+    private var periodSelectionSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("Динамика")
+                Text("Период")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
                 
                 Spacer()
                 
-                // Кнопка выбора валюты
                 Button {
                     viewModel.handle(.showCurrencySelector)
                 } label: {
@@ -322,10 +307,8 @@ private struct CashflowContentView: View {
                 }
             }
             
-            // Выбор периода через горизонтальный скролл
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    // Быстрые периоды
                     PeriodChip(
                         title: "Месяц",
                         isSelected: viewModel.state.chartPeriod == .month,
@@ -350,10 +333,9 @@ private struct CashflowContentView: View {
                         }
                     )
                     
-                    // Конкретные периоды
                     PeriodChip(
                         title: getSpecificPeriodTitle(),
-                        isSelected: viewModel.state.chartPeriod == .specificMonth || 
+                        isSelected: viewModel.state.chartPeriod == .specificMonth ||
                                    viewModel.state.chartPeriod == .specificQuarter ||
                                    viewModel.state.chartPeriod == .specificYear ||
                                    viewModel.state.chartPeriod == .custom,
@@ -365,130 +347,16 @@ private struct CashflowContentView: View {
                 .padding(.horizontal, 4)
             }
             
-            if !appState.isPro {
-                // Блокировка графика для бесплатной версии
-                VStack(spacing: 16) {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 48))
-                        .foregroundStyle(AppColors.textTertiary)
-                    
-                    Text("График доступен в PRO версии")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                    
-                    Text("Оформите подписку для доступа к расширенной аналитике")
-                        .font(.system(size: 14))
-                        .foregroundStyle(AppColors.textSecondary)
-                        .multilineTextAlignment(.center)
-                    
-                    Button {
-                        showSubscriptionSheet = true
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "star.fill")
-                                .font(.system(size: 14))
-                            Text("Оформить PRO")
-                                .font(.system(size: 16, weight: .semibold))
-                        }
-                        .foregroundStyle(AppColors.textPrimary)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
-                        .background {
-                            Capsule()
-                                .fill(.ultraThinMaterial)
-                                .overlay {
-                                    Capsule()
-                                        .stroke(
-                                            LinearGradient(
-                                                colors: AppColors.incomeGradient,
-                                                startPoint: .leading,
-                                                endPoint: .trailing
-                                            ),
-                                            lineWidth: 2
-                                        )
-                                }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 300)
-                .padding(24)
-            } else if viewModel.state.incomeChartData.isEmpty && viewModel.state.expenseChartData.isEmpty {
-                VStack(spacing: 16) {
-                    Image(systemName: "chart.line.uptrend.xyaxis")
-                        .font(.system(size: 48))
-                        .foregroundStyle(AppColors.textTertiary)
-                    
-                    Text("Нет данных для отображения")
-                        .font(.system(size: 16))
-                        .foregroundStyle(AppColors.textSecondary)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 300)
-            } else {
-                Chart {
-                    // Доходы - левая полоса
-                    BarMark(
-                        x: .value("Тип", "Доходы"),
-                        y: .value("Сумма", viewModel.state.totalIncome)
-                    )
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: AppColors.incomeGradient,
-                            startPoint: .bottom,
-                            endPoint: .top
-                        )
-                    )
-                    .cornerRadius(8)
-                    
-                    // Расходы - правая полоса
-                    BarMark(
-                        x: .value("Тип", "Расходы"),
-                        y: .value("Сумма", viewModel.state.totalExpense)
-                    )
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: AppColors.expenseGradient,
-                            startPoint: .bottom,
-                            endPoint: .top
-                        )
-                    )
-                    .cornerRadius(8)
-                }
-                .chartYAxis {
-                    AxisMarks(position: .leading) { value in
-                        AxisGridLine()
-                            .foregroundStyle(AppColors.textTertiary.opacity(0.3))
-                        AxisValueLabel {
-                            if let doubleValue = value.as(Double.self) {
-                                Text(formatAmount(doubleValue))
-                                    .foregroundStyle(AppColors.textSecondary)
-                                    .font(.system(size: 10))
-                            }
-                        }
-                    }
-                }
-                .chartXAxis {
-                    AxisMarks { value in
-                        AxisValueLabel {
-                            if let stringValue = value.as(String.self) {
-                                Text(stringValue)
-                                    .foregroundStyle(AppColors.textSecondary)
-                                    .font(.system(size: 12, weight: .medium))
-                            }
-                        }
-                    }
-                }
-                .chartYAxisLabel("Сумма (\(viewModel.state.displayCurrency))")
-                .frame(height: 300)
-                .padding(20)
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color.black.opacity(0.3))
-                )
-            }
+            let range = viewModel.currentDateRange()
+            Text("\(formatPeriod(range.0)) — \(formatPeriod(range.1))")
+                .font(.system(size: 12))
+                .foregroundStyle(AppColors.textSecondary)
         }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.black.opacity(0.3))
+        )
     }
     
     // MARK: - History Button Section
@@ -533,18 +401,9 @@ private struct CashflowContentView: View {
         return formatter.string(from: NSNumber(value: amount)) ?? "0.00"
     }
     
-    private func formatDate(_ date: Date) -> String {
+    private func formatPeriod(_ date: Date) -> String {
         let formatter = DateFormatter()
-        switch viewModel.state.chartPeriod {
-        case .month, .specificMonth:
-            formatter.dateFormat = "dd.MM"
-        case .quarter, .specificQuarter:
-            formatter.dateFormat = "dd.MM"
-        case .year, .specificYear:
-            formatter.dateFormat = "MMM"
-        case .custom:
-            formatter.dateFormat = "dd.MM"
-        }
+        formatter.dateFormat = "dd.MM.yyyy"
         return formatter.string(from: date)
     }
     
@@ -609,42 +468,36 @@ private struct PeriodChip: View {
 // MARK: - Cashflow Action Button
 
 private struct CashflowActionButton: View {
-    let title: String
+    let accessibilityLabel: String
     let icon: String
     let gradientColors: [Color]
     let action: () -> Void
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: gradientColors.map { $0.opacity(0.2) },
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: gradientColors.map { $0.opacity(0.2) },
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
                         )
-                        .frame(width: 56, height: 56)
-                    
-                    Image(systemName: icon)
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: gradientColors,
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                }
+                    )
+                    .frame(width: 56, height: 56)
                 
-                Text(title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
+                Image(systemName: icon)
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: gradientColors,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 20)
+            .padding(.vertical, 16)
             .padding(.horizontal, 12)
             .background {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -663,5 +516,6 @@ private struct CashflowActionButton: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(Text(accessibilityLabel))
     }
 }

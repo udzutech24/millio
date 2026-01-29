@@ -64,12 +64,6 @@ struct CashflowState {
     /// Показывать ли sheet выбора валюты
     var showCurrencySelector: Bool = false
     
-    /// Данные для графика доходов
-    var incomeChartData: [CashflowChartDataPoint] = []
-    
-    /// Данные для графика расходов
-    var expenseChartData: [CashflowChartDataPoint] = []
-    
     /// Сумма доходов за выбранный период
     var totalIncome: Double = 0.0
     
@@ -81,15 +75,6 @@ struct CashflowState {
     
     /// Флаг загрузки данных
     var isLoading: Bool = false
-}
-
-// MARK: - Cashflow Chart Data Point
-
-struct CashflowChartDataPoint: Identifiable {
-    let id = UUID()
-    let date: Date
-    let value: Double
-    let label: String
 }
 
 // MARK: - Chart Period
@@ -326,71 +311,7 @@ final class CashflowViewModel: ViewModelProtocol {
     }
     
     private func updateChartDataAsync() async {
-        let calendar = Calendar.current
         let (startDate, endDate) = getDateRange()
-        
-        // Группируем транзакции по датам
-        var incomeByDate: [Date: Double] = [:]
-        var expenseByDate: [Date: Double] = [:]
-        
-        for transaction in state.transactions {
-            guard transaction.transactionDate >= startDate && transaction.transactionDate <= endDate else {
-                continue
-            }
-            
-            let dateKey = calendar.startOfDay(for: transaction.transactionDate)
-            
-            switch transaction.transactionType {
-            case .income:
-                let converted = await convertAmount(
-                    value: transaction.amount,
-                    from: transaction.currency,
-                    to: state.displayCurrency
-                )
-                incomeByDate[dateKey, default: 0.0] += converted
-                
-            case .expense:
-                let converted = await convertAmount(
-                    value: transaction.amount,
-                    from: transaction.currency,
-                    to: state.displayCurrency
-                )
-                expenseByDate[dateKey, default: 0.0] += converted
-                
-            case .transfer:
-                break // Переводы не учитываем в графике
-            case .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
-                break // Ручные изменения баланса не учитываем в графике доходов/расходов
-            }
-        }
-        
-        // Создаем точки данных для графика
-        var incomePoints: [CashflowChartDataPoint] = []
-        var expensePoints: [CashflowChartDataPoint] = []
-        
-        // Сортируем даты
-        let sortedDates = Array(Set(incomeByDate.keys).union(Set(expenseByDate.keys))).sorted()
-        
-        for date in sortedDates {
-            if let income = incomeByDate[date], income > 0 {
-                incomePoints.append(CashflowChartDataPoint(
-                    date: date,
-                    value: income,
-                    label: "Доходы"
-                ))
-            }
-            
-            if let expense = expenseByDate[date], expense > 0 {
-                expensePoints.append(CashflowChartDataPoint(
-                    date: date,
-                    value: expense,
-                    label: "Расходы"
-                ))
-            }
-        }
-        
-        state.incomeChartData = incomePoints.sorted { $0.date < $1.date }
-        state.expenseChartData = expensePoints.sorted { $0.date < $1.date }
         
         // Рассчитываем общие суммы за период
         var totalIncome: Double = 0.0
@@ -430,6 +351,10 @@ final class CashflowViewModel: ViewModelProtocol {
         state.periodBalance = totalIncome - totalExpense
     }
     
+    func currentDateRange() -> (Date, Date) {
+        getDateRange()
+    }
+
     private func getDateRange() -> (Date, Date) {
         let calendar = Calendar.current
         

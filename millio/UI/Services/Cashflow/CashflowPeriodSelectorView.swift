@@ -73,11 +73,7 @@ struct CashflowPeriodSelectorView: View {
                         }
                     } else if selectedPeriodType == .custom {
                         Section {
-                            DatePicker("Начало периода", selection: $customStartDate, displayedComponents: .date)
-                                .foregroundStyle(AppColors.textPrimary)
-                            
-                            DatePicker("Конец периода", selection: $customEndDate, displayedComponents: .date)
-                                .foregroundStyle(AppColors.textPrimary)
+                            CalendarRangeMonthView(startDate: $customStartDate, endDate: $customEndDate)
                         } header: {
                             Text("Выберите период")
                                 .foregroundStyle(AppColors.textSecondary)

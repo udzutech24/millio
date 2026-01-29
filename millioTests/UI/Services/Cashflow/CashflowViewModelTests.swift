@@ -117,4 +117,19 @@ struct CashflowViewModelTests {
         let cardIDs = Set(viewModel.state.availableCards.map { $0.cardUniqueID })
         #expect(cardIDs.contains(newCard.cardUniqueID))
     }
+
+    @Test("Выбор кастомного периода задает текущий диапазон")
+    func testCustomPeriodUpdatesDateRange() throws {
+        let modelContext = try createTestModelContext()
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+
+        let startDate = Calendar.current.date(byAdding: .day, value: -10, to: Date()) ?? Date()
+        let endDate = Date()
+
+        viewModel.handle(.setCustomPeriod(start: startDate, end: endDate))
+
+        let range = viewModel.currentDateRange()
+        #expect(Calendar.current.isDate(range.0, inSameDayAs: startDate))
+        #expect(Calendar.current.isDate(range.1, inSameDayAs: endDate))
+    }
 }
