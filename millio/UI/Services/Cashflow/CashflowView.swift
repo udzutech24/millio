@@ -54,8 +54,6 @@ private struct CashflowContentView: View {
                     // Кнопки действий
                     actionButtonsSection
                     
-                    // Кнопка для открытия истории операций
-                    historyButtonSection
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 16)
@@ -64,6 +62,7 @@ private struct CashflowContentView: View {
         }
         .navigationTitle("Кэшфлоу")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar { topToolbar }
         .sheet(isPresented: Binding(
             get: { viewModel.state.showTransactionEditor },
             set: { if !$0 { viewModel.handle(.hideTransactionEditor) } }
@@ -287,24 +286,6 @@ private struct CashflowContentView: View {
                     .foregroundStyle(AppColors.textPrimary)
                 
                 Spacer()
-                
-                Button {
-                    viewModel.handle(.showCurrencySelector)
-                } label: {
-                    HStack(spacing: 6) {
-                        Text(viewModel.state.displayCurrency)
-                            .font(.system(size: 14, weight: .medium))
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 10, weight: .medium))
-                    }
-                    .foregroundStyle(AppColors.textPrimary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(Color.white.opacity(0.1))
-                    )
-                }
             }
             
             ScrollView(.horizontal, showsIndicators: false) {
@@ -359,36 +340,29 @@ private struct CashflowContentView: View {
         )
     }
     
-    // MARK: - History Button Section
-    
-    private var historyButtonSection: some View {
-        Button {
-            viewModel.handle(.showTransactionsHistory)
-        } label: {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("История операций")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                    
-                    Text("\(viewModel.state.filteredTransactions.count) операций")
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundStyle(AppColors.textSecondary)
+    @ToolbarContentBuilder
+    private var topToolbar: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            HStack(spacing: 12) {
+                Button {
+                    viewModel.handle(.showCurrencySelector)
+                } label: {
+                    Image(systemName: "rublesign.circle.fill")
+                        .font(.title3.weight(.semibold))
+                        .frame(width: 28, height: 28)
                 }
+                .accessibilityLabel("Выбор валюты отображения")
                 
-                Spacer()
-                
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AppColors.textSecondary)
+                Button {
+                    viewModel.handle(.showTransactionsHistory)
+                } label: {
+                    Image(systemName: "list.bullet")
+                        .font(.title3.weight(.semibold))
+                        .frame(width: 28, height: 28)
+                }
+                .accessibilityLabel("История операций")
             }
-            .padding(20)
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color.black.opacity(0.3))
-            )
         }
-        .buttonStyle(.plain)
     }
     
     private func formatAmount(_ amount: Double) -> String {
