@@ -223,7 +223,7 @@ struct ProfileView: View {
     // MARK: - Profile Header Block
     
     private var profileHeaderBlock: some View {
-        HStack(alignment: .center, spacing: 16) {
+        HStack(alignment: .center, spacing: 20) {
             PhotosPicker(
                 selection: $selectedPhotoItem,
                 matching: .images
@@ -238,10 +238,10 @@ struct ProfileView: View {
             } label: {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Привет,")
-                        .font(.system(size: 16))
+                        .font(.system(size: 13))
                         .foregroundStyle(AppColors.textSecondary)
                     Text(appState.profileDisplayName)
-                        .font(.system(size: 24, weight: .bold))
+                        .font(.system(size: 22, weight: .bold))
                         .foregroundStyle(AppColors.textPrimary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -262,14 +262,14 @@ struct ProfileView: View {
                 Image("user")
                     .resizable()
                     .scaledToFit()
-                    .padding(16)
+                    .padding(4)
             }
         }
         .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .background {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(AppColors.accentDarkBlue)
         }
     }
     

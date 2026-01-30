@@ -106,6 +106,11 @@ enum AppColors {
     /// Градиент для кнопки "Доход" (зеленый -> синий)
     static let incomeGradient = [Color(hex: "19E694").opacity(0.5), Color(hex: "0947E4").opacity(0.5)]
     
+    // MARK: - Accent
+    
+    /// Тёмный синий (RGB 22, 21, 67)
+    static let accentDarkBlue = Color(red: 22/255.0, green: 21/255.0, blue: 67/255.0)
+    
     // MARK: - UI Elements
     
     /// Цвет для иконок в кнопках действий (белый)
