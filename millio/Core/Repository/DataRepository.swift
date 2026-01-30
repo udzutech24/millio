@@ -34,14 +34,17 @@ final class DataRepository: DataRepositoryProtocol {
     }
     
     func exportAllDataAsync() async throws -> Data {
-        try await worker.exportAllData()
+        try await MainActor.run {
+            try modelContext.save()
+        }
+        return try await worker.exportAllData()
     }
     
-    nonisolated static func exportAllData(from context: ModelContext) throws -> Data {
+    static func exportAllData(from context: ModelContext) throws -> Data {
         let metadata = BackupMetadata(
             version: .current,
             timestamp: Date(),
-            schemaVersion: "2.0",
+            schemaVersion: BackupMetadata.currentSchemaVersion,
             modelCount: 0
         )
         
@@ -70,10 +73,14 @@ final class DataRepository: DataRepositoryProtocol {
         return try JSONSerialization.data(withJSONObject: exportDict, options: .prettyPrinted)
     }
     
-    nonisolated static func metadataToDict(_ metadata: BackupMetadata) throws -> [String: Any] {
+    static func metadataToDict(_ metadata: BackupMetadata) throws -> [String: Any] {
         let encoder = JSONEncoder()
         let data = try encoder.encode(metadata)
-        return try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+        let object = try JSONSerialization.jsonObject(with: data)
+        guard let dict = object as? [String: Any] else {
+            throw AppError.backupFailed("Не удалось сериализовать metadata для backup")
+        }
+        return dict
     }
     
     func importAllData(_ data: Data) throws {
@@ -84,31 +91,52 @@ final class DataRepository: DataRepositoryProtocol {
         try await worker.importAllData(data)
     }
     
-    nonisolated static func importAllData(_ data: Data, into context: ModelContext) throws {
+    static func importAllData(_ data: Data, into context: ModelContext) throws {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let modelsData = json["models"] as? [[String: Any]] else {
             throw AppError.backupCorrupted
         }
         
-        // Проверяем версию backup
-        if let metadataDict = json["metadata"] as? [String: Any] {
-            let decoder = JSONDecoder()
-            if let metadataData = try? JSONSerialization.data(withJSONObject: metadataDict),
-               let metadata = try? decoder.decode(BackupMetadata.self, from: metadataData) {
-                // Проверяем совместимость версий
-                if !metadata.version.isCompatible(with: .current) {
-                    throw AppError.incompatibleSchemaVersion
-                }
-            }
+        guard let metadataDict = json["metadata"] as? [String: Any] else {
+            throw AppError.backupCorrupted
         }
-        let typedModels: [(priority: Int, typeName: String, data: [String: Any], importer: ModelImporter.Type)] = modelsData.compactMap { modelData in
-            guard let typeName = modelData["_type"] as? String,
-                  let importer = ModelTypeRegistry.shared.getImporter(for: typeName) else {
-                return nil
-            }
-            return (priority: importer.importPriority, typeName: typeName, data: modelData, importer: importer)
+        let decoder = JSONDecoder()
+        guard let metadataData = try? JSONSerialization.data(withJSONObject: metadataDict),
+              let metadata = try? decoder.decode(BackupMetadata.self, from: metadataData) else {
+            throw AppError.backupCorrupted
         }
-        .sorted { $0.priority < $1.priority }
+        
+        if metadata.schemaVersion != BackupMetadata.currentSchemaVersion {
+            throw AppError.incompatibleSchemaVersion
+        }
+        if !metadata.version.isCompatible(with: .current) {
+            throw AppError.incompatibleSchemaVersion
+        }
+        if metadata.modelCount != modelsData.count {
+            throw AppError.backupCorrupted
+        }
+        
+        var unknownTypes: Set<String> = []
+        var typedModels: [(priority: Int, typeName: String, data: [String: Any], importer: ModelImporter.Type)] = []
+        typedModels.reserveCapacity(modelsData.count)
+        
+        for modelData in modelsData {
+            guard let typeName = modelData["_type"] as? String else {
+                throw AppError.backupCorrupted
+            }
+            guard let importer = ModelTypeRegistry.shared.getImporter(for: typeName) else {
+                unknownTypes.insert(typeName)
+                continue
+            }
+            typedModels.append((priority: importer.importPriority, typeName: typeName, data: modelData, importer: importer))
+        }
+        
+        if !unknownTypes.isEmpty {
+            let types = unknownTypes.sorted().joined(separator: ", ")
+            throw AppError.restoreFailed("Неизвестные типы моделей в backup: \(types)")
+        }
+        
+        typedModels.sort { $0.priority < $1.priority }
         
         var currentPriority: Int? = nil
         
@@ -134,7 +162,7 @@ final class DataRepository: DataRepositoryProtocol {
         try await worker.clearAllData()
     }
     
-    nonisolated static func clearAllData(in context: ModelContext) throws {
+    static func clearAllData(in context: ModelContext) throws {
         let registeredTypes = ModelTypeRegistry.shared.getExportableTypes()
         let typeNames = registeredTypes.keys.sorted { lhs, rhs in
             let lhsPriority = ModelTypeRegistry.shared.getImporter(for: lhs)?.importPriority ?? 100
@@ -156,22 +184,27 @@ final class DataRepository: DataRepositoryProtocol {
 
 actor DataRepositoryWorker {
     private let modelContainer: ModelContainer
-    private let modelContext: ModelContext
     
     init(modelContainer: ModelContainer) {
         self.modelContainer = modelContainer
-        self.modelContext = ModelContext(modelContainer)
+    }
+    
+    private func makeContext() -> ModelContext {
+        ModelContext(modelContainer)
     }
     
     func exportAllData() throws -> Data {
-        try DataRepository.exportAllData(from: modelContext)
+        let modelContext = makeContext()
+        return try DataRepository.exportAllData(from: modelContext)
     }
     
     func importAllData(_ data: Data) throws {
+        let modelContext = makeContext()
         try DataRepository.importAllData(data, into: modelContext)
     }
     
     func clearAllData() throws {
+        let modelContext = makeContext()
         try DataRepository.clearAllData(in: modelContext)
     }
 }

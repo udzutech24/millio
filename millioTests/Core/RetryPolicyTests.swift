@@ -13,12 +13,12 @@ struct RetryPolicyTests {
                 attempts += 1
                 throw AppError.iCloudUnavailable
             }
-            #expect(false)
+            #expect(Bool(false))
         } catch let error as AppError {
             #expect(error == .iCloudUnavailable)
             #expect(attempts == 1)
         } catch {
-            #expect(false)
+            #expect(Bool(false))
         }
     }
     
@@ -39,4 +39,3 @@ struct RetryPolicyTests {
         #expect(attempts == 3)
     }
 }
-

@@ -10,6 +10,7 @@ import UserNotifications
 import OSLog
 
 /// Протокол для управления уведомлениями
+@MainActor
 protocol NotificationManagerProtocol {
     func requestAuthorization() async -> Bool
     func scheduleDailyReminder(enabled: Bool) async

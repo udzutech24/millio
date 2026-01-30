@@ -55,36 +55,6 @@ struct CashflowTransactionImporter: ModelImporter {
         let incomeCategory = incomeCategoryRaw.flatMap { IncomeCategory(rawValue: $0) }
         let expenseCategory = expenseCategoryRaw.flatMap { ExpenseCategory(rawValue: $0) }
         
-        // Проверяем, не существует ли уже такая транзакция
-        let uniqueID = dict["transactionUniqueID"] as? String
-        if let uniqueID = uniqueID {
-            let existingDescriptor = FetchDescriptor<CashflowTransaction>(
-                predicate: #Predicate<CashflowTransaction> { transaction in
-                    transaction.transactionUniqueID == uniqueID
-                }
-            )
-            
-            if let existing = try? context.fetch(existingDescriptor).first {
-                // Обновляем существующую транзакцию
-                existing.transactionTypeRaw = transactionTypeRaw
-                existing.amount = amount
-                existing.currency = currency
-                existing.transactionDate = transactionDate
-                existing.cardID = cardID
-                existing.toCardID = toCardID
-                existing.creditID = creditID
-                existing.investmentID = investmentID
-                existing.incomeCategoryRaw = incomeCategoryRaw
-                existing.expenseCategoryRaw = expenseCategoryRaw
-                existing.note = note
-                existing.exchangeRate = exchangeRate
-                existing.exchangeRateDate = exchangeRateDate
-                existing.exchangeRateCurrency = exchangeRateCurrency
-                existing.updatedAt = updatedAt
-                return
-            }
-        }
-        
         // Создаем новую транзакцию
         let transaction = CashflowTransaction(
             transactionType: transactionType,

@@ -224,7 +224,15 @@ struct FinanceChartContainerView: View {
                         .gesture(
                             DragGesture(minimumDistance: 0)
                                 .onChanged { value in
-                                    let plotFrame = geo[proxy.plotAreaFrame]
+                                            let plotFrame: CGRect
+                                            if #available(iOS 17.0, *) {
+                                                guard let anchor = proxy.plotFrame else { return }
+                                                plotFrame = geo[anchor]
+                                            } else if #unavailable(iOS 17.0) {
+                                                plotFrame = geo[proxy.plotAreaFrame]
+                                            } else {
+                                                return
+                                            }
                                     guard plotFrame.contains(value.location) else { return }
 
                                     let xInPlot = value.location.x - plotFrame.minX
@@ -243,7 +251,15 @@ struct FinanceChartContainerView: View {
 
                     // Аннотация выбранной точки
                     if let sel = selectedPoint {
-                        let plotFrame = geo[proxy.plotAreaFrame]
+                        let plotFrame: CGRect = {
+                            if #available(iOS 17.0, *), let anchor = proxy.plotFrame {
+                                return geo[anchor]
+                            }
+                            if #unavailable(iOS 17.0) {
+                                return geo[proxy.plotAreaFrame]
+                            }
+                            return .zero
+                        }()
                         let xPos = proxy.position(forX: sel.date) ?? 0
                         let yPos = proxy.position(forY: sel.value) ?? 0
 

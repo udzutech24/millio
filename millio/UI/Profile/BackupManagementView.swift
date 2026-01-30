@@ -39,6 +39,7 @@ struct BackupManagementView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.modelContext) private var modelContext
     @Environment(\.modelContainer) private var modelContainer
+    @Environment(\.diContainer) private var diContainer
     
     @State private var isBusy = false
     @State private var backupError: AppError?
@@ -46,9 +47,7 @@ struct BackupManagementView: View {
     @State private var encryptionMode: BackupEncryptionMode = .none
     
     private var backupManager: BackupManagerProtocol? {
-        guard let container = modelContainer else { return nil }
-        let dataRepository = DataRepository(modelContext: modelContext, modelContainer: container)
-        return BackupManager(dataRepository: dataRepository)
+        diContainer?.backupManager
     }
     
     var body: some View {

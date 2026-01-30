@@ -27,6 +27,7 @@ final class DIContainer {
         self.backupManager = backupManager
     }
     
+    @MainActor
     static func create(
         appState: AppState,
         modelContainer: ModelContainer

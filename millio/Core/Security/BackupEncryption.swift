@@ -80,11 +80,11 @@ struct KeychainBackupEncryption: BackupEncryptionProtocol {
 
 // MARK: - Keychain Helper
 
-nonisolated private struct Keychain {
+private struct Keychain {
     let service: String
     private let accessible = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
     
-    nonisolated subscript(data key: String) -> Data? {
+    subscript(data key: String) -> Data? {
         get {
             let query: [String: Any] = [
                 kSecClass as String: kSecClassGenericPassword,

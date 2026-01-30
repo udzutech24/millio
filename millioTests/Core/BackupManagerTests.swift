@@ -212,11 +212,11 @@ struct BackupManagerTests {
         
         do {
             try await backupManager.restoreLatest()
-            #expect(false)
+            #expect(Bool(false))
         } catch let error as AppError {
             #expect(error == .backupCorrupted)
         } catch {
-            #expect(false)
+            #expect(Bool(false))
         }
     }
     

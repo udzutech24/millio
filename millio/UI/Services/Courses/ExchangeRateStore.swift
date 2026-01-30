@@ -260,6 +260,7 @@ final class ExchangeRateStore: ObservableObject {
 
 // MARK: - Service adapter (если нужно для твоей архитектуры)
 
+@MainActor
 protocol ExchangeRateService: AnyObject {
     // Возвращает курс: сколько TO за 1 единицу FROM на дату date
     func getRate(from: String, to: String, date: Date) async -> Double?

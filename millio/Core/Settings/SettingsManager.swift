@@ -14,15 +14,15 @@ protocol SettingsManagerProtocol {
     var isDailyReminderEnabled: Bool { get set }
 }
 
-nonisolated final class SettingsManager: SettingsManagerProtocol {
-    nonisolated static let shared = SettingsManager()
+final class SettingsManager: SettingsManagerProtocol {
+    static let shared = SettingsManager()
     
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "SettingsManager")
     private let backupEnabledKey = "isBackupEnabled"
     private let encryptionEnabledKey = "isEncryptionEnabled"
     private let dailyReminderEnabledKey = "isDailyReminderEnabled"
     
-    nonisolated var isBackupEnabled: Bool {
+    var isBackupEnabled: Bool {
         get {
             // По умолчанию backup отключен
             UserDefaults.standard.object(forKey: backupEnabledKey) as? Bool ?? false
@@ -33,7 +33,7 @@ nonisolated final class SettingsManager: SettingsManagerProtocol {
         }
     }
     
-    nonisolated var isEncryptionEnabled: Bool {
+    var isEncryptionEnabled: Bool {
         get {
             UserDefaults.standard.object(forKey: encryptionEnabledKey) as? Bool ?? false
         }
@@ -43,7 +43,7 @@ nonisolated final class SettingsManager: SettingsManagerProtocol {
         }
     }
     
-    nonisolated var isDailyReminderEnabled: Bool {
+    var isDailyReminderEnabled: Bool {
         get {
             UserDefaults.standard.object(forKey: dailyReminderEnabledKey) as? Bool ?? false
         }
@@ -53,5 +53,5 @@ nonisolated final class SettingsManager: SettingsManagerProtocol {
         }
     }
     
-    nonisolated private init() {}
+    private init() {}
 }

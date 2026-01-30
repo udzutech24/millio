@@ -35,13 +35,15 @@ actor BackupManager: BackupManagerProtocol {
         self.encryption = encryption
     }
     
-    convenience init(dataRepository: DataRepositoryProtocol) {
+    init(dataRepository: DataRepositoryProtocol) {
         // Проверяем настройки шифрования синхронно
         let isEncryptionEnabled = SettingsManager.shared.isEncryptionEnabled
         let encryption: BackupEncryptionProtocol? = isEncryptionEnabled
             ? KeychainBackupEncryption()
             : nil
-        self.init(cloudStore: CloudBackupStore(), dataRepository: dataRepository, encryption: encryption)
+        self.cloudStore = CloudBackupStore()
+        self.dataRepository = dataRepository
+        self.encryption = encryption
     }
     
     func isAvailable() async -> Bool {
@@ -58,65 +60,80 @@ actor BackupManager: BackupManagerProtocol {
         let dataRepository = self.dataRepository
         let encryption = self.encryption
         let cloudStore = self.cloudStore
+
+        CrashReporting.setCustomValue("backup", forKey: "backup_operation")
+        CrashReporting.setCustomValue(passphrase != nil ? "passphrase" : (encryption != nil ? "keychain" : "none"), forKey: "backup_encryption_mode")
         
-        try await withRetry(
-            policy: .default,
-            shouldRetry: { error in
-                guard let appError = error as? AppError else { return true }
-                switch appError {
-                case .iCloudUnavailable, .backupCorrupted, .incompatibleSchemaVersion:
-                    return false
-                case .restoreFailed:
-                    return false
-                default:
-                    return true
+        do {
+            try await withRetry(
+                policy: .default,
+                shouldRetry: { error in
+                    guard let appError = error as? AppError else { return true }
+                    switch appError {
+                    case .iCloudUnavailable, .backupCorrupted, .incompatibleSchemaVersion:
+                        return false
+                    case .restoreFailed:
+                        return false
+                    default:
+                        return true
+                    }
                 }
-            }
-        ) {
-            guard await self.isAvailable() else {
-                throw AppError.iCloudUnavailable
-            }
-            
-            var payload = try await dataRepository.exportAllDataAsync()
-            let metadata = BackupMetadata(
-                version: .current,
-                timestamp: Date(),
-                schemaVersion: "2.0",
-                modelCount: 0
-            )
-            
-            var compressionInfo: BackupCompressionInfo? = nil
-            let compressed = try self.compressLZFSE(payload)
-            if compressed.count < payload.count {
-                compressionInfo = BackupCompressionInfo(
-                    algorithm: "lzfse",
-                    originalSize: payload.count
+            ) {
+                guard await self.isAvailable() else {
+                    throw AppError.iCloudUnavailable
+                }
+                
+                var payload = try await dataRepository.exportAllDataAsync()
+                let metadata: BackupMetadata = {
+                    do {
+                        guard let json = try JSONSerialization.jsonObject(with: payload) as? [String: Any],
+                              let metadataDict = json["metadata"] as? [String: Any] else {
+                            return BackupMetadata()
+                        }
+                        let data = try JSONSerialization.data(withJSONObject: metadataDict)
+                        return try JSONDecoder().decode(BackupMetadata.self, from: data)
+                    } catch {
+                        return BackupMetadata()
+                    }
+                }()
+                
+                var compressionInfo: BackupCompressionInfo? = nil
+                let compressed = try self.compressLZFSE(payload)
+                if compressed.count < payload.count {
+                    compressionInfo = BackupCompressionInfo(
+                        algorithm: "lzfse",
+                        originalSize: payload.count
+                    )
+                    payload = compressed
+                }
+                
+                var encryptionInfo: BackupEncryptionInfo? = nil
+                if let passphrase {
+                    let (encrypted, kdf) = try PassphraseBackupEncryption.encrypt(payload, passphrase: passphrase)
+                    payload = encrypted
+                    encryptionInfo = BackupEncryptionInfo(algorithm: "aesgcm-passphrase", kdf: kdf)
+                } else if let encryption {
+                    payload = try encryption.encrypt(payload)
+                    encryptionInfo = BackupEncryptionInfo(algorithm: "aesgcm-keychain", kdf: nil)
+                }
+                
+                let header = BackupEnvelopeHeader(
+                    formatVersion: BackupEnvelopeHeader.currentFormatVersion,
+                    metadata: metadata,
+                    compression: compressionInfo,
+                    encryption: encryptionInfo
                 )
-                payload = compressed
+                
+                let packed = try BackupEnvelope.pack(header: header, payload: payload)
+                try await cloudStore.uploadBackup(packed)
             }
             
-            var encryptionInfo: BackupEncryptionInfo? = nil
-            if let passphrase {
-                let (encrypted, kdf) = try PassphraseBackupEncryption.encrypt(payload, passphrase: passphrase)
-                payload = encrypted
-                encryptionInfo = BackupEncryptionInfo(algorithm: "aesgcm-passphrase", kdf: kdf)
-            } else if let encryption {
-                payload = try encryption.encrypt(payload)
-                encryptionInfo = BackupEncryptionInfo(algorithm: "aesgcm-keychain", kdf: nil)
-            }
-            
-            let header = BackupEnvelopeHeader(
-                formatVersion: BackupEnvelopeHeader.currentFormatVersion,
-                metadata: metadata,
-                compression: compressionInfo,
-                encryption: encryptionInfo
-            )
-            
-            let packed = try BackupEnvelope.pack(header: header, payload: payload)
-            try await cloudStore.uploadBackup(packed)
+            logger.info("Backup completed successfully")
+        } catch {
+            CrashReporting.log("Backup failed: \(String(describing: error))")
+            CrashReporting.record(error: error)
+            throw error
         }
-        
-        logger.info("Backup completed successfully")
     }
     
     private func compressLZFSE(_ data: Data) throws -> Data {
@@ -133,21 +150,25 @@ actor BackupManager: BackupManagerProtocol {
         let dataRepository = self.dataRepository
         let encryption = self.encryption
         let cloudStore = self.cloudStore
+
+        CrashReporting.setCustomValue("restore", forKey: "backup_operation")
+        CrashReporting.setCustomValue(passphrase != nil ? "passphrase" : (encryption != nil ? "keychain" : "none"), forKey: "backup_encryption_mode")
         
-        try await withRetry(
-            policy: .default,
-            shouldRetry: { error in
-                guard let appError = error as? AppError else { return true }
-                switch appError {
-                case .iCloudUnavailable, .backupCorrupted, .incompatibleSchemaVersion:
-                    return false
-                case .restoreFailed:
-                    return false
-                default:
-                    return true
+        do {
+            try await withRetry(
+                policy: .default,
+                shouldRetry: { error in
+                    guard let appError = error as? AppError else { return true }
+                    switch appError {
+                    case .iCloudUnavailable, .backupCorrupted, .incompatibleSchemaVersion:
+                        return false
+                    case .restoreFailed:
+                        return false
+                    default:
+                        return true
+                    }
                 }
-            }
-        ) {
+            ) {
             guard await self.isAvailable() else {
                 throw AppError.iCloudUnavailable
             }
@@ -243,7 +264,12 @@ actor BackupManager: BackupManagerProtocol {
             }
         }
         
-        logger.info("Restore completed successfully")
+            logger.info("Restore completed successfully")
+        } catch {
+            CrashReporting.log("Restore failed: \(String(describing: error))")
+            CrashReporting.record(error: error)
+            throw error
+        }
     }
 
     private func looksLikeEnvelope(_ data: Data) -> Bool {

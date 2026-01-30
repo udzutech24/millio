@@ -107,6 +107,7 @@ struct millioApp: App {
         }
     }
     
+    @MainActor
     private func initializeApp(container: ModelContainer) async {
         // Фичи уже зарегистрированы при создании ModelContainer
         

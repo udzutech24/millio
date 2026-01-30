@@ -8,6 +8,8 @@
 import Foundation
 
 struct BackupMetadata: Codable {
+    static let currentSchemaVersion = "2.0"
+    
     let version: BackupVersion
     let timestamp: Date
     let schemaVersion: String
@@ -16,7 +18,7 @@ struct BackupMetadata: Codable {
     init(
         version: BackupVersion = .current,
         timestamp: Date = Date(),
-        schemaVersion: String = "2.0",
+        schemaVersion: String = BackupMetadata.currentSchemaVersion,
         modelCount: Int = 0
     ) {
         self.version = version

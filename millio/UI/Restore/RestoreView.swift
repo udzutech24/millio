@@ -12,6 +12,7 @@ struct RestoreView: View {
     @Bindable var router: AppRouter
     @Environment(\.modelContext) private var modelContext
     @Environment(\.modelContainer) private var modelContainer
+    @Environment(\.diContainer) private var diContainer
     @Environment(\.dismiss) private var dismiss
     @State private var isRestoring = false
     @State private var restoreError: AppError?
@@ -19,9 +20,7 @@ struct RestoreView: View {
     @State private var backupPassphrase: String = ""
     
     private var backupManager: BackupManagerProtocol? {
-        guard let modelContainer = modelContainer else { return nil }
-        let dataRepository = DataRepository(modelContext: modelContext, modelContainer: modelContainer)
-        return BackupManager(dataRepository: dataRepository)
+        diContainer?.backupManager
     }
     
     var body: some View {

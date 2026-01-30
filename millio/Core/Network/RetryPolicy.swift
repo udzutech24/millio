@@ -8,14 +8,14 @@
 import Foundation
 
 /// Политика повторов для сетевых операций
-nonisolated struct RetryPolicy {
+struct RetryPolicy {
     let maxAttempts: Int
     let delay: TimeInterval
     let backoffMultiplier: Double
     
-    nonisolated static let `default` = RetryPolicy(maxAttempts: 3, delay: 1.0, backoffMultiplier: 2.0)
-    nonisolated static let aggressive = RetryPolicy(maxAttempts: 5, delay: 0.5, backoffMultiplier: 1.5)
-    nonisolated static let conservative = RetryPolicy(maxAttempts: 2, delay: 2.0, backoffMultiplier: 3.0)
+    static let `default` = RetryPolicy(maxAttempts: 3, delay: 1.0, backoffMultiplier: 2.0)
+    static let aggressive = RetryPolicy(maxAttempts: 5, delay: 0.5, backoffMultiplier: 1.5)
+    static let conservative = RetryPolicy(maxAttempts: 2, delay: 2.0, backoffMultiplier: 3.0)
 }
 
 /// Выполняет операцию с повторами согласно политике

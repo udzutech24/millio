@@ -63,10 +63,12 @@ final class ModelTypeRegistry: ModelTypeRegistryProtocol {
                 
                 for item in items {
                     let data = try item.export()
-                    if var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                        json["_type"] = typeName
-                        exported.append(json)
+                    let object = try JSONSerialization.jsonObject(with: data)
+                    guard var json = object as? [String: Any] else {
+                        throw AppError.backupFailed("Экспорт модели '\(typeName)' вернул неожиданный формат")
                     }
+                    json["_type"] = typeName
+                    exported.append(json)
                 }
                 
                 return exported

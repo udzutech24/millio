@@ -11,6 +11,7 @@ import Foundation
 // (определен в SubscriptionManager.swift)
 
 @Observable
+@MainActor
 final class AppState {
     var lifecycle: AppLifecycleState = .launching
     var isICloudAvailable: Bool = false

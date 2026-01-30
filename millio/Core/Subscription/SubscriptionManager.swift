@@ -19,6 +19,7 @@ enum SubscriptionStatus {
 }
 
 /// Протокол для управления подпиской
+@MainActor
 protocol SubscriptionManagerProtocol {
     var status: SubscriptionStatus { get }
     var expirationDate: Date? { get }
@@ -314,7 +315,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         }
     }
     
-    private nonisolated func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
+    private func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
         switch result {
         case .unverified:
             throw SubscriptionError.verificationFailed
