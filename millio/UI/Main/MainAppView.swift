@@ -62,7 +62,7 @@ struct MainAppView: View {
                     HStack(spacing: 16) {
                         ActionButton(
                             title: "Расход",
-                            icon: "minus",
+                            icon: .asset("minus"),
                             gradientColors: AppColors.expenseGradient
                         ) {
                             showExpenseSheet = true
@@ -70,7 +70,7 @@ struct MainAppView: View {
                         
                         ActionButton(
                             title: "Доход",
-                            icon: "plus",
+                            icon: .asset("plus"),
                             gradientColors: AppColors.incomeGradient
                         ) {
                             showIncomeSheet = true

@@ -89,6 +89,9 @@ struct RestoreView: View {
         } message: {
             Text("Вы уверены, что хотите пропустить восстановление? Все данные из резервной копии будут потеряны.")
         }
+        .task {
+            await refreshBackupStatusIfNeeded()
+        }
     }
     
     // MARK: - Backup Disabled View
@@ -111,7 +114,7 @@ struct RestoreView: View {
             
             ActionButton(
                 title: "Продолжить",
-                icon: "arrow.right",
+                icon: .system("arrow.right"),
                 gradientColors: AppColors.incomeGradient
             ) {
                 appState.lifecycle = .ready
@@ -213,7 +216,7 @@ struct RestoreView: View {
             VStack(spacing: 16) {
                 ActionButton(
                     title: "Восстановить",
-                    icon: "arrow.down.circle.fill",
+                icon: .system("arrow.down.circle.fill"),
                     gradientColors: AppColors.incomeGradient
                 ) {
                     restore()
@@ -255,7 +258,7 @@ struct RestoreView: View {
             
             ActionButton(
                 title: "Продолжить",
-                icon: "arrow.right",
+                icon: .system("arrow.right"),
                 gradientColors: AppColors.incomeGradient
             ) {
                 appState.lifecycle = .ready
@@ -289,15 +292,54 @@ struct RestoreView: View {
                 await MainActor.run {
                     isRestoring = false
                     restoreError = error
-                    appState.lifecycle = .error(error)
                 }
             } catch {
                 await MainActor.run {
                     isRestoring = false
                     restoreError = .unknown(error)
-                    appState.lifecycle = .error(.unknown(error))
                 }
             }
+        }
+    }
+    
+    @MainActor
+    private func refreshBackupStatusIfNeeded() async {
+        guard appState.isBackupEnabled, !isRestoring else { return }
+        
+        let available = await withTimeout(seconds: 3) {
+            await CloudBackupStore().isAvailable()
+        }
+        appState.isICloudAvailable = available ?? false
+        
+        guard appState.isICloudAvailable, let backupManager else { return }
+        let info = await withTimeout(seconds: 3) {
+            await backupManager.lastBackupInfo()
+        }
+        if let infoOptional = info, let info = infoOptional {
+            appState.lastBackupDate = info.date
+        }
+    }
+    
+    private func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async -> T) async -> T? {
+        await withTaskGroup(of: T?.self) { group in
+            group.addTask {
+                await operation()
+            }
+            
+            group.addTask {
+                try? await Task.sleep(for: .seconds(seconds))
+                return nil
+            }
+            
+            var result: T? = nil
+            for await value in group {
+                if let value = value {
+                    result = value
+                    break
+                }
+            }
+            group.cancelAll()
+            return result
         }
     }
 }

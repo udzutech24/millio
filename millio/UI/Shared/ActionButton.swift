@@ -6,19 +6,25 @@
 //
 
 import SwiftUI
-import UIKit
+
+enum ActionButtonIcon: Hashable {
+    case system(String)
+    case asset(String)
+}
 
 struct ActionButton: View {
     let title: String
-    let icon: String
+    let icon: ActionButtonIcon
     let gradientColors: [Color]
     let action: () -> Void
     
     private var iconImage: Image {
-        if UIImage(systemName: icon) != nil {
-            return Image(systemName: icon)
+        switch icon {
+        case .system(let name):
+            return Image(systemName: name)
+        case .asset(let name):
+            return Image(name)
         }
-        return Image(icon)
     }
     
     var body: some View {
@@ -81,4 +87,3 @@ struct ActionButton: View {
         .buttonStyle(.plain)
     }
 }
-

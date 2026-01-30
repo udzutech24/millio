@@ -238,7 +238,7 @@ struct BackupManagementView: View {
             
             ActionButton(
                 title: isBusy ? "Создание backup..." : "Создать backup сейчас",
-                icon: "icloud.and.arrow.up.fill",
+                icon: .system("icloud.and.arrow.up.fill"),
                 gradientColors: AppColors.incomeGradient
             ) {
                 Task { await createBackupNow() }

@@ -8,12 +8,14 @@
 import Foundation
 import OSLog
 
+@MainActor
 protocol AppLifecycleUseCaseProtocol {
     func initialize() async
     func checkOnboardingStatus() -> Bool
     func checkRestoreNeeded() async -> Bool
 }
 
+@MainActor
 final class AppLifecycleUseCase: AppLifecycleUseCaseProtocol {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "AppLifecycleUseCase")
     private let appState: AppState

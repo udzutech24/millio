@@ -7,6 +7,7 @@
 
 import Foundation
 import CryptoKit
+import Security
 
 /// Протокол для шифрования backup
 protocol BackupEncryptionProtocol {
@@ -64,14 +65,14 @@ struct KeychainBackupEncryption: BackupEncryptionProtocol {
             return SymmetricKey(data: keyData)
         } else {
             let key = SymmetricKey(size: .bits256)
-            keychain[data: keyTag] = key.withUnsafeBytes { Data($0) }
+            try keychain.setData(key.withUnsafeBytes { Data($0) }, for: keyTag)
             return key
         }
     }
     
     private func getKey() throws -> SymmetricKey {
         guard let keyData = keychain[data: keyTag] else {
-            throw AppError.backupCorrupted
+            throw AppError.restoreFailed("Ключ шифрования backup не найден на этом устройстве")
         }
         return SymmetricKey(data: keyData)
     }
@@ -81,6 +82,7 @@ struct KeychainBackupEncryption: BackupEncryptionProtocol {
 
 nonisolated private struct Keychain {
     let service: String
+    private let accessible = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
     
     nonisolated subscript(data key: String) -> Data? {
         get {
@@ -101,28 +103,45 @@ nonisolated private struct Keychain {
             
             return data
         }
-        nonmutating set {
-            let query: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: service,
-                kSecAttrAccount as String: key
-            ]
-            
-            if let value = newValue {
-                let attributes: [String: Any] = [
-                    kSecValueData as String: value
-                ]
-                
-                if SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess {
-                    SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
-                } else {
-                    var newQuery = query
-                    newQuery.merge(attributes) { _, new in new }
-                    SecItemAdd(newQuery as CFDictionary, nil)
-                }
-            } else {
-                SecItemDelete(query as CFDictionary)
+        nonmutating set {}
+    }
+    
+    func setData(_ data: Data, for key: String) throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: key
+        ]
+        
+        let attributes: [String: Any] = [
+            kSecValueData as String: data
+        ]
+        
+        if SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess {
+            let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+            guard status == errSecSuccess else {
+                throw AppError.backupFailed("Не удалось обновить ключ шифрования backup")
             }
+        } else {
+            var newQuery = query
+            newQuery.merge(attributes) { _, new in new }
+            newQuery[kSecAttrAccessible as String] = accessible
+            let status = SecItemAdd(newQuery as CFDictionary, nil)
+            guard status == errSecSuccess else {
+                throw AppError.backupFailed("Не удалось сохранить ключ шифрования backup")
+            }
+        }
+    }
+    
+    func delete(_ key: String) throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: key
+        ]
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw AppError.backupFailed("Не удалось удалить ключ шифрования backup")
         }
     }
 }
