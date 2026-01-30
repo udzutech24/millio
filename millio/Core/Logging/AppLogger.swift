@@ -32,8 +32,10 @@ struct AppLogger {
             logger.info("\(message, privacy: .public)")
         case .warning:
             logger.warning("\(message, privacy: .private)")
+            CrashReporting.log("[\(category)] \(message)")
         case .error:
             logger.error("\(message, privacy: .private)")
+            CrashReporting.log("[\(category)] \(message)")
         }
     }
 }

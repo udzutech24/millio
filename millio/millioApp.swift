@@ -8,9 +8,11 @@
 import SwiftUI
 import SwiftData
 import UIKit
+import FirebaseCore
 
 @main
 struct millioApp: App {
+    @UIApplicationDelegateAdaptor(FirebaseAppDelegate.self) private var firebaseDelegate
     @State private var appState = AppState()
     @State private var diContainer: DIContainer?
     @State private var lifecycleUseCase: AppLifecycleUseCase?
