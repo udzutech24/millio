@@ -15,8 +15,8 @@ protocol BackupEncryptionProtocol {
 }
 
 /// Шифрование backup с использованием Keychain для хранения ключа
-nonisolated final class KeychainBackupEncryption: BackupEncryptionProtocol {
-    private var keychain = Keychain(service: "com.millio.backup")
+struct KeychainBackupEncryption: BackupEncryptionProtocol {
+    private let keychain = Keychain(service: "com.millio.backup")
     private let keyTag = "backup.encryption.key"
     
     func encrypt(_ data: Data) throws -> Data {
@@ -101,7 +101,7 @@ nonisolated private struct Keychain {
             
             return data
         }
-        set {
+        nonmutating set {
             let query: [String: Any] = [
                 kSecClass as String: kSecClassGenericPassword,
                 kSecAttrService as String: service,

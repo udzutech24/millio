@@ -105,10 +105,14 @@ try await backupManager.backupNow()
                      ▼
 ┌─────────────────────────────────────────────────────────┐
 │ 6. ШИФРОВАНИЕ (опционально)                             │
-│    KeychainBackupEncryption (AES-GCM)                   │
-│    • ключи в iOS Keychain                               │
-│    • включается флагом SettingsManager                  │
-│    • UI-тоггл пока отсутствует                          │
+│    AES-GCM                                                │
+│    • keychain-mode: ключ в iOS Keychain (device-only)      │
+│      - удобно, но restore на новом устройстве/после         │
+│        переустановки может быть невозможен                 │
+│    • passphrase-mode: PBKDF2(HMAC-SHA256)+salt → ключ      │
+│      - переносимо между устройствами, если пользователь     │
+│        знает парольную фразу                               │
+│    • UI-тоггл режима шифрования пока отсутствует            │
 └────────────────────┬────────────────────────────────────┘
                      │
                      ▼
@@ -132,12 +136,40 @@ try await backupManager.backupNow()
 
 ### 2.3. Формат данных backup
 
-Backup содержит **metadata** и массив моделей:
+Backup сохраняется в CloudKit как **envelope**:
+
+- `UInt32` (big-endian) — длина JSON-заголовка
+- JSON-заголовок (`BackupEnvelopeHeader`)
+- payload (данные экспорта, опционально сжатые/зашифрованные)
+
+#### 2.3.1. Заголовок envelope
+
+`BackupEnvelopeHeader` содержит:
+- `formatVersion` — версия envelope-формата
+- `metadata` — метаданные backup
+- `compression` — алгоритм/оригинальный размер (если применялось)
+- `encryption` — алгоритм и параметры KDF (если применялось)
+
+Payload формируется так:
+1) `DataRepository.exportAllData()` → JSON (metadata + models)  
+2) опционально сжатие LZFSE  
+3) опционально шифрование AES-GCM  
+
+`encryption.algorithm`:
+- `aesgcm-keychain` — ключ хранится в iOS Keychain (device-only)
+- `aesgcm-passphrase` — ключ derive'ится из парольной фразы, `encryption.kdf` обязателен:
+  - `algorithm`: `pbkdf2-hmac-sha256`
+  - `iterations`
+  - `saltBase64`
+
+#### 2.3.2. Экспорт данных (payload до сжатия/шифрования)
+
+Экспорт содержит **metadata** и массив моделей:
 
 - `BackupMetadata`:
   - `version` (`BackupVersion`, сейчас `1.0.0`)
   - `timestamp`
-  - `schemaVersion` (строка, сейчас `"1.0"`)
+  - `schemaVersion` (строка, сейчас `"2.0"`)
   - `modelCount`
 
 ### 2.4. Обработка ошибок
@@ -187,7 +219,10 @@ Backup содержит **metadata** и массив моделей:
                      ▼
 ┌─────────────────────────────────────────────────────────┐
 │ 4. РАСШИФРОВКА (если было зашифровано)                  │
-│    KeychainBackupEncryption.decrypt()                   │
+│    По envelope-заголовку:                               │
+│    • aesgcm-keychain → KeychainBackupEncryption.decrypt()│
+│    • aesgcm-passphrase → PassphraseBackupEncryption      │
+│      (нужна парольная фраза)                             │
 └────────────────────┬────────────────────────────────────┘
                      │
                      ▼

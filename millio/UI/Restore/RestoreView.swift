@@ -15,6 +15,7 @@ struct RestoreView: View {
     @State private var isRestoring = false
     @State private var restoreError: AppError?
     @State private var showSkipConfirmation = false
+    @State private var backupPassphrase: String = ""
     
     private var backupManager: BackupManagerProtocol? {
         guard let modelContainer = modelContainer else { return nil }
@@ -186,6 +187,24 @@ struct RestoreView: View {
                 .foregroundStyle(AppColors.textTertiary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
+
+            VStack(spacing: 8) {
+                Text("Парольная фраза (если backup был зашифрован)")
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(AppColors.textTertiary)
+                    .multilineTextAlignment(.center)
+                
+                SecureField("Введите парольную фразу", text: $backupPassphrase)
+                    .textContentType(.password)
+                    .privacySensitive()
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(.ultraThinMaterial)
+                    }
+            }
+            .padding(.horizontal, 24)
             
             // Action buttons
             VStack(spacing: 16) {
@@ -255,7 +274,8 @@ struct RestoreView: View {
         
         Task {
             do {
-                try await backupManager.restoreLatest()
+                let passphrase = backupPassphrase.trimmingCharacters(in: .whitespacesAndNewlines)
+                try await backupManager.restoreLatest(passphrase: passphrase.isEmpty ? nil : passphrase)
                 await MainActor.run {
                     isRestoring = false
                     appState.lifecycle = .ready

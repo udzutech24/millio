@@ -1,6 +1,6 @@
 # Статус ядра — Millio
 
-**Дата обновления:** 2026-01-27
+**Дата обновления:** 2026-01-30
 
 ## ✅ Реализовано в коде
 
@@ -8,7 +8,9 @@
 - **AppSchema + ModelTypeRegistry** — динамическая схема SwiftData и регистрация моделей
 - **Backup/Restore** через CloudKit (`Core/Backup`)
 - **Backup metadata/versioning** (`BackupMetadata`, `BackupVersion`, `BackupInfo`)
-- **Опциональное шифрование backup** (AES-GCM + Keychain)
+- **Опциональное шифрование backup**:
+  - `aesgcm-keychain` (device-only, ключ в Keychain)
+  - `aesgcm-passphrase` (PBKDF2 + парольная фраза, переносимо)
 - **Сжатие backup** (Compression LZFSE)
 - **Retry механизм** для сетевых операций (`RetryPolicy`, `withRetry`)
 - **ErrorRecoveryManager** со стратегиями восстановления
@@ -29,31 +31,28 @@
 
 ## ⚠️ Компромиссы и отступления
 
-1. **Core знает бизнес-сущности**
-   - `DataRepository` использует явные типы (`Card`, `Cashback`, `FinanceGroup` и т.д.) для экспорта/очистки.
-
-2. **SwiftUI в Core**
+1. **SwiftUI в Core**
    - `RootViewResolver` и `AppRouter` находятся в Core и зависят от SwiftUI.
    - `ViewModelProtocol` использует `ObservableObject`.
 
-3. **ModelContext в View слое**
+2. **ModelContext в View слое**
    - Во многих экранах `ModelContext` используется для инициализации ViewModel/репозиториев
      (например, `ProfileView`, `RestoreView`, `FinancesView`).
 
-4. **Restore не запускается автоматически**
+3. **Restore не запускается автоматически**
    - Экран восстановления открывается вручную из профиля.
    - `checkRestoreNeeded()` есть, но сейчас не используется.
 
-5. **UI для шифрования отсутствует**
-   - Флаг есть в `SettingsManager`, но отдельного тоггла нет.
+4. **UI для шифрования не завершен**
+   - Нет UI-тоггла режима шифрования (keychain/passphrase).
+   - В `RestoreView` есть ввод парольной фразы для passphrase-backup.
 
-6. **BackupMonitor не подключен к UI**
+5. **BackupMonitor не подключен к UI**
    - Монитор реализован, но прогресс/статусы в интерфейсе не отображаются.
 
 ## 📌 Открытые улучшения (если захотите развивать)
 
-- Вынести явные зависимости Core → Feature модели (унифицировать экспорт/очистку)
-- Добавить UI для ручного backup и переключателя шифрования
+- Добавить UI для ручного backup и переключателя режима шифрования
 - Подключить `BackupMonitor` к интерфейсу
 - Решить вопрос автоматического restore при старте (или убрать `restoring` из lifecycle)
 

@@ -29,7 +29,8 @@ Millio — iOS-приложение с локальным хранением д�
 - Backup хранится в **CloudKit Private DB** (`AppBackup` / `latest_backup`)
 - UI для **ручного backup** сейчас отсутствует (доступно только через код)
 - Restore запускается **вручную** из профиля (`RestoreView`)
-- Шифрование backup есть, но **UI-тоггла нет** (`SettingsManager.isEncryptionEnabled`)
+- Шифрование backup поддерживает **keychain-mode** (device-only) и **passphrase-mode** (переносимо); UI-тоггла режима пока нет
+- В `RestoreView` есть поле для ввода парольной фразы (нужно для passphrase-mode)
 - Restore полностью заменяет локальные данные (snapshot)
 
 Подробнее: `docs/BACKUP_RESTORE_SCHEMA.md`.

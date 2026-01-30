@@ -5,8 +5,15 @@ struct BackupCompressionInfo: Codable {
     let originalSize: Int
 }
 
+struct BackupKDFInfo: Codable {
+    let algorithm: String
+    let iterations: Int
+    let saltBase64: String
+}
+
 struct BackupEncryptionInfo: Codable {
     let algorithm: String
+    let kdf: BackupKDFInfo?
 }
 
 struct BackupEnvelopeHeader: Codable {

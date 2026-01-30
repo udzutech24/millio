@@ -12,18 +12,20 @@ import Compression
 protocol BackupManagerProtocol {
     func isAvailable() async -> Bool
     func backupNow() async throws
+    func backupNow(passphrase: String?) async throws
     func restoreLatest() async throws
+    func restoreLatest(passphrase: String?) async throws
     func lastBackupInfo() async -> BackupInfo?
 }
 
-nonisolated final class BackupManager: BackupManagerProtocol {
+actor BackupManager: BackupManagerProtocol {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "BackupManager")
     private let cloudStore: CloudBackupStoreProtocol
     private let dataRepository: DataRepositoryProtocol
     private let encryption: BackupEncryptionProtocol?
     private var backupTask: Task<Void, Never>?
     
-    nonisolated init(
+    init(
         cloudStore: CloudBackupStoreProtocol,
         dataRepository: DataRepositoryProtocol,
         encryption: BackupEncryptionProtocol? = nil
@@ -47,6 +49,10 @@ nonisolated final class BackupManager: BackupManagerProtocol {
     }
     
     func backupNow() async throws {
+        try await backupNow(passphrase: nil)
+    }
+    
+    func backupNow(passphrase: String?) async throws {
         logger.info("Starting backup...")
         
         let dataRepository = self.dataRepository
@@ -58,7 +64,9 @@ nonisolated final class BackupManager: BackupManagerProtocol {
                 throw AppError.iCloudUnavailable
             }
             
-            var payload = try dataRepository.exportAllData()
+            var payload = try await MainActor.run {
+                try dataRepository.exportAllData()
+            }
             let metadata = BackupMetadata(
                 version: .current,
                 timestamp: Date(),
@@ -77,9 +85,13 @@ nonisolated final class BackupManager: BackupManagerProtocol {
             }
             
             var encryptionInfo: BackupEncryptionInfo? = nil
-            if let encryption {
+            if let passphrase {
+                let (encrypted, kdf) = try PassphraseBackupEncryption.encrypt(payload, passphrase: passphrase)
+                payload = encrypted
+                encryptionInfo = BackupEncryptionInfo(algorithm: "aesgcm-passphrase", kdf: kdf)
+            } else if let encryption {
                 payload = try encryption.encrypt(payload)
-                encryptionInfo = BackupEncryptionInfo(algorithm: "aesgcm-keychain")
+                encryptionInfo = BackupEncryptionInfo(algorithm: "aesgcm-keychain", kdf: nil)
             }
             
             let header = BackupEnvelopeHeader(
@@ -101,6 +113,10 @@ nonisolated final class BackupManager: BackupManagerProtocol {
     }
     
     func restoreLatest() async throws {
+        try await restoreLatest(passphrase: nil)
+    }
+    
+    func restoreLatest(passphrase: String?) async throws {
         logger.info("Starting restore...")
         
         let dataRepository = self.dataRepository
@@ -125,12 +141,23 @@ nonisolated final class BackupManager: BackupManagerProtocol {
                 
                 backupData = payload
                 
-                if header.encryption != nil {
-                    let decryptor = encryption ?? KeychainBackupEncryption()
-                    do {
-                        backupData = try decryptor.decrypt(backupData)
-                    } catch {
-                        throw AppError.restoreFailed("Backup зашифрован и не может быть расшифрован на этом устройстве")
+                if let encryptionInfo = header.encryption {
+                    switch encryptionInfo.algorithm {
+                    case "aesgcm-passphrase":
+                        guard let passphrase else {
+                            throw AppError.restoreFailed("Backup зашифрован парольной фразой. Введите парольную фразу и повторите.")
+                        }
+                        guard let kdf = encryptionInfo.kdf else {
+                            throw AppError.backupCorrupted
+                        }
+                        backupData = try PassphraseBackupEncryption.decrypt(backupData, passphrase: passphrase, kdf: kdf)
+                    default:
+                        let decryptor = encryption ?? KeychainBackupEncryption()
+                        do {
+                            backupData = try decryptor.decrypt(backupData)
+                        } catch {
+                            throw AppError.restoreFailed("Backup зашифрован и не может быть расшифрован на этом устройстве")
+                        }
                     }
                 }
                 
@@ -151,11 +178,10 @@ nonisolated final class BackupManager: BackupManagerProtocol {
                 backupData = self.decompressLZFSEIfNeeded(backupData)
             }
             
-            // Очищаем локальные данные
-            try dataRepository.clearAllData()
-            
-            // Импортируем данные из backup
-            try dataRepository.importAllData(backupData)
+            try await MainActor.run {
+                try dataRepository.clearAllData()
+                try dataRepository.importAllData(backupData)
+            }
         }
         
         logger.info("Restore completed successfully")

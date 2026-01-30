@@ -41,6 +41,37 @@ struct BackupManagerTests {
         #expect(mockDataRepository.exportCalled == true)
     }
     
+    @Test("Backup now supports passphrase encryption (envelope header + decryptable payload)")
+    func testBackupNowPassphraseEncryption() async throws {
+        let passphrase = "test-passphrase"
+        let mockCloudStore = MockCloudBackupStore()
+        mockCloudStore.isAvailableResult = true
+        
+        let mockDataRepository = MockDataRepository()
+        mockDataRepository.exportData = Data((0..<4096).map { _ in UInt8.random(in: 0...255) })
+        
+        let backupManager = BackupManager(
+            cloudStore: mockCloudStore,
+            dataRepository: mockDataRepository
+        )
+        
+        try await backupManager.backupNow(passphrase: passphrase)
+        
+        guard let uploaded = mockCloudStore.uploadedData else {
+            throw AppError.backupFailed("Test setup failed: uploaded data is nil")
+        }
+        
+        let (header, payload) = try BackupEnvelope.unpack(uploaded)
+        #expect(header.encryption?.algorithm == "aesgcm-passphrase")
+        
+        guard let kdf = header.encryption?.kdf else {
+            throw AppError.backupFailed("Test setup failed: kdf is nil")
+        }
+        
+        let decrypted = try PassphraseBackupEncryption.decrypt(payload, passphrase: passphrase, kdf: kdf)
+        #expect(decrypted == mockDataRepository.exportData)
+    }
+    
     @Test("Backup now throws error when iCloud is unavailable")
     func testBackupNowICloudUnavailable() async {
         let mockCloudStore = MockCloudBackupStore()
@@ -72,6 +103,66 @@ struct BackupManagerTests {
         #expect(mockCloudStore.downloadCalled == true)
         #expect(mockDataRepository.clearCalled == true)
         #expect(mockDataRepository.importCalled == true)
+    }
+    
+    @Test("Restore latest supports passphrase-encrypted backups")
+    func testRestoreLatestPassphraseEncryptedBackup() async throws {
+        let passphrase = "test-passphrase"
+        let mockCloudStore = MockCloudBackupStore()
+        mockCloudStore.isAvailableResult = true
+        
+        let plaintext = Data((0..<2048).map { _ in UInt8.random(in: 0...255) })
+        let encrypted = try PassphraseBackupEncryption.encrypt(plaintext, passphrase: passphrase)
+        
+        let header = BackupEnvelopeHeader(
+            formatVersion: BackupEnvelopeHeader.currentFormatVersion,
+            metadata: BackupMetadata(version: .current, timestamp: Date(), schemaVersion: "2.0", modelCount: 0),
+            compression: nil,
+            encryption: BackupEncryptionInfo(algorithm: "aesgcm-passphrase", kdf: encrypted.kdf)
+        )
+        mockCloudStore.downloadData = try BackupEnvelope.pack(header: header, payload: encrypted.encrypted)
+        
+        let mockDataRepository = MockDataRepository()
+        let backupManager = BackupManager(
+            cloudStore: mockCloudStore,
+            dataRepository: mockDataRepository
+        )
+        
+        try await backupManager.restoreLatest(passphrase: passphrase)
+        
+        #expect(mockDataRepository.clearCalled == true)
+        #expect(mockDataRepository.importCalled == true)
+        #expect(mockDataRepository.importedData == plaintext)
+    }
+    
+    @Test("Restore latest fails without passphrase for passphrase-encrypted backups")
+    func testRestoreLatestPassphraseRequired() async {
+        let passphrase = "test-passphrase"
+        let mockCloudStore = MockCloudBackupStore()
+        mockCloudStore.isAvailableResult = true
+        
+        let plaintext = Data((0..<512).map { _ in UInt8.random(in: 0...255) })
+        let encrypted = try? PassphraseBackupEncryption.encrypt(plaintext, passphrase: passphrase)
+        
+        if let encrypted {
+            let header = BackupEnvelopeHeader(
+                formatVersion: BackupEnvelopeHeader.currentFormatVersion,
+                metadata: BackupMetadata(version: .current, timestamp: Date(), schemaVersion: "2.0", modelCount: 0),
+                compression: nil,
+                encryption: BackupEncryptionInfo(algorithm: "aesgcm-passphrase", kdf: encrypted.kdf)
+            )
+            mockCloudStore.downloadData = try? BackupEnvelope.pack(header: header, payload: encrypted.encrypted)
+        }
+        
+        let mockDataRepository = MockDataRepository()
+        let backupManager = BackupManager(
+            cloudStore: mockCloudStore,
+            dataRepository: mockDataRepository
+        )
+        
+        await #expect(throws: AppError.self) {
+            try await backupManager.restoreLatest(passphrase: nil)
+        }
     }
     
     @Test("Last backup info returns correct information")
@@ -109,6 +200,7 @@ final class MockCloudBackupStore: CloudBackupStoreProtocol {
     var downloadCalled = false
     var downloadData: Data?
     var backupInfo: BackupInfo?
+    var uploadedData: Data?
     
     func isAvailable() async -> Bool {
         isAvailableResult
@@ -116,6 +208,7 @@ final class MockCloudBackupStore: CloudBackupStoreProtocol {
     
     func uploadBackup(_ data: Data) async throws {
         uploadCalled = true
+        uploadedData = data
     }
     
     func downloadLatestBackup() async throws -> Data? {
@@ -133,6 +226,7 @@ final class MockDataRepository: DataRepositoryProtocol {
     var importCalled = false
     var clearCalled = false
     var exportData = Data()
+    var importedData: Data?
     
     func exportAllData() throws -> Data {
         exportCalled = true
@@ -141,6 +235,7 @@ final class MockDataRepository: DataRepositoryProtocol {
     
     func importAllData(_ data: Data) throws {
         importCalled = true
+        importedData = data
     }
     
     func clearAllData() throws {

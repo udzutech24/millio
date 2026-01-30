@@ -16,8 +16,16 @@ final class MockBackupManager: BackupManagerProtocol {
     func backupNow() async throws {
         // Ничего не делаем, backup отключен
     }
+
+    func backupNow(passphrase: String?) async throws {
+        // Ничего не делаем, backup отключен
+    }
     
     func restoreLatest() async throws {
+        // Ничего не делаем, backup отключен
+    }
+
+    func restoreLatest(passphrase: String?) async throws {
         // Ничего не делаем, backup отключен
     }
     
