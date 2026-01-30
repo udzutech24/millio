@@ -108,7 +108,11 @@ final class HistoricalRateStore {
             existing.rate = rate
             existing.source = source
             existing.fetchedAt = Date()
-            try? modelContext.save()
+            do {
+                try modelContext.save()
+            } catch {
+                AppLogger.log(.error, category: "HistoricalRateStore", "Failed to save historical rate: \(error.localizedDescription)")
+            }
             return
         }
         
@@ -121,6 +125,10 @@ final class HistoricalRateStore {
             fetchedAt: Date()
         )
         modelContext.insert(newRate)
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            AppLogger.log(.error, category: "HistoricalRateStore", "Failed to save historical rate: \(error.localizedDescription)")
+        }
     }
 }

@@ -27,13 +27,13 @@ struct AppLogger {
         
         switch level {
         case .debug:
-            logger.debug("\(message)")
+            logger.debug("\(message, privacy: .public)")
         case .info:
-            logger.info("\(message)")
+            logger.info("\(message, privacy: .public)")
         case .warning:
-            logger.warning("\(message)")
+            logger.warning("\(message, privacy: .private)")
         case .error:
-            logger.error("\(message)")
+            logger.error("\(message, privacy: .private)")
         }
     }
 }

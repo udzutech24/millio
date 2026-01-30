@@ -93,6 +93,7 @@ struct BackupManagerTests {
         mockCloudStore.isAvailableResult = true
         mockCloudStore.downloadData = Data("restored data".utf8)
         let mockDataRepository = MockDataRepository()
+        mockDataRepository.exportData = Data("existing data".utf8)
         let backupManager = BackupManager(
             cloudStore: mockCloudStore,
             dataRepository: mockDataRepository
@@ -103,6 +104,32 @@ struct BackupManagerTests {
         #expect(mockCloudStore.downloadCalled == true)
         #expect(mockDataRepository.clearCalled == true)
         #expect(mockDataRepository.importCalled == true)
+        #expect(mockDataRepository.exportCalled == true)
+    }
+
+    @Test("Restore latest rolls back to previous data if import fails")
+    func testRestoreLatestRollbackOnImportFailure() async {
+        let mockCloudStore = MockCloudBackupStore()
+        mockCloudStore.isAvailableResult = true
+        mockCloudStore.downloadData = Data("new data".utf8)
+        
+        let repo = FailingImportDataRepository()
+        repo.storage = Data("previous data".utf8)
+        repo.failNextImport = true
+        
+        let backupManager = BackupManager(
+            cloudStore: mockCloudStore,
+            dataRepository: repo
+        )
+        
+        await #expect(throws: AppError.self) {
+            try await backupManager.restoreLatest()
+        }
+        
+        #expect(repo.storage == Data("previous data".utf8))
+        #expect(repo.exportCalls == 1)
+        #expect(repo.clearCalls >= 1)
+        #expect(repo.importCalls >= 2)
     }
     
     @Test("Restore latest supports passphrase-encrypted backups")
@@ -268,5 +295,32 @@ final class MockDataRepository: DataRepositoryProtocol {
     
     func clearAllData() throws {
         clearCalled = true
+    }
+}
+
+final class FailingImportDataRepository: DataRepositoryProtocol {
+    var storage = Data()
+    var failNextImport = false
+    var exportCalls = 0
+    var importCalls = 0
+    var clearCalls = 0
+    
+    func exportAllData() throws -> Data {
+        exportCalls += 1
+        return storage
+    }
+    
+    func importAllData(_ data: Data) throws {
+        importCalls += 1
+        if failNextImport {
+            failNextImport = false
+            throw AppError.restoreFailed("Simulated import failure")
+        }
+        storage = data
+    }
+    
+    func clearAllData() throws {
+        clearCalls += 1
+        storage = Data()
     }
 }

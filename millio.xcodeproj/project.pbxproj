@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		777D081C2F2CF17B004777D8 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 777D081B2F2CF17B004777D8 /* FirebaseAnalytics */; };
+		777D081E2F2CF1C9004777D8 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 777D081D2F2CF1C9004777D8 /* GoogleService-Info.plist */; };
 		77B22ECF2F146CDC005146C6 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 77B22ECE2F146CDC005146C6 /* StoreKit.framework */; };
 /* End PBXBuildFile section */
 
@@ -31,6 +33,7 @@
 		772BE51D2F12DBED00193DE9 /* millio.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = millio.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		772BE52C2F12DBEF00193DE9 /* millioTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = millioTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		772BE5362F12DBEF00193DE9 /* millioUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = millioUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		777D081D2F2CF1C9004777D8 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		77B22ECE2F146CDC005146C6 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -70,6 +73,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				777D081C2F2CF17B004777D8 /* FirebaseAnalytics in Frameworks */,
 				77B22ECF2F146CDC005146C6 /* StoreKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -94,6 +98,7 @@
 		772BE5142F12DBED00193DE9 = {
 			isa = PBXGroup;
 			children = (
+				777D081D2F2CF1C9004777D8 /* GoogleService-Info.plist */,
 				772BE51F2F12DBED00193DE9 /* millio */,
 				772BE52F2F12DBEF00193DE9 /* millioTests */,
 				772BE5392F12DBEF00193DE9 /* millioUITests */,
@@ -140,6 +145,7 @@
 			);
 			name = millio;
 			packageProductDependencies = (
+				777D081B2F2CF17B004777D8 /* FirebaseAnalytics */,
 			);
 			productName = millio;
 			productReference = 772BE51D2F12DBED00193DE9 /* millio.app */;
@@ -223,6 +229,9 @@
 			);
 			mainGroup = 772BE5142F12DBED00193DE9;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				777D081A2F2CF17B004777D8 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 772BE51E2F12DBED00193DE9 /* Products */;
 			projectDirPath = "";
@@ -240,6 +249,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				777D081E2F2CF1C9004777D8 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -620,6 +630,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		777D081A2F2CF17B004777D8 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.8.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		777D081B2F2CF17B004777D8 /* FirebaseAnalytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 777D081A2F2CF17B004777D8 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalytics;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 772BE5152F12DBED00193DE9 /* Project object */;
 }

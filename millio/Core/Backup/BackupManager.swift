@@ -219,8 +219,21 @@ actor BackupManager: BackupManagerProtocol {
             }
             
             try await MainActor.run {
-                try dataRepository.clearAllData()
-                try dataRepository.importAllData(backupData)
+                let previousData = try dataRepository.exportAllData()
+                
+                do {
+                    try dataRepository.clearAllData()
+                    try dataRepository.importAllData(backupData)
+                } catch {
+                    do {
+                        try dataRepository.clearAllData()
+                        try dataRepository.importAllData(previousData)
+                    } catch {
+                        throw AppError.restoreFailed("Не удалось восстановить данные после ошибки восстановления")
+                    }
+                    
+                    throw error
+                }
             }
         }
         

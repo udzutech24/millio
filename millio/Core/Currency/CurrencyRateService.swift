@@ -105,12 +105,14 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
         let source = currentRateSource
         
         do {
-            let url: URL
+            guard let url = Self.makeLatestURL(for: source) else {
+                return
+            }
             switch source {
             case .erapi:
-                url = URL(string: "https://open.er-api.com/v6/latest/USD")!
+                break
             case .frankfurter:
-                url = URL(string: "https://api.frankfurter.app/latest?from=USD")!
+                break
             }
             
             let (data, response) = try await URLSession.shared.data(from: url)
@@ -139,7 +141,7 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
                     let date: String
                 }
                 let decoded = try JSONDecoder().decode(FrankfurterResponse.self, from: data)
-                let eurRates = decoded.rates
+                let eurRates: [String: Double] = decoded.rates
                 if let eurToUsd = eurRates["USD"] {
                     for (code, eurRate) in eurRates {
                         if code != "USD" {
@@ -178,6 +180,15 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
         } catch {
             // Оставляем старые значения в кэше
             AppLogger.log(.error, category: "CurrencyRateService", "Failed to refresh rates: \(error.localizedDescription)")
+        }
+    }
+
+    nonisolated static func makeLatestURL(for source: RateSource) -> URL? {
+        switch source {
+        case .erapi:
+            return URL(string: "https://open.er-api.com/v6/latest/USD")
+        case .frankfurter:
+            return URL(string: "https://api.frankfurter.app/latest?from=USD")
         }
     }
     

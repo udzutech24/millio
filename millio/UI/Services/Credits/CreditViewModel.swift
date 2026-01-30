@@ -242,7 +242,11 @@ final class CreditViewModel: ViewModelProtocol {
                     credit.updateRemainingAmount()
                 }
             }
-            try? modelContext.save()
+            do {
+                try modelContext.save()
+            } catch {
+                AppLogger.log(.error, category: "CreditViewModel", "Failed to save credits: \(error.localizedDescription)")
+            }
             
             state.credits = activeCredits
             applyFilters()

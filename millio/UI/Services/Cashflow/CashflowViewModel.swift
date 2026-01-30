@@ -646,7 +646,11 @@ final class CashflowViewModel: ViewModelProtocol {
                 await MainActor.run {
                     card.balance += converted
                     card.updatedAt = Date()
-                    try? modelContext.save()
+                    do {
+                        try modelContext.save()
+                    } catch {
+                        AppLogger.log(.error, category: "Cashflow", "Failed to save card balance: \(error.localizedDescription)")
+                    }
                 }
             }
             
@@ -662,7 +666,11 @@ final class CashflowViewModel: ViewModelProtocol {
                 await MainActor.run {
                     card.balance = max(0, card.balance - converted)
                     card.updatedAt = Date()
-                    try? modelContext.save()
+                    do {
+                        try modelContext.save()
+                    } catch {
+                        AppLogger.log(.error, category: "Cashflow", "Failed to save card balance: \(error.localizedDescription)")
+                    }
                 }
             }
             
@@ -690,7 +698,11 @@ final class CashflowViewModel: ViewModelProtocol {
                     toCard.balance += toConverted
                     fromCard.updatedAt = Date()
                     toCard.updatedAt = Date()
-                    try? modelContext.save()
+                    do {
+                        try modelContext.save()
+                    } catch {
+                        AppLogger.log(.error, category: "Cashflow", "Failed to save card balances: \(error.localizedDescription)")
+                    }
                 }
             }
             

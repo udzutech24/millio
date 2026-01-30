@@ -80,7 +80,9 @@ nonisolated final class CloudBackupStore: CloudBackupStoreProtocol {
                 throw AppError.backupCorrupted
             }
             
-            let data = try Data(contentsOf: fileURL)
+            let data = try await Task.detached(priority: .utility) {
+                try Data(contentsOf: fileURL)
+            }.value
             logger.info("Backup downloaded successfully, size: \(data.count) bytes")
             return data
             

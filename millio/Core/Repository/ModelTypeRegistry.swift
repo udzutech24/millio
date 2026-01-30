@@ -39,7 +39,7 @@ final class ModelTypeRegistry: ModelTypeRegistryProtocol {
     private var importers: [String: ModelImporter.Type] = [:]
     private var backupExporters: [String: (ModelContext) throws -> [[String: Any]]] = [:]
     private var backupClearers: [String: (ModelContext) throws -> Void] = [:]
-    private let queue = DispatchQueue(label: "com.millio.modelTypeRegistry", attributes: .concurrent)
+    private let lock = NSLock()
     
     private init() {
         // Регистрируем базовые типы ядра
@@ -48,36 +48,37 @@ final class ModelTypeRegistry: ModelTypeRegistryProtocol {
     }
     
     func register<T: Persistable>(_ type: T.Type, typeName: String) {
-        queue.sync(flags: .barrier) {
-            self.registeredTypes[typeName] = type
-            
-            if self.backupExporters[typeName] == nil {
-                self.backupExporters[typeName] = { context in
-                    let descriptor = FetchDescriptor<T>()
-                    let items = try context.fetch(descriptor)
-                    
-                    var exported: [[String: Any]] = []
-                    exported.reserveCapacity(items.count)
-                    
-                    for item in items {
-                        let data = try item.export()
-                        if var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                            json["_type"] = typeName
-                            exported.append(json)
-                        }
+        lock.lock()
+        defer { lock.unlock() }
+        
+        registeredTypes[typeName] = type
+        
+        if backupExporters[typeName] == nil {
+            backupExporters[typeName] = { context in
+                let descriptor = FetchDescriptor<T>()
+                let items = try context.fetch(descriptor)
+                
+                var exported: [[String: Any]] = []
+                exported.reserveCapacity(items.count)
+                
+                for item in items {
+                    let data = try item.export()
+                    if var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                        json["_type"] = typeName
+                        exported.append(json)
                     }
-                    
-                    return exported
                 }
+                
+                return exported
             }
-            
-            if self.backupClearers[typeName] == nil {
-                self.backupClearers[typeName] = { context in
-                    let descriptor = FetchDescriptor<T>()
-                    let items = try context.fetch(descriptor)
-                    for item in items {
-                        context.delete(item)
-                    }
+        }
+        
+        if backupClearers[typeName] == nil {
+            backupClearers[typeName] = { context in
+                let descriptor = FetchDescriptor<T>()
+                let items = try context.fetch(descriptor)
+                for item in items {
+                    context.delete(item)
                 }
             }
         }
@@ -85,47 +86,45 @@ final class ModelTypeRegistry: ModelTypeRegistryProtocol {
     
     func registerImporter<T: ModelImporter>(_ importer: T.Type) {
         let typeName = importer.importType()
-        // Приводим к базовому типу и сохраняем в словарь напрямую через sync
-        // чтобы избежать проблем с Sendable в async closure
-        queue.sync(flags: .barrier) {
-            self.importers[typeName] = importer as ModelImporter.Type
-        }
+        lock.lock()
+        defer { lock.unlock() }
+        importers[typeName] = importer as ModelImporter.Type
     }
     
     func getExportableTypes() -> [String: any Persistable.Type] {
-        queue.sync {
-            return registeredTypes
-        }
+        lock.lock()
+        defer { lock.unlock() }
+        return registeredTypes
     }
     
     func getImporter(for typeName: String) -> ModelImporter.Type? {
-        queue.sync {
-            return importers[typeName]
-        }
+        lock.lock()
+        defer { lock.unlock() }
+        return importers[typeName]
     }
     
     func registerBackupExporter(_ typeName: String, exporter: @escaping (ModelContext) throws -> [[String: Any]]) {
-        queue.sync(flags: .barrier) {
-            self.backupExporters[typeName] = exporter
-        }
+        lock.lock()
+        defer { lock.unlock() }
+        backupExporters[typeName] = exporter
     }
     
     func registerBackupClearer(_ typeName: String, clearer: @escaping (ModelContext) throws -> Void) {
-        queue.sync(flags: .barrier) {
-            self.backupClearers[typeName] = clearer
-        }
+        lock.lock()
+        defer { lock.unlock() }
+        backupClearers[typeName] = clearer
     }
     
     func getBackupExporter(for typeName: String) -> ((ModelContext) throws -> [[String: Any]])? {
-        queue.sync {
-            return backupExporters[typeName]
-        }
+        lock.lock()
+        defer { lock.unlock() }
+        return backupExporters[typeName]
     }
     
     func getBackupClearer(for typeName: String) -> ((ModelContext) throws -> Void)? {
-        queue.sync {
-            return backupClearers[typeName]
-        }
+        lock.lock()
+        defer { lock.unlock() }
+        return backupClearers[typeName]
     }
     
     /// Получить все зарегистрированные типы как PersistentModel.Type

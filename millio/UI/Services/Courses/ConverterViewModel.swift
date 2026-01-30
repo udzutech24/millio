@@ -596,12 +596,8 @@ final class ConverterViewModel: ViewModelProtocol {
         defer { state.isFetchingRates = false }
         
         do {
-            let url: URL
-            switch state.rateSource {
-            case .erapi:
-                url = URL(string: "https://open.er-api.com/v6/latest/USD")!
-            case .frankfurter:
-                url = URL(string: "https://api.frankfurter.app/latest?from=USD")!
+            guard let url = CurrencyRateService.makeLatestURL(for: state.rateSource) else {
+                throw URLError(.badURL)
             }
             
             let (data, response) = try await URLSession.shared.data(from: url)
