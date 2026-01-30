@@ -21,6 +21,8 @@ final class SettingsManager: SettingsManagerProtocol {
     private let backupEnabledKey = "isBackupEnabled"
     private let encryptionEnabledKey = "isEncryptionEnabled"
     private let dailyReminderEnabledKey = "isDailyReminderEnabled"
+    private let profileDisplayNameKey = "profileDisplayName"
+    private let profileAvatarFilePathKey = "profileAvatarFilePath"
     
     var isBackupEnabled: Bool {
         get {
@@ -50,6 +52,26 @@ final class SettingsManager: SettingsManagerProtocol {
         set {
             UserDefaults.standard.set(newValue, forKey: dailyReminderEnabledKey)
             logger.info("Daily reminder enabled: \(newValue)")
+        }
+    }
+    
+    var profileDisplayName: String {
+        get {
+            UserDefaults.standard.string(forKey: profileDisplayNameKey) ?? "Гость"
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: profileDisplayNameKey)
+            logger.info("Profile display name updated")
+        }
+    }
+    
+    var profileAvatarFilePath: String? {
+        get {
+            UserDefaults.standard.string(forKey: profileAvatarFilePathKey)
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: profileAvatarFilePathKey)
+            logger.info("Profile avatar path updated")
         }
     }
     

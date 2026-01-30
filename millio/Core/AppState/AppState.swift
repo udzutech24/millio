@@ -33,9 +33,15 @@ final class AppState {
         subscriptionStatus == .subscribed || subscriptionStatus == .trial
     }
     
+    // Профиль: имя и путь к аватарке
+    var profileDisplayName: String = "Гость"
+    var profileAvatarPath: String?
+    
     init() {
         self.isBackupEnabled = SettingsManager.shared.isBackupEnabled
         self.isDailyReminderEnabled = SettingsManager.shared.isDailyReminderEnabled
         self.selectedLanguage = LanguageManager.shared.currentLanguage
+        self.profileDisplayName = SettingsManager.shared.profileDisplayName
+        self.profileAvatarPath = SettingsManager.shared.profileAvatarFilePath
     }
 }

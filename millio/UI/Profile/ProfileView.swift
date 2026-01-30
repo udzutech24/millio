@@ -6,15 +6,25 @@
 //
 
 import SwiftUI
+import PhotosUI
 
 struct ProfileView: View {
     @Bindable var router: AppRouter
     @Environment(AppState.self) private var appState
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var showNameEditSheet = false
+    @State private var editedName = ""
     
     private var appVersion: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
         return "\(version) (\(build))"
+    }
+    
+    private var profileAvatarImage: UIImage? {
+        guard let path = appState.profileAvatarPath,
+              FileManager.default.fileExists(atPath: path) else { return nil }
+        return UIImage(contentsOfFile: path)
     }
     
     var body: some View {
@@ -23,17 +33,9 @@ struct ProfileView: View {
             
             ScrollView {
                 VStack(spacing: 24) {
-                    // Profile header
-                    VStack(spacing: 12) {
-                        Image(systemName: "person.circle.fill")
-                            .font(.system(size: 80))
-                            .foregroundStyle(AppColors.textSecondary)
-                        
-                        Text("Профиль")
-                            .font(.system(size: 28, weight: .bold))
-                            .foregroundStyle(AppColors.textPrimary)
-                    }
-                    .padding(.top, 40)
+                    // Блок приветствия и аватарки
+                    profileHeaderBlock
+                        .padding(.top, 16)
                     
                     // Settings section
                     VStack(spacing: 24) {
@@ -197,12 +199,105 @@ struct ProfileView: View {
         }
         .navigationTitle("Профиль")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showNameEditSheet) {
+            nameEditSheet
+        }
+        .onChange(of: selectedPhotoItem) { _, newItem in
+            Task {
+                guard let newItem else { return }
+                if let data = try? await newItem.loadTransferable(type: Data.self) {
+                    _ = ProfileAvatarStorage.saveAvatar(imageData: data)
+                    appState.profileAvatarPath = SettingsManager.shared.profileAvatarFilePath
+                }
+            }
+        }
         .task {
             // Обновляем статус подписки при открытии профиля
             await SubscriptionManager.shared.checkSubscriptionStatus()
             appState.subscriptionStatus = SubscriptionManager.shared.status
             appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
             appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+        }
+    }
+    
+    // MARK: - Profile Header Block
+    
+    private var profileHeaderBlock: some View {
+        HStack(alignment: .center, spacing: 16) {
+            PhotosPicker(
+                selection: $selectedPhotoItem,
+                matching: .images
+            ) {
+                avatarView
+            }
+            .buttonStyle(.plain)
+            
+            Button {
+                editedName = appState.profileDisplayName
+                showNameEditSheet = true
+            } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Привет,")
+                        .font(.system(size: 16))
+                        .foregroundStyle(AppColors.textSecondary)
+                    Text(appState.profileDisplayName)
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundStyle(AppColors.textPrimary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 24)
+    }
+    
+    private var avatarView: some View {
+        let size: CGFloat = 72
+        return Group {
+            if let uiImage = profileAvatarImage {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Image("user")
+                    .resizable()
+                    .scaledToFit()
+                    .padding(16)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.ultraThinMaterial)
+        }
+    }
+    
+    private var nameEditSheet: some View {
+        NavigationStack {
+            ZStack {
+                GradientBackground()
+                VStack(spacing: 20) {
+                    TextField("Имя", text: $editedName)
+                        .textFieldStyle(.roundedBorder)
+                        .padding(.horizontal)
+                    Spacer()
+                }
+                .padding(.top, 24)
+            }
+            .navigationTitle("Имя")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Готово") {
+                        let name = editedName.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let value = name.isEmpty ? "Гость" : name
+                        SettingsManager.shared.profileDisplayName = value
+                        appState.profileDisplayName = value
+                        showNameEditSheet = false
+                    }
+                }
+            }
         }
     }
     
