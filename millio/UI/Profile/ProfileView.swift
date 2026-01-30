@@ -6,13 +6,10 @@
 //
 
 import SwiftUI
-import SwiftData
 
 struct ProfileView: View {
     @Bindable var router: AppRouter
     @Environment(AppState.self) private var appState
-    @Environment(\.modelContainer) private var modelContainer
-    @Environment(\.modelContext) private var modelContext
     
     private var appVersion: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -43,40 +40,35 @@ struct ProfileView: View {
                         // Subscription status
                         subscriptionStatusSection
                         
-                        // Backup settings
                         VStack(spacing: 16) {
                             Section(content: {
-                                Toggle("Резервное копирование", isOn: Binding(
-                                    get: { appState.isBackupEnabled },
-                                    set: { newValue in
-                                        appState.isBackupEnabled = newValue
-                                        SettingsManager.shared.isBackupEnabled = newValue
+                                NavigationLink {
+                                    BackupManagementView(router: router)
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Text("Резервное копирование")
+                                            .foregroundStyle(AppColors.textPrimary)
                                         
-                                        if newValue {
-                                            Task {
-                                                // Проверяем доступность iCloud при включении тоггла
-                                                let cloudStore = CloudBackupStore()
-                                                appState.isICloudAvailable = await cloudStore.isAvailable()
-                                                
-                                                // Если iCloud доступен, получаем информацию о последнем backup
-                                                if appState.isICloudAvailable, let container = modelContainer {
-                                                    let dataRepository = DataRepository(
-                                                        modelContext: modelContext,
-                                                        modelContainer: container
-                                                    )
-                                                    let backupManager = BackupManager(dataRepository: dataRepository)
-                                                    if let backupInfo = await backupManager.lastBackupInfo() {
-                                                        appState.lastBackupDate = backupInfo.date
-                                                    }
-                                                }
+                                        Spacer()
+                                        
+                                        if appState.isBackupEnabled {
+                                            if let backupDate = appState.lastBackupDate {
+                                                Text(backupDate.formatted(date: .abbreviated, time: .shortened))
+                                                    .foregroundStyle(AppColors.textTertiary)
+                                            } else {
+                                                Text("Включено")
+                                                    .foregroundStyle(AppColors.textTertiary)
                                             }
                                         } else {
-                                            appState.isICloudAvailable = false
-                                            appState.lastBackupDate = nil
+                                            Text("Выключено")
+                                                .foregroundStyle(AppColors.textTertiary)
                                         }
+                                        
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundStyle(AppColors.textTertiary)
                                     }
-                                ))
-                                .tint(.blue)
+                                }
                                 
                                 Toggle("Ежедневные напоминания", isOn: Binding(
                                     get: { appState.isDailyReminderEnabled },
@@ -90,67 +82,6 @@ struct ProfileView: View {
                                     }
                                 ))
                                 .tint(.blue)
-                                
-                                if appState.isBackupEnabled {
-                                    if let backupDate = appState.lastBackupDate {
-                                        VStack(spacing: 12) {
-                                            HStack {
-                                                Text("Последний backup")
-                                                    .foregroundStyle(AppColors.textPrimary)
-                                                Spacer()
-                                                Text(backupDate.formatted(date: .abbreviated, time: .shortened))
-                                                    .foregroundStyle(AppColors.textTertiary)
-                                            }
-                                            
-                                            // Кнопка восстановления, если найдена резервная копия
-                                            NavigationLink {
-                                                RestoreView(appState: appState, router: router)
-                                            } label: {
-                                                HStack {
-                                                    Image(systemName: "icloud.and.arrow.down.fill")
-                                                        .font(.system(size: 16, weight: .semibold))
-                                                    Text("Восстановить данные")
-                                                        .font(.system(size: 16, weight: .semibold))
-                                                    Spacer()
-                                                    Image(systemName: "chevron.right")
-                                                        .font(.system(size: 12, weight: .semibold))
-                                                }
-                                                .foregroundStyle(
-                                                    LinearGradient(
-                                                        colors: AppColors.incomeGradient,
-                                                        startPoint: .leading,
-                                                        endPoint: .trailing
-                                                    )
-                                                )
-                                                .padding(.vertical, 12)
-                                                .padding(.horizontal, 16)
-                                                .background {
-                                                    RoundedRectangle(cornerRadius: 12)
-                                                        .fill(.ultraThinMaterial)
-                                                        .overlay {
-                                                            RoundedRectangle(cornerRadius: 12)
-                                                                .stroke(
-                                                                    LinearGradient(
-                                                                        colors: AppColors.incomeGradient,
-                                                                        startPoint: .leading,
-                                                                        endPoint: .trailing
-                                                                    ),
-                                                                    lineWidth: 1
-                                                                )
-                                                        }
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        HStack {
-                                            Text("Статус")
-                                                .foregroundStyle(AppColors.textPrimary)
-                                            Spacer()
-                                            Text(appState.isICloudAvailable ? "iCloud доступен" : "iCloud недоступен")
-                                                .foregroundStyle(AppColors.textTertiary)
-                                        }
-                                    }
-                                }
                             }, header: {
                                 Text("Настройки")
                                     .font(.system(size: 18, weight: .semibold))
@@ -370,4 +301,3 @@ struct ProfileView: View {
             .environment(AppState())
     }
 }
-

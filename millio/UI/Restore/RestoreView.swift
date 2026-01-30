@@ -12,6 +12,7 @@ struct RestoreView: View {
     @Bindable var router: AppRouter
     @Environment(\.modelContext) private var modelContext
     @Environment(\.modelContainer) private var modelContainer
+    @Environment(\.dismiss) private var dismiss
     @State private var isRestoring = false
     @State private var restoreError: AppError?
     @State private var showSkipConfirmation = false
@@ -82,6 +83,7 @@ struct RestoreView: View {
         ) {
             Button("Пропустить", role: .destructive) {
                 appState.lifecycle = .ready
+                dismiss()
             }
             Button("Отмена", role: .cancel) {}
         } message: {
@@ -113,6 +115,7 @@ struct RestoreView: View {
                 gradientColors: AppColors.incomeGradient
             ) {
                 appState.lifecycle = .ready
+                dismiss()
             }
         }
         .padding(.horizontal, 24)
@@ -256,6 +259,7 @@ struct RestoreView: View {
                 gradientColors: AppColors.incomeGradient
             ) {
                 appState.lifecycle = .ready
+                dismiss()
             }
         }
         .padding(.horizontal, 24)
@@ -279,6 +283,7 @@ struct RestoreView: View {
                 await MainActor.run {
                     isRestoring = false
                     appState.lifecycle = .ready
+                    dismiss()
                 }
             } catch let error as AppError {
                 await MainActor.run {

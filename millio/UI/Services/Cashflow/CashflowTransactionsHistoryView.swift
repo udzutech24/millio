@@ -69,7 +69,6 @@ private struct CashflowTransactionRow: View {
     
     var body: some View {
         Button {
-            viewModel.handle(.editTransaction(transaction))
         } label: {
             HStack(spacing: 16) {
                 // Иконка типа транзакции

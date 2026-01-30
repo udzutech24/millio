@@ -6,12 +6,20 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct ActionButton: View {
     let title: String
     let icon: String
     let gradientColors: [Color]
     let action: () -> Void
+    
+    private var iconImage: Image {
+        if UIImage(systemName: icon) != nil {
+            return Image(systemName: icon)
+        }
+        return Image(icon)
+    }
     
     var body: some View {
         Button(action: action) {
@@ -35,7 +43,7 @@ struct ActionButton: View {
                         .frame(width: 48, height: 48)
                         
                     
-                    Image(icon)
+                    iconImage
                         .renderingMode(.template)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
@@ -73,5 +81,4 @@ struct ActionButton: View {
         .buttonStyle(.plain)
     }
 }
-
 
