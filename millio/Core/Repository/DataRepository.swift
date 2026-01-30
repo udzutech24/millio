@@ -136,18 +136,12 @@ final class DataRepository: DataRepositoryProtocol {
             throw AppError.restoreFailed("Неизвестные типы моделей в backup: \(types)")
         }
         
-        typedModels.sort { $0.priority < $1.priority }
-        
-        var currentPriority: Int? = nil
+        typedModels.sort { lhs, rhs in
+            if lhs.priority != rhs.priority { return lhs.priority < rhs.priority }
+            return lhs.typeName < rhs.typeName
+        }
         
         for item in typedModels {
-            if currentPriority != item.priority {
-                if currentPriority != nil {
-                    try context.save()
-                }
-                currentPriority = item.priority
-            }
-            
             try item.importer.`import`(from: item.data, context: context)
         }
         

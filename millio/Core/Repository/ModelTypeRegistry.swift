@@ -41,10 +41,37 @@ final class ModelTypeRegistry: ModelTypeRegistryProtocol {
     private var backupClearers: [String: (ModelContext) throws -> Void] = [:]
     private let lock = NSLock()
     
+    struct State {
+        let registeredTypes: [String: any Persistable.Type]
+        let importers: [String: ModelImporter.Type]
+        let backupExporters: [String: (ModelContext) throws -> [[String: Any]]]
+        let backupClearers: [String: (ModelContext) throws -> Void]
+    }
+    
     private init() {
         // Регистрируем базовые типы ядра
         register(Item.self, typeName: "Item")
         registerImporter(ItemImporter.self)
+    }
+    
+    func captureState() -> State {
+        lock.lock()
+        defer { lock.unlock() }
+        return State(
+            registeredTypes: registeredTypes,
+            importers: importers,
+            backupExporters: backupExporters,
+            backupClearers: backupClearers
+        )
+    }
+    
+    func restoreState(_ state: State) {
+        lock.lock()
+        defer { lock.unlock() }
+        registeredTypes = state.registeredTypes
+        importers = state.importers
+        backupExporters = state.backupExporters
+        backupClearers = state.backupClearers
     }
     
     func register<T: Persistable>(_ type: T.Type, typeName: String) {
@@ -63,10 +90,7 @@ final class ModelTypeRegistry: ModelTypeRegistryProtocol {
                 
                 for item in items {
                     let data = try item.export()
-                    let object = try JSONSerialization.jsonObject(with: data)
-                    guard var json = object as? [String: Any] else {
-                        throw AppError.backupFailed("Экспорт модели '\(typeName)' вернул неожиданный формат")
-                    }
+                    var json = try BackupJSON.decodeExportedDict(data, typeName: typeName)
                     json["_type"] = typeName
                     exported.append(json)
                 }

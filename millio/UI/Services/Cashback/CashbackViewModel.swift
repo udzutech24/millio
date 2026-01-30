@@ -129,17 +129,9 @@ final class CashbackViewModel: ViewModelProtocol {
     
     /// Очищает несуществующие cardIDs из кешбэков
     private func cleanInvalidCardIDs(in cashbacks: [Cashback]) {
-        // Создаем маппинг cardUniqueID -> Card для стабильной идентификации
         let cardUniqueIDMap: [String: Card] = Dictionary(uniqueKeysWithValues: state.availableCards.map { card in
             (card.cardUniqueID, card)
         })
-        
-        // Также создаем маппинг старых persistentModelID -> cardUniqueID для миграции
-        var oldIDToUniqueID: [String: String] = [:]
-        for card in state.availableCards {
-            let oldID = String(describing: card.persistentModelID)
-            oldIDToUniqueID[oldID] = card.cardUniqueID
-        }
         
         AppLogger.log(.info, category: "Cashback", "Available \(state.availableCards.count) cards with unique IDs")
         
@@ -148,20 +140,7 @@ final class CashbackViewModel: ViewModelProtocol {
         for cashback in cashbacks {
             let originalCount = cashback.cardIDs.count
             let validCardIDs = cashback.cardIDs.compactMap { cardIDString -> String? in
-                // Если это уже cardUniqueID, проверяем напрямую
                 if let card = cardUniqueIDMap[cardIDString] {
-                    return card.cardUniqueID
-                }
-                
-                // Если это старый формат (persistentModelID), конвертируем в cardUniqueID
-                if let uniqueID = oldIDToUniqueID[cardIDString] {
-                    AppLogger.log(.info, category: "Cashback", "Migrating old cardID '\(cardIDString.prefix(50))...' to uniqueID '\(uniqueID)'")
-                    return uniqueID
-                }
-                
-                // Пробуем найти по прямому сравнению (на случай если формат немного отличается)
-                if let card = state.availableCards.first(where: { String(describing: $0.persistentModelID) == cardIDString }) {
-                    AppLogger.log(.info, category: "Cashback", "Found card by direct comparison, using uniqueID")
                     return card.cardUniqueID
                 }
                 
@@ -190,9 +169,9 @@ final class CashbackViewModel: ViewModelProtocol {
     }
     
     private func loadCards() {
-        let oldCardIDs = Set(state.availableCards.map { String(describing: $0.persistentModelID) })
+        let oldCardIDs = Set(state.availableCards.map(\.cardUniqueID))
         state.availableCards = CardManager.shared.getAllCards()
-        let newCardIDs = Set(state.availableCards.map { String(describing: $0.persistentModelID) })
+        let newCardIDs = Set(state.availableCards.map(\.cardUniqueID))
         
         // Очищаем несуществующие cardIDs если:
         // 1. Карты действительно удалены (список уменьшился)
@@ -235,13 +214,8 @@ final class CashbackViewModel: ViewModelProtocol {
         // Используем cardUniqueID для стабильной идентификации
         let availableUniqueIDs = Set(state.availableCards.map { $0.cardUniqueID })
         let validCardIDs = cardIDs.compactMap { cardIDString -> String? in
-            // Если это уже uniqueID, проверяем напрямую
             if availableUniqueIDs.contains(cardIDString) {
                 return cardIDString
-            }
-            // Если это старый формат (persistentModelID), конвертируем
-            if let card = state.availableCards.first(where: { String(describing: $0.persistentModelID) == cardIDString }) {
-                return card.cardUniqueID
             }
             return nil
         }
@@ -276,10 +250,7 @@ final class CashbackViewModel: ViewModelProtocol {
     /// Получить карту по ID
     func getCard(byID cardID: String?) -> Card? {
         guard let cardID = cardID else { return nil }
-        // Ищем карту по cardUniqueID (новый формат) или persistentModelID (старый формат)
-        return state.availableCards.first { card in
-            card.cardUniqueID == cardID || String(describing: card.persistentModelID) == cardID
-        }
+        return state.availableCards.first(where: { $0.cardUniqueID == cardID })
     }
     
     /// Получить карты, которые можно использовать для получения кешбэка

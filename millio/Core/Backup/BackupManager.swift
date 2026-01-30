@@ -179,7 +179,7 @@ actor BackupManager: BackupManagerProtocol {
             
             var backupData: Data
             
-            if self.looksLikeEnvelope(downloadedData) {
+            if BackupEnvelope.looksLikeEnvelope(downloadedData) {
                 let (header, payload): (BackupEnvelopeHeader, Data)
                 do {
                     (header, payload) = try BackupEnvelope.unpack(downloadedData)
@@ -270,18 +270,6 @@ actor BackupManager: BackupManagerProtocol {
             CrashReporting.record(error: error)
             throw error
         }
-    }
-
-    private func looksLikeEnvelope(_ data: Data) -> Bool {
-        guard data.count >= 5 else { return false }
-        let headerLength: Int = data.prefix(4).withUnsafeBytes { rawBufferPointer in
-            let value = rawBufferPointer.load(as: UInt32.self)
-            return Int(UInt32(bigEndian: value))
-        }
-        guard headerLength > 1, headerLength <= data.count - 4 else { return false }
-        let headerStartIndex = data.index(data.startIndex, offsetBy: 4)
-        let firstHeaderByte = data[headerStartIndex]
-        return firstHeaderByte == UInt8(ascii: "{")
     }
     
     func lastBackupInfo() async -> BackupInfo? {

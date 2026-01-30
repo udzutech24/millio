@@ -13,6 +13,8 @@ import CommonCrypto
 /// Ключ derive'ится через PBKDF2(HMAC-SHA256) + random salt, далее шифруем AES-GCM.
 struct PassphraseBackupEncryption {
     static let defaultIterations = 120_000
+    static let minIterations = 10_000
+    static let maxIterations = 1_000_000
     
     static func encrypt(_ data: Data, passphrase: String, iterations: Int = defaultIterations) throws -> (encrypted: Data, kdf: BackupKDFInfo) {
         let normalizedPassphrase = passphrase.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -47,7 +49,8 @@ struct PassphraseBackupEncryption {
         
         guard kdf.algorithm == "pbkdf2-hmac-sha256",
               let salt = Data(base64Encoded: kdf.saltBase64),
-              kdf.iterations > 0 else {
+              kdf.iterations >= minIterations,
+              kdf.iterations <= maxIterations else {
             throw AppError.backupCorrupted
         }
         

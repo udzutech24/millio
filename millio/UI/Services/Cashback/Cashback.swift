@@ -98,16 +98,12 @@ final class Cashback: Persistable {
     // MARK: - Exportable
     
     func export() throws -> Data {
-        // Конвертируем persistentModelID в cardUniqueID для восстановления связей при restore
-        // Для этого нужно получить карты из ModelContext
-        // Но так как мы не имеем доступа к ModelContext здесь, сохраняем как есть
-        // и конвертируем в DataRepository при экспорте
         let dict: [String: Any] = [
             "type": "Cashback",
             "name": name,
             "categoryRaw": categoryRaw,
             "percentage": percentage,
-            "cardIDs": cardIDs, // Это persistentModelID, конвертируем в cardUniqueID в DataRepository
+            "cardIDs": cardIDs,
             "createdAt": createdAt.timeIntervalSince1970,
             "updatedAt": updatedAt.timeIntervalSince1970
         ]

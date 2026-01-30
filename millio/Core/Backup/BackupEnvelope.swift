@@ -44,10 +44,8 @@ enum BackupEnvelope {
     static func unpack(_ data: Data) throws -> (BackupEnvelopeHeader, Data) {
         guard data.count >= 4 else { throw AppError.backupCorrupted }
         
-        let headerLength: Int = data.prefix(4).withUnsafeBytes { rawBufferPointer in
-            let value = rawBufferPointer.load(as: UInt32.self)
-            return Int(UInt32(bigEndian: value))
-        }
+        guard let headerLengthU32 = data.readUInt32BE(at: 0) else { throw AppError.backupCorrupted }
+        let headerLength = Int(headerLengthU32)
         
         guard headerLength > 0, data.count >= 4 + headerLength else { throw AppError.backupCorrupted }
         
@@ -55,5 +53,13 @@ enum BackupEnvelope {
         let header = try JSONDecoder().decode(BackupEnvelopeHeader.self, from: headerData)
         let payload = data.suffix(from: 4 + headerLength)
         return (header, payload)
+    }
+    
+    static func looksLikeEnvelope(_ data: Data) -> Bool {
+        guard data.count >= 5 else { return false }
+        guard let headerLengthU32 = data.readUInt32BE(at: 0) else { return false }
+        let headerLength = Int(headerLengthU32)
+        guard headerLength > 1, headerLength <= data.count - 4 else { return false }
+        return data[data.startIndex.advanced(by: 4)] == UInt8(ascii: "{")
     }
 }

@@ -19,16 +19,6 @@ final class BadExportModel: Persistable {
 @Suite(.serialized)
 @MainActor
 struct BackupExporterValidationTests {
-    private static var badExportModelDefaultExporter: ((ModelContext) throws -> [[String: Any]])?
-    
-    private static let didRegisterBadExportModel: Void = {
-        ModelTypeRegistry.shared.register(BadExportModel.self, typeName: "BadExportModel")
-        badExportModelDefaultExporter = ModelTypeRegistry.shared.getBackupExporter(for: "BadExportModel")
-        
-        ModelTypeRegistry.shared.registerBackupExporter("BadExportModel") { _ in [] }
-        ModelTypeRegistry.shared.registerBackupClearer("BadExportModel") { _ in }
-    }()
-    
     private func makeContainer() -> ModelContainer {
         let schema = Schema([Item.self, BadExportModel.self])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
@@ -37,29 +27,18 @@ struct BackupExporterValidationTests {
     
     @Test("Export fails when model export() returns non-dictionary JSON")
     func testNonDictExportFailsControlled() throws {
-        _ = Self.didRegisterBadExportModel
+        let snapshot = ModelTypeRegistry.shared.captureState()
+        defer { ModelTypeRegistry.shared.restoreState(snapshot) }
+        
+        ModelTypeRegistry.shared.register(BadExportModel.self, typeName: "BadExportModel")
         
         let container = makeContainer()
         let context = container.mainContext
         context.insert(BadExportModel())
         try context.save()
         
-        let previousExporter = ModelTypeRegistry.shared.getBackupExporter(for: "BadExportModel")
-        defer {
-            ModelTypeRegistry.shared.registerBackupExporter("BadExportModel") { _ in [] }
-            if let previousExporter {
-                ModelTypeRegistry.shared.registerBackupExporter("BadExportModel", exporter: previousExporter)
-            }
-        }
-        
-        guard let defaultExporter = Self.badExportModelDefaultExporter else {
-            throw AppError.backupFailed("BadExportModel exporter not registered")
-        }
-        ModelTypeRegistry.shared.registerBackupExporter("BadExportModel", exporter: defaultExporter)
-        
         #expect(throws: AppError.backupFailed("Экспорт модели 'BadExportModel' вернул неожиданный формат")) {
             _ = try DataRepository.exportAllData(from: context)
         }
     }
 }
-

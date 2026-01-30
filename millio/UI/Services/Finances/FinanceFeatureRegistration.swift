@@ -24,7 +24,7 @@ enum FinanceFeatureRegistration {
             
             for account in accounts {
                 let data = try account.export()
-                guard var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
+                var json = try BackupJSON.decodeExportedDict(data, typeName: "FinanceAccount")
                 
                 if let group = account.group {
                     json["groupUniqueID"] = group.groupUniqueID

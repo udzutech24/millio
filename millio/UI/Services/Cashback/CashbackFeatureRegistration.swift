@@ -17,27 +17,12 @@ struct CashbackFeatureRegistration {
             let cashbackDescriptor = FetchDescriptor<Cashback>()
             let cashbacks = try context.fetch(cashbackDescriptor)
             
-            let cardDescriptor = FetchDescriptor<Card>()
-            let cards = try context.fetch(cardDescriptor)
-            var cardIDMapping: [String: String] = [:]
-            for card in cards {
-                cardIDMapping[String(describing: card.persistentModelID)] = card.cardUniqueID
-            }
-            
             var exported: [[String: Any]] = []
             exported.reserveCapacity(cashbacks.count)
             
             for cashback in cashbacks {
                 let data = try cashback.export()
-                guard var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
-                
-                if let cardIDs = json["cardIDs"] as? [String] {
-                    let converted = cardIDs.map { cardIDMapping[$0] ?? $0 }
-                    json["cardIDs"] = converted
-                    if converted != cardIDs {
-                        json["_cardIDs_legacy"] = cardIDs
-                    }
-                }
+                var json = try BackupJSON.decodeExportedDict(data, typeName: "Cashback")
                 
                 json["_type"] = "Cashback"
                 exported.append(json)
@@ -64,34 +49,24 @@ struct CashbackImporter: ModelImporter {
         guard let name = data["name"] as? String,
               let categoryRaw = data["categoryRaw"] as? String,
               let percentage = data["percentage"] as? Double,
+              let cardIDs = data["cardIDs"] as? [String],
               let createdAt = data["createdAt"] as? TimeInterval,
               let updatedAt = data["updatedAt"] as? TimeInterval else {
             throw AppError.backupCorrupted
         }
         
-        // Поддержка обратной совместимости: если есть cardID (старый формат), конвертируем в массив
-        var cardIDs: [String] = []
-        if let cardIDsArray = data["cardIDs"] as? [String] {
-            cardIDs = cardIDsArray
-        } else if let cardID = data["cardID"] as? String {
-            // Обратная совместимость: старый формат с одной картой
-            cardIDs = [cardID]
-        }
-        
         let cardDescriptor = FetchDescriptor<Card>()
         let cards = (try? context.fetch(cardDescriptor)) ?? []
-        var cardUniqueIDToPersistentID: [String: String] = [:]
-        for card in cards {
-            cardUniqueIDToPersistentID[card.cardUniqueID] = String(describing: card.persistentModelID)
+        let validUniqueIDs = Set(cards.map(\.cardUniqueID))
+        guard cardIDs.allSatisfy({ validUniqueIDs.contains($0) }) else {
+            throw AppError.backupCorrupted
         }
-        
-        let resolvedCardIDs = cardIDs.map { cardUniqueIDToPersistentID[$0] ?? $0 }
         
         let cashback = Cashback(
             name: name,
             category: CashbackCategory(rawValue: categoryRaw) ?? .other,
             percentage: percentage,
-            cardIDs: resolvedCardIDs
+            cardIDs: cardIDs
         )
         
         // Восстанавливаем даты
