@@ -8,10 +8,12 @@
 - **AppSchema + ModelTypeRegistry** — динамическая схема SwiftData и регистрация моделей
 - **Backup/Restore** через CloudKit (`Core/Backup`)
 - **Backup metadata/versioning** (`BackupMetadata`, `BackupVersion`, `BackupInfo`)
+- **Fail-fast backup импорт/экспорт** (валидируется metadata/schemaVersion/modelCount, неизвестные `_type` считаются ошибкой)
 - **Опциональное шифрование backup**:
   - `aesgcm-keychain` (device-only, ключ в Keychain)
   - `aesgcm-passphrase` (PBKDF2 + парольная фраза, переносимо)
 - **Сжатие backup** (Compression LZFSE)
+- **CrashReporting (Release)** — non-fatal ошибки backup/restore отправляются в Crashlytics
 - **Retry механизм** для сетевых операций (`RetryPolicy`, `withRetry`)
 - **ErrorRecoveryManager** со стратегиями восстановления
 - **EventBus** для слабой связанности

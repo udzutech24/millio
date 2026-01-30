@@ -26,6 +26,7 @@
 - `CrashReporting.record(error:)` — отправить non-fatal ошибку.
 
 Также `.warning/.error` сообщения из `AppLogger` автоматически дублируются в Crashlytics.
+Ошибки backup/restore (например, `AppError.restoreFailed`) также отправляются как non-fatal через `CrashReporting.record(error:)`.
 
 ## Символикация (dSYM) и деплой
 Crashlytics требует dSYM для читаемых stack traces. Для этого добавлен Build Phase “Firebase Crashlytics” со скриптом `Crashlytics/run`.
@@ -46,4 +47,3 @@ Crashlytics требует dSYM для читаемых stack traces. Для э�
 ## Примечания по безопасности
 - Не отправляйте в custom logs/keys PII (персональные данные, финансовые значения, токены, ключи).
 - Логи уровня `.warning/.error` помечены как private для OSLog и должны быть очищены от PII до логирования.
-

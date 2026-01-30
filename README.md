@@ -10,7 +10,6 @@ Millio — iOS-приложение с локальным хранением д�
 - `docs/CORE_STATUS.md` — текущее состояние и компромиссы
 - `docs/BACKUP_RESTORE_SCHEMA.md` — backup/restore
 - `docs/FINANCE_DATA_STORAGE.md` — хранение данных по финансам
-- `docs/FINANCE_HISTORY_PLAN.md` — план исторических курсов и архивных счетов
 - `CLAUDE.md` — проектные правила для ассистента
 
 ## Ключевые принципы
@@ -32,6 +31,8 @@ Millio — iOS-приложение с локальным хранением д�
 - Шифрование backup поддерживает **keychain-mode** (device-only) и **passphrase-mode** (переносимо); режим выбирается в экране управления backup
 - В `RestoreView` есть поле для ввода парольной фразы (нужно для passphrase-mode)
 - Restore полностью заменяет локальные данные (snapshot)
+- В Release ошибки backup/restore отправляются как non-fatal в Crashlytics через `CrashReporting.record(error:)`
+- Сжатие LZFSE применяется только если уменьшает размер; ошибки сжатия/упаковки считаются критическими для операции backup/restore
 
 Подробнее: `docs/BACKUP_RESTORE_SCHEMA.md`.
 
