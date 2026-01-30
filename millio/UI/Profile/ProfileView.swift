@@ -32,15 +32,16 @@ struct ProfileView: View {
             GradientBackground()
             
             ScrollView {
-                VStack(spacing: 24) {
+                VStack(spacing: 20) {
                     // Блок приветствия и аватарки
                     profileHeaderBlock
                         .padding(.top, 16)
                     
+                    // Premium блок
+                    premiumSubscriptionBlock
+
                     // Settings section
-                    VStack(spacing: 24) {
-                        // Subscription status
-                        subscriptionStatusSection
+                    VStack(spacing: 20) {
                         
                         VStack(spacing: 16) {
                             Section(content: {
@@ -301,84 +302,80 @@ struct ProfileView: View {
         }
     }
     
-    // MARK: - Subscription Status Section
-    
-    private var subscriptionStatusSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Подписка")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-                
+    // MARK: - Premium Subscription Block
+
+    private var premiumSubscriptionBlock: some View {
+        Button {
+            router.push(.subscription)
+        } label: {
+            HStack(spacing: 0) {
                 Spacer()
-                
-                if appState.isPro {
-                    HStack(spacing: 6) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 16))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: AppColors.incomeGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                        Text(appState.isTrialActive ? "Пробный период" : "PRO")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: AppColors.incomeGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                    }
-                } else {
-                    Text("Обычная")
-                        .font(.system(size: 14, weight: .medium))
+
+                // Текст справа
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Premium")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+
+                    Text("Расширенные функции и поддержка")
+                        .font(.system(size: 12))
                         .foregroundStyle(AppColors.textSecondary)
-                }
-            }
-            
-            if appState.isPro, let expirationDate = appState.subscriptionExpirationDate {
-                Text("Действует до: \(formatDate(expirationDate))")
-                    .font(.system(size: 14))
-                    .foregroundStyle(AppColors.textSecondary)
-            }
-            
-            Button {
-                router.push(.subscription)
-            } label: {
-                Text(appState.isPro ? "Управление подпиской" : "Оформить PRO")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(.ultraThinMaterial)
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: appState.isPro ? AppColors.incomeGradient : [AppColors.textPrimary.opacity(0.3)],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        ),
-                                        lineWidth: 1.5
-                                    )
-                            }
+
+                    HStack(spacing: 4) {
+                        Text("Подробнее")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(AppColors.brandPrimary)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AppColors.brandPrimary)
                     }
+                    .padding(.top, 4)
+                }
+                .padding(.trailing, 24)
             }
-            .buttonStyle(.plain)
+            .frame(height: 90)
+            .background {
+                // Шум (noise effect)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(.ultraThinMaterial)
+            }
+            .background {
+                // Градиентный фон
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: AppColors.premiumGradient,
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .opacity(0.8)
+            }
+            .overlay {
+                // Градиентная рамка
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: AppColors.premiumGradient,
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        lineWidth: 1
+                    )
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(alignment: .leading) {
+                // Корона выезжает за блок влево
+                Image("crown")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 100, height: 100)
+                    .offset(x: -50)
+            }
         }
-        .padding(.vertical, 20)
-        .padding(.horizontal, 24)
-        .background {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(.ultraThinMaterial)
-        }
-        .padding(.horizontal, 24)
+        .buttonStyle(.plain)
+        .padding(.leading, 70)
+        .padding(.trailing, 20)
     }
     
     private func formatDate(_ date: Date) -> String {

@@ -111,8 +111,16 @@ enum AppColors {
     /// Тёмный синий (RGB 22, 21, 67)
     static let accentDarkBlue = Color(red: 22/255.0, green: 21/255.0, blue: 67/255.0)
     
-    // MARK: - UI Elements
+    /// Brand primary (RGB 104, 165, 255)
+    static let brandPrimary = Color(red: 104/255.0, green: 165/255.0, blue: 255/255.0)
     
+    // MARK: - Premium
+
+    /// Градиент для блока Premium
+    static let premiumGradient = [Color(hex: "0081e7"), Color(hex: "bd00e7")]
+
+    // MARK: - UI Elements
+
     /// Цвет для иконок в кнопках действий (белый)
     static let iconColor = Color.white
     
