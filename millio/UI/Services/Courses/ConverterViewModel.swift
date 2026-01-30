@@ -445,8 +445,12 @@ final class ConverterViewModel: ViewModelProtocol {
                 // Если последний символ - "0" и перед ним оператор или начало выражения
                 if lastChar == "0" {
                     // Проверяем, что это действительно отдельный "0", а не часть числа
-                    let beforeLast = state.expressionText.count > 1 ? state.expressionText[state.expressionText.index(state.expressionText.endIndex, offsetBy: -2)] : nil
-                    if beforeLast == nil || ["+", "-", "*", "/", "="].contains(String(beforeLast!)) {
+                    let beforeLast = state.expressionText.count > 1
+                    ? state.expressionText[state.expressionText.index(state.expressionText.endIndex, offsetBy: -2)]
+                    : nil
+                    let operators: Set<Character> = ["+", "-", "*", "/", "="]
+                    let shouldReplaceZero = beforeLast.map { operators.contains($0) } ?? true
+                    if shouldReplaceZero {
                         state.expressionText.removeLast()
                         state.expressionText.append(s)
                     } else {

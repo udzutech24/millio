@@ -102,11 +102,13 @@ struct PassphraseBackupEncryption {
     }
 }
 
-private extension Data {
+extension Data {
     static func randomBytes(count: Int) throws -> Data {
+        guard count > 0 else { return Data() }
         var data = Data(count: count)
         let status = data.withUnsafeMutableBytes { bytes in
-            SecRandomCopyBytes(kSecRandomDefault, count, bytes.baseAddress!)
+            guard let baseAddress = bytes.baseAddress else { return errSecParam }
+            return SecRandomCopyBytes(kSecRandomDefault, count, baseAddress)
         }
         guard status == errSecSuccess else {
             throw AppError.backupFailed("Не удалось сгенерировать случайные байты для backup")

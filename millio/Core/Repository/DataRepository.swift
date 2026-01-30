@@ -12,18 +12,32 @@ protocol DataRepositoryProtocol {
     func exportAllData() throws -> Data
     func importAllData(_ data: Data) throws
     func clearAllData() throws
+    
+    func exportAllDataAsync() async throws -> Data
+    func importAllDataAsync(_ data: Data) async throws
+    func clearAllDataAsync() async throws
 }
 
 final class DataRepository: DataRepositoryProtocol {
     private let modelContext: ModelContext
     private let modelContainer: ModelContainer
+    private let worker: DataRepositoryWorker
     
     init(modelContext: ModelContext, modelContainer: ModelContainer) {
         self.modelContext = modelContext
         self.modelContainer = modelContainer
+        self.worker = DataRepositoryWorker(modelContainer: modelContainer)
     }
     
     func exportAllData() throws -> Data {
+        try Self.exportAllData(from: modelContext)
+    }
+    
+    func exportAllDataAsync() async throws -> Data {
+        try await worker.exportAllData()
+    }
+    
+    nonisolated static func exportAllData(from context: ModelContext) throws -> Data {
         let metadata = BackupMetadata(
             version: .current,
             timestamp: Date(),
@@ -37,7 +51,7 @@ final class DataRepository: DataRepositoryProtocol {
         
         for typeName in typeNames {
             guard let exporter = ModelTypeRegistry.shared.getBackupExporter(for: typeName) else { continue }
-            modelsData.append(contentsOf: try exporter(modelContext))
+            modelsData.append(contentsOf: try exporter(context))
         }
         
         // Обновляем metadata с реальным количеством моделей
@@ -56,13 +70,21 @@ final class DataRepository: DataRepositoryProtocol {
         return try JSONSerialization.data(withJSONObject: exportDict, options: .prettyPrinted)
     }
     
-    private func metadataToDict(_ metadata: BackupMetadata) throws -> [String: Any] {
+    nonisolated static func metadataToDict(_ metadata: BackupMetadata) throws -> [String: Any] {
         let encoder = JSONEncoder()
         let data = try encoder.encode(metadata)
         return try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
     }
     
     func importAllData(_ data: Data) throws {
+        try Self.importAllData(data, into: modelContext)
+    }
+    
+    func importAllDataAsync(_ data: Data) async throws {
+        try await worker.importAllData(data)
+    }
+    
+    nonisolated static func importAllData(_ data: Data, into context: ModelContext) throws {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let modelsData = json["models"] as? [[String: Any]] else {
             throw AppError.backupCorrupted
@@ -93,18 +115,26 @@ final class DataRepository: DataRepositoryProtocol {
         for item in typedModels {
             if currentPriority != item.priority {
                 if currentPriority != nil {
-                    try modelContext.save()
+                    try context.save()
                 }
                 currentPriority = item.priority
             }
             
-            try item.importer.`import`(from: item.data, context: modelContext)
+            try item.importer.`import`(from: item.data, context: context)
         }
         
-        try modelContext.save()
+        try context.save()
     }
     
     func clearAllData() throws {
+        try Self.clearAllData(in: modelContext)
+    }
+    
+    func clearAllDataAsync() async throws {
+        try await worker.clearAllData()
+    }
+    
+    nonisolated static func clearAllData(in context: ModelContext) throws {
         let registeredTypes = ModelTypeRegistry.shared.getExportableTypes()
         let typeNames = registeredTypes.keys.sorted { lhs, rhs in
             let lhsPriority = ModelTypeRegistry.shared.getImporter(for: lhs)?.importPriority ?? 100
@@ -117,9 +147,31 @@ final class DataRepository: DataRepositoryProtocol {
         
         for typeName in typeNames {
             guard let clearer = ModelTypeRegistry.shared.getBackupClearer(for: typeName) else { continue }
-            try clearer(modelContext)
+            try clearer(context)
         }
         
-        try modelContext.save()
+        try context.save()
+    }
+}
+
+actor DataRepositoryWorker {
+    private let modelContainer: ModelContainer
+    private let modelContext: ModelContext
+    
+    init(modelContainer: ModelContainer) {
+        self.modelContainer = modelContainer
+        self.modelContext = ModelContext(modelContainer)
+    }
+    
+    func exportAllData() throws -> Data {
+        try DataRepository.exportAllData(from: modelContext)
+    }
+    
+    func importAllData(_ data: Data) throws {
+        try DataRepository.importAllData(data, into: modelContext)
+    }
+    
+    func clearAllData() throws {
+        try DataRepository.clearAllData(in: modelContext)
     }
 }

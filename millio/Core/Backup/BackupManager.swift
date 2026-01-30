@@ -77,9 +77,7 @@ actor BackupManager: BackupManagerProtocol {
                 throw AppError.iCloudUnavailable
             }
             
-            var payload = try await MainActor.run {
-                try dataRepository.exportAllData()
-            }
+            var payload = try await dataRepository.exportAllDataAsync()
             let metadata = BackupMetadata(
                 version: .current,
                 timestamp: Date(),
@@ -218,22 +216,30 @@ actor BackupManager: BackupManagerProtocol {
                 backupData = self.decompressLZFSEIfNeeded(backupData)
             }
             
-            try await MainActor.run {
-                let previousData = try dataRepository.exportAllData()
-                
+            let previousData = try await dataRepository.exportAllDataAsync()
+            let snapshotURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("millio-pre-restore-\(UUID().uuidString).json")
+            do {
+                try previousData.write(to: snapshotURL, options: .atomic)
+            } catch {
+                throw AppError.restoreFailed("Не удалось создать снимок данных перед восстановлением")
+            }
+            
+            do {
+                try await dataRepository.clearAllDataAsync()
+                try await dataRepository.importAllDataAsync(backupData)
+                try? FileManager.default.removeItem(at: snapshotURL)
+            } catch {
                 do {
-                    try dataRepository.clearAllData()
-                    try dataRepository.importAllData(backupData)
+                    try await dataRepository.clearAllDataAsync()
+                    let snapshotData = try Data(contentsOf: snapshotURL)
+                    try await dataRepository.importAllDataAsync(snapshotData)
+                    try? FileManager.default.removeItem(at: snapshotURL)
                 } catch {
-                    do {
-                        try dataRepository.clearAllData()
-                        try dataRepository.importAllData(previousData)
-                    } catch {
-                        throw AppError.restoreFailed("Не удалось восстановить данные после ошибки восстановления")
-                    }
-                    
-                    throw error
+                    throw AppError.restoreFailed("Не удалось восстановить данные после ошибки восстановления")
                 }
+                
+                throw error
             }
         }
         

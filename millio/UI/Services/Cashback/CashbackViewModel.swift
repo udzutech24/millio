@@ -62,15 +62,9 @@ final class CashbackViewModel: ViewModelProtocol {
         loadCards()
         loadCashbacks()
         
-        // Логирование для отладки
-        AppLogger.log(.info, category: "Cashback", "Loaded \(state.availableCards.count) cards, \(state.cashbacks.count) cashbacks")
-        for cashback in state.cashbacks {
-            AppLogger.log(.info, category: "Cashback", "Cashback '\(cashback.category.displayName)' has \(cashback.cardIDs.count) cardIDs")
-            for cardID in cashback.cardIDs {
-                let cardExists = state.availableCards.contains { $0.cardUniqueID == cardID }
-                AppLogger.log(.info, category: "Cashback", "  CardID '\(cardID)' exists: \(cardExists)")
-            }
-        }
+        #if DEBUG
+        AppLogger.log(.debug, category: "Cashback", "Loaded \(state.availableCards.count) cards, \(state.cashbacks.count) cashbacks")
+        #endif
         
         // Автоматически проверяем и очищаем невалидные связи при первом запуске
         cleanInvalidCardIDs(in: state.cashbacks)

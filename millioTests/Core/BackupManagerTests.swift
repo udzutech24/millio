@@ -296,6 +296,18 @@ final class MockDataRepository: DataRepositoryProtocol {
     func clearAllData() throws {
         clearCalled = true
     }
+    
+    func exportAllDataAsync() async throws -> Data {
+        try exportAllData()
+    }
+    
+    func importAllDataAsync(_ data: Data) async throws {
+        try importAllData(data)
+    }
+    
+    func clearAllDataAsync() async throws {
+        try clearAllData()
+    }
 }
 
 final class FailingImportDataRepository: DataRepositoryProtocol {
@@ -322,5 +334,17 @@ final class FailingImportDataRepository: DataRepositoryProtocol {
     func clearAllData() throws {
         clearCalls += 1
         storage = Data()
+    }
+    
+    func exportAllDataAsync() async throws -> Data {
+        try exportAllData()
+    }
+    
+    func importAllDataAsync(_ data: Data) async throws {
+        try importAllData(data)
+    }
+    
+    func clearAllDataAsync() async throws {
+        try clearAllData()
     }
 }

@@ -292,10 +292,11 @@
 			outputFileListPaths = (
 			);
 			outputPaths = (
+				"${DERIVED_FILE_DIR}/CrashlyticsRun",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\"";
+			shellScript = "\"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\" && /bin/echo done > \"${DERIVED_FILE_DIR}/CrashlyticsRun\"";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
