@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct MainAppView: View {
     @Bindable var router: AppRouter
@@ -31,11 +32,11 @@ struct MainAppView: View {
                 VStack(spacing: 0) {
                     // Header
                     HStack {
-                        // Иконка профиля слева
+                        // Аватарка или иконка профиля слева
                         Button {
                             viewModel.handle(.navigateToProfile)
                         } label: {
-                            Image("profile")
+                            headerProfileImage
                         }
                         
                         Spacer()
@@ -119,6 +120,25 @@ struct MainAppView: View {
                 }
             }
         }
+    }
+    
+    private var headerProfileImage: some View {
+        let size: CGFloat = 40
+        return Group {
+            if let path = appState.profileAvatarPath,
+               FileManager.default.fileExists(atPath: path),
+               let uiImage = UIImage(contentsOfFile: path) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Image("profile")
+                    .resizable()
+                    .scaledToFit()
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
     }
     
     // MARK: - Services Grid
