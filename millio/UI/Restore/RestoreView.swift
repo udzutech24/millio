@@ -10,8 +10,6 @@ import SwiftUI
 struct RestoreView: View {
     @Bindable var appState: AppState
     @Bindable var router: AppRouter
-    @Environment(\.modelContext) private var modelContext
-    @Environment(\.modelContainer) private var modelContainer
     @Environment(\.diContainer) private var diContainer
     @Environment(\.dismiss) private var dismiss
     @State private var isRestoring = false

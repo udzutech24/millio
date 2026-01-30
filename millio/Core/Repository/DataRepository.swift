@@ -20,12 +20,10 @@ protocol DataRepositoryProtocol {
 
 final class DataRepository: DataRepositoryProtocol {
     private let modelContext: ModelContext
-    private let modelContainer: ModelContainer
     private let worker: DataRepositoryWorker
     
     init(modelContext: ModelContext, modelContainer: ModelContainer) {
         self.modelContext = modelContext
-        self.modelContainer = modelContainer
         self.worker = DataRepositoryWorker(modelContainer: modelContainer)
     }
     
@@ -35,7 +33,9 @@ final class DataRepository: DataRepositoryProtocol {
     
     func exportAllDataAsync() async throws -> Data {
         try await MainActor.run {
-            try modelContext.save()
+            if modelContext.hasChanges {
+                try modelContext.save()
+            }
         }
         return try await worker.exportAllData()
     }

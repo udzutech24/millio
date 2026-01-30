@@ -37,8 +37,6 @@ private enum BackupEncryptionMode: String, CaseIterable, Identifiable {
 struct BackupManagementView: View {
     @Bindable var router: AppRouter
     @Environment(AppState.self) private var appState
-    @Environment(\.modelContext) private var modelContext
-    @Environment(\.modelContainer) private var modelContainer
     @Environment(\.diContainer) private var diContainer
     
     @State private var isBusy = false
