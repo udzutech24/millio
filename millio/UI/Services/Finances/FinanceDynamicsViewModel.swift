@@ -355,7 +355,11 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             state.selectedAccountIDs = Set(accounts.map { $0.accountUniqueID })
             // Автоматически переключаем режим
             if state.selectedAccountIDs.count == 1 {
-                state.dynamicsMode = .singleAccount(state.selectedAccountIDs.first!)
+                if let accountID = state.selectedAccountIDs.first {
+                    state.dynamicsMode = .singleAccount(accountID)
+                } else {
+                    state.dynamicsMode = .aggregated
+                }
             } else {
                 // Для нескольких счетов всегда используем агрегированный режим
                 state.dynamicsMode = .aggregated
@@ -389,7 +393,11 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 }
                 // Автоматически переключаем режим
                 if state.selectedAccountIDs.count == 1 {
-                    state.dynamicsMode = .singleAccount(state.selectedAccountIDs.first!)
+                    if let accountID = state.selectedAccountIDs.first {
+                        state.dynamicsMode = .singleAccount(accountID)
+                    } else {
+                        state.dynamicsMode = .aggregated
+                    }
                 } else {
                     // Для нескольких счетов всегда используем агрегированный режим
                     state.dynamicsMode = .aggregated

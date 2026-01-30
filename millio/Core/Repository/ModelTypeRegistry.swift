@@ -11,7 +11,12 @@ import SwiftData
 /// Протокол для импорта моделей из backup
 protocol ModelImporter {
     static func importType() -> String
+    static var importPriority: Int { get }
     static func `import`(from data: [String: Any], context: ModelContext) throws
+}
+
+extension ModelImporter {
+    static var importPriority: Int { 100 }
 }
 
 /// Регистрация типов моделей для экспорта/импорта
@@ -21,6 +26,10 @@ protocol ModelTypeRegistryProtocol {
     func registerImporter<T: ModelImporter>(_ importer: T.Type)
     func getExportableTypes() -> [String: any Persistable.Type]
     func getImporter(for typeName: String) -> ModelImporter.Type?
+    func registerBackupExporter(_ typeName: String, exporter: @escaping (ModelContext) throws -> [[String: Any]])
+    func registerBackupClearer(_ typeName: String, clearer: @escaping (ModelContext) throws -> Void)
+    func getBackupExporter(for typeName: String) -> ((ModelContext) throws -> [[String: Any]])?
+    func getBackupClearer(for typeName: String) -> ((ModelContext) throws -> Void)?
 }
 
 final class ModelTypeRegistry: ModelTypeRegistryProtocol {
@@ -28,6 +37,8 @@ final class ModelTypeRegistry: ModelTypeRegistryProtocol {
     
     private var registeredTypes: [String: any Persistable.Type] = [:]
     private var importers: [String: ModelImporter.Type] = [:]
+    private var backupExporters: [String: (ModelContext) throws -> [[String: Any]]] = [:]
+    private var backupClearers: [String: (ModelContext) throws -> Void] = [:]
     private let queue = DispatchQueue(label: "com.millio.modelTypeRegistry", attributes: .concurrent)
     
     private init() {
@@ -37,8 +48,38 @@ final class ModelTypeRegistry: ModelTypeRegistryProtocol {
     }
     
     func register<T: Persistable>(_ type: T.Type, typeName: String) {
-        queue.async(flags: .barrier) {
+        queue.sync(flags: .barrier) {
             self.registeredTypes[typeName] = type
+            
+            if self.backupExporters[typeName] == nil {
+                self.backupExporters[typeName] = { context in
+                    let descriptor = FetchDescriptor<T>()
+                    let items = try context.fetch(descriptor)
+                    
+                    var exported: [[String: Any]] = []
+                    exported.reserveCapacity(items.count)
+                    
+                    for item in items {
+                        let data = try item.export()
+                        if var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                            json["_type"] = typeName
+                            exported.append(json)
+                        }
+                    }
+                    
+                    return exported
+                }
+            }
+            
+            if self.backupClearers[typeName] == nil {
+                self.backupClearers[typeName] = { context in
+                    let descriptor = FetchDescriptor<T>()
+                    let items = try context.fetch(descriptor)
+                    for item in items {
+                        context.delete(item)
+                    }
+                }
+            }
         }
     }
     
@@ -60,6 +101,30 @@ final class ModelTypeRegistry: ModelTypeRegistryProtocol {
     func getImporter(for typeName: String) -> ModelImporter.Type? {
         queue.sync {
             return importers[typeName]
+        }
+    }
+    
+    func registerBackupExporter(_ typeName: String, exporter: @escaping (ModelContext) throws -> [[String: Any]]) {
+        queue.sync(flags: .barrier) {
+            self.backupExporters[typeName] = exporter
+        }
+    }
+    
+    func registerBackupClearer(_ typeName: String, clearer: @escaping (ModelContext) throws -> Void) {
+        queue.sync(flags: .barrier) {
+            self.backupClearers[typeName] = clearer
+        }
+    }
+    
+    func getBackupExporter(for typeName: String) -> ((ModelContext) throws -> [[String: Any]])? {
+        queue.sync {
+            return backupExporters[typeName]
+        }
+    }
+    
+    func getBackupClearer(for typeName: String) -> ((ModelContext) throws -> Void)? {
+        queue.sync {
+            return backupClearers[typeName]
         }
     }
     

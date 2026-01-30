@@ -395,6 +395,9 @@ final class CardViewModel: ViewModelProtocol {
                 isFavorite: card.isFavorite,
                 includeInTotal: card.includeInTotal
             )
+            if !card.uniqueID.isEmpty {
+                newCard.uniqueID = card.uniqueID
+            }
             modelContext.insert(newCard)
         }
         

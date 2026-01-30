@@ -64,7 +64,8 @@ struct CreditViewModelTests {
             bank: credit.bank,
             creditType: credit.creditType,
             isFavorite: credit.isFavorite,
-            includeInTotal: credit.includeInTotal
+            includeInTotal: credit.includeInTotal,
+            uniqueID: nil
         ))
 
         let descriptor = FetchDescriptor<CashflowTransaction>()
@@ -111,7 +112,8 @@ struct CreditViewModelTests {
             bank: credit.bank,
             creditType: credit.creditType,
             isFavorite: credit.isFavorite,
-            includeInTotal: credit.includeInTotal
+            includeInTotal: credit.includeInTotal,
+            uniqueID: nil
         ))
 
         viewModel.handle(.loadCredits)

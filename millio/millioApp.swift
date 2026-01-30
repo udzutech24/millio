@@ -66,7 +66,7 @@ struct millioApp: App {
                 RootViewResolver(appState: appState)
                     .preferredColorScheme(.dark)
                     .environment(appState)
-                    .environment(\.modelContainer, container)
+                    .modelContainer(container)
                     .environment(\.diContainer, diContainer)
                     .environment(\.locale, appState.selectedLanguage.locale ?? Locale.current)
                     .task {
@@ -103,7 +103,6 @@ struct millioApp: App {
                 .environment(appState)
             }
         }
-        .modelContainer(sharedModelContainer ?? (try! ModelContainer(for: Schema([]), configurations: [])))
     }
     
     private func initializeApp(container: ModelContainer) async {

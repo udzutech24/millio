@@ -13,6 +13,38 @@ struct CashbackFeatureRegistration {
     static func register() {
         // Регистрируем модели
         ModelTypeRegistry.shared.register(Cashback.self, typeName: "Cashback")
+        ModelTypeRegistry.shared.registerBackupExporter("Cashback") { context in
+            let cashbackDescriptor = FetchDescriptor<Cashback>()
+            let cashbacks = try context.fetch(cashbackDescriptor)
+            
+            let cardDescriptor = FetchDescriptor<Card>()
+            let cards = try context.fetch(cardDescriptor)
+            var cardIDMapping: [String: String] = [:]
+            for card in cards {
+                cardIDMapping[String(describing: card.persistentModelID)] = card.cardUniqueID
+            }
+            
+            var exported: [[String: Any]] = []
+            exported.reserveCapacity(cashbacks.count)
+            
+            for cashback in cashbacks {
+                let data = try cashback.export()
+                guard var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
+                
+                if let cardIDs = json["cardIDs"] as? [String] {
+                    let converted = cardIDs.map { cardIDMapping[$0] ?? $0 }
+                    json["cardIDs"] = converted
+                    if converted != cardIDs {
+                        json["_cardIDs_legacy"] = cardIDs
+                    }
+                }
+                
+                json["_type"] = "Cashback"
+                exported.append(json)
+            }
+            
+            return exported
+        }
         
         // Регистрируем импортеры
         ModelTypeRegistry.shared.registerImporter(CashbackImporter.self)
@@ -25,6 +57,8 @@ struct CashbackImporter: ModelImporter {
     static func importType() -> String {
         "Cashback"
     }
+    
+    static var importPriority: Int { 20 }
     
     static func `import`(from data: [String: Any], context: ModelContext) throws {
         guard let name = data["name"] as? String,
@@ -44,11 +78,20 @@ struct CashbackImporter: ModelImporter {
             cardIDs = [cardID]
         }
         
+        let cardDescriptor = FetchDescriptor<Card>()
+        let cards = (try? context.fetch(cardDescriptor)) ?? []
+        var cardUniqueIDToPersistentID: [String: String] = [:]
+        for card in cards {
+            cardUniqueIDToPersistentID[card.cardUniqueID] = String(describing: card.persistentModelID)
+        }
+        
+        let resolvedCardIDs = cardIDs.map { cardUniqueIDToPersistentID[$0] ?? $0 }
+        
         let cashback = Cashback(
             name: name,
             category: CashbackCategory(rawValue: categoryRaw) ?? .other,
             percentage: percentage,
-            cardIDs: cardIDs
+            cardIDs: resolvedCardIDs
         )
         
         // Восстанавливаем даты

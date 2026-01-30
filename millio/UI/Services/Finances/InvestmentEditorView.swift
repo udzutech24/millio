@@ -245,7 +245,8 @@ struct InvestmentEditorView: View {
             currency: selectedCurrency,
             includeInTotal: includeInTotal,
             priority: selectedPriority,
-            isFavorite: isFavorite
+            isFavorite: isFavorite,
+            uniqueID: nil
         ))
 
         if let onClose {

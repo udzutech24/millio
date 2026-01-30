@@ -30,47 +30,6 @@ struct AppSchema {
             }
         }
         
-        
-        // Явно добавляем модели Card
-        if !modelTypes.contains(where: { $0 == Card.self }) {
-            modelTypes.append(Card.self)
-        }
-        
-        // Явно добавляем модели Cashback
-        if !modelTypes.contains(where: { $0 == Cashback.self }) {
-            modelTypes.append(Cashback.self)
-        }
-        
-        // Явно добавляем модели Credit
-        if !modelTypes.contains(where: { $0 == Credit.self }) {
-            modelTypes.append(Credit.self)
-        }
-        
-        // Явно добавляем модели Investment
-        if !modelTypes.contains(where: { $0 == Investment.self }) {
-            modelTypes.append(Investment.self)
-        }
-        
-        // Явно добавляем модели FinanceGroup
-        if !modelTypes.contains(where: { $0 == FinanceGroup.self }) {
-            modelTypes.append(FinanceGroup.self)
-        }
-        
-        // Явно добавляем модели FinanceAccount
-        if !modelTypes.contains(where: { $0 == FinanceAccount.self }) {
-            modelTypes.append(FinanceAccount.self)
-        }
-        
-        // Явно добавляем модели CashflowTransaction
-        if !modelTypes.contains(where: { $0 == CashflowTransaction.self }) {
-            modelTypes.append(CashflowTransaction.self)
-        }
-        
-        // Явно добавляем модели HistoricalRate
-        if !modelTypes.contains(where: { $0 == HistoricalRate.self }) {
-            modelTypes.append(HistoricalRate.self)
-        }
-        
         return Schema(modelTypes)
     }
 }

@@ -15,6 +15,27 @@ enum FinanceFeatureRegistration {
         ModelTypeRegistry.shared.registerImporter(FinanceGroupImporter.self)
         
         ModelTypeRegistry.shared.register(FinanceAccount.self, typeName: "FinanceAccount")
+        ModelTypeRegistry.shared.registerBackupExporter("FinanceAccount") { context in
+            let descriptor = FetchDescriptor<FinanceAccount>()
+            let accounts = try context.fetch(descriptor)
+            
+            var exported: [[String: Any]] = []
+            exported.reserveCapacity(accounts.count)
+            
+            for account in accounts {
+                let data = try account.export()
+                guard var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
+                
+                if let group = account.group {
+                    json["groupUniqueID"] = group.groupUniqueID
+                }
+                
+                json["_type"] = "FinanceAccount"
+                exported.append(json)
+            }
+            
+            return exported
+        }
         ModelTypeRegistry.shared.registerImporter(FinanceAccountImporter.self)
     }
 }
@@ -26,6 +47,8 @@ struct FinanceGroupImporter: ModelImporter {
         "FinanceGroup"
     }
     
+    static var importPriority: Int { 0 }
+    
     static func `import`(from dict: [String: Any], context: ModelContext) throws {
         guard let name = dict["name"] as? String,
               let colorHex = dict["colorHex"] as? String,
@@ -36,10 +59,12 @@ struct FinanceGroupImporter: ModelImporter {
         
         let order = dict["order"] as? Int ?? 0
         
-        // Проверяем, не существует ли уже группа с таким именем
+        let createdAtDate = Date(timeIntervalSince1970: createdAt)
+        
+        // Проверяем, не существует ли уже группа с таким именем/цветом/датой
         let groupDescriptor = FetchDescriptor<FinanceGroup>(
             predicate: #Predicate<FinanceGroup> { group in
-                group.name == name
+                group.name == name && group.colorHex == colorHex && group.createdAt == createdAtDate
             }
         )
         
@@ -67,7 +92,7 @@ struct FinanceGroupImporter: ModelImporter {
         let priority = GroupPriority(rawValue: priorityRaw) ?? .normal
         
         let group = FinanceGroup(name: name, colorHex: colorHex, order: order, isFavorite: isFavorite, priority: priority)
-        group.createdAt = Date(timeIntervalSince1970: createdAt)
+        group.createdAt = createdAtDate
         group.updatedAt = Date(timeIntervalSince1970: updatedAt)
         group.displayCurrency = displayCurrency
         
@@ -81,6 +106,8 @@ struct FinanceAccountImporter: ModelImporter {
     static func importType() -> String {
         "FinanceAccount"
     }
+    
+    static var importPriority: Int { 10 }
     
     static func `import`(from dict: [String: Any], context: ModelContext) throws {
         guard let accountTypeRaw = dict["accountTypeRaw"] as? String,
@@ -111,7 +138,12 @@ struct FinanceAccountImporter: ModelImporter {
         account.createdAt = Date(timeIntervalSince1970: createdAt)
         account.updatedAt = Date(timeIntervalSince1970: updatedAt)
         
-        // Связь с группой будет установлена в DataRepository после импорта
+        if let groupUniqueID = dict["groupUniqueID"] as? String {
+            let groupDescriptor = FetchDescriptor<FinanceGroup>()
+            let groups = (try? context.fetch(groupDescriptor)) ?? []
+            account.group = groups.first(where: { $0.groupUniqueID == groupUniqueID })
+        }
+        
         context.insert(account)
     }
 }

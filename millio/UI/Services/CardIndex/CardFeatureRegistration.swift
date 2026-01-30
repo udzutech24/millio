@@ -26,6 +26,8 @@ struct CardImporter: ModelImporter {
         "Card"
     }
     
+    static var importPriority: Int { 0 }
+    
     static func `import`(from data: [String: Any], context: ModelContext) throws {
         guard let name = data["name"] as? String,
               let cardNumber = data["cardNumber"] as? String,

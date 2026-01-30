@@ -264,7 +264,8 @@ struct CreditEditorView: View {
             bank: selectedBank,
             creditType: selectedCreditType,
             isFavorite: isFavorite,
-            includeInTotal: includeInTotal
+            includeInTotal: includeInTotal,
+            uniqueID: nil
         ))
 
         if let onClose {

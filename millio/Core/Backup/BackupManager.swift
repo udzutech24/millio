@@ -58,46 +58,46 @@ nonisolated final class BackupManager: BackupManagerProtocol {
                 throw AppError.iCloudUnavailable
             }
             
-            var backupData = try dataRepository.exportAllData()
+            var payload = try dataRepository.exportAllData()
+            let metadata = BackupMetadata(
+                version: .current,
+                timestamp: Date(),
+                schemaVersion: "2.0",
+                modelCount: 0
+            )
             
-            // Сжимаем backup
-            backupData = try self.compress(backupData)
-            
-            // Шифруем если включено
-            if let encryption = encryption {
-                backupData = try encryption.encrypt(backupData)
+            var compressionInfo: BackupCompressionInfo? = nil
+            let compressed = try self.compressLZFSE(payload)
+            if compressed.count < payload.count {
+                compressionInfo = BackupCompressionInfo(
+                    algorithm: "lzfse",
+                    originalSize: payload.count
+                )
+                payload = compressed
             }
             
-            try await cloudStore.uploadBackup(backupData)
+            var encryptionInfo: BackupEncryptionInfo? = nil
+            if let encryption {
+                payload = try encryption.encrypt(payload)
+                encryptionInfo = BackupEncryptionInfo(algorithm: "aesgcm-keychain")
+            }
+            
+            let header = BackupEnvelopeHeader(
+                formatVersion: BackupEnvelopeHeader.currentFormatVersion,
+                metadata: metadata,
+                compression: compressionInfo,
+                encryption: encryptionInfo
+            )
+            
+            let packed = try BackupEnvelope.pack(header: header, payload: payload)
+            try await cloudStore.uploadBackup(packed)
         }
         
         logger.info("Backup completed successfully")
     }
     
-    private func compress(_ data: Data) throws -> Data {
-        // Используем Compression framework для сжатия
-        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: data.count)
-        defer { buffer.deallocate() }
-        
-        data.copyBytes(to: buffer, count: data.count)
-        
-        let compressedSize = data.count + (data.count / 16) + 64
-        let compressed = UnsafeMutablePointer<UInt8>.allocate(capacity: compressedSize)
-        defer { compressed.deallocate() }
-        
-        let result = compression_encode_buffer(
-            compressed, compressedSize,
-            buffer, data.count,
-            nil,
-            COMPRESSION_LZFSE
-        )
-        
-        guard result > 0 else {
-            // Если сжатие не удалось, возвращаем исходные данные
-            return data
-        }
-        
-        return Data(bytes: compressed, count: result)
+    private func compressLZFSE(_ data: Data) throws -> Data {
+        try processCompressionStream(data, operation: COMPRESSION_STREAM_ENCODE)
     }
     
     func restoreLatest() async throws {
@@ -112,17 +112,44 @@ nonisolated final class BackupManager: BackupManagerProtocol {
                 throw AppError.iCloudUnavailable
             }
             
-            guard var backupData = try await cloudStore.downloadLatestBackup() else {
+            guard let downloadedData = try await cloudStore.downloadLatestBackup() else {
                 throw AppError.restoreFailed("Backup не найден в iCloud")
             }
             
-            // Расшифровываем если было зашифровано
-            if let encryption = encryption {
-                backupData = try encryption.decrypt(backupData)
-            }
+            var backupData: Data
             
-            // Распаковываем backup
-            backupData = try self.decompress(backupData)
+            if let (header, payload) = try? BackupEnvelope.unpack(downloadedData) {
+                guard header.formatVersion == BackupEnvelopeHeader.currentFormatVersion else {
+                    throw AppError.incompatibleSchemaVersion
+                }
+                
+                backupData = payload
+                
+                if header.encryption != nil {
+                    let decryptor = encryption ?? KeychainBackupEncryption()
+                    do {
+                        backupData = try decryptor.decrypt(backupData)
+                    } catch {
+                        throw AppError.restoreFailed("Backup зашифрован и не может быть расшифрован на этом устройстве")
+                    }
+                }
+                
+                if header.compression != nil {
+                    backupData = try self.decompressLZFSE(backupData)
+                }
+            } else {
+                backupData = downloadedData
+                
+                if let encryption {
+                    do {
+                        backupData = try encryption.decrypt(backupData)
+                    } catch {
+                        throw AppError.restoreFailed("Не удалось расшифровать backup")
+                    }
+                }
+                
+                backupData = self.decompressLZFSEIfNeeded(backupData)
+            }
             
             // Очищаем локальные данные
             try dataRepository.clearAllData()
@@ -143,30 +170,76 @@ nonisolated final class BackupManager: BackupManagerProtocol {
         }
     }
     
-    private func decompress(_ data: Data) throws -> Data {
-        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: data.count)
-        defer { buffer.deallocate() }
+    private func decompressLZFSE(_ data: Data) throws -> Data {
+        try processCompressionStream(data, operation: COMPRESSION_STREAM_DECODE)
+    }
+    
+    private func decompressLZFSEIfNeeded(_ data: Data) -> Data {
+        (try? decompressLZFSE(data)) ?? data
+    }
+    
+    private func processCompressionStream(_ data: Data, operation: compression_stream_operation) throws -> Data {
+        let dummyPointer = UnsafeMutablePointer<UInt8>.allocate(capacity: 1)
+        defer { dummyPointer.deallocate() }
         
-        data.copyBytes(to: buffer, count: data.count)
-        
-        // Пытаемся определить размер распакованных данных (упрощенно - используем 10x)
-        let decompressedSize = data.count * 10
-        let decompressed = UnsafeMutablePointer<UInt8>.allocate(capacity: decompressedSize)
-        defer { decompressed.deallocate() }
-        
-        let result = compression_decode_buffer(
-            decompressed, decompressedSize,
-            buffer, data.count,
-            nil,
-            COMPRESSION_LZFSE
+        var stream = compression_stream(
+            dst_ptr: dummyPointer,
+            dst_size: 0,
+            src_ptr: UnsafePointer(dummyPointer),
+            src_size: 0,
+            state: nil
         )
-        
-        guard result > 0 else {
-            // Если распаковка не удалась, возможно данные не сжаты
-            return data
+        let status = compression_stream_init(&stream, operation, COMPRESSION_LZFSE)
+        guard status != COMPRESSION_STATUS_ERROR else {
+            throw AppError.backupFailed("Ошибка инициализации сжатия")
         }
+        defer { compression_stream_destroy(&stream) }
         
-        return Data(bytes: decompressed, count: result)
+        let dstSize = 64 * 1024
+        let dstBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: dstSize)
+        defer { dstBuffer.deallocate() }
+        
+        return try data.withUnsafeBytes { rawBufferPointer in
+            guard let srcBaseAddress = rawBufferPointer.bindMemory(to: UInt8.self).baseAddress else {
+                return Data()
+            }
+            
+            stream.src_ptr = srcBaseAddress
+            stream.src_size = data.count
+            
+            var output = Data()
+            
+            while true {
+                stream.dst_ptr = dstBuffer
+                stream.dst_size = dstSize
+                
+                let flags: Int32
+                if operation == COMPRESSION_STREAM_ENCODE && stream.src_size == 0 {
+                    flags = Int32(COMPRESSION_STREAM_FINALIZE.rawValue)
+                } else {
+                    flags = 0
+                }
+                
+                let processStatus = compression_stream_process(&stream, flags)
+                let produced = dstSize - stream.dst_size
+                if produced > 0 {
+                    output.append(dstBuffer, count: produced)
+                }
+                
+                switch processStatus {
+                case COMPRESSION_STATUS_OK:
+                    continue
+                case COMPRESSION_STATUS_END:
+                    return output
+                default:
+                    if operation == COMPRESSION_STREAM_ENCODE {
+                        throw AppError.backupFailed("Не удалось сжать backup")
+                    } else {
+                        throw AppError.backupCorrupted
+                    }
+                }
+            }
+        }
     }
     
     func scheduleBackup() {

@@ -63,7 +63,8 @@ enum InvestmentAction {
         currency: String,
         includeInTotal: Bool,
         priority: InvestmentPriority,
-        isFavorite: Bool
+        isFavorite: Bool,
+        uniqueID: String?
     )
     case showInvestmentEditor
     case hideInvestmentEditor
@@ -112,7 +113,7 @@ final class InvestmentViewModel: ViewModelProtocol {
         case .toggleFavorite(let investment):
             toggleFavorite(investment)
             
-        case .updateInvestment(let name, let investmentType, let category, let amount, let currency, let includeInTotal, let priority, let isFavorite):
+        case .updateInvestment(let name, let investmentType, let category, let amount, let currency, let includeInTotal, let priority, let isFavorite, let uniqueID):
             updateInvestment(
                 name: name,
                 investmentType: investmentType,
@@ -121,7 +122,8 @@ final class InvestmentViewModel: ViewModelProtocol {
                 currency: currency,
                 includeInTotal: includeInTotal,
                 priority: priority,
-                isFavorite: isFavorite
+                isFavorite: isFavorite,
+                uniqueID: uniqueID
             )
             
         case .showInvestmentEditor:
@@ -256,7 +258,8 @@ final class InvestmentViewModel: ViewModelProtocol {
         currency: String,
         includeInTotal: Bool,
         priority: InvestmentPriority,
-        isFavorite: Bool
+        isFavorite: Bool,
+        uniqueID: String?
     ) {
         var editedInvestment: Investment? = nil
         var oldAmount: Double = 0.0
@@ -293,6 +296,9 @@ final class InvestmentViewModel: ViewModelProtocol {
                 priority: priority,
                 isFavorite: isFavorite
             )
+            if let uniqueID, !uniqueID.isEmpty {
+                newInvestment.uniqueID = uniqueID
+            }
             modelContext.insert(newInvestment)
         }
         

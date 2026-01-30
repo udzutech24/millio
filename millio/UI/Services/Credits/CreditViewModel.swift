@@ -89,7 +89,8 @@ enum CreditAction {
         bank: Bank,
         creditType: CreditType,
         isFavorite: Bool,
-        includeInTotal: Bool
+        includeInTotal: Bool,
+        uniqueID: String?
     )
     case search(String)
     case filterByBank(Bank?)
@@ -145,7 +146,7 @@ final class CreditViewModel: ViewModelProtocol {
         case .toggleFavorite(let credit):
             toggleFavorite(credit)
             
-        case .updateCredit(let name, let amount, let monthlyPayment, let endDate, let remainingAmount, let currency, let bank, let creditType, let isFavorite, let includeInTotal):
+        case .updateCredit(let name, let amount, let monthlyPayment, let endDate, let remainingAmount, let currency, let bank, let creditType, let isFavorite, let includeInTotal, let uniqueID):
             updateCredit(
                 name: name,
                 amount: amount,
@@ -156,7 +157,8 @@ final class CreditViewModel: ViewModelProtocol {
                 bank: bank,
                 creditType: creditType,
                 isFavorite: isFavorite,
-                includeInTotal: includeInTotal
+                includeInTotal: includeInTotal,
+                uniqueID: uniqueID
             )
             
         case .search(let text):
@@ -365,7 +367,8 @@ final class CreditViewModel: ViewModelProtocol {
         bank: Bank,
         creditType: CreditType,
         isFavorite: Bool,
-        includeInTotal: Bool
+        includeInTotal: Bool,
+        uniqueID: String?
     ) {
         // Вычисляем startDate и termMonths для внутреннего использования
         // Устанавливаем startDate примерно за год до endDate (или используем существующую дату)
@@ -437,6 +440,9 @@ final class CreditViewModel: ViewModelProtocol {
                 creditType: creditType,
                 includeInTotal: includeInTotal
         )
+            if let uniqueID, !uniqueID.isEmpty {
+                newCredit.uniqueID = uniqueID
+            }
         newCredit.endDate = endDate
         newCredit.applyManualRemainingAmount(remainingAmount)
         newCredit.isFavorite = isFavorite

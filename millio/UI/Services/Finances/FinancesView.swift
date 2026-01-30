@@ -1537,31 +1537,28 @@ private struct FinanceAddAccountView: View {
     private func createCardAndAddToGroup(cardViewModel: CardViewModel, group: FinanceGroup) {
         guard let cardData = cardData else { return }
         
-        _ = cardViewModel.state.cards.count
-        let initialCardIDs = Set(cardViewModel.state.cards.map { $0.cardUniqueID })
+        if cardData.uniqueID.isEmpty {
+            cardData.uniqueID = UUID().uuidString
+        }
+        
+        let createdCardID = cardData.cardUniqueID
         
         // Создаем карту из данных формы
         cardViewModel.handle(.updateCard(cardData))
         
-        // Ждем создания и добавляем в группу
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            let newCards = cardViewModel.state.cards.filter { !initialCardIDs.contains($0.cardUniqueID) }
-            if let newCard = newCards.first {
-                viewModel.handle(.addAccountToGroup(
-                    accountType: .card,
-                    accountID: newCard.cardUniqueID,
-                    group: group
-                ))
-                dismiss()
-            }
-        }
+        guard cardViewModel.state.cards.contains(where: { $0.cardUniqueID == createdCardID }) else { return }
+        
+        viewModel.handle(.addAccountToGroup(
+            accountType: .card,
+            accountID: createdCardID,
+            group: group
+        ))
+        dismiss()
     }
     
     private func createCreditAndAddToGroup(creditViewModel: CreditViewModel, group: FinanceGroup) {
         guard let creditData = creditData else { return }
-        
-        _ = creditViewModel.state.credits.count
-        let initialCreditIDs = Set(creditViewModel.state.credits.map { $0.creditUniqueID })
+        let createdCreditID = UUID().uuidString
         
         // Создаем кредит из данных формы
         creditViewModel.handle(.updateCredit(
@@ -1574,27 +1571,23 @@ private struct FinanceAddAccountView: View {
             bank: creditData.bank,
             creditType: creditData.creditType,
             isFavorite: creditData.isFavorite,
-            includeInTotal: creditData.includeInTotal
+            includeInTotal: creditData.includeInTotal,
+            uniqueID: createdCreditID
         ))
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            let newCredits = creditViewModel.state.credits.filter { !initialCreditIDs.contains($0.creditUniqueID) }
-            if let newCredit = newCredits.first {
-                viewModel.handle(.addAccountToGroup(
-                    accountType: .credit,
-                    accountID: newCredit.creditUniqueID,
-                    group: group
-                ))
-                dismiss()
-            }
-        }
+        guard creditViewModel.state.credits.contains(where: { $0.creditUniqueID == createdCreditID }) else { return }
+        
+        viewModel.handle(.addAccountToGroup(
+            accountType: .credit,
+            accountID: createdCreditID,
+            group: group
+        ))
+        dismiss()
     }
     
     private func createInvestmentAndAddToGroup(investmentViewModel: InvestmentViewModel, group: FinanceGroup) {
         guard let investmentData = investmentData else { return }
-        
-        _ = investmentViewModel.state.investments.count
-        let initialInvestmentIDs = Set(investmentViewModel.state.investments.map { $0.investmentUniqueID })
+        let createdInvestmentID = UUID().uuidString
         
         // Создаем актив из данных формы
         investmentViewModel.handle(.updateInvestment(
@@ -1605,20 +1598,18 @@ private struct FinanceAddAccountView: View {
             currency: investmentData.currency,
             includeInTotal: investmentData.includeInTotal,
             priority: investmentData.priority,
-            isFavorite: investmentData.isFavorite
+            isFavorite: investmentData.isFavorite,
+            uniqueID: createdInvestmentID
         ))
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            let newInvestments = investmentViewModel.state.investments.filter { !initialInvestmentIDs.contains($0.investmentUniqueID) }
-            if let newInvestment = newInvestments.first {
-                viewModel.handle(.addAccountToGroup(
-                    accountType: .investment,
-                    accountID: newInvestment.investmentUniqueID,
-                    group: group
-                ))
-                dismiss()
-            }
-        }
+        guard investmentViewModel.state.investments.contains(where: { $0.investmentUniqueID == createdInvestmentID }) else { return }
+        
+        viewModel.handle(.addAccountToGroup(
+            accountType: .investment,
+            accountID: createdInvestmentID,
+            group: group
+        ))
+        dismiss()
     }
 }
 
@@ -1673,16 +1664,6 @@ private struct FinanceCardEditorWrapper: View {
                     }
                 }
             }
-            .onChange(of: cardViewModel.state.showCardEditor) { oldValue, newValue in
-                if wasNewCard && oldValue == true && newValue == false {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        let newCards = cardViewModel.state.cards.filter { !initialCardIDs.contains($0.cardUniqueID) }
-                        if let newCard = newCards.first {
-                            onCardCreated(newCard.cardUniqueID)
-                        }
-                    }
-                }
-            }
     }
 }
 
@@ -1710,16 +1691,6 @@ private struct FinanceCreditEditorWrapper: View {
                     }
                 }
             }
-            .onChange(of: creditViewModel.state.showCreditEditor) { oldValue, newValue in
-                if wasNewCredit && oldValue == true && newValue == false {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        let newCredits = creditViewModel.state.credits.filter { !initialCreditIDs.contains($0.creditUniqueID) }
-                        if let newCredit = newCredits.first {
-                            onCreditCreated(newCredit.creditUniqueID)
-                        }
-                    }
-                }
-            }
     }
 }
 
@@ -1744,16 +1715,6 @@ private struct FinanceInvestmentEditorWrapper: View {
                     let newInvestments = investmentViewModel.state.investments.filter { !initialInvestmentIDs.contains($0.investmentUniqueID) }
                     if let newInvestment = newInvestments.first {
                         onInvestmentCreated(newInvestment.investmentUniqueID)
-                    }
-                }
-            }
-            .onChange(of: investmentViewModel.state.showInvestmentEditor) { oldValue, newValue in
-                if wasNewInvestment && oldValue == true && newValue == false {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        let newInvestments = investmentViewModel.state.investments.filter { !initialInvestmentIDs.contains($0.investmentUniqueID) }
-                        if let newInvestment = newInvestments.first {
-                            onInvestmentCreated(newInvestment.investmentUniqueID)
-                        }
                     }
                 }
             }
