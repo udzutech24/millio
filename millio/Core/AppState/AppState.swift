@@ -37,13 +37,5 @@ final class AppState {
         self.isBackupEnabled = SettingsManager.shared.isBackupEnabled
         self.isDailyReminderEnabled = SettingsManager.shared.isDailyReminderEnabled
         self.selectedLanguage = LanguageManager.shared.currentLanguage
-        
-        // Загружаем статус подписки из менеджера
-        Task { @MainActor in
-            await SubscriptionManager.shared.checkSubscriptionStatus()
-            self.subscriptionStatus = SubscriptionManager.shared.status
-            self.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
-            self.isTrialActive = SubscriptionManager.shared.isTrialActive
-        }
     }
 }

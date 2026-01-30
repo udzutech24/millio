@@ -63,11 +63,6 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         
         // Запускаем слушатель обновлений транзакций
         updateListenerTask = listenForTransactions()
-        
-        // Проверяем статус при инициализации
-        Task {
-            await checkSubscriptionStatus()
-        }
     }
     
     deinit {

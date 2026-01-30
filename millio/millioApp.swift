@@ -9,6 +9,7 @@ import SwiftUI
 import SwiftData
 import UIKit
 import FirebaseCore
+import OSLog
 
 @main
 struct millioApp: App {
@@ -16,6 +17,7 @@ struct millioApp: App {
     @State private var appState = AppState()
     @State private var diContainer: DIContainer?
     @State private var lifecycleUseCase: AppLifecycleUseCase?
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "App")
     
     var sharedModelContainer: ModelContainer? = {
         // Регистрируем фичи ДО создания схемы
@@ -109,14 +111,17 @@ struct millioApp: App {
     
     @MainActor
     private func initializeApp(container: ModelContainer) async {
+        let start = DispatchTime.now()
         // Фичи уже зарегистрированы при создании ModelContainer
         
         // Используем DIContainer для создания зависимостей
+        let diStart = DispatchTime.now()
         let container = DIContainer.create(
             appState: appState,
             modelContainer: container
         )
         self.diContainer = container
+        logger.info("DIContainer.create finished in \(Double(DispatchTime.now().uptimeNanoseconds - diStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
         
         // Создаем UseCase через DI Container
         let useCase = AppLifecycleUseCase(
@@ -125,7 +130,17 @@ struct millioApp: App {
         )
         
         self.lifecycleUseCase = useCase
+        let initStart = DispatchTime.now()
         await useCase.initialize()
+        logger.info("AppLifecycleUseCase.initialize finished in \(Double(DispatchTime.now().uptimeNanoseconds - initStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
+        logger.info("initializeApp finished in \(Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
+        
+        Task { @MainActor in
+            await SubscriptionManager.shared.checkSubscriptionStatus()
+            appState.subscriptionStatus = SubscriptionManager.shared.status
+            appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
+            appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+        }
     }
     
     private func triggerBackgroundBackup() {
