@@ -48,16 +48,14 @@ nonisolated final class CloudBackupStore: CloudBackupStoreProtocol {
         defer { try? FileManager.default.removeItem(at: tempURL) }
         
         let asset = CKAsset(fileURL: tempURL)
-        
-        // Удаляем старый backup если есть
+        let record: CKRecord
         do {
-            try await privateDB.deleteRecord(withID: recordID)
+            record = try await privateDB.record(for: recordID)
+        } catch let error as CKError where error.code == .unknownItem {
+            record = CKRecord(recordType: recordType, recordID: recordID)
         } catch {
-            // Игнорируем ошибку если записи нет
+            throw AppError.backupFailed(error.localizedDescription)
         }
-        
-        // Создаём новую запись
-        let record = CKRecord(recordType: recordType, recordID: recordID)
         record["backupData"] = asset
         record["backupDate"] = Date()
         record["backupVersion"] = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"

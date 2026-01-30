@@ -233,6 +233,9 @@ struct BackupManagementView: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(AppColors.textSecondary)
             
+            let trimmedPassphrase = passphrase.trimmingCharacters(in: .whitespacesAndNewlines)
+            let canCreateBackup = appState.isBackupEnabled && !isBusy && (encryptionMode != .passphrase || !trimmedPassphrase.isEmpty)
+            
             ActionButton(
                 title: isBusy ? "Создание backup..." : "Создать backup сейчас",
                 icon: "icloud.and.arrow.up.fill",
@@ -240,7 +243,14 @@ struct BackupManagementView: View {
             ) {
                 Task { await createBackupNow() }
             }
-            .disabled(!appState.isBackupEnabled || isBusy)
+            .disabled(!canCreateBackup)
+            
+            if encryptionMode == .passphrase, appState.isBackupEnabled, trimmedPassphrase.isEmpty {
+                Text("Введите парольную фразу, иначе backup будет невозможно восстановить.")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(AppColors.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             
             NavigationLink {
                 RestoreView(appState: appState, router: router)

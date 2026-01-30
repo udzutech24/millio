@@ -164,6 +164,34 @@ struct BackupManagerTests {
             try await backupManager.restoreLatest(passphrase: nil)
         }
     }
+
+    @Test("Restore latest treats corrupted envelope as backupCorrupted (no legacy fallback)")
+    func testRestoreLatestCorruptedEnvelope() async {
+        let mockCloudStore = MockCloudBackupStore()
+        mockCloudStore.isAvailableResult = true
+        
+        var data = Data()
+        var headerLength = UInt32(2).bigEndian
+        withUnsafeBytes(of: &headerLength) { data.append(contentsOf: $0) }
+        data.append(Data("{x".utf8))
+        data.append(Data("payload".utf8))
+        mockCloudStore.downloadData = data
+        
+        let mockDataRepository = MockDataRepository()
+        let backupManager = BackupManager(
+            cloudStore: mockCloudStore,
+            dataRepository: mockDataRepository
+        )
+        
+        do {
+            try await backupManager.restoreLatest()
+            #expect(false)
+        } catch let error as AppError {
+            #expect(error == .backupCorrupted)
+        } catch {
+            #expect(false)
+        }
+    }
     
     @Test("Last backup info returns correct information")
     func testLastBackupInfo() async {

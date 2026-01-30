@@ -59,7 +59,20 @@ actor BackupManager: BackupManagerProtocol {
         let encryption = self.encryption
         let cloudStore = self.cloudStore
         
-        try await withRetry(policy: .default) {
+        try await withRetry(
+            policy: .default,
+            shouldRetry: { error in
+                guard let appError = error as? AppError else { return true }
+                switch appError {
+                case .iCloudUnavailable, .backupCorrupted, .incompatibleSchemaVersion:
+                    return false
+                case .restoreFailed:
+                    return false
+                default:
+                    return true
+                }
+            }
+        ) {
             guard await self.isAvailable() else {
                 throw AppError.iCloudUnavailable
             }
@@ -123,7 +136,20 @@ actor BackupManager: BackupManagerProtocol {
         let encryption = self.encryption
         let cloudStore = self.cloudStore
         
-        try await withRetry(policy: .default) {
+        try await withRetry(
+            policy: .default,
+            shouldRetry: { error in
+                guard let appError = error as? AppError else { return true }
+                switch appError {
+                case .iCloudUnavailable, .backupCorrupted, .incompatibleSchemaVersion:
+                    return false
+                case .restoreFailed:
+                    return false
+                default:
+                    return true
+                }
+            }
+        ) {
             guard await self.isAvailable() else {
                 throw AppError.iCloudUnavailable
             }
@@ -134,7 +160,13 @@ actor BackupManager: BackupManagerProtocol {
             
             var backupData: Data
             
-            if let (header, payload) = try? BackupEnvelope.unpack(downloadedData) {
+            if self.looksLikeEnvelope(downloadedData) {
+                let (header, payload): (BackupEnvelopeHeader, Data)
+                do {
+                    (header, payload) = try BackupEnvelope.unpack(downloadedData)
+                } catch {
+                    throw AppError.backupCorrupted
+                }
                 guard header.formatVersion == BackupEnvelopeHeader.currentFormatVersion else {
                     throw AppError.incompatibleSchemaVersion
                 }
@@ -151,18 +183,26 @@ actor BackupManager: BackupManagerProtocol {
                             throw AppError.backupCorrupted
                         }
                         backupData = try PassphraseBackupEncryption.decrypt(backupData, passphrase: passphrase, kdf: kdf)
-                    default:
+                    case "aesgcm-keychain":
                         let decryptor = encryption ?? KeychainBackupEncryption()
                         do {
                             backupData = try decryptor.decrypt(backupData)
                         } catch {
                             throw AppError.restoreFailed("Backup зашифрован и не может быть расшифрован на этом устройстве")
                         }
+                    default:
+                        throw AppError.backupCorrupted
                     }
                 }
                 
-                if header.compression != nil {
+                if let compression = header.compression {
+                    guard compression.algorithm == "lzfse" else {
+                        throw AppError.backupCorrupted
+                    }
                     backupData = try self.decompressLZFSE(backupData)
+                    if backupData.count != compression.originalSize {
+                        throw AppError.backupCorrupted
+                    }
                 }
             } else {
                 backupData = downloadedData
@@ -185,6 +225,18 @@ actor BackupManager: BackupManagerProtocol {
         }
         
         logger.info("Restore completed successfully")
+    }
+
+    private func looksLikeEnvelope(_ data: Data) -> Bool {
+        guard data.count >= 5 else { return false }
+        let headerLength: Int = data.prefix(4).withUnsafeBytes { rawBufferPointer in
+            let value = rawBufferPointer.load(as: UInt32.self)
+            return Int(UInt32(bigEndian: value))
+        }
+        guard headerLength > 1, headerLength <= data.count - 4 else { return false }
+        let headerStartIndex = data.index(data.startIndex, offsetBy: 4)
+        let firstHeaderByte = data[headerStartIndex]
+        return firstHeaderByte == UInt8(ascii: "{")
     }
     
     func lastBackupInfo() async -> BackupInfo? {

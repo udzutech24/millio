@@ -21,6 +21,7 @@ nonisolated struct RetryPolicy {
 /// Выполняет операцию с повторами согласно политике
 func withRetry<T>(
     policy: RetryPolicy = .default,
+    shouldRetry: @escaping (Error) -> Bool,
     operation: @escaping () async throws -> T
 ) async throws -> T {
     var lastError: Error?
@@ -30,6 +31,10 @@ func withRetry<T>(
         do {
             return try await operation()
         } catch {
+            if !shouldRetry(error) {
+                throw error
+            }
+            
             lastError = error
             
             if attempt < policy.maxAttempts {
@@ -40,4 +45,11 @@ func withRetry<T>(
     }
     
     throw lastError ?? NSError(domain: "Retry", code: -1, userInfo: [NSLocalizedDescriptionKey: "Retry failed after \(policy.maxAttempts) attempts"])
+}
+
+func withRetry<T>(
+    policy: RetryPolicy = .default,
+    operation: @escaping () async throws -> T
+) async throws -> T {
+    try await withRetry(policy: policy, shouldRetry: { _ in true }, operation: operation)
 }
