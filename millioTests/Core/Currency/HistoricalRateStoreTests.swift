@@ -42,7 +42,7 @@ struct HistoricalRateStoreTests {
     
     private func createTestModelContext() throws -> ModelContext {
         let context = Self.sharedContainer.mainContext
-        try context.delete(model: HistoricalRate.self)
+        try context.deleteAll(HistoricalRate.self)
         try context.save()
         return context
     }

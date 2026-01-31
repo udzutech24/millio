@@ -298,14 +298,21 @@ final class CashflowViewModel: ViewModelProtocol {
     private func subscribeToFinanceEvents() {
         eventSubscriptionID = EventBus.shared.subscribe { [weak self] event in
             guard let self else { return }
-            if case FinanceEvent.cardsUpdated = event {
+            switch event {
+            case FinanceEvent.cardsUpdated:
                 self.loadCards()
+            case BackupEvent.restoreCompleted:
+                self.loadTransactions()
+                self.loadCards()
+            default:
+                break
             }
         }
     }
     
     private func loadAvailableCurrencies() {
-        Task {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
             _ = await CurrencyRateService.shared.getRate(from: "USD", to: "RUB")
             let fromRateSource = Set(CurrencyRateService.shared.getAvailableCurrencies())
             
@@ -333,8 +340,9 @@ final class CashflowViewModel: ViewModelProtocol {
     
     private func updateChartData() {
         state.currencyConversionWarning = nil
-        Task {
-            await updateChartDataAsync()
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.updateChartDataAsync()
         }
     }
     
@@ -618,8 +626,9 @@ final class CashflowViewModel: ViewModelProtocol {
             
             // Обновляем баланс карт только для новых транзакций
             if isNewTransaction {
-                Task {
-                    await updateCardBalancesAsync(for: transaction)
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    await self.updateCardBalancesAsync(for: transaction)
                 }
             }
             

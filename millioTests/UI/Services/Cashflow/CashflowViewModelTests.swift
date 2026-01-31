@@ -25,9 +25,9 @@ struct CashflowViewModelTests {
 
     private func createTestModelContext() throws -> ModelContext {
         let context = Self.sharedContainer.mainContext
-        try context.delete(model: CashflowTransaction.self)
-        try context.delete(model: HistoricalRate.self)
-        try context.delete(model: Card.self)
+        try context.deleteAll(CashflowTransaction.self)
+        try context.deleteAll(HistoricalRate.self)
+        try context.deleteAll(Card.self)
         try context.save()
         return context
     }

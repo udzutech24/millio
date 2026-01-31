@@ -129,9 +129,10 @@ final class CashbackViewModel: ViewModelProtocol {
     
     /// Очищает несуществующие cardIDs из кешбэков
     private func cleanInvalidCardIDs(in cashbacks: [Cashback]) {
-        let cardUniqueIDMap: [String: Card] = Dictionary(uniqueKeysWithValues: state.availableCards.map { card in
-            (card.cardUniqueID, card)
-        })
+        let cardUniqueIDMap: [String: Card] = Dictionary(
+            state.availableCards.map { ($0.cardUniqueID, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
         
         AppLogger.log(.info, category: "Cashback", "Available \(state.availableCards.count) cards with unique IDs")
         

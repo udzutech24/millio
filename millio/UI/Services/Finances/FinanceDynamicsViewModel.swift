@@ -200,6 +200,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     private let historicalRateStore: HistoricalRateStore
     
     let defaults = UserDefaults.standard
+    private var eventSubscriptionID: UUID?
     
     // Кэши для оптимизации производительности
     var cardsCache: [String: Card] = [:]
@@ -251,6 +252,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         if state.period == .custom && state.customPeriod == nil {
             state.period = .month
         }
+        
+        subscribeToEvents()
     }
 
     convenience init(
@@ -270,6 +273,26 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             initialAccountCurrency: initialAccountCurrency,
             currencyService: CurrencyRateService.shared
         )
+    }
+    
+    deinit {
+        if let id = eventSubscriptionID {
+            Task { @MainActor in
+                EventBus.shared.unsubscribe(id)
+            }
+        }
+    }
+    
+    private func subscribeToEvents() {
+        eventSubscriptionID = EventBus.shared.subscribe { [weak self] event in
+            guard let self else { return }
+            switch event {
+            case BackupEvent.restoreCompleted:
+                self.loadData()
+            default:
+                break
+            }
+        }
     }
     
     func handle(_ action: FinanceDynamicsAction) {
@@ -442,13 +465,13 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     /// Перестроить кэши для оптимизации производительности
     func rebuildCaches() {
         // Кэш карт
-        cardsCache = Dictionary(uniqueKeysWithValues: state.availableCards.map { ($0.cardUniqueID, $0) })
+        cardsCache = Dictionary(state.availableCards.map { ($0.cardUniqueID, $0) }, uniquingKeysWith: { first, _ in first })
         
         // Кэш кредитов
-        creditsCache = Dictionary(uniqueKeysWithValues: state.availableCredits.map { ($0.creditUniqueID, $0) })
+        creditsCache = Dictionary(state.availableCredits.map { ($0.creditUniqueID, $0) }, uniquingKeysWith: { first, _ in first })
         
         // Кэш инвестиций
-        investmentsCache = Dictionary(uniqueKeysWithValues: state.availableInvestments.map { ($0.investmentUniqueID, $0) })
+        investmentsCache = Dictionary(state.availableInvestments.map { ($0.investmentUniqueID, $0) }, uniquingKeysWith: { first, _ in first })
         
         // Очищаем кэши балансов при перезагрузке данных
         initialBalancesCache.removeAll()

@@ -521,8 +521,22 @@ final class FinanceViewModel: ViewModelProtocol {
     private func subscribeToFinanceEvents() {
         financeEventsSubscriptionID = EventBus.shared.subscribe { [weak self] event in
             guard let self else { return }
-            if case FinanceEvent.creditsUpdated = event {
-                handleCreditsUpdated()
+            switch event {
+            case FinanceEvent.creditsUpdated:
+                self.handleCreditsUpdated()
+            case FinanceEvent.cardsUpdated:
+                self.loadAccounts()
+                Task {
+                    await self.refreshGroupTotalsAndAmounts()
+                }
+            case BackupEvent.restoreCompleted:
+                self.loadGroups()
+                self.loadAccounts()
+                Task {
+                    await self.refreshGroupTotalsAndAmounts()
+                }
+            default:
+                break
             }
         }
     }

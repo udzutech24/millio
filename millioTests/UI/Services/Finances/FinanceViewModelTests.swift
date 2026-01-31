@@ -66,11 +66,11 @@ struct FinanceViewModelTests {
     private func createTestModelContext() throws -> ModelContext {
         let context = Self.sharedContainer.mainContext
         // Очищаем все данные от предыдущих тестов
-        try context.delete(model: FinanceAccount.self)
-        try context.delete(model: FinanceGroup.self)
-        try context.delete(model: Card.self)
-        try context.delete(model: Credit.self)
-        try context.delete(model: Investment.self)
+        try context.deleteAll(FinanceAccount.self)
+        try context.deleteAll(FinanceGroup.self)
+        try context.deleteAll(Card.self)
+        try context.deleteAll(Credit.self)
+        try context.deleteAll(Investment.self)
         try context.save()
         return context
     }

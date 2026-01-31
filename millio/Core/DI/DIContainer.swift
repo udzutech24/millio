@@ -33,6 +33,11 @@ final class DIContainer {
         modelContainer: ModelContainer
     ) -> DIContainer {
         let modelContext = modelContainer.mainContext
+        do {
+            try DataIntegrityCleaner.runIfNeeded(modelContext: modelContext)
+        } catch {
+            AppLogger.log(.error, category: "Integrity", "Data integrity cleanup failed: \(error.localizedDescription)")
+        }
         let dataRepository = DataRepository(
             modelContext: modelContext,
             modelContainer: modelContainer

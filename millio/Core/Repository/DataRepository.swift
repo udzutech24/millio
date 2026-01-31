@@ -88,7 +88,10 @@ final class DataRepository: DataRepositoryProtocol {
     }
     
     func importAllDataAsync(_ data: Data) async throws {
-        try await worker.importAllData(data)
+        try await MainActor.run {
+            try Self.importAllData(data, into: modelContext)
+            try DataIntegrityCleaner.dedupeAll(modelContext: modelContext)
+        }
     }
     
     static func importAllData(_ data: Data, into context: ModelContext) throws {
@@ -153,7 +156,9 @@ final class DataRepository: DataRepositoryProtocol {
     }
     
     func clearAllDataAsync() async throws {
-        try await worker.clearAllData()
+        try await MainActor.run {
+            try Self.clearAllData(in: modelContext)
+        }
     }
     
     static func clearAllData(in context: ModelContext) throws {
@@ -190,15 +195,5 @@ actor DataRepositoryWorker {
     func exportAllData() throws -> Data {
         let modelContext = makeContext()
         return try DataRepository.exportAllData(from: modelContext)
-    }
-    
-    func importAllData(_ data: Data) throws {
-        let modelContext = makeContext()
-        try DataRepository.importAllData(data, into: modelContext)
-    }
-    
-    func clearAllData() throws {
-        let modelContext = makeContext()
-        try DataRepository.clearAllData(in: modelContext)
     }
 }

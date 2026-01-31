@@ -147,6 +147,10 @@ actor BackupManager: BackupManagerProtocol {
     func restoreLatest(passphrase: String?) async throws {
         logger.info("Starting restore...")
         
+        await MainActor.run {
+            EventBus.shared.publish(BackupEvent.restoreStarted)
+        }
+        
         let dataRepository = self.dataRepository
         let encryption = self.encryption
         let cloudStore = self.cloudStore
@@ -265,7 +269,15 @@ actor BackupManager: BackupManagerProtocol {
         }
         
             logger.info("Restore completed successfully")
+            
+            await MainActor.run {
+                EventBus.shared.publish(BackupEvent.restoreCompleted)
+            }
         } catch {
+            let appError = (error as? AppError) ?? .unknown(error)
+            await MainActor.run {
+                EventBus.shared.publish(BackupEvent.restoreFailed(appError))
+            }
             CrashReporting.log("Restore failed: \(String(describing: error))")
             CrashReporting.record(error: error)
             throw error
