@@ -297,11 +297,7 @@ struct ProfileView: View {
                 .padding(.trailing, 24)
             }
             .frame(height: 90)
-            .background {
-                // Шум (noise effect)
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(.ultraThinMaterial)
-            }
+           
             .background {
                 // Градиентный фон
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -359,10 +355,10 @@ struct ProfileView: View {
     
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
-            .font(.system(size: 14, weight: .regular))
+            .font(.system(size: 12, weight: .regular))
             .foregroundStyle(AppColors.textPrimary.opacity(0.35))
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 24)
+            .padding(.horizontal, 20)
     }
     
     private func card<Content: View>(@ViewBuilder content: () -> Content) -> some View {
@@ -370,7 +366,7 @@ struct ProfileView: View {
             .padding(.horizontal, 18)
             .padding(.vertical, 18)
             .background {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(
                         LinearGradient(
                             colors: AppColors.profileCardBackgroundGradient,
@@ -379,7 +375,7 @@ struct ProfileView: View {
                         )
                     )
                     .overlay {
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
                             .stroke(
                                 LinearGradient(
                                     colors: AppColors.profileCardStrokeGradient,
@@ -389,9 +385,9 @@ struct ProfileView: View {
                                 lineWidth: 1
                             )
                     }
-                    .shadow(color: AppColors.profileCardGlow, radius: 18, x: 0, y: 0)
+                   
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, 20)
     }
     
     private func settingsRow<Trailing: View>(

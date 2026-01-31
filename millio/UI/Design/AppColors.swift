@@ -118,13 +118,13 @@ enum AppColors {
     static let toggleOnGreen = Color(hex: "34C759")
 
     static let profileCardBackgroundGradient = [
-        Color(hex: "2A0B3D").opacity(0.65),
-        Color(hex: "0B0614").opacity(0.95)
+        Color(hex: "712382").opacity(0.1),
+        Color(hex: "bd00e7").opacity(0.1)
     ]
 
     static let profileCardStrokeGradient = [
-        Color(hex: "A400FF").opacity(0.70),
-        Color(hex: "3B2FFF").opacity(0.55)
+        Color(hex: "bd00e7").opacity(0.3),
+        Color(hex: "3f1249").opacity(0.3)
     ]
 
     static let profileCardGlow = Color(hex: "8B00FF").opacity(0.18)
