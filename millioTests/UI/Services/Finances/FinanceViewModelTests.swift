@@ -524,4 +524,137 @@ struct FinanceViewModelTests {
 
         #expect(didPublish, "При удалении карты должно публиковаться событие обновления списка карт")
     }
+
+    @Test("Удаление группы архивирует все привязанные счета и удаляет связи")
+    func testDeleteGroupArchivesAccountsAndRemovesLinks() throws {
+        let modelContext = try createTestModelContext()
+
+        let group = FinanceGroup(name: "Группа", colorHex: "#FF0000")
+        modelContext.insert(group)
+
+        let card = Card(
+            name: "Карта",
+            cardNumber: "1234",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 10.0
+        )
+        let credit = Credit(
+            name: "Кредит",
+            amount: 1000.0,
+            interestRate: 10.0,
+            monthlyPayment: 100.0,
+            startDate: Date(),
+            termMonths: 12,
+            currency: "RUB",
+            bank: .other,
+            creditType: .consumer
+        )
+        credit.remainingAmount = 500.0
+        let investment = Investment(
+            name: "Актив",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 50.0,
+            currency: "RUB"
+        )
+
+        modelContext.insert(card)
+        modelContext.insert(credit)
+        modelContext.insert(investment)
+
+        let cardAccount = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        cardAccount.group = group
+        let creditAccount = FinanceAccount(accountType: .credit, accountID: credit.creditUniqueID)
+        creditAccount.group = group
+        let investmentAccount = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+        investmentAccount.group = group
+
+        modelContext.insert(cardAccount)
+        modelContext.insert(creditAccount)
+        modelContext.insert(investmentAccount)
+
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadGroups)
+        viewModel.handle(.loadAccounts)
+
+        let groupToDelete = try #require(viewModel.state.groups.first)
+        viewModel.handle(.deleteGroup(groupToDelete))
+
+        let groups = (try? modelContext.fetch(FetchDescriptor<FinanceGroup>())) ?? []
+        #expect(groups.isEmpty)
+
+        let links = (try? modelContext.fetch(FetchDescriptor<FinanceAccount>())) ?? []
+        #expect(links.isEmpty)
+
+        let cards = (try? modelContext.fetch(FetchDescriptor<Card>())) ?? []
+        let credits = (try? modelContext.fetch(FetchDescriptor<Credit>())) ?? []
+        let investments = (try? modelContext.fetch(FetchDescriptor<Investment>())) ?? []
+
+        let updatedCard = cards.first { $0.cardUniqueID == card.cardUniqueID }
+        let updatedCredit = credits.first { $0.creditUniqueID == credit.creditUniqueID }
+        let updatedInvestment = investments.first { $0.investmentUniqueID == investment.investmentUniqueID }
+
+        #expect(updatedCard?.archivedAt != nil)
+        #expect(updatedCredit?.archivedAt != nil)
+        #expect(updatedInvestment?.archivedAt != nil)
+    }
+
+    @Test("Восстановление из архива сбрасывает archivedAt и выставляет новую дату при повторной архивации")
+    func testRestoreFromArchiveResetsDateAndReArchiveSetsNewDate() throws {
+        let modelContext = try createTestModelContext()
+
+        let group = FinanceGroup(name: "Группа", colorHex: "#00FF00")
+        modelContext.insert(group)
+
+        let oldArchivedAt = Date(timeIntervalSince1970: 1_600_000_000)
+        let card = Card(
+            name: "Архивная карта",
+            cardNumber: "9999",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 100.0
+        )
+        card.archivedAt = oldArchivedAt
+        modelContext.insert(card)
+
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadGroups)
+        viewModel.handle(.loadAccounts)
+
+        let targetGroup = try #require(viewModel.state.groups.first)
+        viewModel.handle(.restoreArchivedAccountToGroup(
+            accountType: .card,
+            accountID: card.cardUniqueID,
+            group: targetGroup
+        ))
+
+        let cardsAfterRestore = (try? modelContext.fetch(FetchDescriptor<Card>())) ?? []
+        let restoredCard = try #require(cardsAfterRestore.first { $0.cardUniqueID == card.cardUniqueID })
+        #expect(restoredCard.archivedAt == nil)
+
+        let linksAfterRestore = (try? modelContext.fetch(FetchDescriptor<FinanceAccount>())) ?? []
+        let link = try #require(linksAfterRestore.first { $0.accountType == .card && $0.accountID == card.cardUniqueID })
+
+        viewModel.handle(.removeAccountFromGroup(link))
+
+        let cardsAfterReArchive = (try? modelContext.fetch(FetchDescriptor<Card>())) ?? []
+        let reArchivedCard = try #require(cardsAfterReArchive.first { $0.cardUniqueID == card.cardUniqueID })
+        let newArchivedAt = try #require(reArchivedCard.archivedAt)
+        #expect(newArchivedAt > oldArchivedAt)
+    }
 }

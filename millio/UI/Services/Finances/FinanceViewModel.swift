@@ -67,6 +67,19 @@ struct FinanceState {
     
     /// Доступные активы
     var availableInvestments: [Investment] = []
+
+    /// Архивные карты
+    var archivedCards: [Card] = []
+
+    /// Архивные кредиты
+    var archivedCredits: [Credit] = []
+
+    /// Архивные активы
+    var archivedInvestments: [Investment] = []
+
+    var hasArchivedAccounts: Bool {
+        !archivedCards.isEmpty || !archivedCredits.isEmpty || !archivedInvestments.isEmpty
+    }
     
     /// Непривязанные карты (не добавленные ни в одну группу)
     var unattachedCards: [Card] = []
@@ -148,6 +161,7 @@ enum FinanceAction {
     case showAddAccountSheet(FinanceGroup?)
     case hideAddAccountSheet
     case addAccountToGroup(accountType: FinanceAccountType, accountID: String, group: FinanceGroup?)
+    case restoreArchivedAccountToGroup(accountType: FinanceAccountType, accountID: String, group: FinanceGroup?)
     case removeAccountFromGroup(FinanceAccount)
     case deleteAccountPermanently(FinanceAccount)
     case showCreateCardSheet
@@ -292,6 +306,9 @@ final class FinanceViewModel: ViewModelProtocol {
             
         case .addAccountToGroup(let accountType, let accountID, let group):
             addAccountToGroup(accountType: accountType, accountID: accountID, group: group)
+
+        case .restoreArchivedAccountToGroup(let accountType, let accountID, let group):
+            restoreArchivedAccountToGroup(accountType: accountType, accountID: accountID, group: group)
             
         case .removeAccountFromGroup(let account):
             removeAccountFromGroup(account)
@@ -465,14 +482,17 @@ final class FinanceViewModel: ViewModelProtocol {
         let cardDescriptor = FetchDescriptor<Card>()
         let allCards = (try? modelContext.fetch(cardDescriptor)) ?? []
         state.availableCards = allCards.filter { $0.archivedAt == nil }
+        state.archivedCards = allCards.filter { $0.archivedAt != nil }
         
         let creditDescriptor = FetchDescriptor<Credit>()
         let allCredits = (try? modelContext.fetch(creditDescriptor)) ?? []
         state.availableCredits = allCredits.filter { $0.archivedAt == nil }
+        state.archivedCredits = allCredits.filter { $0.archivedAt != nil }
         
         let investmentDescriptor = FetchDescriptor<Investment>()
         let allInvestments = (try? modelContext.fetch(investmentDescriptor)) ?? []
         state.availableInvestments = allInvestments.filter { $0.archivedAt == nil }
+        state.archivedInvestments = allInvestments.filter { $0.archivedAt != nil }
 
         rebuildAccountCaches()
         rebuildAllAccountCaches(
@@ -877,19 +897,40 @@ final class FinanceViewModel: ViewModelProtocol {
     }
     
     private func deleteGroup(_ group: FinanceGroup) {
-        // Отвязываем все счета от группы (но не удаляем их)
+        let now = Date()
+        var didAffectCards = false
+        var didAffectCredits = false
+
         if let accounts = group.accounts {
             for account in accounts {
-                account.group = nil
+                let kind = updateUnderlyingArchiveState(for: account, archivedAt: now)
+                switch kind {
+                case .card:
+                    didAffectCards = true
+                case .credit:
+                    didAffectCredits = true
+                case .investment, .none:
+                    break
+                }
+
+                modelContext.delete(account)
             }
         }
-        
+
         modelContext.delete(group)
-        
+
         do {
             try modelContext.save()
             loadGroups()
-            updateUnattachedItems() // Обновляем списки непривязанных элементов после удаления группы
+            loadAccounts()
+            calculateTotalAmount()
+
+            if didAffectCards {
+                EventBus.shared.publish(FinanceEvent.cardsUpdated)
+            }
+            if didAffectCredits {
+                EventBus.shared.publish(FinanceEvent.creditsUpdated)
+            }
         } catch {
             AppLogger.log(.error, category: "Finance", "Failed to delete group: \(error.localizedDescription)")
         }
@@ -988,7 +1029,7 @@ final class FinanceViewModel: ViewModelProtocol {
             group.accounts?.contains(where: { $0.accountUniqueID == account.accountUniqueID }) ?? false
         }
 
-        let isCardAccount = archiveUnderlyingAccount(for: account)
+        let kind = updateUnderlyingArchiveState(for: account, archivedAt: Date())
         modelContext.delete(account)
         
         do {
@@ -1006,8 +1047,11 @@ final class FinanceViewModel: ViewModelProtocol {
                     state.groupTotals[group.groupUniqueID] = total
                 }
             }
-            if isCardAccount {
+            if kind == .card {
                 EventBus.shared.publish(FinanceEvent.cardsUpdated)
+            }
+            if kind == .credit {
+                EventBus.shared.publish(FinanceEvent.creditsUpdated)
             }
         } catch {
             AppLogger.log(.error, category: "Finance", "Failed to remove account: \(error.localizedDescription)")
@@ -1018,7 +1062,7 @@ final class FinanceViewModel: ViewModelProtocol {
         let accountGroup = state.groups.first { group in
             group.accounts?.contains(where: { $0.accountUniqueID == account.accountUniqueID }) ?? false
         }
-        let isCardAccount = archiveUnderlyingAccount(for: account)
+        let kind = updateUnderlyingArchiveState(for: account, archivedAt: Date())
 
         do {
             try modelContext.save()
@@ -1034,36 +1078,71 @@ final class FinanceViewModel: ViewModelProtocol {
                     state.groupTotals[group.groupUniqueID] = total
                 }
             }
-            if isCardAccount {
+            if kind == .card {
                 EventBus.shared.publish(FinanceEvent.cardsUpdated)
+            }
+            if kind == .credit {
+                EventBus.shared.publish(FinanceEvent.creditsUpdated)
             }
         } catch {
             AppLogger.log(.error, category: "Finance", "Failed to delete account permanently: \(error.localizedDescription)")
         }
     }
 
-    private func archiveUnderlyingAccount(for account: FinanceAccount) -> Bool {
-        let isCardAccount = account.accountType == .card
+    private enum UnderlyingAccountKind {
+        case card
+        case credit
+        case investment
+        case none
+    }
 
-        switch account.accountType {
+    @discardableResult
+    private func updateUnderlyingArchiveState(for account: FinanceAccount, archivedAt: Date?) -> UnderlyingAccountKind {
+        updateUnderlyingArchiveState(accountType: account.accountType, accountID: account.accountID, archivedAt: archivedAt)
+    }
+
+    @discardableResult
+    private func updateUnderlyingArchiveState(accountType: FinanceAccountType, accountID: String, archivedAt: Date?) -> UnderlyingAccountKind {
+        switch accountType {
         case .card:
-            if let card = allCardByID[account.accountID] {
-                card.archivedAt = Date()
+            let card = allCardByID[accountID] ?? ((try? modelContext.fetch(FetchDescriptor<Card>())) ?? []).first { $0.cardUniqueID == accountID }
+            if let card {
+                card.archivedAt = archivedAt
                 card.updatedAt = Date()
             }
+            return .card
         case .credit:
-            if let credit = allCreditByID[account.accountID] {
-                credit.archivedAt = Date()
+            let credit = allCreditByID[accountID] ?? ((try? modelContext.fetch(FetchDescriptor<Credit>())) ?? []).first { $0.creditUniqueID == accountID }
+            if let credit {
+                credit.archivedAt = archivedAt
                 credit.updatedAt = Date()
             }
+            return .credit
         case .investment:
-            if let investment = allInvestmentByID[account.accountID] {
-                investment.archivedAt = Date()
+            let investment = allInvestmentByID[accountID] ?? ((try? modelContext.fetch(FetchDescriptor<Investment>())) ?? []).first { $0.investmentUniqueID == accountID }
+            if let investment {
+                investment.archivedAt = archivedAt
                 investment.updatedAt = Date()
             }
+            return .investment
+        }
+    }
+
+    private func restoreArchivedAccountToGroup(accountType: FinanceAccountType, accountID: String, group: FinanceGroup?) {
+        guard let targetGroup = group else {
+            AppLogger.log(.error, category: "Finance", "Group is required")
+            return
         }
 
-        return isCardAccount
+        let kind = updateUnderlyingArchiveState(accountType: accountType, accountID: accountID, archivedAt: nil)
+        addAccountToGroup(accountType: accountType, accountID: accountID, group: targetGroup)
+
+        if kind == .card {
+            EventBus.shared.publish(FinanceEvent.cardsUpdated)
+        }
+        if kind == .credit {
+            EventBus.shared.publish(FinanceEvent.creditsUpdated)
+        }
     }
     
     private func editAccount(_ account: FinanceAccount) {

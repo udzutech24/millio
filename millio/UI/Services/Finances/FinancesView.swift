@@ -1191,7 +1191,24 @@ private struct FinanceAddAccountView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     
+    private enum AddAccountMode: String, CaseIterable, Identifiable {
+        case create
+        case archived
+        
+        var id: String { rawValue }
+        
+        var title: String {
+            switch self {
+            case .create:
+                "Создать"
+            case .archived:
+                "Из архива"
+            }
+        }
+    }
+    
     @State private var selectedAccountType: FinanceAccountType = .card
+    @State private var addAccountMode: AddAccountMode = .create
     @State private var selectedGroupID: String? = nil
     @State private var showCreateGroup = false
     @State private var cardViewModel: CardViewModel?
@@ -1200,6 +1217,7 @@ private struct FinanceAddAccountView: View {
     @State private var cardData: Card?
     @State private var creditData: (name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, includeInTotal: Bool)?
     @State private var investmentData: (name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool)?
+    @State private var selectedArchivedAccountID: String? = nil
     
     var targetGroup: FinanceGroup? {
         if let selectedGroupID = selectedGroupID {
@@ -1354,6 +1372,24 @@ private struct FinanceAddAccountView: View {
         }
     }
     
+    private var addAccountModeSection: some View {
+        Group {
+            if viewModel.state.hasArchivedAccounts {
+                Section {
+                    Picker("Режим", selection: $addAccountMode) {
+                        ForEach(AddAccountMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("Режим")
+                        .foregroundStyle(AppColors.textSecondary)
+                }
+            }
+        }
+    }
+    
     @ViewBuilder
     private var createFormSections: some View {
         switch selectedAccountType {
@@ -1437,12 +1473,165 @@ private struct FinanceAddAccountView: View {
             }
         }
     }
+
+    @ViewBuilder
+    private var archivedSelectionSections: some View {
+        Section {
+            VStack(spacing: 0) {
+                switch selectedAccountType {
+                case .card:
+                    if viewModel.state.archivedCards.isEmpty {
+                        Text("Нет архивных карт")
+                            .font(.system(size: 14))
+                            .foregroundStyle(AppColors.textTertiary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, 8)
+                    } else {
+                        ForEach(viewModel.state.archivedCards) { card in
+                            Button {
+                                selectedArchivedAccountID = card.cardUniqueID
+                            } label: {
+                                HStack {
+                                    Text(card.name)
+                                        .foregroundStyle(AppColors.textPrimary)
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+                                    
+                                    Spacer()
+                                    
+                                    if selectedArchivedAccountID == card.cardUniqueID {
+                                        Image(systemName: "checkmark")
+                                            .foregroundStyle(
+                                                LinearGradient(
+                                                    colors: AppColors.financesGradient,
+                                                    startPoint: .leading,
+                                                    endPoint: .trailing
+                                                )
+                                            )
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 12)
+                                .padding(.horizontal, 16)
+                            }
+                            .buttonStyle(.plain)
+                            
+                            if card.cardUniqueID != viewModel.state.archivedCards.last?.cardUniqueID {
+                                Divider()
+                                    .padding(.leading, 16)
+                            }
+                        }
+                    }
+                    
+                case .credit:
+                    if viewModel.state.archivedCredits.isEmpty {
+                        Text("Нет архивных кредитов")
+                            .font(.system(size: 14))
+                            .foregroundStyle(AppColors.textTertiary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, 8)
+                    } else {
+                        ForEach(viewModel.state.archivedCredits) { credit in
+                            Button {
+                                selectedArchivedAccountID = credit.creditUniqueID
+                            } label: {
+                                HStack {
+                                    Text(credit.name)
+                                        .foregroundStyle(AppColors.textPrimary)
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+                                    
+                                    Spacer()
+                                    
+                                    if selectedArchivedAccountID == credit.creditUniqueID {
+                                        Image(systemName: "checkmark")
+                                            .foregroundStyle(
+                                                LinearGradient(
+                                                    colors: AppColors.financesGradient,
+                                                    startPoint: .leading,
+                                                    endPoint: .trailing
+                                                )
+                                            )
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 12)
+                                .padding(.horizontal, 16)
+                            }
+                            .buttonStyle(.plain)
+                            
+                            if credit.creditUniqueID != viewModel.state.archivedCredits.last?.creditUniqueID {
+                                Divider()
+                                    .padding(.leading, 16)
+                            }
+                        }
+                    }
+                    
+                case .investment:
+                    if viewModel.state.archivedInvestments.isEmpty {
+                        Text("Нет архивных активов")
+                            .font(.system(size: 14))
+                            .foregroundStyle(AppColors.textTertiary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, 8)
+                    } else {
+                        ForEach(viewModel.state.archivedInvestments) { investment in
+                            Button {
+                                selectedArchivedAccountID = investment.investmentUniqueID
+                            } label: {
+                                HStack {
+                                    Text(investment.name)
+                                        .foregroundStyle(AppColors.textPrimary)
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+                                    
+                                    Spacer()
+                                    
+                                    if selectedArchivedAccountID == investment.investmentUniqueID {
+                                        Image(systemName: "checkmark")
+                                            .foregroundStyle(
+                                                LinearGradient(
+                                                    colors: AppColors.financesGradient,
+                                                    startPoint: .leading,
+                                                    endPoint: .trailing
+                                                )
+                                            )
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 12)
+                                .padding(.horizontal, 16)
+                            }
+                            .buttonStyle(.plain)
+                            
+                            if investment.investmentUniqueID != viewModel.state.archivedInvestments.last?.investmentUniqueID {
+                                Divider()
+                                    .padding(.leading, 16)
+                            }
+                        }
+                    }
+                }
+            }
+            .background(.ultraThinMaterial)
+            .cornerRadius(12)
+        } header: {
+            Text("Выбрать из архива")
+                .foregroundStyle(AppColors.textSecondary)
+        }
+        
+        groupSection
+    }
     
     @ViewBuilder
     private var formContent: some View {
         Form {
             accountTypeSection
-            createFormSections
+            addAccountModeSection
+            if addAccountMode == .create {
+                createFormSections
+            } else {
+                archivedSelectionSections
+            }
         }
         .scrollContentBackground(.hidden)
     }
@@ -1494,12 +1683,21 @@ private struct FinanceAddAccountView: View {
     var body: some View {
         NavigationStack {
             navigationContent
-                .modifier(SelectedAccountTypeChangeHandler(selectedAccountType: $selectedAccountType, cardViewModel: $cardViewModel, creditViewModel: $creditViewModel, investmentViewModel: $investmentViewModel))
+                .modifier(SelectedAccountTypeChangeHandler(selectedAccountType: $selectedAccountType, cardViewModel: $cardViewModel, creditViewModel: $creditViewModel, investmentViewModel: $investmentViewModel, selectedArchivedAccountID: $selectedArchivedAccountID))
+                .onChange(of: addAccountMode) { _, newValue in
+                    if newValue == .create {
+                        selectedArchivedAccountID = nil
+                    }
+                }
         }
     }
     
     private var isValid: Bool {
         guard targetGroup != nil else { return false }
+
+        if addAccountMode == .archived {
+            return selectedArchivedAccountID != nil
+        }
         
         switch selectedAccountType {
         case .card:
@@ -1513,6 +1711,17 @@ private struct FinanceAddAccountView: View {
     
     private func addAccount() {
         guard let targetGroup = targetGroup else { return }
+
+        if addAccountMode == .archived {
+            guard let archivedAccountID = selectedArchivedAccountID else { return }
+            viewModel.handle(.restoreArchivedAccountToGroup(
+                accountType: selectedAccountType,
+                accountID: archivedAccountID,
+                group: targetGroup
+            ))
+            dismiss()
+            return
+        }
         
         switch selectedAccountType {
         case .card:
@@ -1620,11 +1829,13 @@ private struct SelectedAccountTypeChangeHandler: ViewModifier {
     @Binding var cardViewModel: CardViewModel?
     @Binding var creditViewModel: CreditViewModel?
     @Binding var investmentViewModel: InvestmentViewModel?
+    @Binding var selectedArchivedAccountID: String?
 
     func body(content: Content) -> some View {
         content
             .onChange(of: selectedAccountType) { oldValue, newValue in
                 if oldValue != newValue {
+                    selectedArchivedAccountID = nil
                     // Сбрасываем viewModels при смене типа
                     switch oldValue {
                     case .card:
