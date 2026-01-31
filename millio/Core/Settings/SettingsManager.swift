@@ -23,6 +23,7 @@ final class SettingsManager: SettingsManagerProtocol {
     private let dailyReminderEnabledKey = "isDailyReminderEnabled"
     private let profileDisplayNameKey = "profileDisplayName"
     private let profileAvatarFilePathKey = "profileAvatarFilePath"
+    private let primaryCurrencyCodeKey = "primaryCurrencyCode"
     
     var isBackupEnabled: Bool {
         get {
@@ -72,6 +73,20 @@ final class SettingsManager: SettingsManagerProtocol {
         set {
             UserDefaults.standard.set(newValue, forKey: profileAvatarFilePathKey)
             logger.info("Profile avatar path updated")
+        }
+    }
+
+    /// Основная валюта приложения (используется как дефолт во всех денежных сервисах).
+    /// Хранится в UserDefaults, чтобы быть доступной на уровне Core.
+    var primaryCurrencyCode: String {
+        get {
+            UserDefaults.standard.string(forKey: primaryCurrencyCodeKey) ?? "RUB"
+        }
+        set {
+            let normalized = newValue.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            guard !normalized.isEmpty else { return }
+            UserDefaults.standard.set(normalized, forKey: primaryCurrencyCodeKey)
+            logger.info("Primary currency code updated: \(normalized)")
         }
     }
     

@@ -21,6 +21,11 @@ final class AppState {
             LanguageManager.shared.setLanguage(selectedLanguage)
         }
     }
+    var primaryCurrencyCode: String = "RUB" {
+        didSet {
+            SettingsManager.shared.primaryCurrencyCode = primaryCurrencyCode
+        }
+    }
     var isBackupEnabled: Bool = false
     var isDailyReminderEnabled: Bool = false
     
@@ -41,6 +46,7 @@ final class AppState {
         self.isBackupEnabled = SettingsManager.shared.isBackupEnabled
         self.isDailyReminderEnabled = SettingsManager.shared.isDailyReminderEnabled
         self.selectedLanguage = LanguageManager.shared.currentLanguage
+        self.primaryCurrencyCode = SettingsManager.shared.primaryCurrencyCode
         self.profileDisplayName = SettingsManager.shared.profileDisplayName
         self.profileAvatarPath = SettingsManager.shared.profileAvatarFilePath
     }

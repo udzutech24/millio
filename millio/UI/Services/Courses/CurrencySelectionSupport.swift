@@ -186,6 +186,43 @@ public struct CurrencySelectionSupport {
         }
         return map
     }()
+
+    /// Полный список кодов валют для UI-пикеров.
+    /// Собирается из локалей системы, чтобы не зависеть от загруженных курсов и наличия интернета.
+    static let allCurrencyCodesForPicker: [String] = {
+        var set = Set<String>()
+        
+        for id in Locale.availableIdentifiers {
+            let loc = Locale(identifier: id)
+            if let code = loc.currency?.identifier.trimmingCharacters(in: .whitespacesAndNewlines).uppercased(), !code.isEmpty {
+                set.insert(code)
+            }
+        }
+        
+        if #available(iOS 16.0, *) {
+            for code in Locale.commonISOCurrencyCodes {
+                let normalized = code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+                if !normalized.isEmpty {
+                    set.insert(normalized)
+                }
+            }
+        }
+        
+        set.insert("USD")
+        return Array(set).sorted()
+    }()
+    
+    static func pinnedCurrencyCodes(for current: String) -> [String] {
+        let base = ["RUB", "USD", "EUR"]
+        let normalizedCurrent = current.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if normalizedCurrent.isEmpty {
+            return base
+        }
+        if base.contains(normalizedCurrent) {
+            return base
+        }
+        return [normalizedCurrent] + base
+    }
 }
 
 // MARK: - Picker with pinned favorites on top + RU/EN search
@@ -387,4 +424,3 @@ public struct CurrencyPickerView: View {
         }
     }
 }
-

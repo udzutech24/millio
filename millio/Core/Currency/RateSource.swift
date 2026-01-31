@@ -27,4 +27,13 @@ enum RateSource: String, CaseIterable, Identifiable {
         case .frankfurter: return "Официальные курсы Европейского ЦБ"
         }
     }
+    
+    var latestURL: URL? {
+        switch self {
+        case .erapi:
+            return URL(string: "https://open.er-api.com/v6/latest/USD")
+        case .frankfurter:
+            return URL(string: "https://api.frankfurter.app/latest?from=USD")
+        }
+    }
 }

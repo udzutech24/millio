@@ -171,7 +171,7 @@ final class CashflowViewModel: ViewModelProtocol {
     private var eventSubscriptionID: UUID?
     
     private var storedDisplayCurrency: String {
-        get { defaults.string(forKey: "cashflow_display_currency") ?? "RUB" }
+        get { defaults.string(forKey: "cashflow_display_currency") ?? SettingsManager.shared.primaryCurrencyCode }
         set { defaults.set(newValue, forKey: "cashflow_display_currency") }
     }
     

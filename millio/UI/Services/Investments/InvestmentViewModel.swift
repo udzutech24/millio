@@ -84,7 +84,7 @@ final class InvestmentViewModel: ViewModelProtocol {
     private let defaults = UserDefaults.standard
     
     private var storedDisplayCurrency: String {
-        get { defaults.string(forKey: "investment_display_currency") ?? "RUB" }
+        get { defaults.string(forKey: "investment_display_currency") ?? SettingsManager.shared.primaryCurrencyCode }
         set { defaults.set(newValue, forKey: "investment_display_currency") }
     }
     

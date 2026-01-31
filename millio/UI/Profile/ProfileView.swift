@@ -14,6 +14,8 @@ struct ProfileView: View {
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var showNameEditSheet = false
     @State private var editedName = ""
+    @State private var showPrimaryCurrencySheet = false
+    @State private var primaryCurrencySearchText = ""
     
     private var appVersion: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -36,6 +38,38 @@ struct ProfileView: View {
                     // Блок приветствия и аватарки
                     profileHeaderBlock
                         .padding(.top, 16)
+                    
+                    sectionHeader("Основные")
+                    card {
+                        VStack(spacing: 16) {
+                            NavigationLink {
+                                LanguageSelectionView(selectedLanguage: Binding(
+                                    get: { appState.selectedLanguage },
+                                    set: { appState.selectedLanguage = $0 }
+                                ))
+                            } label: {
+                                settingsRow(iconSystemName: "globe", title: "Язык") {
+                                    Text(appState.selectedLanguage.displayName)
+                                        .foregroundStyle(AppColors.profileValueAccent)
+                                    chevron
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("profile.languageLink")
+                            
+                            Button {
+                                showPrimaryCurrencySheet = true
+                            } label: {
+                                settingsRow(iconSystemName: "dollarsign", title: "Валюта") {
+                                    Text(appState.primaryCurrencyCode)
+                                        .foregroundStyle(AppColors.profileValueAccent)
+                                    chevron
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("profile.primaryCurrencyButton")
+                        }
+                    }
                     
                     // Premium блок
                     premiumSubscriptionBlock
@@ -73,24 +107,6 @@ struct ProfileView: View {
                                 .tint(AppColors.toggleOnGreen)
                                 .accessibilityIdentifier("profile.dailyReminderToggle")
                             }
-                        }
-                        
-                        sectionHeader("Язык и регион")
-                        card {
-                            NavigationLink {
-                                LanguageSelectionView(selectedLanguage: Binding(
-                                    get: { appState.selectedLanguage },
-                                    set: { appState.selectedLanguage = $0 }
-                                ))
-                            } label: {
-                                settingsRow(iconSystemName: "globe", title: "Язык") {
-                                    Text(appState.selectedLanguage.displayName)
-                                        .foregroundStyle(AppColors.profileValueAccent)
-                                    chevron
-                                }
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("profile.languageLink")
                         }
                         
                         sectionHeader("О приложении")
@@ -134,6 +150,32 @@ struct ProfileView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .sheet(isPresented: $showNameEditSheet) {
             nameEditSheet
+        }
+        .sheet(isPresented: $showPrimaryCurrencySheet) {
+            NavigationStack {
+                CurrencyPickerView(
+                    allCodes: CurrencySelectionSupport.allCurrencyCodesForPicker,
+                    searchText: $primaryCurrencySearchText,
+                    selectedCodes: CurrencySelectionSupport.pinnedCurrencyCodes(for: appState.primaryCurrencyCode),
+                    onSelect: { code in
+                        appState.primaryCurrencyCode = code
+                        primaryCurrencySearchText = ""
+                        showPrimaryCurrencySheet = false
+                    }
+                )
+                .navigationTitle("Валюта")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Закрыть") {
+                            primaryCurrencySearchText = ""
+                            showPrimaryCurrencySheet = false
+                        }
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
+            .accessibilityIdentifier("profile.primaryCurrencySheet")
         }
         .onChange(of: selectedPhotoItem) { _, newItem in
             Task {

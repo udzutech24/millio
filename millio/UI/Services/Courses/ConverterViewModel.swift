@@ -63,6 +63,7 @@ final class ConverterViewModel: ViewModelProtocol {
     
     // Persisted settings (using UserDefaults instead of @AppStorage for MVVM compliance)
     private let defaults = UserDefaults.standard
+    private let rateRepository: RateRepositoryProtocol
     
     private var selectedCodesRaw: String {
         get { defaults.string(forKey: "conv_selected_codes") ?? "RUB,USD,EUR,TRY,GBP,KZT" }
@@ -118,7 +119,8 @@ final class ConverterViewModel: ViewModelProtocol {
         max(0, min(8, storedFractionDigits))
     }
     
-    init() {
+    init(rateRepository: RateRepositoryProtocol = RateRepository.shared) {
+        self.rateRepository = rateRepository
         onAppearInit()
         // Проверяем валюты после инициализации, если курсы уже загружены
         if state.allRates.count > 1 {
@@ -600,69 +602,9 @@ final class ConverterViewModel: ViewModelProtocol {
         defer { state.isFetchingRates = false }
         
         do {
-            guard let url = CurrencyRateService.makeLatestURL(for: state.rateSource) else {
-                throw URLError(.badURL)
-            }
-            
-            let (data, response) = try await URLSession.shared.data(from: url)
-            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-                throw URLError(.badServerResponse)
-            }
-            
-            var rates: [String: Double] = [:]
-            var updateTS: Double = now
-            
-            switch state.rateSource {
-            case .erapi:
-                let decoded = try JSONDecoder().decode(ERAPIResponse.self, from: data)
-                guard decoded.result == "success" else { throw URLError(.cannotParseResponse) }
-                rates = decoded.rates
-                updateTS = TimeInterval(decoded.time_last_update_unix)
-                
-            case .frankfurter:
-                let decoded = try JSONDecoder().decode(FrankfurterResponse.self, from: data)
-                // Frankfurter использует EUR как базовую валюту, нужно конвертировать в USD
-                let eurRates = decoded.rates
-                if let eurToUsd = eurRates["USD"] {
-                    // Конвертируем все курсы из EUR в USD
-                    for (code, eurRate) in eurRates {
-                        if code != "USD" {
-                            // 1 USD = (1 / eurToUsd) * eurRate EUR = eurRate / eurToUsd
-                            rates[code] = eurRate / eurToUsd
-                        }
-                    }
-                } else {
-                    // Если нет курса EUR/USD, используем курсы как есть (но это не должно произойти)
-                    rates = eurRates
-                }
-                // Парсим дату из ответа (формат YYYY-MM-DD)
-                if let dateStr = decoded.date {
-                    let df = DateFormatter()
-                    df.dateFormat = "yyyy-MM-dd"
-                    df.locale = Locale(identifier: "en_US_POSIX")
-                    df.timeZone = TimeZone(secondsFromGMT: 0) // UTC
-                    if let date = df.date(from: dateStr) {
-                        // Устанавливаем время на 16:00 CET (15:00 UTC) - время обновления Frankfurter
-                        var components = Calendar.current.dateComponents([.year, .month, .day], from: date)
-                        components.hour = 15
-                        components.minute = 0
-                        components.timeZone = TimeZone(secondsFromGMT: 0)
-                        if let dateWithTime = Calendar.current.date(from: components) {
-                            updateTS = dateWithTime.timeIntervalSince1970
-                        } else {
-                            updateTS = date.timeIntervalSince1970
-                        }
-                    }
-                }
-            }
-            
-            rates["USD"] = 1.0
-            rates = rates.filter { !$0.key.isEmpty && $0.value > 0 }
-            
-            if rates.isEmpty { throw URLError(.cannotParseResponse) }
-            
-            state.allRates = rates
-            storedLastRatesTS = updateTS
+            let snapshot = try await rateRepository.getLatestRates(source: state.rateSource, forceRefresh: true, allowStaleOnError: false)
+            state.allRates = snapshot.rates
+            storedLastRatesTS = snapshot.updatedAt
             state.isOffline = false
             
             // Фильтруем выбранные валюты, оставляя только те, что есть в новом источнике

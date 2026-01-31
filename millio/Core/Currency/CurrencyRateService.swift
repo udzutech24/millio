@@ -24,18 +24,20 @@ protocol CurrencyRateServiceProtocol {
 /// Соответствует принципам Offline-First: кэширует курсы и работает без интернета
 @MainActor
 final class CurrencyRateService: CurrencyRateServiceProtocol {
-    static let shared = CurrencyRateService()
+    static let shared = CurrencyRateService(rateSource: .erapi, rateRepository: RateRepository.shared)
+    
+    /// Источник курсов для данного экземпляра сервиса.
+    /// Глобально для приложения используется `.erapi`.
+    private(set) var rateSource: RateSource
+    private let rateRepository: RateRepositoryProtocol
     
     private var cachedRates: [String: Double] = ["USD": 1.0]
     private var lastUpdateTS: Double = 0
     private let cacheTimeout: TimeInterval = 12 * 3600 // 12 часов
     
-    private init() {}
-    
-    /// Получить текущий источник курсов из настроек
-    private var currentRateSource: RateSource {
-        let stored = UserDefaults.standard.string(forKey: "conv_rate_source") ?? "erapi"
-        return RateSource(rawValue: stored) ?? .erapi
+    init(rateSource: RateSource = .erapi, rateRepository: RateRepositoryProtocol = RateRepository.shared) {
+        self.rateSource = rateSource
+        self.rateRepository = rateRepository
     }
     
     /// Получить курс конвертации: сколько единиц 'to' за 1 единицу 'from'
@@ -97,85 +99,20 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
     /// Явно обновить курсы из API (принудительная загрузка)
     /// Используется когда нужно гарантировать наличие актуальных курсов
     func forceRefreshRates() async {
-        await refreshRates()
+        await refreshRates(force: true)
     }
     
     /// Обновить курсы из выбранного источника
-    private func refreshRates() async {
-        let source = currentRateSource
+    private func refreshRates(force: Bool = false) async {
+        let source = rateSource
+        let now = Date().timeIntervalSince1970
+        let needsUpdate = force || cachedRates.count <= 1 || (now - lastUpdateTS) > cacheTimeout
         
         do {
-            guard let url = Self.makeLatestURL(for: source) else {
-                return
-            }
-            switch source {
-            case .erapi:
-                break
-            case .frankfurter:
-                break
-            }
-            
-            let (data, response) = try await URLSession.shared.data(from: url)
-            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-                throw URLError(.badServerResponse)
-            }
-            
-            var rates: [String: Double] = [:]
-            var updateTS: Double = Date().timeIntervalSince1970
-            
-            switch source {
-            case .erapi:
-                struct ERAPIResponse: Decodable {
-                    let result: String
-                    let rates: [String: Double]
-                    let time_last_update_unix: Int
-                }
-                let decoded = try JSONDecoder().decode(ERAPIResponse.self, from: data)
-                guard decoded.result == "success" else { throw URLError(.cannotParseResponse) }
-                rates = decoded.rates
-                updateTS = TimeInterval(decoded.time_last_update_unix)
-                
-            case .frankfurter:
-                struct FrankfurterResponse: Decodable {
-                    let rates: [String: Double]
-                    let date: String
-                }
-                let decoded = try JSONDecoder().decode(FrankfurterResponse.self, from: data)
-                let eurRates: [String: Double] = decoded.rates
-                if let eurToUsd = eurRates["USD"] {
-                    for (code, eurRate) in eurRates {
-                        if code != "USD" {
-                            rates[code] = eurRate / eurToUsd
-                        }
-                    }
-                } else {
-                    rates = eurRates
-                }
-                // Парсим дату из ответа (формат YYYY-MM-DD)
-                let df = DateFormatter()
-                df.dateFormat = "yyyy-MM-dd"
-                df.locale = Locale(identifier: "en_US_POSIX")
-                df.timeZone = TimeZone(secondsFromGMT: 0)
-                if let date = df.date(from: decoded.date) {
-                    // Устанавливаем время на 16:00 CET (15:00 UTC) - время обновления Frankfurter
-                    var components = Calendar.current.dateComponents([.year, .month, .day], from: date)
-                    components.hour = 15
-                    components.minute = 0
-                    components.timeZone = TimeZone(secondsFromGMT: 0)
-                    if let dateWithTime = Calendar.current.date(from: components) {
-                        updateTS = dateWithTime.timeIntervalSince1970
-                    } else {
-                        updateTS = date.timeIntervalSince1970
-                    }
-                }
-            }
-            
-            rates["USD"] = 1.0
-            rates = rates.filter { !$0.key.isEmpty && $0.value > 0 }
-            
-            if !rates.isEmpty {
-                cachedRates = rates
-                lastUpdateTS = updateTS
+            let snapshot = try await rateRepository.getLatestRates(source: source, forceRefresh: needsUpdate, allowStaleOnError: true)
+            if !snapshot.rates.isEmpty {
+                cachedRates = snapshot.rates
+                lastUpdateTS = snapshot.updatedAt
             }
         } catch {
             // Оставляем старые значения в кэше
@@ -184,12 +121,7 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
     }
 
     nonisolated static func makeLatestURL(for source: RateSource) -> URL? {
-        switch source {
-        case .erapi:
-            return URL(string: "https://open.er-api.com/v6/latest/USD")
-        case .frankfurter:
-            return URL(string: "https://api.frankfurter.app/latest?from=USD")
-        }
+        source.latestURL
     }
     
     private func fetchFrankfurterRate(on date: Date, from: String, to: String) async -> Double? {

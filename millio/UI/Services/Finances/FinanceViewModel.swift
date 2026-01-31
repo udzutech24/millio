@@ -221,7 +221,7 @@ final class FinanceViewModel: ViewModelProtocol {
     private var allInvestmentByID: [String: Investment] = [:]
     
     private var storedDisplayCurrency: String {
-        get { defaults.string(forKey: "finance_display_currency") ?? "RUB" }
+        get { defaults.string(forKey: "finance_display_currency") ?? SettingsManager.shared.primaryCurrencyCode }
         set { defaults.set(newValue, forKey: "finance_display_currency") }
     }
     

@@ -21,6 +21,8 @@
 - **AppState + AppLifecycleUseCase**
 - **AppRouter + RootViewResolver** для навигации
 - **Мультиязычность** (String Catalog + LanguageManager)
+- **Основная валюта приложения** (persisted-настройка в профиле, используется как дефолт в денежных сервисах)
+- **Курсы валют:** глобально фиксированы на ERAPI; выбор источника внутри конвертера изолирован и не влияет на остальные экраны
 - **Subscription/Notification менеджеры** на уровне Core
 
 ## ✅ Соответствие CORE_RULES.md (в целом)
