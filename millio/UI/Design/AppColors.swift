@@ -113,6 +113,21 @@ enum AppColors {
     
     /// Brand primary (RGB 104, 165, 255)
     static let brandPrimary = Color(red: 104/255.0, green: 165/255.0, blue: 255/255.0)
+
+    static let profileValueAccent = Color(hex: "6AA8FF")
+    static let toggleOnGreen = Color(hex: "34C759")
+
+    static let profileCardBackgroundGradient = [
+        Color(hex: "2A0B3D").opacity(0.65),
+        Color(hex: "0B0614").opacity(0.95)
+    ]
+
+    static let profileCardStrokeGradient = [
+        Color(hex: "A400FF").opacity(0.70),
+        Color(hex: "3B2FFF").opacity(0.55)
+    ]
+
+    static let profileCardGlow = Color(hex: "8B00FF").opacity(0.18)
     
     // MARK: - Premium
 

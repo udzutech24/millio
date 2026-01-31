@@ -42,38 +42,22 @@ struct ProfileView: View {
 
                     // Settings section
                     VStack(spacing: 20) {
-                        
-                        VStack(spacing: 16) {
-                            Section(content: {
+                        sectionHeader("Настройки")
+                        card {
+                            VStack(spacing: 16) {
                                 NavigationLink {
                                     BackupManagementView(router: router)
                                 } label: {
-                                    HStack(spacing: 12) {
-                                        Text("Резервное копирование")
-                                            .foregroundStyle(AppColors.textPrimary)
-                                        
-                                        Spacer()
-                                        
-                                        if appState.isBackupEnabled {
-                                            if let backupDate = appState.lastBackupDate {
-                                                Text(backupDate.formatted(date: .abbreviated, time: .shortened))
-                                                    .foregroundStyle(AppColors.textTertiary)
-                                            } else {
-                                                Text("Включено")
-                                                    .foregroundStyle(AppColors.textTertiary)
-                                            }
-                                        } else {
-                                            Text("Выключено")
-                                                .foregroundStyle(AppColors.textTertiary)
-                                        }
-                                        
-                                        Image(systemName: "chevron.right")
-                                            .font(.system(size: 12, weight: .semibold))
+                                    settingsRow(iconSystemName: "arrow.clockwise.icloud", title: "Резервное копирование") {
+                                        Text(backupStatusText)
                                             .foregroundStyle(AppColors.textTertiary)
+                                        chevron
                                     }
                                 }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("profile.backupLink")
                                 
-                                Toggle("Ежедневные напоминания", isOn: Binding(
+                                Toggle(isOn: Binding(
                                     get: { appState.isDailyReminderEnabled },
                                     set: { newValue in
                                         appState.isDailyReminderEnabled = newValue
@@ -83,123 +67,71 @@ struct ProfileView: View {
                                             await NotificationManager.shared.scheduleDailyReminder(enabled: newValue)
                                         }
                                     }
+                                )) {
+                                    settingsRow(iconSystemName: "bell", title: "Ежедневные напоминания") { EmptyView() }
+                                }
+                                .tint(AppColors.toggleOnGreen)
+                                .accessibilityIdentifier("profile.dailyReminderToggle")
+                            }
+                        }
+                        
+                        sectionHeader("Язык и регион")
+                        card {
+                            NavigationLink {
+                                LanguageSelectionView(selectedLanguage: Binding(
+                                    get: { appState.selectedLanguage },
+                                    set: { appState.selectedLanguage = $0 }
                                 ))
-                                .tint(.blue)
-                            }, header: {
-                                Text("Настройки")
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundStyle(AppColors.textSecondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            })
-                        }
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 20)
-                        .background {
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(.ultraThinMaterial)
-                        }
-                        .padding(.horizontal, 24)
-                        
-                        // Language selection
-                        VStack(spacing: 16) {
-                            Section(content: {
-                                NavigationLink {
-                                    LanguageSelectionView(selectedLanguage: Binding(
-                                        get: { appState.selectedLanguage },
-                                        set: { appState.selectedLanguage = $0 }
-                                    ))
-                                } label: {
-                                    HStack {
-                                        Text("Язык")
-                                            .foregroundStyle(AppColors.textPrimary)
-                                        Spacer()
-                                        Text(appState.selectedLanguage.displayName)
-                                            .foregroundStyle(AppColors.textTertiary)
-                                        Image(systemName: "chevron.right")
-                                            .font(.system(size: 12, weight: .semibold))
-                                            .foregroundStyle(AppColors.textTertiary)
-                                    }
+                            } label: {
+                                settingsRow(iconSystemName: "globe", title: "Язык") {
+                                    Text(appState.selectedLanguage.displayName)
+                                        .foregroundStyle(AppColors.profileValueAccent)
+                                    chevron
                                 }
-                            }, header: {
-                                Text("Язык и регион")
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundStyle(AppColors.textSecondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            })
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("profile.languageLink")
                         }
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 20)
-                        .background {
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(.ultraThinMaterial)
-                        }
-                        .padding(.horizontal, 24)
                         
-                        // App info
-                        VStack(spacing: 16) {
-                            Section(content: {
-                                HStack {
-                                    Text("Версия")
-                                        .foregroundStyle(AppColors.textPrimary)
-                                    Spacer()
-                                    Text(appVersion)
-                                        .foregroundStyle(AppColors.textTertiary)
-                                }
-                            }, header: {
-                                Text("О приложении")
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundStyle(AppColors.textSecondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            })
+                        sectionHeader("О приложении")
+                        card {
+                            settingsRow(iconSystemName: "info.circle", title: "Версия") {
+                                Text(appVersion)
+                                    .foregroundStyle(AppColors.textTertiary)
+                            }
+                            .accessibilityIdentifier("profile.versionRow")
                         }
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 20)
-                        .background {
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(.ultraThinMaterial)
-                        }
-                        .padding(.horizontal, 24)
                         
                         #if DEBUG
-                        // Debug section
-                        VStack(spacing: 16) {
-                            Section(content: {
-                                Toggle("Премиум доступ", isOn: Binding(
-                                    get: { appState.isPro },
-                                    set: { newValue in
-                                        if newValue {
-                                            SubscriptionManager.shared.grantDebugPremium()
-                                        } else {
-                                            SubscriptionManager.shared.revokeDebugPremium()
-                                        }
-                                        appState.subscriptionStatus = SubscriptionManager.shared.status
-                                        appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
-                                        appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+                        sectionHeader("Отладка")
+                        card {
+                            Toggle(isOn: Binding(
+                                get: { appState.isPro },
+                                set: { newValue in
+                                    if newValue {
+                                        SubscriptionManager.shared.grantDebugPremium()
+                                    } else {
+                                        SubscriptionManager.shared.revokeDebugPremium()
                                     }
-                                ))
-                                .tint(.blue)
-                            }, header: {
-                                Text("Отладка")
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundStyle(AppColors.textSecondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            })
+                                    appState.subscriptionStatus = SubscriptionManager.shared.status
+                                    appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
+                                    appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+                                }
+                            )) {
+                                settingsRow(iconSystemName: "crown", title: "Премиум доступ") { EmptyView() }
+                            }
+                            .tint(AppColors.toggleOnGreen)
+                            .accessibilityIdentifier("profile.debugPremiumToggle")
                         }
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 20)
-                        .background {
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(.ultraThinMaterial)
-                        }
-                        .padding(.horizontal, 24)
                         #endif
                     }
                 }
                 .padding(.bottom, 40)
             }
         }
-        .navigationTitle("Профиль")
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .sheet(isPresented: $showNameEditSheet) {
             nameEditSheet
         }
@@ -239,10 +171,10 @@ struct ProfileView: View {
             } label: {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Привет,")
-                        .font(.system(size: 13))
-                        .foregroundStyle(AppColors.textSecondary)
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(AppColors.textTertiary)
                     Text(appState.profileDisplayName)
-                        .font(.system(size: 22, weight: .bold))
+                        .font(.system(size: 28, weight: .bold))
                         .foregroundStyle(AppColors.textPrimary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -250,6 +182,7 @@ struct ProfileView: View {
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 24)
+        .accessibilityIdentifier("profile.header")
     }
     
     private var avatarView: some View {
@@ -272,6 +205,18 @@ struct ProfileView: View {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(AppColors.accentDarkBlue)
         }
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: AppColors.profileCardStrokeGradient,
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0
+                )
+        }
+        
     }
     
     private var nameEditSheet: some View {
@@ -280,8 +225,26 @@ struct ProfileView: View {
                 GradientBackground()
                 VStack(spacing: 20) {
                     TextField("Имя", text: $editedName)
-                        .textFieldStyle(.roundedBorder)
-                        .padding(.horizontal)
+                        .font(.system(size: 17, weight: .regular))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                        .background {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(Color.black.opacity(0.35))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .stroke(
+                                            LinearGradient(
+                                                colors: AppColors.profileCardStrokeGradient,
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            ),
+                                            lineWidth: 1
+                                        )
+                                }
+                        }
+                        .padding(.horizontal, 24)
                     Spacer()
                 }
                 .padding(.top, 24)
@@ -378,12 +341,82 @@ struct ProfileView: View {
         .padding(.trailing, 20)
     }
     
-    private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
-        formatter.locale = Locale(identifier: "ru_RU")
-        return formatter.string(from: date)
+    private var chevron: some View {
+        Image(systemName: "chevron.right")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(AppColors.textTertiary)
+    }
+    
+    private var backupStatusText: String {
+        if appState.isBackupEnabled {
+            if let backupDate = appState.lastBackupDate {
+                return backupDate.formatted(date: .abbreviated, time: .shortened)
+            }
+            return "Включено"
+        }
+        return "Выключено"
+    }
+    
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 14, weight: .regular))
+            .foregroundStyle(AppColors.textPrimary.opacity(0.35))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 24)
+    }
+    
+    private func card<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .padding(.horizontal, 18)
+            .padding(.vertical, 18)
+            .background {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: AppColors.profileCardBackgroundGradient,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .stroke(
+                                LinearGradient(
+                                    colors: AppColors.profileCardStrokeGradient,
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1
+                            )
+                    }
+                    .shadow(color: AppColors.profileCardGlow, radius: 18, x: 0, y: 0)
+            }
+            .padding(.horizontal, 24)
+    }
+    
+    private func settingsRow<Trailing: View>(
+        iconSystemName: String,
+        title: String,
+        @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: iconSystemName)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(AppColors.textSecondary)
+                .frame(width: 22, alignment: .leading)
+            
+            Text(title)
+                .font(.system(size: 16, weight: .regular))
+                .foregroundStyle(AppColors.textPrimary)
+            
+            Spacer()
+            
+            HStack(spacing: 6) {
+                trailing()
+            }
+        }
+        .frame(minHeight: 28)
+        .contentShape(Rectangle())
     }
 }
 
