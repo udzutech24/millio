@@ -29,6 +29,38 @@ struct SettingsAndCurrencyDefaultsTests {
         #expect(SettingsManager.shared.primaryCurrencyCode == "RUB")
     }
     
+    @Test("SettingsManager favoriteCurrencyCodes defaults to RUB/USD/EUR")
+    func testFavoriteCurrencyDefaults() {
+        let key = "favoriteCurrencyCodes"
+        let original = UserDefaults.standard.array(forKey: key) as? [String]
+        defer {
+            if let original {
+                UserDefaults.standard.set(original, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+        
+        UserDefaults.standard.removeObject(forKey: key)
+        #expect(SettingsManager.shared.favoriteCurrencyCodes == ["RUB", "USD", "EUR"])
+    }
+    
+    @Test("SettingsManager favoriteCurrencyCodes persists and normalizes uniquely")
+    func testFavoriteCurrencyPersistsAndNormalizes() {
+        let key = "favoriteCurrencyCodes"
+        let original = UserDefaults.standard.array(forKey: key) as? [String]
+        defer {
+            if let original {
+                UserDefaults.standard.set(original, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+        
+        SettingsManager.shared.favoriteCurrencyCodes = [" rub ", "usd", "RUB", "", " eur "]
+        #expect(SettingsManager.shared.favoriteCurrencyCodes == ["RUB", "USD", "EUR"])
+    }
+    
     @Test("CurrencyRateService ignores conv_rate_source and stays on ERAPI")
     @MainActor
     func testCurrencyRateServiceRateSourceIsolation() {

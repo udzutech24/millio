@@ -24,6 +24,7 @@ final class SettingsManager: SettingsManagerProtocol {
     private let profileDisplayNameKey = "profileDisplayName"
     private let profileAvatarFilePathKey = "profileAvatarFilePath"
     private let primaryCurrencyCodeKey = "primaryCurrencyCode"
+    private let favoriteCurrencyCodesKey = "favoriteCurrencyCodes"
     
     var isBackupEnabled: Bool {
         get {
@@ -88,6 +89,38 @@ final class SettingsManager: SettingsManagerProtocol {
             UserDefaults.standard.set(normalized, forKey: primaryCurrencyCodeKey)
             logger.info("Primary currency code updated: \(normalized)")
         }
+    }
+
+    /// Избранные валюты для быстрых выборов в UI.
+    /// Хранятся в UserDefaults (строки ISO-кодов в верхнем регистре).
+    var favoriteCurrencyCodes: [String] {
+        get {
+            if UserDefaults.standard.object(forKey: favoriteCurrencyCodesKey) == nil {
+                return ["RUB", "USD", "EUR"]
+            }
+            let raw = UserDefaults.standard.array(forKey: favoriteCurrencyCodesKey) as? [String] ?? []
+            return Self.normalizeCurrencyCodes(raw)
+        }
+        set {
+            let normalized = Self.normalizeCurrencyCodes(newValue)
+            UserDefaults.standard.set(normalized, forKey: favoriteCurrencyCodesKey)
+            logger.info("Favorite currency codes updated: \(normalized.count)")
+        }
+    }
+    
+    static func normalizeCurrencyCodes(_ codes: [String]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        
+        for raw in codes {
+            let c = raw.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            guard !c.isEmpty else { continue }
+            if seen.contains(c) { continue }
+            seen.insert(c)
+            result.append(c)
+        }
+        
+        return result
     }
     
     private init() {}

@@ -230,13 +230,27 @@ public struct CurrencySelectionSupport {
 public struct CurrencyPickerView: View {
     public let allCodes: [String]
     @Binding public var searchText: String
-    public let selectedCodes: [String]   // избранные
+    public let selectedCodes: [String]   // закрепленные сверху (контекстно: избранные / выбранные)
+    public let favoriteCodes: Set<String>
+    public let currentSelection: String?
+    public let onToggleFavorite: ((String) -> Void)?
     public let onSelect: (String) -> Void
 
-    public init(allCodes: [String], searchText: Binding<String>, selectedCodes: [String], onSelect: @escaping (String) -> Void) {
+    public init(
+        allCodes: [String],
+        searchText: Binding<String>,
+        selectedCodes: [String],
+        favoriteCodes: Set<String> = [],
+        currentSelection: String? = nil,
+        onToggleFavorite: ((String) -> Void)? = nil,
+        onSelect: @escaping (String) -> Void
+    ) {
         self.allCodes = allCodes.map { $0.uppercased() }
         self._searchText = searchText
         self.selectedCodes = selectedCodes.map { $0.uppercased() }
+        self.favoriteCodes = Set(favoriteCodes.map { $0.uppercased() })
+        self.currentSelection = currentSelection?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        self.onToggleFavorite = onToggleFavorite
         self.onSelect = onSelect
     }
 
@@ -293,11 +307,19 @@ public struct CurrencyPickerView: View {
                                 .foregroundStyle(AppColors.textPrimary)
                                 .padding(.horizontal, 20)
                                 .padding(.top, 8)
-                            
-                            ForEach(pinnedFavorites, id: \.self) { code in
-                                row(code: code, showStar: true)
-                                    .padding(.horizontal, 16)
+
+                            SelectionSectionCard {
+                                ForEach(Array(pinnedFavorites.enumerated()), id: \.element) { index, code in
+                                    currencyRow(
+                                        code: code,
+                                        isSelected: currentSelection == code.uppercased(),
+                                        isFavorite: true,
+                                        showDivider: index != pinnedFavorites.count - 1,
+                                        dividerColor: AppColors.textPrimary.opacity(0.08)
+                                    )
+                                }
                             }
+                            .padding(.horizontal, 16)
                         }
                     }
 
@@ -308,11 +330,20 @@ public struct CurrencyPickerView: View {
                                 .foregroundStyle(AppColors.textPrimary)
                                 .padding(.horizontal, 20)
                                 .padding(.top, pinnedFavorites.isEmpty ? 8 : 16)
-                            
-                            ForEach(filteredOthers, id: \.self) { code in
-                                row(code: code, showStar: selectedCodes.contains(code.uppercased()))
-                                    .padding(.horizontal, 16)
+
+                            VStack(spacing: 0) {
+                                ForEach(Array(filteredOthers.enumerated()), id: \.element) { index, code in
+                                    let uppercasedCode = code.uppercased()
+                                    currencyRow(
+                                        code: uppercasedCode,
+                                        isSelected: currentSelection == uppercasedCode,
+                                        isFavorite: favoriteCodes.contains(uppercasedCode),
+                                        showDivider: index != filteredOthers.count - 1,
+                                        dividerColor: AppColors.brandPrimary.opacity(0.35)
+                                    )
+                                }
                             }
+                            .padding(.horizontal, 16)
                         }
                     }
                 }
@@ -375,52 +406,47 @@ public struct CurrencyPickerView: View {
     }
 
     @ViewBuilder
-    private func row(code: String, showStar: Bool) -> some View {
+    private func currencyRow(
+        code: String,
+        isSelected: Bool,
+        isFavorite: Bool,
+        showDivider: Bool,
+        dividerColor: Color
+    ) -> some View {
         let c = code.uppercased()
+        let ruName = CurrencySelectionSupport.nameRu(for: c) ?? ""
 
-        HStack(spacing: 12) {
-            currencyIcon(for: c)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(c)
-                    .font(.headline)
-                    .foregroundStyle(AppColors.textPrimary)
-
-                // Для крипты покажем русское имя, для фиата — русскую локализацию
-                let ruName = CurrencySelectionSupport.nameRu(for: c) ?? ""
-                if !ruName.isEmpty {
-                    Text(ruName)
-                        .font(.caption)
-                        .foregroundStyle(AppColors.textTertiary)
+        SelectionItemRow(
+            title: c,
+            subtitle: ruName.isEmpty ? nil : ruName,
+            isSelected: isSelected,
+            dividerColor: dividerColor,
+            showDivider: showDivider,
+            onTap: { onSelect(c) },
+            leading: {
+                currencyIcon(for: c)
+            },
+            trailing: {
+                if let onToggleFavorite {
+                    Button {
+                        onToggleFavorite(c)
+                    } label: {
+                        Image(systemName: isFavorite ? "star.fill" : "star")
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: AppColors.coursesGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .opacity(isFavorite ? 1 : 0.55)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("currencyPicker.favorite.\(c)")
+                } else {
+                    EmptyView()
                 }
             }
-
-            Spacer()
-
-            if showStar {
-                Image(systemName: "star.fill")
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: AppColors.coursesGradient,
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-            }
-        }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 16)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(AppColors.textPrimary.opacity(0.1), lineWidth: 1)
-                )
         )
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onSelect(c)
-        }
     }
 }

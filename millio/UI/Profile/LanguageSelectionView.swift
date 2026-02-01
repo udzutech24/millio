@@ -15,28 +15,38 @@ struct LanguageSelectionView: View {
         ZStack {
             GradientBackground()
             
-            List {
-                ForEach(Language.allCases, id: \.self) { language in
-                    Button {
-                        selectedLanguage = language
-                        dismiss()
-                    } label: {
-                        HStack {
-                            Text(language.displayName)
-                                .foregroundStyle(AppColors.textPrimary)
-                            
-                            Spacer()
-                            
-                            if selectedLanguage == language {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(AppColors.textPrimary)
-                            }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    SelectionSectionCard {
+                        ForEach(Array(Language.allCases.enumerated()), id: \.element) { index, language in
+                            SelectionItemRow(
+                                title: language.displayName,
+                                subtitle: nil,
+                                isSelected: selectedLanguage == language,
+                                dividerColor: AppColors.textPrimary.opacity(0.08),
+                                showDivider: index != Language.allCases.count - 1,
+                                onTap: {
+                                    selectedLanguage = language
+                                    dismiss()
+                                },
+                                leading: {
+                                    Image(systemName: "globe")
+                                        .renderingMode(.template)
+                                        .resizable()
+                                        .scaledToFit()
+                                        .foregroundStyle(AppColors.textPrimary)
+                                },
+                                trailing: {
+                                    EmptyView()
+                                }
+                            )
                         }
                     }
-                    .listRowBackground(Color.clear)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
                 }
+                .padding(.vertical, 8)
             }
-            .scrollContentBackground(.hidden)
         }
         .navigationTitle("Язык")
         .navigationBarTitleDisplayMode(.inline)

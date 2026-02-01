@@ -293,6 +293,17 @@ struct InvestmentViewModelTests {
     @Test("Расчёт totalPositive и totalNegative")
     func testCalculateTotals() async throws {
         let context = try createTestModelContext()
+        
+        let displayCurrencyKey = "investment_display_currency"
+        let originalDisplayCurrency = UserDefaults.standard.string(forKey: displayCurrencyKey)
+        defer {
+            if let originalDisplayCurrency {
+                UserDefaults.standard.set(originalDisplayCurrency, forKey: displayCurrencyKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: displayCurrencyKey)
+            }
+        }
+        UserDefaults.standard.set("RUB", forKey: displayCurrencyKey)
 
         let positive1 = Investment(
             name: "Плюс 1",
@@ -332,8 +343,16 @@ struct InvestmentViewModelTests {
 
         let viewModel = InvestmentViewModel(modelContext: context)
 
-        // Ждём асинхронный расчёт
-        try await Task.sleep(for: .milliseconds(100))
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(2))
+        while clock.now < deadline {
+            if abs(viewModel.state.totalPositive - 15000) < 0.01,
+               abs(viewModel.state.totalNegative - 3000) < 0.01,
+               abs(viewModel.state.balance - 12000) < 0.01 {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(25))
+        }
 
         #expect(abs(viewModel.state.totalPositive - 15000) < 0.01)
         #expect(abs(viewModel.state.totalNegative - 3000) < 0.01)
