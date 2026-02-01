@@ -86,4 +86,112 @@ struct HistoricalRateStoreTests {
         #expect(result.rate == 100.0)
         #expect(result.resolution == .exact)
     }
+
+    // MARK: - Дополнительные тесты
+
+    @Test("Одинаковые валюты: resolution = .exact, rate = 1.0")
+    func testSameCurrencyReturnsExact() async throws {
+        let context = try createTestModelContext()
+        let mockService = MockHistoricalRateService()
+
+        let store = HistoricalRateStore(modelContext: context, currencyService: mockService)
+
+        let result = await store.getRate(on: Date(), from: "USD", to: "USD")
+
+        #expect(result.rate == 1.0)
+        #expect(result.resolution == .exact)
+    }
+
+    @Test("Fallback на предыдущий курс при отсутствии точного")
+    func testFallbackToPreviousRate() async throws {
+        let context = try createTestModelContext()
+        let mockService = MockHistoricalRateService()
+        mockService.historicalRate = nil // API не возвращает исторический курс
+
+        let today = Calendar.current.startOfDay(for: Date())
+        let weekAgo = Calendar.current.startOfDay(for: Date().addingTimeInterval(-7 * 86400))
+
+        // Вставляем курс недельной давности
+        let cachedRate = HistoricalRate(
+            baseCurrency: "USD",
+            quoteCurrency: "RUB",
+            rate: 88.0,
+            rateDate: weekAgo,
+            source: "test"
+        )
+        context.insert(cachedRate)
+        try context.save()
+
+        let store = HistoricalRateStore(modelContext: context, currencyService: mockService)
+
+        // Запрашиваем курс на сегодня — нет точного, берётся предыдущий
+        let result = await store.getRate(on: today, from: "USD", to: "RUB")
+
+        #expect(result.rate == 88.0)
+        #expect(result.resolution == .previous)
+        #expect(result.rateDate == weekAgo)
+    }
+
+    @Test("Fallback на текущий курс при отсутствии исторических")
+    func testFallbackToCurrentRate() async throws {
+        let context = try createTestModelContext()
+        let mockService = MockHistoricalRateService()
+        mockService.historicalRate = nil // исторических нет
+        mockService.currentRate = 92.0 // только текущий
+
+        let weekAgo = Calendar.current.startOfDay(for: Date().addingTimeInterval(-7 * 86400))
+
+        let store = HistoricalRateStore(modelContext: context, currencyService: mockService)
+
+        // Запрашиваем исторический курс — нет ни в кэше, ни в API, fallback на текущий
+        let result = await store.getRate(on: weekAgo, from: "USD", to: "RUB")
+
+        #expect(result.rate == 92.0)
+        #expect(result.resolution == .current)
+        #expect(result.rateDate == nil)
+    }
+
+    @Test("Unavailable при отсутствии любых курсов")
+    func testUnavailableWhenNoRates() async throws {
+        let context = try createTestModelContext()
+        let mockService = MockHistoricalRateService()
+        mockService.historicalRate = nil
+        mockService.currentRate = nil
+
+        let store = HistoricalRateStore(modelContext: context, currencyService: mockService)
+
+        let result = await store.getRate(on: Date(), from: "USD", to: "XYZ")
+
+        #expect(result.rate == nil)
+        #expect(result.resolution == .unavailable)
+    }
+
+    @Test("Нормализация даты: время отбрасывается")
+    func testDateNormalization() async throws {
+        let context = try createTestModelContext()
+        let mockService = MockHistoricalRateService()
+        mockService.historicalRate = nil
+
+        let today = Calendar.current.startOfDay(for: Date())
+
+        // Вставляем курс на начало дня
+        let cachedRate = HistoricalRate(
+            baseCurrency: "USD",
+            quoteCurrency: "EUR",
+            rate: 0.92,
+            rateDate: today,
+            source: "test"
+        )
+        context.insert(cachedRate)
+        try context.save()
+
+        let store = HistoricalRateStore(modelContext: context, currencyService: mockService)
+
+        // Запрашиваем с произвольным временем в тот же день
+        let dateWithTime = today.addingTimeInterval(12 * 3600) // +12 часов
+        let result = await store.getRate(on: dateWithTime, from: "USD", to: "EUR")
+
+        #expect(result.rate == 0.92)
+        #expect(result.resolution == .exact)
+    }
 }

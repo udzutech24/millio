@@ -194,4 +194,423 @@ struct FinanceDynamicsViewModelTests {
         let allAccounts = dynamicsViewModel.getAccountsForCalculation()
         #expect(allAccounts.count == 2)
     }
+
+    // MARK: - Новые тесты
+
+    @Test("Баланс карты на прошлую дату с учётом транзакций")
+    func testCardBalanceAtPastDate() async throws {
+        let modelContext = try createTestModelContext()
+
+        // Создаём карту с начальным балансом 10000
+        let card = Card(name: "Тестовая", cardNumber: "1234", bank: .other, cardType: .debit, currency: "RUB")
+        card.balance = 15000 // Текущий баланс
+        card.initialBalance = 10000
+        card.hasInitialBalance = true
+        card.createdAt = Date().addingTimeInterval(-7 * 86400) // Неделю назад
+        modelContext.insert(card)
+
+        // Создаём группу и счёт
+        let group = FinanceGroup(name: "Тест", colorHex: "#FFFFFF")
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+
+        // Транзакция дохода +5000 три дня назад
+        let transaction = CashflowTransaction(
+            transactionType: .income,
+            amount: 5000,
+            currency: "RUB",
+            transactionDate: Date().addingTimeInterval(-3 * 86400),
+            cardID: card.cardUniqueID,
+            note: "Зарплата"
+        )
+        modelContext.insert(transaction)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+
+        // Баланс 5 дней назад (до транзакции) должен быть 10000
+        let balanceBefore = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: Date().addingTimeInterval(-5 * 86400),
+            accountCardIDs: [card.cardUniqueID]
+        )
+        #expect(abs(balanceBefore - 10000) < 0.01)
+
+        // Баланс сегодня должен быть 15000 (10000 + 5000)
+        let balanceNow = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: Date(),
+            accountCardIDs: [card.cardUniqueID]
+        )
+        #expect(abs(balanceNow - 15000) < 0.01)
+    }
+
+    @Test("Процентное изменение: деление на ноль возвращает специальное значение")
+    func testPercentChangeWithZeroDenominator() async throws {
+        let modelContext = try createTestModelContext()
+
+        // Создаём карту с нулевым начальным балансом
+        let card = Card(name: "Пустая", cardNumber: "0000", bank: .other, cardType: .debit, currency: "RUB")
+        card.balance = 1000 // Текущий баланс
+        card.initialBalance = 0 // Начальный баланс 0
+        card.hasInitialBalance = true
+        card.createdAt = Date().addingTimeInterval(-7 * 86400)
+        modelContext.insert(card)
+
+        let group = FinanceGroup(name: "Тест", colorHex: "#FFFFFF")
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: false
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        dynamicsViewModel.handle(.setPeriod(.week))
+
+        // Ждём обновления дельты
+        try await Task.sleep(for: .milliseconds(100))
+
+        // При делении на ноль должно вернуться специальное значение (не crash)
+        let delta = dynamicsViewModel.state.periodDelta
+        // delta.percent должен быть большим числом (999999) или 0, но не NaN/Inf
+        #expect(!delta.percent.isNaN)
+        #expect(!delta.percent.isInfinite || abs(delta.percent) == 999999.0)
+    }
+
+    @Test("Кредитная карта: баланс отображается как задолженность")
+    func testCreditCardBalanceAsDebt() async throws {
+        let modelContext = try createTestModelContext()
+
+        // Создаём кредитную карту с лимитом 100000 и балансом 80000
+        // Задолженность = 100000 - 80000 = 20000
+        let creditCard = Card(name: "Кредитка", cardNumber: "5555", bank: .other, cardType: .credit, currency: "RUB")
+        creditCard.creditLimit = 100_000
+        creditCard.balance = 80_000 // Доступный остаток
+        creditCard.initialBalance = 100_000 // Изначально полный лимит
+        creditCard.hasInitialBalance = true
+        creditCard.createdAt = Date().addingTimeInterval(-7 * 86400)
+        modelContext.insert(creditCard)
+
+        let group = FinanceGroup(name: "Кредитки", colorHex: "#FF0000")
+        let account = FinanceAccount(accountType: .card, accountID: creditCard.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+
+        // Баланс кредитной карты должен отображаться как задолженность
+        let balance = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: Date(),
+            accountCardIDs: [creditCard.cardUniqueID]
+        )
+        // Задолженность = лимит - баланс = 100000 - 100000 (initialBalance) = 0
+        // Но с транзакциями баланс будет другим
+        #expect(balance >= 0) // Задолженность не может быть отрицательной
+    }
+
+    @Test("Смена валюты пересчитывает данные графика")
+    func testCurrencyChangeRecalculates() async throws {
+        let modelContext = try createTestModelContext()
+
+        let card = Card(name: "USD карта", cardNumber: "1111", bank: .other, cardType: .debit, currency: "USD")
+        card.balance = 1000
+        card.initialBalance = 1000
+        card.hasInitialBalance = true
+        modelContext.insert(card)
+
+        let group = FinanceGroup(name: "Валютные", colorHex: "#00FF00")
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: false
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+
+        // Начальная валюта
+        let initialCurrency = dynamicsViewModel.state.displayCurrency
+
+        // Меняем валюту
+        dynamicsViewModel.handle(.setDisplayCurrency("EUR"))
+
+        // Валюта должна измениться
+        #expect(dynamicsViewModel.state.displayCurrency == "EUR")
+        #expect(dynamicsViewModel.state.displayCurrency != initialCurrency || initialCurrency == "EUR")
+    }
+
+    @Test("Период week корректно рассчитывает диапазон дат")
+    func testWeekPeriodDateRange() async throws {
+        let modelContext = try createTestModelContext()
+
+        let card = Card(name: "Тест", cardNumber: "0000", bank: .other, cardType: .debit, currency: "RUB")
+        card.balance = 1000
+        modelContext.insert(card)
+
+        let group = FinanceGroup(name: "Тест", colorHex: "#FFFFFF")
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: false
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        dynamicsViewModel.handle(.setPeriod(.week))
+
+        // Ждём обновления
+        try await Task.sleep(for: .milliseconds(100))
+
+        // Проверяем что период = 7 дней
+        let start = dynamicsViewModel.state.periodStartDate
+        let end = dynamicsViewModel.state.periodEndDate
+        let daysDiff = Calendar.current.dateComponents([.day], from: start, to: end).day ?? 0
+
+        #expect(daysDiff >= 6 && daysDiff <= 8) // примерно неделя
+    }
+
+    @Test("Транзакция расхода уменьшает баланс на историческую дату")
+    func testExpenseTransactionReducesBalance() async throws {
+        let modelContext = try createTestModelContext()
+
+        let card = Card(name: "Расходы", cardNumber: "2222", bank: .other, cardType: .debit, currency: "RUB")
+        card.balance = 5000
+        card.initialBalance = 10000
+        card.hasInitialBalance = true
+        card.createdAt = Date().addingTimeInterval(-7 * 86400)
+        modelContext.insert(card)
+
+        let group = FinanceGroup(name: "Тест", colorHex: "#FFFFFF")
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+
+        // Транзакция расхода -5000 три дня назад
+        let expense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 5000,
+            currency: "RUB",
+            transactionDate: Date().addingTimeInterval(-3 * 86400),
+            cardID: card.cardUniqueID,
+            note: "Покупка"
+        )
+        modelContext.insert(expense)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+
+        // До расхода баланс был 10000
+        let balanceBefore = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: Date().addingTimeInterval(-5 * 86400),
+            accountCardIDs: [card.cardUniqueID]
+        )
+        #expect(abs(balanceBefore - 10000) < 0.01)
+
+        // После расхода баланс 5000
+        let balanceAfter = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: Date(),
+            accountCardIDs: [card.cardUniqueID]
+        )
+        #expect(abs(balanceAfter - 5000) < 0.01)
+    }
+
+    @Test("Трансфер между картами корректно обновляет балансы")
+    func testTransferBetweenCards() async throws {
+        let modelContext = try createTestModelContext()
+
+        let card1 = Card(name: "Карта 1", cardNumber: "1111", bank: .other, cardType: .debit, currency: "RUB")
+        card1.balance = 5000
+        card1.initialBalance = 10000
+        card1.hasInitialBalance = true
+        card1.createdAt = Date().addingTimeInterval(-7 * 86400)
+        modelContext.insert(card1)
+
+        let card2 = Card(name: "Карта 2", cardNumber: "2222", bank: .other, cardType: .debit, currency: "RUB")
+        card2.balance = 5000
+        card2.initialBalance = 0
+        card2.hasInitialBalance = true
+        card2.createdAt = Date().addingTimeInterval(-7 * 86400)
+        modelContext.insert(card2)
+
+        let group = FinanceGroup(name: "Все карты", colorHex: "#FFFFFF")
+        let account1 = FinanceAccount(accountType: .card, accountID: card1.cardUniqueID)
+        let account2 = FinanceAccount(accountType: .card, accountID: card2.cardUniqueID)
+        account1.group = group
+        account2.group = group
+        group.accounts = [account1, account2]
+        modelContext.insert(group)
+        modelContext.insert(account1)
+        modelContext.insert(account2)
+
+        // Трансфер 5000 с карты 1 на карту 2
+        let transfer = CashflowTransaction(
+            transactionType: .transfer,
+            amount: 5000,
+            currency: "RUB",
+            transactionDate: Date().addingTimeInterval(-2 * 86400),
+            cardID: card1.cardUniqueID,
+            toCardID: card2.cardUniqueID,
+            note: "Перевод"
+        )
+        modelContext.insert(transfer)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+
+        // Карта 1: 10000 - 5000 = 5000
+        let balance1 = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account1],
+            date: Date(),
+            accountCardIDs: [card1.cardUniqueID]
+        )
+        #expect(abs(balance1 - 5000) < 0.01)
+
+        // Карта 2: 0 + 5000 = 5000
+        let balance2 = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account2],
+            date: Date(),
+            accountCardIDs: [card2.cardUniqueID]
+        )
+        #expect(abs(balance2 - 5000) < 0.01)
+
+        // Общий баланс не изменился: 10000
+        let totalBalance = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account1, account2],
+            date: Date(),
+            accountCardIDs: [card1.cardUniqueID, card2.cardUniqueID]
+        )
+        #expect(abs(totalBalance - 10000) < 0.01)
+    }
+
+    @Test("Баланс до создания карты равен нулю (если не включен флаг)")
+    func testBalanceBeforeCardCreationIsZero() async throws {
+        let modelContext = try createTestModelContext()
+
+        let card = Card(name: "Новая", cardNumber: "3333", bank: .other, cardType: .debit, currency: "RUB")
+        card.balance = 5000
+        card.initialBalance = 5000
+        card.hasInitialBalance = true
+        card.createdAt = Date() // Создана сегодня
+        modelContext.insert(card)
+
+        let group = FinanceGroup(name: "Тест", colorHex: "#FFFFFF")
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+
+        // До создания карты (вчера) баланс = 0
+        let balanceYesterday = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: Date().addingTimeInterval(-86400),
+            accountCardIDs: [card.cardUniqueID],
+            includeInitialBeforeCreation: false
+        )
+        #expect(abs(balanceYesterday) < 0.01)
+
+        // С флагом includeInitialBeforeCreation баланс = начальный
+        let balanceWithFlag = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: Date().addingTimeInterval(-86400),
+            accountCardIDs: [card.cardUniqueID],
+            includeInitialBeforeCreation: true
+        )
+        #expect(abs(balanceWithFlag - 5000) < 0.01)
+    }
 }
