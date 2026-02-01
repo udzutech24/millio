@@ -9,6 +9,15 @@ import Foundation
 import UserNotifications
 import OSLog
 
+protocol UserNotificationCenterProtocol {
+    func requestAuthorization(options: UNAuthorizationOptions) async throws -> Bool
+    func add(_ request: UNNotificationRequest) async throws
+    func removePendingNotificationRequests(withIdentifiers identifiers: [String])
+    func removeDeliveredNotifications(withIdentifiers identifiers: [String])
+}
+
+extension UNUserNotificationCenter: UserNotificationCenterProtocol {}
+
 /// Протокол для управления уведомлениями
 @MainActor
 protocol NotificationManagerProtocol {
@@ -23,7 +32,9 @@ final class NotificationManager: NotificationManagerProtocol {
     static let shared = NotificationManager()
     
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "NotificationManager")
-    private let notificationCenter = UNUserNotificationCenter.current()
+    private let notificationCenter: any UserNotificationCenterProtocol
+    private let now: () -> Date
+    private let calendar: Calendar
     private let dailyReminderIdentifier = "daily_reminder"
     
     // Дружелюбные сообщения для ежедневных напоминаний
@@ -45,7 +56,15 @@ final class NotificationManager: NotificationManagerProtocol {
         "Привет! Как дела? Проверь свои финансовые цели и прогресс 🎯"
     ]
     
-    private init() {}
+    init(
+        notificationCenter: any UserNotificationCenterProtocol = UNUserNotificationCenter.current(),
+        now: @escaping () -> Date = Date.init,
+        calendar: Calendar = .current
+    ) {
+        self.notificationCenter = notificationCenter
+        self.now = now
+        self.calendar = calendar
+    }
     
     // MARK: - Public Methods
     
@@ -113,7 +132,7 @@ final class NotificationManager: NotificationManagerProtocol {
     
     private func getRandomMessage() -> String {
         // Используем день месяца для выбора сообщения (чтобы было предсказуемо, но разнообразно)
-        let day = Calendar.current.component(.day, from: Date())
+        let day = calendar.component(.day, from: now())
         let index = day % reminderMessages.count
         return reminderMessages[index]
     }

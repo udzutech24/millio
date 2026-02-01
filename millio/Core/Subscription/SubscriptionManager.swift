@@ -37,7 +37,8 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
     static let shared = SubscriptionManager()
     
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "SubscriptionManager")
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
+    private let now: () -> Date
     
     // Ключи для хранения статуса локально (offline-first)
     private let subscriptionStatusKey = "subscription_status"
@@ -57,12 +58,23 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
     
     private var updateListenerTask: Task<Void, Never>?
     
-    private init() {
+    init(
+        defaults: UserDefaults = .standard,
+        startTransactionListener: Bool = true,
+        now: @escaping () -> Date = Date.init
+    ) {
+        self.defaults = defaults
+        self.now = now
+        
         // Загружаем локально сохраненный статус (offline-first)
         loadLocalStatus()
         
         // Запускаем слушатель обновлений транзакций
-        updateListenerTask = listenForTransactions()
+        if startTransactionListener {
+            updateListenerTask = listenForTransactions()
+        } else {
+            updateListenerTask = nil
+        }
     }
     
     deinit {
@@ -78,7 +90,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         // Если включен дебаг-премиум, не проверяем StoreKit
         if defaults.bool(forKey: debugPremiumKey),
            let expiration = defaults.object(forKey: debugSubscriptionExpirationKey) as? Date,
-           expiration > Date() {
+           expiration > now() {
             self.status = .subscribed
             self.expirationDate = expiration
             self.isTrialActive = false
@@ -99,7 +111,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
             switch result {
             case .verified(let transaction):
                 if let expirationDate = transaction.expirationDate,
-                   expirationDate > Date() {
+                   expirationDate > now() {
                     hasActiveSubscription = true
                     if latestExpirationDate == nil || expirationDate > latestExpirationDate! {
                         latestExpirationDate = expirationDate
@@ -182,7 +194,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         }
         
         // Устанавливаем дату начала триала
-        let trialStartDate = Date()
+        let trialStartDate = now()
         defaults.set(trialStartDate, forKey: trialStartDateKey)
         defaults.set(true, forKey: "trial_used")
         
@@ -198,7 +210,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         logger.info("Granting debug premium access...")
         
         // Устанавливаем премиум доступ на год вперед
-        let expirationDate = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
+        let expirationDate = Calendar.current.date(byAdding: .year, value: 1, to: now()) ?? now()
         defaults.set(true, forKey: debugPremiumKey)
         defaults.set(expirationDate, forKey: debugSubscriptionExpirationKey)
         self.status = .subscribed
@@ -228,7 +240,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         defaults.bool(forKey: debugPremiumKey) && 
         status == .subscribed && 
         expirationDate != nil && 
-        expirationDate! > Date()
+        expirationDate! > now()
     }
     #endif
     
@@ -239,7 +251,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         // Если включен дебаг-премиум, загружаем его статус из debug ключа
         if defaults.bool(forKey: debugPremiumKey),
            let expiration = defaults.object(forKey: debugSubscriptionExpirationKey) as? Date,
-           expiration > Date() {
+           expiration > now() {
             self.status = .subscribed
             self.expirationDate = expiration
             self.isTrialActive = false
@@ -258,7 +270,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         
         if let trialStartDate = defaults.object(forKey: trialStartDateKey) as? Date {
             let trialEndDate = trialStartDate.addingTimeInterval(TimeInterval(self.trialDurationDays * 24 * 60 * 60))
-            self.isTrialActive = trialEndDate > Date()
+            self.isTrialActive = trialEndDate > now()
         }
     }
     
@@ -282,7 +294,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         
         let trialEndDate = trialStartDate.addingTimeInterval(TimeInterval(self.trialDurationDays * 24 * 60 * 60))
         
-        if trialEndDate > Date() {
+        if trialEndDate > now() {
             self.isTrialActive = true
             if status != .subscribed {
                 self.status = .trial

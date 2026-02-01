@@ -11,13 +11,7 @@ func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async -> T) a
             return nil
         }
         
-        var result: T? = nil
-        for await value in group {
-            if let value {
-                result = value
-                break
-            }
-        }
+        let result = await group.next() ?? nil
         group.cancelAll()
         return result
     }

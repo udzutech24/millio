@@ -16,9 +16,13 @@ struct BackupImportValidationTests {
         Self.container.mainContext
     }
     
-    private func makeMetadata(modelCount: Int, schemaVersion: String = BackupMetadata.currentSchemaVersion) -> [String: Any] {
+    private func makeMetadata(
+        modelCount: Int,
+        schemaVersion: String = BackupMetadata.currentSchemaVersion,
+        version: BackupVersion = .current
+    ) -> [String: Any] {
         [
-            "version": ["major": BackupVersion.current.major, "minor": BackupVersion.current.minor, "patch": BackupVersion.current.patch],
+            "version": ["major": version.major, "minor": version.minor, "patch": version.patch],
             "timestamp": Date().timeIntervalSince1970,
             "schemaVersion": schemaVersion,
             "modelCount": modelCount
@@ -80,5 +84,70 @@ struct BackupImportValidationTests {
         #expect(throws: AppError.backupCorrupted) {
             try DataRepository.importAllData(data, into: makeContext())
         }
+    }
+    
+    @Test("Import fails when backup major version mismatch")
+    func testMajorVersionMismatchFails() throws {
+        let payload: [String: Any] = [
+            "metadata": makeMetadata(modelCount: 0, version: BackupVersion(major: 1, minor: 0, patch: 0)),
+            "models": []
+        ]
+        let data = try JSONSerialization.data(withJSONObject: payload)
+        #expect(throws: AppError.incompatibleSchemaVersion) {
+            try DataRepository.importAllData(data, into: makeContext())
+        }
+    }
+    
+    @Test("Import respects importPriority then typeName sorting")
+    func testImportRespectsPriorityThenTypeNameSorting() throws {
+        let registryState = ModelTypeRegistry.shared.captureState()
+        defer { ModelTypeRegistry.shared.restoreState(registryState) }
+        
+        enum ImportOrderRecorder {
+            static var calls: [String] = []
+        }
+        
+        struct Priority0ImporterC: ModelImporter {
+            static var importPriority: Int { 0 }
+            static func importType() -> String { "C" }
+            static func `import`(from data: [String: Any], context: ModelContext) throws {
+                ImportOrderRecorder.calls.append("C")
+            }
+        }
+        
+        struct Priority1ImporterA: ModelImporter {
+            static var importPriority: Int { 1 }
+            static func importType() -> String { "A" }
+            static func `import`(from data: [String: Any], context: ModelContext) throws {
+                ImportOrderRecorder.calls.append("A")
+            }
+        }
+        
+        struct Priority1ImporterB: ModelImporter {
+            static var importPriority: Int { 1 }
+            static func importType() -> String { "B" }
+            static func `import`(from data: [String: Any], context: ModelContext) throws {
+                ImportOrderRecorder.calls.append("B")
+            }
+        }
+        
+        ModelTypeRegistry.shared.registerImporter(Priority0ImporterC.self)
+        ModelTypeRegistry.shared.registerImporter(Priority1ImporterA.self)
+        ModelTypeRegistry.shared.registerImporter(Priority1ImporterB.self)
+        
+        ImportOrderRecorder.calls = []
+        
+        let payload: [String: Any] = [
+            "metadata": makeMetadata(modelCount: 3),
+            "models": [
+                ["_type": "B"],
+                ["_type": "C"],
+                ["_type": "A"]
+            ]
+        ]
+        let data = try JSONSerialization.data(withJSONObject: payload)
+        try DataRepository.importAllData(data, into: makeContext())
+        
+        #expect(ImportOrderRecorder.calls == ["C", "A", "B"])
     }
 }

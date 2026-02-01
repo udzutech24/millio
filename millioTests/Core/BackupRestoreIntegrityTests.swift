@@ -133,4 +133,123 @@ struct BackupRestoreIntegrityTests {
         #expect(cards.count == 1)
         #expect(cards.first?.cardUniqueID == sharedID)
     }
+    
+    @Test("DataIntegrityCleaner удаляет дубликаты Credit по creditUniqueID, оставляя самый новый updatedAt")
+    func testDataIntegrityCleanerDedupesCreditsByUniqueIDKeepingNewest() throws {
+        let container = makeContainer()
+        let context = container.mainContext
+        try resetAll(in: context)
+        
+        let sharedID = "CREDIT-SHARED-ID"
+        
+        let older = Credit(
+            name: "Кредит",
+            amount: 100_000,
+            interestRate: 10,
+            monthlyPayment: 10_000,
+            startDate: Date(timeIntervalSince1970: 0),
+            termMonths: 12,
+            currency: "RUB"
+        )
+        older.uniqueID = sharedID
+        older.updatedAt = Date(timeIntervalSince1970: 1)
+        
+        let newer = Credit(
+            name: "Кредит",
+            amount: 100_000,
+            interestRate: 10,
+            monthlyPayment: 10_000,
+            startDate: Date(timeIntervalSince1970: 0),
+            termMonths: 12,
+            currency: "RUB"
+        )
+        newer.uniqueID = sharedID
+        newer.updatedAt = Date(timeIntervalSince1970: 2)
+        
+        context.insert(older)
+        context.insert(newer)
+        try context.save()
+        
+        try DataIntegrityCleaner.dedupeAll(modelContext: context)
+        
+        let credits = try context.fetch(FetchDescriptor<Credit>())
+        #expect(credits.count == 1)
+        #expect(credits.first?.creditUniqueID == sharedID)
+        #expect(credits.first?.updatedAt == newer.updatedAt)
+    }
+    
+    @Test("DataIntegrityCleaner удаляет дубликаты Investment по investmentUniqueID, оставляя самый новый updatedAt")
+    func testDataIntegrityCleanerDedupesInvestmentsByUniqueIDKeepingNewest() throws {
+        let container = makeContainer()
+        let context = container.mainContext
+        try resetAll(in: context)
+        
+        let sharedID = "INVEST-SHARED-ID"
+        
+        let older = Investment(
+            name: "Актив",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 10,
+            currency: "RUB"
+        )
+        older.uniqueID = sharedID
+        older.updatedAt = Date(timeIntervalSince1970: 1)
+        
+        let newer = Investment(
+            name: "Актив",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 10,
+            currency: "RUB"
+        )
+        newer.uniqueID = sharedID
+        newer.updatedAt = Date(timeIntervalSince1970: 2)
+        
+        context.insert(older)
+        context.insert(newer)
+        try context.save()
+        
+        try DataIntegrityCleaner.dedupeAll(modelContext: context)
+        
+        let investments = try context.fetch(FetchDescriptor<Investment>())
+        #expect(investments.count == 1)
+        #expect(investments.first?.investmentUniqueID == sharedID)
+        #expect(investments.first?.updatedAt == newer.updatedAt)
+    }
+    
+    @Test("DataIntegrityCleaner удаляет дубликаты FinanceGroup и переносит связанные FinanceAccount")
+    func testDataIntegrityCleanerDedupesFinanceGroupsAndReassignsAccounts() throws {
+        let container = makeContainer()
+        let context = container.mainContext
+        try resetAll(in: context)
+        
+        let sharedCreatedAt = Date(timeIntervalSince1970: 123)
+        
+        let olderGroup = FinanceGroup(name: "Группа", colorHex: "#FFFFFF", order: 0)
+        olderGroup.createdAt = sharedCreatedAt
+        olderGroup.updatedAt = Date(timeIntervalSince1970: 1)
+        
+        let newerGroup = FinanceGroup(name: "Группа", colorHex: "#FFFFFF", order: 0)
+        newerGroup.createdAt = sharedCreatedAt
+        newerGroup.updatedAt = Date(timeIntervalSince1970: 2)
+        
+        let account = FinanceAccount(accountType: .card, accountID: "ACC-1")
+        account.group = olderGroup
+        
+        context.insert(olderGroup)
+        context.insert(newerGroup)
+        context.insert(account)
+        try context.save()
+        
+        try DataIntegrityCleaner.dedupeAll(modelContext: context)
+        
+        let groups = try context.fetch(FetchDescriptor<FinanceGroup>())
+        #expect(groups.count == 1)
+        #expect(groups.first?.updatedAt == newerGroup.updatedAt)
+        
+        let accounts = try context.fetch(FetchDescriptor<FinanceAccount>())
+        #expect(accounts.count == 1)
+        #expect(accounts.first?.group?.groupUniqueID == groups.first?.groupUniqueID)
+    }
 }

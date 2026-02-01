@@ -23,7 +23,16 @@ final class AppState {
     }
     var primaryCurrencyCode: String = "RUB" {
         didSet {
-            SettingsManager.shared.primaryCurrencyCode = primaryCurrencyCode
+            let normalized = primaryCurrencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            guard !normalized.isEmpty else {
+                primaryCurrencyCode = oldValue
+                return
+            }
+            if normalized != primaryCurrencyCode {
+                primaryCurrencyCode = normalized
+                return
+            }
+            SettingsManager.shared.primaryCurrencyCode = normalized
         }
     }
     var isBackupEnabled: Bool = false
