@@ -31,7 +31,7 @@ final class FeatureRegistry {
     
     /// Зарегистрировать feature модуль
     func register(_ feature: FeatureModule) {
-        queue.async(flags: .barrier) {
+        queue.sync(flags: .barrier) {
             self.features.append(feature)
         }
     }
@@ -43,6 +43,20 @@ final class FeatureRegistry {
                 feature.registerModels(in: ModelTypeRegistry.shared)
                 // Routes и dependencies можно настроить позже при необходимости
             }
+        }
+    }
+    
+    struct State {
+        let features: [FeatureModule]
+    }
+    
+    func captureState() -> State {
+        queue.sync { State(features: features) }
+    }
+    
+    func restoreState(_ state: State) {
+        queue.sync(flags: .barrier) {
+            features = state.features
         }
     }
 }

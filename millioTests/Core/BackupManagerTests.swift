@@ -7,6 +7,7 @@
 
 import Foundation
 import Testing
+import CloudKit
 @testable import millio
 
 struct BackupManagerTests {
@@ -346,5 +347,170 @@ final class FailingImportDataRepository: DataRepositoryProtocol {
     
     func clearAllDataAsync() async throws {
         try clearAllData()
+    }
+}
+
+@Suite(.serialized)
+struct CloudBackupStoreTests {
+    @Test("isAvailable возвращает true при CKAccountStatus.available")
+    func testIsAvailableReturnsTrueWhenAccountAvailable() async {
+        let store = CloudBackupStore(container: FakeCloudBackupContainer(accountStatusResult: .available))
+        let result = await store.isAvailable()
+        #expect(result == true)
+    }
+    
+    @Test("isAvailable возвращает false при ошибке получения статуса аккаунта")
+    func testIsAvailableReturnsFalseOnError() async {
+        let store = CloudBackupStore(container: FakeCloudBackupContainer(accountStatusError: CKError(.networkUnavailable)))
+        let result = await store.isAvailable()
+        #expect(result == false)
+    }
+    
+    @Test("uploadBackup создает запись при CKError.unknownItem и сохраняет метаданные")
+    func testUploadBackupCreatesRecordAndSavesMetadata() async throws {
+        let db = FakeCloudBackupDatabase()
+        db.recordToReturn = nil
+        db.errorOnFetch = CKError(.unknownItem)
+        
+        let container = FakeCloudBackupContainer(accountStatusResult: .available, database: db)
+        let store = CloudBackupStore(container: container)
+        
+        let data = Data((0..<256).map { _ in UInt8.random(in: 0...255) })
+        try await store.uploadBackup(data)
+        
+        let saved = db.lastSavedRecord
+        #expect(saved != nil)
+        #expect(saved?["backupSize"] as? Int64 == Int64(data.count))
+        #expect(saved?["backupDate"] as? Date != nil)
+        #expect(saved?["backupVersion"] as? String != nil)
+        #expect(saved?["backupData"] as? CKAsset != nil)
+    }
+    
+    @Test("downloadLatestBackup возвращает nil при отсутствии записи (CKError.unknownItem)")
+    func testDownloadReturnsNilWhenNoRecord() async throws {
+        let db = FakeCloudBackupDatabase()
+        db.errorOnFetch = CKError(.unknownItem)
+        let store = CloudBackupStore(container: FakeCloudBackupContainer(accountStatusResult: .available, database: db))
+        
+        let data = try await store.downloadLatestBackup()
+        #expect(data == nil)
+    }
+    
+    @Test("downloadLatestBackup возвращает nil при отсутствии backupData в записи")
+    func testDownloadReturnsNilWhenNoAsset() async throws {
+        let db = FakeCloudBackupDatabase()
+        db.recordToReturn = CKRecord(recordType: "AppBackup", recordID: CKRecord.ID(recordName: "latest_backup"))
+        let store = CloudBackupStore(container: FakeCloudBackupContainer(accountStatusResult: .available, database: db))
+        
+        let data = try await store.downloadLatestBackup()
+        #expect(data == nil)
+    }
+    
+    @Test("downloadLatestBackup возвращает данные при наличии CKAsset.fileURL")
+    func testDownloadReturnsDataWhenAssetHasFileURL() async throws {
+        let expected = Data("payload".utf8)
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("backup")
+        try expected.write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        
+        let record = CKRecord(recordType: "AppBackup", recordID: CKRecord.ID(recordName: "latest_backup"))
+        record["backupData"] = CKAsset(fileURL: url)
+        
+        let db = FakeCloudBackupDatabase()
+        db.recordToReturn = record
+        let store = CloudBackupStore(container: FakeCloudBackupContainer(accountStatusResult: .available, database: db))
+        
+        let downloaded = try await store.downloadLatestBackup()
+        #expect(downloaded == expected)
+    }
+    
+    @Test("downloadLatestBackup бросает ошибку, если файл CKAsset недоступен")
+    func testDownloadThrowsWhenAssetFileIsUnavailable() async throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("backup")
+        try Data("payload".utf8).write(to: url)
+        try FileManager.default.removeItem(at: url)
+        
+        let record = CKRecord(recordType: "AppBackup", recordID: CKRecord.ID(recordName: "latest_backup"))
+        record["backupData"] = CKAsset(fileURL: url)
+        
+        let db = FakeCloudBackupDatabase()
+        db.recordToReturn = record
+        let store = CloudBackupStore(container: FakeCloudBackupContainer(accountStatusResult: .available, database: db))
+        
+        await #expect(throws: AppError.self) {
+            _ = try await store.downloadLatestBackup()
+        }
+    }
+    
+    @Test("getLatestBackupInfo возвращает nil при отсутствии записи (CKError.unknownItem)")
+    func testGetLatestBackupInfoReturnsNilWhenNoRecord() async throws {
+        let db = FakeCloudBackupDatabase()
+        db.errorOnFetch = CKError(.unknownItem)
+        let store = CloudBackupStore(container: FakeCloudBackupContainer(accountStatusResult: .available, database: db))
+        
+        let info = try await store.getLatestBackupInfo()
+        #expect(info == nil)
+    }
+    
+    @Test("getLatestBackupInfo возвращает данные при наличии полей даты/размера/версии")
+    func testGetLatestBackupInfoReturnsInfoWhenFieldsPresent() async throws {
+        let record = CKRecord(recordType: "AppBackup", recordID: CKRecord.ID(recordName: "latest_backup"))
+        let date = Date(timeIntervalSince1970: 123)
+        record["backupDate"] = date
+        record["backupSize"] = Int64(999)
+        record["backupVersion"] = "2.0.0"
+        
+        let db = FakeCloudBackupDatabase()
+        db.recordToReturn = record
+        let store = CloudBackupStore(container: FakeCloudBackupContainer(accountStatusResult: .available, database: db))
+        
+        let info = try await store.getLatestBackupInfo()
+        #expect(info?.date == date)
+        #expect(info?.size == Int64(999))
+        #expect(info?.version == "2.0.0")
+    }
+}
+
+final class FakeCloudBackupContainer: CloudBackupContainerProtocol {
+    private let databaseImpl: CloudBackupDatabaseProtocol
+    private let statusResult: CKAccountStatus?
+    private let statusError: Error?
+    
+    init(
+        accountStatusResult: CKAccountStatus? = nil,
+        accountStatusError: Error? = nil,
+        database: CloudBackupDatabaseProtocol = FakeCloudBackupDatabase()
+    ) {
+        self.databaseImpl = database
+        self.statusResult = accountStatusResult
+        self.statusError = accountStatusError
+    }
+    
+    var privateCloudDatabase: CloudBackupDatabaseProtocol { databaseImpl }
+    
+    func accountStatus() async throws -> CKAccountStatus {
+        if let statusError { throw statusError }
+        return statusResult ?? .couldNotDetermine
+    }
+}
+
+final class FakeCloudBackupDatabase: CloudBackupDatabaseProtocol {
+    var errorOnFetch: Error?
+    var recordToReturn: CKRecord?
+    var lastSavedRecord: CKRecord?
+    
+    func record(for recordID: CKRecord.ID) async throws -> CKRecord {
+        if let errorOnFetch { throw errorOnFetch }
+        if let recordToReturn { return recordToReturn }
+        return CKRecord(recordType: "AppBackup", recordID: recordID)
+    }
+    
+    func save(_ record: CKRecord) async throws -> CKRecord {
+        lastSavedRecord = record
+        return record
     }
 }

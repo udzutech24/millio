@@ -7,13 +7,36 @@
 
 import SwiftUI
 
+enum RootViewRoute: Equatable {
+    case launching
+    case onboarding
+    case restoring
+    case ready
+    case error
+}
+
 struct RootViewResolver: View {
     @Bindable var appState: AppState
     @State private var router = AppRouter()
     
+    static func route(for lifecycle: AppLifecycleState) -> RootViewRoute {
+        switch lifecycle {
+        case .launching:
+            return .launching
+        case .onboarding:
+            return .onboarding
+        case .restoring:
+            return .restoring
+        case .ready:
+            return .ready
+        case .error:
+            return .error
+        }
+    }
+    
     var body: some View {
         Group {
-            switch appState.lifecycle {
+            switch Self.route(for: appState.lifecycle) {
             case .launching:
                 LaunchingView()
             case .onboarding:
@@ -22,8 +45,12 @@ struct RootViewResolver: View {
                 RestoreView(appState: appState, router: router)
             case .ready:
                 MainAppView(router: router)
-            case .error(let error):
-                ErrorView(error: error, appState: appState, router: router)
+            case .error:
+                if case .error(let error) = appState.lifecycle {
+                    ErrorView(error: error, appState: appState, router: router)
+                } else {
+                    EmptyView()
+                }
             }
         }
         .environment(router)

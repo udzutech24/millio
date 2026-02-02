@@ -92,7 +92,7 @@ final class ViewModel: ObservableObject {
 
 ## Backup/Restore — фактическое поведение
 
-- Backup запускается **автоматически** при уходе в фон, если включен в профиле.
+- Backup запускается **руками** в профиле.
 - Backup хранится в **CloudKit Private DB** (`AppBackup` / `latest_backup`).
 - Restore запускается **вручную** из профиля (экран `RestoreView`).
 - Авто-restore при старте **не используется** (есть задел в `AppLifecycleUseCase`).

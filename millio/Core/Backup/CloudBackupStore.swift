@@ -9,6 +9,48 @@ import Foundation
 import CloudKit
 import OSLog
 
+protocol CloudBackupContainerProtocol {
+    var privateCloudDatabase: CloudBackupDatabaseProtocol { get }
+    func accountStatus() async throws -> CKAccountStatus
+}
+
+protocol CloudBackupDatabaseProtocol {
+    func record(for recordID: CKRecord.ID) async throws -> CKRecord
+    func save(_ record: CKRecord) async throws -> CKRecord
+}
+
+struct CKContainerAdapter: CloudBackupContainerProtocol {
+    private let container: CKContainer
+    
+    init(container: CKContainer) {
+        self.container = container
+    }
+    
+    var privateCloudDatabase: CloudBackupDatabaseProtocol {
+        CKDatabaseAdapter(database: container.privateCloudDatabase)
+    }
+    
+    func accountStatus() async throws -> CKAccountStatus {
+        try await container.accountStatus()
+    }
+}
+
+struct CKDatabaseAdapter: CloudBackupDatabaseProtocol {
+    private let database: CKDatabase
+    
+    init(database: CKDatabase) {
+        self.database = database
+    }
+    
+    func record(for recordID: CKRecord.ID) async throws -> CKRecord {
+        try await database.record(for: recordID)
+    }
+    
+    func save(_ record: CKRecord) async throws -> CKRecord {
+        try await database.save(record)
+    }
+}
+
 protocol CloudBackupStoreProtocol {
     func isAvailable() async -> Bool
     func uploadBackup(_ data: Data) async throws
@@ -18,11 +60,15 @@ protocol CloudBackupStoreProtocol {
 
 final class CloudBackupStore: CloudBackupStoreProtocol {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "CloudBackupStore")
-    private let container: CKContainer
+    private let container: CloudBackupContainerProtocol
     private let recordType = "AppBackup"
     private let recordID = CKRecord.ID(recordName: "latest_backup")
     
     init(container: CKContainer = .default()) {
+        self.container = CKContainerAdapter(container: container)
+    }
+    
+    init(container: CloudBackupContainerProtocol) {
         self.container = container
     }
     

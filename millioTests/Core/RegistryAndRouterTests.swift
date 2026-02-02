@@ -80,3 +80,45 @@ struct AppRouterTests {
         #expect(router.navigationPath.count == 2)
     }
 }
+
+@Suite(.serialized)
+struct RootViewResolverTests {
+    @Test("RootViewResolver.route корректно маппит AppLifecycleState")
+    func testRouteMapping() {
+        #expect(RootViewResolver.route(for: .launching) == .launching)
+        #expect(RootViewResolver.route(for: .onboarding) == .onboarding)
+        #expect(RootViewResolver.route(for: .restoring) == .restoring)
+        #expect(RootViewResolver.route(for: .ready) == .ready)
+        #expect(RootViewResolver.route(for: .error(.iCloudUnavailable)) == .error)
+    }
+}
+
+@Suite(.serialized)
+struct FeatureRegistryTests {
+    @Test("FeatureRegistry.configureAll вызывает registerModels для зарегистрированных модулей")
+    func testConfigureAllCallsRegisterModels() {
+        let state = FeatureRegistry.shared.captureState()
+        defer { FeatureRegistry.shared.restoreState(state) }
+        
+        final class Recorder {
+            var calls = 0
+        }
+        let recorder = Recorder()
+        
+        struct TestFeature: FeatureModule {
+            let recorder: Recorder
+            
+            func registerModels(in registry: ModelTypeRegistryProtocol) {
+                recorder.calls += 1
+            }
+            
+            func registerRoutes(in router: AppRouter) {}
+            func configureDependencies(in container: DIContainer) {}
+        }
+        
+        FeatureRegistry.shared.register(TestFeature(recorder: recorder))
+        FeatureRegistry.shared.configureAll()
+        
+        #expect(recorder.calls == 1)
+    }
+}

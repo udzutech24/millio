@@ -437,6 +437,17 @@ struct FinanceViewModelTests {
     @Test("Событие обновления кредитов пересчитывает суммы групп")
     func testCreditsUpdatedEventRecalculatesGroupTotals() async throws {
         let modelContext = try createTestModelContext()
+        
+        let displayCurrencyKey = "finance_display_currency"
+        let previousDisplayCurrency = UserDefaults.standard.string(forKey: displayCurrencyKey)
+        defer {
+            if let previousDisplayCurrency {
+                UserDefaults.standard.set(previousDisplayCurrency, forKey: displayCurrencyKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: displayCurrencyKey)
+            }
+        }
+        UserDefaults.standard.set("RUB", forKey: displayCurrencyKey)
 
         let group = FinanceGroup(name: "Группа", colorHex: "#123456")
         modelContext.insert(group)
@@ -459,6 +470,7 @@ struct FinanceViewModelTests {
         let account = FinanceAccount(accountType: .credit, accountID: credit.creditUniqueID)
         account.group = group
         modelContext.insert(account)
+        group.accounts = [account]
 
         try modelContext.save()
 
@@ -475,12 +487,19 @@ struct FinanceViewModelTests {
         try modelContext.save()
 
         EventBus.shared.publish(FinanceEvent.creditsUpdated)
-
-        try await Task.sleep(nanoseconds: 50_000_000)
-
-        let groupTotal = viewModel.state.groupTotals[group.groupUniqueID] ?? 0.0
-        #expect(abs(groupTotal + 500.0) < 0.01)
-        #expect(abs(viewModel.state.totalAmount + 500.0) < 0.01)
+        
+        var didUpdate = false
+        for _ in 0..<100 {
+            let groupTotal = viewModel.state.groupTotals[group.groupUniqueID] ?? 0.0
+            if abs(groupTotal + 500.0) < 0.01, abs(viewModel.state.totalAmount + 500.0) < 0.01 {
+                didUpdate = true
+                break
+            }
+            await Task.yield()
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        
+        #expect(didUpdate == true)
     }
 
     @Test("Удаление карты из финансов публикует событие обновления карт")

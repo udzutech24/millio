@@ -37,6 +37,56 @@ struct BackupImportValidationTests {
             try DataRepository.importAllData(data, into: makeContext())
         }
     }
+
+    @Test("Import fails when root JSON is not a dictionary")
+    func testRootNotDictionaryFails() throws {
+        let payload: [Any] = []
+        let data = try JSONSerialization.data(withJSONObject: payload)
+        #expect(throws: AppError.backupCorrupted) {
+            try DataRepository.importAllData(data, into: makeContext())
+        }
+    }
+    
+    @Test("Import fails when models is not an array")
+    func testModelsNotArrayFails() throws {
+        let payload: [String: Any] = [
+            "metadata": makeMetadata(modelCount: 0),
+            "models": "not-an-array"
+        ]
+        let data = try JSONSerialization.data(withJSONObject: payload)
+        #expect(throws: AppError.backupCorrupted) {
+            try DataRepository.importAllData(data, into: makeContext())
+        }
+    }
+    
+    @Test("Import fails when metadata is not a dictionary")
+    func testMetadataNotDictionaryFails() throws {
+        let payload: [String: Any] = [
+            "metadata": "not-a-dict",
+            "models": []
+        ]
+        let data = try JSONSerialization.data(withJSONObject: payload)
+        #expect(throws: AppError.backupCorrupted) {
+            try DataRepository.importAllData(data, into: makeContext())
+        }
+    }
+    
+    @Test("Import fails when metadata cannot be decoded")
+    func testMetadataDecodeFails() throws {
+        let payload: [String: Any] = [
+            "metadata": [
+                "version": ["major": "two", "minor": 0, "patch": 0],
+                "timestamp": Date().timeIntervalSince1970,
+                "schemaVersion": BackupMetadata.currentSchemaVersion,
+                "modelCount": 0
+            ],
+            "models": []
+        ]
+        let data = try JSONSerialization.data(withJSONObject: payload)
+        #expect(throws: AppError.backupCorrupted) {
+            try DataRepository.importAllData(data, into: makeContext())
+        }
+    }
     
     @Test("Import fails when unknown model type present")
     func testUnknownTypeFails() throws {

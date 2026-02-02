@@ -416,15 +416,9 @@ struct FinanceDynamicsViewModelTests {
         dynamicsViewModel.handle(.loadData)
         dynamicsViewModel.handle(.setPeriod(.week))
 
-        // Ждём обновления
-        try await Task.sleep(for: .milliseconds(100))
-
-        // Проверяем что период = 7 дней
-        let start = dynamicsViewModel.state.periodStartDate
-        let end = dynamicsViewModel.state.periodEndDate
+        let (start, end) = dynamicsViewModel.getPeriodDates()
         let daysDiff = Calendar.current.dateComponents([.day], from: start, to: end).day ?? 0
-
-        #expect(daysDiff >= 6 && daysDiff <= 8) // примерно неделя
+        #expect(daysDiff >= 6 && daysDiff <= 8)
     }
 
     @Test("Транзакция расхода уменьшает баланс на историческую дату")

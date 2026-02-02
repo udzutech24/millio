@@ -252,4 +252,52 @@ struct BackupRestoreIntegrityTests {
         #expect(accounts.count == 1)
         #expect(accounts.first?.group?.groupUniqueID == groups.first?.groupUniqueID)
     }
+    
+    @Test("runIfNeeded выполняется только один раз и выставляет флаг в UserDefaults")
+    func testDataIntegrityCleanerRunIfNeededRunsOnce() throws {
+        let defaults = UserDefaults.standard
+        let key = "data_integrity_cleanup_v1"
+        let previousValue = defaults.object(forKey: key)
+        defer {
+            if let previousValue {
+                defaults.set(previousValue, forKey: key)
+            } else {
+                defaults.removeObject(forKey: key)
+            }
+        }
+        defaults.removeObject(forKey: key)
+        
+        let container = makeContainer()
+        let context = container.mainContext
+        try resetAll(in: context)
+        
+        let sharedID = "RUN-IF-NEEDED-ID"
+        let older = Card(name: "Карта", cardNumber: "0000", bank: .other, cardType: .debit, currency: "RUB", balance: 10)
+        older.uniqueID = sharedID
+        older.updatedAt = Date(timeIntervalSince1970: 1)
+        
+        let newer = Card(name: "Карта", cardNumber: "0000", bank: .other, cardType: .debit, currency: "RUB", balance: 10)
+        newer.uniqueID = sharedID
+        newer.updatedAt = Date(timeIntervalSince1970: 2)
+        
+        context.insert(older)
+        context.insert(newer)
+        try context.save()
+        
+        try DataIntegrityCleaner.runIfNeeded(modelContext: context)
+        #expect(defaults.bool(forKey: key) == true)
+        
+        var cards = try context.fetch(FetchDescriptor<Card>())
+        #expect(cards.count == 1)
+        
+        let duplicate = Card(name: "Карта", cardNumber: "0000", bank: .other, cardType: .debit, currency: "RUB", balance: 10)
+        duplicate.uniqueID = sharedID
+        duplicate.updatedAt = Date(timeIntervalSince1970: 3)
+        context.insert(duplicate)
+        try context.save()
+        
+        try DataIntegrityCleaner.runIfNeeded(modelContext: context)
+        cards = try context.fetch(FetchDescriptor<Card>())
+        #expect(cards.count == 2)
+    }
 }

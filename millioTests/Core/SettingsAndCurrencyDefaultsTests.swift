@@ -2,7 +2,40 @@ import Foundation
 import Testing
 @testable import millio
 
+@Suite(.serialized)
 struct SettingsAndCurrencyDefaultsTests {
+    @Test("SettingsManager isBackupEnabled defaults to false")
+    func testBackupEnabledDefaultFalse() {
+        let key = "isBackupEnabled"
+        let original = UserDefaults.standard.object(forKey: key)
+        defer {
+            if let original {
+                UserDefaults.standard.set(original, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+        
+        UserDefaults.standard.removeObject(forKey: key)
+        #expect(SettingsManager.shared.isBackupEnabled == false)
+    }
+    
+    @Test("SettingsManager isEncryptionEnabled defaults to false")
+    func testEncryptionEnabledDefaultFalse() {
+        let key = "isEncryptionEnabled"
+        let original = UserDefaults.standard.object(forKey: key)
+        defer {
+            if let original {
+                UserDefaults.standard.set(original, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+        
+        UserDefaults.standard.removeObject(forKey: key)
+        #expect(SettingsManager.shared.isEncryptionEnabled == false)
+    }
+
     @Test("SettingsManager primaryCurrencyCode defaults to RUB")
     func testPrimaryCurrencyDefault() {
         let key = "primaryCurrencyCode"

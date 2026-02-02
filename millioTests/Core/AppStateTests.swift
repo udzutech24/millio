@@ -146,3 +146,95 @@ struct AppStateTests {
         #expect(UserDefaults.standard.string(forKey: "selectedLanguage") == "system")
     }
 }
+
+@Suite(.serialized)
+@MainActor
+struct AppLifecycleUseCaseTests {
+    @Test("initialize переводит в onboarding при непройденном онбординге")
+    func testInitializeSetsOnboardingWhenNotCompleted() async {
+        let defaults = UserDefaults.standard
+        let key = "hasCompletedOnboarding"
+        let previous = defaults.object(forKey: key)
+        defer {
+            if let previous { defaults.set(previous, forKey: key) } else { defaults.removeObject(forKey: key) }
+        }
+        defaults.set(false, forKey: key)
+        
+        let appState = AppState()
+        appState.isBackupEnabled = false
+        
+        let useCase = AppLifecycleUseCase(appState: appState, backupManager: FakeBackupManager())
+        await useCase.initialize()
+        
+        #expect(appState.lifecycle == .onboarding)
+        #expect(appState.isICloudAvailable == false)
+        #expect(appState.lastBackupDate == nil)
+    }
+    
+    @Test("initialize переводит в ready при пройденном онбординге")
+    func testInitializeSetsReadyWhenOnboardingCompleted() async {
+        let defaults = UserDefaults.standard
+        let key = "hasCompletedOnboarding"
+        let previous = defaults.object(forKey: key)
+        defer {
+            if let previous { defaults.set(previous, forKey: key) } else { defaults.removeObject(forKey: key) }
+        }
+        defaults.set(true, forKey: key)
+        
+        let appState = AppState()
+        appState.isBackupEnabled = false
+        
+        let useCase = AppLifecycleUseCase(appState: appState, backupManager: FakeBackupManager())
+        await useCase.initialize()
+        
+        #expect(appState.lifecycle == .ready)
+    }
+    
+    @Test("initialize обновляет iCloud статус в фоне при включенном backup")
+    func testInitializeRefreshesICloudStatusWhenBackupEnabled() async throws {
+        let defaults = UserDefaults.standard
+        let key = "hasCompletedOnboarding"
+        let previous = defaults.object(forKey: key)
+        defer {
+            if let previous { defaults.set(previous, forKey: key) } else { defaults.removeObject(forKey: key) }
+        }
+        defaults.set(true, forKey: key)
+        
+        let expectedDate = Date(timeIntervalSince1970: 123)
+        let backupManager = FakeBackupManager(isAvailableResult: true, lastBackupInfoResult: BackupInfo(date: expectedDate, size: 1, version: "2.0.0"))
+        
+        let appState = AppState()
+        appState.isBackupEnabled = true
+        
+        let useCase = AppLifecycleUseCase(appState: appState, backupManager: backupManager)
+        await useCase.initialize()
+        
+        var didUpdate = false
+        for _ in 0..<50 {
+            if appState.isICloudAvailable == true, appState.lastBackupDate == expectedDate {
+                didUpdate = true
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        
+        #expect(didUpdate == true)
+    }
+}
+
+final class FakeBackupManager: BackupManagerProtocol {
+    private let isAvailableResult: Bool
+    private let lastBackupInfoResult: BackupInfo?
+    
+    init(isAvailableResult: Bool = false, lastBackupInfoResult: BackupInfo? = nil) {
+        self.isAvailableResult = isAvailableResult
+        self.lastBackupInfoResult = lastBackupInfoResult
+    }
+    
+    func isAvailable() async -> Bool { isAvailableResult }
+    func backupNow() async throws {}
+    func backupNow(passphrase: String?) async throws {}
+    func restoreLatest() async throws {}
+    func restoreLatest(passphrase: String?) async throws {}
+    func lastBackupInfo() async -> BackupInfo? { lastBackupInfoResult }
+}
