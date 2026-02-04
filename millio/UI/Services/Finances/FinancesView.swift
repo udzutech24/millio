@@ -8,6 +8,178 @@
 import SwiftUI
 import SwiftData
 
+private struct FinancesSectionHeader: View {
+    let title: String
+    
+    var body: some View {
+        Text(title)
+            .font(.system(size: 12, weight: .regular))
+            .foregroundStyle(AppColors.textPrimary.opacity(0.35))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 2)
+    }
+}
+
+private struct FinancesGlassCard<Content: View>: View {
+    let contentPadding: EdgeInsets
+    let content: Content
+    
+    init(
+        contentPadding: EdgeInsets = EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0),
+        @ViewBuilder content: () -> Content
+    ) {
+        self.contentPadding = contentPadding
+        self.content = content()
+    }
+    
+    var body: some View {
+        content
+            .padding(contentPadding)
+            .frame(maxWidth: .infinity)
+            .background {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .stroke(
+                                LinearGradient(
+                                    colors: AppColors.financesGradient,
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.2
+                            )
+                    }
+            }
+            .shadow(color: (AppColors.financesGradient.last ?? .cyan).opacity(0.18), radius: 18, x: 0, y: 10)
+    }
+}
+
+private struct FinancesRowDivider: View {
+    let leadingPadding: CGFloat
+    
+    init(leadingPadding: CGFloat = 0) {
+        self.leadingPadding = leadingPadding
+    }
+    
+    var body: some View {
+        Divider()
+            .background(Color.white.opacity(0.14))
+            .padding(.leading, leadingPadding)
+    }
+}
+
+private struct FinancesSelectionRow: View {
+    let title: String
+    let isSelected: Bool
+    let leadingIcon: String?
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 12) {
+                if let leadingIcon {
+                    Image(systemName: leadingIcon)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppColors.textTertiary)
+                        .frame(width: 22)
+                }
+                
+                Text(title)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                
+                Spacer()
+                
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: AppColors.financesGradient,
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 14)
+            .padding(.horizontal, 16)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct FinancesCheckboxOption: View {
+    let title: String
+    let isSelected: Bool
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 10) {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .stroke(
+                        isSelected
+                            ? LinearGradient(colors: AppColors.financesGradient, startPoint: .topLeading, endPoint: .bottomTrailing)
+                            : LinearGradient(colors: [Color.white.opacity(0.25), Color.white.opacity(0.25)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                        lineWidth: 1.2
+                    )
+                    .frame(width: 18, height: 18)
+                    .overlay {
+                        if isSelected {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(LinearGradient(colors: AppColors.financesGradient, startPoint: .topLeading, endPoint: .bottomTrailing))
+                        }
+                    }
+                
+                Text(title)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(AppColors.textPrimary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct FinancesRadioOption: View {
+    let title: String
+    let isSelected: Bool
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 10) {
+                Circle()
+                    .stroke(
+                        isSelected
+                            ? LinearGradient(colors: AppColors.financesGradient, startPoint: .topLeading, endPoint: .bottomTrailing)
+                            : LinearGradient(colors: [Color.white.opacity(0.25), Color.white.opacity(0.25)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                        lineWidth: 1.2
+                    )
+                    .frame(width: 18, height: 18)
+                    .overlay {
+                        if isSelected {
+                            Circle()
+                                .fill(LinearGradient(colors: AppColors.financesGradient, startPoint: .topLeading, endPoint: .bottomTrailing))
+                                .frame(width: 10, height: 10)
+                        }
+                    }
+                
+                Text(title)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(AppColors.textPrimary)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 // MARK: - Finances Tab Enum
 
 enum FinancesTab: String {
@@ -123,26 +295,15 @@ private struct FinancesMainTabView: View {
     // MARK: - Total Amount Section
     
     private var totalAmountSection: some View {
-        VStack(spacing: 16) {
-            HStack {
-                // Кнопка глаза для скрытия/показа сумм
-                Button {
-                    viewModel.handle(.toggleAmountVisibility)
-                } label: {
-                    Image(systemName: viewModel.state.isAmountHidden ? "eye.slash" : "eye")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(AppColors.textTertiary)
-                }
-                
-                Spacer()
-                
-                HStack(spacing: 8) {
+        VStack(spacing: 14) {
+            HStack(alignment: .center) {
+                HStack(spacing: 10) {
                     Button {
                         viewModel.handle(.showDisplayCurrencySheet)
                     } label: {
                         HStack(spacing: 4) {
                             Text(viewModel.state.displayCurrency)
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.system(size: 13, weight: .semibold))
                             Image(systemName: "chevron.down")
                                 .font(.system(size: 10, weight: .semibold))
                         }
@@ -181,7 +342,6 @@ private struct FinancesMainTabView: View {
                         }
                     }
                     
-                    // Кнопка настроек цели накопления
                     Button {
                         viewModel.handle(.showSavingsGoalSheet)
                     } label: {
@@ -190,37 +350,57 @@ private struct FinancesMainTabView: View {
                             .foregroundStyle(AppColors.textTertiary)
                     }
                 }
-            }
-            
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(formatBalance(viewModel.state.totalAmount, isHidden: viewModel.state.isAmountHidden))
-                    .font(.system(size: 32, weight: .bold))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: AppColors.financesGradient,
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
                 
-                Text(viewModel.state.displayCurrency)
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(AppColors.textSecondary)
-                    .lineLimit(1)
+                Spacer()
+                
+                Button {
+                    viewModel.handle(.toggleAmountVisibility)
+                } label: {
+                    Image(systemName: viewModel.state.isAmountHidden ? "eye.slash" : "eye")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .frame(width: 36, height: 36)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Circle())
+                        .overlay {
+                            Circle()
+                                .stroke(
+                                    LinearGradient(
+                                        colors: AppColors.financesGradient,
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1
+                                )
+                        }
+                }
+                .buttonStyle(.plain)
             }
             
-            // Дополнительная валюта
-            if let secondaryCurrency = viewModel.state.secondaryDisplayCurrency, viewModel.state.secondaryTotalAmount > 0 {
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(formatBalance(viewModel.state.secondaryTotalAmount, isHidden: viewModel.state.isAmountHidden))
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(AppColors.textTertiary)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(formatBalance(viewModel.state.totalAmount, isHidden: viewModel.state.isAmountHidden))
+                        .font(.system(size: 44, weight: .bold))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
                     
-                    Text(secondaryCurrency)
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundStyle(AppColors.textTertiary)
+                    Text(currencyDisplay(viewModel.state.displayCurrency))
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary.opacity(0.9))
+                        .lineLimit(1)
+                }
+                
+                if let secondaryCurrency = viewModel.state.secondaryDisplayCurrency, viewModel.state.secondaryTotalAmount > 0 {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(formatBalance(viewModel.state.secondaryTotalAmount, isHidden: viewModel.state.isAmountHidden))
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundStyle(AppColors.textTertiary)
+                        
+                        Text(currencyDisplay(secondaryCurrency))
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(AppColors.textTertiary)
+                    }
                 }
             }
 
@@ -257,16 +437,18 @@ private struct FinancesMainTabView: View {
                         guard calculated.isFinite else { return 0.0 }
                         return max(0.0, min(1.0, calculated))
                     }()
-                    let remaining = max(0, viewModel.state.savingsGoalAmount - viewModel.state.totalAmount)
+                    let displayCurrency = currencyDisplay(viewModel.state.displayCurrency)
+                    let totalText = formatBalance(viewModel.state.totalAmount, isHidden: viewModel.state.isAmountHidden)
+                    let goalText = formatBalance(viewModel.state.savingsGoalAmount, isHidden: viewModel.state.isAmountHidden)
                     
-                    ProgressView(value: progress)
-                        .tint(AppColors.financesGradient.first)
-                        .scaleEffect(x: 1, y: 1.5, anchor: .center)
+                    goalProgressBar(progress: progress)
                     
                     HStack {
-                        Text("Осталось: \(formatBalance(remaining, isHidden: viewModel.state.isAmountHidden)) \(viewModel.state.displayCurrency)")
+                        Text("\(totalText) \(displayCurrency) из \(goalText) \(displayCurrency)")
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(AppColors.textTertiary)
+                            .foregroundStyle(AppColors.financesGradient.first ?? AppColors.brandPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                         
                         Spacer()
                         
@@ -307,6 +489,7 @@ private struct FinancesMainTabView: View {
                         )
                 }
         }
+        .shadow(color: AppColors.financesGradient.last?.opacity(0.18) ?? .clear, radius: 18, x: 0, y: 10)
     }
     
     // MARK: - Groups List Section
@@ -381,6 +564,36 @@ private struct FinancesMainTabView: View {
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: balance)) ?? "0"
+    }
+    
+    private func currencyDisplay(_ code: String) -> String {
+        switch code.uppercased() {
+        case "RUB": "₽"
+        case "USD": "$"
+        case "EUR": "€"
+        case "GBP": "£"
+        case "CNY": "¥"
+        default: code
+        }
+    }
+    
+    private func goalProgressBar(progress: Double) -> some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule(style: .continuous)
+                    .fill(Color.white.opacity(0.12))
+                Capsule(style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: AppColors.financesGradient,
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: max(0, proxy.size.width * progress))
+            }
+        }
+        .frame(height: 10)
     }
 }
 
@@ -480,10 +693,10 @@ private struct FinanceGroupRow: View {
     
     private var headerContent: some View {
         HStack(spacing: 12) {
-            // Цветная полоска
-            RoundedRectangle(cornerRadius: 2)
+            Circle()
                 .fill(group.color)
-                .frame(width: 4, height: 40)
+                .frame(width: 12, height: 12)
+                .shadow(color: group.color.opacity(0.6), radius: 10, x: 0, y: 0)
             
             // Название группы
             groupNameSection
@@ -492,12 +705,13 @@ private struct FinanceGroupRow: View {
             groupAmountSection
             
             // Иконка раскрытия
-            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                .font(.system(size: 12, weight: .semibold))
+            Image(systemName: "chevron.right")
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(AppColors.textTertiary)
+                .rotationEffect(.degrees(isExpanded ? 90 : 0))
         }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 16)
+        .padding(.vertical, 18)
+        .padding(.horizontal, 18)
     }
     
     private var groupNameSection: some View {
@@ -514,7 +728,7 @@ private struct FinanceGroupRow: View {
                     )
             }
             Text(group.name)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(AppColors.textPrimary)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -523,24 +737,24 @@ private struct FinanceGroupRow: View {
     }
     
     private var groupAmountSection: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 4) {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(formatBalance(groupTotal, isHidden: viewModel.state.isAmountHidden))
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(AppColors.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             
-            Text(groupDisplayCurrency)
-                .font(.system(size: 12, weight: .medium))
+            Text(currencyDisplay(groupDisplayCurrency))
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(AppColors.textSecondary)
                 .lineLimit(1)
         }
     }
     
     private var accountsAccordion: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 0) {
             if let accounts = group.accounts, !accounts.isEmpty {
-                ForEach(accounts) { account in
+                ForEach(Array(accounts.enumerated()), id: \.element.id) { index, account in
                     if let accountInfo = viewModel.getAccountInfo(account: account) {
                         FinanceAccountRow(
                             viewModel: viewModel,
@@ -558,6 +772,12 @@ private struct FinanceGroupRow: View {
                                 viewModel.handle(.showQuickEditAccountSheet(account))
                             }
                         )
+                        
+                        if index != accounts.count - 1 {
+                            Divider()
+                                .background((AppColors.financesGradient.last ?? AppColors.textTertiary).opacity(0.35))
+                                .padding(.leading, 56)
+                        }
                     }
                 }
             } else {
@@ -565,16 +785,30 @@ private struct FinanceGroupRow: View {
                     .font(.system(size: 14, weight: .regular))
                     .foregroundStyle(AppColors.textTertiary)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, 20)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 14)
             }
         }
-        .padding(.bottom, 12)
+        .padding(.bottom, 14)
     }
     
     private var groupBackground: some View {
         RoundedRectangle(cornerRadius: 16, style: .continuous)
             .fill(.ultraThinMaterial)
+            .background {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                (AppColors.financesGradient.last ?? .cyan).opacity(0.08),
+                                (AppColors.financesGradient.first ?? .blue).opacity(0.04),
+                                Color.clear
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
             .overlay {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(
@@ -586,6 +820,7 @@ private struct FinanceGroupRow: View {
                         lineWidth: 1.5
                     )
             }
+            .shadow(color: (AppColors.financesGradient.last ?? .cyan).opacity(0.22), radius: 26, x: 0, y: 16)
     }
     
     @ViewBuilder
@@ -662,6 +897,17 @@ private struct FinanceGroupRow: View {
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: balance)) ?? "0"
     }
+    
+    private func currencyDisplay(_ code: String) -> String {
+        switch code.uppercased() {
+        case "RUB": "₽"
+        case "USD": "$"
+        case "EUR": "€"
+        case "GBP": "£"
+        case "CNY": "¥"
+        default: code
+        }
+    }
 }
 
 // MARK: - Group Row Modifiers
@@ -736,27 +982,38 @@ private struct FinanceAccountRow: View {
     
     var body: some View {
         HStack(spacing: 12) {
-            // Иконка счета
-            Image(systemName: icon)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(
-                    accountType == .credit || isCreditCardDebt
-                        ? LinearGradient(
-                            colors: [AppColors.error, AppColors.error],
+            let iconGradientColors = (accountType == .credit || isCreditCardDebt) ? [AppColors.error, AppColors.error] : AppColors.financesGradient
+            
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.white.opacity(0.06))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(
+                                LinearGradient(
+                                    colors: iconGradientColors,
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1
+                            )
+                    }
+                
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: iconGradientColors,
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
-                        : LinearGradient(
-                            colors: AppColors.financesGradient,
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                )
-                .frame(width: 32, height: 32)
+                    )
+            }
+            .frame(width: 34, height: 34)
             
             // Название счета
             Text(name)
-                .font(.system(size: 14, weight: .medium))
+                .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(AppColors.textPrimary)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -768,21 +1025,21 @@ private struct FinanceAccountRow: View {
             } label: {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(formatBalance(amount, isHidden: viewModel.state.isAmountHidden))
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(isCreditCardDebt ? AppColors.error : (amount >= 0 ? AppColors.textPrimary : AppColors.error))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                     
-                    Text(currency)
-                        .font(.system(size: 11, weight: .medium))
+                    Text(currencyDisplay(currency))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(AppColors.textSecondary)
                         .lineLimit(1)
                 }
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
         .contentShape(Rectangle())
         .onTapGesture {
             onEdit()
@@ -805,6 +1062,17 @@ private struct FinanceAccountRow: View {
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: balance)) ?? "0"
+    }
+    
+    private func currencyDisplay(_ code: String) -> String {
+        switch code.uppercased() {
+        case "RUB": "₽"
+        case "USD": "$"
+        case "EUR": "€"
+        case "GBP": "£"
+        case "CNY": "¥"
+        default: code
+        }
     }
 }
 
@@ -1231,101 +1499,29 @@ private struct FinanceAddAccountView: View {
     // MARK: - Form Sections
     
     private var accountTypeSection: some View {
-        Section {
-            VStack(spacing: 0) {
-                ForEach(FinanceAccountType.allCases, id: \.self) { type in
-                    Button {
-                        selectedAccountType = type
-                    } label: {
-                        HStack {
-                            Image(systemName: type.icon)
-                                .foregroundStyle(AppColors.textPrimary)
-                                .frame(width: 24)
-                            
-                            Text(type.displayName)
-                                .foregroundStyle(AppColors.textPrimary)
-                            
-                            Spacer()
-                            
-                            if selectedAccountType == type {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(
-                                        LinearGradient(
-                                            colors: AppColors.financesGradient,
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 12)
-                        .padding(.horizontal, 16)
-                    }
-                    .buttonStyle(.plain)
-                    
-                    if type != FinanceAccountType.allCases.last {
-                        Divider()
-                            .padding(.leading, 40)
-                    }
-                }
-            }
-            .background(.ultraThinMaterial)
-            .cornerRadius(12)
-        } header: {
-            Text("Тип продукта")
-                .foregroundStyle(AppColors.textSecondary)
-        }
-    }
-    
-    private var groupSection: some View {
-        Section {
-            if viewModel.state.groups.isEmpty {
-                VStack(spacing: 12) {
-                    Text("Сначала создайте группу")
-                        .font(.system(size: 14))
-                        .foregroundStyle(AppColors.textTertiary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.vertical, 8)
-                    
-                    Button {
-                        showCreateGroup = true
-                    } label: {
-                        HStack {
-                            Image(systemName: "folder.badge.plus")
-                            Text("Создать группу")
-                        }
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: AppColors.financesGradient,
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                    }
-                }
-            } else {
-                let currentGroupID = selectedGroupID ?? viewModel.state.selectedGroupForAccount?.groupUniqueID ?? viewModel.state.groups.first?.groupUniqueID ?? ""
-                
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Тип продукта")
+            FinancesGlassCard {
                 VStack(spacing: 0) {
-                    ForEach(viewModel.state.groups) { group in
+                    ForEach(FinanceAccountType.allCases, id: \.self) { type in
                         Button {
-                            selectedGroupID = group.groupUniqueID
+                            selectedAccountType = type
                         } label: {
-                            HStack {
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(group.color)
-                                    .frame(width: 16, height: 16)
-                                
-                                Text(group.name)
+                            HStack(spacing: 12) {
+                                Image(systemName: type.icon)
+                                    .font(.system(size: 16, weight: .semibold))
                                     .foregroundStyle(AppColors.textPrimary)
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
+                                    .frame(width: 22)
+                                
+                                Text(type.displayName)
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundStyle(AppColors.textPrimary)
                                 
                                 Spacer()
                                 
-                                if currentGroupID == group.groupUniqueID {
+                                if selectedAccountType == type {
                                     Image(systemName: "checkmark")
+                                        .font(.system(size: 14, weight: .bold))
                                         .foregroundStyle(
                                             LinearGradient(
                                                 colors: AppColors.financesGradient,
@@ -1336,26 +1532,105 @@ private struct FinanceAddAccountView: View {
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.vertical, 12)
+                            .padding(.vertical, 14)
                             .padding(.horizontal, 16)
                         }
                         .buttonStyle(.plain)
                         
-                        if group.groupUniqueID != viewModel.state.groups.last?.groupUniqueID {
-                            Divider()
-                                .padding(.leading, 40)
+                        if type != FinanceAccountType.allCases.last {
+                            FinancesRowDivider(leadingPadding: 50)
                         }
                     }
                 }
-                .background(.ultraThinMaterial)
-                .cornerRadius(12)
+            }
+        }
+    }
+    
+    private var groupSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Группа")
+            
+            if viewModel.state.groups.isEmpty {
+                FinancesGlassCard(contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)) {
+                    VStack(spacing: 12) {
+                        Text("Сначала создайте группу")
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundStyle(AppColors.textTertiary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                        
+                        Button {
+                            showCreateGroup = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "folder.badge.plus")
+                                Text("Создать группу")
+                                    .font(.system(size: 15, weight: .semibold))
+                            }
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: AppColors.financesGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                        }
+                    }
+                }
+            } else {
+                let currentGroupID = selectedGroupID ?? viewModel.state.selectedGroupForAccount?.groupUniqueID ?? viewModel.state.groups.first?.groupUniqueID ?? ""
+                
+                FinancesGlassCard {
+                    VStack(spacing: 0) {
+                        ForEach(viewModel.state.groups) { group in
+                            Button {
+                                selectedGroupID = group.groupUniqueID
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Circle()
+                                        .fill(group.color)
+                                        .frame(width: 12, height: 12)
+                                        .shadow(color: group.color.opacity(0.4), radius: 8, x: 0, y: 0)
+                                    
+                                    Text(group.name)
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundStyle(AppColors.textPrimary)
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+                                    
+                                    Spacer()
+                                    
+                                    if currentGroupID == group.groupUniqueID {
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 14, weight: .bold))
+                                            .foregroundStyle(
+                                                LinearGradient(
+                                                    colors: AppColors.financesGradient,
+                                                    startPoint: .leading,
+                                                    endPoint: .trailing
+                                                )
+                                            )
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 14)
+                                .padding(.horizontal, 16)
+                            }
+                            .buttonStyle(.plain)
+                            
+                            if group.groupUniqueID != viewModel.state.groups.last?.groupUniqueID {
+                                FinancesRowDivider(leadingPadding: 40)
+                            }
+                        }
+                    }
+                }
                 
                 Button {
                     showCreateGroup = true
                 } label: {
-                    HStack {
+                    HStack(spacing: 8) {
                         Image(systemName: "folder.badge.plus")
                         Text("Создать новую группу")
+                            .font(.system(size: 15, weight: .semibold))
                     }
                     .foregroundStyle(
                         LinearGradient(
@@ -1365,26 +1640,24 @@ private struct FinanceAddAccountView: View {
                         )
                     )
                 }
+                .padding(.top, 4)
             }
-        } header: {
-            Text("Группа")
-                .foregroundStyle(AppColors.textSecondary)
         }
     }
     
     private var addAccountModeSection: some View {
         Group {
             if viewModel.state.hasArchivedAccounts {
-                Section {
-                    Picker("Режим", selection: $addAccountMode) {
-                        ForEach(AddAccountMode.allCases) { mode in
-                            Text(mode.title).tag(mode)
+                VStack(alignment: .leading, spacing: 10) {
+                    FinancesSectionHeader(title: "Режим")
+                    FinancesGlassCard(contentPadding: EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12)) {
+                        Picker("Режим", selection: $addAccountMode) {
+                            ForEach(AddAccountMode.allCases) { mode in
+                                Text(mode.title).tag(mode)
+                            }
                         }
+                        .pickerStyle(.segmented)
                     }
-                    .pickerStyle(.segmented)
-                } header: {
-                    Text("Режим")
-                        .foregroundStyle(AppColors.textSecondary)
                 }
             }
         }
@@ -1395,19 +1668,18 @@ private struct FinanceAddAccountView: View {
         switch selectedAccountType {
         case .card:
             if cardViewModel == nil {
-                Section {
-                    ProgressView()
-                        .tint(AppColors.textPrimary)
-                        .task {
-                            let vm = CardViewModel(modelContext: modelContext)
-                            vm.handle(.addCard)
-                            cardViewModel = vm
-                        }
-                } header: {
-                    Text("Создать карту")
-                        .foregroundStyle(AppColors.textSecondary)
+                VStack(alignment: .leading, spacing: 10) {
+                    FinancesSectionHeader(title: "Создать карту")
+                    FinancesGlassCard(contentPadding: EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20)) {
+                        ProgressView()
+                            .tint(AppColors.textPrimary)
+                            .task {
+                                let vm = CardViewModel(modelContext: modelContext)
+                                vm.handle(.addCard)
+                                cardViewModel = vm
+                            }
+                    }
                 }
-                
                 groupSection
             } else if let vm = cardViewModel {
                 InlineCardCreateForm(
@@ -1421,19 +1693,18 @@ private struct FinanceAddAccountView: View {
             }
         case .credit:
             if creditViewModel == nil {
-                Section {
-                    ProgressView()
-                        .tint(AppColors.textPrimary)
-                        .task {
-                            let vm = CreditViewModel(modelContext: modelContext)
-                            vm.handle(.addCredit)
-                            creditViewModel = vm
-                        }
-                } header: {
-                    Text("Создать кредит")
-                        .foregroundStyle(AppColors.textSecondary)
+                VStack(alignment: .leading, spacing: 10) {
+                    FinancesSectionHeader(title: "Создать кредит")
+                    FinancesGlassCard(contentPadding: EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20)) {
+                        ProgressView()
+                            .tint(AppColors.textPrimary)
+                            .task {
+                                let vm = CreditViewModel(modelContext: modelContext)
+                                vm.handle(.addCredit)
+                                creditViewModel = vm
+                            }
+                    }
                 }
-                
                 groupSection
             } else if let vm = creditViewModel {
                 InlineCreditCreateForm(
@@ -1447,19 +1718,18 @@ private struct FinanceAddAccountView: View {
             }
         case .investment:
             if investmentViewModel == nil {
-                Section {
-                    ProgressView()
-                        .tint(AppColors.textPrimary)
-                        .task {
-                            let vm = InvestmentViewModel(modelContext: modelContext)
-                            vm.handle(.addInvestment)
-                            investmentViewModel = vm
-                        }
-                } header: {
-                    Text("Создать актив")
-                        .foregroundStyle(AppColors.textSecondary)
+                VStack(alignment: .leading, spacing: 10) {
+                    FinancesSectionHeader(title: "Создать актив")
+                    FinancesGlassCard(contentPadding: EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20)) {
+                        ProgressView()
+                            .tint(AppColors.textPrimary)
+                            .task {
+                                let vm = InvestmentViewModel(modelContext: modelContext)
+                                vm.handle(.addInvestment)
+                                investmentViewModel = vm
+                            }
+                    }
                 }
-                
                 groupSection
             } else if let vm = investmentViewModel {
                 InlineInvestmentCreateForm(
@@ -1476,171 +1746,104 @@ private struct FinanceAddAccountView: View {
 
     @ViewBuilder
     private var archivedSelectionSections: some View {
-        Section {
-            VStack(spacing: 0) {
-                switch selectedAccountType {
-                case .card:
-                    if viewModel.state.archivedCards.isEmpty {
-                        Text("Нет архивных карт")
-                            .font(.system(size: 14))
-                            .foregroundStyle(AppColors.textTertiary)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, 8)
-                    } else {
-                        ForEach(viewModel.state.archivedCards) { card in
-                            Button {
-                                selectedArchivedAccountID = card.cardUniqueID
-                            } label: {
-                                HStack {
-                                    Text(card.name)
-                                        .foregroundStyle(AppColors.textPrimary)
-                                        .lineLimit(1)
-                                        .truncationMode(.tail)
-                                    
-                                    Spacer()
-                                    
-                                    if selectedArchivedAccountID == card.cardUniqueID {
-                                        Image(systemName: "checkmark")
-                                            .foregroundStyle(
-                                                LinearGradient(
-                                                    colors: AppColors.financesGradient,
-                                                    startPoint: .leading,
-                                                    endPoint: .trailing
-                                                )
-                                            )
-                                    }
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Выбрать из архива")
+            FinancesGlassCard {
+                VStack(spacing: 0) {
+                    switch selectedAccountType {
+                    case .card:
+                        if viewModel.state.archivedCards.isEmpty {
+                            Text("Нет архивных карт")
+                                .font(.system(size: 14, weight: .regular))
+                                .foregroundStyle(AppColors.textTertiary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical, 16)
+                        } else {
+                            ForEach(viewModel.state.archivedCards) { card in
+                                FinancesSelectionRow(
+                                    title: card.name,
+                                    isSelected: selectedArchivedAccountID == card.cardUniqueID,
+                                    leadingIcon: nil,
+                                    onTap: { selectedArchivedAccountID = card.cardUniqueID }
+                                )
+                                if card.cardUniqueID != viewModel.state.archivedCards.last?.cardUniqueID {
+                                    FinancesRowDivider(leadingPadding: 16)
                                 }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.vertical, 12)
-                                .padding(.horizontal, 16)
-                            }
-                            .buttonStyle(.plain)
-                            
-                            if card.cardUniqueID != viewModel.state.archivedCards.last?.cardUniqueID {
-                                Divider()
-                                    .padding(.leading, 16)
                             }
                         }
-                    }
-                    
-                case .credit:
-                    if viewModel.state.archivedCredits.isEmpty {
-                        Text("Нет архивных кредитов")
-                            .font(.system(size: 14))
-                            .foregroundStyle(AppColors.textTertiary)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, 8)
-                    } else {
-                        ForEach(viewModel.state.archivedCredits) { credit in
-                            Button {
-                                selectedArchivedAccountID = credit.creditUniqueID
-                            } label: {
-                                HStack {
-                                    Text(credit.name)
-                                        .foregroundStyle(AppColors.textPrimary)
-                                        .lineLimit(1)
-                                        .truncationMode(.tail)
-                                    
-                                    Spacer()
-                                    
-                                    if selectedArchivedAccountID == credit.creditUniqueID {
-                                        Image(systemName: "checkmark")
-                                            .foregroundStyle(
-                                                LinearGradient(
-                                                    colors: AppColors.financesGradient,
-                                                    startPoint: .leading,
-                                                    endPoint: .trailing
-                                                )
-                                            )
-                                    }
+                        
+                    case .credit:
+                        if viewModel.state.archivedCredits.isEmpty {
+                            Text("Нет архивных кредитов")
+                                .font(.system(size: 14, weight: .regular))
+                                .foregroundStyle(AppColors.textTertiary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical, 16)
+                        } else {
+                            ForEach(viewModel.state.archivedCredits) { credit in
+                                FinancesSelectionRow(
+                                    title: credit.name,
+                                    isSelected: selectedArchivedAccountID == credit.creditUniqueID,
+                                    leadingIcon: nil,
+                                    onTap: { selectedArchivedAccountID = credit.creditUniqueID }
+                                )
+                                if credit.creditUniqueID != viewModel.state.archivedCredits.last?.creditUniqueID {
+                                    FinancesRowDivider(leadingPadding: 16)
                                 }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.vertical, 12)
-                                .padding(.horizontal, 16)
-                            }
-                            .buttonStyle(.plain)
-                            
-                            if credit.creditUniqueID != viewModel.state.archivedCredits.last?.creditUniqueID {
-                                Divider()
-                                    .padding(.leading, 16)
                             }
                         }
-                    }
-                    
-                case .investment:
-                    if viewModel.state.archivedInvestments.isEmpty {
-                        Text("Нет архивных активов")
-                            .font(.system(size: 14))
-                            .foregroundStyle(AppColors.textTertiary)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, 8)
-                    } else {
-                        ForEach(viewModel.state.archivedInvestments) { investment in
-                            Button {
-                                selectedArchivedAccountID = investment.investmentUniqueID
-                            } label: {
-                                HStack {
-                                    Text(investment.name)
-                                        .foregroundStyle(AppColors.textPrimary)
-                                        .lineLimit(1)
-                                        .truncationMode(.tail)
-                                    
-                                    Spacer()
-                                    
-                                    if selectedArchivedAccountID == investment.investmentUniqueID {
-                                        Image(systemName: "checkmark")
-                                            .foregroundStyle(
-                                                LinearGradient(
-                                                    colors: AppColors.financesGradient,
-                                                    startPoint: .leading,
-                                                    endPoint: .trailing
-                                                )
-                                            )
-                                    }
+                        
+                    case .investment:
+                        if viewModel.state.archivedInvestments.isEmpty {
+                            Text("Нет архивных активов")
+                                .font(.system(size: 14, weight: .regular))
+                                .foregroundStyle(AppColors.textTertiary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical, 16)
+                        } else {
+                            ForEach(viewModel.state.archivedInvestments) { investment in
+                                FinancesSelectionRow(
+                                    title: investment.name,
+                                    isSelected: selectedArchivedAccountID == investment.investmentUniqueID,
+                                    leadingIcon: nil,
+                                    onTap: { selectedArchivedAccountID = investment.investmentUniqueID }
+                                )
+                                if investment.investmentUniqueID != viewModel.state.archivedInvestments.last?.investmentUniqueID {
+                                    FinancesRowDivider(leadingPadding: 16)
                                 }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.vertical, 12)
-                                .padding(.horizontal, 16)
-                            }
-                            .buttonStyle(.plain)
-                            
-                            if investment.investmentUniqueID != viewModel.state.archivedInvestments.last?.investmentUniqueID {
-                                Divider()
-                                    .padding(.leading, 16)
                             }
                         }
                     }
                 }
             }
-            .background(.ultraThinMaterial)
-            .cornerRadius(12)
-        } header: {
-            Text("Выбрать из архива")
-                .foregroundStyle(AppColors.textSecondary)
         }
         
         groupSection
     }
     
-    @ViewBuilder
-    private var formContent: some View {
-        Form {
-            accountTypeSection
-            addAccountModeSection
-            if addAccountMode == .create {
-                createFormSections
-            } else {
-                archivedSelectionSections
+    private var scrollContent: some View {
+        ScrollView {
+            VStack(spacing: 18) {
+                accountTypeSection
+                addAccountModeSection
+                if addAccountMode == .create {
+                    createFormSections
+                } else {
+                    archivedSelectionSections
+                }
             }
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .padding(.bottom, 32)
         }
-        .scrollContentBackground(.hidden)
+        .scrollIndicators(.hidden)
     }
     
     @ViewBuilder
     private var navigationContent: some View {
         ZStack {
             GradientBackground()
-            formContent
+            scrollContent
         }
         .navigationTitle("Новый продукт")
         .navigationBarTitleDisplayMode(.inline)
@@ -2408,7 +2611,7 @@ private struct SavingsGoalSettingsView: View {
                                     Text("Осталось накопить: \(formatAmount(remaining, isHidden: viewModel.state.isAmountHidden)) \(viewModel.state.displayCurrency)")
                                     
                                     ProgressView(value: progress)
-                                        .tint(AppColors.financesGradient.first)
+                                        .tint(AppColors.financesGradient.first ?? AppColors.brandPrimary)
                                     
                                     Text("Прогресс: \(Int(progress * 100))%")
                                         .font(.caption)
@@ -2513,116 +2716,15 @@ private struct InlineCardCreateForm<GroupSection: View>: View {
     
     var isValid: Bool { !card.name.isEmpty }
     
-    var mainContent: some View {
-        Group {
-            Section {
-                TextField("Название карты", text: $card.name)
-                    .foregroundStyle(AppColors.textPrimary)
-                
-                TextField("Номер карты (последние 4 цифры, необязательно)", text: Binding(
-                    get: { card.cardNumber },
-                    set: { newValue in
-                        let filtered = newValue.filter { $0.isNumber }
-                        if filtered.count <= 4 { card.cardNumber = filtered }
-                    }
-                ))
-                .keyboardType(.numberPad)
-                .foregroundStyle(AppColors.textPrimary)
-                
-                Picker("Банк", selection: $card.bankRaw) {
-                    ForEach(Bank.allCases, id: \.rawValue) { bank in
-                        Text(bank.displayName).tag(bank.rawValue)
-                    }
-                }
-                .foregroundStyle(AppColors.textPrimary)
-                
-                Picker("Тип карты", selection: $card.cardTypeRaw) {
-                    ForEach(CardType.allCases, id: \.rawValue) { type in
-                        Text(type.displayName).tag(type.rawValue)
-                    }
-                }
-                .foregroundStyle(AppColors.textPrimary)
-                .onChange(of: card.cardTypeRaw) { oldValue, newValue in
-                    if newValue == CardType.debit.rawValue {
-                        card.creditLimit = nil
-                        creditLimitText = ""
-                    }
-                }
-            } header: {
-                Text("Основная информация")
-                    .foregroundStyle(AppColors.textSecondary)
-            }
-            
-            Section {
-                if isLoadingCurrencies {
-                    HStack {
-                        Text("Валюта")
-                            .foregroundStyle(AppColors.textPrimary)
-                        Spacer()
-                        ProgressView()
-                            .scaleEffect(0.8)
-                            .tint(AppColors.textTertiary)
-                    }
-                } else {
-                    Picker("Валюта", selection: $card.currency) {
-                        ForEach(availableCurrencies, id: \.self) { currency in
-                            Text(currency).tag(currency)
-                        }
-                    }
-                    .foregroundStyle(AppColors.textPrimary)
-                }
-                
-                TextField("Баланс", value: $card.balance, format: .number)
-                    .keyboardType(.decimalPad)
-                    .foregroundStyle(AppColors.textPrimary)
-                
-                if card.cardType == .credit {
-                    TextField("Кредитный лимит", text: $creditLimitText)
-                        .keyboardType(.decimalPad)
-                        .foregroundStyle(AppColors.textPrimary)
-                        .onChange(of: creditLimitText) { oldValue, newValue in
-                            if let limit = Double(newValue.replacingOccurrences(of: ",", with: ".")) {
-                                card.creditLimit = limit
-                            } else if newValue.isEmpty {
-                                card.creditLimit = nil
-                            }
-                        }
-                }
-            } header: {
-                Text("Финансы")
-                    .foregroundStyle(AppColors.textSecondary)
-            }
-        }
-    }
-    
-    var additionalSection: some View {
-        Section {
-            Picker("Приоритет", selection: Binding(
-                get: { card.priority },
-                set: { card.priority = $0 }
-            )) {
-                ForEach(CardPriority.allCases, id: \.self) { priority in
-                    Text(priority.displayName).tag(priority)
-                }
-            }
-            .foregroundStyle(AppColors.textPrimary)
-            
-            Toggle("Избранная", isOn: $card.isFavorite)
-                .foregroundStyle(AppColors.textPrimary)
-            
-            Toggle("Учитывать в общих финансах", isOn: $card.includeInTotal)
-                .foregroundStyle(AppColors.textPrimary)
-        } header: {
-            Text("Дополнительно")
-                .foregroundStyle(AppColors.textSecondary)
-        }
-    }
-    
     var body: some View {
-        Group {
-            mainContent
+        VStack(spacing: 18) {
+            nameSection
+            typeSection
+            balanceSection
+            organizationSection
             groupSection
-            additionalSection
+            calculationsSection
+            prioritySection
         }
         .onAppear { loadAvailableCurrencies() }
         .onChange(of: card.name) { _, _ in onCardDataChanged(currentCard) }
@@ -2635,6 +2737,254 @@ private struct InlineCardCreateForm<GroupSection: View>: View {
         .onChange(of: card.priority) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: card.isFavorite) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: card.includeInTotal) { _, _ in onCardDataChanged(currentCard) }
+    }
+    
+    private var accentColor: Color { AppColors.financesGradient.first ?? AppColors.brandPrimary }
+    
+    private var nameSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Название")
+            FinancesGlassCard {
+                VStack(spacing: 0) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "creditcard")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(AppColors.textTertiary)
+                            .frame(width: 22)
+                        
+                        TextField("Например, Тинькофф Black", text: $card.name)
+                            .foregroundStyle(AppColors.textPrimary)
+                            .textInputAutocapitalization(.words)
+                            .submitLabel(.done)
+                    }
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 16)
+                    
+                    FinancesRowDivider(leadingPadding: 16)
+                    
+                    HStack(spacing: 12) {
+                        Image(systemName: "number")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(AppColors.textTertiary)
+                            .frame(width: 22)
+                        
+                        Text("Последние 4 цифры")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(AppColors.textPrimary)
+                        
+                        Spacer()
+                        
+                        TextField("0000", text: Binding(
+                            get: { card.cardNumber },
+                            set: { newValue in
+                                let filtered = newValue.filter { $0.isNumber }
+                                if filtered.count <= 4 { card.cardNumber = filtered }
+                            }
+                        ))
+                        .keyboardType(.numberPad)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 90)
+                    }
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 16)
+                }
+            }
+        }
+    }
+    
+    private var typeSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Тип")
+            FinancesGlassCard {
+                VStack(spacing: 0) {
+                    HStack {
+                        Text("Тип продукта")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        Text("Карта")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(accentColor)
+                    }
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 16)
+                    
+                    FinancesRowDivider(leadingPadding: 16)
+                    
+                    HStack(spacing: 12) {
+                        FinancesCheckboxOption(
+                            title: "дебетовая",
+                            isSelected: card.cardTypeRaw == CardType.debit.rawValue,
+                            onTap: { card.cardTypeRaw = CardType.debit.rawValue }
+                        )
+                        
+                        FinancesCheckboxOption(
+                            title: "кредитная",
+                            isSelected: card.cardTypeRaw == CardType.credit.rawValue,
+                            onTap: { card.cardTypeRaw = CardType.credit.rawValue }
+                        )
+                    }
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 16)
+                }
+            }
+        }
+        .onChange(of: card.cardTypeRaw) { _, newValue in
+            if newValue == CardType.debit.rawValue {
+                card.creditLimit = nil
+                creditLimitText = ""
+            }
+        }
+    }
+    
+    private var balanceSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Баланс")
+            FinancesGlassCard {
+                VStack(spacing: 0) {
+                    HStack(spacing: 12) {
+                        Text("Сумма")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        TextField("0", value: $card.balance, format: .number)
+                            .keyboardType(.decimalPad)
+                            .foregroundStyle(AppColors.textPrimary)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 140)
+                    }
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 16)
+                    
+                    FinancesRowDivider(leadingPadding: 16)
+                    
+                    HStack(spacing: 12) {
+                        Text("Валюта")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        if isLoadingCurrencies {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                                .tint(AppColors.textTertiary)
+                        } else {
+                            Menu {
+                                ForEach(availableCurrencies, id: \.self) { currency in
+                                    Button(currency) { card.currency = currency }
+                                }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Text(card.currency)
+                                        .font(.system(size: 16, weight: .semibold))
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 12, weight: .semibold))
+                                }
+                                .foregroundStyle(AppColors.textTertiary)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 16)
+                    
+                    if card.cardType == .credit {
+                        FinancesRowDivider(leadingPadding: 16)
+                        
+                        HStack(spacing: 12) {
+                            Text("Лимит")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(AppColors.textPrimary)
+                            Spacer()
+                            TextField("0", text: $creditLimitText)
+                                .keyboardType(.decimalPad)
+                                .foregroundStyle(AppColors.textPrimary)
+                                .multilineTextAlignment(.trailing)
+                                .frame(width: 140)
+                                .onChange(of: creditLimitText) { _, newValue in
+                                    if let limit = Double(newValue.replacingOccurrences(of: ",", with: ".")) {
+                                        card.creditLimit = limit
+                                    } else if newValue.isEmpty {
+                                        card.creditLimit = nil
+                                    }
+                                }
+                        }
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 16)
+                    }
+                }
+            }
+        }
+    }
+    
+    private var organizationSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Организация")
+            FinancesGlassCard {
+                HStack(spacing: 12) {
+                    Text("Банк")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(AppColors.textPrimary)
+                    Spacer()
+                    Menu {
+                        ForEach(Bank.allCases, id: \.rawValue) { bank in
+                            Button(bank.displayName) { card.bankRaw = bank.rawValue }
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(Bank(rawValue: card.bankRaw)?.displayName ?? Bank.other.displayName)
+                                .font(.system(size: 16, weight: .semibold))
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundStyle(AppColors.textTertiary)
+                        .lineLimit(1)
+                    }
+                }
+                .padding(.vertical, 14)
+                .padding(.horizontal, 16)
+            }
+        }
+    }
+    
+    private var calculationsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Подсчёты")
+            FinancesGlassCard(contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)) {
+                VStack(alignment: .leading, spacing: 14) {
+                    Toggle("Учитывать в «Итого»", isOn: $card.includeInTotal)
+                        .tint(AppColors.toggleOnGreen)
+                        .foregroundStyle(AppColors.textPrimary)
+                    
+                    Toggle("Избранная", isOn: $card.isFavorite)
+                        .tint(AppColors.toggleOnGreen)
+                        .foregroundStyle(AppColors.textPrimary)
+                    
+                    Text("Определяет, как изменение баланса влияет на общий итог по всем продуктам.")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(AppColors.textPrimary.opacity(0.35))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+    
+    private var prioritySection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Приоритет")
+            FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16)) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 12) {
+                        FinancesRadioOption(title: "низкий", isSelected: card.priority == .low) { card.priority = .low }
+                        FinancesRadioOption(title: "обычный", isSelected: card.priority == .normal) { card.priority = .normal }
+                        FinancesRadioOption(title: "высокий", isSelected: card.priority == .high) { card.priority = .high }
+                    }
+                    
+                    Text("Высокий приоритет — выше в списках.")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(AppColors.textPrimary.opacity(0.35))
+                }
+            }
+        }
     }
     
     private func loadAvailableCurrencies() {
@@ -2692,95 +3042,168 @@ private struct InlineCreditCreateForm<GroupSection: View>: View {
         return (name, amount, monthlyPayment, endDate, remainingAmount, selectedCurrency, selectedBank, selectedCreditType, isFavorite, includeInTotal)
     }
     
-    var mainContent: some View {
-        Group {
-            Section {
-                TextField("Название кредита", text: $name)
-                    .foregroundStyle(AppColors.textPrimary)
-            } header: {
-                Text("Основная информация")
-                    .foregroundStyle(AppColors.textSecondary)
+    var body: some View {
+        VStack(spacing: 18) {
+            FinancesSectionHeader(title: "Название")
+            FinancesGlassCard {
+                HStack(spacing: 12) {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppColors.textTertiary)
+                        .frame(width: 22)
+                    
+                    TextField("Например, Потребительский кредит", text: $name)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .textInputAutocapitalization(.sentences)
+                        .submitLabel(.done)
+                }
+                .padding(.vertical, 14)
+                .padding(.horizontal, 16)
             }
             
-            Section {
-                TextField("Сумма кредита", text: Binding(
-                    get: { formatNumberForDisplay(amountText) },
-                    set: { newValue in
-                        let normalized = newValue.replacingOccurrences(of: " ", with: "")
-                            .replacingOccurrences(of: ",", with: ".")
-                        amountText = normalized
-                    }
-                ))
-                .keyboardType(.decimalPad)
-                .foregroundStyle(AppColors.textPrimary)
-                
-                TextField("Остаток долга", text: Binding(
-                    get: { formatNumberForDisplay(remainingAmountText) },
-                    set: { newValue in
-                        let normalized = newValue.replacingOccurrences(of: " ", with: "")
-                            .replacingOccurrences(of: ",", with: ".")
-                        remainingAmountText = normalized
-                    }
-                ))
-                .keyboardType(.decimalPad)
-                .foregroundStyle(AppColors.textPrimary)
-            } header: {
-                Text("Параметры кредита")
-                    .foregroundStyle(AppColors.textSecondary)
-            }
-        }
-    }
-    
-    var additionalSection: some View {
-        Section {
-            if isLoadingCurrencies {
-                HStack {
-                    Text("Валюта")
+            FinancesSectionHeader(title: "Тип")
+            FinancesGlassCard {
+                HStack(spacing: 12) {
+                    Text("Тип кредита")
+                        .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(AppColors.textPrimary)
                     Spacer()
-                    ProgressView()
-                        .scaleEffect(0.8)
-                        .tint(AppColors.textTertiary)
-                }
-            } else {
-                Picker("Валюта", selection: $selectedCurrency) {
-                    ForEach(availableCurrencies, id: \.self) { currency in
-                        Text(currency).tag(currency)
+                    Menu {
+                        ForEach(CreditType.allCases, id: \.self) { type in
+                            Button(type.displayName) { selectedCreditType = type }
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(selectedCreditType.displayName)
+                                .font(.system(size: 16, weight: .semibold))
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundStyle(AppColors.textTertiary)
                     }
                 }
-                .foregroundStyle(AppColors.textPrimary)
+                .padding(.vertical, 14)
+                .padding(.horizontal, 16)
             }
             
-            Picker("Банк", selection: $selectedBank) {
-                ForEach(Bank.allCases, id: \.self) { bank in
-                    Text(bank.displayName).tag(bank)
+            FinancesSectionHeader(title: "Баланс")
+            FinancesGlassCard {
+                VStack(spacing: 0) {
+                    HStack(spacing: 12) {
+                        Text("Сумма")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        TextField("0", text: Binding(
+                            get: { formatNumberForDisplay(amountText) },
+                            set: { newValue in
+                                let normalized = newValue.replacingOccurrences(of: " ", with: "")
+                                    .replacingOccurrences(of: ",", with: ".")
+                                amountText = normalized
+                            }
+                        ))
+                        .keyboardType(.decimalPad)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 160)
+                    }
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 16)
+                    
+                    FinancesRowDivider(leadingPadding: 16)
+                    
+                    HStack(spacing: 12) {
+                        Text("Остаток")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        TextField("0", text: Binding(
+                            get: { formatNumberForDisplay(remainingAmountText) },
+                            set: { newValue in
+                                let normalized = newValue.replacingOccurrences(of: " ", with: "")
+                                    .replacingOccurrences(of: ",", with: ".")
+                                remainingAmountText = normalized
+                            }
+                        ))
+                        .keyboardType(.decimalPad)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 160)
+                    }
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 16)
+                    
+                    FinancesRowDivider(leadingPadding: 16)
+                    
+                    HStack(spacing: 12) {
+                        Text("Валюта")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        if isLoadingCurrencies {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                                .tint(AppColors.textTertiary)
+                        } else {
+                            Menu {
+                                ForEach(availableCurrencies, id: \.self) { currency in
+                                    Button(currency) { selectedCurrency = currency }
+                                }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Text(selectedCurrency)
+                                        .font(.system(size: 16, weight: .semibold))
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 12, weight: .semibold))
+                                }
+                                .foregroundStyle(AppColors.textTertiary)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 16)
                 }
             }
-            .foregroundStyle(AppColors.textPrimary)
             
-            Picker("Тип кредита", selection: $selectedCreditType) {
-                ForEach(CreditType.allCases, id: \.self) { type in
-                    Text(type.displayName).tag(type)
+            FinancesSectionHeader(title: "Организация")
+            FinancesGlassCard {
+                HStack(spacing: 12) {
+                    Text("Банк")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(AppColors.textPrimary)
+                    Spacer()
+                    Menu {
+                        ForEach(Bank.allCases, id: \.self) { bank in
+                            Button(bank.displayName) { selectedBank = bank }
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(selectedBank.displayName)
+                                .font(.system(size: 16, weight: .semibold))
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundStyle(AppColors.textTertiary)
+                    }
                 }
+                .padding(.vertical, 14)
+                .padding(.horizontal, 16)
             }
-            .foregroundStyle(AppColors.textPrimary)
             
-            Toggle("В избранном", isOn: $isFavorite)
-                .foregroundStyle(AppColors.textPrimary)
-            
-            Toggle("Учитывать в общих финансах", isOn: $includeInTotal)
-                .foregroundStyle(AppColors.textPrimary)
-        } header: {
-            Text("Дополнительно")
-                .foregroundStyle(AppColors.textSecondary)
-        }
-    }
-    
-    var body: some View {
-        Group {
-            mainContent
             groupSection
-            additionalSection
+            
+            FinancesSectionHeader(title: "Подсчёты")
+            FinancesGlassCard(contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)) {
+                VStack(alignment: .leading, spacing: 14) {
+                    Toggle("Учитывать в «Итого»", isOn: $includeInTotal)
+                        .tint(AppColors.toggleOnGreen)
+                        .foregroundStyle(AppColors.textPrimary)
+                    
+                    Toggle("В избранном", isOn: $isFavorite)
+                        .tint(AppColors.toggleOnGreen)
+                        .foregroundStyle(AppColors.textPrimary)
+                }
+            }
         }
         .onAppear { loadAvailableCurrencies() }
         .onChange(of: name) { _, _ in onCreditDataChanged(getCreditData()) }
@@ -2865,91 +3288,156 @@ private struct InlineInvestmentCreateForm<GroupSection: View>: View {
         return (name, selectedInvestmentType, selectedCategory, amount, selectedCurrency, includeInTotal, selectedPriority, isFavorite)
     }
     
-    var mainContent: some View {
-        Group {
-            Section {
-                TextField("Название актива", text: $name)
-                    .foregroundStyle(AppColors.textPrimary)
-            } header: {
-                Text("Основная информация")
-                    .foregroundStyle(AppColors.textSecondary)
+    var body: some View {
+        VStack(spacing: 18) {
+            FinancesSectionHeader(title: "Название")
+            FinancesGlassCard {
+                HStack(spacing: 12) {
+                    Image(systemName: "chart.pie.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppColors.textTertiary)
+                        .frame(width: 22)
+                    
+                    TextField("Например, Наличные", text: $name)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .textInputAutocapitalization(.sentences)
+                        .submitLabel(.done)
+                }
+                .padding(.vertical, 14)
+                .padding(.horizontal, 16)
             }
             
-            Section {
-                Picker("Тип актива", selection: $selectedInvestmentType) {
-                    ForEach(InvestmentType.allCases, id: \.self) { type in
-                        Text(type.displayName).tag(type)
-                    }
-                }
-                .foregroundStyle(AppColors.textPrimary)
-                
-                Picker("Категория", selection: $selectedCategory) {
-                    ForEach(InvestmentCategory.allCases, id: \.self) { category in
-                        Text(category.displayName).tag(category)
-                    }
-                }
-                .foregroundStyle(AppColors.textPrimary)
-                
-                TextField("Сумма", text: Binding(
-                    get: { formatNumberForDisplay(amountText) },
-                    set: { newValue in
-                        let normalized = newValue.replacingOccurrences(of: " ", with: "")
-                            .replacingOccurrences(of: ",", with: ".")
-                        amountText = normalized
-                    }
-                ))
-                .keyboardType(.decimalPad)
-                .foregroundStyle(AppColors.textPrimary)
-                
-                if isLoadingCurrencies {
-                    HStack {
-                        Text("Валюта")
+            FinancesSectionHeader(title: "Баланс")
+            FinancesGlassCard {
+                VStack(spacing: 0) {
+                    HStack(spacing: 12) {
+                        Text("Сумма")
+                            .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        ProgressView()
-                            .scaleEffect(0.8)
-                            .tint(AppColors.textTertiary)
+                        TextField("0", text: Binding(
+                            get: { formatNumberForDisplay(amountText) },
+                            set: { newValue in
+                                let normalized = newValue.replacingOccurrences(of: " ", with: "")
+                                    .replacingOccurrences(of: ",", with: ".")
+                                amountText = normalized
+                            }
+                        ))
+                        .keyboardType(.decimalPad)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 160)
                     }
-                } else {
-                    Picker("Валюта", selection: $selectedCurrency) {
-                        ForEach(availableCurrencies, id: \.self) { currency in
-                            Text(currency).tag(currency)
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 16)
+                    
+                    FinancesRowDivider(leadingPadding: 16)
+                    
+                    HStack(spacing: 12) {
+                        Text("Валюта")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        if isLoadingCurrencies {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                                .tint(AppColors.textTertiary)
+                        } else {
+                            Menu {
+                                ForEach(availableCurrencies, id: \.self) { currency in
+                                    Button(currency) { selectedCurrency = currency }
+                                }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Text(selectedCurrency)
+                                        .font(.system(size: 16, weight: .semibold))
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 12, weight: .semibold))
+                                }
+                                .foregroundStyle(AppColors.textTertiary)
+                            }
                         }
                     }
-                    .foregroundStyle(AppColors.textPrimary)
-                }
-            } header: {
-                Text("Параметры актива")
-                    .foregroundStyle(AppColors.textSecondary)
-            }
-        }
-    }
-    
-    var additionalSection: some View {
-        Section {
-            Toggle("Учитывать в общих финансах", isOn: $includeInTotal)
-                .foregroundStyle(AppColors.textPrimary)
-            
-            Picker("Приоритет", selection: $selectedPriority) {
-                ForEach(InvestmentPriority.allCases, id: \.self) { priority in
-                    Text(priority.displayName).tag(priority)
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 16)
                 }
             }
-            .foregroundStyle(AppColors.textPrimary)
             
-            Toggle("В избранном", isOn: $isFavorite)
-                .foregroundStyle(AppColors.textPrimary)
-        } header: {
-            Text("Дополнительно")
-                .foregroundStyle(AppColors.textSecondary)
-        }
-    }
-    
-    var body: some View {
-        Group {
-            mainContent
+            FinancesSectionHeader(title: "Организация")
+            FinancesGlassCard {
+                VStack(spacing: 0) {
+                    HStack(spacing: 12) {
+                        Text("Категория")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        Menu {
+                            ForEach(InvestmentCategory.allCases, id: \.self) { category in
+                                Button(category.displayName) { selectedCategory = category }
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text(selectedCategory.displayName)
+                                    .font(.system(size: 16, weight: .semibold))
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 12, weight: .semibold))
+                            }
+                            .foregroundStyle(AppColors.textTertiary)
+                            .lineLimit(1)
+                        }
+                    }
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 16)
+                }
+            }
+            
             groupSection
-            additionalSection
+            
+            FinancesSectionHeader(title: "Подсчёты")
+            FinancesGlassCard(contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)) {
+                VStack(alignment: .leading, spacing: 14) {
+                    Toggle("Учитывать в «Итого»", isOn: $includeInTotal)
+                        .tint(AppColors.toggleOnGreen)
+                        .foregroundStyle(AppColors.textPrimary)
+                    
+                    HStack(spacing: 12) {
+                        FinancesCheckboxOption(
+                            title: "увеличивает",
+                            isSelected: selectedInvestmentType == .positive,
+                            onTap: { selectedInvestmentType = .positive }
+                        )
+                        FinancesCheckboxOption(
+                            title: "уменьшает",
+                            isSelected: selectedInvestmentType == .negative,
+                            onTap: { selectedInvestmentType = .negative }
+                        )
+                    }
+                    
+                    Toggle("В избранном", isOn: $isFavorite)
+                        .tint(AppColors.toggleOnGreen)
+                        .foregroundStyle(AppColors.textPrimary)
+                    
+                    Text("Определяет, как изменение баланса влияет на общий итог по всем продуктам.")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(AppColors.textPrimary.opacity(0.35))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            
+            FinancesSectionHeader(title: "Приоритет")
+            FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16)) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 12) {
+                        FinancesRadioOption(title: "низкий", isSelected: selectedPriority == .low) { selectedPriority = .low }
+                        FinancesRadioOption(title: "обычный", isSelected: selectedPriority == .normal) { selectedPriority = .normal }
+                        FinancesRadioOption(title: "высокий", isSelected: selectedPriority == .high) { selectedPriority = .high }
+                    }
+                    
+                    Text("Высокий приоритет — выше в списках.")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(AppColors.textPrimary.opacity(0.35))
+                }
+            }
         }
         .onAppear { loadAvailableCurrencies() }
         .onChange(of: name) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
