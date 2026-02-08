@@ -62,7 +62,7 @@ enum AppColors {
     static let textPrimary = Color.white
     
     /// Вторичный цвет текста (белый с прозрачностью)
-    static let textSecondary = Color.white.opacity(0.9)
+    static let textSecondary = Color.white.opacity(0.7)
     
     /// Третичный цвет текста (белый с меньшей прозрачностью)
     static let textTertiary = Color.white.opacity(0.7)

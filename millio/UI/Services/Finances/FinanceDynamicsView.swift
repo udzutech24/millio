@@ -521,7 +521,7 @@ private struct FinanceDynamicsContentView: View {
                             .font(.callout)
                             .foregroundStyle(AppColors.textSecondary)
                     }
-                    .padding(.horizontal)
+                    .padding(.horizontal, 0)
                     .padding(.top, 4)
 
                     // Календарь
