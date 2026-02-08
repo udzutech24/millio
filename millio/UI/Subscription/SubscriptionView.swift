@@ -215,7 +215,7 @@ struct SubscriptionView: View {
                                 startPoint: .leading,
                                 endPoint: .trailing
                             ),
-                            lineWidth: 1.5
+                            lineWidth: 1
                         )
                 }
         )
@@ -524,7 +524,7 @@ private struct FeatureRow: View {
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 ),
-                                lineWidth: 1.5
+                                lineWidth: 1
                             )
                     }
                 

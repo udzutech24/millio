@@ -212,7 +212,7 @@ private struct CashbackRowView: View {
                                         startPoint: .leading,
                                         endPoint: .trailing
                                     ),
-                                    lineWidth: 1.5
+                                    lineWidth: 1
                                 )
                         }
                 }
@@ -472,7 +472,7 @@ private struct CashbackEditorView: View {
                                                                     startPoint: .leading,
                                                                     endPoint: .trailing
                                                                 ),
-                                                                lineWidth: 1.5
+                                                                lineWidth: 1
                                                             )
                                                     }
                                                 }
@@ -644,7 +644,7 @@ private struct CashbackEditorView: View {
                                                         startPoint: .leading,
                                                         endPoint: .trailing
                                                     ),
-                                                    lineWidth: 1.5
+                                                    lineWidth: 1
                                                 )
                                         }
                                 }
@@ -729,7 +729,7 @@ private struct CashbackEditorView: View {
                                             startPoint: .leading,
                                             endPoint: .trailing
                                         ),
-                                        lineWidth: 1.5
+                                        lineWidth: 1
                                     )
                             }
                     }
@@ -982,7 +982,7 @@ private struct CashbackCardPickerView: View {
                                                                 startPoint: .leading,
                                                                 endPoint: .trailing
                                                             ),
-                                                            lineWidth: 1.5
+                                                            lineWidth: 1
                                                         )
                                                 }
                                             }
@@ -1133,7 +1133,7 @@ private struct CashbackSingleCardPickerView: View {
                                                                 startPoint: .leading,
                                                                 endPoint: .trailing
                                                             ),
-                                                            lineWidth: 1.5
+                                                            lineWidth: 1
                                                         )
                                                 }
                                             }

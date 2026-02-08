@@ -452,9 +452,9 @@ private struct FinanceDynamicsContentView: View {
                     cachedSelectedPoint = nil
                 } label: {
                     Text(period.rawValue)
-                        .font(.subheadline.weight(.semibold))
+                        .font(.system(size: 13, weight: .regular))
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
+                        .padding(.vertical, 7)
                         .background(
                             Capsule().fill(
                                 period == viewModel.state.period && !useCustomPeriod
@@ -467,7 +467,7 @@ private struct FinanceDynamicsContentView: View {
                                 Color.white.opacity(
                                     period == viewModel.state.period && !useCustomPeriod ? 0.20 : 0.08
                                 ),
-                                lineWidth: 1
+                                lineWidth: 0
                             )
                         )
                         .foregroundStyle(
@@ -477,6 +477,7 @@ private struct FinanceDynamicsContentView: View {
                         )
                 }
                 .buttonStyle(.plain)
+                .frame(width: 60, height: 32)
             }
 
             Spacer(minLength: 8)
@@ -488,16 +489,18 @@ private struct FinanceDynamicsContentView: View {
                 showCustomPeriodSheet = true
             } label: {
                 Image("calendar")
+                    .frame(width: 24, height: 24)
                     .font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 4)
                     .background(Capsule().fill(calendarBg))
                     .foregroundStyle(useCustomPeriod ? AppColors.textPrimary : AppColors.textSecondary)
             }
             .buttonStyle(.plain)
+            .frame(width: 60, height: 32)
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 12)
+//        .padding(.horizontal, 12)
         .padding(.vertical, 6)
     }
 
@@ -626,11 +629,42 @@ private struct FinanceDynamicsContentView: View {
                 Button {
                     viewModel.handle(.showFilterSheet)
                 } label: {
+                    let accentColor = AppColors.financesGradient.first ?? .cyan
+                    let fillGradient = LinearGradient(
+                        colors: [
+                            Color(red: 0.03, green: 0.07, blue: 0.11),
+                            Color(red: 0.02, green: 0.04, blue: 0.06),
+                            Color.black
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    let glowGradient = LinearGradient(
+                        colors: [
+                            accentColor.opacity(0.18),
+                            Color.clear
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+
                     Image(systemName: "line.3.horizontal.decrease.circle")
-                        .font(.system(size: 20))
-                        .padding(8)
-                        .background(Circle().fill(Color.white.opacity(0.06)))
-                        .foregroundStyle(AppColors.textSecondary)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .background(
+                            Circle()
+                                .fill(fillGradient)
+                                .overlay(
+                                    Circle()
+                                        .fill(glowGradient)
+                                        .opacity(0.6)
+                                )
+                                .overlay(
+                                    Circle()
+                                        .stroke(accentColor.opacity(0.55), lineWidth: 1)
+                                )
+                        )
                 }
                 .buttonStyle(.plain)
 

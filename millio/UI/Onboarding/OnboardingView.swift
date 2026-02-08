@@ -146,7 +146,7 @@ private struct FeatureCard: View {
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 ),
-                                lineWidth: 1.5
+                                lineWidth: 1
                             )
                     }
                 

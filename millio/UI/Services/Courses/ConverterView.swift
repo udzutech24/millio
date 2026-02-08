@@ -566,7 +566,7 @@ struct ConverterView: View {
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
                                 .stroke(
                                     LinearGradient(colors: AppColors.coursesGradient, startPoint: .leading, endPoint: .trailing),
-                                    lineWidth: 1.5
+                                    lineWidth: 1
                                 )
                         } else {
                             RoundedRectangle(cornerRadius: 16, style: .continuous)

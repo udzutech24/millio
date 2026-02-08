@@ -38,7 +38,7 @@ struct ToastView: View {
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 ),
-                                lineWidth: 1.5
+                                lineWidth: 1
                             )
                     }
             }
