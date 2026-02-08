@@ -147,6 +147,7 @@ struct FinanceChartContainerView: View {
     // MARK: - Body
 
     var body: some View {
+        let gridColor = Color(red: 0.06, green: 0.45, blue: 0.38)
         Chart {
             // Область под графиком с градиентом
             ForEach(points) { item in
@@ -186,9 +187,9 @@ struct FinanceChartContainerView: View {
         .chartXAxis {
             AxisMarks(values: .stride(by: xAxisStride, count: xAxisCount)) { value in
                 AxisGridLine()
-                    .foregroundStyle(AppColors.textTertiary.opacity(0.3))
+                    .foregroundStyle(gridColor.opacity(0.6))
                 AxisTick()
-                    .foregroundStyle(AppColors.textTertiary.opacity(0.5))
+                    .foregroundStyle(gridColor.opacity(0.8))
                 AxisValueLabel {
                     if let d = value.as(Date.self) {
                         Text(d.formatted(.dateTime.day().month(.abbreviated)))
@@ -202,9 +203,9 @@ struct FinanceChartContainerView: View {
             let ticks = Array(stride(from: niceY.lower, through: niceY.upper, by: niceY.step))
             AxisMarks(position: .trailing, values: ticks) { value in
                 AxisGridLine()
-                    .foregroundStyle(AppColors.textTertiary.opacity(0.3))
+                    .foregroundStyle(gridColor.opacity(0.6))
                 AxisTick()
-                    .foregroundStyle(AppColors.textTertiary.opacity(0.5))
+                    .foregroundStyle(gridColor.opacity(0.8))
                 AxisValueLabel {
                     if let v = value.as(Double.self) {
                         Text(formatCompact(v))
@@ -269,7 +270,7 @@ struct FinanceChartContainerView: View {
                             p.addLine(to: CGPoint(x: xPos + plotFrame.minX, y: plotFrame.maxY))
                         }
                         .stroke(
-                            AppColors.textTertiary.opacity(0.5),
+                            gridColor.opacity(0.7),
                             style: StrokeStyle(lineWidth: 1, dash: [4, 4])
                         )
 

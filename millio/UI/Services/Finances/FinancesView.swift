@@ -108,18 +108,42 @@ private struct FinancesMainTabView: View {
                     Button {
                         viewModel.handle(.showAddAccountSheet(nil))
                     } label: {
+                        let accentColor = AppColors.financesGradient.first ?? .cyan
+                        let fillGradient = LinearGradient(
+                            colors: [
+                                Color(red: 0.03, green: 0.07, blue: 0.11),
+                                Color(red: 0.02, green: 0.04, blue: 0.06),
+                                Color.black
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        let glowGradient = LinearGradient(
+                            colors: [
+                                accentColor.opacity(0.18),
+                                Color.clear
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+
                         Image(systemName: "plus")
                             .font(.system(size: 24, weight: .semibold))
                             .foregroundStyle(.white)
                             .frame(width: 56, height: 56)
                             .background(
-                                LinearGradient(
-                                    colors: AppColors.financesGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
+                                Circle()
+                                    .fill(fillGradient)
+                                    .overlay(
+                                        Circle()
+                                            .fill(glowGradient)
+                                            .opacity(0.6)
+                                    )
+                                    .overlay(
+                                        Circle()
+                                            .stroke(accentColor.opacity(0.55), lineWidth: 1)
+                                    )
                             )
-                            .clipShape(Circle())
                             .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
                     }
                     .padding(.trailing, 24)

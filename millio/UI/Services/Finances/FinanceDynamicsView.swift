@@ -379,10 +379,11 @@ private struct FinanceDynamicsContentView: View {
         let (startDate, endDate) = viewModel.getPeriodDates()
         let xDomain = startDate...endDate
 
+        let seriesColor = Color(red: 0.47, green: 0.69, blue: 1.0)
         return FinanceChartContainerView(
             points: points,
             selectedPoint: cachedSelectedPoint,
-            seriesColor: Color.orange,
+            seriesColor: seriesColor,
             niceY: niceY,
             xDomain: xDomain,
             xAxisStride: xAxisStride,
