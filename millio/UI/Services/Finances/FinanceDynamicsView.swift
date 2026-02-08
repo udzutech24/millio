@@ -439,7 +439,9 @@ private struct FinanceDynamicsContentView: View {
     // MARK: - Period Selector
 
     private var periodSelector: some View {
-        HStack(spacing: 8) {
+        let periodBg = Color(.sRGB, red: 217.0 / 255.0, green: 217.0 / 255.0, blue: 217.0 / 255.0, opacity: 0.2)
+        let calendarBg = Color(.sRGB, red: 217.0 / 255.0, green: 217.0 / 255.0, blue: 217.0 / 255.0, opacity: 0.4)
+        return HStack(spacing: 8) {
             // Кнопки периодов
             ForEach([DynamicsPeriod.all, .week, .month, .year], id: \.self) { period in
                 Button {
@@ -456,8 +458,8 @@ private struct FinanceDynamicsContentView: View {
                         .background(
                             Capsule().fill(
                                 period == viewModel.state.period && !useCustomPeriod
-                                    ? Color.white.opacity(0.18)
-                                    : Color.white.opacity(0.06)
+                                    ? periodBg
+                                    : periodBg
                             )
                         )
                         .overlay(
@@ -485,11 +487,11 @@ private struct FinanceDynamicsContentView: View {
                 draftEndDate = customEndDate
                 showCustomPeriodSheet = true
             } label: {
-                Image(systemName: useCustomPeriod ? "calendar.badge.checkmark" : "calendar")
+                Image("calendar")
                     .font(.subheadline.weight(.semibold))
                     .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Capsule().fill(Color.white.opacity(0.06)))
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(calendarBg))
                     .foregroundStyle(useCustomPeriod ? AppColors.textPrimary : AppColors.textSecondary)
             }
             .buttonStyle(.plain)
