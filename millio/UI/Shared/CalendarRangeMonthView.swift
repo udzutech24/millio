@@ -81,15 +81,15 @@ struct CalendarRangeMonthView: View {
                     }
                 } label: {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(AppColors.textSecondary)
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(AppColors.textPrimary)
                 }
                 .buttonStyle(.plain)
 
                 Spacer()
 
                 Text(currentMonthAnchor, format: .dateTime.month(.wide).year())
-                    .font(.headline.weight(.semibold))
+                    .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
 
                 Spacer()
@@ -100,8 +100,8 @@ struct CalendarRangeMonthView: View {
                     }
                 } label: {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(AppColors.textSecondary)
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(AppColors.textPrimary)
                 }
                 .buttonStyle(.plain)
             }
@@ -114,7 +114,7 @@ struct CalendarRangeMonthView: View {
                 ForEach(orderedSymbols, id: \.self) { s in
                     Text(s.uppercased())
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(AppColors.textTertiary)
+                        .foregroundStyle(AppColors.textSecondary)
                         .frame(maxWidth: .infinity)
                 }
             }
@@ -126,10 +126,10 @@ struct CalendarRangeMonthView: View {
             let weekdayOfFirst = (cal.component(.weekday, from: firstDay) + 5) % 7
             let days = daysInMonth()
 
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 7), spacing: 6) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 7), spacing: 8) {
                 // Пустые ячейки в начале
                 ForEach(0..<weekdayOfFirst, id: \.self) { _ in
-                    Color.clear.frame(height: 44)
+                    Color.clear.frame(height: 48)
                 }
 
                 // Дни месяца
@@ -140,44 +140,39 @@ struct CalendarRangeMonthView: View {
                     let isEnd = isSameDay(day, max(startDate, endDate))
 
                     ZStack {
-                        // Фон выделения диапазона
-                        if selected {
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(
-                                    LinearGradient(
-                                        colors: AppColors.financesGradient.map { $0.opacity(0.2) },
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
+                        let dayText = "\(Calendar.current.component(.day, from: day))"
+                        let same = isSameDay(startDate, endDate)
+                        let isEdge = (same && isStart) || (!same && (isStart || isEnd))
+                        let inMiddle = selected && !isEdge
+
+                        // Базовая плитка
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.clear)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .stroke(Color.white.opacity(0.25), lineWidth: 1)
+                            )
+
+                        if inMiddle {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(Color(red: 0.29, green: 0.49, blue: 0.76).opacity(0.9))
+                        }
+
+                        if isEdge {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color(red: 0.29, green: 0.49, blue: 0.76))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(Color.white.opacity(0.25), lineWidth: 1)
                                 )
                         }
 
-                        // Число дня
-                        Text("\(Calendar.current.component(.day, from: day))")
-                            .font(.callout)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .padding(8)
-                            .background(
-                                Group {
-                                    let same = isSameDay(startDate, endDate)
-                                    if (same && isStart) || (!same && (isStart || isEnd)) {
-                                        Circle()
-                                            .fill(
-                                                LinearGradient(
-                                                    colors: AppColors.financesGradient,
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
-                                    } else {
-                                        Color.clear
-                                    }
-                                }
-                            )
-                            .foregroundStyle((isStart || isEnd) ? Color.white : AppColors.textPrimary)
+                        Text(dayText)
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle((inMiddle || isEdge) ? Color.white : AppColors.textSecondary)
                     }
                     .opacity(disabled ? 0.35 : 1.0)
-                    .frame(height: 44)
+                    .frame(height: 48)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         guard !disabled else { return }
