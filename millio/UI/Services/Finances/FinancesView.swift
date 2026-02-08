@@ -31,6 +31,7 @@ struct FinancesView: View {
                 viewModel = FinanceViewModel(modelContext: modelContext)
             }
         }
+        .navigationTitle("Финансы")
     }
 }
 
@@ -131,34 +132,11 @@ private struct FinancesMainTabView: View {
     // MARK: - Total Amount Section
     
     private var totalAmountSection: some View {
-        VStack(spacing: 14) {
-            HStack(alignment: .center) {
-                Button {
-                    viewModel.handle(.showSavingsGoalSheet)
-                } label: {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(AppColors.textTertiary)
-                }
-
-                Spacer()
-
-                Button {
-                    viewModel.handle(.toggleAmountVisibility)
-                } label: {
-                    Image(systemName: viewModel.state.isAmountHidden ? "eye.slash" : "eye")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(AppColors.textSecondary)
-                        .frame(width: 36, height: 36)
-                        .clipShape(Circle())
-                }
-                .buttonStyle(.plain)
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
+        VStack(spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(formatBalance(viewModel.state.totalAmount, isHidden: viewModel.state.isAmountHidden))
-                        .font(.system(size: 44, weight: .bold))
+                        .font(.system(size: 28, weight: .bold))
                         .foregroundStyle(AppColors.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
@@ -167,28 +145,53 @@ private struct FinancesMainTabView: View {
                         viewModel.handle(.showDisplayCurrencySheet)
                     } label: {
                         Text(currencyDisplay(viewModel.state.displayCurrency))
-                            .font(.system(size: 28, weight: .semibold))
+                            .font(.system(size: 28, weight: .bold))
                             .foregroundStyle(AppColors.textPrimary.opacity(0.9))
                             .lineLimit(1)
                     }
                     .buttonStyle(.plain)
                 }
 
-                if let secondaryCurrency = viewModel.state.secondaryDisplayCurrency, viewModel.state.secondaryTotalAmount > 0 {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(formatBalance(viewModel.state.secondaryTotalAmount, isHidden: viewModel.state.isAmountHidden))
-                            .font(.system(size: 20, weight: .medium))
-                            .foregroundStyle(AppColors.textTertiary)
+                Spacer()
 
-                        Button {
-                            viewModel.handle(.showSecondaryDisplayCurrencySheet)
-                        } label: {
-                            Text(currencyDisplay(secondaryCurrency))
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(AppColors.textTertiary)
-                        }
-                        .buttonStyle(.plain)
+                HStack(spacing: 6) {
+                    Button {
+                        viewModel.handle(.toggleAmountVisibility)
+                    } label: {
+                        Image(systemName: viewModel.state.isAmountHidden ? "eye.slash" : "eye")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(AppColors.textSecondary)
+                            .frame(width: 26, height: 26)
+                            .clipShape(Circle())
                     }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        viewModel.handle(.showSavingsGoalSheet)
+                    } label: {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(AppColors.textSecondary)
+                            .frame(width: 26, height: 26)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if let secondaryCurrency = viewModel.state.secondaryDisplayCurrency, viewModel.state.secondaryTotalAmount > 0 {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(formatBalance(viewModel.state.secondaryTotalAmount, isHidden: viewModel.state.isAmountHidden))
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(AppColors.textTertiary)
+
+                    Button {
+                        viewModel.handle(.showSecondaryDisplayCurrencySheet)
+                    } label: {
+                        Text(currencyDisplay(secondaryCurrency))
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(AppColors.textTertiary)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
 
