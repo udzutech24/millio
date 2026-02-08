@@ -584,13 +584,8 @@ private struct FinanceDynamicsContentView: View {
 
     private var dynamicsListCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Панель переключателя
-            HStack(spacing: 8) {
-                dynamicsSegmentedControl
-            }
-
-            // Кнопка фильтра над таблицей
-            HStack {
+            // Панель с фильтром и переключателем
+            HStack(spacing: 12) {
                 Button {
                     viewModel.handle(.showFilterSheet)
                 } label: {
@@ -602,10 +597,10 @@ private struct FinanceDynamicsContentView: View {
                 }
                 .buttonStyle(.plain)
 
-                Spacer()
+                dynamicsSegmentedControl
             }
 
-            // Таблица
+            // Блок таблицы
             LazyVStack(spacing: 0) {
                 // Заголовок таблицы
                 tableHeader
@@ -627,9 +622,9 @@ private struct FinanceDynamicsContentView: View {
                         .padding(.vertical, 8)
                 }
             }
+            .padding(.vertical, 12)
+            .background(dynamicsCardBackground)
         }
-        .padding(.vertical, 12)
-        .background(dynamicsCardBackground)
     }
 
     // MARK: - Table Header
@@ -699,11 +694,6 @@ private struct FinanceDynamicsContentView: View {
                 .background(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(isSelected ? Color.white.opacity(0.08) : Color.clear)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(borderGradient, lineWidth: 1)
-                        .opacity(isSelected ? 1 : 0)
                 )
         }
         .buttonStyle(.plain)
