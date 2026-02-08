@@ -542,7 +542,38 @@ private struct FinanceDynamicsContentView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                HStack {
+                let gradient = LinearGradient(
+                    colors: [
+                        Color(red: 0.12, green: 0.02, blue: 0.12),
+                        Color(red: 0.02, green: 0.12, blue: 0.10)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+
+                HStack(spacing: 12) {
+                    Button {
+                        draftStartDate = Date()
+                        draftEndDate = Date()
+                        customStartDate = draftStartDate
+                        customEndDate = draftEndDate
+                        useCustomPeriod = false
+                        viewModel.handle(.setPeriod(.month))
+                        cachedSelectedPoint = nil
+                        showCustomPeriodSheet = false
+                    } label: {
+                        Text("Сбросить")
+                            .font(.system(size: 16, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(
+                                Capsule()
+                                    .stroke(Color.white.opacity(0.7), lineWidth: 1)
+                            )
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+
                     Button {
                         let start = min(draftStartDate, draftEndDate)
                         let end = max(draftStartDate, draftEndDate)
@@ -555,26 +586,30 @@ private struct FinanceDynamicsContentView: View {
                         cachedSelectedPoint = nil
                         showCustomPeriodSheet = false
                     } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "checkmark.circle.fill")
-                            Text("Готово").bold()
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(
-                            Capsule().fill(
-                                LinearGradient(
-                                    colors: AppColors.financesGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
+                        Text("Показать")
+                            .font(.system(size: 16, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(
+                                Capsule()
+                                    .fill(gradient)
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(
+                                                LinearGradient(
+                                                    colors: AppColors.financesGradient,
+                                                    startPoint: .leading,
+                                                    endPoint: .trailing
+                                                ),
+                                                lineWidth: 1
+                                            )
+                                    )
                             )
-                        )
-                        .foregroundStyle(Color.white)
-                        .padding(.horizontal, 16)
+                            .foregroundStyle(Color.white)
                     }
                     .buttonStyle(.plain)
                 }
+                .padding(.horizontal, 16)
                 .padding(.vertical, 8)
             }
         }
