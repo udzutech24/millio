@@ -119,6 +119,8 @@ private struct FinanceDynamicsContentView: View {
     @State private var showCustomPeriodSheet: Bool = false
     @State private var draftStartDate: Date = Date()
     @State private var draftEndDate: Date = Date()
+    @State private var showDisplayCurrencySheet: Bool = false
+    @State private var displayCurrencySearchText: String = ""
 
     // Кэшированные значения для графика
     @State private var cachedSelectedPoint: (date: Date, value: Double)? = nil
@@ -196,6 +198,9 @@ private struct FinanceDynamicsContentView: View {
             NavigationStack {
                 SubscriptionView()
             }
+        }
+        .sheet(isPresented: $showDisplayCurrencySheet) {
+            displayCurrencySheet
         }
         .sheet(isPresented: Binding(
             get: {
@@ -295,25 +300,15 @@ private struct FinanceDynamicsContentView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 // Баланс с валютой
-                Menu {
-                    ForEach(viewModel.state.availableCurrencies, id: \.self) { currency in
-                        Button {
-                            viewModel.handle(.setDisplayCurrency(currency))
-                        } label: {
-                            HStack {
-                                Text(currency)
-                                if currency == viewModel.state.displayCurrency {
-                                    Image(systemName: "checkmark")
-                                }
-                            }
-                        }
-                    }
+                Button {
+                    showDisplayCurrencySheet = true
                 } label: {
+                    let symbol = MonetaCurrency(rawValue: viewModel.state.displayCurrency)?.symbol ?? viewModel.state.displayCurrency
                     HStack(spacing: 6) {
                         Text(formatBalance(viewModel.state.currentBalance))
                             .font(.title3.weight(.semibold))
                             .foregroundStyle(AppColors.textPrimary)
-                        Text(String(viewModel.state.displayCurrency.prefix(1)))
+                        Text(symbol)
                             .font(.caption.weight(.bold))
                             .foregroundStyle(AppColors.textSecondary)
                             .padding(6)
@@ -327,7 +322,16 @@ private struct FinanceDynamicsContentView: View {
                 // Бейдж с дельтой
                 if viewModel.state.chartData.count >= 2 {
                     let delta = viewModel.state.periodDelta
-                    let color: Color = delta.absolute >= 0 ? .green : AppColors.error
+                    let positiveText = Color(.sRGB, red: 127.0 / 255.0, green: 1.0, blue: 189.0 / 255.0, opacity: 1.0)
+                    let positiveBg = Color(.sRGB, red: 127.0 / 255.0, green: 1.0, blue: 189.0 / 255.0, opacity: 0.3)
+                    let negativeText = Color(.sRGB, red: 1.0, green: 0.37, blue: 0.37, opacity: 1.0)
+                    let negativeBg = Color(.sRGB, red: 1.0, green: 0.37, blue: 0.37, opacity: 0.3)
+                    let neutralText = Color(.sRGB, red: 181.0 / 255.0, green: 181.0 / 255.0, blue: 181.0 / 255.0, opacity: 1.0)
+                    let neutralBg = Color(.sRGB, red: 181.0 / 255.0, green: 181.0 / 255.0, blue: 181.0 / 255.0, opacity: 0.3)
+                    let isPositive = delta.absolute > 0
+                    let isNegative = delta.absolute < 0
+                    let color: Color = isPositive ? positiveText : (isNegative ? negativeText : neutralText)
+                    let bg: Color = isPositive ? positiveBg : (isNegative ? negativeBg : neutralBg)
                     HStack(spacing: 6) {
                         Text(formatDelta(delta.absolute))
                             .font(.caption.weight(.semibold))
@@ -336,7 +340,7 @@ private struct FinanceDynamicsContentView: View {
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(Capsule().fill(color.opacity(0.18)))
+                    .background(Capsule().fill(bg))
                     .foregroundStyle(color)
                 }
             }
@@ -399,6 +403,37 @@ private struct FinanceDynamicsContentView: View {
                 }
             }
         )
+    }
+
+    private var displayCurrencySheet: some View {
+        NavigationStack {
+            CurrencyPickerView(
+                allCodes: viewModel.state.availableCurrencies.isEmpty
+                    ? CurrencySelectionSupport.allCurrencyCodesForPicker
+                    : viewModel.state.availableCurrencies,
+                searchText: $displayCurrencySearchText,
+                selectedCodes: CurrencySelectionSupport.pinnedCurrencyCodes(for: viewModel.state.displayCurrency),
+                favoriteCodes: [],
+                currentSelection: viewModel.state.displayCurrency,
+                onToggleFavorite: nil,
+                onSelect: { code in
+                    viewModel.handle(.setDisplayCurrency(code))
+                    displayCurrencySearchText = ""
+                    showDisplayCurrencySheet = false
+                }
+            )
+            .navigationTitle("Валюта")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Закрыть") {
+                        displayCurrencySearchText = ""
+                        showDisplayCurrencySheet = false
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 
     // MARK: - Period Selector
@@ -671,12 +706,13 @@ private struct FinanceDynamicsContentView: View {
 
                     // Бейдж с изменением
                     let badgeColor = deltaColor(for: item)
+                    let badgeBg = deltaBackground(for: item)
                     let badgeText = "\(formatDelta(item.delta))  •  \(formatPercent(item.deltaPercent))"
                     Text(badgeText)
                         .font(.caption.weight(.semibold).monospacedDigit())
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
-                        .background(Capsule().fill(badgeColor.opacity(0.14)))
+                        .background(Capsule().fill(badgeBg))
                         .foregroundStyle(badgeColor)
                         .fixedSize()
                 }
@@ -707,13 +743,14 @@ private struct FinanceDynamicsContentView: View {
                             .frame(width: 92, alignment: .trailing)
                     }
 
-                    let badgeColor: Color = item.delta >= 0 ? .green : AppColors.error
+                    let badgeColor = deltaColor(for: item)
+                    let badgeBg = deltaBackground(for: item)
                     let badgeText = "\(formatDelta(item.delta))  •  \(formatPercent(item.deltaPercent))"
                     Text(badgeText)
                         .font(.caption.weight(.semibold).monospacedDigit())
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
-                        .background(Capsule().fill(badgeColor.opacity(0.14)))
+                        .background(Capsule().fill(badgeBg))
                         .foregroundStyle(badgeColor)
                         .fixedSize()
                 }
@@ -891,15 +928,37 @@ private struct FinanceDynamicsContentView: View {
     }
 
     private func deltaColor(for item: DynamicsBreakdownItem) -> Color {
+        let positiveText = Color(.sRGB, red: 127.0 / 255.0, green: 1.0, blue: 189.0 / 255.0, opacity: 1.0)
+        let negativeText = Color(.sRGB, red: 1.0, green: 0.37, blue: 0.37, opacity: 1.0)
+        let neutralText = Color(.sRGB, red: 181.0 / 255.0, green: 181.0 / 255.0, blue: 181.0 / 255.0, opacity: 1.0)
         if item.accountType == .credit || item.isCreditCard {
-            // Для долгов: уменьшение = хорошо (зеленый)
+            // Для долгов: уменьшение = хорошо (зелёный), рост = плохо (красный)
             let startAbs = abs(item.startValue)
             let endAbs = abs(item.endValue)
-            if endAbs < startAbs { return .green }
-            if endAbs > startAbs { return AppColors.error }
-            return AppColors.textSecondary
+            if endAbs < startAbs { return positiveText }
+            if endAbs > startAbs { return negativeText }
+            return neutralText
         } else {
-            return item.delta >= 0 ? .green : AppColors.error
+            if item.delta > 0 { return positiveText }
+            if item.delta < 0 { return negativeText }
+            return neutralText
+        }
+    }
+
+    private func deltaBackground(for item: DynamicsBreakdownItem) -> Color {
+        let positiveBg = Color(.sRGB, red: 127.0 / 255.0, green: 1.0, blue: 189.0 / 255.0, opacity: 0.3)
+        let negativeBg = Color(.sRGB, red: 1.0, green: 0.37, blue: 0.37, opacity: 0.3)
+        let neutralBg = Color(.sRGB, red: 181.0 / 255.0, green: 181.0 / 255.0, blue: 181.0 / 255.0, opacity: 0.3)
+        if item.accountType == .credit || item.isCreditCard {
+            let startAbs = abs(item.startValue)
+            let endAbs = abs(item.endValue)
+            if endAbs < startAbs { return positiveBg }
+            if endAbs > startAbs { return negativeBg }
+            return neutralBg
+        } else {
+            if item.delta > 0 { return positiveBg }
+            if item.delta < 0 { return negativeBg }
+            return neutralBg
         }
     }
 
@@ -928,6 +987,8 @@ private struct FinanceDynamicsContentView: View {
 private struct FinanceDynamicsFilterSheet: View {
     @ObservedObject var viewModel: FinanceDynamicsViewModel
     @Environment(\.dismiss) private var dismiss
+    @State private var showDisplayCurrencySheet: Bool = false
+    @State private var displayCurrencySearchText: String = ""
 
     var body: some View {
         NavigationStack {
@@ -965,6 +1026,9 @@ private struct FinanceDynamicsFilterSheet: View {
                 }
             }
         }
+        .sheet(isPresented: $showDisplayCurrencySheet) {
+            displayCurrencySheet
+        }
     }
 
     private var currencyPicker: some View {
@@ -984,22 +1048,12 @@ private struct FinanceDynamicsFilterSheet: View {
                         .tint(AppColors.textTertiary)
                 }
             } else {
-                Menu {
-                    ForEach(viewModel.state.availableCurrencies, id: \.self) { currency in
-                        Button {
-                            viewModel.handle(.setDisplayCurrency(currency))
-                        } label: {
-                            HStack {
-                                Text(currency)
-                                if currency == viewModel.state.displayCurrency {
-                                    Image(systemName: "checkmark")
-                                }
-                            }
-                        }
-                    }
+                Button {
+                    showDisplayCurrencySheet = true
                 } label: {
+                    let symbol = MonetaCurrency(rawValue: viewModel.state.displayCurrency)?.symbol ?? viewModel.state.displayCurrency
                     HStack {
-                        Text(viewModel.state.displayCurrency)
+                        Text("\(symbol) \(viewModel.state.displayCurrency)")
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
@@ -1014,6 +1068,7 @@ private struct FinanceDynamicsFilterSheet: View {
                             .fill(Color.white.opacity(0.1))
                     )
                 }
+                .buttonStyle(.plain)
             }
         }
         .padding(20)
@@ -1021,6 +1076,37 @@ private struct FinanceDynamicsFilterSheet: View {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(Color.black.opacity(0.3))
         )
+    }
+
+    private var displayCurrencySheet: some View {
+        NavigationStack {
+            CurrencyPickerView(
+                allCodes: viewModel.state.availableCurrencies.isEmpty
+                    ? CurrencySelectionSupport.allCurrencyCodesForPicker
+                    : viewModel.state.availableCurrencies,
+                searchText: $displayCurrencySearchText,
+                selectedCodes: CurrencySelectionSupport.pinnedCurrencyCodes(for: viewModel.state.displayCurrency),
+                favoriteCodes: [],
+                currentSelection: viewModel.state.displayCurrency,
+                onToggleFavorite: nil,
+                onSelect: { code in
+                    viewModel.handle(.setDisplayCurrency(code))
+                    displayCurrencySearchText = ""
+                    showDisplayCurrencySheet = false
+                }
+            )
+            .navigationTitle("Валюта")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Закрыть") {
+                        displayCurrencySearchText = ""
+                        showDisplayCurrencySheet = false
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 
     private var groupsFilterSection: some View {
