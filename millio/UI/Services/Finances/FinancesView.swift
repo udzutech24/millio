@@ -133,62 +133,16 @@ private struct FinancesMainTabView: View {
     private var totalAmountSection: some View {
         VStack(spacing: 14) {
             HStack(alignment: .center) {
-                HStack(spacing: 10) {
-                    Button {
-                        viewModel.handle(.showDisplayCurrencySheet)
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text(viewModel.state.displayCurrency)
-                                .font(.system(size: 13, weight: .semibold))
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 10, weight: .semibold))
-                        }
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: AppColors.financesGradient,
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                    }
-                    
-                    if let secondaryCurrency = viewModel.state.secondaryDisplayCurrency {
-                        Button {
-                            viewModel.handle(.showSecondaryDisplayCurrencySheet)
-                        } label: {
-                            HStack(spacing: 4) {
-                                Text(secondaryCurrency)
-                                    .font(.system(size: 12, weight: .medium))
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 8, weight: .medium))
-                            }
-                            .foregroundStyle(AppColors.textTertiary)
-                        }
-                    } else {
-                        Button {
-                            viewModel.handle(.showSecondaryDisplayCurrencySheet)
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "plus.circle")
-                                    .font(.system(size: 12, weight: .medium))
-                                Text("Доп. валюта")
-                                    .font(.system(size: 12, weight: .medium))
-                            }
-                            .foregroundStyle(AppColors.textTertiary)
-                        }
-                    }
-                    
-                    Button {
-                        viewModel.handle(.showSavingsGoalSheet)
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(AppColors.textTertiary)
-                    }
+                Button {
+                    viewModel.handle(.showSavingsGoalSheet)
+                } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(AppColors.textTertiary)
                 }
-                
+
                 Spacer()
-                
+
                 Button {
                     viewModel.handle(.toggleAmountVisibility)
                 } label: {
@@ -196,13 +150,11 @@ private struct FinancesMainTabView: View {
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(AppColors.textSecondary)
                         .frame(width: 36, height: 36)
-                        
                         .clipShape(Circle())
-                       
                 }
                 .buttonStyle(.plain)
             }
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(formatBalance(viewModel.state.totalAmount, isHidden: viewModel.state.isAmountHidden))
@@ -210,22 +162,32 @@ private struct FinancesMainTabView: View {
                         .foregroundStyle(AppColors.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
-                    
-                    Text(currencyDisplay(viewModel.state.displayCurrency))
-                        .font(.system(size: 28, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary.opacity(0.9))
-                        .lineLimit(1)
+
+                    Button {
+                        viewModel.handle(.showDisplayCurrencySheet)
+                    } label: {
+                        Text(currencyDisplay(viewModel.state.displayCurrency))
+                            .font(.system(size: 28, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary.opacity(0.9))
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
                 }
-                
+
                 if let secondaryCurrency = viewModel.state.secondaryDisplayCurrency, viewModel.state.secondaryTotalAmount > 0 {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text(formatBalance(viewModel.state.secondaryTotalAmount, isHidden: viewModel.state.isAmountHidden))
                             .font(.system(size: 20, weight: .medium))
                             .foregroundStyle(AppColors.textTertiary)
-                        
-                        Text(currencyDisplay(secondaryCurrency))
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(AppColors.textTertiary)
+
+                        Button {
+                            viewModel.handle(.showSecondaryDisplayCurrencySheet)
+                        } label: {
+                            Text(currencyDisplay(secondaryCurrency))
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(AppColors.textTertiary)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }

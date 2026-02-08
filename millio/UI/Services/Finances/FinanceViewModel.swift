@@ -227,7 +227,7 @@ final class FinanceViewModel: ViewModelProtocol {
     
     private var storedSecondaryDisplayCurrency: String? {
         get {
-            defaults.string(forKey: "finance_secondary_display_currency")
+            defaults.string(forKey: "finance_secondary_display_currency") ?? "USD"
         }
         set { defaults.set(newValue, forKey: "finance_secondary_display_currency") }
     }
