@@ -132,7 +132,7 @@ private struct FinancesMainTabView: View {
     // MARK: - Total Amount Section
     
     private var totalAmountSection: some View {
-        VStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center, spacing: 12) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(formatBalance(viewModel.state.totalAmount, isHidden: viewModel.state.isAmountHidden))
