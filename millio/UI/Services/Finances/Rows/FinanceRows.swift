@@ -139,7 +139,7 @@ struct FinanceGroupRow: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             
-            Text(currencyDisplay(groupDisplayCurrency))
+            Text(MonetaCurrency(rawValue: groupDisplayCurrency)?.symbol ?? groupDisplayCurrency)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(AppColors.textSecondary)
                 .lineLimit(1)
@@ -293,16 +293,6 @@ struct FinanceGroupRow: View {
         return formatter.string(from: NSNumber(value: balance)) ?? "0"
     }
     
-    private func currencyDisplay(_ code: String) -> String {
-        switch code.uppercased() {
-        case "RUB": "₽"
-        case "USD": "$"
-        case "EUR": "€"
-        case "GBP": "£"
-        case "CNY": "¥"
-        default: code
-        }
-    }
 }
 
 // MARK: - Group Row Modifiers
@@ -425,7 +415,7 @@ private struct FinanceAccountRow: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                     
-                    Text(currencyDisplay(currency))
+                    Text(MonetaCurrency(rawValue: currency)?.symbol ?? currency)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(AppColors.textSecondary)
                         .lineLimit(1)
@@ -459,14 +449,4 @@ private struct FinanceAccountRow: View {
         return formatter.string(from: NSNumber(value: balance)) ?? "0"
     }
     
-    private func currencyDisplay(_ code: String) -> String {
-        switch code.uppercased() {
-        case "RUB": "₽"
-        case "USD": "$"
-        case "EUR": "€"
-        case "GBP": "£"
-        case "CNY": "¥"
-        default: code
-        }
-    }
 }
