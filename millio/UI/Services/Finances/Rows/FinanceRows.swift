@@ -111,19 +111,19 @@ struct FinanceGroupRow: View {
     
     private var groupNameSection: some View {
         HStack(spacing: 6) {
-            if group.isFavorite {
-                Image(systemName: "star.fill")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: AppColors.incomeGradient,
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-            }
+//            if group.isFavorite {
+//                Image(systemName: "star.fill")
+//                    .font(.system(size: 12, weight: .semibold))
+//                    .foregroundStyle(
+//                        LinearGradient(
+//                            colors: AppColors.incomeGradient,
+//                            startPoint: .leading,
+//                            endPoint: .trailing
+//                        )
+//                    )
+//            }
             Text(group.name)
-                .font(.system(size: 22, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(AppColors.textPrimary)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -134,13 +134,13 @@ struct FinanceGroupRow: View {
     private var groupAmountSection: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(formatBalance(groupTotal, isHidden: viewModel.state.isAmountHidden))
-                .font(.system(size: 22, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(AppColors.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             
             Text(MonetaCurrency(rawValue: groupDisplayCurrency)?.symbol ?? groupDisplayCurrency)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(AppColors.textSecondary)
                 .lineLimit(1)
         }
@@ -176,8 +176,8 @@ struct FinanceGroupRow: View {
                     }
                 }
             } else {
-                Text("Нет счетов")
-                    .font(.system(size: 14, weight: .regular))
+                Text("Создайте продукт")
+                    .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(AppColors.textTertiary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 18)
@@ -212,7 +212,7 @@ struct FinanceGroupRow: View {
                             startPoint: .leading,
                             endPoint: .trailing
                         ),
-                        lineWidth: 1.5
+                        lineWidth: 1
                     )
             }
           
@@ -370,20 +370,20 @@ private struct FinanceAccountRow: View {
             let iconGradientColors = (accountType == .credit || isCreditCardDebt) ? [AppColors.error, AppColors.error] : AppColors.financesGradient
             
             ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.white.opacity(0.06))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(
-                                LinearGradient(
-                                    colors: iconGradientColors,
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
-                    }
-                
+//                RoundedRectangle(cornerRadius: 10, style: .continuous)
+//                    .fill(Color.white.opacity(0.06))
+//                    .overlay {
+//                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+//                            .stroke(
+//                                LinearGradient(
+//                                    colors: iconGradientColors,
+//                                    startPoint: .topLeading,
+//                                    endPoint: .bottomTrailing
+//                                ),
+//                                lineWidth: 1
+//                            )
+//                    }
+//                
                 Image(systemName: icon)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(
@@ -394,11 +394,11 @@ private struct FinanceAccountRow: View {
                         )
                     )
             }
-            .frame(width: 34, height: 34)
+            .frame(width: 16, height: 16)
             
             // Название счета
             Text(name)
-                .font(.system(size: 16, weight: .medium))
+                .font(.system(size: 12, weight: .regular))
                 .foregroundStyle(AppColors.textPrimary)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -410,13 +410,13 @@ private struct FinanceAccountRow: View {
             } label: {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(formatBalance(amount, isHidden: viewModel.state.isAmountHidden))
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(isCreditCardDebt ? AppColors.error : (amount >= 0 ? AppColors.textPrimary : AppColors.error))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                     
                     Text(MonetaCurrency(rawValue: currency)?.symbol ?? currency)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppColors.textSecondary)
                         .lineLimit(1)
                 }

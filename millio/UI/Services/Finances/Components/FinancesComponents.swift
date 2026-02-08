@@ -48,7 +48,6 @@ struct FinancesGlassCard<Content: View>: View {
                             )
                     }
             }
-            .shadow(color: (AppColors.financesGradient.last ?? .cyan).opacity(0.18), radius: 18, x: 0, y: 10)
     }
 }
 
