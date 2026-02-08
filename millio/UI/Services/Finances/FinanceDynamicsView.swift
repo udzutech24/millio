@@ -1140,8 +1140,7 @@ private struct FinanceDynamicsContentView: View {
 private struct FinanceDynamicsFilterSheet: View {
     @ObservedObject var viewModel: FinanceDynamicsViewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var showDisplayCurrencySheet: Bool = false
-    @State private var displayCurrencySearchText: String = ""
+    @State private var filterSearchText: String = ""
 
     var body: some View {
         NavigationStack {
@@ -1150,7 +1149,7 @@ private struct FinanceDynamicsFilterSheet: View {
 
                 ScrollView {
                     VStack(spacing: 24) {
-                        currencyPicker
+                        filterSearchBar
 
                         if !viewModel.state.isSingleGroupMode && !viewModel.state.isSingleAccountMode {
                             groupsFilterSection
@@ -1168,98 +1167,75 @@ private struct FinanceDynamicsFilterSheet: View {
                     .padding(.bottom, 32)
                 }
             }
+            .safeAreaInset(edge: .bottom) {
+                filterApplyButton
+            }
             .navigationTitle("Фильтры")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Готово") {
-                        dismiss()
-                    }
-                    .foregroundStyle(AppColors.textPrimary)
-                }
-            }
-        }
-        .sheet(isPresented: $showDisplayCurrencySheet) {
-            displayCurrencySheet
+            .toolbar { }
         }
     }
 
-    private var currencyPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Валюта")
-                .font(.system(size: 14, weight: .medium))
+    private var filterSearchBar: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary)
-
-            if viewModel.state.availableCurrencies.isEmpty {
-                HStack {
-                    Text("Загрузка...")
-                        .font(.system(size: 14))
-                        .foregroundStyle(AppColors.textTertiary)
-                    Spacer()
-                    ProgressView()
-                        .scaleEffect(0.8)
-                        .tint(AppColors.textTertiary)
-                }
-            } else {
-                Button {
-                    showDisplayCurrencySheet = true
-                } label: {
-                    let symbol = MonetaCurrency(rawValue: viewModel.state.displayCurrency)?.symbol ?? viewModel.state.displayCurrency
-                    HStack {
-                        Text("\(symbol) \(viewModel.state.displayCurrency)")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(AppColors.textPrimary)
-                        Spacer()
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(AppColors.textSecondary)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color.white.opacity(0.1))
-                    )
-                }
-                .buttonStyle(.plain)
+            TextField("Поиск", text: $filterSearchText)
+                .foregroundStyle(AppColors.textPrimary)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+            Spacer()
+            Button("Отменить") {
+                filterSearchText = ""
             }
+            .foregroundStyle(Color(red: 0.46, green: 0.67, blue: 1.0))
         }
-        .padding(20)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
         .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.black.opacity(0.3))
+            Capsule()
+                .stroke(Color.white.opacity(0.7), lineWidth: 1)
         )
     }
 
-    private var displayCurrencySheet: some View {
-        NavigationStack {
-            CurrencyPickerView(
-                allCodes: viewModel.state.availableCurrencies.isEmpty
-                    ? CurrencySelectionSupport.allCurrencyCodesForPicker
-                    : viewModel.state.availableCurrencies,
-                searchText: $displayCurrencySearchText,
-                selectedCodes: CurrencySelectionSupport.pinnedCurrencyCodes(for: viewModel.state.displayCurrency),
-                favoriteCodes: [],
-                currentSelection: viewModel.state.displayCurrency,
-                onToggleFavorite: nil,
-                onSelect: { code in
-                    viewModel.handle(.setDisplayCurrency(code))
-                    displayCurrencySearchText = ""
-                    showDisplayCurrencySheet = false
-                }
-            )
-            .navigationTitle("Валюта")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Закрыть") {
-                        displayCurrencySearchText = ""
-                        showDisplayCurrencySheet = false
-                    }
-                }
-            }
+    private var filterApplyButton: some View {
+        let gradient = LinearGradient(
+            colors: [
+                Color(red: 0.12, green: 0.02, blue: 0.12),
+                Color(red: 0.02, green: 0.12, blue: 0.10)
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+
+        return Button {
+            dismiss()
+        } label: {
+            Text("Принять фильтр")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Color.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(
+                    Capsule()
+                        .fill(gradient)
+                        .overlay(
+                            Capsule()
+                                .stroke(
+                                    LinearGradient(
+                                        colors: AppColors.financesGradient,
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    ),
+                                    lineWidth: 1
+                                )
+                        )
+                )
         }
-        .presentationDetents([.medium, .large])
+        .buttonStyle(.plain)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 8)
     }
 
     private var groupsFilterSection: some View {
@@ -1272,30 +1248,31 @@ private struct FinanceDynamicsFilterSheet: View {
                 Spacer()
 
                 HStack(spacing: 12) {
-                    Button { viewModel.handle(.selectAllGroups) } label: {
-                        Text("Все")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(AppColors.textPrimary)
+                    filterPrimaryButton(title: "Показать все") {
+                        viewModel.handle(.selectAllGroups)
                     }
-                    Button { viewModel.handle(.deselectAllGroups) } label: {
-                        Text("Снять")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(AppColors.textSecondary)
+                    filterSecondaryButton(title: "Снять выбор") {
+                        viewModel.handle(.deselectAllGroups)
                     }
                 }
             }
 
-            if viewModel.state.groups.isEmpty {
+            let filteredGroups = viewModel.state.groups.filter { group in
+                let q = filterSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                return q.isEmpty || group.name.lowercased().contains(q)
+            }
+
+            if filteredGroups.isEmpty {
                 Text("Нет групп")
                     .font(.system(size: 14))
                     .foregroundStyle(AppColors.textTertiary)
             } else {
-                VStack(spacing: 12) {
-                    ForEach(viewModel.state.groups) { group in
+                VStack(spacing: 0) {
+                    ForEach(Array(filteredGroups.enumerated()), id: \.element.id) { index, group in
                         Button {
                             viewModel.handle(.toggleGroup(group.groupUniqueID))
                         } label: {
-                            HStack {
+                            HStack(spacing: 12) {
                                 Circle()
                                     .fill(group.color)
                                     .frame(width: 12, height: 12)
@@ -1303,26 +1280,23 @@ private struct FinanceDynamicsFilterSheet: View {
                                     .font(.system(size: 16, weight: .medium))
                                     .foregroundStyle(AppColors.textPrimary)
                                 Spacer()
-                                Image(systemName: viewModel.state.selectedGroupIDs.contains(group.groupUniqueID) ? "checkmark.circle.fill" : "circle")
-                                    .font(.system(size: 20))
-                                    .foregroundStyle(viewModel.state.selectedGroupIDs.contains(group.groupUniqueID) ? Color.green : AppColors.textTertiary)
+                                filterCheckbox(isSelected: viewModel.state.selectedGroupIDs.contains(group.groupUniqueID))
                             }
-                            .padding(16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color.white.opacity(0.05))
-                            )
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
                         }
                         .buttonStyle(.plain)
+
+                        if index != filteredGroups.count - 1 {
+                            Divider()
+                                .overlay(Color.white.opacity(0.12))
+                                .padding(.horizontal, 16)
+                        }
                     }
                 }
+                .background(filterCardBackground)
             }
         }
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.black.opacity(0.3))
-        )
     }
 
     private var accountsFilterSection: some View {
@@ -1335,33 +1309,36 @@ private struct FinanceDynamicsFilterSheet: View {
                 Spacer()
 
                 HStack(spacing: 12) {
-                    Button { viewModel.handle(.selectAllAccounts) } label: {
-                        Text("Все")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(AppColors.textPrimary)
+                    filterPrimaryButton(title: "Показать все") {
+                        viewModel.handle(.selectAllAccounts)
                     }
-                    Button { viewModel.handle(.deselectAllAccounts) } label: {
-                        Text("Снять")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(AppColors.textSecondary)
+                    filterSecondaryButton(title: "Снять выбор") {
+                        viewModel.handle(.deselectAllAccounts)
                     }
                 }
             }
 
-            let accounts = viewModel.getAccountsForSelectedGroups()
+            let accounts = viewModel.getAccountsForSelectedGroups().filter { account in
+                let q = filterSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                guard !q.isEmpty else { return true }
+                if let info = viewModel.getAccountInfoForDynamics(account: account) {
+                    return info.name.lowercased().contains(q)
+                }
+                return false
+            }
 
             if accounts.isEmpty {
                 Text("Нет счетов")
                     .font(.system(size: 14))
                     .foregroundStyle(AppColors.textTertiary)
             } else {
-                VStack(spacing: 8) {
-                    ForEach(accounts) { account in
+                VStack(spacing: 0) {
+                    ForEach(Array(accounts.enumerated()), id: \.element.id) { index, account in
                         if let accountInfo = viewModel.getAccountInfoForDynamics(account: account) {
                             Button {
                                 viewModel.handle(.toggleAccount(account.accountUniqueID))
                             } label: {
-                                HStack {
+                                HStack(spacing: 12) {
                                     Image(systemName: accountInfo.icon)
                                         .font(.system(size: 14))
                                         .foregroundStyle(AppColors.textSecondary)
@@ -1370,22 +1347,24 @@ private struct FinanceDynamicsFilterSheet: View {
                                         .font(.system(size: 14, weight: .regular))
                                         .foregroundStyle(AppColors.textPrimary)
                                     Spacer()
-                                    Image(systemName: viewModel.state.selectedAccountIDs.contains(account.accountUniqueID) ? "checkmark.circle.fill" : "circle")
-                                        .font(.system(size: 18))
-                                        .foregroundStyle(viewModel.state.selectedAccountIDs.contains(account.accountUniqueID) ? Color.green : AppColors.textTertiary)
+                                    filterCheckbox(isSelected: viewModel.state.selectedAccountIDs.contains(account.accountUniqueID))
                                 }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
                             }
                             .buttonStyle(.plain)
+
+                            if index != accounts.count - 1 {
+                                Divider()
+                                    .overlay(Color.white.opacity(0.12))
+                                    .padding(.horizontal, 16)
+                            }
                         }
                     }
                 }
+                .background(filterCardBackground)
             }
         }
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.black.opacity(0.3))
-        )
     }
 
     private var archivedToggleSection: some View {
@@ -1402,9 +1381,110 @@ private struct FinanceDynamicsFilterSheet: View {
         }
         .padding(20)
         .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.black.opacity(0.3))
+            filterCardBackground
         )
+    }
+
+    private var filterCardBackground: some View {
+        let accentColor = AppColors.financesGradient.first ?? .cyan
+        let fillGradient = LinearGradient(
+            colors: [
+                Color(red: 0.03, green: 0.07, blue: 0.11),
+                Color(red: 0.02, green: 0.04, blue: 0.06),
+                Color.black
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        let glowGradient = LinearGradient(
+            colors: [
+                accentColor.opacity(0.18),
+                Color.clear
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+
+        return RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .fill(fillGradient)
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(glowGradient)
+                    .opacity(0.6)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: AppColors.financesGradient,
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        lineWidth: 1
+                    )
+            )
+    }
+
+    private func filterPrimaryButton(title: String, action: @escaping () -> Void) -> some View {
+        let gradient = LinearGradient(
+            colors: [
+                Color(red: 0.12, green: 0.02, blue: 0.12),
+                Color(red: 0.02, green: 0.12, blue: 0.10)
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+        return Button(action: action) {
+            Text(title)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Color.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(
+                    Capsule()
+                        .fill(gradient)
+                        .overlay(
+                            Capsule()
+                                .stroke(
+                                    LinearGradient(
+                                        colors: AppColors.financesGradient,
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    ),
+                                    lineWidth: 1
+                                )
+                        )
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func filterSecondaryButton(title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(AppColors.textSecondary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(
+                    Capsule()
+                        .stroke(Color.white.opacity(0.7), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func filterCheckbox(isSelected: Bool) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .stroke(Color.white.opacity(0.8), lineWidth: 1.2)
+                .frame(width: 22, height: 22)
+            if isSelected {
+                Circle()
+                    .fill(Color(red: 0.46, green: 0.67, blue: 1.0))
+                    .frame(width: 10, height: 10)
+            }
+        }
     }
 }
 
