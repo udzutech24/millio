@@ -584,8 +584,13 @@ private struct FinanceDynamicsContentView: View {
 
     private var dynamicsListCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Панель с фильтром и переключателем
+            // Панель переключателя
             HStack(spacing: 8) {
+                dynamicsSegmentedControl
+            }
+
+            // Кнопка фильтра над таблицей
+            HStack {
                 Button {
                     viewModel.handle(.showFilterSheet)
                 } label: {
@@ -597,14 +602,7 @@ private struct FinanceDynamicsContentView: View {
                 }
                 .buttonStyle(.plain)
 
-                Picker("Режим", selection: Binding(
-                    get: { viewModel.state.viewMode },
-                    set: { viewModel.handle(.setViewMode($0)) }
-                )) {
-                    Text("Группы").tag(DynamicsViewMode.groups)
-                    Text("Счета").tag(DynamicsViewMode.accounts)
-                }
-                .pickerStyle(.segmented)
+                Spacer()
             }
 
             // Таблица
@@ -617,7 +615,9 @@ private struct FinanceDynamicsContentView: View {
                     totalRowView(total)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 10)
-                    Divider().overlay(Color.white.opacity(0.06))
+                    Divider()
+                        .overlay(Color.white.opacity(0.06))
+                        .padding(.horizontal, 16)
                 }
 
                 // Строки данных
@@ -629,10 +629,7 @@ private struct FinanceDynamicsContentView: View {
             }
         }
         .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.black.opacity(0.3))
-        )
+        .background(dynamicsCardBackground)
     }
 
     // MARK: - Table Header
@@ -651,10 +648,105 @@ private struct FinanceDynamicsContentView: View {
                     .frame(width: 92, alignment: .trailing)
             }
             .padding(.vertical, 4)
-            Divider().overlay(Color.white.opacity(0.06))
+            Divider()
+                .overlay(Color.white.opacity(0.2))
+                .padding(.horizontal, 0)
         }
         .padding(.horizontal, 12)
         .padding(.top, 4)
+    }
+
+    private var dynamicsSegmentedControl: some View {
+        let borderGradient = LinearGradient(
+            colors: AppColors.financesGradient,
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+        let baseGradient = LinearGradient(
+            colors: [
+                Color(red: 0.03, green: 0.07, blue: 0.11),
+                Color.black
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+
+        return HStack(spacing: 0) {
+            dynamicsSegmentButton(title: "Группы", mode: .groups, borderGradient: borderGradient)
+            dynamicsSegmentButton(title: "Счета", mode: .accounts, borderGradient: borderGradient)
+        }
+        .padding(4)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(baseGradient)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(borderGradient, lineWidth: 1)
+        )
+    }
+
+    private func dynamicsSegmentButton(title: String, mode: DynamicsViewMode, borderGradient: LinearGradient) -> some View {
+        let isSelected = viewModel.state.viewMode == mode
+        return Button {
+            viewModel.handle(.setViewMode(mode))
+        } label: {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(isSelected ? AppColors.textPrimary : AppColors.textSecondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(isSelected ? Color.white.opacity(0.08) : Color.clear)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(borderGradient, lineWidth: 1)
+                        .opacity(isSelected ? 1 : 0)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var dynamicsCardBackground: some View {
+        let accentColor = AppColors.financesGradient.first ?? .cyan
+        let fillGradient = LinearGradient(
+            colors: [
+                Color(red: 0.03, green: 0.07, blue: 0.11),
+                Color(red: 0.02, green: 0.04, blue: 0.06),
+                Color.black
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        let glowGradient = LinearGradient(
+            colors: [
+                accentColor.opacity(0.18),
+                Color.clear
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+
+        return RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .fill(fillGradient)
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(glowGradient)
+                    .opacity(0.6)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: AppColors.financesGradient,
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        lineWidth: 1
+                    )
+            )
     }
 
     // MARK: - Row Views
