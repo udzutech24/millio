@@ -309,10 +309,10 @@ private struct FinanceDynamicsContentView: View {
                             .font(.title3.weight(.semibold))
                             .foregroundStyle(AppColors.textPrimary)
                         Text(symbol)
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(AppColors.textSecondary)
-                            .padding(6)
-                            .background(Circle().fill(Color.white.opacity(0.1)))
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                           
+                         
                     }
                 }
                 .buttonStyle(.plain)
