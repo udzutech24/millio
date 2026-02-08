@@ -196,19 +196,9 @@ private struct FinancesMainTabView: View {
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(AppColors.textSecondary)
                         .frame(width: 36, height: 36)
-                        .background(.ultraThinMaterial)
+                        
                         .clipShape(Circle())
-                        .overlay {
-                            Circle()
-                                .stroke(
-                                    LinearGradient(
-                                        colors: AppColors.financesGradient,
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 1
-                                )
-                        }
+                       
                 }
                 .buttonStyle(.plain)
             }
