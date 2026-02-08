@@ -91,7 +91,7 @@ struct FinanceGroupRow: View {
             Circle()
                 .fill(group.color)
                 .frame(width: 12, height: 12)
-                .shadow(color: group.color.opacity(0.6), radius: 10, x: 0, y: 0)
+               
             
             // Название группы
             groupNameSection
@@ -215,7 +215,7 @@ struct FinanceGroupRow: View {
                         lineWidth: 1.5
                     )
             }
-            .shadow(color: (AppColors.financesGradient.last ?? .cyan).opacity(0.22), radius: 26, x: 0, y: 16)
+          
     }
     
     @ViewBuilder

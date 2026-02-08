@@ -96,7 +96,7 @@ private struct FinancesMainTabView: View {
                     groupsListSection
                 }
                 .padding(.horizontal, 24)
-                .padding(.top, 16)
+                .padding(.top, 4)
                 .padding(.bottom, 100) // Дополнительный отступ снизу для FAB
             }
             
@@ -144,7 +144,7 @@ private struct FinancesMainTabView: View {
                     Button {
                         viewModel.handle(.showDisplayCurrencySheet)
                     } label: {
-                        Text(currencyDisplay(viewModel.state.displayCurrency))
+                        Text(MonetaCurrency(rawValue: viewModel.state.displayCurrency)?.symbol ?? viewModel.state.displayCurrency)
                             .font(.system(size: 28, weight: .bold))
                             .foregroundStyle(AppColors.textPrimary.opacity(0.9))
                             .lineLimit(1)
@@ -187,7 +187,7 @@ private struct FinancesMainTabView: View {
                     Button {
                         viewModel.handle(.showSecondaryDisplayCurrencySheet)
                     } label: {
-                        Text(currencyDisplay(secondaryCurrency))
+                        Text(MonetaCurrency(rawValue: secondaryCurrency)?.symbol ?? secondaryCurrency)
                             .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(AppColors.textTertiary)
                     }
@@ -228,7 +228,7 @@ private struct FinancesMainTabView: View {
                         guard calculated.isFinite else { return 0.0 }
                         return max(0.0, min(1.0, calculated))
                     }()
-                    let displayCurrency = currencyDisplay(viewModel.state.displayCurrency)
+                    let displayCurrency = MonetaCurrency(rawValue: viewModel.state.displayCurrency)?.symbol ?? viewModel.state.displayCurrency
                     let totalText = formatBalance(viewModel.state.totalAmount, isHidden: viewModel.state.isAmountHidden)
                     let goalText = formatBalance(viewModel.state.savingsGoalAmount, isHidden: viewModel.state.isAmountHidden)
                     
@@ -273,20 +273,6 @@ private struct FinancesMainTabView: View {
     
     private var groupsListSection: some View {
         VStack(spacing: 12) {
-            HStack {
-                Text("Группы")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-                
-                Spacer()
-                
-                if !viewModel.state.groups.isEmpty {
-                    Text("\(viewModel.state.groups.count)")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(AppColors.textTertiary)
-                }
-            }
-            
             if viewModel.state.groups.isEmpty {
                 VStack(spacing: 16) {
                     Image(systemName: "folder.fill")
@@ -341,17 +327,6 @@ private struct FinancesMainTabView: View {
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: balance)) ?? "0"
-    }
-    
-    private func currencyDisplay(_ code: String) -> String {
-        switch code.uppercased() {
-        case "RUB": "₽"
-        case "USD": "$"
-        case "EUR": "€"
-        case "GBP": "£"
-        case "CNY": "¥"
-        default: code
-        }
     }
     
     private func goalProgressBar(progress: Double) -> some View {
