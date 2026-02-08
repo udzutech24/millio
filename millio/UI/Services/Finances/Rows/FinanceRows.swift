@@ -171,7 +171,8 @@ struct FinanceGroupRow: View {
                         if index != accounts.count - 1 {
                             Divider()
                                 .background((AppColors.financesGradient.last ?? AppColors.textTertiary).opacity(0.35))
-                                .padding(.leading, 56)
+                                .padding(.leading, 18)
+                                .padding(.trailing, 18)
                         }
                     }
                 }
