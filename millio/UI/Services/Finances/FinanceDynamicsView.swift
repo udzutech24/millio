@@ -1155,11 +1155,6 @@ private struct FinanceDynamicsFilterSheet: View {
                             groupsFilterSection
                         }
 
-                        if !viewModel.state.isSingleAccountMode &&
-                           (!viewModel.state.selectedGroupIDs.isEmpty || viewModel.state.isSingleGroupMode) {
-                            accountsFilterSection
-                        }
-                        
                         archivedToggleSection
                     }
                     .padding(.horizontal, 24)
@@ -1240,22 +1235,18 @@ private struct FinanceDynamicsFilterSheet: View {
 
     private var groupsFilterSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Группы")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-
-                Spacer()
-
-                HStack(spacing: 12) {
-                    filterPrimaryButton(title: "Показать все") {
-                        viewModel.handle(.selectAllGroups)
-                    }
-                    filterSecondaryButton(title: "Снять выбор") {
-                        viewModel.handle(.deselectAllGroups)
-                    }
+            HStack(spacing: 10) {
+                filterPrimaryButton(title: "Показать все") {
+                    viewModel.handle(.selectAllGroups)
                 }
+                .frame(maxWidth: .infinity)
+
+                filterSecondaryButton(title: "Снять выбор") {
+                    viewModel.handle(.deselectAllGroups)
+                }
+                .frame(maxWidth: .infinity)
             }
+            .frame(maxWidth: .infinity)
 
             let filteredGroups = viewModel.state.groups.filter { group in
                 let q = filterSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -1267,102 +1258,75 @@ private struct FinanceDynamicsFilterSheet: View {
                     .font(.system(size: 14))
                     .foregroundStyle(AppColors.textTertiary)
             } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(filteredGroups.enumerated()), id: \.element.id) { index, group in
-                        Button {
-                            viewModel.handle(.toggleGroup(group.groupUniqueID))
-                        } label: {
-                            HStack(spacing: 12) {
-                                Circle()
-                                    .fill(group.color)
-                                    .frame(width: 12, height: 12)
-                                Text(group.name)
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundStyle(AppColors.textPrimary)
-                                Spacer()
-                                filterCheckbox(isSelected: viewModel.state.selectedGroupIDs.contains(group.groupUniqueID))
+                VStack(spacing: 16) {
+                    ForEach(filteredGroups) { group in
+                        let accountsForGroup = viewModel.getAccounts(for: group).filter { account in
+                            let q = filterSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                            guard !q.isEmpty else { return true }
+                            if let info = viewModel.getAccountInfoForDynamics(account: account) {
+                                return info.name.lowercased().contains(q)
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
+                            return false
                         }
-                        .buttonStyle(.plain)
+                        let selectedCount = accountsForGroup.filter { viewModel.state.selectedAccountIDs.contains($0.accountUniqueID) }.count
+                        let totalCount = accountsForGroup.count
 
-                        if index != filteredGroups.count - 1 {
-                            Divider()
-                                .overlay(Color.white.opacity(0.12))
-                                .padding(.horizontal, 16)
-                        }
-                    }
-                }
-                .background(filterCardBackground)
-            }
-        }
-    }
-
-    private var accountsFilterSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Счета")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-
-                Spacer()
-
-                HStack(spacing: 12) {
-                    filterPrimaryButton(title: "Показать все") {
-                        viewModel.handle(.selectAllAccounts)
-                    }
-                    filterSecondaryButton(title: "Снять выбор") {
-                        viewModel.handle(.deselectAllAccounts)
-                    }
-                }
-            }
-
-            let accounts = viewModel.getAccountsForSelectedGroups().filter { account in
-                let q = filterSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                guard !q.isEmpty else { return true }
-                if let info = viewModel.getAccountInfoForDynamics(account: account) {
-                    return info.name.lowercased().contains(q)
-                }
-                return false
-            }
-
-            if accounts.isEmpty {
-                Text("Нет счетов")
-                    .font(.system(size: 14))
-                    .foregroundStyle(AppColors.textTertiary)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(accounts.enumerated()), id: \.element.id) { index, account in
-                        if let accountInfo = viewModel.getAccountInfoForDynamics(account: account) {
+                        VStack(spacing: 0) {
                             Button {
-                                viewModel.handle(.toggleAccount(account.accountUniqueID))
+                                viewModel.handle(.toggleGroup(group.groupUniqueID))
                             } label: {
                                 HStack(spacing: 12) {
-                                    Image(systemName: accountInfo.icon)
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(AppColors.textSecondary)
-                                        .frame(width: 20)
-                                    Text(accountInfo.name)
-                                        .font(.system(size: 14, weight: .regular))
+                                    filterCheckbox(isSelected: viewModel.state.selectedGroupIDs.contains(group.groupUniqueID))
+                                    Text(group.name)
+                                        .font(.system(size: 18, weight: .medium))
                                         .foregroundStyle(AppColors.textPrimary)
                                     Spacer()
-                                    filterCheckbox(isSelected: viewModel.state.selectedAccountIDs.contains(account.accountUniqueID))
+                                    Text("\(selectedCount)/\(max(totalCount, 1))")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundStyle(AppColors.textSecondary)
+                                    Image(systemName: "folder")
+                                        .font(.system(size: 18))
+                                        .foregroundStyle(AppColors.textSecondary)
                                 }
                                 .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
+                                .padding(.vertical, 14)
                             }
                             .buttonStyle(.plain)
 
-                            if index != accounts.count - 1 {
-                                Divider()
-                                    .overlay(Color.white.opacity(0.12))
-                                    .padding(.horizontal, 16)
+                            Divider()
+                                .overlay(Color.white.opacity(0.12))
+                                .padding(.horizontal, 16)
+
+                            VStack(spacing: 0) {
+                                ForEach(Array(accountsForGroup.enumerated()), id: \.element.id) { index, account in
+                                    if let accountInfo = viewModel.getAccountInfoForDynamics(account: account) {
+                                        Button {
+                                            viewModel.handle(.toggleAccount(account.accountUniqueID))
+                                        } label: {
+                                            HStack(spacing: 12) {
+                                                filterCheckbox(isSelected: viewModel.state.selectedAccountIDs.contains(account.accountUniqueID))
+                                                Text(accountInfo.name)
+                                                    .font(.system(size: 16, weight: .regular))
+                                                    .foregroundStyle(AppColors.textPrimary)
+                                                Spacer()
+                                            }
+                                            .padding(.horizontal, 16)
+                                            .padding(.vertical, 12)
+                                        }
+                                        .buttonStyle(.plain)
+
+                                        if index != accountsForGroup.count - 1 {
+                                            Divider()
+                                                .overlay(Color.white.opacity(0.12))
+                                                .padding(.horizontal, 16)
+                                        }
+                                    }
+                                }
                             }
                         }
+                        .background(filterCardBackground)
                     }
                 }
-                .background(filterCardBackground)
             }
         }
     }
@@ -1438,6 +1402,7 @@ private struct FinanceDynamicsFilterSheet: View {
             Text(title)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(Color.white)
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(
@@ -1464,6 +1429,7 @@ private struct FinanceDynamicsFilterSheet: View {
             Text(title)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary)
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(

@@ -1719,6 +1719,15 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         return accounts.filter { !isAccountArchived($0) }
     }
 
+    /// Получить список счетов внутри группы (с учетом архива)
+    func getAccounts(for group: FinanceGroup) -> [FinanceAccount] {
+        guard let groupAccounts = group.accounts else { return [] }
+        if state.showArchivedAccounts {
+            return groupAccounts
+        }
+        return groupAccounts.filter { !isAccountArchived($0) }
+    }
+
     private func isAccountArchived(_ account: FinanceAccount) -> Bool {
         switch account.accountType {
         case .card:
