@@ -371,7 +371,7 @@ private struct FinanceDynamicsContentView: View {
                 .font(.caption2)
                 .foregroundStyle(AppColors.textSecondary)
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 0)
     }
 
     // MARK: - Chart Content
@@ -672,29 +672,56 @@ private struct FinanceDynamicsContentView: View {
             }
 
             // Блок таблицы
-            LazyVStack(spacing: 0) {
-                // Заголовок таблицы
-                tableHeader
+            if viewModel.state.dynamicsBreakdown.isEmpty {
+                emptyStateView
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 40)
+                    .background(dynamicsCardBackground)
+            } else {
+                LazyVStack(spacing: 0) {
+                    // Заголовок таблицы
+                    tableHeader
 
-                // Итого
-                if let total = totalRow {
-                    totalRowView(total)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                    Divider()
-                        .overlay(Color.white.opacity(0.06))
-                        .padding(.horizontal, 16)
-                }
+                    // Итого
+                    if let total = totalRow {
+                        totalRowView(total)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                        Divider()
+                            .overlay(Color.white.opacity(0.06))
+                            .padding(.horizontal, 16)
+                    }
 
-                // Строки данных
-                ForEach(viewModel.state.dynamicsBreakdown) { item in
-                    rowView(item)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
+                    // Строки данных
+                    ForEach(viewModel.state.dynamicsBreakdown) { item in
+                        rowView(item)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                    }
                 }
+                .padding(.vertical, 12)
+                .background(dynamicsCardBackground)
             }
-            .padding(.vertical, 12)
-            .background(dynamicsCardBackground)
+        }
+    }
+
+    // MARK: - Empty State
+
+    private var emptyStateView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: viewModel.state.viewMode == .groups ? "folder.fill" : "creditcard.fill")
+                .font(.system(size: 64))
+                .foregroundStyle(AppColors.textSecondary.opacity(0.5))
+            
+            VStack(spacing: 6) {
+                Text(viewModel.state.viewMode == .groups ? "Нет групп" : "Нет продуктов")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(AppColors.textPrimary)
+                
+                Text(viewModel.state.viewMode == .groups ? "Создайте первую группу" : "Создайте первый продукт")
+                    .font(.subheadline)
+                    .foregroundStyle(AppColors.textSecondary)
+            }
         }
     }
 
@@ -1148,7 +1175,7 @@ private struct FinanceDynamicsFilterSheet: View {
                 GradientBackground()
 
                 ScrollView {
-                    VStack(spacing: 24) {
+                    VStack(spacing: 20) {
                         filterSearchBar
 
                         if !viewModel.state.isSingleGroupMode && !viewModel.state.isSingleAccountMode {
@@ -1157,7 +1184,7 @@ private struct FinanceDynamicsFilterSheet: View {
 
                         archivedToggleSection
                     }
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, 20)
                     .padding(.top, 16)
                     .padding(.bottom, 32)
                 }

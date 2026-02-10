@@ -88,14 +88,14 @@ private struct FinancesMainTabView: View {
             GradientBackground()
             
             ScrollView {
-                VStack(spacing: 24) {
+                VStack(spacing: 20) {
                     // Общая сумма
                     totalAmountSection
                     
                     // Список групп
                     groupsListSection
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, 20)
                 .padding(.top, 4)
                 .padding(.bottom, 100) // Дополнительный отступ снизу для FAB
             }
