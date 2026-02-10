@@ -304,10 +304,6 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                         .tint(AppColors.toggleOnGreen)
                         .foregroundStyle(AppColors.textPrimary)
                     
-                    Toggle("Избранная", isOn: $card.isFavorite)
-                        .tint(AppColors.toggleOnGreen)
-                        .foregroundStyle(AppColors.textPrimary)
-                    
                     Text("Определяет, как изменение баланса влияет на общий итог по всем продуктам.")
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppColors.textPrimary.opacity(0.35))
@@ -320,8 +316,14 @@ struct InlineCardCreateForm<GroupSection: View>: View {
     private var prioritySection: some View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: "Приоритет")
-            FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16)) {
+            FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 12, bottom: 14, trailing: 12)) {
                 VStack(alignment: .leading, spacing: 12) {
+                    Toggle("Избранная", isOn: $card.isFavorite)
+                        .tint(AppColors.toggleOnGreen)
+                        .foregroundStyle(AppColors.textPrimary)
+                    
+                    FinancesRowDivider(leadingPadding: 0)
+                    
                     HStack(spacing: 12) {
                         FinancesRadioOption(title: "низкий", isSelected: card.priority == .low) { card.priority = .low }
                         FinancesRadioOption(title: "обычный", isSelected: card.priority == .normal) { card.priority = .normal }
@@ -402,6 +404,7 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
             organizationSection
             groupSection
             calculationsSection
+            prioritySection
         }
         .onAppear { loadAvailableCurrencies() }
         .onChange(of: name) { _, _ in onCreditDataChanged(getCreditData()) }
@@ -587,9 +590,10 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
                         .tint(AppColors.toggleOnGreen)
                         .foregroundStyle(AppColors.textPrimary)
                     
-                    Toggle("В избранном", isOn: $isFavorite)
-                        .tint(AppColors.toggleOnGreen)
-                        .foregroundStyle(AppColors.textPrimary)
+                    Text("Определяет, как изменение баланса влияет на общий итог по всем продуктам.")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(AppColors.textPrimary.opacity(0.35))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -608,6 +612,17 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
         }
     }
     
+    private var prioritySection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Приоритет")
+            FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 12, bottom: 14, trailing: 12)) {
+                Toggle("В избранном", isOn: $isFavorite)
+                    .tint(AppColors.toggleOnGreen)
+                    .foregroundStyle(AppColors.textPrimary)
+            }
+        }
+    }
+
     private func parseNumber(_ text: String) -> Double? {
         let normalized = text.replacingOccurrences(of: " ", with: "")
             .replacingOccurrences(of: ",", with: ".")
@@ -827,10 +842,6 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                         )
                     }
                     
-                    Toggle("В избранном", isOn: $isFavorite)
-                        .tint(AppColors.toggleOnGreen)
-                        .foregroundStyle(AppColors.textPrimary)
-                    
                     Text("Определяет, как изменение баланса влияет на общий итог по всем продуктам.")
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppColors.textPrimary.opacity(0.35))
@@ -843,8 +854,14 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     private var prioritySection: some View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: "Приоритет")
-            FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16)) {
+            FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 12, bottom: 14, trailing: 12)) {
                 VStack(alignment: .leading, spacing: 12) {
+                    Toggle("В избранном", isOn: $isFavorite)
+                        .tint(AppColors.toggleOnGreen)
+                        .foregroundStyle(AppColors.textPrimary)
+                    
+                    FinancesRowDivider(leadingPadding: 0)
+                    
                     HStack(spacing: 12) {
                         FinancesRadioOption(title: "низкий", isSelected: selectedPriority == .low) { selectedPriority = .low }
                         FinancesRadioOption(title: "обычный", isSelected: selectedPriority == .normal) { selectedPriority = .normal }
