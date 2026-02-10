@@ -180,7 +180,7 @@ struct FinanceAddAccountView: View {
                                     Circle()
                                         .fill(group.color)
                                         .frame(width: 12, height: 12)
-                                        .shadow(color: group.color.opacity(0.4), radius: 8, x: 0, y: 0)
+                                        
                                     
                                     Text(group.name)
                                         .font(.system(size: 16, weight: .medium))

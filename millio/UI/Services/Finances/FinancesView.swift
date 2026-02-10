@@ -144,7 +144,7 @@ private struct FinancesMainTabView: View {
                                             .stroke(accentColor.opacity(0.55), lineWidth: 1)
                                     )
                             )
-                            .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
+                        
                     }
                     .padding(.trailing, 24)
                     .padding(.bottom, 24)

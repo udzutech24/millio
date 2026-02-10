@@ -17,6 +17,8 @@ struct InlineCardCreateForm<GroupSection: View>: View {
     @State private var creditLimitText: String = ""
     @State private var availableCurrencies: [String] = ["RUB", "USD", "EUR"]
     @State private var isLoadingCurrencies: Bool = false
+    @State private var showCurrencyPicker: Bool = false
+    @State private var currencySearchText: String = ""
     
     init(
         viewModel: CardViewModel,
@@ -71,6 +73,31 @@ struct InlineCardCreateForm<GroupSection: View>: View {
         .onChange(of: card.priority) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: card.isFavorite) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: card.includeInTotal) { _, _ in onCardDataChanged(currentCard) }
+        .sheet(isPresented: $showCurrencyPicker) {
+            NavigationStack {
+                CurrencyPickerView(
+                    allCodes: availableCurrencies,
+                    searchText: $currencySearchText,
+                    selectedCodes: [],
+                    favoriteCodes: [],
+                    currentSelection: card.currency,
+                    onToggleFavorite: nil,
+                    onSelect: { currency in
+                        card.currency = currency
+                        showCurrencyPicker = false
+                    }
+                )
+                .navigationTitle("Выбор валюты")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Отмена") { showCurrencyPicker = false }
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
     }
     
     private var accentColor: Color { AppColors.financesGradient.first ?? AppColors.brandPrimary }
@@ -193,10 +220,8 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                                 .scaleEffect(0.8)
                                 .tint(AppColors.textTertiary)
                         } else {
-                            Menu {
-                                ForEach(availableCurrencies, id: \.self) { currency in
-                                    Button(currency) { card.currency = currency }
-                                }
+                            Button {
+                                showCurrencyPicker = true
                             } label: {
                                 HStack(spacing: 6) {
                                     Text(card.currency)
@@ -340,6 +365,8 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
     @State private var includeInTotal: Bool = true
     @State private var availableCurrencies: [String] = ["RUB", "USD", "EUR"]
     @State private var isLoadingCurrencies: Bool = false
+    @State private var showCurrencyPicker: Bool = false
+    @State private var currencySearchText: String = ""
     
     init(
         viewModel: CreditViewModel,
@@ -385,6 +412,31 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
         .onChange(of: selectedCreditType) { _, _ in onCreditDataChanged(getCreditData()) }
         .onChange(of: isFavorite) { _, _ in onCreditDataChanged(getCreditData()) }
         .onChange(of: includeInTotal) { _, _ in onCreditDataChanged(getCreditData()) }
+        .sheet(isPresented: $showCurrencyPicker) {
+            NavigationStack {
+                CurrencyPickerView(
+                    allCodes: availableCurrencies,
+                    searchText: $currencySearchText,
+                    selectedCodes: [],
+                    favoriteCodes: [],
+                    currentSelection: selectedCurrency,
+                    onToggleFavorite: nil,
+                    onSelect: { currency in
+                        selectedCurrency = currency
+                        showCurrencyPicker = false
+                    }
+                )
+                .navigationTitle("Выбор валюты")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Отмена") { showCurrencyPicker = false }
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
     }
     
     private var typeSection: some View {
@@ -477,10 +529,8 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
                                 .scaleEffect(0.8)
                                 .tint(AppColors.textTertiary)
                         } else {
-                            Menu {
-                                ForEach(availableCurrencies, id: \.self) { currency in
-                                    Button(currency) { selectedCurrency = currency }
-                                }
+                            Button {
+                                showCurrencyPicker = true
                             } label: {
                                 HStack(spacing: 6) {
                                     Text(selectedCurrency)
@@ -599,6 +649,8 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     @State private var isFavorite: Bool = false
     @State private var availableCurrencies: [String] = ["RUB", "USD", "EUR"]
     @State private var isLoadingCurrencies: Bool = false
+    @State private var showCurrencyPicker: Bool = false
+    @State private var currencySearchText: String = ""
     
     init(
         viewModel: InvestmentViewModel,
@@ -636,6 +688,31 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
         .onChange(of: selectedInvestmentType) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
         .onChange(of: isFavorite) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
         .onChange(of: includeInTotal) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
+        .sheet(isPresented: $showCurrencyPicker) {
+            NavigationStack {
+                CurrencyPickerView(
+                    allCodes: availableCurrencies,
+                    searchText: $currencySearchText,
+                    selectedCodes: [],
+                    favoriteCodes: [],
+                    currentSelection: selectedCurrency,
+                    onToggleFavorite: nil,
+                    onSelect: { currency in
+                        selectedCurrency = currency
+                        showCurrencyPicker = false
+                    }
+                )
+                .navigationTitle("Выбор валюты")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Отмена") { showCurrencyPicker = false }
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
     }
     
     private var balanceSection: some View {
@@ -676,10 +753,8 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                                 .scaleEffect(0.8)
                                 .tint(AppColors.textTertiary)
                         } else {
-                            Menu {
-                                ForEach(availableCurrencies, id: \.self) { currency in
-                                    Button(currency) { selectedCurrency = currency }
-                                }
+                            Button {
+                                showCurrencyPicker = true
                             } label: {
                                 HStack(spacing: 6) {
                                     Text(selectedCurrency)

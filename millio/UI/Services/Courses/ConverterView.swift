@@ -574,7 +574,6 @@ struct ConverterView: View {
                         }
                     }
                 )
-                .shadow(color: .black.opacity(isActive ? 0.22 : 0.10), radius: isActive ? 9 : 5, x: 0, y: isActive ? 6 : 3)
             }
             .buttonStyle(.plain)
             .contextMenu {

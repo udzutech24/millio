@@ -102,7 +102,6 @@ struct ShareRow: View {
                         lineWidth: highlighted ? 1.6 : 0.8
                     )
             )
-            .shadow(color: .black.opacity(0.25), radius: highlighted ? 10 : 8, x: 0, y: highlighted ? 6 : 4)
         }
     }
 }
