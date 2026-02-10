@@ -113,36 +113,44 @@ struct InlineCardCreateForm<GroupSection: View>: View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: "Тип")
             FinancesGlassCard {
-                VStack(spacing: 0) {
-                    HStack {
-                        Text("Тип продукта")
+                Menu {
+                    Button {
+                        card.cardTypeRaw = CardType.debit.rawValue
+                    } label: {
+                        Label("Дебетовая", systemImage: "creditcard")
+                    }
+                    Button {
+                        card.cardTypeRaw = CardType.credit.rawValue
+                    } label: {
+                        Label("Кредитная", systemImage: "banknote")
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        Text("Тип карты")
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
-                        Spacer()
-                        Text("Карта")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(accentColor)
-                    }
-                    .padding(.vertical, 14)
-                    .padding(.horizontal, 16)
-                    
-                    FinancesRowDivider(leadingPadding: 16)
-                    
-                    HStack(spacing: 12) {
-                        FinancesCheckboxOption(
-                            title: "дебетовая",
-                            isSelected: card.cardTypeRaw == CardType.debit.rawValue,
-                            onTap: { card.cardTypeRaw = CardType.debit.rawValue }
-                        )
                         
-                        FinancesCheckboxOption(
-                            title: "кредитная",
-                            isSelected: card.cardTypeRaw == CardType.credit.rawValue,
-                            onTap: { card.cardTypeRaw = CardType.credit.rawValue }
-                        )
+                        Spacer()
+                        
+                        HStack(spacing: 6) {
+                            Text(card.cardTypeRaw == CardType.debit.rawValue ? "Дебетовая" : "Кредитная")
+                                .font(.system(size: 16, weight: .regular))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: AppColors.financesGradient,
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                            
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(AppColors.textTertiary)
+                        }
                     }
                     .padding(.vertical, 14)
                     .padding(.horizontal, 16)
+                    .contentShape(Rectangle())
                 }
             }
         }
