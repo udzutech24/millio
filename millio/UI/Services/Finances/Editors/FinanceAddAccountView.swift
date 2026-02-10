@@ -54,47 +54,38 @@ struct FinanceAddAccountView: View {
     
     private var accountTypeSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Тип продукта")
+            FinancesSectionHeader(title: "Тип")
             FinancesGlassCard {
-                VStack(spacing: 0) {
+                Menu {
                     ForEach(FinanceAccountType.allCases, id: \.self) { type in
                         Button {
                             selectedAccountType = type
                         } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: type.icon)
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(AppColors.textPrimary)
-                                    .frame(width: 22)
-                                
-                                Text(type.displayName)
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundStyle(AppColors.textPrimary)
-                                
-                                Spacer()
-                                
-                                if selectedAccountType == type {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 14, weight: .bold))
-                                        .foregroundStyle(
-                                            LinearGradient(
-                                                colors: AppColors.financesGradient,
-                                                startPoint: .leading,
-                                                endPoint: .trailing
-                                            )
-                                        )
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.vertical, 14)
-                            .padding(.horizontal, 16)
-                        }
-                        .buttonStyle(.plain)
-                        
-                        if type != FinanceAccountType.allCases.last {
-                            FinancesRowDivider(leadingPadding: 50)
+                            Label(type.displayName, systemImage: type.icon)
                         }
                     }
+                } label: {
+                    HStack(spacing: 12) {
+                        Text("Тип продукта")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(AppColors.textPrimary)
+                        
+                        Spacer()
+                        
+                        Text(selectedAccountType.displayName)
+                            .font(.system(size: 16, weight: .regular))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: AppColors.financesGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 16)
+                    .contentShape(Rectangle())
                 }
             }
         }
