@@ -9,6 +9,7 @@ import SwiftUI
 
 struct InlineCardCreateForm<GroupSection: View>: View {
     @ObservedObject var viewModel: CardViewModel
+    @Binding var name: String
     let onCardDataChanged: (Card) -> Void
     let groupSection: GroupSection
     
@@ -19,14 +20,16 @@ struct InlineCardCreateForm<GroupSection: View>: View {
     
     init(
         viewModel: CardViewModel,
+        name: Binding<String>,
         onCardDataChanged: @escaping (Card) -> Void,
         @ViewBuilder groupSection: () -> GroupSection
     ) {
         self.viewModel = viewModel
+        self._name = name
         self.onCardDataChanged = onCardDataChanged
         self.groupSection = groupSection()
         _card = State(initialValue: Card(
-            name: "",
+            name: name.wrappedValue,
             cardNumber: "",
             bank: .other,
             cardType: .debit,
@@ -38,17 +41,18 @@ struct InlineCardCreateForm<GroupSection: View>: View {
     
     var currentCard: Card {
         let result = card
+        result.name = name
         if result.cardType == .credit, let limit = Double(creditLimitText.replacingOccurrences(of: ",", with: ".")) {
             result.creditLimit = limit
         }
         return result
     }
     
-    var isValid: Bool { !card.name.isEmpty }
+    var isValid: Bool { !name.isEmpty }
     
     var body: some View {
         VStack(spacing: 18) {
-            nameSection
+            cardNumberSection
             typeSection
             balanceSection
             organizationSection
@@ -57,7 +61,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
             prioritySection
         }
         .onAppear { loadAvailableCurrencies() }
-        .onChange(of: card.name) { _, _ in onCardDataChanged(currentCard) }
+        .onChange(of: name) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: card.cardNumber) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: card.bankRaw) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: card.cardTypeRaw) { _, _ in onCardDataChanged(currentCard) }
@@ -71,54 +75,36 @@ struct InlineCardCreateForm<GroupSection: View>: View {
     
     private var accentColor: Color { AppColors.financesGradient.first ?? AppColors.brandPrimary }
     
-    private var nameSection: some View {
+    private var cardNumberSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Название")
+            FinancesSectionHeader(title: "Номер карты")
             FinancesGlassCard {
-                VStack(spacing: 0) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "creditcard")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(AppColors.textTertiary)
-                            .frame(width: 22)
-                        
-                        TextField("Например, Тинькофф Black", text: $card.name)
-                            .foregroundStyle(AppColors.textPrimary)
-                            .textInputAutocapitalization(.words)
-                            .submitLabel(.done)
-                    }
-                    .padding(.vertical, 14)
-                    .padding(.horizontal, 16)
+                HStack(spacing: 12) {
+                    Image(systemName: "number")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppColors.textTertiary)
+                        .frame(width: 22)
                     
-                    FinancesRowDivider(leadingPadding: 16)
-                    
-                    HStack(spacing: 12) {
-                        Image(systemName: "number")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(AppColors.textTertiary)
-                            .frame(width: 22)
-                        
-                        Text("Последние 4 цифры")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(AppColors.textPrimary)
-                        
-                        Spacer()
-                        
-                        TextField("0000", text: Binding(
-                            get: { card.cardNumber },
-                            set: { newValue in
-                                let filtered = newValue.filter { $0.isNumber }
-                                if filtered.count <= 4 { card.cardNumber = filtered }
-                            }
-                        ))
-                        .keyboardType(.numberPad)
+                    Text("Последние 4 цифры")
+                        .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(AppColors.textPrimary)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 90)
-                    }
-                    .padding(.vertical, 14)
-                    .padding(.horizontal, 16)
+                    
+                    Spacer()
+                    
+                    TextField("0000", text: Binding(
+                        get: { card.cardNumber },
+                        set: { newValue in
+                            let filtered = newValue.filter { $0.isNumber }
+                            if filtered.count <= 4 { card.cardNumber = filtered }
+                        }
+                    ))
+                    .keyboardType(.numberPad)
+                    .foregroundStyle(AppColors.textPrimary)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 90)
                 }
+                .padding(.vertical, 14)
+                .padding(.horizontal, 16)
             }
         }
     }
@@ -333,10 +319,10 @@ struct InlineCardCreateForm<GroupSection: View>: View {
 
 struct InlineCreditCreateForm<GroupSection: View>: View {
     @ObservedObject var viewModel: CreditViewModel
+    @Binding var name: String
     let onCreditDataChanged: ((name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, includeInTotal: Bool)?) -> Void
     let groupSection: GroupSection
     
-    @State private var name: String = ""
     @State private var amountText: String = ""
     @State private var remainingAmountText: String = ""
     @State private var selectedCurrency: String = "RUB"
@@ -349,10 +335,12 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
     
     init(
         viewModel: CreditViewModel,
+        name: Binding<String>,
         onCreditDataChanged: @escaping ((name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, includeInTotal: Bool)?) -> Void,
         @ViewBuilder groupSection: () -> GroupSection
     ) {
         self.viewModel = viewModel
+        self._name = name
         self.onCreditDataChanged = onCreditDataChanged
         self.groupSection = groupSection()
     }
@@ -374,23 +362,25 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
     
     var body: some View {
         VStack(spacing: 18) {
-            FinancesSectionHeader(title: "Название")
-            FinancesGlassCard {
-                HStack(spacing: 12) {
-                    Image(systemName: "doc.text")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppColors.textTertiary)
-                        .frame(width: 22)
-                    
-                    TextField("Например, Потребительский кредит", text: $name)
-                        .foregroundStyle(AppColors.textPrimary)
-                        .textInputAutocapitalization(.sentences)
-                        .submitLabel(.done)
-                }
-                .padding(.vertical, 14)
-                .padding(.horizontal, 16)
-            }
-            
+            typeSection
+            balanceSection
+            organizationSection
+            groupSection
+            calculationsSection
+        }
+        .onAppear { loadAvailableCurrencies() }
+        .onChange(of: name) { _, _ in onCreditDataChanged(getCreditData()) }
+        .onChange(of: amountText) { _, _ in onCreditDataChanged(getCreditData()) }
+        .onChange(of: remainingAmountText) { _, _ in onCreditDataChanged(getCreditData()) }
+        .onChange(of: selectedCurrency) { _, _ in onCreditDataChanged(getCreditData()) }
+        .onChange(of: selectedBank) { _, _ in onCreditDataChanged(getCreditData()) }
+        .onChange(of: selectedCreditType) { _, _ in onCreditDataChanged(getCreditData()) }
+        .onChange(of: isFavorite) { _, _ in onCreditDataChanged(getCreditData()) }
+        .onChange(of: includeInTotal) { _, _ in onCreditDataChanged(getCreditData()) }
+    }
+    
+    private var typeSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: "Тип")
             FinancesGlassCard {
                 HStack(spacing: 12) {
@@ -415,7 +405,11 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
                 .padding(.vertical, 14)
                 .padding(.horizontal, 16)
             }
-            
+        }
+    }
+    
+    private var balanceSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: "Баланс")
             FinancesGlassCard {
                 VStack(spacing: 0) {
@@ -494,7 +488,11 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
                     .padding(.horizontal, 16)
                 }
             }
-            
+        }
+    }
+    
+    private var organizationSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: "Организация")
             FinancesGlassCard {
                 HStack(spacing: 12) {
@@ -519,9 +517,11 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
                 .padding(.vertical, 14)
                 .padding(.horizontal, 16)
             }
-            
-            groupSection
-            
+        }
+    }
+    
+    private var calculationsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: "Подсчёты")
             FinancesGlassCard(contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)) {
                 VStack(alignment: .leading, spacing: 14) {
@@ -535,15 +535,6 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
                 }
             }
         }
-        .onAppear { loadAvailableCurrencies() }
-        .onChange(of: name) { _, _ in onCreditDataChanged(getCreditData()) }
-        .onChange(of: amountText) { _, _ in onCreditDataChanged(getCreditData()) }
-        .onChange(of: remainingAmountText) { _, _ in onCreditDataChanged(getCreditData()) }
-        .onChange(of: selectedCurrency) { _, _ in onCreditDataChanged(getCreditData()) }
-        .onChange(of: selectedBank) { _, _ in onCreditDataChanged(getCreditData()) }
-        .onChange(of: selectedCreditType) { _, _ in onCreditDataChanged(getCreditData()) }
-        .onChange(of: isFavorite) { _, _ in onCreditDataChanged(getCreditData()) }
-        .onChange(of: includeInTotal) { _, _ in onCreditDataChanged(getCreditData()) }
     }
     
     private func loadAvailableCurrencies() {
@@ -587,10 +578,10 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
 
 struct InlineInvestmentCreateForm<GroupSection: View>: View {
     @ObservedObject var viewModel: InvestmentViewModel
+    @Binding var name: String
     let onInvestmentDataChanged: ((name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool)?) -> Void
     let groupSection: GroupSection
     
-    @State private var name: String = ""
     @State private var selectedInvestmentType: InvestmentType = .positive
     @State private var selectedCategory: InvestmentCategory = .other
     @State private var amountText: String = ""
@@ -603,10 +594,12 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     
     init(
         viewModel: InvestmentViewModel,
+        name: Binding<String>,
         onInvestmentDataChanged: @escaping ((name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool)?) -> Void,
         @ViewBuilder groupSection: () -> GroupSection
     ) {
         self.viewModel = viewModel
+        self._name = name
         self.onInvestmentDataChanged = onInvestmentDataChanged
         self.groupSection = groupSection()
     }
@@ -620,23 +613,25 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     
     var body: some View {
         VStack(spacing: 18) {
-            FinancesSectionHeader(title: "Название")
-            FinancesGlassCard {
-                HStack(spacing: 12) {
-                    Image(systemName: "chart.pie.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppColors.textTertiary)
-                        .frame(width: 22)
-                    
-                    TextField("Например, Наличные", text: $name)
-                        .foregroundStyle(AppColors.textPrimary)
-                        .textInputAutocapitalization(.sentences)
-                        .submitLabel(.done)
-                }
-                .padding(.vertical, 14)
-                .padding(.horizontal, 16)
-            }
-            
+            balanceSection
+            organizationSection
+            groupSection
+            calculationsSection
+            prioritySection
+        }
+        .onAppear { loadAvailableCurrencies() }
+        .onChange(of: name) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
+        .onChange(of: amountText) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
+        .onChange(of: selectedCurrency) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
+        .onChange(of: selectedCategory) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
+        .onChange(of: selectedPriority) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
+        .onChange(of: selectedInvestmentType) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
+        .onChange(of: isFavorite) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
+        .onChange(of: includeInTotal) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
+    }
+    
+    private var balanceSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: "Баланс")
             FinancesGlassCard {
                 VStack(spacing: 0) {
@@ -692,7 +687,11 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                     .padding(.horizontal, 16)
                 }
             }
-            
+        }
+    }
+    
+    private var organizationSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: "Организация")
             FinancesGlassCard {
                 VStack(spacing: 0) {
@@ -720,9 +719,11 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                     .padding(.horizontal, 16)
                 }
             }
-            
-            groupSection
-            
+        }
+    }
+    
+    private var calculationsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: "Подсчёты")
             FinancesGlassCard(contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)) {
                 VStack(alignment: .leading, spacing: 14) {
@@ -753,7 +754,11 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            
+        }
+    }
+    
+    private var prioritySection: some View {
+        VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: "Приоритет")
             FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16)) {
                 VStack(alignment: .leading, spacing: 12) {
@@ -769,15 +774,6 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                 }
             }
         }
-        .onAppear { loadAvailableCurrencies() }
-        .onChange(of: name) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
-        .onChange(of: selectedInvestmentType) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
-        .onChange(of: selectedCategory) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
-        .onChange(of: amountText) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
-        .onChange(of: selectedCurrency) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
-        .onChange(of: includeInTotal) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
-        .onChange(of: selectedPriority) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
-        .onChange(of: isFavorite) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
     }
     
     private func loadAvailableCurrencies() {

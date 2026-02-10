@@ -40,6 +40,15 @@ struct FinanceAddAccountView: View {
     @State private var creditData: (name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, includeInTotal: Bool)?
     @State private var investmentData: (name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool)?
     @State private var selectedArchivedAccountID: String? = nil
+    @State private var accountName: String = ""
+    
+    private var navigationTitle: String {
+        switch selectedAccountType {
+        case .card: return "Новая карта"
+        case .credit: return "Новый кредит"
+        case .investment: return "Новый актив"
+        }
+    }
     
     var targetGroup: FinanceGroup? {
         if let selectedGroupID = selectedGroupID {
@@ -51,6 +60,43 @@ struct FinanceAddAccountView: View {
     }
     
     // MARK: - Form Sections
+    
+    private var nameSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Название")
+            FinancesGlassCard {
+                HStack(spacing: 12) {
+                    Image(systemName: iconForSelectedType)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppColors.textTertiary)
+                        .frame(width: 22)
+                    
+                    TextField(placeholderForSelectedType, text: $accountName)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .textInputAutocapitalization(selectedAccountType == .card ? .words : .sentences)
+                        .submitLabel(.done)
+                }
+                .padding(.vertical, 14)
+                .padding(.horizontal, 16)
+            }
+        }
+    }
+    
+    private var iconForSelectedType: String {
+        switch selectedAccountType {
+        case .card: return "creditcard"
+        case .credit: return "doc.text"
+        case .investment: return "chart.pie.fill"
+        }
+    }
+    
+    private var placeholderForSelectedType: String {
+        switch selectedAccountType {
+        case .card: return "Например, Тинькофф Black"
+        case .credit: return "Например, Потребительский кредит"
+        case .investment: return "Например, Наличные"
+        }
+    }
     
     private var accountTypeSection: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -229,6 +275,7 @@ struct FinanceAddAccountView: View {
             } else if let vm = cardViewModel {
                 InlineCardCreateForm(
                     viewModel: vm,
+                    name: $accountName,
                     onCardDataChanged: { card in
                         self.cardData = card
                     }
@@ -254,6 +301,7 @@ struct FinanceAddAccountView: View {
             } else if let vm = creditViewModel {
                 InlineCreditCreateForm(
                     viewModel: vm,
+                    name: $accountName,
                     onCreditDataChanged: { data in
                         self.creditData = data
                     }
@@ -279,6 +327,7 @@ struct FinanceAddAccountView: View {
             } else if let vm = investmentViewModel {
                 InlineInvestmentCreateForm(
                     viewModel: vm,
+                    name: $accountName,
                     onInvestmentDataChanged: { data in
                         self.investmentData = data
                     }
@@ -369,8 +418,13 @@ struct FinanceAddAccountView: View {
     private var scrollContent: some View {
         ScrollView {
             VStack(spacing: 18) {
+                if addAccountMode == .create {
+                    nameSection
+                }
+                
                 accountTypeSection
                 addAccountModeSection
+                
                 if addAccountMode == .create {
                     createFormSections
                 } else {
@@ -390,7 +444,7 @@ struct FinanceAddAccountView: View {
             GradientBackground()
             scrollContent
         }
-        .navigationTitle("Новый продукт")
+        .navigationTitle(navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showCreateGroup) {
             FinanceGroupEditorView(viewModel: viewModel)
@@ -447,13 +501,16 @@ struct FinanceAddAccountView: View {
             return selectedArchivedAccountID != nil
         }
         
+        // Базовая проверка имени для всех типов
+        guard !accountName.isEmpty else { return false }
+        
         switch selectedAccountType {
         case .card:
-            return cardData != nil && !(cardData?.name.isEmpty ?? true)
+            return cardData != nil
         case .credit:
-            return creditData != nil && !(creditData?.name.isEmpty ?? true)
+            return creditData != nil
         case .investment:
-            return investmentData != nil && !(investmentData?.name.isEmpty ?? true)
+            return investmentData != nil
         }
     }
     
