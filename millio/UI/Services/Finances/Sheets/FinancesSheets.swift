@@ -272,24 +272,32 @@ struct SavingsGoalSettingsView: View {
             ZStack {
                 GradientBackground()
                 
-                Form {
-                    Section {
-                        Toggle("Включить цель накопления", isOn: $isEnabled)
-                            .foregroundStyle(AppColors.textPrimary)
-                    } header: {
-                        Text("Настройки цели")
-                            .foregroundStyle(AppColors.textSecondary)
-                    }
-                    
-                    if isEnabled {
-                        Section {
-                            TextField("Сумма цели", text: $goalAmount)
-                                .keyboardType(.decimalPad)
-                                .foregroundStyle(AppColors.textPrimary)
-                        } header: {
-                            Text("Сумма цели (\(viewModel.state.displayCurrency))")
-                                .foregroundStyle(AppColors.textSecondary)
-                        } footer: {
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // Настройки цели
+                        VStack(alignment: .leading, spacing: 10) {
+                            FinancesSectionHeader(title: "Настройки цели")
+                            FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16)) {
+                                Toggle("Включить цель накопления", isOn: $isEnabled)
+                                    .tint(AppColors.toggleOnGreen)
+                                    .foregroundStyle(AppColors.textPrimary)
+                            }
+                        }
+                        
+                        if isEnabled {
+                            // Сумма цели
+                            VStack(alignment: .leading, spacing: 10) {
+                                FinancesSectionHeader(title: "Сумма цели (\(viewModel.state.displayCurrency))")
+                                FinancesGlassCard {
+                                    TextField("Сумма цели", text: $goalAmount)
+                                        .keyboardType(.decimalPad)
+                                        .foregroundStyle(AppColors.textPrimary)
+                                        .padding(.vertical, 14)
+                                        .padding(.horizontal, 16)
+                                }
+                            }
+                            
+                            // Прогресс
                             if let amount = Double(goalAmount), amount > 0 {
                                 let progress: Double = {
                                     guard amount > 0 else { return 0.0 }
@@ -299,23 +307,62 @@ struct SavingsGoalSettingsView: View {
                                 }()
                                 let remaining = max(0, amount - viewModel.state.totalAmount)
                                 
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Текущая сумма: \(formatAmount(viewModel.state.totalAmount, isHidden: viewModel.state.isAmountHidden)) \(viewModel.state.displayCurrency)")
-                                    Text("Осталось накопить: \(formatAmount(remaining, isHidden: viewModel.state.isAmountHidden)) \(viewModel.state.displayCurrency)")
-                                    
-                                    ProgressView(value: progress)
-                                        .tint(AppColors.financesGradient.first ?? AppColors.brandPrimary)
-                                    
-                                    Text("Прогресс: \(Int(progress * 100))%")
-                                        .font(.caption)
-                                        .foregroundStyle(AppColors.textTertiary)
+                                VStack(alignment: .leading, spacing: 10) {
+                                    FinancesSectionHeader(title: "Прогресс")
+                                    FinancesGlassCard(contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)) {
+                                        VStack(alignment: .leading, spacing: 16) {
+                                            VStack(spacing: 8) {
+                                                HStack {
+                                                    Text("Текущая сумма")
+                                                        .font(.system(size: 14, weight: .medium))
+                                                        .foregroundStyle(AppColors.textSecondary)
+                                                    Spacer()
+                                                    Text("\(formatAmount(viewModel.state.totalAmount, isHidden: viewModel.state.isAmountHidden)) \(viewModel.state.displayCurrency)")
+                                                        .font(.system(size: 14, weight: .semibold))
+                                                        .foregroundStyle(AppColors.textPrimary)
+                                                }
+                                                
+                                                HStack {
+                                                    Text("Осталось накопить")
+                                                        .font(.system(size: 14, weight: .medium))
+                                                        .foregroundStyle(AppColors.textSecondary)
+                                                    Spacer()
+                                                    Text("\(formatAmount(remaining, isHidden: viewModel.state.isAmountHidden)) \(viewModel.state.displayCurrency)")
+                                                        .font(.system(size: 14, weight: .semibold))
+                                                        .foregroundStyle(AppColors.textPrimary)
+                                                }
+                                            }
+                                            
+                                            // Кастомный прогресс бар
+                                            VStack(spacing: 8) {
+                                                GeometryReader { proxy in
+                                                    ZStack(alignment: .leading) {
+                                                        Capsule()
+                                                            .fill(Color.white.opacity(0.1))
+                                                            .frame(height: 8)
+                                                        
+                                                        Capsule()
+                                                            .fill(LinearGradient(colors: AppColors.financesGradient, startPoint: .leading, endPoint: .trailing))
+                                                            .frame(width: max(0, min(proxy.size.width, proxy.size.width * progress)), height: 8)
+                                                    }
+                                                }
+                                                .frame(height: 8)
+                                                
+                                                Text("Выполнено: \(Int(progress * 100))%")
+                                                    .font(.system(size: 12, weight: .regular))
+                                                    .foregroundStyle(AppColors.textTertiary)
+                                                    .frame(maxWidth: .infinity, alignment: .center)
+                                            }
+                                        }
+                                    }
                                 }
-                                .padding(.top, 8)
                             }
                         }
                     }
+                    .padding(.top, 20)
+                    .padding(.bottom, 40)
+                    .padding(.horizontal, 16)
                 }
-                .scrollContentBackground(.hidden)
             }
             .navigationTitle("Цель накопления")
             .navigationBarTitleDisplayMode(.inline)
