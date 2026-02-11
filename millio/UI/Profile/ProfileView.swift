@@ -283,27 +283,13 @@ struct ProfileView: View {
             ZStack {
                 GradientBackground()
                 VStack(spacing: 20) {
-                    TextField("Имя", text: $editedName)
-                        .font(.system(size: 17, weight: .regular))
-                        .foregroundStyle(AppColors.textPrimary)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
-                        .background {
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(Color.black.opacity(0.35))
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                        .stroke(
-                                            LinearGradient(
-                                                colors: AppColors.profileCardStrokeGradient,
-                                                startPoint: .leading,
-                                                endPoint: .trailing
-                                            ),
-                                            lineWidth: 1
-                                        )
-                                }
-                        }
-                        .padding(.horizontal, 24)
+                    FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16)) {
+                        TextField("Имя", text: $editedName)
+                            .font(.system(size: 17, weight: .regular))
+                            .foregroundStyle(AppColors.textPrimary)
+                    }
+                    .padding(.horizontal, 24)
+                    
                     Spacer()
                 }
                 .padding(.top, 24)

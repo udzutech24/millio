@@ -95,19 +95,21 @@ struct RestoreView: View {
     
     private var backupDisabledView: some View {
         VStack(spacing: 24) {
-            VStack(spacing: 12) {
-                Text("Резервное копирование отключено")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-                    .multilineTextAlignment(.center)
-                
-                Text("Включите резервное копирование в настройках для восстановления данных")
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(AppColors.textSecondary)
-                    .multilineTextAlignment(.center)
+            FinancesGlassCard {
+                VStack(spacing: 12) {
+                    Text("Резервное копирование отключено")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .multilineTextAlignment(.center)
+                    
+                    Text("Включите резервное копирование в настройках для восстановления данных")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(24)
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 24)
             
             ActionButton(
                 title: "Продолжить",
@@ -124,23 +126,28 @@ struct RestoreView: View {
     // MARK: - Restoring View
     
     private var restoringView: some View {
-        VStack(spacing: 24) {
-            ProgressView()
-                .scaleEffect(1.5)
-                .tint(.white)
-            
-            Text("Восстановление данных...")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(AppColors.textPrimary)
-                .multilineTextAlignment(.center)
-            
-            Text("Пожалуйста, подождите")
-                .font(.system(size: 14, weight: .regular))
-                .foregroundStyle(AppColors.textTertiary)
-                .multilineTextAlignment(.center)
+        FinancesGlassCard {
+            VStack(spacing: 24) {
+                ProgressView()
+                    .scaleEffect(1.5)
+                    .tint(AppColors.textPrimary)
+                
+                VStack(spacing: 8) {
+                    Text("Восстановление данных...")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .multilineTextAlignment(.center)
+                    
+                    Text("Пожалуйста, подождите")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(AppColors.textTertiary)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .padding(40)
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
+        .padding(.horizontal, 24)
     }
     
     // MARK: - Backup Found View
@@ -148,40 +155,27 @@ struct RestoreView: View {
     private func backupFoundView(backupDate: Date) -> some View {
         VStack(spacing: 24) {
             // Backup info card
-            VStack(spacing: 16) {
-                VStack(spacing: 8) {
-                    Text("Найдена резервная копия")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                        .multilineTextAlignment(.center)
-                    
-                    HStack(spacing: 8) {
-                        Image(systemName: "calendar")
-                            .font(.system(size: 14, weight: .regular))
-                            .foregroundStyle(AppColors.textTertiary)
+            FinancesGlassCard {
+                VStack(spacing: 16) {
+                    VStack(spacing: 8) {
+                        Text("Найдена резервная копия")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .multilineTextAlignment(.center)
                         
-                        Text(backupDate.formatted(date: .abbreviated, time: .shortened))
-                            .font(.system(size: 14, weight: .regular))
-                            .foregroundStyle(AppColors.textTertiary)
+                        HStack(spacing: 8) {
+                            Image(systemName: "calendar")
+                                .font(.system(size: 14, weight: .regular))
+                                .foregroundStyle(AppColors.textTertiary)
+                            
+                            Text(backupDate.formatted(date: .abbreviated, time: .shortened))
+                                .font(.system(size: 14, weight: .regular))
+                                .foregroundStyle(AppColors.textTertiary)
+                        }
                     }
                 }
-            }
-            .padding(24)
-            .frame(maxWidth: .infinity)
-            .background {
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(
-                                LinearGradient(
-                                    colors: AppColors.incomeGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ),
-                                lineWidth: 1
-                            )
-                    }
+                .padding(24)
+                .frame(maxWidth: .infinity)
             }
             
             // Warning text
@@ -197,15 +191,14 @@ struct RestoreView: View {
                     .foregroundStyle(AppColors.textTertiary)
                     .multilineTextAlignment(.center)
                 
-                SecureField("Введите парольную фразу", text: $backupPassphrase)
-                    .textContentType(.password)
-                    .privacySensitive()
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background {
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(.ultraThinMaterial)
-                    }
+                FinancesGlassCard(contentPadding: EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)) {
+                    SecureField("Введите парольную фразу", text: $backupPassphrase)
+                        .textContentType(.password)
+                        .privacySensitive()
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                }
             }
             .padding(.horizontal, 24)
             
@@ -213,7 +206,7 @@ struct RestoreView: View {
             VStack(spacing: 16) {
                 ActionButton(
                     title: "Восстановить",
-                icon: .system("arrow.down.circle.fill"),
+                    icon: .system("arrow.down.circle.fill"),
                     gradientColors: AppColors.incomeGradient
                 ) {
                     restore()
@@ -239,19 +232,21 @@ struct RestoreView: View {
     
     private var noBackupView: some View {
         VStack(spacing: 24) {
-            VStack(spacing: 12) {
-                Text("Резервная копия не найдена")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-                    .multilineTextAlignment(.center)
-                
-                Text("Продолжите работу с приложением")
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(AppColors.textSecondary)
-                    .multilineTextAlignment(.center)
+            FinancesGlassCard {
+                VStack(spacing: 12) {
+                    Text("Резервная копия не найдена")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .multilineTextAlignment(.center)
+                    
+                    Text("Продолжите работу с приложением")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(24)
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 24)
             
             ActionButton(
                 title: "Продолжить",
