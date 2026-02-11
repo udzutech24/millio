@@ -37,86 +37,16 @@ struct CreditEditorView: View {
             ZStack {
                 GradientBackground()
 
-                Form {
-                    Section {
-                        TextField("Название кредита", text: $name)
-                            .foregroundStyle(AppColors.textPrimary)
-                    } header: {
-                        Text("Основная информация")
-                            .foregroundStyle(AppColors.textSecondary)
+                ScrollView {
+                    VStack(spacing: 24) {
+                        mainInfoSection
+                        creditParamsSection
+                        additionalSection
                     }
-
-                    Section {
-                        TextField("Сумма кредита", text: Binding(
-                            get: { formatNumberForDisplay(amountText) },
-                            set: { newValue in
-                                let normalized = newValue.replacingOccurrences(of: " ", with: "")
-                                    .replacingOccurrences(of: ",", with: ".")
-                                amountText = normalized
-                            }
-                        ))
-                        .keyboardType(.decimalPad)
-                        .foregroundStyle(AppColors.textPrimary)
-
-                        TextField("Остаток долга", text: Binding(
-                            get: { formatNumberForDisplay(remainingAmountText) },
-                            set: { newValue in
-                                let normalized = newValue.replacingOccurrences(of: " ", with: "")
-                                    .replacingOccurrences(of: ",", with: ".")
-                                remainingAmountText = normalized
-                            }
-                        ))
-                        .keyboardType(.decimalPad)
-                        .foregroundStyle(AppColors.textPrimary)
-                    } header: {
-                        Text("Параметры кредита")
-                            .foregroundStyle(AppColors.textSecondary)
-                    }
-
-                    Section {
-                        if isLoadingCurrencies {
-                            HStack {
-                                Text("Валюта")
-                                    .foregroundStyle(AppColors.textPrimary)
-                                Spacer()
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                                    .tint(AppColors.textTertiary)
-                            }
-                        } else {
-                            Picker("Валюта", selection: $selectedCurrency) {
-                                ForEach(availableCurrencies, id: \.self) { currency in
-                                    Text(currency).tag(currency)
-                                }
-                            }
-                            .foregroundStyle(AppColors.textPrimary)
-                        }
-
-                        Picker("Банк", selection: $selectedBank) {
-                            ForEach(Bank.allCases, id: \.self) { bank in
-                                Text(bank.displayName).tag(bank)
-                            }
-                        }
-                        .foregroundStyle(AppColors.textPrimary)
-
-                        Picker("Тип кредита", selection: $selectedCreditType) {
-                            ForEach(CreditType.allCases, id: \.self) { type in
-                                Text(type.displayName).tag(type)
-                            }
-                        }
-                        .foregroundStyle(AppColors.textPrimary)
-
-                        Toggle("В избранном", isOn: $isFavorite)
-                            .foregroundStyle(AppColors.textPrimary)
-
-                        Toggle("Учитывать в общих финансах", isOn: $includeInTotal)
-                            .foregroundStyle(AppColors.textPrimary)
-                    } header: {
-                        Text("Дополнительно")
-                            .foregroundStyle(AppColors.textSecondary)
-                    }
+                    .padding(.top, 20)
+                    .padding(.bottom, 40)
+                    .padding(.horizontal, 16)
                 }
-                .scrollContentBackground(.hidden)
             }
             .navigationTitle(viewModel.state.editingCredit == nil ? "Новый кредит" : "Редактировать")
             .navigationBarTitleDisplayMode(.inline)
@@ -167,6 +97,148 @@ struct CreditEditorView: View {
                 }
 
                 loadAvailableCurrencies()
+            }
+        }
+    }
+    
+    private var mainInfoSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Основная информация")
+            FinancesGlassCard {
+                VStack(spacing: 0) {
+                    TextField("Название кредита", text: $name)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                }
+            }
+        }
+    }
+    
+    private var creditParamsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Параметры кредита")
+            FinancesGlassCard {
+                VStack(spacing: 0) {
+                    HStack {
+                        Text("Сумма кредита")
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        TextField("0", text: Binding(
+                            get: { formatNumberForDisplay(amountText) },
+                            set: { newValue in
+                                let normalized = newValue.replacingOccurrences(of: " ", with: "")
+                                    .replacingOccurrences(of: ",", with: ".")
+                                amountText = normalized
+                            }
+                        ))
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .frame(maxWidth: 150)
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                    
+                    FinancesRowDivider()
+                    
+                    HStack {
+                        Text("Остаток долга")
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        TextField("0", text: Binding(
+                            get: { formatNumberForDisplay(remainingAmountText) },
+                            set: { newValue in
+                                let normalized = newValue.replacingOccurrences(of: " ", with: "")
+                                    .replacingOccurrences(of: ",", with: ".")
+                                remainingAmountText = normalized
+                            }
+                        ))
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .frame(maxWidth: 150)
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                }
+            }
+        }
+    }
+    
+    private var additionalSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Дополнительно")
+            FinancesGlassCard {
+                VStack(spacing: 0) {
+                    HStack {
+                        Text("Валюта")
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        if isLoadingCurrencies {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                                .tint(AppColors.textTertiary)
+                        } else {
+                            Picker("Валюта", selection: $selectedCurrency) {
+                                ForEach(availableCurrencies, id: \.self) { currency in
+                                    Text(currency).tag(currency)
+                                }
+                            }
+                            .tint(AppColors.textTertiary)
+                        }
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 16)
+                    
+                    FinancesRowDivider()
+                    
+                    HStack {
+                        Text("Банк")
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        Picker("Банк", selection: $selectedBank) {
+                            ForEach(Bank.allCases, id: \.self) { bank in
+                                Text(bank.displayName).tag(bank)
+                            }
+                        }
+                        .tint(AppColors.textTertiary)
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 16)
+                    
+                    FinancesRowDivider()
+                    
+                    HStack {
+                        Text("Тип кредита")
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        Picker("Тип кредита", selection: $selectedCreditType) {
+                            ForEach(CreditType.allCases, id: \.self) { type in
+                                Text(type.displayName).tag(type)
+                            }
+                        }
+                        .tint(AppColors.textTertiary)
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 16)
+                    
+                    FinancesRowDivider()
+                    
+                    Toggle("В избранном", isOn: $isFavorite)
+                        .tint(AppColors.toggleOnGreen)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                    
+                    FinancesRowDivider()
+                    
+                    Toggle("Учитывать в общих", isOn: $includeInTotal)
+                        .tint(AppColors.toggleOnGreen)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                }
             }
         }
     }

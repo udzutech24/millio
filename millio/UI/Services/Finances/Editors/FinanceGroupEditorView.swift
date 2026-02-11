@@ -196,16 +196,16 @@ struct FinanceGroupEditorView: View {
                                 }
                                 
                                 Button {
-                                    showCurrencyPicker = true
-                                } label: {
-                                    HStack(spacing: 6) {
-                                        Text(selectedCurrency ?? "Общая")
-                                            .font(.system(size: 16, weight: .semibold))
-                                        Image(systemName: "chevron.down")
-                                            .font(.system(size: 12, weight: .semibold))
+                                        showCurrencyPicker = true
+                                    } label: {
+                                        HStack(spacing: 6) {
+                                            Text(selectedCurrency ?? viewModel.state.displayCurrency)
+                                                .font(.system(size: 16, weight: .semibold))
+                                            Image(systemName: "chevron.down")
+                                                .font(.system(size: 12, weight: .semibold))
+                                        }
+                                        .foregroundStyle(AppColors.textTertiary)
                                     }
-                                    .foregroundStyle(AppColors.textTertiary)
-                                }
                             }
                         }
                     }

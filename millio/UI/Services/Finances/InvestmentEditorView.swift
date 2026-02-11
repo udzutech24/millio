@@ -37,82 +37,16 @@ struct InvestmentEditorView: View {
             ZStack {
                 GradientBackground()
 
-                Form {
-                    Section {
-                        TextField("Название актива", text: $name)
-                            .foregroundStyle(AppColors.textPrimary)
-                    } header: {
-                        Text("Основная информация")
-                            .foregroundStyle(AppColors.textSecondary)
+                ScrollView {
+                    VStack(spacing: 24) {
+                        mainInfoSection
+                        investmentParamsSection
+                        additionalSection
                     }
-
-                    Section {
-                        Picker("Тип актива", selection: $selectedInvestmentType) {
-                            ForEach(InvestmentType.allCases, id: \.self) { type in
-                                Text(type.displayName).tag(type)
-                            }
-                        }
-                        .foregroundStyle(AppColors.textPrimary)
-
-                        Picker("Категория", selection: $selectedCategory) {
-                            ForEach(InvestmentCategory.allCases, id: \.self) { category in
-                                Text(category.displayName).tag(category)
-                            }
-                        }
-                        .foregroundStyle(AppColors.textPrimary)
-
-                        TextField("Сумма", text: Binding(
-                            get: { formatNumberForDisplay(amountText) },
-                            set: { newValue in
-                                let normalized = newValue.replacingOccurrences(of: " ", with: "")
-                                    .replacingOccurrences(of: ",", with: ".")
-                                amountText = normalized
-                            }
-                        ))
-                        .keyboardType(.decimalPad)
-                        .foregroundStyle(AppColors.textPrimary)
-
-                        if isLoadingCurrencies {
-                            HStack {
-                                Text("Валюта")
-                                    .foregroundStyle(AppColors.textPrimary)
-                                Spacer()
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                                    .tint(AppColors.textTertiary)
-                            }
-                        } else {
-                            Picker("Валюта", selection: $selectedCurrency) {
-                                ForEach(availableCurrencies, id: \.self) { currency in
-                                    Text(currency).tag(currency)
-                                }
-                            }
-                            .foregroundStyle(AppColors.textPrimary)
-                        }
-                    } header: {
-                        Text("Параметры актива")
-                            .foregroundStyle(AppColors.textSecondary)
-                    }
-
-                    Section {
-                        Toggle("Учитывать в общих финансах", isOn: $includeInTotal)
-                            .foregroundStyle(AppColors.textPrimary)
-
-                        Picker("Приоритет", selection: $selectedPriority) {
-                            ForEach(InvestmentPriority.allCases, id: \.self) { priority in
-                                Text(priority.displayName).tag(priority)
-                            }
-                        }
-                        .foregroundStyle(AppColors.textPrimary)
-
-                        Toggle("В избранном", isOn: $isFavorite)
-                            .foregroundStyle(AppColors.textPrimary)
-                    } header: {
-                        Text("Дополнительно")
-                            .foregroundStyle(AppColors.textSecondary)
-                    }
+                    .padding(.top, 20)
+                    .padding(.bottom, 40)
+                    .padding(.horizontal, 16)
                 }
-                .scrollContentBackground(.hidden)
             }
             .navigationTitle(viewModel.state.editingInvestment == nil ? "Новый актив" : "Редактировать")
             .navigationBarTitleDisplayMode(.inline)
@@ -163,6 +97,142 @@ struct InvestmentEditorView: View {
                 }
 
                 loadAvailableCurrencies()
+            }
+        }
+    }
+    
+    private var mainInfoSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Основная информация")
+            FinancesGlassCard {
+                VStack(spacing: 0) {
+                    TextField("Название актива", text: $name)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                }
+            }
+        }
+    }
+    
+    private var investmentParamsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Параметры актива")
+            FinancesGlassCard {
+                VStack(spacing: 0) {
+                    HStack {
+                        Text("Тип актива")
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        Picker("Тип актива", selection: $selectedInvestmentType) {
+                            ForEach(InvestmentType.allCases, id: \.self) { type in
+                                Text(type.displayName).tag(type)
+                            }
+                        }
+                        .tint(AppColors.textTertiary)
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 16)
+                    
+                    FinancesRowDivider()
+                    
+                    HStack {
+                        Text("Категория")
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        Picker("Категория", selection: $selectedCategory) {
+                            ForEach(InvestmentCategory.allCases, id: \.self) { category in
+                                Text(category.displayName).tag(category)
+                            }
+                        }
+                        .tint(AppColors.textTertiary)
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 16)
+                    
+                    FinancesRowDivider()
+                    
+                    HStack {
+                        Text("Сумма")
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        TextField("0", text: Binding(
+                            get: { formatNumberForDisplay(amountText) },
+                            set: { newValue in
+                                let normalized = newValue.replacingOccurrences(of: " ", with: "")
+                                    .replacingOccurrences(of: ",", with: ".")
+                                amountText = normalized
+                            }
+                        ))
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .frame(maxWidth: 150)
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                    
+                    FinancesRowDivider()
+                    
+                    HStack {
+                        Text("Валюта")
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        if isLoadingCurrencies {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                                .tint(AppColors.textTertiary)
+                        } else {
+                            Picker("Валюта", selection: $selectedCurrency) {
+                                ForEach(availableCurrencies, id: \.self) { currency in
+                                    Text(currency).tag(currency)
+                                }
+                            }
+                            .tint(AppColors.textTertiary)
+                        }
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 16)
+                }
+            }
+        }
+    }
+    
+    private var additionalSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Дополнительно")
+            FinancesGlassCard {
+                VStack(spacing: 0) {
+                    HStack {
+                        Text("Приоритет")
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        Picker("Приоритет", selection: $selectedPriority) {
+                            ForEach(InvestmentPriority.allCases, id: \.self) { priority in
+                                Text(priority.displayName).tag(priority)
+                            }
+                        }
+                        .tint(AppColors.textTertiary)
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 16)
+                    
+                    FinancesRowDivider()
+                    
+                    Toggle("В избранном", isOn: $isFavorite)
+                        .tint(AppColors.toggleOnGreen)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                    
+                    FinancesRowDivider()
+                    
+                    Toggle("Учитывать в общих", isOn: $includeInTotal)
+                        .tint(AppColors.toggleOnGreen)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                }
             }
         }
     }
