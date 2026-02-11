@@ -86,21 +86,7 @@ struct OnboardingView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 18)
-                        .background {
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(.ultraThinMaterial)
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 20)
-                                        .stroke(
-                                            LinearGradient(
-                                                colors: AppColors.incomeGradient,
-                                                startPoint: .leading,
-                                                endPoint: .trailing
-                                            ),
-                                            lineWidth: 2
-                                        )
-                                }
-                        }
+                        .background(GlassBackground(gradient: AppColors.incomeGradient, strokeWidth: 2))
                     }
                     .buttonStyle(.plain)
                     .padding(.horizontal, 24)
@@ -135,20 +121,12 @@ private struct FeatureCard: View {
         HStack(spacing: 16) {
             // Иконка
             ZStack {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(.ultraThinMaterial)
-                    .frame(width: 56, height: 56)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(
-                                LinearGradient(
-                                    colors: gradient,
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
-                    }
+                GlassBackground(
+                    gradient: gradient,
+                    cornerRadius: 16,
+                    strokeWidth: 1
+                )
+                .frame(width: 56, height: 56)
                 
                 Image(systemName: icon)
                     .font(.system(size: 24, weight: .semibold))
@@ -176,17 +154,7 @@ private struct FeatureCard: View {
             Spacer()
         }
         .padding(20)
-        .background {
-            RoundedRectangle(cornerRadius: 20)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(
-                            AppColors.textPrimary.opacity(0.1),
-                            lineWidth: 1
-                        )
-                }
-        }
+        .background(GlassBackground(gradient: gradient))
     }
 }
 

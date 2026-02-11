@@ -118,21 +118,7 @@ struct SubscriptionView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 18)
-                        .background {
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(.ultraThinMaterial)
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 20)
-                                        .stroke(
-                                            LinearGradient(
-                                                colors: AppColors.incomeGradient,
-                                                startPoint: .leading,
-                                                endPoint: .trailing
-                                            ),
-                                            lineWidth: 2
-                                        )
-                                }
-                        }
+                        .background(GlassBackground(gradient: AppColors.incomeGradient, strokeWidth: 2))
                     }
                     .buttonStyle(.plain)
                     .disabled(isLoading)
@@ -170,13 +156,15 @@ struct SubscriptionView: View {
     // MARK: - Subscription Status Section
     
     private var subscriptionStatusSection: some View {
-        VStack(spacing: 12) {
+        let gradient = AppColors.incomeGradient
+        
+        return VStack(spacing: 12) {
             HStack {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 20))
                     .foregroundStyle(
                         LinearGradient(
-                            colors: AppColors.incomeGradient,
+                            colors: gradient,
                             startPoint: .leading,
                             endPoint: .trailing
                         )
@@ -204,27 +192,15 @@ struct SubscriptionView: View {
             }
         }
         .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.black.opacity(0.3))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(
-                            LinearGradient(
-                                colors: AppColors.incomeGradient,
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            ),
-                            lineWidth: 1
-                        )
-                }
-        )
+        .background(GlassBackground(gradient: gradient, cornerRadius: 16, strokeWidth: 1))
     }
     
     // MARK: - Trial Button
     
     private var trialButton: some View {
-        Button {
+        let gradient = AppColors.cashbackGradient
+        
+        return Button {
             Task {
                 await startTrial()
             }
@@ -239,21 +215,7 @@ struct SubscriptionView: View {
             .foregroundStyle(AppColors.textPrimary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(
-                                LinearGradient(
-                                    colors: AppColors.cashbackGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ),
-                                lineWidth: 2
-                            )
-                    }
-            }
+            .background(GlassBackground(gradient: gradient, cornerRadius: 16, strokeWidth: 2))
         }
         .buttonStyle(.plain)
         .disabled(isLoading)
@@ -348,7 +310,7 @@ struct SubscriptionView: View {
 }
 
 // MARK: - Subscription Plan
-
+// (No changes needed for Enum)
 private enum SubscriptionPlan {
     case monthly
     case yearly
@@ -477,27 +439,7 @@ private struct SubscriptionPlanCard: View {
             }
             .padding(24)
             .frame(maxWidth: .infinity)
-            .background {
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(
-                                isSelected
-                                ? LinearGradient(
-                                    colors: gradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                                : LinearGradient(
-                                    colors: [AppColors.textPrimary.opacity(0.1)],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ),
-                                lineWidth: isSelected ? 2 : 1
-                            )
-                    }
-            }
+            .background(GlassBackground(gradient: gradient, isActive: isSelected))
         }
         .buttonStyle(.plain)
     }
@@ -513,20 +455,8 @@ private struct FeatureRow: View {
     var body: some View {
         HStack(spacing: 16) {
             ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(.ultraThinMaterial)
+                GlassBackground(gradient: gradient, cornerRadius: 12, strokeWidth: 1)
                     .frame(width: 40, height: 40)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(
-                                LinearGradient(
-                                    colors: gradient,
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
-                    }
                 
                 Image(systemName: icon)
                     .font(.system(size: 18, weight: .semibold))
@@ -546,17 +476,7 @@ private struct FeatureRow: View {
             Spacer()
         }
         .padding(16)
-        .background {
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(
-                            AppColors.textPrimary.opacity(0.1),
-                            lineWidth: 1
-                        )
-                }
-        }
+        .background(GlassBackground(gradient: gradient, cornerRadius: 16, isActive: false))
     }
 }
 
