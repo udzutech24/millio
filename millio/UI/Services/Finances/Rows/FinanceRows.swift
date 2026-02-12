@@ -148,41 +148,46 @@ struct FinanceGroupRow: View {
     
     private var accountsAccordion: some View {
         VStack(spacing: 0) {
-            if let accounts = group.accounts, !accounts.isEmpty {
-                ForEach(Array(accounts.enumerated()), id: \.element.id) { index, account in
-                    if let accountInfo = viewModel.getAccountInfo(account: account) {
-                        FinanceAccountRow(
-                            viewModel: viewModel,
-                            account: account,
-                            name: accountInfo.name,
-                            amount: accountInfo.amount,
-                            currency: accountInfo.currency,
-                            icon: accountInfo.icon,
-                            accountType: account.accountType,
-                            isCreditCardDebt: accountInfo.isCreditCardDebt,
-                            onEdit: {
-                                viewModel.handle(.showAccountDynamics(account))
-                            },
-                            onQuickEditAmount: {
-                                viewModel.handle(.showQuickEditAccountSheet(account))
-                            }
-                        )
-                        
-                        if index != accounts.count - 1 {
-                            Divider()
-                                .background((AppColors.financesGradient.last ?? AppColors.textTertiary).opacity(0.35))
-                                .padding(.leading, 18)
-                                .padding(.trailing, 18)
-                        }
-                    }
+            let displayAccounts: [(account: FinanceAccount, info: (name: String, amount: Double, currency: String, icon: String, isCreditCardDebt: Bool))] = (group.accounts ?? []).compactMap { account in
+                guard let info = viewModel.getAccountInfo(account: account) else {
+                    return nil
                 }
-            } else {
-                Text("Создайте продукт")
+                return (account: account, info: info)
+            }
+
+            if displayAccounts.isEmpty {
+                Text("Нет продуктов")
                     .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(AppColors.textTertiary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 18)
                     .padding(.vertical, 14)
+            } else {
+                ForEach(Array(displayAccounts.enumerated()), id: \.element.account.id) { index, item in
+                    FinanceAccountRow(
+                        viewModel: viewModel,
+                        account: item.account,
+                        name: item.info.name,
+                        amount: item.info.amount,
+                        currency: item.info.currency,
+                        icon: item.info.icon,
+                        accountType: item.account.accountType,
+                        isCreditCardDebt: item.info.isCreditCardDebt,
+                        onEdit: {
+                            viewModel.handle(.showAccountDynamics(item.account))
+                        },
+                        onQuickEditAmount: {
+                            viewModel.handle(.showQuickEditAccountSheet(item.account))
+                        }
+                    )
+
+                    if index != displayAccounts.count - 1 {
+                        Divider()
+                            .background((AppColors.financesGradient.last ?? AppColors.textTertiary).opacity(0.35))
+                            .padding(.leading, 18)
+                            .padding(.trailing, 18)
+                    }
+                }
             }
         }
         .padding(.bottom, 14)
