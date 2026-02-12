@@ -59,6 +59,13 @@ struct InvestmentEditorView: View {
         selectedCategory == .crypto ? .crypto : .stocks
     }
 
+    private var isEditingMarketAssetWithLockedIdentity: Bool {
+        guard let editing = viewModel.state.editingInvestment else {
+            return false
+        }
+        return editing.category == .stocks || editing.category == .crypto
+    }
+
     private var marketInstrumentTitle: LocalizedStringKey {
         selectedCategory == .crypto ? "finances.market.field_pair" : "finances.market.field_ticker"
     }
@@ -212,12 +219,17 @@ struct InvestmentEditorView: View {
                         Text("Категория")
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        Picker("Категория", selection: $selectedCategory) {
-                            ForEach(InvestmentCategory.allCases, id: \.self) { category in
-                                Text(category.displayName).tag(category)
+                        if isEditingMarketAssetWithLockedIdentity {
+                            Text(selectedCategory.displayName)
+                                .foregroundStyle(AppColors.textTertiary)
+                        } else {
+                            Picker("Категория", selection: $selectedCategory) {
+                                ForEach(InvestmentCategory.allCases, id: \.self) { category in
+                                    Text(category.displayName).tag(category)
+                                }
                             }
+                            .tint(AppColors.textTertiary)
                         }
-                        .tint(AppColors.textTertiary)
                     }
                     .padding(.vertical, 8)
                     .padding(.horizontal, 16)
@@ -252,35 +264,37 @@ struct InvestmentEditorView: View {
 
             FinancesRowDivider()
 
-            HStack(spacing: 12) {
-                Button {
-                    showMarketSearchSheet = true
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "magnifyingglass")
-                        Text(marketSearchButtonTitle)
-                    }
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: AppColors.investmentsGradient,
-                            startPoint: .leading,
-                            endPoint: .trailing
+            if !isEditingMarketAssetWithLockedIdentity {
+                HStack(spacing: 12) {
+                    Button {
+                        showMarketSearchSheet = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "magnifyingglass")
+                            Text(marketSearchButtonTitle)
+                        }
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: AppColors.investmentsGradient,
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
                         )
-                    )
-                }
+                    }
 
-                Spacer()
+                    Spacer()
 
-                if let marketExchange, !marketExchange.isEmpty {
-                    Text(marketExchange)
-                        .font(.system(size: 13, weight: .regular))
-                        .foregroundStyle(AppColors.textTertiary)
+                    if let marketExchange, !marketExchange.isEmpty {
+                        Text(marketExchange)
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundStyle(AppColors.textTertiary)
+                    }
                 }
+                .padding(.vertical, 12)
+                .padding(.horizontal, 16)
+
+                FinancesRowDivider()
             }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 16)
-
-            FinancesRowDivider()
 
             HStack {
                 Text(marketQuantityTitle)
@@ -612,6 +626,7 @@ struct InvestmentEditorView: View {
         let effectiveAmount: Double
         let marketData: InvestmentMarketData?
         let createCashflowTransaction: Bool
+        let effectiveCategory: InvestmentCategory
 
         if isMarketCategory {
             guard let quantity = parseNumber(marketQuantityText), quantity > 0 else {
@@ -620,9 +635,11 @@ struct InvestmentEditorView: View {
 
             effectiveAmount = positionTotal ?? parseNumber(amountText) ?? (viewModel.state.editingInvestment?.amount ?? 0)
             let effectiveCurrency = (marketCurrency?.isEmpty == false) ? marketCurrency! : selectedCurrency
+            let lockedCategory = viewModel.state.editingInvestment?.category
+            let lockedSymbol = viewModel.state.editingInvestment?.marketSymbol
 
             marketData = InvestmentMarketData(
-                symbol: marketSymbol.isEmpty ? nil : marketSymbol,
+                symbol: isEditingMarketAssetWithLockedIdentity ? lockedSymbol : (marketSymbol.isEmpty ? nil : marketSymbol),
                 exchange: marketExchange,
                 currency: marketCurrency ?? selectedCurrency,
                 quantity: quantity,
@@ -633,6 +650,7 @@ struct InvestmentEditorView: View {
 
             selectedCurrency = effectiveCurrency
             createCashflowTransaction = false
+            effectiveCategory = isEditingMarketAssetWithLockedIdentity ? (lockedCategory ?? selectedCategory) : selectedCategory
         } else {
             guard let parsedAmount = parseNumber(amountText) else {
                 return
@@ -640,12 +658,13 @@ struct InvestmentEditorView: View {
             effectiveAmount = parsedAmount
             marketData = nil
             createCashflowTransaction = true
+            effectiveCategory = selectedCategory
         }
 
         viewModel.handle(.updateInvestment(
             name: name,
             investmentType: selectedInvestmentType,
-            category: selectedCategory,
+            category: effectiveCategory,
             amount: effectiveAmount,
             currency: selectedCurrency,
             includeInTotal: includeInTotal,
