@@ -298,67 +298,81 @@ public struct CurrencyPickerView: View {
         ZStack {
             GradientBackground()
             
-            ScrollView {
-                LazyVStack(spacing: 8) {
-                    if !pinnedFavorites.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Избранные")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(AppColors.textPrimary)
-                                .padding(.horizontal, 20)
-                                .padding(.top, 8)
+            VStack(spacing: 0) {
+                InlineSearchBar(text: $searchText, placeholder: "Код или название (RU/EN)")
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                    .padding(.bottom, 8)
+                
+                ScrollView {
+                    LazyVStack(spacing: 8) {
+                        if !pinnedFavorites.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Избранные")
+                                    .font(.system(size: 16, weight: .regular))
+                                    .foregroundStyle(AppColors.textSecondary)
+                                    .padding(.horizontal, 20)
+                                    .padding(.top, 8)
 
-                            SelectionSectionCard {
-                                ForEach(Array(pinnedFavorites.enumerated()), id: \.element) { index, code in
-                                    currencyRow(
-                                        code: code,
-                                        isSelected: currentSelection == code.uppercased(),
-                                        isFavorite: true,
-                                        showDivider: index != pinnedFavorites.count - 1,
-                                        dividerColor: AppColors.textPrimary.opacity(0.08)
-                                    )
+                                SelectionSectionCard {
+                                    ForEach(Array(pinnedFavorites.enumerated()), id: \.element) { index, code in
+                                        currencyRow(
+                                            code: code,
+                                            isSelected: currentSelection == code.uppercased(),
+                                            isFavorite: true,
+                                            showDivider: index != pinnedFavorites.count - 1,
+                                            dividerColor: AppColors.textPrimary.opacity(0.08)
+                                        )
+                                    }
                                 }
+                                .padding(.horizontal, 16)
                             }
-                            .padding(.horizontal, 16)
+                        }
+
+                        if !filteredOthers.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                // Если есть избранные, отступаем больше
+                                // Если избранных нет (например, поиск всё отфильтровал), то отступ меньше
+                                let topPadding: CGFloat = pinnedFavorites.isEmpty ? 8 : 16
+                                
+                                // Заголовок секции, если нужно (в дизайне "Все валюты" может не быть, но оставим для ясности)
+                                // На скрине "Избранные" есть. А для списка ниже заголовка не видно, но лучше оставить или убрать?
+                                // Оставим как было, но с более мелким шрифтом как "Избранные"
+                                
+                                // Но на скрине после "Избранные" идет просто список.
+                                // Если избранных нет, то список просто идет.
+                                // Оставим заголовок, чтобы разделять.
+                                
+                                Text("Все валюты")
+                                    .font(.system(size: 16, weight: .regular))
+                                    .foregroundStyle(AppColors.textSecondary)
+                                    .padding(.horizontal, 20)
+                                    .padding(.top, topPadding)
+
+                                SelectionSectionCard {
+                                    ForEach(Array(filteredOthers.enumerated()), id: \.element) { index, code in
+                                        let uppercasedCode = code.uppercased()
+                                        currencyRow(
+                                            code: uppercasedCode,
+                                            isSelected: currentSelection == uppercasedCode,
+                                            isFavorite: favoriteCodes.contains(uppercasedCode),
+                                            showDivider: index != filteredOthers.count - 1,
+                                            dividerColor: AppColors.textPrimary.opacity(0.08)
+                                        )
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                            }
                         }
                     }
-
-                    if !filteredOthers.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Все валюты")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(AppColors.textPrimary)
-                                .padding(.horizontal, 20)
-                                .padding(.top, pinnedFavorites.isEmpty ? 8 : 16)
-
-                            VStack(spacing: 0) {
-                                ForEach(Array(filteredOthers.enumerated()), id: \.element) { index, code in
-                                    let uppercasedCode = code.uppercased()
-                                    currencyRow(
-                                        code: uppercasedCode,
-                                        isSelected: currentSelection == uppercasedCode,
-                                        isFavorite: favoriteCodes.contains(uppercasedCode),
-                                        showDivider: index != filteredOthers.count - 1,
-                                        dividerColor: AppColors.brandPrimary.opacity(0.35)
-                                    )
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                        }
-                    }
+                    .padding(.vertical, 8)
                 }
-                .padding(.vertical, 8)
             }
         }
         // Важно: это помогает вводить и тикеры (BTC), и англ. слова — без автозамены
         .textInputAutocapitalization(.never)
         .autocorrectionDisabled(true)
         .keyboardType(.asciiCapable)
-        .searchable(
-            text: $searchText,
-            placement: .navigationBarDrawer(displayMode: .always),
-            prompt: "Код или название (RU/EN)"
-        )
     }
 
     @ViewBuilder

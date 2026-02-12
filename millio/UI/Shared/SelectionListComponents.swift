@@ -15,15 +15,38 @@ struct SelectionSectionCard<Content: View>: View {
     }
     
     var body: some View {
+        let accentColor = AppColors.financesGradient.first ?? .cyan
+        let fillGradient = LinearGradient(
+            colors: [
+                Color(red: 0.03, green: 0.07, blue: 0.11),
+                Color.black
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        let glowGradient = LinearGradient(
+            colors: [
+                accentColor.opacity(0.18),
+                Color.clear
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+        
         VStack(spacing: 0) {
             content
         }
         .background(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(.ultraThinMaterial)
+                .fill(fillGradient)
                 .overlay(
                     RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .strokeBorder(AppColors.textPrimary.opacity(0.10), lineWidth: 1)
+                        .fill(glowGradient)
+                        .opacity(0.6)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .stroke(accentColor.opacity(0.55), lineWidth: 1)
                 )
         )
     }
