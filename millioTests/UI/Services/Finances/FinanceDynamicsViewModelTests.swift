@@ -607,4 +607,114 @@ struct FinanceDynamicsViewModelTests {
         )
         #expect(abs(balanceWithFlag - 5000) < 0.01)
     }
+
+    @Test("Крипта: прирост учитывается после обновления рыночной позиции без транзакций")
+    func testCryptoGrowthUsesActualAmountAfterUpdateWithoutTransactions() async throws {
+        let modelContext = try createTestModelContext()
+
+        let createdAt = Date().addingTimeInterval(-7 * 86400)
+        let updatedAt = Date().addingTimeInterval(-3600)
+
+        let investment = Investment(
+            name: "BTC/USD",
+            investmentType: .positive,
+            category: .crypto,
+            amount: 66_236,
+            currency: "USD"
+        )
+        investment.createdAt = createdAt
+        investment.updatedAt = updatedAt
+        investment.initialAmount = 50_000
+        investment.hasInitialAmount = true
+        modelContext.insert(investment)
+
+        let group = FinanceGroup(name: "Крипта", colorHex: "#00AAFF")
+        let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+        account.group = group
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+
+        let beforeUpdate = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: updatedAt.addingTimeInterval(-60),
+            accountCardIDs: []
+        )
+        #expect(abs(beforeUpdate - 50_000) < 0.01)
+
+        let afterUpdate = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: updatedAt.addingTimeInterval(60),
+            accountCardIDs: []
+        )
+        #expect(abs(afterUpdate - 66_236) < 0.01)
+    }
+
+    @Test("Акции: прирост учитывается после обновления рыночной позиции без транзакций")
+    func testStocksGrowthUsesActualAmountAfterUpdateWithoutTransactions() async throws {
+        let modelContext = try createTestModelContext()
+
+        let createdAt = Date().addingTimeInterval(-10 * 86400)
+        let updatedAt = Date().addingTimeInterval(-2 * 3600)
+
+        let investment = Investment(
+            name: "AA",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 4_672,
+            currency: "USD"
+        )
+        investment.createdAt = createdAt
+        investment.updatedAt = updatedAt
+        investment.initialAmount = 3_900
+        investment.hasInitialAmount = true
+        modelContext.insert(investment)
+
+        let group = FinanceGroup(name: "Акции", colorHex: "#00CC66")
+        let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+        account.group = group
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+
+        let beforeUpdate = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: updatedAt.addingTimeInterval(-60),
+            accountCardIDs: []
+        )
+        #expect(abs(beforeUpdate - 3_900) < 0.01)
+
+        let afterUpdate = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: Date(),
+            accountCardIDs: []
+        )
+        #expect(abs(afterUpdate - 4_672) < 0.01)
+    }
 }

@@ -1470,6 +1470,16 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                         )
                         investmentBalance += converted
                     }
+
+                    // Если история неполная (например, для рыночных активов при изменении цены/количества
+                    // без создания balanceAdjustment), фиксируем актуальное значение на дату последнего обновления.
+                    let actualSignedAmount = investment.investmentType == .positive ? investment.amount : -investment.amount
+                    if date >= investment.updatedAt {
+                        let deltaToActual = actualSignedAmount - investmentBalance
+                        if abs(deltaToActual) > 0.01 {
+                            investmentBalance += deltaToActual
+                        }
+                    }
                     
                     accountBalance = investmentBalance
                 }
