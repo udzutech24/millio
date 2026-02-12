@@ -394,6 +394,43 @@ struct FinanceViewModelTests {
         #expect(info?.currency == "USD")
     }
 
+    @Test("Для рыночной инвестиции показывается количество и цена за штуку")
+    func testInvestmentPositionSubtitle() throws {
+        let modelContext = try createTestModelContext()
+
+        let group = FinanceGroup(name: "Акции", colorHex: "#33AA44")
+        modelContext.insert(group)
+
+        let investment = Investment(
+            name: "AAPL",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 1000,
+            currency: "USD"
+        )
+        investment.marketQuantity = 2
+        investment.lastKnownUnitPrice = 500
+        investment.includeInTotal = true
+        modelContext.insert(investment)
+
+        let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+        account.group = group
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadAccounts)
+
+        let subtitle = viewModel.getInvestmentPositionSubtitle(account: account)
+        #expect(subtitle?.contains("шт.") == true)
+        #expect(subtitle?.contains("/шт.") == true)
+        #expect(subtitle?.contains("500") == true)
+    }
+
     @Test("Невалидные связи FinanceAccount очищаются при загрузке счетов")
     func testCleanupInvalidFinanceAccounts() throws {
         let modelContext = try createTestModelContext()

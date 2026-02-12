@@ -931,6 +931,23 @@ final class FinanceViewModel: ViewModelProtocol {
         return nil
     }
 
+    func getInvestmentPositionSubtitle(account: FinanceAccount) -> String? {
+        guard account.accountType == .investment,
+              let investment = investmentByID[account.accountID],
+              investment.isMarketPriced,
+              let quantity = investment.marketQuantity, quantity > 0,
+              let unitPrice = investment.lastKnownUnitPrice, unitPrice > 0 else {
+            return nil
+        }
+
+        let quantityText = formatMarketNumber(quantity, maximumFractionDigits: 8)
+        let unitPriceText = formatMarketNumber(unitPrice, maximumFractionDigits: 2)
+        let currencyCode = resolvedInvestmentCurrency(investment)
+        let currencyLabel = MonetaCurrency(rawValue: currencyCode)?.symbol ?? currencyCode
+
+        return "\(quantityText) шт. • \(unitPriceText) \(currencyLabel)/шт."
+    }
+
     private func resolvedInvestmentCurrency(_ investment: Investment) -> String {
         let normalizedCurrency = investment.currency
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -965,6 +982,16 @@ final class FinanceViewModel: ViewModelProtocol {
         }
 
         return state.displayCurrency
+    }
+
+    private func formatMarketNumber(_ value: Double, maximumFractionDigits: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.groupingSeparator = " "
+        formatter.usesGroupingSeparator = true
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = maximumFractionDigits
+        return formatter.string(from: NSNumber(value: value)) ?? "0"
     }
     
     func refreshRates() async {

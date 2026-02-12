@@ -400,13 +400,23 @@ private struct FinanceAccountRow: View {
             }
             .frame(width: 16, height: 16)
             
-            // Название счета
-            Text(name)
-                .font(.system(size: 12, weight: .regular))
-                .foregroundStyle(AppColors.textPrimary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            // Название счета + детали позиции для рыночных активов
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                if let subtitle = viewModel.getInvestmentPositionSubtitle(account: account) {
+                    Text(subtitle)
+                        .font(.system(size: 10, weight: .regular))
+                        .foregroundStyle(AppColors.textTertiary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
             
             // Сумма (кликабельна для быстрого редактирования)
             Button {
