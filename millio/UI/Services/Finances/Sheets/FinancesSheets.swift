@@ -132,127 +132,36 @@ struct DisplayCurrencySheet: View {
     @ObservedObject var viewModel: FinanceViewModel
     @Environment(\.dismiss) private var dismiss
     var isSecondary: Bool = false
-    @State private var availableCurrencies: [String] = []
-    @State private var filteredCurrencies: [String] = []
     @State private var searchText: String = ""
-    @State private var isLoading = true
     
-    private var searchBar: some View {
-        HStack {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(AppColors.textTertiary)
-            TextField("Поиск валют", text: $searchText)
-                .foregroundStyle(AppColors.textPrimary)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(.ultraThinMaterial)
-        .cornerRadius(12)
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-    }
+    // Используем полный список валют из CurrencySelectionSupport
+    private let allCurrencies = CurrencySelectionSupport.allCodes(includeCrypto: true)
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                GradientBackground()
-                
-                if isLoading {
-                    ProgressView()
-                        .tint(AppColors.textPrimary)
-                } else {
-                    VStack(spacing: 0) {
-                        searchBar
-                        
-                        List {
-                            ForEach(filteredCurrencies, id: \.self) { currency in
-                                Button {
-                                    if isSecondary {
-                                        viewModel.handle(.setSecondaryDisplayCurrency(currency))
-                                    } else {
-                                        viewModel.handle(.setDisplayCurrency(currency))
-                                    }
-                                    dismiss()
-                                } label: {
-                                    HStack {
-                                        Text(currency)
-                                            .foregroundStyle(AppColors.textPrimary)
-                                        Spacer()
-                                        if isSecondary {
-                                            if viewModel.state.secondaryDisplayCurrency == currency {
-                                                Image(systemName: "checkmark")
-                                                    .foregroundStyle(
-                                                        LinearGradient(
-                                                            colors: AppColors.financesGradient,
-                                                            startPoint: .leading,
-                                                            endPoint: .trailing
-                                                        )
-                                                    )
-                                            }
-                                        } else {
-                                            if viewModel.state.displayCurrency == currency {
-                                                Image(systemName: "checkmark")
-                                                    .foregroundStyle(
-                                                        LinearGradient(
-                                                            colors: AppColors.financesGradient,
-                                                            startPoint: .leading,
-                                                            endPoint: .trailing
-                                                        )
-                                                    )
-                                            }
-                                        }
-                                    }
-                                }
-                                .listRowBackground(Color.clear)
-                            }
-                        }
-                        .scrollContentBackground(.hidden)
+            CurrencyPickerView(
+                allCodes: allCurrencies,
+                searchText: $searchText,
+                selectedCodes: [], // Можно добавить закрепленные, если нужно
+                favoriteCodes: [], // Можно подключить избранное из настроек, если есть доступ
+                currentSelection: isSecondary ? viewModel.state.secondaryDisplayCurrency : viewModel.state.displayCurrency,
+                onToggleFavorite: nil,
+                onSelect: { currency in
+                    if isSecondary {
+                        viewModel.handle(.setSecondaryDisplayCurrency(currency))
+                    } else {
+                        viewModel.handle(.setDisplayCurrency(currency))
                     }
+                    dismiss()
                 }
-            }
+            )
             .navigationTitle(isSecondary ? "Дополнительная валюта" : "Валюта отображения")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Готово") { dismiss() }
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: AppColors.financesGradient,
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Отмена") { dismiss() }
+                        .foregroundStyle(AppColors.textPrimary)
                 }
-            }
-            .task { await loadAvailableCurrencies() }
-            .onChange(of: searchText) { _, _ in filterCurrencies() }
-        }
-    }
-    
-    private func loadAvailableCurrencies() async {
-        isLoading = true
-        defer { isLoading = false }
-        
-        _ = await CurrencyRateService.shared.getRate(from: "USD", to: "RUB")
-        
-        let fromRateSource = Set(CurrencyRateService.shared.getAvailableCurrencies())
-        let fromAccounts = Set(
-            viewModel.state.availableCards.map { $0.currency } +
-            viewModel.state.availableCredits.map { $0.currency } +
-            viewModel.state.availableInvestments.map { $0.currency }
-        )
-        availableCurrencies = Array(fromRateSource.union(fromAccounts)).sorted()
-        filteredCurrencies = availableCurrencies
-    }
-    
-    private func filterCurrencies() {
-        if searchText.isEmpty {
-            filteredCurrencies = availableCurrencies
-        } else {
-            filteredCurrencies = availableCurrencies.filter { currency in
-                currency.localizedCaseInsensitiveContains(searchText)
             }
         }
     }

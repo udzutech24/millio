@@ -29,6 +29,9 @@ struct CashflowTransactionEditorView: View {
     @State private var isLoadingCurrencies: Bool = false
     @State private var isAmountOverBalance: Bool = false
     @State private var validationTask: Task<Void, Never>? = nil
+    
+    @State private var showCurrencyPicker: Bool = false
+    @State private var currencySearchText: String = ""
 
     init(viewModel: CashflowViewModel, transactionType: CashflowTransactionType? = nil, transaction: CashflowTransaction? = nil) {
         self.viewModel = viewModel
@@ -142,6 +145,34 @@ struct CashflowTransactionEditorView: View {
             }
             .onChange(of: selectedTransactionType) { _, _ in
                 validateAvailableBalance()
+            }
+            .sheet(isPresented: $showCurrencyPicker) {
+                NavigationStack {
+                    CurrencyPickerView(
+                        allCodes: CurrencySelectionSupport.allCodes(includeCrypto: true),
+                        searchText: $currencySearchText,
+                        selectedCodes: [],
+                        favoriteCodes: [],
+                        currentSelection: selectedCurrency,
+                        onToggleFavorite: nil,
+                        onSelect: { currency in
+                            selectedCurrency = currency
+                            showCurrencyPicker = false
+                        }
+                    )
+                    .navigationTitle("Валюта операции")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Отмена") {
+                                showCurrencyPicker = false
+                            }
+                            .foregroundStyle(AppColors.textPrimary)
+                        }
+                    }
+                }
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
             }
         }
     }
@@ -283,12 +314,20 @@ struct CashflowTransactionEditorView: View {
                                 .scaleEffect(0.8)
                                 .tint(AppColors.textTertiary)
                         } else {
-                            Picker("Валюта", selection: $selectedCurrency) {
-                                ForEach(availableCurrencies, id: \.self) { currency in
-                                    Text(currency).tag(currency)
+                            Button {
+                                showCurrencyPicker = true
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Text(selectedCurrency)
+                                        .font(.system(size: 17))
+                                        .foregroundStyle(AppColors.textPrimary)
+                                    
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(AppColors.textTertiary)
                                 }
                             }
-                            .tint(AppColors.textTertiary)
+                            .buttonStyle(.plain)
                         }
                     }
                     .padding(.vertical, 8)
