@@ -135,7 +135,7 @@ struct DisplayCurrencySheet: View {
     @State private var searchText: String = ""
     
     // Используем полный список валют из CurrencySelectionSupport
-    private let allCurrencies = CurrencySelectionSupport.allCodes(includeCrypto: true)
+    private let allCurrencies = CurrencySelectionSupport.allCodes(includeCrypto: false)
     
     var body: some View {
         NavigationStack {

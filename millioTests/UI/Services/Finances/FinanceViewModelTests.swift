@@ -320,6 +320,44 @@ struct FinanceViewModelTests {
         #expect(total <= 1000.0 + 0.01, "Сумма не должна включать сумму в валюте без курса конвертации")
     }
 
+    @Test("Суммы в стейблкоинах конвертируются как USD")
+    func testStablecoinAmountsAreConvertedAsUSD() async throws {
+        let modelContext = try createTestModelContext()
+
+        let group = FinanceGroup(name: "Крипто группа", colorHex: "#00AAFF")
+        group.displayCurrency = "RUB"
+        modelContext.insert(group)
+
+        let usdtInvestment = Investment(
+            name: "BTC/USDT",
+            investmentType: .positive,
+            category: .crypto,
+            amount: 100.0,
+            currency: "USDT"
+        )
+        usdtInvestment.includeInTotal = true
+        modelContext.insert(usdtInvestment)
+
+        let account = FinanceAccount(accountType: .investment, accountID: usdtInvestment.investmentUniqueID)
+        account.group = group
+        modelContext.insert(account)
+
+        try modelContext.save()
+
+        let mockRateService = MockCurrencyRateService()
+        mockRateService.setRate(from: "USD", to: "RUB", rate: 100.0)
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: mockRateService,
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadAccounts)
+
+        let total = await viewModel.calculateGroupTotal(group: group, in: "RUB")
+        #expect(abs(total - 10000.0) < 0.01, "USDT должен конвертироваться как USD")
+    }
+
     @Test("Невалидные связи FinanceAccount очищаются при загрузке счетов")
     func testCleanupInvalidFinanceAccounts() throws {
         let modelContext = try createTestModelContext()

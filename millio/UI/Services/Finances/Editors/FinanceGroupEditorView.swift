@@ -320,12 +320,7 @@ struct FinanceGroupEditorView: View {
         _ = await CurrencyRateService.shared.getRate(from: "USD", to: "RUB")
         
         let fromRateSource = Set(CurrencyRateService.shared.getAvailableCurrencies())
-        let fromAccounts = Set(
-            viewModel.state.availableCards.map { $0.currency } +
-            viewModel.state.availableCredits.map { $0.currency } +
-            viewModel.state.availableInvestments.map { $0.currency }
-        )
-        availableCurrencies = Array(fromRateSource.union(fromAccounts)).sorted()
+        availableCurrencies = Array(fromRateSource).sorted()
     }
     
     private func formatAmount(_ amount: Double, isHidden: Bool = false) -> String {

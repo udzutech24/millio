@@ -202,7 +202,7 @@ private struct FinancesMainTabView: View {
                 }
             }
 
-            if let secondaryCurrency = viewModel.state.secondaryDisplayCurrency, viewModel.state.secondaryTotalAmount > 0 {
+            if let secondaryCurrency = viewModel.state.secondaryDisplayCurrency {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(formatBalance(viewModel.state.secondaryTotalAmount, isHidden: viewModel.state.isAmountHidden))
                         .font(.system(size: 15, weight: .medium))

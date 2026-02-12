@@ -252,6 +252,15 @@ final class FinanceViewModel: ViewModelProtocol {
         self.currencyService = currencyService ?? CurrencyRateService.shared
         state.displayCurrency = storedDisplayCurrency
         state.secondaryDisplayCurrency = storedSecondaryDisplayCurrency
+        if CurrencySelectionSupport.isCrypto(state.displayCurrency) {
+            let fallbackCurrency = SettingsManager.shared.primaryCurrencyCode
+            state.displayCurrency = fallbackCurrency
+            storedDisplayCurrency = fallbackCurrency
+        }
+        if let secondary = state.secondaryDisplayCurrency, CurrencySelectionSupport.isCrypto(secondary) {
+            state.secondaryDisplayCurrency = "USD"
+            storedSecondaryDisplayCurrency = "USD"
+        }
         state.isSavingsGoalEnabled = storedSavingsGoalEnabled
         state.savingsGoalAmount = storedSavingsGoalAmount
         state.isAmountHidden = storedAmountHidden
@@ -694,12 +703,14 @@ final class FinanceViewModel: ViewModelProtocol {
         for group in state.groups {
             let groupCurrency = group.displayCurrency ?? state.displayCurrency
             let groupTotalInGroupCurrency = await calculateGroupTotal(group: group, in: groupCurrency)
+            let normalizedGroupCurrency = normalizedConversionCurrency(groupCurrency)
+            let normalizedDisplayCurrency = normalizedConversionCurrency(displayCurrency)
             
             // Конвертируем сумму группы в displayCurrency если нужно
-            if groupCurrency == displayCurrency {
+            if normalizedGroupCurrency == normalizedDisplayCurrency {
                 total += groupTotalInGroupCurrency
             } else {
-                if let rate = await currencyService.getRate(from: groupCurrency, to: displayCurrency), rate > 0 {
+                if let rate = await currencyService.getRate(from: normalizedGroupCurrency, to: normalizedDisplayCurrency), rate > 0 {
                     total += groupTotalInGroupCurrency * rate
                 } else {
                     // Если курс недоступен, просто пропускаем сумму этой группы и добавляем предупреждение
@@ -721,11 +732,13 @@ final class FinanceViewModel: ViewModelProtocol {
             for group in state.groups {
                 let groupCurrency = group.displayCurrency ?? state.displayCurrency
                 let groupTotalInGroupCurrency = await calculateGroupTotal(group: group, in: groupCurrency)
+                let normalizedGroupCurrency = normalizedConversionCurrency(groupCurrency)
+                let normalizedSecondaryCurrency = normalizedConversionCurrency(secondaryCurrency)
                 
-                if groupCurrency == secondaryCurrency {
+                if normalizedGroupCurrency == normalizedSecondaryCurrency {
                     secondaryTotal += groupTotalInGroupCurrency
                 } else {
-                    if let rate = await currencyService.getRate(from: groupCurrency, to: secondaryCurrency), rate > 0 {
+                    if let rate = await currencyService.getRate(from: normalizedGroupCurrency, to: normalizedSecondaryCurrency), rate > 0 {
                         secondaryTotal += groupTotalInGroupCurrency * rate
                     } else {
                         warnings.append("Курс конвертации \(groupCurrency) → \(secondaryCurrency) недоступен. Некоторые суммы не учтены, потому что выбранная API не поддерживает эти валюты.")
@@ -750,6 +763,7 @@ final class FinanceViewModel: ViewModelProtocol {
     /// Подсчитать сумму группы в указанной валюте
     func calculateGroupTotal(group: FinanceGroup, in currency: String) async -> Double {
         var total: Double = 0.0
+        let targetCurrency = normalizedConversionCurrency(currency)
         
         guard let accounts = group.accounts else { return 0.0 }
         
@@ -758,7 +772,7 @@ final class FinanceViewModel: ViewModelProtocol {
         
         // Собираем все валюты, для которых нужны курсы (включая целевую)
         var allCurrenciesNeeded = Set(currencies)
-        allCurrenciesNeeded.insert(currency)
+        allCurrenciesNeeded.insert(targetCurrency)
         
         // Предзагружаем курсы для всех необходимых валют через USD
         // Курсы уже обновлены на верхнем уровне, здесь только предзагрузка
@@ -771,17 +785,18 @@ final class FinanceViewModel: ViewModelProtocol {
         
         for account in accounts {
             let amount = await getAccountAmount(account: account)
+            let sourceCurrency = normalizedConversionCurrency(amount.currency)
             
             // Пропускаем нулевые значения
             guard abs(amount.value) > 0.01 else { continue }
             
-            if amount.currency == currency {
+            if sourceCurrency == targetCurrency {
                 // Валюта совпадает с целевой - добавляем напрямую
                 total += amount.value
             } else {
                 // Конвертируем валюту в целевую валюту группы
                 // Сначала проверяем доступность курса
-                let rate = await currencyService.getRate(from: amount.currency, to: currency)
+                let rate = await currencyService.getRate(from: sourceCurrency, to: targetCurrency)
                 
                 if let rate = rate, rate > 0 {
                     // Курс доступен - выполняем конвертацию
@@ -806,7 +821,7 @@ final class FinanceViewModel: ViewModelProtocol {
             let amount = await getAccountAmount(account: account)
             // Добавляем валюту только если сумма не нулевая
             if abs(amount.value) > 0.01 {
-                currencies.insert(amount.currency)
+                currencies.insert(normalizedConversionCurrency(amount.currency))
             }
         }
         
@@ -851,6 +866,34 @@ final class FinanceViewModel: ViewModelProtocol {
         }
         
         return (0.0, "RUB")
+    }
+
+    private func normalizedConversionCurrency(_ currency: String) -> String {
+        let trimmed = currency
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+        guard !trimmed.isEmpty else { return "USD" }
+
+        let stablecoinToUSD: Set<String> = ["USDT", "USDC", "BUSD", "TUSD", "FDUSD", "DAI"]
+        if stablecoinToUSD.contains(trimmed) {
+            return "USD"
+        }
+
+        if trimmed.contains("/") {
+            let parts = trimmed.split(separator: "/").map(String.init)
+            if let quote = parts.last {
+                return normalizedConversionCurrency(quote)
+            }
+        }
+
+        if trimmed.contains("-") {
+            let parts = trimmed.split(separator: "-").map(String.init)
+            if let quote = parts.last {
+                return normalizedConversionCurrency(quote)
+            }
+        }
+
+        return trimmed
     }
     
     /// Получить информацию о счете для отображения
