@@ -860,7 +860,7 @@ final class FinanceViewModel: ViewModelProtocol {
                 // Учитываем только если includeInTotal = true
                 if investment.includeInTotal {
                     let value = investment.investmentType == .positive ? investment.amount : -investment.amount
-                    return (value, investment.currency)
+                    return (value, resolvedInvestmentCurrency(investment))
                 }
             }
         }
@@ -924,11 +924,47 @@ final class FinanceViewModel: ViewModelProtocol {
             
         case .investment:
             if let investment = investmentByID[account.accountID] {
-                return (investment.name, investment.amount, investment.currency, investment.category.icon, false)
+                return (investment.name, investment.amount, resolvedInvestmentCurrency(investment), investment.category.icon, false)
             }
         }
         
         return nil
+    }
+
+    private func resolvedInvestmentCurrency(_ investment: Investment) -> String {
+        let normalizedCurrency = investment.currency
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+        if !normalizedCurrency.isEmpty {
+            return normalizedCurrency
+        }
+
+        if let marketCurrency = investment.marketCurrency?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased(),
+           !marketCurrency.isEmpty {
+            return marketCurrency
+        }
+
+        if let marketSymbol = investment.marketSymbol?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased(),
+           !marketSymbol.isEmpty {
+            if marketSymbol.contains("/") {
+                let parts = marketSymbol.split(separator: "/").map(String.init)
+                if let quote = parts.last, !quote.isEmpty {
+                    return quote
+                }
+            }
+            if marketSymbol.contains("-") {
+                let parts = marketSymbol.split(separator: "-").map(String.init)
+                if let quote = parts.last, !quote.isEmpty {
+                    return quote
+                }
+            }
+        }
+
+        return state.displayCurrency
     }
     
     func refreshRates() async {

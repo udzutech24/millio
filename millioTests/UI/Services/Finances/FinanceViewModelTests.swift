@@ -358,6 +358,42 @@ struct FinanceViewModelTests {
         #expect(abs(total - 10000.0) < 0.01, "USDT должен конвертироваться как USD")
     }
 
+    @Test("Валюта инвестиции берется из marketSymbol, если currency пустая")
+    func testInvestmentCurrencyFallbackFromMarketSymbol() throws {
+        let modelContext = try createTestModelContext()
+
+        let group = FinanceGroup(name: "Крипто", colorHex: "#22AAFF")
+        modelContext.insert(group)
+
+        let investment = Investment(
+            name: "BTC/USD",
+            investmentType: .positive,
+            category: .crypto,
+            amount: 132_472,
+            currency: ""
+        )
+        investment.marketSymbol = "BTC/USD"
+        investment.marketCurrency = nil
+        investment.includeInTotal = true
+        modelContext.insert(investment)
+
+        let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+        account.group = group
+        modelContext.insert(account)
+
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadAccounts)
+
+        let info = viewModel.getAccountInfo(account: account)
+        #expect(info?.currency == "USD")
+    }
+
     @Test("Невалидные связи FinanceAccount очищаются при загрузке счетов")
     func testCleanupInvalidFinanceAccounts() throws {
         let modelContext = try createTestModelContext()
