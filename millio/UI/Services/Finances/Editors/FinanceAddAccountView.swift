@@ -38,7 +38,7 @@ struct FinanceAddAccountView: View {
     @State private var investmentViewModel: InvestmentViewModel?
     @State private var cardData: Card?
     @State private var creditData: (name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, includeInTotal: Bool)?
-    @State private var investmentData: (name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool)?
+    @State private var investmentData: (name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)?
     @State private var selectedArchivedAccountID: String? = nil
     @State private var accountName: String = ""
     
@@ -613,6 +613,8 @@ struct FinanceAddAccountView: View {
             includeInTotal: investmentData.includeInTotal,
             priority: investmentData.priority,
             isFavorite: investmentData.isFavorite,
+            marketData: investmentData.marketData,
+            createCashflowTransaction: investmentData.createCashflowTransaction,
             uniqueID: createdInvestmentID
         ))
         

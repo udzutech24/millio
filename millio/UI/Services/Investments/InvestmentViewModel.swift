@@ -47,6 +47,18 @@ struct InvestmentState {
     var isLoadingRates: Bool = false
 }
 
+// MARK: - Market Data Draft
+
+struct InvestmentMarketData: Equatable {
+    var symbol: String?
+    var exchange: String?
+    var currency: String?
+    var quantity: Double?
+    var unitPrice: Double?
+    var priceUpdatedAt: Date?
+    var providerRaw: String?
+}
+
 // MARK: - Investment Actions
 
 enum InvestmentAction {
@@ -64,6 +76,8 @@ enum InvestmentAction {
         includeInTotal: Bool,
         priority: InvestmentPriority,
         isFavorite: Bool,
+        marketData: InvestmentMarketData?,
+        createCashflowTransaction: Bool,
         uniqueID: String?
     )
     case showInvestmentEditor
@@ -113,7 +127,19 @@ final class InvestmentViewModel: ViewModelProtocol {
         case .toggleFavorite(let investment):
             toggleFavorite(investment)
             
-        case .updateInvestment(let name, let investmentType, let category, let amount, let currency, let includeInTotal, let priority, let isFavorite, let uniqueID):
+        case .updateInvestment(
+            let name,
+            let investmentType,
+            let category,
+            let amount,
+            let currency,
+            let includeInTotal,
+            let priority,
+            let isFavorite,
+            let marketData,
+            let createCashflowTransaction,
+            let uniqueID
+        ):
             updateInvestment(
                 name: name,
                 investmentType: investmentType,
@@ -123,6 +149,8 @@ final class InvestmentViewModel: ViewModelProtocol {
                 includeInTotal: includeInTotal,
                 priority: priority,
                 isFavorite: isFavorite,
+                marketData: marketData,
+                createCashflowTransaction: createCashflowTransaction,
                 uniqueID: uniqueID
             )
             
@@ -259,6 +287,8 @@ final class InvestmentViewModel: ViewModelProtocol {
         includeInTotal: Bool,
         priority: InvestmentPriority,
         isFavorite: Bool,
+        marketData: InvestmentMarketData?,
+        createCashflowTransaction: Bool,
         uniqueID: String?
     ) {
         var editedInvestment: Investment? = nil
@@ -283,6 +313,12 @@ final class InvestmentViewModel: ViewModelProtocol {
             existing.includeInTotal = includeInTotal
             existing.priority = priority
             existing.isFavorite = isFavorite
+            applyMarketData(
+                marketData,
+                to: existing,
+                category: category
+            )
+            existing.recalculateAmountFromPosition()
             existing.updatedAt = Date()
         } else {
             // Создаем новую инвестицию
@@ -299,11 +335,17 @@ final class InvestmentViewModel: ViewModelProtocol {
             if let uniqueID, !uniqueID.isEmpty {
                 newInvestment.uniqueID = uniqueID
             }
+            applyMarketData(
+                marketData,
+                to: newInvestment,
+                category: category
+            )
+            newInvestment.recalculateAmountFromPosition()
             modelContext.insert(newInvestment)
         }
         
         // Создание CashflowTransaction если нужно (перед save для атомарности)
-        if let existing = editedInvestment {
+        if createCashflowTransaction, let existing = editedInvestment {
             let delta = amount - oldAmount
             if abs(delta) > 0.01 {
                 let transaction = CashflowTransaction(
@@ -327,5 +369,32 @@ final class InvestmentViewModel: ViewModelProtocol {
         } catch {
             AppLogger.log(.error, category: "Investment", "Failed to save investment: \(error.localizedDescription)")
         }
+    }
+
+    private func applyMarketData(
+        _ marketData: InvestmentMarketData?,
+        to investment: Investment,
+        category: InvestmentCategory
+    ) {
+        let isMarketCategory = (category == .stocks || category == .crypto)
+
+        if !isMarketCategory {
+            investment.marketSymbol = nil
+            investment.marketExchange = nil
+            investment.marketCurrency = nil
+            investment.marketQuantity = nil
+            investment.lastKnownUnitPrice = nil
+            investment.lastKnownPriceUpdatedAt = nil
+            investment.marketProviderRaw = nil
+            return
+        }
+
+        investment.marketSymbol = marketData?.symbol
+        investment.marketExchange = marketData?.exchange
+        investment.marketCurrency = marketData?.currency
+        investment.marketQuantity = marketData?.quantity
+        investment.lastKnownUnitPrice = marketData?.unitPrice
+        investment.lastKnownPriceUpdatedAt = marketData?.priceUpdatedAt
+        investment.marketProviderRaw = marketData?.providerRaw
     }
 }

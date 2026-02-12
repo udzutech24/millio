@@ -105,6 +105,27 @@ final class Investment: Persistable {
     /// Стоимость/сумма инвестиции
     var amount: Double = 0.0
 
+    /// Символ биржевого инструмента (например, AAPL, BTCUSD)
+    var marketSymbol: String?
+
+    /// Биржа/площадка котировки (если доступно)
+    var marketExchange: String?
+
+    /// Валюта котировки инструмента
+    var marketCurrency: String?
+
+    /// Количество инструмента в позиции
+    var marketQuantity: Double?
+
+    /// Последняя известная цена за единицу
+    var lastKnownUnitPrice: Double?
+
+    /// Дата/время последнего обновления цены
+    var lastKnownPriceUpdatedAt: Date?
+
+    /// Сырой идентификатор провайдера market-данных
+    var marketProviderRaw: String?
+
     /// Изначальная сумма для истории (не меняется при редактировании)
     var initialAmount: Double = 0.0
 
@@ -148,6 +169,27 @@ final class Investment: Persistable {
     var priority: InvestmentPriority {
         get { InvestmentPriority(rawValue: priorityRaw) ?? .normal }
         set { priorityRaw = newValue.rawValue }
+    }
+
+    /// Рыночно-оцениваемый актив (акции/криптовалюта)
+    var isMarketPriced: Bool {
+        category == .stocks || category == .crypto
+    }
+
+    /// Итог позиции = количество * цена за единицу
+    var positionTotal: Double? {
+        guard let quantity = marketQuantity,
+              let unitPrice = lastKnownUnitPrice else {
+            return nil
+        }
+        return quantity * unitPrice
+    }
+
+    /// Пересчитывает amount на основе рыночной позиции, если есть количество и цена.
+    func recalculateAmountFromPosition() {
+        if let total = positionTotal {
+            amount = total
+        }
     }
     
     init(
@@ -213,6 +255,28 @@ final class Investment: Persistable {
         
         if let archivedAt = archivedAt {
             dict["archivedAt"] = archivedAt.timeIntervalSince1970
+        }
+
+        if let marketSymbol {
+            dict["marketSymbol"] = marketSymbol
+        }
+        if let marketExchange {
+            dict["marketExchange"] = marketExchange
+        }
+        if let marketCurrency {
+            dict["marketCurrency"] = marketCurrency
+        }
+        if let marketQuantity {
+            dict["marketQuantity"] = marketQuantity
+        }
+        if let lastKnownUnitPrice {
+            dict["lastKnownUnitPrice"] = lastKnownUnitPrice
+        }
+        if let lastKnownPriceUpdatedAt {
+            dict["lastKnownPriceUpdatedAt"] = lastKnownPriceUpdatedAt.timeIntervalSince1970
+        }
+        if let marketProviderRaw {
+            dict["marketProviderRaw"] = marketProviderRaw
         }
         
         return try JSONSerialization.data(withJSONObject: dict)

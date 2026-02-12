@@ -652,7 +652,7 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
 struct InlineInvestmentCreateForm<GroupSection: View>: View {
     @ObservedObject var viewModel: InvestmentViewModel
     @Binding var name: String
-    let onInvestmentDataChanged: ((name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool)?) -> Void
+    let onInvestmentDataChanged: ((name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)?) -> Void
     let groupSection: GroupSection
     
     @State private var selectedInvestmentType: InvestmentType = .positive
@@ -666,29 +666,124 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     @State private var isLoadingCurrencies: Bool = false
     @State private var showCurrencyPicker: Bool = false
     @State private var currencySearchText: String = ""
+    @State private var marketSymbol: String = ""
+    @State private var marketExchange: String?
+    @State private var marketCurrency: String?
+    @State private var marketQuantityText: String = ""
+    @State private var lastKnownUnitPrice: Double?
+    @State private var lastKnownPriceUpdatedAt: Date?
+    @State private var marketProviderRaw: String?
+    @State private var showMarketSearchSheet: Bool = false
+    @State private var isRefreshingPrice: Bool = false
+    @State private var marketErrorMessage: String?
+    
+    private let marketDataClient: MarketDataClientProtocol
     
     init(
         viewModel: InvestmentViewModel,
         name: Binding<String>,
-        onInvestmentDataChanged: @escaping ((name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool)?) -> Void,
+        onInvestmentDataChanged: @escaping ((name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)?) -> Void,
+        marketDataClient: MarketDataClientProtocol = TwelveDataClient.shared,
         @ViewBuilder groupSection: () -> GroupSection
     ) {
         self.viewModel = viewModel
         self._name = name
         self.onInvestmentDataChanged = onInvestmentDataChanged
+        self.marketDataClient = marketDataClient
         self.groupSection = groupSection()
     }
     
-    var isValid: Bool { !name.isEmpty && parseNumber(amountText) != nil && parseNumber(amountText)! > 0 }
+    private var isMarketCategory: Bool {
+        selectedCategory == .stocks || selectedCategory == .crypto
+    }
     
-    func getInvestmentData() -> (name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool)? {
-        guard let amount = parseNumber(amountText) else { return nil }
-        return (name, selectedInvestmentType, selectedCategory, amount, selectedCurrency, includeInTotal, selectedPriority, isFavorite)
+    private var marketFilter: MarketSymbolFilter {
+        selectedCategory == .crypto ? .crypto : .stocks
+    }
+    
+    private var positionTotal: Double? {
+        guard let quantity = parseNumber(marketQuantityText),
+              let unitPrice = lastKnownUnitPrice else {
+            return nil
+        }
+        return quantity * unitPrice
+    }
+    
+    var isValid: Bool {
+        if isMarketCategory {
+            guard !name.isEmpty,
+                  !marketSymbol.isEmpty,
+                  let quantity = parseNumber(marketQuantityText) else {
+                return false
+            }
+            return quantity > 0
+        }
+        guard !name.isEmpty,
+              let amount = parseNumber(amountText) else {
+            return false
+        }
+        return amount > 0
+    }
+    
+    func getInvestmentData() -> (name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)? {
+        if isMarketCategory {
+            guard let quantity = parseNumber(marketQuantityText),
+                  quantity > 0 else {
+                return nil
+            }
+            
+            let effectiveAmount = positionTotal ?? parseNumber(amountText) ?? 0.0
+            let effectiveCurrency = (marketCurrency?.isEmpty == false) ? marketCurrency! : selectedCurrency
+            let marketData = InvestmentMarketData(
+                symbol: marketSymbol.isEmpty ? nil : marketSymbol,
+                exchange: marketExchange,
+                currency: marketCurrency ?? selectedCurrency,
+                quantity: quantity,
+                unitPrice: lastKnownUnitPrice,
+                priceUpdatedAt: lastKnownPriceUpdatedAt,
+                providerRaw: marketProviderRaw
+            )
+            
+            return (
+                name,
+                selectedInvestmentType,
+                selectedCategory,
+                effectiveAmount,
+                effectiveCurrency,
+                includeInTotal,
+                selectedPriority,
+                isFavorite,
+                marketData,
+                false
+            )
+        }
+        
+        guard let amount = parseNumber(amountText) else {
+            return nil
+        }
+        
+        return (
+            name,
+            selectedInvestmentType,
+            selectedCategory,
+            amount,
+            selectedCurrency,
+            includeInTotal,
+            selectedPriority,
+            isFavorite,
+            nil,
+            true
+        )
     }
     
     var body: some View {
         VStack(spacing: 18) {
-            balanceSection
+            if isMarketCategory {
+                marketInstrumentSection
+                marketPositionSection
+            } else {
+                balanceSection
+            }
             organizationSection
             groupSection
             calculationsSection
@@ -698,11 +793,22 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
         .onChange(of: name) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
         .onChange(of: amountText) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
         .onChange(of: selectedCurrency) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
-        .onChange(of: selectedCategory) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
+        .onChange(of: selectedCategory) { _, newValue in
+            if !(newValue == .stocks || newValue == .crypto) {
+                clearMarketState()
+            }
+            onInvestmentDataChanged(getInvestmentData())
+        }
         .onChange(of: selectedPriority) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
         .onChange(of: selectedInvestmentType) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
         .onChange(of: isFavorite) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
         .onChange(of: includeInTotal) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
+        .onChange(of: marketQuantityText) { _, _ in
+            if let total = positionTotal {
+                amountText = String(total)
+            }
+            onInvestmentDataChanged(getInvestmentData())
+        }
         .sheet(isPresented: $showCurrencyPicker) {
             NavigationStack {
                 CurrencyPickerView(
@@ -727,6 +833,162 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showMarketSearchSheet) {
+            MarketSymbolSearchSheet(filter: marketFilter) { symbol in
+                applySelectedMarketSymbol(symbol)
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+    }
+    
+    private var marketInstrumentTitle: LocalizedStringKey {
+        selectedCategory == .crypto ? "finances.market.field_pair" : "finances.market.field_ticker"
+    }
+    
+    private var marketQuantityTitle: LocalizedStringKey {
+        selectedCategory == .crypto ? "finances.market.field_quantity_coins" : "finances.market.field_quantity"
+    }
+    
+    private var marketSearchButtonTitle: LocalizedStringKey {
+        selectedCategory == .crypto ? "finances.market.search_pair_button" : "finances.market.search_ticker_button"
+    }
+    
+    private var marketInstrumentSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: String(localized: "finances.market.section_symbol"))
+            FinancesGlassCard {
+                VStack(spacing: 0) {
+                    HStack(spacing: 12) {
+                        Text(marketInstrumentTitle)
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        Text(marketSymbol.isEmpty ? "—" : marketSymbol)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                    }
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 16)
+                    
+                    FinancesRowDivider(leadingPadding: 16)
+                    
+                    HStack(spacing: 12) {
+                        Button {
+                            showMarketSearchSheet = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "magnifyingglass")
+                                Text(marketSearchButtonTitle)
+                                    .font(.system(size: 15, weight: .semibold))
+                            }
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: AppColors.financesGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                        }
+                        
+                        Spacer()
+                        
+                        if let marketExchange, !marketExchange.isEmpty {
+                            Text(marketExchange)
+                                .font(.system(size: 13, weight: .regular))
+                                .foregroundStyle(AppColors.textTertiary)
+                        }
+                    }
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 16)
+                }
+            }
+        }
+    }
+    
+    private var marketPositionSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: String(localized: "finances.market.section_position"))
+            FinancesGlassCard {
+                VStack(spacing: 0) {
+                    HStack(spacing: 12) {
+                        Text(marketQuantityTitle)
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        TextField("0", text: Binding(
+                            get: { formatNumberForDisplay(marketQuantityText) },
+                            set: { newValue in
+                                let normalized = newValue.replacingOccurrences(of: " ", with: "")
+                                    .replacingOccurrences(of: ",", with: ".")
+                                marketQuantityText = normalized
+                            }
+                        ))
+                        .keyboardType(.decimalPad)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 160)
+                    }
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 16)
+                    
+                    FinancesRowDivider(leadingPadding: 16)
+                    
+                    HStack(spacing: 12) {
+                        Text(String(localized: "finances.market.field_unit_price"))
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        if isRefreshingPrice {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                                .tint(AppColors.textTertiary)
+                        } else {
+                            Text(formatOptionalPrice(lastKnownUnitPrice))
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(AppColors.textPrimary)
+                        }
+                        
+                        Button {
+                            refreshLatestPrice(forceRefresh: true)
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(AppColors.textTertiary)
+                        }
+                        .disabled(marketSymbol.isEmpty || isRefreshingPrice)
+                    }
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 16)
+                    
+                    FinancesRowDivider(leadingPadding: 16)
+                    
+                    HStack(spacing: 12) {
+                        Text(String(localized: "finances.market.field_position_total"))
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        Text(formatOptionalPrice(positionTotal))
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                    }
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 16)
+                }
+            }
+            
+            if let marketErrorMessage, !marketErrorMessage.isEmpty {
+                Text(marketErrorMessage)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(AppColors.error)
+                    .padding(.horizontal, 4)
+            } else if let lastKnownPriceUpdatedAt {
+                Text("\(String(localized: "finances.market.price_updated_prefix")) \(formatDate(lastKnownPriceUpdatedAt))")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(AppColors.textPrimary.opacity(0.35))
+                    .padding(.horizontal, 4)
+            }
         }
     }
     
@@ -893,6 +1155,85 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
         let normalized = text.replacingOccurrences(of: " ", with: "")
             .replacingOccurrences(of: ",", with: ".")
         return Double(normalized)
+    }
+    
+    private func refreshLatestPrice(forceRefresh: Bool) {
+        guard !marketSymbol.isEmpty else {
+            return
+        }
+        
+        Task {
+            await MainActor.run {
+                isRefreshingPrice = true
+                marketErrorMessage = nil
+            }
+            
+            defer {
+                Task { @MainActor in
+                    isRefreshingPrice = false
+                }
+            }
+            
+            do {
+                let latestPrice = try await marketDataClient.latestPrice(
+                    symbol: marketSymbol,
+                    forceRefresh: forceRefresh
+                )
+                
+                await MainActor.run {
+                    lastKnownUnitPrice = latestPrice
+                    lastKnownPriceUpdatedAt = latestPrice == nil ? nil : Date()
+                    marketProviderRaw = latestPrice == nil ? nil : "twelvedata"
+                    if let positionTotal {
+                        amountText = String(positionTotal)
+                    }
+                    onInvestmentDataChanged(getInvestmentData())
+                }
+            } catch {
+                await MainActor.run {
+                    marketErrorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+    
+    private func applySelectedMarketSymbol(_ symbol: TwelveDataSymbol) {
+        marketSymbol = symbol.symbol
+        marketExchange = symbol.exchange
+        marketCurrency = symbol.currency
+        selectedCurrency = symbol.currency ?? selectedCurrency
+        marketProviderRaw = "twelvedata"
+        
+        // В MVP используем тикер как название актива для единообразия.
+        name = symbol.symbol
+        
+        refreshLatestPrice(forceRefresh: true)
+        onInvestmentDataChanged(getInvestmentData())
+    }
+    
+    private func clearMarketState() {
+        marketSymbol = ""
+        marketExchange = nil
+        marketCurrency = nil
+        marketQuantityText = ""
+        lastKnownUnitPrice = nil
+        lastKnownPriceUpdatedAt = nil
+        marketProviderRaw = nil
+        marketErrorMessage = nil
+    }
+    
+    private func formatOptionalPrice(_ value: Double?) -> String {
+        guard let value else {
+            return "—"
+        }
+        return "\(formatNumberForDisplay(String(value))) \(marketCurrency ?? selectedCurrency)"
+    }
+    
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: Locale.current.identifier)
+        formatter.dateFormat = "dd.MM.yyyy HH:mm"
+        return formatter.string(from: date)
     }
     
     private func formatNumberForDisplay(_ text: String) -> String {

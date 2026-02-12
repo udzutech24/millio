@@ -239,6 +239,8 @@ struct InvestmentViewModelTests {
             includeInTotal: true,
             priority: .high,
             isFavorite: true,
+            marketData: nil,
+            createCashflowTransaction: true,
             uniqueID: nil
         ))
 
@@ -278,6 +280,8 @@ struct InvestmentViewModelTests {
             includeInTotal: true,
             priority: .normal,
             isFavorite: false,
+            marketData: nil,
+            createCashflowTransaction: true,
             uniqueID: investment.investmentUniqueID
         ))
 
@@ -288,6 +292,56 @@ struct InvestmentViewModelTests {
         #expect(transactions.count == 1)
         #expect(abs(transactions.first!.amount - 5000) < 0.01)
         #expect(transactions.first!.investmentID == investment.investmentUniqueID)
+    }
+
+    @Test("Market-обновление инвестиции не создаёт CashflowTransaction")
+    func testMarketUpdateDoesNotCreateTransaction() async throws {
+        let context = try createTestModelContext()
+
+        let investment = Investment(
+            name: "BTCUSD",
+            investmentType: .positive,
+            category: .crypto,
+            amount: 10000,
+            currency: "USD",
+            includeInTotal: true,
+            priority: .normal,
+            isFavorite: false
+        )
+        context.insert(investment)
+        try context.save()
+
+        let viewModel = InvestmentViewModel(modelContext: context)
+        viewModel.handle(.editInvestment(investment))
+
+        viewModel.handle(.updateInvestment(
+            name: "BTCUSD",
+            investmentType: .positive,
+            category: .crypto,
+            amount: 11250,
+            currency: "USD",
+            includeInTotal: true,
+            priority: .normal,
+            isFavorite: false,
+            marketData: InvestmentMarketData(
+                symbol: "BTCUSD",
+                exchange: "CRYPTO",
+                currency: "USD",
+                quantity: 0.25,
+                unitPrice: 45000,
+                priceUpdatedAt: Date(),
+                providerRaw: "twelvedata"
+            ),
+            createCashflowTransaction: false,
+            uniqueID: investment.investmentUniqueID
+        ))
+
+        let descriptor = FetchDescriptor<CashflowTransaction>()
+        let transactions = try context.fetch(descriptor)
+
+        #expect(transactions.isEmpty)
+        #expect(investment.marketSymbol == "BTCUSD")
+        #expect(abs(investment.amount - 11250) < 0.01)
     }
 
     @Test("Расчёт totalPositive и totalNegative")
