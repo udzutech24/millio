@@ -431,6 +431,44 @@ struct FinanceViewModelTests {
         #expect(subtitle?.contains("500") == true)
     }
 
+    @Test("Быстрое редактирование рыночной инвестиции меняет количество, а не сумму напрямую")
+    func testQuickEditMarketInvestmentUpdatesQuantity() throws {
+        let modelContext = try createTestModelContext()
+
+        let group = FinanceGroup(name: "Крипто", colorHex: "#22AAFF")
+        modelContext.insert(group)
+
+        let investment = Investment(
+            name: "BTC/USD",
+            investmentType: .positive,
+            category: .crypto,
+            amount: 2000,
+            currency: "USD"
+        )
+        investment.marketQuantity = 2
+        investment.lastKnownUnitPrice = 1000
+        investment.includeInTotal = true
+        modelContext.insert(investment)
+
+        let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+        account.group = group
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadGroups)
+        viewModel.handle(.loadAccounts)
+
+        viewModel.handle(.updateAccountAmount(account, 3.5))
+
+        #expect(abs((investment.marketQuantity ?? 0) - 3.5) < 0.000001)
+        #expect(abs(investment.amount - 3500) < 0.01)
+    }
+
     @Test("Невалидные связи FinanceAccount очищаются при загрузке счетов")
     func testCleanupInvalidFinanceAccounts() throws {
         let modelContext = try createTestModelContext()

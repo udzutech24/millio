@@ -1416,41 +1416,72 @@ final class FinanceViewModel: ViewModelProtocol {
                     investment.initialAmount = investment.amount
                     investment.hasInitialAmount = true
                 }
-                
-                investment.amount = newAmount
-                investment.updatedAt = Date()
-                
-                do {
-                    // Создаем транзакцию для ручного изменения стоимости актива
-                    let difference = newAmount - oldAmount
-                    if abs(difference) > 0.01 {
-                        let transaction = CashflowTransaction(
-                            transactionType: .balanceAdjustment,
-                            amount: difference,
-                            currency: investment.currency,
-                            transactionDate: Date(),
-                            investmentID: investment.investmentUniqueID,
-                            note: "Ручное изменение стоимости актива"
-                        )
-                        modelContext.insert(transaction)
+
+                if investment.isMarketPriced {
+                    let previousQuantity = investment.marketQuantity ?? 0
+                    investment.marketQuantity = newAmount
+
+                    if let unitPrice = investment.lastKnownUnitPrice, unitPrice > 0 {
+                        investment.amount = newAmount * unitPrice
+                    } else if previousQuantity > 0 {
+                        let inferredUnitPrice = oldAmount / previousQuantity
+                        investment.amount = newAmount * inferredUnitPrice
                     }
-                    
-                    // Атомарное сохранение обновления инвестиции и транзакции (если она была создана)
-                    try modelContext.save()
-                    
-                    loadAccounts()
-                    calculateTotalAmount()
-                    
-                    // Пересчитываем сумму группы, к которой принадлежит счет
-                    if let group = accountGroup {
-                        Task {
-                            let currency = group.displayCurrency ?? state.displayCurrency
-                            let total = await calculateGroupTotal(group: group, in: currency)
-                            state.groupTotals[group.groupUniqueID] = total
+
+                    investment.updatedAt = Date()
+
+                    do {
+                        try modelContext.save()
+
+                        loadAccounts()
+                        calculateTotalAmount()
+
+                        if let group = accountGroup {
+                            Task {
+                                let currency = group.displayCurrency ?? state.displayCurrency
+                                let total = await calculateGroupTotal(group: group, in: currency)
+                                state.groupTotals[group.groupUniqueID] = total
+                            }
                         }
+                    } catch {
+                        AppLogger.log(.error, category: "Finance", "Failed to update investment quantity: \(error.localizedDescription)")
                     }
-                } catch {
-                    AppLogger.log(.error, category: "Finance", "Failed to update investment amount: \(error.localizedDescription)")
+                } else {
+                    investment.amount = newAmount
+                    investment.updatedAt = Date()
+                    
+                    do {
+                        // Создаем транзакцию для ручного изменения стоимости актива
+                        let difference = newAmount - oldAmount
+                        if abs(difference) > 0.01 {
+                            let transaction = CashflowTransaction(
+                                transactionType: .balanceAdjustment,
+                                amount: difference,
+                                currency: investment.currency,
+                                transactionDate: Date(),
+                                investmentID: investment.investmentUniqueID,
+                                note: "Ручное изменение стоимости актива"
+                            )
+                            modelContext.insert(transaction)
+                        }
+                        
+                        // Атомарное сохранение обновления инвестиции и транзакции (если она была создана)
+                        try modelContext.save()
+                        
+                        loadAccounts()
+                        calculateTotalAmount()
+                        
+                        // Пересчитываем сумму группы, к которой принадлежит счет
+                        if let group = accountGroup {
+                            Task {
+                                let currency = group.displayCurrency ?? state.displayCurrency
+                                let total = await calculateGroupTotal(group: group, in: currency)
+                                state.groupTotals[group.groupUniqueID] = total
+                            }
+                        }
+                    } catch {
+                        AppLogger.log(.error, category: "Finance", "Failed to update investment amount: \(error.localizedDescription)")
+                    }
                 }
             }
         }
