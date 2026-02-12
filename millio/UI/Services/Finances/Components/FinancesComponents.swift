@@ -18,19 +18,24 @@ struct FinancesSectionHeader: View {
 }
 
 struct FinancesGlassCard<Content: View>: View {
+    let accentColor: Color
+    let cornerRadius: CGFloat
     let contentPadding: EdgeInsets
     let content: Content
-    
+
     init(
+        accentColor: Color? = nil,
+        cornerRadius: CGFloat = 16,
         contentPadding: EdgeInsets = EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0),
         @ViewBuilder content: () -> Content
     ) {
+        self.accentColor = accentColor ?? (AppColors.financesGradient.first ?? .cyan)
+        self.cornerRadius = cornerRadius
         self.contentPadding = contentPadding
         self.content = content()
     }
-    
+
     var body: some View {
-        let accentColor = AppColors.financesGradient.first ?? .cyan
         let fillGradient = LinearGradient(
             colors: [
                 Color(red: 0.03, green: 0.07, blue: 0.11),
@@ -52,15 +57,15 @@ struct FinancesGlassCard<Content: View>: View {
             .padding(contentPadding)
             .frame(maxWidth: .infinity)
             .background {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(fillGradient)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                             .fill(glowGradient)
                             .opacity(0.6)
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                             .stroke(accentColor.opacity(0.55), lineWidth: 1)
                     )
             }

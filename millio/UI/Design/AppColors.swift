@@ -76,7 +76,7 @@ enum AppColors {
     static let coursesGradient = [Color.green, Color.mint]
     
     /// Градиент для кнопки "Кешбэк"
-    static let cashbackGradient = [Color.purple, Color.pink]
+    static let cashbackGradient = [Color.blue, Color.cyan]
     
     /// Градиент для кнопки "Кредиты"
     static let creditsGradient = [Color.blue, Color.indigo]
