@@ -14,25 +14,63 @@ protocol CrashReportingSink {
 }
 
 enum CrashReporting {
-    static var reporter: CrashReporter = NoopCrashReporter()
-    static private(set) var isEnabled: Bool = false
+    private static let lock = NSLock()
+    private static var _reporter: CrashReporter = NoopCrashReporter()
+    private static var _isEnabled: Bool = false
+
+    static var reporter: CrashReporter {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _reporter
+        }
+        set {
+            lock.lock()
+            _reporter = newValue
+            lock.unlock()
+        }
+    }
+
+    static var isEnabled: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return _isEnabled
+    }
     
     static func setEnabled(_ enabled: Bool) {
-        isEnabled = enabled
+        let reporter: CrashReporter
+        lock.lock()
+        _isEnabled = enabled
+        reporter = _reporter
+        lock.unlock()
         reporter.setEnabled(enabled)
     }
     
     static func log(_ message: String) {
-        guard isEnabled else { return }
+        let reporter: CrashReporter
+        lock.lock()
+        let enabled = _isEnabled
+        reporter = _reporter
+        lock.unlock()
+        guard enabled else { return }
         reporter.log(sanitizeForCrashlytics(message))
     }
     
     static func setCustomValue(_ value: Any, forKey key: String) {
+        let reporter: CrashReporter
+        lock.lock()
+        reporter = _reporter
+        lock.unlock()
         reporter.setCustomValue(value, forKey: key)
     }
     
     static func record(error: Error) {
-        guard isEnabled else { return }
+        let reporter: CrashReporter
+        lock.lock()
+        let enabled = _isEnabled
+        reporter = _reporter
+        lock.unlock()
+        guard enabled else { return }
         reporter.record(error: error)
     }
     

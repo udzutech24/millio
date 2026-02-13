@@ -51,6 +51,7 @@ private final class MockCrashReportingSink: CrashReportingSink {
     }
 }
 
+@Suite(.serialized)
 struct CrashlyticsBootstrapTests {
     @Test("CrashlyticsBootstrap is idempotent and configures once")
     func testBootstrapIdempotent() {
@@ -78,7 +79,9 @@ struct CrashlyticsBootstrapTests {
     @Test("CrashReporting forwards logs/keys/errors to reporter")
     func testCrashReportingForwarding() {
         let reporter = MockCrashReporter()
+        let previousReporter = CrashReporting.reporter
         CrashReporting.reporter = reporter
+        defer { CrashReporting.reporter = previousReporter }
         
         struct SampleError: Error {}
         CrashReporting.setEnabled(true)
@@ -90,8 +93,5 @@ struct CrashlyticsBootstrapTests {
         #expect(reporter.customValues["k"] as? String == "v")
         #expect(reporter.logs == ["m"])
         #expect(reporter.recordedErrors.count == 1)
-        
-        CrashReporting.reporter = NoopCrashReporter()
     }
 }
-

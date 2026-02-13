@@ -57,6 +57,7 @@ struct FinanceViewModelTests {
             Investment.self,
             FinanceGroup.self,
             FinanceAccount.self,
+            CashflowTransaction.self,
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         return try! ModelContainer(for: schema, configurations: [config])
@@ -71,6 +72,7 @@ struct FinanceViewModelTests {
         try context.deleteAll(Card.self)
         try context.deleteAll(Credit.self)
         try context.deleteAll(Investment.self)
+        try context.deleteAll(CashflowTransaction.self)
         try context.save()
         return context
     }
@@ -480,8 +482,9 @@ struct FinanceViewModelTests {
         let descriptor = FetchDescriptor<CashflowTransaction>()
         let transactions = try modelContext.fetch(descriptor)
         #expect(transactions.count == 1)
-        #expect(abs(transactions[0].amount - 1500) < 0.01)
-        #expect(transactions[0].investmentID == investment.investmentUniqueID)
+        guard let transaction = transactions.first else { return }
+        #expect(abs(transaction.amount - 1500) < 0.01)
+        #expect(transaction.investmentID == investment.investmentUniqueID)
     }
 
     @Test("Невалидные связи FinanceAccount очищаются при загрузке счетов")

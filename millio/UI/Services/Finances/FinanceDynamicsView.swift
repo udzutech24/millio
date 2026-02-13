@@ -396,10 +396,8 @@ private struct FinanceDynamicsContentView: View {
             onSelectPoint: { newPoint in
                 if let pt = newPoint {
                     cachedSelectedPoint = (date: pt.0, value: pt.1)
-                    viewModel.handle(.selectDateOnChart(pt.0))
                 } else {
                     cachedSelectedPoint = nil
-                    viewModel.handle(.selectDateOnChart(nil))
                 }
             }
         )
