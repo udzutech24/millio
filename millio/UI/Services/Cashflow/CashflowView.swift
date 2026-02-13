@@ -40,6 +40,7 @@ private struct CashflowContentView: View {
     @ObservedObject var viewModel: CashflowViewModel
     @State private var draftStartDate: Date = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
     @State private var draftEndDate: Date = Date()
+    @State private var showAssetChangeInfoSheet: Bool = false
     
     var body: some View {
         ZStack {
@@ -50,8 +51,8 @@ private struct CashflowContentView: View {
                     // Выбор периода
                     periodSelectionSection
 
-                    // Статистика за период
-                    periodStatsSection
+                    // Сводка активов за период
+                    assetBreakdownSection
 
                     if let warning = viewModel.state.currencyConversionWarning {
                         currencyWarningView(text: warning)
@@ -103,6 +104,9 @@ private struct CashflowContentView: View {
         )) {
             CashflowCurrencySelectorView(viewModel: viewModel)
         }
+        .sheet(isPresented: $showAssetChangeInfoSheet) {
+            assetChangeInfoSheet
+        }
     }
     
     // MARK: - Action Buttons Section
@@ -140,146 +144,118 @@ private struct CashflowContentView: View {
     
     // MARK: - Period Stats Section
     
-    private var periodStatsSection: some View {
+    private var assetBreakdownSection: some View {
         VStack(spacing: 16) {
-            HStack(spacing: 16) {
-                // Доходы
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Заработано")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(AppColors.textSecondary)
-                    
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text(formatAmount(viewModel.state.totalIncome))
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: AppColors.incomeGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                        
-                        Text(viewModel.state.displayCurrency)
-                            .font(.system(size: 14, weight: .semibold))
+            statRow(
+                title: "Активы на начало периода",
+                value: formatMoney(viewModel.state.assetsAtPeriodStart),
+                valueColor: AppColors.textPrimary
+            )
+
+            statRow(
+                title: "Доходы",
+                value: formatSignedMoney(viewModel.state.totalIncome),
+                valueColor: positiveColor(for: viewModel.state.totalIncome)
+            )
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .center) {
+                    HStack(spacing: 8) {
+                        Text("Изменение стоимости активов")
+                            .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(AppColors.textSecondary)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color.black.opacity(0.3))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .stroke(
-                                    LinearGradient(
-                                        colors: AppColors.incomeGradient,
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    ),
-                                    lineWidth: 2
-                                )
+                        Button {
+                            showAssetChangeInfoSheet = true
+                        } label: {
+                            Image(systemName: "questionmark.circle")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(AppColors.textSecondary)
                         }
-                )
-                
-                // Расходы
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Потрачено")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(AppColors.textSecondary)
-                    
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text(formatAmount(viewModel.state.totalExpense))
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: AppColors.expenseGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                        
-                        Text(viewModel.state.displayCurrency)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(AppColors.textSecondary)
+                        .buttonStyle(.plain)
                     }
+                    Spacer()
+                    Text(formatSignedMoney(viewModel.state.assetValueChange))
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(positiveColor(for: viewModel.state.assetValueChange))
                 }
-                .frame(maxWidth: .infinity)
-                .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color.black.opacity(0.3))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .stroke(
-                                    LinearGradient(
-                                        colors: AppColors.expenseGradient,
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    ),
-                                    lineWidth: 2
-                                )
-                        }
-                )
-            }
-            
-            // Баланс
-            HStack {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Баланс")
-                        .font(.system(size: 14, weight: .medium))
+
+                HStack {
+                    Text("Курсовая разница")
+                        .font(.system(size: 14, weight: .regular))
                         .foregroundStyle(AppColors.textSecondary)
-                    
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text(formatAmount(viewModel.state.periodBalance))
-                            .font(.system(size: 28, weight: .bold))
-                            .foregroundStyle(
-                                viewModel.state.periodBalance >= 0 ?
-                                LinearGradient(
-                                    colors: AppColors.incomeGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ) :
-                                LinearGradient(
-                                    colors: AppColors.expenseGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                        
-                        Text(viewModel.state.displayCurrency)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(AppColors.textSecondary)
-                    }
-                }
-                
-                Spacer()
-                
-                if viewModel.state.periodBalance != 0 {
-                    Image(systemName: viewModel.state.periodBalance >= 0 ? "arrow.up.circle.fill" : "arrow.down.circle.fill")
-                        .font(.system(size: 32))
-                        .foregroundStyle(
-                            viewModel.state.periodBalance >= 0 ?
-                            LinearGradient(
-                                colors: AppColors.incomeGradient,
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            ) :
-                            LinearGradient(
-                                colors: AppColors.expenseGradient,
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
+                    Spacer()
+                    Text(formatSignedMoney(viewModel.state.currencyDifference))
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundStyle(positiveColor(for: viewModel.state.currencyDifference))
                 }
             }
-            .padding(16)
+            .padding(18)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.black.opacity(0.3))
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.white.opacity(0.12))
+            )
+
+            statRow(
+                title: "Расходы внесенные",
+                value: formatSignedMoney(-viewModel.state.contributedExpense),
+                valueColor: negativeColor(for: -viewModel.state.contributedExpense)
+            )
+
+            VStack(spacing: 12) {
+                statRow(
+                    title: "Активы на конец периода",
+                    value: formatMoney(viewModel.state.assetsAtPeriodEnd),
+                    valueColor: AppColors.textPrimary
+                )
+
+                Divider()
+                    .overlay(AppColors.textSecondary.opacity(0.3))
+
+                HStack {
+                    Text("Итого")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                    Spacer()
+                    Text(formatSignedMoney(viewModel.state.periodTotalChange))
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(positiveColor(for: viewModel.state.periodTotalChange))
+                }
+                .padding(.horizontal, 4)
+                .padding(.bottom, 4)
+            }
+            .padding(18)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.white.opacity(0.12))
             )
         }
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.black.opacity(0.3))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                )
+        )
+    }
+
+    private func statRow(title: String, value: String, valueColor: Color) -> some View {
+        HStack(alignment: .top) {
+            Text(title)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(AppColors.textSecondary)
+            Spacer()
+            Text(value)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(valueColor)
+                .lineLimit(1)
+        }
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.white.opacity(0.12))
+        )
     }
 
     private func currencyWarningView(text: String) -> some View {
@@ -413,6 +389,113 @@ private struct CashflowContentView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "dd.MM.yyyy"
         return formatter.string(from: date)
+    }
+
+    private func formatMoney(_ amount: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.groupingSeparator = " "
+        formatter.usesGroupingSeparator = true
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 2
+        let value = formatter.string(from: NSNumber(value: amount)) ?? "0"
+        let symbol = MonetaCurrency(rawValue: viewModel.state.displayCurrency)?.symbol ?? viewModel.state.displayCurrency
+        return "\(value) \(symbol)"
+    }
+
+    private func formatSignedMoney(_ amount: Double) -> String {
+        let absolute = formatMoney(abs(amount))
+        if amount > 0.0000001 {
+            return "+\(absolute)"
+        }
+        if amount < -0.0000001 {
+            return "-\(absolute)"
+        }
+        return absolute
+    }
+
+    private func positiveColor(for value: Double) -> Color {
+        if value > 0.0000001 {
+            return Color(.sRGB, red: 127.0 / 255.0, green: 1.0, blue: 189.0 / 255.0, opacity: 1.0)
+        }
+        if value < -0.0000001 {
+            return Color(.sRGB, red: 1.0, green: 0.37, blue: 0.37, opacity: 1.0)
+        }
+        return AppColors.textSecondary
+    }
+
+    private func negativeColor(for value: Double) -> Color {
+        if value < -0.0000001 {
+            return Color(.sRGB, red: 1.0, green: 0.37, blue: 0.37, opacity: 1.0)
+        }
+        if value > 0.0000001 {
+            return Color(.sRGB, red: 127.0 / 255.0, green: 1.0, blue: 189.0 / 255.0, opacity: 1.0)
+        }
+        return AppColors.textSecondary
+    }
+
+    private var assetChangeInfoSheet: some View {
+        NavigationStack {
+            ZStack {
+                GradientBackground()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Как считается изменение стоимости активов?")
+                            .font(.system(size: 34, weight: .bold))
+                            .foregroundStyle(AppColors.textPrimary)
+
+                        Text("Формула:\nИзменение = (Итого на конец – Итого на начало) – Доходы + Расходы.")
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundStyle(AppColors.textSecondary)
+
+                        Text("Подстановка:")
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundStyle(AppColors.textPrimary)
+
+                        Group {
+                            Text("Итого на начало: \(formatMoney(viewModel.state.assetsAtPeriodStart))")
+                            Text("Итого на конец: \(formatMoney(viewModel.state.assetsAtPeriodEnd))")
+                            Text("Доходы: \(formatSignedMoney(viewModel.state.totalIncome))")
+                            Text("Расходы: \(formatSignedMoney(-viewModel.state.contributedExpense))")
+                            Text("Изменение: \(formatSignedMoney(viewModel.state.assetValueChange))")
+                        }
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundStyle(AppColors.textPrimary)
+
+                        Text("Проверка баланса:")
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundStyle(AppColors.textPrimary)
+
+                        let checkValue = abs(
+                            (viewModel.state.assetsAtPeriodEnd - viewModel.state.assetsAtPeriodStart) -
+                            (viewModel.state.totalIncome + viewModel.state.assetValueChange - viewModel.state.contributedExpense)
+                        )
+                        Text(checkValue < 0.01 ? "Сходится" : "Не сходится")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(checkValue < 0.01 ? Color.green : Color.red)
+
+                        Text("Пояснение: это переоценка/движение стоимости активов за период после учета явных притоков (доходов) и учтенных расходов.")
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
+                    .padding(24)
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showAssetChangeInfoSheet = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .foregroundStyle(AppColors.textPrimary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
     }
     
     private var customPeriodSheet: some View {

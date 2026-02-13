@@ -91,6 +91,24 @@ struct CashflowState {
     /// Баланс за выбранный период (доходы - расходы)
     var periodBalance: Double = 0.0
 
+    /// Активы на начало периода (как в Динамике/Финансах)
+    var assetsAtPeriodStart: Double = 0.0
+
+    /// Активы на конец периода (как в Динамике/Финансах)
+    var assetsAtPeriodEnd: Double = 0.0
+
+    /// Расходы внесенные (абсолютное значение)
+    var contributedExpense: Double = 0.0
+
+    /// Изменение стоимости активов по формуле
+    var assetValueChange: Double = 0.0
+
+    /// Курсовая разница (пока равна изменению стоимости активов)
+    var currencyDifference: Double = 0.0
+
+    /// Итого за период (end-start)
+    var periodTotalChange: Double = 0.0
+
     /// Предупреждение о конвертации валют в истории
     var currencyConversionWarning: String? = nil
     
@@ -169,6 +187,7 @@ final class CashflowViewModel: ViewModelProtocol {
     let modelContext: ModelContext
     private let historicalRateStore: HistoricalRateStore
     private let now: () -> Date
+    private let assetsSnapshotProvider: ((Date, Date, String) async -> (start: Double, end: Double)?)?
     
     private let defaults = UserDefaults.standard
     private var eventSubscriptionID: UUID?
@@ -180,11 +199,13 @@ final class CashflowViewModel: ViewModelProtocol {
     
     init(
         modelContext: ModelContext,
-        now: @escaping () -> Date = Date.init
+        now: @escaping () -> Date = Date.init,
+        assetsSnapshotProvider: ((Date, Date, String) async -> (start: Double, end: Double)?)? = nil
     ) {
         self.modelContext = modelContext
         self.historicalRateStore = HistoricalRateStore(modelContext: modelContext)
         self.now = now
+        self.assetsSnapshotProvider = assetsSnapshotProvider
         state.displayCurrency = storedDisplayCurrency
         state.selectedMonth = now()
         state.selectedQuarter = now()
@@ -401,6 +422,8 @@ final class CashflowViewModel: ViewModelProtocol {
         state.totalIncome = totalIncome
         state.totalExpense = totalExpense
         state.periodBalance = totalIncome - totalExpense
+
+        await updateAssetsBreakdown(startDate: startDate, endDate: endDate)
     }
     
     func currentDateRange() -> (Date, Date) {
@@ -485,6 +508,67 @@ final class CashflowViewModel: ViewModelProtocol {
         }
         state.chartPeriod = .specificMonth
         updateChartData()
+    }
+
+    private func updateAssetsBreakdown(startDate: Date, endDate: Date) async {
+        let snapshot: (start: Double, end: Double)?
+        if let assetsSnapshotProvider {
+            snapshot = await assetsSnapshotProvider(startDate, endDate, state.displayCurrency)
+        } else {
+            snapshot = await resolveAssetsSnapshotFromFinance(startDate: startDate, endDate: endDate)
+        }
+
+        let startAssets = snapshot?.start ?? 0.0
+        let endAssets = snapshot?.end ?? 0.0
+        let periodTotalChange = endAssets - startAssets
+        let income = state.totalIncome
+        let expense = state.totalExpense
+        let valueChange = periodTotalChange - income + expense
+
+        state.assetsAtPeriodStart = startAssets
+        state.assetsAtPeriodEnd = endAssets
+        state.contributedExpense = expense
+        state.assetValueChange = valueChange
+        state.currencyDifference = valueChange
+        state.periodTotalChange = periodTotalChange
+    }
+
+    private func resolveAssetsSnapshotFromFinance(startDate: Date, endDate: Date) async -> (start: Double, end: Double)? {
+        do {
+            _ = try modelContext.fetch(FetchDescriptor<FinanceGroup>())
+        } catch {
+            return nil
+        }
+
+        let financeViewModel = FinanceViewModel(modelContext: modelContext, skipInitialLoad: true)
+        financeViewModel.handle(.loadGroups)
+        financeViewModel.handle(.loadAccounts)
+
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel
+        )
+        dynamicsViewModel.state.displayCurrency = state.displayCurrency
+        dynamicsViewModel.loadData()
+
+        let accounts = dynamicsViewModel.getAccountsForCalculation()
+        let accountCardIDs = Set(accounts.compactMap { $0.accountType == .card ? $0.accountID : nil })
+
+        let start = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: accounts,
+            date: startDate,
+            accountCardIDs: accountCardIDs,
+            debtAsNegative: true,
+            includeInitialBeforeCreation: true
+        )
+        let end = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: accounts,
+            date: endDate,
+            accountCardIDs: accountCardIDs,
+            debtAsNegative: true,
+            includeInitialBeforeCreation: false
+        )
+        return (start, end)
     }
     
     private func convertAmount(value: Double, from: String, to: String) async -> Double {
