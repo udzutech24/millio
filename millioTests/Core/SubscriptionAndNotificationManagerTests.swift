@@ -79,6 +79,28 @@ struct SubscriptionManagerTests {
         
         #expect(manager.isTrialActive == true)
     }
+
+    @Test("Отладочный премиум можно включать и выключать через менеджер")
+    func testDebugPremiumCanBeToggled() {
+        let suiteName = "SubscriptionManagerTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let now = Date(timeIntervalSince1970: 10_000)
+        let manager = SubscriptionManager(defaults: defaults, startTransactionListener: false, now: { now })
+
+        manager.grantDebugPremium()
+        #expect(manager.status.rawValue == SubscriptionStatus.subscribed.rawValue)
+        #expect(manager.expirationDate != nil)
+        #expect(defaults.bool(forKey: "debug_premium_enabled") == true)
+        #expect(manager.isDebugPremiumActive == true)
+
+        manager.revokeDebugPremium()
+        #expect(manager.status.rawValue == SubscriptionStatus.notSubscribed.rawValue)
+        #expect(manager.expirationDate == nil)
+        #expect(defaults.bool(forKey: "debug_premium_enabled") == false)
+        #expect(manager.isDebugPremiumActive == false)
+    }
 }
 
 final class FakeNotificationCenter: UserNotificationCenterProtocol {

@@ -38,6 +38,8 @@ struct CashflowView: View {
 
 private struct CashflowContentView: View {
     @ObservedObject var viewModel: CashflowViewModel
+    @State private var draftStartDate: Date = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+    @State private var draftEndDate: Date = Date()
     
     var body: some View {
         ZStack {
@@ -87,7 +89,7 @@ private struct CashflowContentView: View {
             get: { viewModel.state.showPeriodSelector },
             set: { if !$0 { viewModel.handle(.hidePeriodSelector) } }
         )) {
-            CashflowPeriodSelectorView(viewModel: viewModel)
+            customPeriodSheet
         }
         .sheet(isPresented: Binding(
             get: { viewModel.state.showTransactionsHistory },
@@ -307,54 +309,56 @@ private struct CashflowContentView: View {
     
     private var periodSelectionSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Период")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-                
-                Spacer()
-            }
-            
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    PeriodChip(
-                        title: "Месяц",
-                        isSelected: viewModel.state.chartPeriod == .month,
-                        action: {
-                            viewModel.handle(.setChartPeriod(.month))
-                        }
-                    )
-                    
-                    PeriodChip(
-                        title: "Квартал",
-                        isSelected: viewModel.state.chartPeriod == .quarter,
-                        action: {
-                            viewModel.handle(.setChartPeriod(.quarter))
-                        }
-                    )
-                    
-                    PeriodChip(
-                        title: "Год",
-                        isSelected: viewModel.state.chartPeriod == .year,
-                        action: {
-                            viewModel.handle(.setChartPeriod(.year))
-                        }
-                    )
-                    
-                    PeriodChip(
-                        title: getSpecificPeriodTitle(),
-                        isSelected: viewModel.state.chartPeriod == .specificMonth ||
-                                   viewModel.state.chartPeriod == .specificQuarter ||
-                                   viewModel.state.chartPeriod == .specificYear ||
-                                   viewModel.state.chartPeriod == .custom,
-                        action: {
-                            viewModel.handle(.showPeriodSelector)
-                        }
-                    )
+            HStack(spacing: 12) {
+                Button {
+                    viewModel.handle(.movePeriodBackward)
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(Color.white.opacity(0.12)))
                 }
-                .padding(.horizontal, 4)
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                HStack(spacing: 8) {
+                    Text(viewModel.currentPeriodHeaderTitle())
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .lineLimit(1)
+
+                    Button {
+                        draftStartDate = viewModel.state.customStartDate
+                        draftEndDate = viewModel.state.customEndDate
+                        viewModel.handle(.showPeriodSelector)
+                    } label: {
+                        Image("calendar")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 20, height: 20)
+                            .padding(8)
+                            .background(Capsule().fill(Color.white.opacity(0.2)))
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Spacer()
+
+                Button {
+                    viewModel.handle(.movePeriodForward)
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(viewModel.canMovePeriodForward() ? AppColors.textPrimary : AppColors.textSecondary)
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(Color.white.opacity(0.12)))
+                }
+                .buttonStyle(.plain)
+                .disabled(!viewModel.canMovePeriodForward())
             }
-            
+
             let range = viewModel.currentDateRange()
             Text("\(formatPeriod(range.0)) — \(formatPeriod(range.1))")
                 .font(.system(size: 12))
@@ -411,61 +415,105 @@ private struct CashflowContentView: View {
         return formatter.string(from: date)
     }
     
-    private func getSpecificPeriodTitle() -> String {
-        switch viewModel.state.chartPeriod {
-        case .specificMonth:
-            let formatter = DateFormatter()
-            formatter.dateFormat = "MMMM yyyy"
-            return formatter.string(from: viewModel.state.selectedMonth)
-        case .specificQuarter:
-            let calendar = Calendar.current
-            let month = calendar.component(.month, from: viewModel.state.selectedQuarter)
-            let quarter = (month - 1) / 3 + 1
-            let year = calendar.component(.year, from: viewModel.state.selectedQuarter)
-            return "Q\(quarter) \(year)"
-        case .specificYear:
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy"
-            return formatter.string(from: viewModel.state.selectedYear)
-        case .custom:
-            let formatter = DateFormatter()
-            formatter.dateFormat = "dd.MM"
-            return "\(formatter.string(from: viewModel.state.customStartDate)) - \(formatter.string(from: viewModel.state.customEndDate))"
-        default:
-            return "Выбрать период"
-        }
-    }
-}
+    private var customPeriodSheet: some View {
+        NavigationStack {
+            ZStack {
+                GradientBackground()
 
-// MARK: - Period Chip
-
-private struct PeriodChip: View {
-    let title: String
-    let isSelected: Bool
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(isSelected ? Color.white : AppColors.textPrimary)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(
-                    Group {
-                        if isSelected {
-                            LinearGradient(
-                                colors: AppColors.cashflowGradient,
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        } else {
-                            Color.white.opacity(0.1)
-                        }
+                VStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        let sameYear = Calendar.current.component(.year, from: draftStartDate) == Calendar.current.component(.year, from: draftEndDate)
+                        let startFormat: Date.FormatStyle = sameYear ? .dateTime.day().month(.abbreviated) : .dateTime.day().month(.abbreviated).year()
+                        let endFormat: Date.FormatStyle = .dateTime.day().month(.abbreviated).year()
+                        Text("Период: \(min(draftStartDate, draftEndDate).formatted(startFormat)) — \(max(draftStartDate, draftEndDate).formatted(endFormat))")
+                            .font(.headline)
+                            .foregroundStyle(AppColors.textPrimary)
+                        Text("Выберите начало и конец периода на календаре")
+                            .font(.callout)
+                            .foregroundStyle(AppColors.textSecondary)
                     }
+                    .padding(.top, 4)
+
+                    CalendarRangeMonthView(startDate: $draftStartDate, endDate: $draftEndDate)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        viewModel.handle(.hidePeriodSelector)
+                    } label: {
+                        Image(systemName: "xmark")
+                            .foregroundStyle(AppColors.textPrimary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                let gradient = LinearGradient(
+                    colors: [
+                        Color(red: 0.12, green: 0.02, blue: 0.12),
+                        Color(red: 0.02, green: 0.12, blue: 0.10)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
                 )
-                .clipShape(Capsule())
+
+                HStack(spacing: 12) {
+                    Button {
+                        viewModel.handle(.setSelectedMonth(Date()))
+                        viewModel.handle(.hidePeriodSelector)
+                    } label: {
+                        Text("Сбросить")
+                            .font(.system(size: 16, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(
+                                Capsule()
+                                    .stroke(Color.white.opacity(0.7), lineWidth: 1)
+                            )
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        let start = min(draftStartDate, draftEndDate)
+                        let end = max(draftStartDate, draftEndDate)
+                        let clampedEnd = min(end, Calendar.current.startOfDay(for: Date()))
+                        let clampedStart = min(start, clampedEnd)
+                        viewModel.handle(.setCustomPeriod(start: clampedStart, end: clampedEnd))
+                        viewModel.handle(.hidePeriodSelector)
+                    } label: {
+                        Text("Показать")
+                            .font(.system(size: 16, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(
+                                Capsule()
+                                    .fill(gradient)
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(
+                                                LinearGradient(
+                                                    colors: AppColors.cashflowGradient,
+                                                    startPoint: .leading,
+                                                    endPoint: .trailing
+                                                ),
+                                                lineWidth: 1
+                                            )
+                                    )
+                            )
+                            .foregroundStyle(Color.white)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+            }
         }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
     }
 }
 

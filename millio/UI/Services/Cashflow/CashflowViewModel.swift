@@ -145,6 +145,8 @@ enum CashflowAction {
     case setSelectedMonth(Date)
     case setSelectedQuarter(Date)
     case setSelectedYear(Date)
+    case movePeriodBackward
+    case movePeriodForward
     case showPeriodSelector
     case hidePeriodSelector
     case showTransactionsHistory
@@ -166,6 +168,7 @@ final class CashflowViewModel: ViewModelProtocol {
     
     let modelContext: ModelContext
     private let historicalRateStore: HistoricalRateStore
+    private let now: () -> Date
     
     private let defaults = UserDefaults.standard
     private var eventSubscriptionID: UUID?
@@ -175,10 +178,17 @@ final class CashflowViewModel: ViewModelProtocol {
         set { defaults.set(newValue, forKey: "cashflow_display_currency") }
     }
     
-    init(modelContext: ModelContext) {
+    init(
+        modelContext: ModelContext,
+        now: @escaping () -> Date = Date.init
+    ) {
         self.modelContext = modelContext
         self.historicalRateStore = HistoricalRateStore(modelContext: modelContext)
+        self.now = now
         state.displayCurrency = storedDisplayCurrency
+        state.selectedMonth = now()
+        state.selectedQuarter = now()
+        state.selectedYear = now()
         loadTransactions()
         loadCards()
         loadAvailableCurrencies()
@@ -249,6 +259,12 @@ final class CashflowViewModel: ViewModelProtocol {
             state.selectedYear = date
             state.chartPeriod = .specificYear
             updateChartData()
+
+        case .movePeriodBackward:
+            moveSelectedMonth(by: -1)
+
+        case .movePeriodForward:
+            moveSelectedMonth(by: 1)
             
         case .showPeriodSelector:
             state.showPeriodSelector = true
@@ -391,22 +407,45 @@ final class CashflowViewModel: ViewModelProtocol {
         getDateRange()
     }
 
+    func currentPeriodHeaderTitle() -> String {
+        if state.chartPeriod == .custom {
+            let start = min(state.customStartDate, state.customEndDate)
+            let end = max(state.customStartDate, state.customEndDate)
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "ru_RU")
+            formatter.dateFormat = "d MMM yyyy"
+            return "\(formatter.string(from: start)) — \(formatter.string(from: end))"
+        }
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.dateFormat = "LLLL yyyy 'г.'"
+        return formatter.string(from: state.selectedMonth).capitalized
+    }
+
+    func canMovePeriodForward() -> Bool {
+        let calendar = Calendar.current
+        let selectedStart = calendar.date(from: calendar.dateComponents([.year, .month], from: state.selectedMonth)) ?? state.selectedMonth
+        let currentStart = calendar.date(from: calendar.dateComponents([.year, .month], from: now())) ?? now()
+        return selectedStart < currentStart
+    }
+
     private func getDateRange() -> (Date, Date) {
         let calendar = Calendar.current
         
         switch state.chartPeriod {
         case .month:
-            let endDate = Date()
+            let endDate = now()
             let startDate = calendar.date(byAdding: .day, value: -30, to: endDate) ?? endDate
             return (startDate, endDate)
             
         case .quarter:
-            let endDate = Date()
+            let endDate = now()
             let startDate = calendar.date(byAdding: .day, value: -90, to: endDate) ?? endDate
             return (startDate, endDate)
             
         case .year:
-            let endDate = Date()
+            let endDate = now()
             let startDate = calendar.date(byAdding: .day, value: -365, to: endDate) ?? endDate
             return (startDate, endDate)
             
@@ -431,6 +470,21 @@ final class CashflowViewModel: ViewModelProtocol {
         case .custom:
             return (state.customStartDate, state.customEndDate)
         }
+    }
+
+    private func moveSelectedMonth(by value: Int) {
+        let calendar = Calendar.current
+        let currentMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now())) ?? now()
+        let selectedMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: state.selectedMonth)) ?? state.selectedMonth
+        let candidateMonth = calendar.date(byAdding: .month, value: value, to: selectedMonthStart) ?? selectedMonthStart
+
+        if candidateMonth > currentMonth {
+            state.selectedMonth = currentMonth
+        } else {
+            state.selectedMonth = candidateMonth
+        }
+        state.chartPeriod = .specificMonth
+        updateChartData()
     }
     
     private func convertAmount(value: Double, from: String, to: String) async -> Double {

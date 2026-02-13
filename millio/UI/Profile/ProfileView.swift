@@ -120,7 +120,6 @@ struct ProfileView: View {
                             .accessibilityIdentifier("profile.versionRow")
                         }
                         
-                        #if DEBUG
                         sectionHeader("Отладка")
                         card {
                             Toggle(isOn: Binding(
@@ -141,7 +140,6 @@ struct ProfileView: View {
                             .tint(AppColors.toggleOnGreen)
                             .accessibilityIdentifier("profile.debugPremiumToggle")
                         }
-                        #endif
                     }
                 }
                 .padding(.bottom, 40)

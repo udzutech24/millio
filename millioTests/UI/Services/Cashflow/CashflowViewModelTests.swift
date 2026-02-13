@@ -107,4 +107,31 @@ struct CashflowViewModelTests {
         #expect(viewModel.state.transactions.count == 1)
         #expect(viewModel.state.transactions.first?.note == "Тест")
     }
+
+    @Test("Стрелки периода переключают месяцы и не уходят в будущее")
+    func testMonthNavigationByArrows() async throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 2, day: 13)) ?? Date()
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+
+        let calendar = Calendar.current
+        let initialMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: fixedNow)) ?? fixedNow
+
+        #expect(!viewModel.canMovePeriodForward())
+
+        viewModel.handle(.movePeriodBackward)
+        #expect(viewModel.state.chartPeriod == .specificMonth)
+        #expect(calendar.component(.month, from: viewModel.state.selectedMonth) == 1)
+        #expect(calendar.component(.year, from: viewModel.state.selectedMonth) == 2026)
+        #expect(viewModel.canMovePeriodForward())
+
+        viewModel.handle(.movePeriodForward)
+        #expect(calendar.component(.month, from: viewModel.state.selectedMonth) == calendar.component(.month, from: initialMonth))
+        #expect(calendar.component(.year, from: viewModel.state.selectedMonth) == calendar.component(.year, from: initialMonth))
+        #expect(!viewModel.canMovePeriodForward())
+
+        viewModel.handle(.movePeriodForward)
+        #expect(calendar.component(.month, from: viewModel.state.selectedMonth) == calendar.component(.month, from: initialMonth))
+        #expect(calendar.component(.year, from: viewModel.state.selectedMonth) == calendar.component(.year, from: initialMonth))
+    }
 }

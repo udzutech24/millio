@@ -86,7 +86,6 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
     func checkSubscriptionStatus() async {
         logger.info("Checking subscription status...")
         
-        #if DEBUG
         // Если включен дебаг-премиум, не проверяем StoreKit
         if defaults.bool(forKey: debugPremiumKey),
            let expiration = defaults.object(forKey: debugSubscriptionExpirationKey) as? Date,
@@ -97,7 +96,6 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
             logger.info("Debug premium is active, expires: \(expiration)")
             return
         }
-        #endif
         
         // Проверяем локальный статус триала
         checkTrialStatus()
@@ -205,7 +203,6 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         logger.info("Trial started, expires: \(trialStartDate.addingTimeInterval(TimeInterval(self.trialDurationDays * 24 * 60 * 60)))")
     }
     
-    #if DEBUG
     func grantDebugPremium() {
         logger.info("Granting debug premium access...")
         
@@ -242,12 +239,10 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         expirationDate != nil && 
         expirationDate! > now()
     }
-    #endif
     
     // MARK: - Private Methods
     
     private func loadLocalStatus() {
-        #if DEBUG
         // Если включен дебаг-премиум, загружаем его статус из debug ключа
         if defaults.bool(forKey: debugPremiumKey),
            let expiration = defaults.object(forKey: debugSubscriptionExpirationKey) as? Date,
@@ -257,7 +252,6 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
             self.isTrialActive = false
             return
         }
-        #endif
         
         if let statusRaw = defaults.string(forKey: subscriptionStatusKey),
            let status = SubscriptionStatus(rawValue: statusRaw) {
@@ -278,13 +272,9 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         defaults.set(status.rawValue, forKey: subscriptionStatusKey)
         // Не сохраняем expirationDate в subscriptionExpirationKey если включен debug premium,
         // чтобы не перезаписать реальную дату истечения подписки StoreKit
-        #if DEBUG
         if !defaults.bool(forKey: debugPremiumKey) {
             defaults.set(expirationDate, forKey: subscriptionExpirationKey)
         }
-        #else
-        defaults.set(expirationDate, forKey: subscriptionExpirationKey)
-        #endif
     }
     
     private func checkTrialStatus() {
