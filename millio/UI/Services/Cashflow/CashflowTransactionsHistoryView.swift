@@ -10,7 +10,7 @@ import SwiftUI
 // MARK: - Фильтр истории
 
 private enum HistoryFilter: CaseIterable {
-    case all, income, expense, transfer
+    case all, income, expense, transfer, assetBalanceChange, accountBalanceCorrection
 
     var title: String {
         switch self {
@@ -18,6 +18,8 @@ private enum HistoryFilter: CaseIterable {
         case .income: return "Пополнения"
         case .expense: return "Списания"
         case .transfer: return "Переводы"
+        case .assetBalanceChange: return "Изм. актива"
+        case .accountBalanceCorrection: return "Корр. счета"
         }
     }
 
@@ -27,6 +29,8 @@ private enum HistoryFilter: CaseIterable {
         case .income: return type == .income
         case .expense: return type == .expense
         case .transfer: return type == .transfer
+        case .assetBalanceChange: return type == .balanceAdjustment
+        case .accountBalanceCorrection: return type == .cardBalanceAdjustment || type == .creditDebtAdjustment
         }
     }
 }

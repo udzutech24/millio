@@ -28,8 +28,8 @@ enum CashflowTransactionType: String, Codable, CaseIterable {
         case .income: return "Доход"
         case .expense: return "Расход"
         case .transfer: return "Перевод"
-        case .balanceAdjustment: return "Изменение баланса"
-        case .cardBalanceAdjustment: return "Корректировка баланса"
+        case .balanceAdjustment: return "Изменение стоимости актива"
+        case .cardBalanceAdjustment: return "Корректировка баланса счета"
         case .creditDebtAdjustment: return "Корректировка долга"
         }
     }
