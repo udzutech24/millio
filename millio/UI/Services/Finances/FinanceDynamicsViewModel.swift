@@ -1422,7 +1422,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     continue
                 }
                 
-                accountCurrency = investment.currency
+                accountCurrency = resolvedInvestmentCurrency(investment)
                 shouldInclude = true
                 
                 // Активы = оценочная стоимость + история изменений
@@ -1671,7 +1671,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             }
         case .investment:
             if let investment = investmentsCache[account.accountID] {
-                return (investment.name, investment.amount, investment.currency, investment.category.icon, false)
+                return (investment.name, investment.amount, resolvedInvestmentCurrency(investment), investment.category.icon, false)
             }
         }
         
@@ -1679,12 +1679,15 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     }
     
     func convertAmount(value: Double, from: String, to: String, at date: Date? = nil) async -> Double {
-        if from == to {
+        let normalizedFrom = normalizedConversionCurrency(from)
+        let normalizedTo = normalizedConversionCurrency(to)
+
+        if normalizedFrom == normalizedTo {
             return value
         }
         
         if let date = date {
-            let result = await historicalRateStore.getRate(on: date, from: from, to: to)
+            let result = await historicalRateStore.getRate(on: date, from: normalizedFrom, to: normalizedTo)
             if result.resolution != .exact {
                 if state.currencyConversionWarning == nil {
                     state.currencyConversionWarning = "Часть значений рассчитана по оценочному курсу."
@@ -1697,8 +1700,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         
         if let converted = await currencyService.convert(
             amount: value,
-            from: from,
-            to: to
+            from: normalizedFrom,
+            to: normalizedTo
         ) {
             if state.currencyConversionWarning == nil {
                 state.currencyConversionWarning = "Часть значений рассчитана по оценочному курсу."
@@ -1707,6 +1710,52 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
         
         return value
+    }
+
+    private func normalizedConversionCurrency(_ currency: String) -> String {
+        let trimmed = currency
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+        guard !trimmed.isEmpty else { return "USD" }
+
+        let stablecoinToUSD: Set<String> = ["USDT", "USDC", "BUSD", "TUSD", "FDUSD", "DAI"]
+        if stablecoinToUSD.contains(trimmed) {
+            return "USD"
+        }
+
+        if trimmed.contains("/") {
+            let parts = trimmed.split(separator: "/").map(String.init)
+            if let quote = parts.last {
+                return normalizedConversionCurrency(quote)
+            }
+        }
+
+        if trimmed.contains("-") {
+            let parts = trimmed.split(separator: "-").map(String.init)
+            if let quote = parts.last {
+                return normalizedConversionCurrency(quote)
+            }
+        }
+
+        return trimmed
+    }
+
+    private func resolvedInvestmentCurrency(_ investment: Investment) -> String {
+        let normalizedCurrency = investment.currency
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+        if !normalizedCurrency.isEmpty {
+            return normalizedCurrency
+        }
+
+        if let marketCurrency = investment.marketCurrency?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased(),
+           !marketCurrency.isEmpty {
+            return marketCurrency
+        }
+
+        return "USD"
     }
     
     /// Получить список счетов для выбранных групп

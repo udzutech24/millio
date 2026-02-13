@@ -18,6 +18,26 @@ final class MockDynamicsCurrencyRateService: CurrencyRateServiceProtocol {
     func forceRefreshRates() async {}
 }
 
+@MainActor
+final class MockDynamicsNormalizedCurrencyRateService: CurrencyRateServiceProtocol {
+    func getRate(from: String, to: String) async -> Double? {
+        if from == "USD", to == "RUB" { return 100.0 }
+        if from == "RUB", to == "USD" { return 0.01 }
+        return nil
+    }
+
+    func getHistoricalRate(on date: Date, from: String, to: String) async -> Double? {
+        await getRate(from: from, to: to)
+    }
+
+    func convert(amount: Double, from: String, to: String) async -> Double? {
+        guard let rate = await getRate(from: from, to: to) else { return nil }
+        return amount * rate
+    }
+
+    func forceRefreshRates() async {}
+}
+
 @Suite(.serialized)
 @MainActor
 struct FinanceDynamicsViewModelTests {
@@ -606,6 +626,30 @@ struct FinanceDynamicsViewModelTests {
             includeInitialBeforeCreation: true
         )
         #expect(abs(balanceWithFlag - 5000) < 0.01)
+    }
+
+    @Test("Конвертация в динамике нормализует валютные пары")
+    func testDynamicsConversionNormalizesCurrencyPair() async throws {
+        let modelContext = try createTestModelContext()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsNormalizedCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsNormalizedCurrencyRateService()
+        )
+
+        let converted = await dynamicsViewModel.convertAmount(
+            value: 2.0,
+            from: "BTC/USD",
+            to: "RUB",
+            at: Date()
+        )
+        #expect(abs(converted - 200.0) < 0.01)
     }
 
     @Test("Крипта: прирост учитывается после обновления рыночной позиции без транзакций")
