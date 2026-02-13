@@ -83,4 +83,28 @@ struct CashflowViewModelTests {
         )
         #expect(available)
     }
+
+    @Test("Cashflow обновляет историю по событию transactionsUpdated")
+    func testTransactionsUpdatedEventReloadsTransactions() async throws {
+        let modelContext = try createTestModelContext()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+        #expect(viewModel.state.transactions.isEmpty)
+
+        let transaction = CashflowTransaction(
+            transactionType: .income,
+            amount: 1000,
+            currency: "RUB",
+            transactionDate: Date(),
+            cardID: nil,
+            note: "Тест"
+        )
+        modelContext.insert(transaction)
+        try modelContext.save()
+
+        EventBus.shared.publish(FinanceEvent.transactionsUpdated)
+
+        #expect(viewModel.state.transactions.count == 1)
+        #expect(viewModel.state.transactions.first?.note == "Тест")
+    }
 }

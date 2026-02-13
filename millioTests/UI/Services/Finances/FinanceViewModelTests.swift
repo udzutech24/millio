@@ -463,10 +463,25 @@ struct FinanceViewModelTests {
         viewModel.handle(.loadGroups)
         viewModel.handle(.loadAccounts)
 
+        var didPublishTransactionsUpdated = false
+        let subscriptionID = EventBus.shared.subscribe { event in
+            if case FinanceEvent.transactionsUpdated = event {
+                didPublishTransactionsUpdated = true
+            }
+        }
+        defer { EventBus.shared.unsubscribe(subscriptionID) }
+
         viewModel.handle(.updateAccountAmount(account, 3.5))
 
         #expect(abs((investment.marketQuantity ?? 0) - 3.5) < 0.000001)
         #expect(abs(investment.amount - 3500) < 0.01)
+        #expect(didPublishTransactionsUpdated)
+
+        let descriptor = FetchDescriptor<CashflowTransaction>()
+        let transactions = try modelContext.fetch(descriptor)
+        #expect(transactions.count == 1)
+        #expect(abs(transactions[0].amount - 1500) < 0.01)
+        #expect(transactions[0].investmentID == investment.investmentUniqueID)
     }
 
     @Test("Невалидные связи FinanceAccount очищаются при загрузке счетов")

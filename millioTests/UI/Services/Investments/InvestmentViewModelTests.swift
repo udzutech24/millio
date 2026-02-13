@@ -344,6 +344,70 @@ struct InvestmentViewModelTests {
         #expect(abs(investment.amount - 11250) < 0.01)
     }
 
+    @Test("Market-обновление с изменением количества создаёт CashflowTransaction")
+    func testMarketQuantityUpdateCreatesTransaction() async throws {
+        let context = try createTestModelContext()
+
+        let investment = Investment(
+            name: "BTCUSD",
+            investmentType: .positive,
+            category: .crypto,
+            amount: 10000,
+            currency: "USD",
+            includeInTotal: true,
+            priority: .normal,
+            isFavorite: false
+        )
+        investment.marketSymbol = "BTCUSD"
+        investment.marketQuantity = 0.2
+        investment.lastKnownUnitPrice = 50000
+        context.insert(investment)
+        try context.save()
+
+        let viewModel = InvestmentViewModel(modelContext: context)
+        viewModel.handle(.editInvestment(investment))
+
+        var didPublishTransactionsUpdated = false
+        let subscriptionID = EventBus.shared.subscribe { event in
+            if case FinanceEvent.transactionsUpdated = event {
+                didPublishTransactionsUpdated = true
+            }
+        }
+        defer { EventBus.shared.unsubscribe(subscriptionID) }
+
+        viewModel.handle(.updateInvestment(
+            name: "BTCUSD",
+            investmentType: .positive,
+            category: .crypto,
+            amount: 12500,
+            currency: "USD",
+            includeInTotal: true,
+            priority: .normal,
+            isFavorite: false,
+            marketData: InvestmentMarketData(
+                symbol: "BTCUSD",
+                exchange: "CRYPTO",
+                currency: "USD",
+                quantity: 0.25,
+                unitPrice: 50000,
+                priceUpdatedAt: Date(),
+                providerRaw: "twelvedata"
+            ),
+            createCashflowTransaction: true,
+            uniqueID: investment.investmentUniqueID
+        ))
+
+        let descriptor = FetchDescriptor<CashflowTransaction>()
+        let transactions = try context.fetch(descriptor)
+
+        #expect(transactions.count == 1)
+        #expect(abs(transactions.first!.amount - 2500) < 0.01)
+        #expect(transactions.first!.investmentID == investment.investmentUniqueID)
+        #expect(transactions.first!.note == "Ручное изменение количества актива")
+        #expect(abs(investment.amount - 12500) < 0.01)
+        #expect(didPublishTransactionsUpdated)
+    }
+
     @Test("Расчёт totalPositive и totalNegative")
     func testCalculateTotals() async throws {
         let context = try createTestModelContext()

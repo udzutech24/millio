@@ -301,6 +301,8 @@ final class CashflowViewModel: ViewModelProtocol {
             switch event {
             case FinanceEvent.cardsUpdated:
                 self.loadCards()
+            case FinanceEvent.transactionsUpdated:
+                self.loadTransactions()
             case BackupEvent.restoreCompleted:
                 self.loadTransactions()
                 self.loadCards()

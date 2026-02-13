@@ -1304,6 +1304,7 @@ final class FinanceViewModel: ViewModelProtocol {
                 card.updatedAt = Date()
                 
                 do {
+                    var didCreateTransaction = false
                     // Создаем транзакцию для ручного изменения баланса
                     let difference = newAmount - oldAmount
                     if abs(difference) > 0.01 { // Создаем транзакцию только если есть изменение
@@ -1334,6 +1335,7 @@ final class FinanceViewModel: ViewModelProtocol {
                             note: transactionNote
                         )
                         modelContext.insert(transaction)
+                        didCreateTransaction = true
                     }
                     
                     // Атомарное сохранение обновления карты и транзакции (если она была создана)
@@ -1349,6 +1351,9 @@ final class FinanceViewModel: ViewModelProtocol {
                             let total = await calculateGroupTotal(group: group, in: currency)
                             state.groupTotals[group.groupUniqueID] = total
                         }
+                    }
+                    if didCreateTransaction {
+                        EventBus.shared.publish(FinanceEvent.transactionsUpdated)
                     }
                 } catch {
                     AppLogger.log(.error, category: "Finance", "Failed to update card amount: \(error.localizedDescription)")
@@ -1369,6 +1374,7 @@ final class FinanceViewModel: ViewModelProtocol {
                 credit.updatedAt = Date()
                 
                 do {
+                    var didCreateTransaction = false
                     // Создаем транзакцию для ручного изменения баланса
                     let difference = newAmount - oldAmount
                     if abs(difference) > 0.01 { // Создаем транзакцию только если есть изменение
@@ -1387,6 +1393,7 @@ final class FinanceViewModel: ViewModelProtocol {
                             note: "Быстрое изменение остатка долга"
                         )
                         modelContext.insert(transaction)
+                        didCreateTransaction = true
                     }
                     
                     // Атомарное сохранение обновления кредита и транзакции (если она была создана)
@@ -1402,6 +1409,9 @@ final class FinanceViewModel: ViewModelProtocol {
                             let total = await calculateGroupTotal(group: group, in: currency)
                             state.groupTotals[group.groupUniqueID] = total
                         }
+                    }
+                    if didCreateTransaction {
+                        EventBus.shared.publish(FinanceEvent.transactionsUpdated)
                     }
                 } catch {
                     AppLogger.log(.error, category: "Finance", "Failed to update credit amount: \(error.localizedDescription)")
@@ -1431,6 +1441,21 @@ final class FinanceViewModel: ViewModelProtocol {
                     investment.updatedAt = Date()
 
                     do {
+                        var didCreateTransaction = false
+                        let difference = investment.amount - oldAmount
+                        if abs(difference) > 0.01 {
+                            let transaction = CashflowTransaction(
+                                transactionType: .balanceAdjustment,
+                                amount: difference,
+                                currency: investment.currency,
+                                transactionDate: Date(),
+                                investmentID: investment.investmentUniqueID,
+                                note: "Ручное изменение количества актива"
+                            )
+                            modelContext.insert(transaction)
+                            didCreateTransaction = true
+                        }
+
                         try modelContext.save()
 
                         loadAccounts()
@@ -1443,6 +1468,9 @@ final class FinanceViewModel: ViewModelProtocol {
                                 state.groupTotals[group.groupUniqueID] = total
                             }
                         }
+                        if didCreateTransaction {
+                            EventBus.shared.publish(FinanceEvent.transactionsUpdated)
+                        }
                     } catch {
                         AppLogger.log(.error, category: "Finance", "Failed to update investment quantity: \(error.localizedDescription)")
                     }
@@ -1451,6 +1479,7 @@ final class FinanceViewModel: ViewModelProtocol {
                     investment.updatedAt = Date()
                     
                     do {
+                        var didCreateTransaction = false
                         // Создаем транзакцию для ручного изменения стоимости актива
                         let difference = newAmount - oldAmount
                         if abs(difference) > 0.01 {
@@ -1463,6 +1492,7 @@ final class FinanceViewModel: ViewModelProtocol {
                                 note: "Ручное изменение стоимости актива"
                             )
                             modelContext.insert(transaction)
+                            didCreateTransaction = true
                         }
                         
                         // Атомарное сохранение обновления инвестиции и транзакции (если она была создана)
@@ -1478,6 +1508,9 @@ final class FinanceViewModel: ViewModelProtocol {
                                 let total = await calculateGroupTotal(group: group, in: currency)
                                 state.groupTotals[group.groupUniqueID] = total
                             }
+                        }
+                        if didCreateTransaction {
+                            EventBus.shared.publish(FinanceEvent.transactionsUpdated)
                         }
                     } catch {
                         AppLogger.log(.error, category: "Finance", "Failed to update investment amount: \(error.localizedDescription)")

@@ -24,6 +24,7 @@ enum BackupEvent: AppEvent {
 enum FinanceEvent: AppEvent {
     case cardsUpdated
     case creditsUpdated
+    case transactionsUpdated
 }
 
 /// Event Bus для слабой связанности между компонентами

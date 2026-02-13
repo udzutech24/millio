@@ -293,6 +293,9 @@ final class InvestmentViewModel: ViewModelProtocol {
     ) {
         var editedInvestment: Investment? = nil
         var oldAmount: Double = 0.0
+        var newAmountForTransaction: Double?
+        var quantityWasChanged: Bool = false
+        var didCreateTransaction: Bool = false
         
         if let existing = state.editingInvestment {
             if existing.uniqueID.isEmpty {
@@ -303,6 +306,7 @@ final class InvestmentViewModel: ViewModelProtocol {
                 existing.hasInitialAmount = true
             }
             oldAmount = existing.amount
+            let previousQuantity = existing.marketQuantity
             editedInvestment = existing
             // Обновляем существующую инвестицию
             existing.name = name
@@ -319,6 +323,12 @@ final class InvestmentViewModel: ViewModelProtocol {
                 category: category
             )
             existing.recalculateAmountFromPosition()
+            newAmountForTransaction = existing.amount
+            if category == .stocks || category == .crypto {
+                let oldQuantity = previousQuantity ?? 0
+                let updatedQuantity = existing.marketQuantity ?? 0
+                quantityWasChanged = abs(oldQuantity - updatedQuantity) > 0.0000001
+            }
             existing.updatedAt = Date()
         } else {
             // Создаем новую инвестицию
@@ -346,7 +356,7 @@ final class InvestmentViewModel: ViewModelProtocol {
         
         // Создание CashflowTransaction если нужно (перед save для атомарности)
         if createCashflowTransaction, let existing = editedInvestment {
-            let delta = amount - oldAmount
+            let delta = (newAmountForTransaction ?? amount) - oldAmount
             if abs(delta) > 0.01 {
                 let transaction = CashflowTransaction(
                     transactionType: .balanceAdjustment,
@@ -354,9 +364,10 @@ final class InvestmentViewModel: ViewModelProtocol {
                     currency: existing.currency,
                     transactionDate: Date(),
                     investmentID: existing.investmentUniqueID,
-                    note: "Ручное изменение стоимости актива"
+                    note: quantityWasChanged ? "Ручное изменение количества актива" : "Ручное изменение стоимости актива"
                 )
                 modelContext.insert(transaction)
+                didCreateTransaction = true
             }
         }
         
@@ -366,6 +377,9 @@ final class InvestmentViewModel: ViewModelProtocol {
             loadInvestments()
             state.showInvestmentEditor = false
             state.editingInvestment = nil
+            if didCreateTransaction {
+                EventBus.shared.publish(FinanceEvent.transactionsUpdated)
+            }
         } catch {
             AppLogger.log(.error, category: "Investment", "Failed to save investment: \(error.localizedDescription)")
         }

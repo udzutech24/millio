@@ -649,7 +649,12 @@ struct InvestmentEditorView: View {
             )
 
             selectedCurrency = effectiveCurrency
-            createCashflowTransaction = false
+            if let editing = viewModel.state.editingInvestment {
+                let previousQuantity = editing.marketQuantity ?? 0
+                createCashflowTransaction = abs(previousQuantity - quantity) > 0.0000001
+            } else {
+                createCashflowTransaction = false
+            }
             effectiveCategory = isEditingMarketAssetWithLockedIdentity ? (lockedCategory ?? selectedCategory) : selectedCategory
         } else {
             guard let parsedAmount = parseNumber(amountText) else {
