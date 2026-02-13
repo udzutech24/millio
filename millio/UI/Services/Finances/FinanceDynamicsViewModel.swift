@@ -201,6 +201,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     
     let defaults = UserDefaults.standard
     private var eventSubscriptionID: UUID?
+    private var selectionUpdateTask: Task<Void, Never>?
     
     // Кэши для оптимизации производительности
     var cardsCache: [String: Card] = [:]
@@ -276,6 +277,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     }
     
     deinit {
+        selectionUpdateTask?.cancel()
         if let id = eventSubscriptionID {
             Task { @MainActor in
                 EventBus.shared.unsubscribe(id)
@@ -333,8 +335,11 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             
         case .selectDateOnChart(let date):
             state.selectedDate = date
-            Task {
-                await updateCurrentBalanceAndDelta()
+            selectionUpdateTask?.cancel()
+            let selectedDateSnapshot = date
+            selectionUpdateTask = Task { [weak self] in
+                guard let self else { return }
+                await self.updateCurrentBalanceAndDelta(for: selectedDateSnapshot)
             }
             
         case .setDynamicsMode(let mode):
@@ -601,6 +606,14 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     
     /// Обновить текущий баланс и дельту
     func updateCurrentBalanceAndDelta() async {
+        await updateCurrentBalanceAndDelta(for: state.selectedDate)
+    }
+
+    /// Обновить текущий баланс и дельту для конкретной выбранной даты.
+    /// Используется, чтобы избежать race condition при быстром выборе точек на графике.
+    private func updateCurrentBalanceAndDelta(for selectedDate: Date?) async {
+        if Task.isCancelled { return }
+
         let (startDate, endDate) = getPeriodDates()
         state.periodStartDate = startDate
         state.periodEndDate = endDate
@@ -610,14 +623,27 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         let useNetTotals = shouldUseNetTotals()
         
         // Рассчитываем текущий баланс
-        let targetDate = state.selectedDate ?? endDate
-        state.currentBalance = await calculateBalanceAtDate(
+        let targetDate: Date
+        if let selectedDate {
+            targetDate = Calendar.current.date(
+                bySettingHour: 23,
+                minute: 59,
+                second: 59,
+                of: selectedDate
+            ) ?? selectedDate
+        } else {
+            targetDate = endDate
+        }
+        let currentBalance = await calculateBalanceAtDate(
             accounts: accounts,
             date: targetDate,
             accountCardIDs: Set(accounts.compactMap { $0.accountType == .card ? $0.accountID : nil }),
             debtAsNegative: useNetTotals,
             includeInitialBeforeCreation: false
         )
+        if Task.isCancelled { return }
+        if selectedDate != state.selectedDate { return }
+        state.currentBalance = currentBalance
         
         // Рассчитываем баланс на начало периода
         let startBalance = await calculateBalanceAtDate(
@@ -627,6 +653,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             debtAsNegative: useNetTotals,
             includeInitialBeforeCreation: true
         )
+        if Task.isCancelled { return }
+        if selectedDate != state.selectedDate { return }
         
         // Рассчитываем дельту
         let rawDelta = state.currentBalance - startBalance

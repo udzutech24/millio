@@ -652,6 +652,61 @@ struct FinanceDynamicsViewModelTests {
         #expect(abs(converted - 200.0) < 0.01)
     }
 
+    @Test("Выбор точки на графике использует значение на конец дня")
+    func testSelectedChartPointUsesEndOfDayBalance() async throws {
+        let modelContext = try createTestModelContext()
+
+        let card = Card(name: "Тестовая", cardNumber: "7777", bank: .other, cardType: .debit, currency: "RUB")
+        card.initialBalance = 100
+        card.hasInitialBalance = true
+        card.balance = 1000
+        card.createdAt = Date().addingTimeInterval(-3 * 86400)
+        modelContext.insert(card)
+
+        let group = FinanceGroup(name: "Группа", colorHex: "#FFFFFF")
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+
+        let targetDay = Calendar.current.startOfDay(for: Date().addingTimeInterval(-1 * 86400))
+        let transaction = CashflowTransaction(
+            transactionType: .income,
+            amount: 900,
+            currency: "RUB",
+            transactionDate: targetDay.addingTimeInterval(12 * 3600),
+            cardID: card.cardUniqueID,
+            note: "Пополнение"
+        )
+        modelContext.insert(transaction)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        dynamicsViewModel.handle(.selectDateOnChart(targetDay))
+
+        var resolved = false
+        for _ in 0..<120 {
+            if abs(dynamicsViewModel.state.currentBalance - 1000) < 0.01 {
+                resolved = true
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        #expect(resolved)
+    }
+
     @Test("Крипта: прирост учитывается после обновления рыночной позиции без транзакций")
     func testCryptoGrowthUsesActualAmountAfterUpdateWithoutTransactions() async throws {
         let modelContext = try createTestModelContext()
