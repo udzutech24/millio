@@ -485,6 +485,9 @@ struct FinanceViewModelTests {
         guard let transaction = transactions.first else { return }
         #expect(abs(transaction.amount - 1500) < 0.01)
         #expect(transaction.investmentID == investment.investmentUniqueID)
+        #expect(transaction.exchangeRate == 1.0)
+        #expect(transaction.exchangeRateCurrency == "USD")
+        #expect(transaction.exchangeRateDate != nil)
     }
 
     @Test("Невалидные связи FinanceAccount очищаются при загрузке счетов")

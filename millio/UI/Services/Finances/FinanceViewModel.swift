@@ -984,6 +984,17 @@ final class FinanceViewModel: ViewModelProtocol {
         return state.displayCurrency
     }
 
+    private func stampFrozenRate(on transaction: CashflowTransaction, targetCurrency: String) {
+        let normalizedSource = normalizedConversionCurrency(transaction.currency)
+        let normalizedTarget = normalizedConversionCurrency(targetCurrency)
+        transaction.currency = normalizedSource
+        transaction.exchangeRateCurrency = normalizedTarget
+        transaction.exchangeRateDate = Calendar.current.startOfDay(for: transaction.transactionDate)
+        if normalizedSource == normalizedTarget {
+            transaction.exchangeRate = 1.0
+        }
+    }
+
     private func formatMarketNumber(_ value: Double, maximumFractionDigits: Int) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
@@ -1334,6 +1345,7 @@ final class FinanceViewModel: ViewModelProtocol {
                             cardID: card.cardUniqueID,
                             note: transactionNote
                         )
+                        stampFrozenRate(on: transaction, targetCurrency: card.currency)
                         modelContext.insert(transaction)
                         didCreateTransaction = true
                     }
@@ -1392,6 +1404,7 @@ final class FinanceViewModel: ViewModelProtocol {
                             creditID: credit.creditUniqueID,
                             note: "Быстрое изменение остатка долга"
                         )
+                        stampFrozenRate(on: transaction, targetCurrency: credit.currency)
                         modelContext.insert(transaction)
                         didCreateTransaction = true
                     }
@@ -1452,6 +1465,7 @@ final class FinanceViewModel: ViewModelProtocol {
                                 investmentID: investment.investmentUniqueID,
                                 note: "Ручное изменение количества актива"
                             )
+                            stampFrozenRate(on: transaction, targetCurrency: resolvedInvestmentCurrency(investment))
                             modelContext.insert(transaction)
                             didCreateTransaction = true
                         }
@@ -1491,6 +1505,7 @@ final class FinanceViewModel: ViewModelProtocol {
                                 investmentID: investment.investmentUniqueID,
                                 note: "Ручное изменение стоимости актива"
                             )
+                            stampFrozenRate(on: transaction, targetCurrency: resolvedInvestmentCurrency(investment))
                             modelContext.insert(transaction)
                             didCreateTransaction = true
                         }

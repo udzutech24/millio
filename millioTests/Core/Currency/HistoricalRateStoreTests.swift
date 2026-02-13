@@ -14,13 +14,19 @@ import SwiftData
 final class MockHistoricalRateService: CurrencyRateServiceProtocol {
     var historicalRate: Double?
     var currentRate: Double?
+    var historicalRatesByPair: [String: Double] = [:]
+    private(set) var historicalCalls: Int = 0
     
     func getRate(from: String, to: String) async -> Double? {
         currentRate
     }
     
     func getHistoricalRate(on date: Date, from: String, to: String) async -> Double? {
-        historicalRate
+        historicalCalls += 1
+        if let mapped = historicalRatesByPair["\(from.uppercased())_\(to.uppercased())"] {
+            return mapped
+        }
+        return historicalRate
     }
     
     func convert(amount: Double, from: String, to: String) async -> Double? {
@@ -192,6 +198,21 @@ struct HistoricalRateStoreTests {
         let result = await store.getRate(on: dateWithTime, from: "USD", to: "EUR")
 
         #expect(result.rate == 0.92)
+        #expect(result.resolution == .exact)
+    }
+
+    @Test("Prefetch exact-курсов сохраняет запись в кэш")
+    func testPrefetchExactRatesStoresCache() async throws {
+        let context = try createTestModelContext()
+        let mockService = MockHistoricalRateService()
+        mockService.historicalRatesByPair["USD_RUB"] = 95.0
+
+        let store = HistoricalRateStore(modelContext: context, currencyService: mockService)
+        let date = Date()
+        await store.prefetchExactRates(on: [date], pairs: [(from: "USD", to: "RUB")])
+
+        let result = await store.getRate(on: date, from: "USD", to: "RUB")
+        #expect(result.rate == 95.0)
         #expect(result.resolution == .exact)
     }
 }

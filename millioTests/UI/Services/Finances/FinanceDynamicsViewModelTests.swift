@@ -652,6 +652,63 @@ struct FinanceDynamicsViewModelTests {
         #expect(abs(converted - 200.0) < 0.01)
     }
 
+    @Test("Динамика использует зафиксированный курс транзакции")
+    func testDynamicsUsesFrozenTransactionRate() async throws {
+        let modelContext = try createTestModelContext()
+
+        let investment = Investment(
+            name: "Asset",
+            investmentType: .positive,
+            category: .other,
+            amount: 200,
+            currency: "RUB"
+        )
+        investment.initialAmount = 0
+        investment.hasInitialAmount = true
+        investment.createdAt = Date().addingTimeInterval(-2 * 86400)
+        modelContext.insert(investment)
+
+        let group = FinanceGroup(name: "Группа", colorHex: "#FFFFFF")
+        let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+        account.group = group
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+
+        let tx = CashflowTransaction(
+            transactionType: .balanceAdjustment,
+            amount: 2.0,
+            currency: "USD",
+            transactionDate: Date().addingTimeInterval(-3600),
+            investmentID: investment.investmentUniqueID,
+            note: "fx"
+        )
+        tx.exchangeRate = 100.0
+        tx.exchangeRateCurrency = "RUB"
+        tx.exchangeRateDate = Calendar.current.startOfDay(for: tx.transactionDate)
+        modelContext.insert(tx)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+
+        let balance = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: Date(),
+            accountCardIDs: []
+        )
+        #expect(abs(balance - 200.0) < 0.01)
+    }
+
     @Test("Крипта: прирост учитывается после обновления рыночной позиции без транзакций")
     func testCryptoGrowthUsesActualAmountAfterUpdateWithoutTransactions() async throws {
         let modelContext = try createTestModelContext()

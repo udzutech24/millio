@@ -404,6 +404,9 @@ struct InvestmentViewModelTests {
         #expect(abs(transactions.first!.amount - 2500) < 0.01)
         #expect(transactions.first!.investmentID == investment.investmentUniqueID)
         #expect(transactions.first!.note == "Ручное изменение количества актива")
+        #expect(transactions.first!.exchangeRate == 1.0)
+        #expect(transactions.first!.exchangeRateCurrency == "USD")
+        #expect(transactions.first!.exchangeRateDate != nil)
         #expect(abs(investment.amount - 12500) < 0.01)
         #expect(didPublishTransactionsUpdated)
     }

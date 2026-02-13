@@ -74,6 +74,29 @@ final class HistoricalRateStore {
         
         return HistoricalRateResult(rate: nil, resolution: .unavailable, rateDate: nil)
     }
+
+    /// Прогреть exact-курсы в локальном кэше для списка дат и валютных пар.
+    /// Используется для уменьшения количества оценочных курсов в аналитике.
+    func prefetchExactRates(
+        on dates: [Date],
+        pairs: [(from: String, to: String)]
+    ) async {
+        for date in dates {
+            let targetDate = normalizedDate(date)
+            for pair in pairs {
+                let base = pair.from.uppercased()
+                let quote = pair.to.uppercased()
+                if base == quote { continue }
+
+                if fetchExactRate(base: base, quote: quote, date: targetDate) != nil { continue }
+                if fetchExactRate(base: quote, quote: base, date: targetDate) != nil { continue }
+
+                if let fetched = await currencyService.getHistoricalRate(on: targetDate, from: base, to: quote) {
+                    upsertRate(base: base, quote: quote, rate: fetched, date: targetDate, source: "historical_prefetch")
+                }
+            }
+        }
+    }
     
     private func normalizedDate(_ date: Date) -> Date {
         Calendar.current.startOfDay(for: date)

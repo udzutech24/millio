@@ -366,6 +366,7 @@ final class InvestmentViewModel: ViewModelProtocol {
                     investmentID: existing.investmentUniqueID,
                     note: quantityWasChanged ? "Ручное изменение количества актива" : "Ручное изменение стоимости актива"
                 )
+                stampFrozenRate(on: transaction, targetCurrency: existing.currency)
                 modelContext.insert(transaction)
                 didCreateTransaction = true
             }
@@ -410,5 +411,44 @@ final class InvestmentViewModel: ViewModelProtocol {
         investment.lastKnownUnitPrice = marketData?.unitPrice
         investment.lastKnownPriceUpdatedAt = marketData?.priceUpdatedAt
         investment.marketProviderRaw = marketData?.providerRaw
+    }
+
+    private func normalizedConversionCurrency(_ currency: String) -> String {
+        let trimmed = currency
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+        guard !trimmed.isEmpty else { return "USD" }
+
+        let stablecoinToUSD: Set<String> = ["USDT", "USDC", "BUSD", "TUSD", "FDUSD", "DAI"]
+        if stablecoinToUSD.contains(trimmed) {
+            return "USD"
+        }
+
+        if trimmed.contains("/") {
+            let parts = trimmed.split(separator: "/").map(String.init)
+            if let quote = parts.last {
+                return normalizedConversionCurrency(quote)
+            }
+        }
+
+        if trimmed.contains("-") {
+            let parts = trimmed.split(separator: "-").map(String.init)
+            if let quote = parts.last {
+                return normalizedConversionCurrency(quote)
+            }
+        }
+
+        return trimmed
+    }
+
+    private func stampFrozenRate(on transaction: CashflowTransaction, targetCurrency: String) {
+        let normalizedSource = normalizedConversionCurrency(transaction.currency)
+        let normalizedTarget = normalizedConversionCurrency(targetCurrency)
+        transaction.currency = normalizedSource
+        transaction.exchangeRateCurrency = normalizedTarget
+        transaction.exchangeRateDate = Calendar.current.startOfDay(for: transaction.transactionDate)
+        if normalizedSource == normalizedTarget {
+            transaction.exchangeRate = 1.0
+        }
     }
 }
