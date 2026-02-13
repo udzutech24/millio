@@ -47,7 +47,7 @@ private struct CashflowContentView: View {
             GradientBackground()
             
             ScrollView {
-                VStack(spacing: 24) {
+                VStack(spacing: 16) {
                     // Выбор периода
                     periodSelectionSection
 
@@ -62,9 +62,9 @@ private struct CashflowContentView: View {
                     actionButtonsSection
                     
                 }
-                .padding(.horizontal, 24)
-                .padding(.top, 16)
-                .padding(.bottom, 32)
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 24)
             }
         }
         .navigationTitle("Кэшфлоу")
@@ -145,7 +145,7 @@ private struct CashflowContentView: View {
     // MARK: - Period Stats Section
     
     private var assetBreakdownSection: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 10) {
             statRow(
                 title: "Активы на начало периода",
                 value: formatMoney(viewModel.state.assetsAtPeriodStart),
@@ -158,11 +158,11 @@ private struct CashflowContentView: View {
                 valueColor: positiveColor(for: viewModel.state.totalIncome)
             )
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .center) {
                     HStack(spacing: 8) {
                         Text("Изменение стоимости активов")
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(AppColors.textSecondary)
                         Button {
                             showAssetChangeInfoSheet = true
@@ -175,25 +175,22 @@ private struct CashflowContentView: View {
                     }
                     Spacer()
                     Text(formatSignedMoney(viewModel.state.assetValueChange))
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(positiveColor(for: viewModel.state.assetValueChange))
                 }
 
                 HStack {
                     Text("Курсовая разница")
-                        .font(.system(size: 14, weight: .regular))
+                        .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(AppColors.textSecondary)
                     Spacer()
                     Text(formatSignedMoney(viewModel.state.currencyDifference))
-                        .font(.system(size: 18, weight: .regular))
+                        .font(.system(size: 16, weight: .regular))
                         .foregroundStyle(positiveColor(for: viewModel.state.currencyDifference))
                 }
             }
-            .padding(18)
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color.white.opacity(0.12))
-            )
+            .padding(12)
+            .background(financeInnerBackground(cornerRadius: 16))
 
             statRow(
                 title: "Расходы внесенные",
@@ -201,7 +198,7 @@ private struct CashflowContentView: View {
                 valueColor: negativeColor(for: -viewModel.state.contributedExpense)
             )
 
-            VStack(spacing: 12) {
+            VStack(spacing: 8) {
                 statRow(
                     title: "Активы на конец периода",
                     value: formatMoney(viewModel.state.assetsAtPeriodEnd),
@@ -213,49 +210,36 @@ private struct CashflowContentView: View {
 
                 HStack {
                     Text("Итого")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                     Spacer()
                     Text(formatSignedMoney(viewModel.state.periodTotalChange))
-                        .font(.system(size: 22, weight: .semibold))
+                        .font(.system(size: 19, weight: .semibold))
                         .foregroundStyle(positiveColor(for: viewModel.state.periodTotalChange))
                 }
-                .padding(.horizontal, 4)
-                .padding(.bottom, 4)
+                .padding(.horizontal, 2)
+                .padding(.bottom, 2)
             }
-            .padding(18)
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color.white.opacity(0.12))
-            )
+            .padding(12)
+            .background(financeInnerBackground(cornerRadius: 16))
         }
-        .padding(18)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.black.opacity(0.3))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                )
-        )
+        .padding(12)
+        .background(financeCardBackground(cornerRadius: 20))
     }
 
     private func statRow(title: String, value: String, valueColor: Color) -> some View {
         HStack(alignment: .top) {
             Text(title)
-                .font(.system(size: 14, weight: .medium))
+                .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary)
             Spacer()
             Text(value)
-                .font(.system(size: 20, weight: .semibold))
+                .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(valueColor)
                 .lineLimit(1)
         }
-        .padding(18)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.white.opacity(0.12))
-        )
+        .padding(12)
+        .background(financeInnerBackground(cornerRadius: 16))
     }
 
     private func currencyWarningView(text: String) -> some View {
@@ -284,7 +268,7 @@ private struct CashflowContentView: View {
     // MARK: - Period Selection Section
     
     private var periodSelectionSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
                 Button {
                     viewModel.handle(.movePeriodBackward)
@@ -292,8 +276,8 @@ private struct CashflowContentView: View {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
-                        .frame(width: 36, height: 36)
-                        .background(Circle().fill(Color.white.opacity(0.12)))
+                        .frame(width: 34, height: 34)
+                        .background(Circle().fill(Color.white.opacity(0.08)))
                 }
                 .buttonStyle(.plain)
 
@@ -301,7 +285,7 @@ private struct CashflowContentView: View {
 
                 HStack(spacing: 8) {
                     Text(viewModel.currentPeriodHeaderTitle())
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                         .lineLimit(1)
 
@@ -314,8 +298,8 @@ private struct CashflowContentView: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 20, height: 20)
-                            .padding(8)
-                            .background(Capsule().fill(Color.white.opacity(0.2)))
+                            .padding(7)
+                            .background(Capsule().fill(Color.white.opacity(0.08)))
                     }
                     .buttonStyle(.plain)
                 }
@@ -328,8 +312,8 @@ private struct CashflowContentView: View {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(viewModel.canMovePeriodForward() ? AppColors.textPrimary : AppColors.textSecondary)
-                        .frame(width: 36, height: 36)
-                        .background(Circle().fill(Color.white.opacity(0.12)))
+                        .frame(width: 34, height: 34)
+                        .background(Circle().fill(Color.white.opacity(0.08)))
                 }
                 .buttonStyle(.plain)
                 .disabled(!viewModel.canMovePeriodForward())
@@ -337,14 +321,11 @@ private struct CashflowContentView: View {
 
             let range = viewModel.currentDateRange()
             Text("\(formatPeriod(range.0)) — \(formatPeriod(range.1))")
-                .font(.system(size: 12))
+                .font(.system(size: 11))
                 .foregroundStyle(AppColors.textSecondary)
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.black.opacity(0.3))
-        )
+        .padding(12)
+        .background(financeCardBackground(cornerRadius: 18))
     }
     
     @ToolbarContentBuilder
@@ -412,6 +393,48 @@ private struct CashflowContentView: View {
             return "-\(absolute)"
         }
         return absolute
+    }
+
+    private func financeCardBackground(cornerRadius: CGFloat) -> some View {
+        let accentColor = AppColors.financesGradient.first ?? .cyan
+        let fillGradient = LinearGradient(
+            colors: [
+                Color(red: 0.03, green: 0.07, blue: 0.11),
+                Color(red: 0.02, green: 0.04, blue: 0.06),
+                Color.black
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        let glowGradient = LinearGradient(
+            colors: [
+                accentColor.opacity(0.16),
+                Color.clear
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+
+        return RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(fillGradient)
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(glowGradient)
+                    .opacity(0.6)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(accentColor.opacity(0.55), lineWidth: 1)
+            )
+    }
+
+    private func financeInnerBackground(cornerRadius: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(Color.white.opacity(0.08))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(Color.white.opacity(0.10), lineWidth: 0.8)
+            )
     }
 
     private func positiveColor(for value: Double) -> Color {
