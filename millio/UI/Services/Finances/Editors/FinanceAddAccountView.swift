@@ -50,13 +50,16 @@ struct FinanceAddAccountView: View {
         }
     }
     
+    private var resolvedGroup: FinanceGroup? {
+        FinanceAddAccountGroupSelection.resolveSelectedGroup(
+            selectedGroupID: selectedGroupID,
+            preselectedGroupID: viewModel.state.selectedGroupForAccount?.groupUniqueID,
+            groups: viewModel.state.groups
+        )
+    }
+    
     var targetGroup: FinanceGroup? {
-        if let selectedGroupID = selectedGroupID {
-            return viewModel.state.groups.first { group in
-                group.groupUniqueID == selectedGroupID
-            }
-        }
-        return viewModel.state.selectedGroupForAccount
+        resolvedGroup
     }
     
     // MARK: - Form Sections
@@ -168,10 +171,11 @@ struct FinanceAddAccountView: View {
                     }
                 }
             } else {
-                let currentGroupID = selectedGroupID ?? viewModel.state.selectedGroupForAccount?.groupUniqueID ?? viewModel.state.groups.first?.groupUniqueID ?? ""
+                let currentGroupID = resolvedGroup?.groupUniqueID
+                let currentGroupName = resolvedGroup?.name ?? "Не выбрано"
                 
                 FinancesGlassCard {
-                    VStack(spacing: 0) {
+                    Menu {
                         ForEach(viewModel.state.groups) { group in
                             Button {
                                 selectedGroupID = group.groupUniqueID
@@ -180,7 +184,6 @@ struct FinanceAddAccountView: View {
                                     Circle()
                                         .fill(group.color)
                                         .frame(width: 12, height: 12)
-                                        
                                     
                                     Text(group.name)
                                         .font(.system(size: 16, weight: .medium))
@@ -202,16 +205,32 @@ struct FinanceAddAccountView: View {
                                             )
                                     }
                                 }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.vertical, 14)
-                                .padding(.horizontal, 16)
-                            }
-                            .buttonStyle(.plain)
-                            
-                            if group.groupUniqueID != viewModel.state.groups.last?.groupUniqueID {
-                                FinancesRowDivider(leadingPadding: 40)
                             }
                         }
+                    } label: {
+                        HStack(spacing: 12) {
+                            Text("Группа")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(AppColors.textPrimary)
+                            
+                            Spacer()
+                            
+                            Text(currentGroupName)
+                                .font(.system(size: 16, weight: .regular))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: AppColors.financesGradient,
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 16)
+                        .contentShape(Rectangle())
                     }
                 }
                 
@@ -654,5 +673,27 @@ private struct SelectedAccountTypeChangeHandler: ViewModifier {
                     }
                 }
             }
+    }
+}
+
+// MARK: - Group Selection Helper
+
+enum FinanceAddAccountGroupSelection {
+    static func resolveSelectedGroup(
+        selectedGroupID: String?,
+        preselectedGroupID: String?,
+        groups: [FinanceGroup]
+    ) -> FinanceGroup? {
+        if let selectedGroupID,
+           let selectedGroup = groups.first(where: { $0.groupUniqueID == selectedGroupID }) {
+            return selectedGroup
+        }
+        
+        if let preselectedGroupID,
+           let preselectedGroup = groups.first(where: { $0.groupUniqueID == preselectedGroupID }) {
+            return preselectedGroup
+        }
+        
+        return groups.first
     }
 }
