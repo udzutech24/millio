@@ -216,6 +216,7 @@ struct CashflowViewModelTests {
             currency: "RUB",
             transactionDate: fixedNow,
             cardID: nil,
+            expenseCategory: .groceries,
             note: "Small"
         )
         let expenseLarge = CashflowTransaction(
@@ -224,6 +225,7 @@ struct CashflowViewModelTests {
             currency: "RUB",
             transactionDate: fixedNow,
             cardID: nil,
+            expenseCategory: .shopping,
             note: "Large"
         )
         let expenseMedium = CashflowTransaction(
@@ -232,6 +234,7 @@ struct CashflowViewModelTests {
             currency: "RUB",
             transactionDate: fixedNow,
             cardID: nil,
+            expenseCategory: .cafe,
             note: "Medium"
         )
         let income = CashflowTransaction(
@@ -240,6 +243,7 @@ struct CashflowViewModelTests {
             currency: "RUB",
             transactionDate: fixedNow,
             cardID: nil,
+            incomeCategory: .salary,
             note: "Income"
         )
 
@@ -264,8 +268,10 @@ struct CashflowViewModelTests {
             viewModel.state.incomeBreakdown.count == 1
         }
 
-        let expenseAmounts = viewModel.state.expenseBreakdown.map { $0.convertedAmount }
-        #expect(expenseAmounts == [300, 200, 100])
+        let expenseBreakdown = viewModel.state.expenseBreakdown
+        #expect(expenseBreakdown.map { $0.title } == ["Покупки", "Кафе", "Продукты"])
+        #expect(expenseBreakdown.map { $0.convertedAmount } == [300, 200, 100])
+        #expect(viewModel.state.incomeBreakdown.first?.title == "Зарплата")
         #expect(viewModel.state.incomeBreakdown.first?.convertedAmount == 400)
     }
 

@@ -112,26 +112,26 @@ struct CashflowState {
     /// Предупреждение о конвертации валют в истории
     var currencyConversionWarning: String? = nil
 
-    /// Детализация доходов за период (по убыванию суммы)
-    var incomeBreakdown: [CashflowBreakdownEntry] = []
+    /// Детализация доходов по категориям за период (по убыванию суммы)
+    var incomeBreakdown: [CashflowCategoryBreakdownEntry] = []
 
-    /// Детализация расходов за период (по убыванию суммы)
-    var expenseBreakdown: [CashflowBreakdownEntry] = []
+    /// Детализация расходов по категориям за период (по убыванию суммы)
+    var expenseBreakdown: [CashflowCategoryBreakdownEntry] = []
     
     /// Флаг загрузки данных
     var isLoading: Bool = false
 }
 
-// MARK: - Cashflow Breakdown Entry
+// MARK: - Cashflow Category Breakdown Entry
 
-struct CashflowBreakdownEntry: Identifiable {
+struct CashflowCategoryBreakdownEntry: Identifiable {
     let id: String
-    let transaction: CashflowTransaction
+    let title: String
     let convertedAmount: Double
 
-    init(transaction: CashflowTransaction, convertedAmount: Double) {
-        self.id = transaction.transactionUniqueID
-        self.transaction = transaction
+    init(title: String, convertedAmount: Double) {
+        self.id = title
+        self.title = title
         self.convertedAmount = convertedAmount
     }
 }
@@ -408,11 +408,11 @@ final class CashflowViewModel: ViewModelProtocol {
     private func updateChartDataAsync() async {
         let (startDate, endDate) = getDateRange()
         
-        // Рассчитываем общие суммы за период и детализацию
+        // Рассчитываем общие суммы за период и детализацию по категориям
         var totalIncome: Double = 0.0
         var totalExpense: Double = 0.0
-        var incomeBreakdown: [CashflowBreakdownEntry] = []
-        var expenseBreakdown: [CashflowBreakdownEntry] = []
+        var incomeByCategory: [String: Double] = [:]
+        var expenseByCategory: [String: Double] = [:]
         
         for transaction in state.transactions {
             guard transaction.transactionDate >= startDate && transaction.transactionDate <= endDate else {
@@ -426,12 +426,8 @@ final class CashflowViewModel: ViewModelProtocol {
                     to: state.displayCurrency
                 )
                 totalIncome += converted
-                incomeBreakdown.append(
-                    CashflowBreakdownEntry(
-                        transaction: transaction,
-                        convertedAmount: converted
-                    )
-                )
+                let title = transaction.incomeCategory?.displayName ?? "Без категории"
+                incomeByCategory[title, default: 0.0] += converted
                 
             case .expense:
                 let converted = await convertAmountForTransaction(
@@ -439,12 +435,8 @@ final class CashflowViewModel: ViewModelProtocol {
                     to: state.displayCurrency
                 )
                 totalExpense += converted
-                expenseBreakdown.append(
-                    CashflowBreakdownEntry(
-                        transaction: transaction,
-                        convertedAmount: converted
-                    )
-                )
+                let title = transaction.expenseCategory?.displayName ?? "Без категории"
+                expenseByCategory[title, default: 0.0] += converted
                 
             case .transfer, .balanceAdjustment:
                 break
@@ -456,8 +448,12 @@ final class CashflowViewModel: ViewModelProtocol {
         state.totalIncome = totalIncome
         state.totalExpense = totalExpense
         state.periodBalance = totalIncome - totalExpense
-        state.incomeBreakdown = incomeBreakdown.sorted { $0.convertedAmount > $1.convertedAmount }
-        state.expenseBreakdown = expenseBreakdown.sorted { $0.convertedAmount > $1.convertedAmount }
+        state.incomeBreakdown = incomeByCategory
+            .map { CashflowCategoryBreakdownEntry(title: $0.key, convertedAmount: $0.value) }
+            .sorted { $0.convertedAmount > $1.convertedAmount }
+        state.expenseBreakdown = expenseByCategory
+            .map { CashflowCategoryBreakdownEntry(title: $0.key, convertedAmount: $0.value) }
+            .sorted { $0.convertedAmount > $1.convertedAmount }
 
         await updateAssetsBreakdown(startDate: startDate, endDate: endDate)
     }

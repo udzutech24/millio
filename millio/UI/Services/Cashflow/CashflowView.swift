@@ -296,7 +296,7 @@ private struct CashflowContentView: View {
     }
 
     private func breakdownList(
-        entries: [CashflowBreakdownEntry],
+        entries: [CashflowCategoryBreakdownEntry],
         signedAmount: @escaping (Double) -> Double,
         valueColor: @escaping (Double) -> Color
     ) -> some View {
@@ -308,7 +308,7 @@ private struct CashflowContentView: View {
             } else {
                 ForEach(entries) { entry in
                     HStack(alignment: .firstTextBaseline) {
-                        Text(transactionBreakdownTitle(entry.transaction))
+                        Text(entry.title)
                             .font(.system(size: 13, weight: .regular))
                             .foregroundStyle(AppColors.textSecondary)
                             .lineLimit(2)
@@ -324,50 +324,6 @@ private struct CashflowContentView: View {
         }
         .padding(12)
         .background(financeInnerBackground(cornerRadius: 16))
-    }
-
-    private func transactionBreakdownTitle(_ transaction: CashflowTransaction) -> String {
-        var parts: [String] = []
-
-        switch transaction.transactionType {
-        case .income:
-            if let category = transaction.incomeCategory {
-                parts.append(category.displayName)
-            }
-            if let cardName = cardName(for: transaction.cardID) {
-                parts.append("на \(cardName)")
-            }
-
-        case .expense:
-            if let category = transaction.expenseCategory {
-                parts.append(category.displayName)
-            }
-            if let cardName = cardName(for: transaction.cardID) {
-                parts.append("с \(cardName)")
-            }
-
-        case .transfer:
-            if let fromName = cardName(for: transaction.cardID),
-               let toName = cardName(for: transaction.toCardID) {
-                parts.append("\(fromName) → \(toName)")
-            }
-
-        default:
-            if let cardName = cardName(for: transaction.cardID) {
-                parts.append(cardName)
-            }
-        }
-
-        if let note = transaction.note, !note.isEmpty {
-            parts.append(note)
-        }
-
-        return parts.isEmpty ? "Без описания" : parts.joined(separator: ". ")
-    }
-
-    private func cardName(for cardID: String?) -> String? {
-        guard let cardID else { return nil }
-        return viewModel.state.allCards.first(where: { $0.cardUniqueID == cardID })?.name
     }
 
     private func currencyWarningView(text: String) -> some View {
