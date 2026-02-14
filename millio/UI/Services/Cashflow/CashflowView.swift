@@ -41,6 +41,8 @@ private struct CashflowContentView: View {
     @State private var draftStartDate: Date = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
     @State private var draftEndDate: Date = Date()
     @State private var showAssetChangeInfoSheet: Bool = false
+    @State private var showIncomeBreakdown: Bool = false
+    @State private var showExpenseBreakdown: Bool = false
     
     var body: some View {
         ZStack {
@@ -152,11 +154,20 @@ private struct CashflowContentView: View {
                 valueColor: AppColors.textPrimary
             )
 
-            statRow(
+            expandableStatRow(
                 title: "Доходы",
                 value: formatSignedMoney(viewModel.state.totalIncome),
-                valueColor: positiveColor(for: viewModel.state.totalIncome)
+                valueColor: positiveColor(for: viewModel.state.totalIncome),
+                isExpanded: $showIncomeBreakdown
             )
+            
+            if showIncomeBreakdown {
+                breakdownList(
+                    entries: viewModel.state.incomeBreakdown,
+                    signedAmount: { $0 },
+                    valueColor: { positiveColor(for: $0) }
+                )
+            }
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .center) {
@@ -192,11 +203,20 @@ private struct CashflowContentView: View {
             .padding(12)
             .background(financeInnerBackground(cornerRadius: 16))
 
-            statRow(
+            expandableStatRow(
                 title: "Расходы внесенные",
                 value: formatSignedMoney(-viewModel.state.contributedExpense),
-                valueColor: negativeColor(for: -viewModel.state.contributedExpense)
+                valueColor: negativeColor(for: -viewModel.state.contributedExpense),
+                isExpanded: $showExpenseBreakdown
             )
+            
+            if showExpenseBreakdown {
+                breakdownList(
+                    entries: viewModel.state.expenseBreakdown,
+                    signedAmount: { -$0 },
+                    valueColor: { negativeColor(for: -$0) }
+                )
+            }
 
             VStack(spacing: 8) {
                 statRow(
@@ -240,6 +260,114 @@ private struct CashflowContentView: View {
         }
         .padding(12)
         .background(financeInnerBackground(cornerRadius: 16))
+    }
+
+    private func expandableStatRow(
+        title: String,
+        value: String,
+        valueColor: Color,
+        isExpanded: Binding<Bool>
+    ) -> some View {
+        HStack(alignment: .top) {
+            Text(title)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(AppColors.textSecondary)
+            Spacer()
+            HStack(spacing: 8) {
+                Text(value)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(valueColor)
+                    .lineLimit(1)
+                Button {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
+                        isExpanded.wrappedValue.toggle()
+                    }
+                } label: {
+                    Image(systemName: isExpanded.wrappedValue ? "minus.circle" : "plus.circle")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(AppColors.textSecondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isExpanded.wrappedValue ? "Скрыть детали" : "Показать детали")
+            }
+        }
+        .padding(12)
+        .background(financeInnerBackground(cornerRadius: 16))
+    }
+
+    private func breakdownList(
+        entries: [CashflowBreakdownEntry],
+        signedAmount: @escaping (Double) -> Double,
+        valueColor: @escaping (Double) -> Color
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if entries.isEmpty {
+                Text("Нет операций")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(AppColors.textSecondary)
+            } else {
+                ForEach(entries) { entry in
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(transactionBreakdownTitle(entry.transaction))
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundStyle(AppColors.textSecondary)
+                            .lineLimit(2)
+                        Spacer()
+                        let value = signedAmount(entry.convertedAmount)
+                        Text(formatSignedMoney(value))
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(valueColor(entry.convertedAmount))
+                            .lineLimit(1)
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .background(financeInnerBackground(cornerRadius: 16))
+    }
+
+    private func transactionBreakdownTitle(_ transaction: CashflowTransaction) -> String {
+        var parts: [String] = []
+
+        switch transaction.transactionType {
+        case .income:
+            if let category = transaction.incomeCategory {
+                parts.append(category.displayName)
+            }
+            if let cardName = cardName(for: transaction.cardID) {
+                parts.append("на \(cardName)")
+            }
+
+        case .expense:
+            if let category = transaction.expenseCategory {
+                parts.append(category.displayName)
+            }
+            if let cardName = cardName(for: transaction.cardID) {
+                parts.append("с \(cardName)")
+            }
+
+        case .transfer:
+            if let fromName = cardName(for: transaction.cardID),
+               let toName = cardName(for: transaction.toCardID) {
+                parts.append("\(fromName) → \(toName)")
+            }
+
+        default:
+            if let cardName = cardName(for: transaction.cardID) {
+                parts.append(cardName)
+            }
+        }
+
+        if let note = transaction.note, !note.isEmpty {
+            parts.append(note)
+        }
+
+        return parts.isEmpty ? "Без описания" : parts.joined(separator: ". ")
+    }
+
+    private func cardName(for cardID: String?) -> String? {
+        guard let cardID else { return nil }
+        return viewModel.state.allCards.first(where: { $0.cardUniqueID == cardID })?.name
     }
 
     private func currencyWarningView(text: String) -> some View {

@@ -195,6 +195,80 @@ struct CashflowViewModelTests {
         #expect(abs(viewModel.state.periodTotalChange - 300) < 0.01)
     }
 
+    @Test("Детализация расходов сортируется по убыванию и учитывает доходы отдельно")
+    func testBreakdownSortingByAmount() async throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 2, day: 13)) ?? Date()
+        let defaults = UserDefaults.standard
+        let previousDisplayCurrency = defaults.string(forKey: "cashflow_display_currency")
+        defaults.set("RUB", forKey: "cashflow_display_currency")
+        defer {
+            if let previousDisplayCurrency {
+                defaults.set(previousDisplayCurrency, forKey: "cashflow_display_currency")
+            } else {
+                defaults.removeObject(forKey: "cashflow_display_currency")
+            }
+        }
+
+        let expenseSmall = CashflowTransaction(
+            transactionType: .expense,
+            amount: 100,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: nil,
+            note: "Small"
+        )
+        let expenseLarge = CashflowTransaction(
+            transactionType: .expense,
+            amount: 300,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: nil,
+            note: "Large"
+        )
+        let expenseMedium = CashflowTransaction(
+            transactionType: .expense,
+            amount: 200,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: nil,
+            note: "Medium"
+        )
+        let income = CashflowTransaction(
+            transactionType: .income,
+            amount: 400,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: nil,
+            note: "Income"
+        )
+
+        modelContext.insert(expenseSmall)
+        modelContext.insert(expenseLarge)
+        modelContext.insert(expenseMedium)
+        modelContext.insert(income)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(
+            modelContext: modelContext,
+            now: { fixedNow },
+            assetsSnapshotProvider: { _, _, _ in
+                (start: 0, end: 0)
+            }
+        )
+
+        viewModel.handle(.loadTransactions)
+
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            viewModel.state.expenseBreakdown.count == 3 &&
+            viewModel.state.incomeBreakdown.count == 1
+        }
+
+        let expenseAmounts = viewModel.state.expenseBreakdown.map { $0.convertedAmount }
+        #expect(expenseAmounts == [300, 200, 100])
+        #expect(viewModel.state.incomeBreakdown.first?.convertedAmount == 400)
+    }
+
     private func waitUntil(
         timeoutNanoseconds: UInt64,
         intervalNanoseconds: UInt64 = 50_000_000,

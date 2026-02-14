@@ -111,9 +111,29 @@ struct CashflowState {
 
     /// Предупреждение о конвертации валют в истории
     var currencyConversionWarning: String? = nil
+
+    /// Детализация доходов за период (по убыванию суммы)
+    var incomeBreakdown: [CashflowBreakdownEntry] = []
+
+    /// Детализация расходов за период (по убыванию суммы)
+    var expenseBreakdown: [CashflowBreakdownEntry] = []
     
     /// Флаг загрузки данных
     var isLoading: Bool = false
+}
+
+// MARK: - Cashflow Breakdown Entry
+
+struct CashflowBreakdownEntry: Identifiable {
+    let id: String
+    let transaction: CashflowTransaction
+    let convertedAmount: Double
+
+    init(transaction: CashflowTransaction, convertedAmount: Double) {
+        self.id = transaction.transactionUniqueID
+        self.transaction = transaction
+        self.convertedAmount = convertedAmount
+    }
 }
 
 // MARK: - Chart Period
@@ -388,9 +408,11 @@ final class CashflowViewModel: ViewModelProtocol {
     private func updateChartDataAsync() async {
         let (startDate, endDate) = getDateRange()
         
-        // Рассчитываем общие суммы за период
+        // Рассчитываем общие суммы за период и детализацию
         var totalIncome: Double = 0.0
         var totalExpense: Double = 0.0
+        var incomeBreakdown: [CashflowBreakdownEntry] = []
+        var expenseBreakdown: [CashflowBreakdownEntry] = []
         
         for transaction in state.transactions {
             guard transaction.transactionDate >= startDate && transaction.transactionDate <= endDate else {
@@ -404,6 +426,12 @@ final class CashflowViewModel: ViewModelProtocol {
                     to: state.displayCurrency
                 )
                 totalIncome += converted
+                incomeBreakdown.append(
+                    CashflowBreakdownEntry(
+                        transaction: transaction,
+                        convertedAmount: converted
+                    )
+                )
                 
             case .expense:
                 let converted = await convertAmountForTransaction(
@@ -411,6 +439,12 @@ final class CashflowViewModel: ViewModelProtocol {
                     to: state.displayCurrency
                 )
                 totalExpense += converted
+                expenseBreakdown.append(
+                    CashflowBreakdownEntry(
+                        transaction: transaction,
+                        convertedAmount: converted
+                    )
+                )
                 
             case .transfer, .balanceAdjustment:
                 break
@@ -422,6 +456,8 @@ final class CashflowViewModel: ViewModelProtocol {
         state.totalIncome = totalIncome
         state.totalExpense = totalExpense
         state.periodBalance = totalIncome - totalExpense
+        state.incomeBreakdown = incomeBreakdown.sorted { $0.convertedAmount > $1.convertedAmount }
+        state.expenseBreakdown = expenseBreakdown.sorted { $0.convertedAmount > $1.convertedAmount }
 
         await updateAssetsBreakdown(startDate: startDate, endDate: endDate)
     }
