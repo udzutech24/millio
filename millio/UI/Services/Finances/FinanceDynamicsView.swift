@@ -762,10 +762,11 @@ private struct FinanceDynamicsContentView: View {
             endPoint: .bottomTrailing
         )
 
-        return HStack(spacing: 0) {
-            dynamicsSegmentButton(title: "Группы", mode: .groups, borderGradient: borderGradient)
-            dynamicsSegmentButton(title: "Счета", mode: .accounts, borderGradient: borderGradient)
+        return Picker("Режим динамики", selection: dynamicsViewModeSelection) {
+            Text("Группы").tag(0)
+            Text("Счета").tag(1)
         }
+        .pickerStyle(.segmented)
         .padding(4)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -777,22 +778,12 @@ private struct FinanceDynamicsContentView: View {
         )
     }
 
-    private func dynamicsSegmentButton(title: String, mode: DynamicsViewMode, borderGradient: LinearGradient) -> some View {
-        let isSelected = viewModel.state.viewMode == mode
-        return Button {
-            viewModel.handle(.setViewMode(mode))
-        } label: {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(isSelected ? AppColors.textPrimary : AppColors.textSecondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(isSelected ? Color.white.opacity(0.08) : Color.clear)
-                )
+    private var dynamicsViewModeSelection: Binding<Int> {
+        Binding {
+            viewModel.state.viewMode == .groups ? 0 : 1
+        } set: { value in
+            viewModel.handle(.setViewMode(value == 0 ? .groups : .accounts))
         }
-        .buttonStyle(.plain)
     }
 
     private var dynamicsCardBackground: some View {
