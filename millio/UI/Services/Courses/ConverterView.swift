@@ -197,6 +197,10 @@ struct ConverterView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
             }
+
+            calculatorPanel
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
             
             // Клавиатура всегда внизу
             VStack(spacing: 0) {
@@ -218,7 +222,7 @@ struct ConverterView: View {
         VStack(spacing: safeRowSpacing) {
             ForEach(Array(viewModel.state.selectedCurrencies.enumerated()), id: \.offset) { idx, code in
                 let isActive = (viewModel.state.activeCode == code)
-                let effectiveRowH = isActive ? safeRowH * 1.20 : safeRowH
+                let effectiveRowH = safeRowH
                 let finalRowH = effectiveRowH.isFinite && effectiveRowH > 0 ? effectiveRowH : safeRowH
                 currencyRow(index: idx,
                             code: code,
@@ -451,6 +455,24 @@ struct ConverterView: View {
         }
     }
     
+    private var calculatorPanel: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(viewModel.state.expressionText)
+                .font(.system(size: 15, weight: .regular))
+                .foregroundStyle(AppColors.textTertiary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Spacer(minLength: 8)
+            Text(viewModel.state.inputText)
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(AppColors.textPrimary)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+        }
+        .frame(maxWidth: .infinity)
+    }
+    
     
     // MARK: - Currency row
     private func currencyRow(index: Int, code: String, valueText: String, isActive: Bool, rowHeight: CGFloat) -> some View {
@@ -490,69 +512,14 @@ struct ConverterView: View {
                                 .font(isActive ? .title3.weight(.semibold) : .headline.weight(.semibold))
                                 .foregroundStyle(AppColors.textPrimary)
                         }
-                        if isActive {
-                            Button {
-                                viewModel.handle(.toggleCalcMode)
-                            } label: {
-                                Image(systemName: viewModel.state.calcModeOn ? "circle.grid.3x3.fill" : "circle.grid.3x3")
-                                    .font(.footnote.weight(.semibold))
-                                    .foregroundStyle(viewModel.state.calcModeOn ? AppColors.textPrimary : AppColors.textTertiary)
-                                    .frame(width: 22, height: 22)
-                                    .background(
-                                        Circle().fill(viewModel.state.calcModeOn ? AppColors.coursesGradient.first!.opacity(0.85) : AppColors.iconBackground)
-                                    )
-                                    .overlay(
-                                        Circle().strokeBorder(AppColors.textPrimary.opacity(viewModel.state.calcModeOn ? 0.0 : 0.12))
-                                    )
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Калькулятор")
-                        }
                     }
                     Spacer()
-                    if isActive && viewModel.state.calcModeOn {
-                        VStack(alignment: .trailing, spacing: 2) {
-                            // Строка выражения: 100-2+3 или 100-2+3=101
-                            if !viewModel.state.expressionText.isEmpty {
-                                Text(viewModel.state.expressionText)
-                                    .font(.caption2)
-                                    .foregroundStyle(AppColors.textTertiary)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.6)
-                            }
-                            HStack(spacing: 6) {
-                                TextField("0", text: Binding(
-                                    get: { viewModel.state.inputText },
-                                    set: { viewModel.handle(.updateInputText($0)) }
-                                ))
-                                .keyboardType(.decimalPad)
-                                .font(.title3.weight(.semibold))
-                                .monospacedDigit()
-                                .multilineTextAlignment(.trailing)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled(true)
-                                .submitLabel(.done)
-                                .frame(minWidth: 80)
-                            }
-                            .padding(.vertical, 6)
-                            .padding(.horizontal, 8)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(.ultraThinMaterial)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .strokeBorder(AppColors.textPrimary.opacity(0.1))
-                            )
-                        }
-                    } else {
-                        Text(valueText)
-                            .font(isActive ? .title2.weight(.bold) : .title3.weight(.semibold))
-                            .monospacedDigit()
-                            .minimumScaleFactor(0.6)
-                            .foregroundStyle(AppColors.textPrimary)
-                            .padding(.trailing, 4)
-                    }
+                    Text(valueText)
+                        .font(isActive ? .title2.weight(.bold) : .title3.weight(.semibold))
+                        .monospacedDigit()
+                        .minimumScaleFactor(0.6)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.trailing, 4)
                 }
                 .padding(.horizontal, 12)
                 .frame(height: safeRowHeight)
@@ -801,4 +768,3 @@ struct ConverterView_Previews: PreviewProvider {
     }
 }
 #endif
-

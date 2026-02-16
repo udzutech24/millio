@@ -44,7 +44,7 @@ struct ConverterState {
     var entering: Bool = true
     var justEvaluated: Bool = false
     var expressionText: String = ""
-    var calcModeOn: Bool = false
+    var calcModeOn: Bool = true
     
     // Share
     var shareImage: UIImage? = nil
@@ -179,7 +179,6 @@ final class ConverterViewModel: ViewModelProtocol {
             state.activeCode = code
             storedActive = code
             mirrorToICloud(key: "conv_active_code", value: code)
-            state.calcModeOn = false
             
         case .addCurrency:
             state.replaceIndex = nil
