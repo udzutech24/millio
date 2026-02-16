@@ -55,62 +55,86 @@ struct ShareRow: View {
     let highlighted: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Flag
+        HStack(spacing: 10) {
             Image("flag")
                 .resizable()
                 .renderingMode(.template)
                 .foregroundStyle(Color.white)
-                .frame(width: 48, height: 48)
+                .frame(width: 28, height: 28)
                 .frame(width: 64, height: 64)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.8)
+                .background(
+                    Circle()
+                        .fill(flagCircleBackground)
                 )
 
-            // Main pill
             HStack {
                 Text(code)
-                    .font(.system(size: 28, weight: .semibold))
+                    .font(.system(size: 24, weight: .medium))
                     .foregroundStyle(.white)
+                    .frame(width: 134, height: 44)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(codePillBackground)
+                    )
 
                 Spacer()
 
                 Text(value)
-                    .font(.system(size: 40, weight: .bold))
+                    .font(.system(size: 36, weight: .bold))
                     .monospacedDigit()
                     .foregroundStyle(.white)
+                    .minimumScaleFactor(0.65)
+                    .lineLimit(1)
             }
-            .padding(.horizontal, 16)
-            .frame(height: 84)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .strokeBorder(
-                        highlighted
-                        ? LinearGradient(
-                            colors: AppColors.coursesGradient,
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                        : LinearGradient(
-                            colors: [AppColors.textPrimary.opacity(0.10), AppColors.textPrimary.opacity(0.06)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: highlighted ? 1.6 : 0.8
-                    )
+            .padding(.leading, highlighted ? 14 : 10)
+            .padding(.trailing, 16)
+            .frame(height: 64)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(rowBackground)
             )
         }
+    }
+
+    private var rowBackground: LinearGradient {
+        if highlighted {
+            return LinearGradient(
+                colors: [Color(hex: "F7933A"), Color(hex: "F58A37")],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        }
+
+        return LinearGradient(
+            colors: [Color(hex: "2F3035"), Color(hex: "25262A")],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+    }
+
+    private var codePillBackground: Color {
+        highlighted ? Color(hex: "E9B183") : Color(hex: "5A5C61")
+    }
+
+    private var flagCircleBackground: LinearGradient {
+        if highlighted {
+            return LinearGradient(
+                colors: [Color(hex: "F79B41"), Color(hex: "F58A37")],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+
+        return LinearGradient(
+            colors: [Color(hex: "34353A"), Color(hex: "26272B")],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 }
 
 // MARK: - ShareCardView
 struct ShareCardView: View {
-    private let appName: String = "millio"
-    private let slogan: String = "Курс за секунду. Делись красиво."
-
     let dateString: String
     let rows: [ShareRowModel]
     let highlightedCode: String
@@ -119,10 +143,10 @@ struct ShareCardView: View {
         ZStack {
             background
 
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 16) {
                 header
 
-                VStack(spacing: 8) {
+                VStack(spacing: 10) {
                     ForEach(rows) { row in
                         ShareRow(
                             flag: row.flag,
@@ -132,27 +156,21 @@ struct ShareCardView: View {
                         )
                     }
                 }
-                .padding(.top, 4)
+                .padding(.top, 2)
 
-                // Небольшой “воздух”, но без огромной пустоты
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 16)
-            .padding(.top, 16)
-            .padding(.bottom, 14)
+            .padding(.top, 18)
+            .padding(.bottom, 16)
         }
-        // Важно: фрейм задаётся снаружи при рендере (card.frame(width:..., height:...))
     }
 
     private var background: some View {
-        LinearGradient(
-            colors: AppColors.backgroundGradient,
-            startPoint: .top,
-            endPoint: .bottom
-        )
+        Color.black
         .overlay(
             RadialGradient(
-                colors: [AppColors.coursesGradient.first!.opacity(0.18), .clear],
+                colors: [Color(hex: "F58A37").opacity(0.20), .clear],
                 center: .topLeading,
                 startRadius: 80,
                 endRadius: 520
@@ -160,7 +178,7 @@ struct ShareCardView: View {
         )
         .overlay(
             RadialGradient(
-                colors: [AppColors.coursesGradient.last!.opacity(0.18), .clear],
+                colors: [Color(hex: "68A5FF").opacity(0.18), .clear],
                 center: .bottomTrailing,
                 startRadius: 80,
                 endRadius: 520
@@ -170,36 +188,26 @@ struct ShareCardView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
-                        )
-
-                    Image(systemName: "creditcard.and.123")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.95))
-                }
-                .frame(width: 28, height: 28)
-
-                Text(appName)
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundStyle(.white)
-
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Text("Курсы")
+                    .font(.system(size: 44, weight: .bold))
+                    .foregroundStyle(Color.white)
                 Spacer()
+                Text("millio")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.95))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(Color.white.opacity(0.08))
+                    )
             }
 
-            Text(slogan)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.92))
-
             Text(dateString)
-                .font(.system(size: 14, weight: .regular))
-                .foregroundStyle(.white.opacity(0.70))
+                .font(.system(size: 22, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.72))
         }
     }
 }
@@ -295,4 +303,3 @@ struct ActivityView: UIViewControllerRepresentable {
     return card
         .frame(width: 390, height: 844) // iPhone 15/14 Pro-like size in points
 }
-
