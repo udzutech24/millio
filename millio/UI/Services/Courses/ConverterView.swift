@@ -8,6 +8,7 @@ import AudioToolbox
 struct ConverterView: View {
     @StateObject private var viewModel = ConverterViewModel()
     @State private var deleteButtonTapCount = 0
+    @State private var isRateSourceExpanded = false
     
     private var decSep: String { Locale.current.decimalSeparator ?? "," }
     
@@ -270,116 +271,162 @@ struct ConverterView: View {
         NavigationStack {
             ZStack {
                 GradientBackground()
-                
-                List {
-                    Section {
-                        DisclosureGroup {
-                            ForEach(RateSource.allCases) { src in
-                                Button {
-                                    viewModel.handle(.setRateSource(src))
-                                } label: {
-                                    HStack(alignment: .center, spacing: 10) {
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(src.title)
-                                                .font(.body)
+                ScrollView {
+                    VStack(spacing: 22) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            FinancesSectionHeader(title: "Курс")
+                            FinancesGlassCard(accentColor: AppColors.financesGradient.first ?? AppColors.brandPrimary) {
+                                VStack(spacing: 0) {
+                                    Button {
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            isRateSourceExpanded.toggle()
+                                        }
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            Text("Источник курса")
+                                                .font(.system(size: 16, weight: .medium))
                                                 .foregroundStyle(AppColors.textPrimary)
-                                            Text(src.subtitle)
-                                                .font(.caption)
+                                            Spacer()
+                                            Text(viewModel.state.rateSource.title)
+                                                .font(.system(size: 14, weight: .regular))
+                                                .foregroundStyle(AppColors.textTertiary)
+                                            Image(systemName: isRateSourceExpanded ? "chevron.up" : "chevron.down")
+                                                .font(.system(size: 12, weight: .semibold))
                                                 .foregroundStyle(AppColors.textTertiary)
                                         }
-                                        Spacer()
-                                        if src == viewModel.state.rateSource {
-                                            Image(systemName: "checkmark")
-                                                .foregroundStyle(
-                                                    LinearGradient(
-                                                        colors: AppColors.coursesGradient,
-                                                        startPoint: .leading,
-                                                        endPoint: .trailing
-                                                    )
-                                                )
+                                        .padding(.vertical, 14)
+                                        .padding(.horizontal, 16)
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    if isRateSourceExpanded {
+                                        FinancesRowDivider(leadingPadding: 16)
+                                        VStack(spacing: 0) {
+                                            ForEach(Array(RateSource.allCases.enumerated()), id: \.element.id) { index, src in
+                                                Button {
+                                                    viewModel.handle(.setRateSource(src))
+                                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                                        isRateSourceExpanded = false
+                                                    }
+                                                } label: {
+                                                    HStack(spacing: 12) {
+                                                        VStack(alignment: .leading, spacing: 2) {
+                                                            Text(src.title)
+                                                                .font(.system(size: 15, weight: .medium))
+                                                                .foregroundStyle(AppColors.textPrimary)
+                                                            Text(src.subtitle)
+                                                                .font(.system(size: 12, weight: .regular))
+                                                                .foregroundStyle(AppColors.textTertiary)
+                                                                .multilineTextAlignment(.leading)
+                                                        }
+                                                        Spacer()
+                                                        if src == viewModel.state.rateSource {
+                                                            Image(systemName: "checkmark")
+                                                                .font(.system(size: 13, weight: .semibold))
+                                                                .foregroundStyle(
+                                                                    LinearGradient(
+                                                                        colors: AppColors.financesGradient,
+                                                                        startPoint: .leading,
+                                                                        endPoint: .trailing
+                                                                    )
+                                                                )
+                                                        }
+                                                    }
+                                                    .padding(.vertical, 12)
+                                                    .padding(.horizontal, 16)
+                                                }
+                                                .buttonStyle(.plain)
+
+                                                if index < RateSource.allCases.count - 1 {
+                                                    FinancesRowDivider(leadingPadding: 16)
+                                                }
+                                            }
                                         }
                                     }
-                                    .padding(.vertical, 4)
+
+                                    FinancesRowDivider(leadingPadding: 16)
+
+                                    HStack(spacing: 12) {
+                                        Text("Последнее обновление")
+                                            .font(.system(size: 16, weight: .medium))
+                                            .foregroundStyle(AppColors.textPrimary)
+                                        Spacer()
+                                        Text(viewModel.lastUpdatedText)
+                                            .font(.system(size: 14, weight: .regular))
+                                            .foregroundStyle(AppColors.textTertiary)
+                                    }
+                                    .padding(.vertical, 14)
+                                    .padding(.horizontal, 16)
+
+                                    FinancesRowDivider(leadingPadding: 16)
+
+                                    Button {
+                                        #if os(iOS)
+                                        if viewModel.state.hapticsEnabled {
+                                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                        }
+                                        #endif
+                                        viewModel.handle(.refreshRates(force: true))
+                                    } label: {
+                                        HStack(spacing: 10) {
+                                            Image(systemName: "arrow.clockwise")
+                                            Text(viewModel.state.isFetchingRates ? "Обновляем..." : "Обновить курсы")
+                                        }
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundStyle(
+                                            LinearGradient(
+                                                colors: AppColors.financesGradient,
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.vertical, 14)
+                                        .padding(.horizontal, 16)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .disabled(viewModel.state.isFetchingRates)
+                                    .opacity(viewModel.state.isFetchingRates ? 0.5 : 1.0)
                                 }
                             }
-                        } label: {
-                            HStack {
-                                Text("Источник курса")
-                                    .foregroundStyle(AppColors.textPrimary)
-                                Spacer()
-                                Text(viewModel.state.rateSource.title)
-                                    .font(.subheadline)
-                                    .foregroundStyle(AppColors.textTertiary)
+                        }
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            FinancesSectionHeader(title: "Точность")
+                            FinancesGlassCard(accentColor: AppColors.financesGradient.first ?? AppColors.brandPrimary, contentPadding: EdgeInsets(top: 14, leading: 16, bottom: 16, trailing: 16)) {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Text("Знаков после запятой")
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundStyle(AppColors.textPrimary)
+                                    Picker("Знаков после запятой", selection: Binding(
+                                        get: { viewModel.state.fractionDigits },
+                                        set: { viewModel.handle(.setFractionDigits($0)) }
+                                    )) {
+                                        ForEach(0...8, id: \.self) { n in
+                                            Text("\(n)").tag(n)
+                                        }
+                                    }
+                                    .pickerStyle(.segmented)
+                                }
                             }
                         }
-                        
-                        HStack {
-                            Text("Последнее обновление")
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            FinancesSectionHeader(title: "Ощущения")
+                            FinancesGlassCard(accentColor: AppColors.financesGradient.first ?? AppColors.brandPrimary, contentPadding: EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16)) {
+                                Toggle("Тактильный отклик", isOn: Binding(
+                                    get: { viewModel.state.hapticsEnabled },
+                                    set: { viewModel.handle(.setHapticsEnabled($0)) }
+                                ))
+                                .tint(AppColors.financesGradient.first ?? AppColors.brandPrimary)
                                 .foregroundStyle(AppColors.textPrimary)
-                            Spacer()
-                            Text(viewModel.lastUpdatedText)
-                                .font(.subheadline)
-                                .foregroundStyle(AppColors.textTertiary)
-                        }
-                        
-                        Button {
-                            #if os(iOS)
-                            if viewModel.state.hapticsEnabled {
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            }
-                            #endif
-                            viewModel.handle(.refreshRates(force: true))
-                        } label: {
-                            HStack {
-                                Image(systemName: "arrow.clockwise")
-                                Text("Обновить курсы")
-                            }
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: AppColors.coursesGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                        }
-                        .disabled(viewModel.state.isFetchingRates)
-                    } header: {
-                        Text("Курс")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary)
-                    }
-                    
-                    Section {
-                        Picker("Знаков после запятой", selection: Binding(
-                            get: { viewModel.state.fractionDigits },
-                            set: { viewModel.handle(.setFractionDigits($0)) }
-                        )) {
-                            ForEach(0...8, id: \.self) { n in
-                                Text("\(n)").tag(n)
                             }
                         }
-                        .pickerStyle(.segmented)
-                    } header: {
-                        Text("Точность")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary)
                     }
-                    
-                    Section {
-                        Toggle("Тактильный отклик", isOn: Binding(
-                            get: { viewModel.state.hapticsEnabled },
-                            set: { viewModel.handle(.setHapticsEnabled($0)) }
-                        ))
-                        .foregroundStyle(AppColors.textPrimary)
-                    } header: {
-                        Text("Ощущения")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary)
-                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 20)
+                    .padding(.bottom, 32)
                 }
-                .listStyle(.insetGrouped)
-                .scrollContentBackground(.hidden)
-                .background(Color.clear)
             }
             .navigationTitle("Конвертор")
             .navigationBarTitleDisplayMode(.inline)
