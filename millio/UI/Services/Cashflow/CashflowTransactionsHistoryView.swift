@@ -338,7 +338,7 @@ private struct HistoryTransactionCard: View {
         formatter.maximumFractionDigits = 0
 
         let amountStr = formatter.string(from: NSNumber(value: transaction.amount)) ?? "0"
-        let symbol = currencySymbol(transaction.currency)
+        let symbol = MonetaCurrency(rawValue: resolvedCurrencyCode)?.symbol ?? resolvedCurrencyCode
 
         switch transaction.transactionType {
         case .income:
@@ -350,15 +350,24 @@ private struct HistoryTransactionCard: View {
         }
     }
 
-    private func currencySymbol(_ code: String) -> String {
-        switch code {
-        case "RUB": return "₽"
-        case "USD": return "$"
-        case "EUR": return "€"
-        case "GBP": return "£"
-        case "JPY", "CNY": return "¥"
-        default: return code
+    private var resolvedCurrencyCode: String {
+        let rawCurrency = transaction.currency
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+        if !rawCurrency.isEmpty {
+            return rawCurrency
         }
+
+        let exchangeCurrency = transaction.exchangeRateCurrency?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased() ?? ""
+        if !exchangeCurrency.isEmpty {
+            return exchangeCurrency
+        }
+
+        return viewModel.state.displayCurrency
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
     }
 
     // MARK: - Описание операции
