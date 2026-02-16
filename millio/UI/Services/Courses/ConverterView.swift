@@ -473,6 +473,44 @@ struct ConverterView: View {
         .frame(maxWidth: .infinity)
     }
     
+    private func courseRowBackground(isActive: Bool) -> LinearGradient {
+        if isActive {
+            return LinearGradient(
+                colors: [Color(hex: "F7933A"), Color(hex: "F58A37")],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        }
+        return LinearGradient(
+            colors: [Color(hex: "2F3035"), Color(hex: "25262A")],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+    }
+    
+    private func codePillBackground(isActive: Bool) -> Color {
+        isActive ? Color(hex: "E9B183") : Color(hex: "5A5C61")
+    }
+    
+    private func flagCircleBackground(isActive: Bool) -> some ShapeStyle {
+        if isActive {
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [Color(hex: "F79B41"), Color(hex: "F58A37")],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+        }
+        return AnyShapeStyle(
+            LinearGradient(
+                colors: [Color(hex: "34353A"), Color(hex: "26272B")],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+    }
+    
     
     // MARK: - Currency row
     private func currencyRow(index: Int, code: String, valueText: String, isActive: Bool, rowHeight: CGFloat) -> some View {
@@ -486,11 +524,11 @@ struct ConverterView: View {
                     .resizable()
                     .renderingMode(.template)
                     .foregroundStyle(AppColors.textPrimary)
-                    .frame(width: 24, height: 24)
-                    .frame(width: 60, height: safeRowHeight)
+                    .frame(width: 28, height: 28)
+                    .frame(width: safeRowHeight, height: safeRowHeight)
                     .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(.ultraThinMaterial)
+                        Circle()
+                            .fill(flagCircleBackground(isActive: isActive))
                     )
             }
             .buttonStyle(.plain)
@@ -505,41 +543,28 @@ struct ConverterView: View {
                     viewModel.handle(.selectCurrency(code))
                 }
             } label: {
-                HStack(spacing: 12) {
-                    HStack(spacing: 8) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(code)
-                                .font(isActive ? .title3.weight(.semibold) : .headline.weight(.semibold))
-                                .foregroundStyle(AppColors.textPrimary)
-                        }
-                    }
+                HStack(spacing: 14) {
+                    Text(code)
+                        .font(.title3.weight(.medium))
+                        .foregroundStyle(Color.white.opacity(0.95))
+                        .frame(width: 86, height: max(34, safeRowHeight * 0.56))
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(codePillBackground(isActive: isActive))
+                        )
                     Spacer()
                     Text(valueText)
-                        .font(isActive ? .title2.weight(.bold) : .title3.weight(.semibold))
+                        .font(isActive ? .system(size: 22, weight: .bold) : .system(size: 22, weight: .regular))
                         .monospacedDigit()
                         .minimumScaleFactor(0.6)
-                        .foregroundStyle(AppColors.textPrimary)
-                        .padding(.trailing, 4)
+                        .foregroundStyle(Color.white.opacity(0.95))
+                        .padding(.trailing, 2)
                 }
                 .padding(.horizontal, 12)
                 .frame(height: safeRowHeight)
                 .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                )
-                .overlay(
-                    Group {
-                        if isActive {
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .stroke(
-                                    LinearGradient(colors: AppColors.coursesGradient, startPoint: .leading, endPoint: .trailing),
-                                    lineWidth: 1
-                                )
-                        } else {
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .stroke(AppColors.textPrimary.opacity(0.1), lineWidth: 1)
-                        }
-                    }
+                    Capsule(style: .continuous)
+                        .fill(courseRowBackground(isActive: isActive))
                 )
             }
             .buttonStyle(.plain)
@@ -565,29 +590,39 @@ struct ConverterView: View {
         let safeRowHeight = rowHeight.isFinite && rowHeight > 0 ? rowHeight : 58
         
         return HStack(spacing: 10) {
-            Image(systemName: "plus.circle.fill")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(AppColors.textTertiary)
-                .frame(width: 60, height: safeRowHeight)
+            Image("flag")
+                .resizable()
+                .renderingMode(.template)
+                .foregroundStyle(AppColors.textPrimary)
+                .frame(width: 28, height: 28)
+                .frame(width: safeRowHeight, height: safeRowHeight)
                 .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(.ultraThinMaterial)
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(hex: "34353A"), Color(hex: "26272B")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                 )
             HStack {
-                Text("Добавить валюту")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(AppColors.textTertiary)
                 Spacer()
+                Text("Добавить валюту")
+                    .font(.system(size: 22, weight: .regular))
+                    .foregroundStyle(Color.white.opacity(0.55))
             }
             .padding(.horizontal, 12)
-                .frame(height: safeRowHeight)
+            .frame(height: safeRowHeight)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(.ultraThinMaterial)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(AppColors.textPrimary.opacity(0.1), lineWidth: 1)
+                Capsule(style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(hex: "2F3035"), Color(hex: "25262A")],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
             )
         }
         .contentShape(Rectangle())
