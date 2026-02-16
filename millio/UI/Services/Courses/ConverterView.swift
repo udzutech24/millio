@@ -54,11 +54,11 @@ struct ConverterView: View {
         let bottomSafe: CGFloat = 0
 #endif
         let headerH: CGFloat = 52
-        let topPadding: CGFloat = 8
+        let topPadding: CGFloat = 4
         
-        // Минимальные размеры для клавиатуры
-        let minKeyHeight: CGFloat = 44
-        let minKeySpacing: CGFloat = 6
+        // Фиксированная высота кнопок клавиатуры по дизайну
+        let minKeyHeight: CGFloat = 64
+        let minKeySpacing: CGFloat = 4
         let keypadRows: Int = 5
         
         // Вычисляем минимальную высоту клавиатуры (без лишних отступов)
@@ -72,15 +72,15 @@ struct ConverterView: View {
         
         // Вычисляем размеры кнопок и отступы с учетом доступного места
         let keypadContentHeight = max(0, keypadAvailableHeight - bottomSafe)
-        let keyH = max(minKeyHeight, floor(max(0, (keypadContentHeight - CGFloat(keypadRows - 1) * minKeySpacing) / CGFloat(keypadRows))))
+        let keyH = minKeyHeight
         
         // Адаптируем spacing между кнопками
         let actualKeypadContentHeight = CGFloat(keypadRows) * keyH
         let remainingSpace = max(0, keypadContentHeight - actualKeypadContentHeight)
-        let keySpacing = minKeySpacing + (remainingSpace > 0 ? floor(remainingSpace / CGFloat(keypadRows - 1)) : 0)
+        let keySpacing = min(5, minKeySpacing + (remainingSpace > 0 ? floor(remainingSpace / CGFloat(keypadRows - 1)) : 0))
         
-        // Размер шрифта зависит от высоты кнопки
-        let fontSize: CGFloat = keyH >= 60 ? 22 : (keyH >= 54 ? 20 : (keyH >= 48 ? 18 : 16))
+        // Для фиксированной высоты 64 используем фиксированный размер шрифта
+        let fontSize: CGFloat = 22
         
         // Для списка валют используем адаптивную высоту строк
         let desiredRows: Int = 6
@@ -115,12 +115,8 @@ struct ConverterView: View {
     
     var body: some View {
         ZStack {
-            GradientBackground(
-                topGradientColor: "F78C3B",
-                topGradientFadeColor: "1942E6",
-                bottomGradientColor: "1942E6",
-                bottomGradientFadeColor: "F78C3B"
-            )
+            Color.black
+                .ignoresSafeArea()
             
             GeometryReader { geo in
                 let layout = makeLayout(totalH: geo.size.height)
@@ -192,22 +188,22 @@ struct ConverterView: View {
     @ViewBuilder
     private func mainContent(layout: Layout) -> some View {
         VStack(spacing: 0) {
-            // Список валют с возможностью скролла
-            ScrollView {
-                currencyList(layout: layout)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-            }
+            currencyList(layout: layout)
+                .padding(.horizontal, 16)
+                .padding(.top, 4)
+                .padding(.bottom, 28)
+
+            Spacer(minLength: 0)
 
             calculatorPanel
                 .padding(.horizontal, 16)
-                .padding(.top, 8)
+                .padding(.top, 4)
             
             // Клавиатура всегда внизу
             VStack(spacing: 0) {
                 keypad(height: layout.keyH, spacing: layout.keySpacing, fontSize: layout.fontSize)
                     .padding(.horizontal, 16)
-                    .padding(.top, 8)
+                    .padding(.top, 4)
                     .padding(.bottom, layout.bottomSafe) // Минимальный отступ только для safe area
             }
             .background(Color.clear)
@@ -217,8 +213,8 @@ struct ConverterView: View {
     @ViewBuilder
     private func currencyList(layout: Layout) -> some View {
         let safeRowSpacing = layout.rowSpacing.isFinite && layout.rowSpacing >= 0 ? layout.rowSpacing : 8
-        let regularRowHeight: CGFloat = 42
-        let activeRowHeight: CGFloat = 50
+        let regularRowHeight: CGFloat = 40
+        let activeRowHeight: CGFloat = 46
         
         VStack(spacing: safeRowSpacing) {
             ForEach(Array(viewModel.state.selectedCurrencies.enumerated()), id: \.offset) { idx, code in
