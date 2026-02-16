@@ -215,15 +215,14 @@ struct ConverterView: View {
     
     @ViewBuilder
     private func currencyList(layout: Layout) -> some View {
-        // Гарантируем валидные значения
-        let safeRowH = layout.rowH.isFinite && layout.rowH > 0 ? layout.rowH : 58
         let safeRowSpacing = layout.rowSpacing.isFinite && layout.rowSpacing >= 0 ? layout.rowSpacing : 8
+        let regularRowHeight: CGFloat = 42
+        let activeRowHeight: CGFloat = 50
         
         VStack(spacing: safeRowSpacing) {
             ForEach(Array(viewModel.state.selectedCurrencies.enumerated()), id: \.offset) { idx, code in
                 let isActive = (viewModel.state.activeCode == code)
-                let effectiveRowH = safeRowH
-                let finalRowH = effectiveRowH.isFinite && effectiveRowH > 0 ? effectiveRowH : safeRowH
+                let finalRowH = isActive ? activeRowHeight : regularRowHeight
                 currencyRow(index: idx,
                             code: code,
                             valueText: viewModel.displayValue(for: code),
@@ -232,7 +231,7 @@ struct ConverterView: View {
             }
             let placeholders = max(0, layout.desiredRows - viewModel.state.selectedCurrencies.count)
             ForEach(0..<placeholders, id: \.self) { _ in
-                placeholderRow(rowHeight: safeRowH)
+                placeholderRow(rowHeight: regularRowHeight)
                     .onTapGesture {
                         viewModel.handle(.addCurrency)
                     }
@@ -524,7 +523,7 @@ struct ConverterView: View {
                     .resizable()
                     .renderingMode(.template)
                     .foregroundStyle(AppColors.textPrimary)
-                    .frame(width: 28, height: 28)
+                    .frame(width: 24, height: 24)
                     .frame(width: safeRowHeight, height: safeRowHeight)
                     .background(
                         Circle()
@@ -545,8 +544,8 @@ struct ConverterView: View {
             } label: {
                 HStack(spacing: 14) {
                     Text(code)
-                        .font(.title3.weight(.medium))
-                        .foregroundStyle(Color.white.opacity(0.95))
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(Color.white)
                         .frame(width: 86, height: max(34, safeRowHeight * 0.56))
                         .background(
                             Capsule(style: .continuous)
@@ -554,10 +553,10 @@ struct ConverterView: View {
                         )
                     Spacer()
                     Text(valueText)
-                        .font(isActive ? .system(size: 22, weight: .bold) : .system(size: 22, weight: .regular))
+                        .font(isActive ? .system(size: 17, weight: .bold) : .system(size: 15, weight: .regular))
                         .monospacedDigit()
                         .minimumScaleFactor(0.6)
-                        .foregroundStyle(Color.white.opacity(0.95))
+                        .foregroundStyle(Color.white)
                         .padding(.trailing, 2)
                 }
                 .padding(.horizontal, 12)
@@ -594,7 +593,7 @@ struct ConverterView: View {
                 .resizable()
                 .renderingMode(.template)
                 .foregroundStyle(AppColors.textPrimary)
-                .frame(width: 28, height: 28)
+                .frame(width: 24, height: 24)
                 .frame(width: safeRowHeight, height: safeRowHeight)
                 .background(
                     Circle()
@@ -609,7 +608,7 @@ struct ConverterView: View {
             HStack {
                 Spacer()
                 Text("Добавить валюту")
-                    .font(.system(size: 22, weight: .regular))
+                    .font(.system(size: 15, weight: .regular))
                     .foregroundStyle(Color.white.opacity(0.55))
             }
             .padding(.horizontal, 12)
