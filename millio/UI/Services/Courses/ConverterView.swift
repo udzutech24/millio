@@ -543,10 +543,11 @@ struct ConverterView: View {
                 }
             } label: {
                 HStack(spacing: 14) {
+                    let codePillHeight: CGFloat = isActive ? 34 : 30
                     Text(code)
                         .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(Color.white)
-                        .frame(width: 86, height: max(34, safeRowHeight * 0.56))
+                        .frame(width: 86, height: codePillHeight)
                         .background(
                             Capsule(style: .continuous)
                                 .fill(codePillBackground(isActive: isActive))
