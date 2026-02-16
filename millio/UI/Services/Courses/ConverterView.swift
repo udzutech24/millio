@@ -560,7 +560,8 @@ struct ConverterView: View {
                         .foregroundStyle(Color.white)
                         .padding(.trailing, 2)
                 }
-                .padding(.horizontal, 12)
+                .padding(.leading, isActive ? 12 : 8)
+                .padding(.trailing, 12)
                 .frame(height: safeRowHeight)
                 .background(
                     Capsule(style: .continuous)
