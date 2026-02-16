@@ -267,25 +267,25 @@ private struct HistoryFilterChip: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(isSelected ? Color.white : AppColors.textPrimary)
-                .padding(.horizontal, 16)
+                .foregroundStyle(isSelected ? Color(hex: "1A2233") : Color.white)
+                .padding(.horizontal, 18)
                 .padding(.vertical, 10)
                 .background {
-                    if isSelected {
-                        Capsule()
-                            .fill(
+                    Capsule()
+                        .fill(
+                            isSelected
+                            ? AnyShapeStyle(Color(hex: "A0A0A0"))
+                            : AnyShapeStyle(
                                 LinearGradient(
-                                    colors: AppColors.cashflowGradient,
+                                    colors: [Color(hex: "303238"), Color(hex: "24262B")],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
                             )
-                    } else {
-                        Capsule()
-                            .stroke(AppColors.textPrimary.opacity(0.2), lineWidth: 1)
-                    }
+                        )
                 }
         }
+        .buttonStyle(.plain)
     }
 }
 
