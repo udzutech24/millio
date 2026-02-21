@@ -22,7 +22,8 @@ actor BackupManager: BackupManagerProtocol {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "BackupManager")
     private let cloudStore: CloudBackupStoreProtocol
     private let dataRepository: DataRepositoryProtocol
-    private let encryption: BackupEncryptionProtocol?
+    private let staticEncryption: BackupEncryptionProtocol?
+    private let usesSettingsEncryption: Bool
     private var backupTask: Task<Void, Never>?
     
     init(
@@ -32,18 +33,15 @@ actor BackupManager: BackupManagerProtocol {
     ) {
         self.cloudStore = cloudStore
         self.dataRepository = dataRepository
-        self.encryption = encryption
+        self.staticEncryption = encryption
+        self.usesSettingsEncryption = false
     }
     
     init(dataRepository: DataRepositoryProtocol) {
-        // Проверяем настройки шифрования синхронно
-        let isEncryptionEnabled = SettingsManager.shared.isEncryptionEnabled
-        let encryption: BackupEncryptionProtocol? = isEncryptionEnabled
-            ? KeychainBackupEncryption()
-            : nil
         self.cloudStore = CloudBackupStore()
         self.dataRepository = dataRepository
-        self.encryption = encryption
+        self.staticEncryption = nil
+        self.usesSettingsEncryption = true
     }
     
     func isAvailable() async -> Bool {
@@ -58,7 +56,7 @@ actor BackupManager: BackupManagerProtocol {
         logger.info("Starting backup...")
         
         let dataRepository = self.dataRepository
-        let encryption = self.encryption
+        let encryption = resolvedEncryption()
         let cloudStore = self.cloudStore
 
         CrashReporting.setCustomValue("backup", forKey: "backup_operation")
@@ -152,7 +150,7 @@ actor BackupManager: BackupManagerProtocol {
         }
         
         let dataRepository = self.dataRepository
-        let encryption = self.encryption
+        let encryption = resolvedEncryption()
         let cloudStore = self.cloudStore
 
         CrashReporting.setCustomValue("restore", forKey: "backup_operation")
@@ -295,6 +293,16 @@ actor BackupManager: BackupManagerProtocol {
     
     private func decompressLZFSE(_ data: Data) throws -> Data {
         try processCompressionStream(data, operation: COMPRESSION_STREAM_DECODE)
+    }
+
+    private func resolvedEncryption() -> BackupEncryptionProtocol? {
+        if let staticEncryption {
+            return staticEncryption
+        }
+        guard usesSettingsEncryption, SettingsManager.shared.isEncryptionEnabled else {
+            return nil
+        }
+        return KeychainBackupEncryption()
     }
     
     private func decompressLZFSEIfNeeded(_ data: Data) -> Data {

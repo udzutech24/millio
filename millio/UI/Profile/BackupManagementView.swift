@@ -8,7 +8,6 @@
 import SwiftUI
 
 private enum BackupEncryptionMode: String, CaseIterable, Identifiable {
-    case none
     case deviceKey
     case passphrase
     
@@ -16,7 +15,6 @@ private enum BackupEncryptionMode: String, CaseIterable, Identifiable {
     
     var title: String {
         switch self {
-        case .none: "Не шифровать"
         case .deviceKey: "На устройстве"
         case .passphrase: "Парольная фраза"
         }
@@ -24,8 +22,6 @@ private enum BackupEncryptionMode: String, CaseIterable, Identifiable {
     
     var description: String {
         switch self {
-        case .none:
-            "Подходит, если вы доверяете iCloud и устройству."
         case .deviceKey:
             "Ключ хранится в iOS Keychain. После переустановки/на новом устройстве восстановление может быть невозможно."
         case .passphrase:
@@ -44,7 +40,7 @@ struct BackupManagementView: View {
     @State private var passphrase: String = ""
     @State private var passphraseConfirmation: String = ""
     @State private var isPassphraseVisible: Bool = false
-    @State private var encryptionMode: BackupEncryptionMode = .none
+    @State private var encryptionMode: BackupEncryptionMode = .deviceKey
     
     private var backupManager: BackupManagerProtocol? {
         diContainer?.backupManager
@@ -78,7 +74,7 @@ struct BackupManagementView: View {
         }
         .onAppear {
             let isDeviceKeyEnabled = SettingsManager.shared.isEncryptionEnabled
-            encryptionMode = isDeviceKeyEnabled ? .deviceKey : .none
+            encryptionMode = isDeviceKeyEnabled ? .deviceKey : .passphrase
             Task { await refreshStatusIfNeeded() }
         }
     }
@@ -162,8 +158,6 @@ struct BackupManagementView: View {
                     .padding(.horizontal, 16)
                     .onChange(of: encryptionMode) { _, newValue in
                         switch newValue {
-                        case .none:
-                            SettingsManager.shared.isEncryptionEnabled = false
                         case .deviceKey:
                             SettingsManager.shared.isEncryptionEnabled = true
                         case .passphrase:
@@ -379,7 +373,7 @@ struct BackupManagementView: View {
             switch encryptionMode {
             case .passphrase:
                 try await backupManager.backupNow(passphrase: trimmed.isEmpty ? nil : trimmed)
-            case .none, .deviceKey:
+            case .deviceKey:
                 try await backupManager.backupNow()
             }
             await refreshStatusIfNeeded(force: true)

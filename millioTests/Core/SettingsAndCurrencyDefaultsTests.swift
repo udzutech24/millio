@@ -93,6 +93,43 @@ struct SettingsAndCurrencyDefaultsTests {
         SettingsManager.shared.favoriteCurrencyCodes = [" rub ", "usd", "RUB", "", " eur "]
         #expect(SettingsManager.shared.favoriteCurrencyCodes == ["RUB", "USD", "EUR"])
     }
+
+    @Test("SettingsManager profileAvatarFilePath persists")
+    func testProfileAvatarPathPersists() {
+        let key = "profileAvatarFilePath"
+        let original = UserDefaults.standard.string(forKey: key)
+        defer {
+            if let original {
+                UserDefaults.standard.set(original, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+
+        let expectedPath = "/tmp/millio-tests/avatar.jpg"
+        SettingsManager.shared.profileAvatarFilePath = expectedPath
+        #expect(SettingsManager.shared.profileAvatarFilePath == expectedPath)
+    }
+
+    @Test("AppState loads profile avatar path from SettingsManager on init")
+    @MainActor
+    func testAppStateLoadsProfileAvatarPathFromSettings() {
+        let key = "profileAvatarFilePath"
+        let original = UserDefaults.standard.string(forKey: key)
+        defer {
+            if let original {
+                UserDefaults.standard.set(original, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+
+        let expectedPath = "/tmp/millio-tests/avatar-on-relaunch.jpg"
+        SettingsManager.shared.profileAvatarFilePath = expectedPath
+
+        let appState = AppState()
+        #expect(appState.profileAvatarPath == expectedPath)
+    }
     
     @Test("CurrencyRateService ignores conv_rate_source and stays on ERAPI")
     @MainActor
