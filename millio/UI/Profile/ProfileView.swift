@@ -14,9 +14,6 @@ struct ProfileView: View {
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var showNameEditSheet = false
     @State private var editedName = ""
-    @State private var showPrimaryCurrencySheet = false
-    @State private var primaryCurrencySearchText = ""
-    @State private var favoriteCurrencyCodes: [String] = SettingsManager.shared.favoriteCurrencyCodes
     
     private var appVersion: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -58,9 +55,11 @@ struct ProfileView: View {
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("profile.languageLink")
                             
-                            Button {
-                                favoriteCurrencyCodes = SettingsManager.shared.favoriteCurrencyCodes
-                                showPrimaryCurrencySheet = true
+                            NavigationLink {
+                                PrimaryCurrencySelectionView(primaryCurrencyCode: Binding(
+                                    get: { appState.primaryCurrencyCode },
+                                    set: { appState.primaryCurrencyCode = $0 }
+                                ))
                             } label: {
                                 settingsRow(iconSystemName: "dollarsign", title: "Валюта") {
                                     Text(appState.primaryCurrencyCode)
@@ -69,7 +68,7 @@ struct ProfileView: View {
                                 }
                             }
                             .buttonStyle(.plain)
-                            .accessibilityIdentifier("profile.primaryCurrencyButton")
+                            .accessibilityIdentifier("profile.primaryCurrencyLink")
                         }
                     }
                     
@@ -150,47 +149,6 @@ struct ProfileView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .sheet(isPresented: $showNameEditSheet) {
             nameEditSheet
-        }
-        .sheet(isPresented: $showPrimaryCurrencySheet) {
-            NavigationStack {
-                CurrencyPickerView(
-                    allCodes: CurrencySelectionSupport.allCurrencyCodesForPicker,
-                    searchText: $primaryCurrencySearchText,
-                    selectedCodes: favoriteCurrencyCodes,
-                    favoriteCodes: Set(favoriteCurrencyCodes),
-                    currentSelection: appState.primaryCurrencyCode,
-                    onToggleFavorite: { code in
-                        let normalized = code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-                        guard !normalized.isEmpty else { return }
-                        
-                        if let idx = favoriteCurrencyCodes.firstIndex(where: { $0.uppercased() == normalized }) {
-                            favoriteCurrencyCodes.remove(at: idx)
-                        } else {
-                            favoriteCurrencyCodes.insert(normalized, at: 0)
-                        }
-                        
-                        favoriteCurrencyCodes = SettingsManager.normalizeCurrencyCodes(favoriteCurrencyCodes)
-                        SettingsManager.shared.favoriteCurrencyCodes = favoriteCurrencyCodes
-                    },
-                    onSelect: { code in
-                        appState.primaryCurrencyCode = code
-                        primaryCurrencySearchText = ""
-                        showPrimaryCurrencySheet = false
-                    }
-                )
-                .navigationTitle("Валюта")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Закрыть") {
-                            primaryCurrencySearchText = ""
-                            showPrimaryCurrencySheet = false
-                        }
-                    }
-                }
-            }
-            .presentationDetents([.medium, .large])
-            .accessibilityIdentifier("profile.primaryCurrencySheet")
         }
         .onChange(of: selectedPhotoItem) { _, newItem in
             Task {
