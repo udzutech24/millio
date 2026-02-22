@@ -37,6 +37,21 @@ final class AppState {
     }
     var isBackupEnabled: Bool = false
     var isDailyReminderEnabled: Bool = false
+    var isAppLockEnabled: Bool = false {
+        didSet {
+            SettingsManager.shared.isAppLockEnabled = isAppLockEnabled
+            if !isAppLockEnabled {
+                isBiometricUnlockEnabled = false
+                isAppLocked = false
+            }
+        }
+    }
+    var isBiometricUnlockEnabled: Bool = false {
+        didSet {
+            SettingsManager.shared.isBiometricUnlockEnabled = isBiometricUnlockEnabled
+        }
+    }
+    var isAppLocked: Bool = false
     
     // Subscription status
     var subscriptionStatus: SubscriptionStatus = .notSubscribed
@@ -54,9 +69,12 @@ final class AppState {
     init() {
         self.isBackupEnabled = SettingsManager.shared.isBackupEnabled
         self.isDailyReminderEnabled = SettingsManager.shared.isDailyReminderEnabled
+        self.isAppLockEnabled = SettingsManager.shared.isAppLockEnabled
+        self.isBiometricUnlockEnabled = SettingsManager.shared.isBiometricUnlockEnabled
         self.selectedLanguage = LanguageManager.shared.currentLanguage
         self.primaryCurrencyCode = SettingsManager.shared.primaryCurrencyCode
         self.profileDisplayName = SettingsManager.shared.profileDisplayName
         self.profileAvatarPath = SettingsManager.shared.profileAvatarFilePath
+        self.isAppLocked = self.isAppLockEnabled
     }
 }

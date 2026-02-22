@@ -91,6 +91,18 @@ struct ProfileView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityIdentifier("profile.backupLink")
+
+                                NavigationLink {
+                                    AppSecuritySettingsView()
+                                } label: {
+                                    settingsRow(iconSystemName: "lock.shield", title: "Защита приложения") {
+                                        Text(appLockStatusText)
+                                            .foregroundStyle(AppColors.textTertiary)
+                                        chevron
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("profile.appSecurityLink")
                                 
                                 Toggle(isOn: Binding(
                                     get: { appState.isDailyReminderEnabled },
@@ -352,6 +364,10 @@ struct ProfileView: View {
             return "Включено"
         }
         return "Выключено"
+    }
+
+    private var appLockStatusText: String {
+        appState.isAppLockEnabled ? "Включено" : "Выключено"
     }
     
     private func sectionHeader(_ title: String) -> some View {

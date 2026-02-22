@@ -12,6 +12,8 @@ protocol SettingsManagerProtocol {
     var isBackupEnabled: Bool { get set }
     var isEncryptionEnabled: Bool { get set }
     var isDailyReminderEnabled: Bool { get set }
+    var isAppLockEnabled: Bool { get set }
+    var isBiometricUnlockEnabled: Bool { get set }
 }
 
 final class SettingsManager: SettingsManagerProtocol {
@@ -21,6 +23,8 @@ final class SettingsManager: SettingsManagerProtocol {
     private let backupEnabledKey = "isBackupEnabled"
     private let encryptionEnabledKey = "isEncryptionEnabled"
     private let dailyReminderEnabledKey = "isDailyReminderEnabled"
+    private let appLockEnabledKey = "isAppLockEnabled"
+    private let biometricUnlockEnabledKey = "isBiometricUnlockEnabled"
     private let profileDisplayNameKey = "profileDisplayName"
     private let profileAvatarFilePathKey = "profileAvatarFilePath"
     private let primaryCurrencyCodeKey = "primaryCurrencyCode"
@@ -54,6 +58,26 @@ final class SettingsManager: SettingsManagerProtocol {
         set {
             UserDefaults.standard.set(newValue, forKey: dailyReminderEnabledKey)
             logger.info("Daily reminder enabled: \(newValue)")
+        }
+    }
+
+    var isAppLockEnabled: Bool {
+        get {
+            UserDefaults.standard.object(forKey: appLockEnabledKey) as? Bool ?? false
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: appLockEnabledKey)
+            logger.info("App lock enabled: \(newValue)")
+        }
+    }
+
+    var isBiometricUnlockEnabled: Bool {
+        get {
+            UserDefaults.standard.object(forKey: biometricUnlockEnabledKey) as? Bool ?? false
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: biometricUnlockEnabledKey)
+            logger.info("Biometric unlock enabled: \(newValue)")
         }
     }
     

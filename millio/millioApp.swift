@@ -17,6 +17,7 @@ struct millioApp: App {
     @State private var appState = AppState()
     @State private var diContainer: DIContainer?
     @State private var lifecycleUseCase: AppLifecycleUseCase?
+    @State private var isBiometricUnlockInProgress = false
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "App")
     
     var sharedModelContainer: ModelContainer? = {
@@ -67,32 +68,50 @@ struct millioApp: App {
     var body: some Scene {
         WindowGroup {
             if let container = sharedModelContainer {
-                RootViewResolver(appState: appState)
-                    .preferredColorScheme(.dark)
-                    .environment(appState)
-                    .modelContainer(container)
-                    .environment(\.diContainer, diContainer)
-                    .environment(\.locale, appState.selectedLanguage.locale ?? Locale.current)
-                    .task {
-                        await initializeApp(container: container)
-                        
-                        // Восстанавливаем расписание уведомлений, если они включены
-                        if appState.isDailyReminderEnabled {
-                            await NotificationManager.shared.scheduleDailyReminder(enabled: true)
+                ZStack {
+                    RootViewResolver(appState: appState)
+                        .zIndex(0)
+
+                    if appState.isAppLocked && appState.lifecycle == .ready {
+                        AppLockScreenView {
+                            await unlockWithBiometricsIfEnabled()
                         }
+                        .zIndex(1)
                     }
-                    .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
-                        triggerBackgroundBackup()
+                }
+                .preferredColorScheme(.dark)
+                .environment(appState)
+                .modelContainer(container)
+                .environment(\.diContainer, diContainer)
+                .environment(\.locale, appState.selectedLanguage.locale ?? Locale.current)
+                .task {
+                    await initializeApp(container: container)
+
+                    // Восстанавливаем расписание уведомлений, если они включены
+                    if appState.isDailyReminderEnabled {
+                        await NotificationManager.shared.scheduleDailyReminder(enabled: true)
                     }
-                    .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+                    triggerBackgroundBackup()
+                    if appState.isAppLockEnabled {
+                        appState.isAppLocked = true
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                    Task { @MainActor in
                         // Обновляем статус подписки при возврате из фона
-                        Task { @MainActor in
-                            await SubscriptionManager.shared.checkSubscriptionStatus()
-                            appState.subscriptionStatus = SubscriptionManager.shared.status
-                            appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
-                            appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+                        await SubscriptionManager.shared.checkSubscriptionStatus()
+                        appState.subscriptionStatus = SubscriptionManager.shared.status
+                        appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
+                        appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+
+                        if appState.isAppLockEnabled {
+                            appState.isAppLocked = true
+                            _ = await unlockWithBiometricsIfEnabled()
                         }
                     }
+                }
             } else {
                 ErrorView(
                     error: .unknown(NSError(
@@ -112,6 +131,15 @@ struct millioApp: App {
     @MainActor
     private func initializeApp(container: ModelContainer) async {
         let start = DispatchTime.now()
+
+        if appState.isAppLockEnabled && !AppLockPinStore.shared.hasPin() {
+            appState.isAppLockEnabled = false
+            appState.isBiometricUnlockEnabled = false
+            appState.isAppLocked = false
+        } else if appState.isAppLockEnabled {
+            appState.isAppLocked = true
+        }
+
         // Фичи уже зарегистрированы при создании ModelContainer
         
         // Используем DIContainer для создания зависимостей
@@ -140,6 +168,10 @@ struct millioApp: App {
             appState.subscriptionStatus = SubscriptionManager.shared.status
             appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
             appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+
+            if appState.isAppLockEnabled {
+                _ = await unlockWithBiometricsIfEnabled()
+            }
         }
     }
     
@@ -156,5 +188,19 @@ struct millioApp: App {
                 AppLogger.log(.error, category: "App", "Background backup failed: \(error.localizedDescription)")
             }
         }
+    }
+
+    @MainActor
+    private func unlockWithBiometricsIfEnabled() async -> Bool {
+        guard appState.isAppLockEnabled, appState.isBiometricUnlockEnabled, !isBiometricUnlockInProgress else {
+            return false
+        }
+        isBiometricUnlockInProgress = true
+        defer { isBiometricUnlockInProgress = false }
+        let success = await AppLockBiometricAuth.authenticate(reason: "Разблокируйте доступ к данным приложения")
+        if success {
+            appState.isAppLocked = false
+        }
+        return success
     }
 }

@@ -36,6 +36,38 @@ struct SettingsAndCurrencyDefaultsTests {
         #expect(SettingsManager.shared.isEncryptionEnabled == false)
     }
 
+    @Test("SettingsManager isAppLockEnabled defaults to false")
+    func testAppLockEnabledDefaultFalse() {
+        let key = "isAppLockEnabled"
+        let original = UserDefaults.standard.object(forKey: key)
+        defer {
+            if let original {
+                UserDefaults.standard.set(original, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+
+        UserDefaults.standard.removeObject(forKey: key)
+        #expect(SettingsManager.shared.isAppLockEnabled == false)
+    }
+
+    @Test("SettingsManager isBiometricUnlockEnabled defaults to false")
+    func testBiometricUnlockEnabledDefaultFalse() {
+        let key = "isBiometricUnlockEnabled"
+        let original = UserDefaults.standard.object(forKey: key)
+        defer {
+            if let original {
+                UserDefaults.standard.set(original, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+
+        UserDefaults.standard.removeObject(forKey: key)
+        #expect(SettingsManager.shared.isBiometricUnlockEnabled == false)
+    }
+
     @Test("SettingsManager primaryCurrencyCode defaults to RUB")
     func testPrimaryCurrencyDefault() {
         let key = "primaryCurrencyCode"
@@ -129,6 +161,35 @@ struct SettingsAndCurrencyDefaultsTests {
 
         let appState = AppState()
         #expect(appState.profileAvatarPath == expectedPath)
+    }
+
+    @Test("AppState loads app lock flags from SettingsManager on init")
+    @MainActor
+    func testAppStateLoadsSecurityFlagsFromSettings() {
+        let lockKey = "isAppLockEnabled"
+        let biometricKey = "isBiometricUnlockEnabled"
+        let originalLock = UserDefaults.standard.object(forKey: lockKey)
+        let originalBiometric = UserDefaults.standard.object(forKey: biometricKey)
+        defer {
+            if let originalLock {
+                UserDefaults.standard.set(originalLock, forKey: lockKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: lockKey)
+            }
+            if let originalBiometric {
+                UserDefaults.standard.set(originalBiometric, forKey: biometricKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: biometricKey)
+            }
+        }
+
+        SettingsManager.shared.isAppLockEnabled = true
+        SettingsManager.shared.isBiometricUnlockEnabled = true
+
+        let appState = AppState()
+        #expect(appState.isAppLockEnabled == true)
+        #expect(appState.isBiometricUnlockEnabled == true)
+        #expect(appState.isAppLocked == true)
     }
     
     @Test("CurrencyRateService ignores conv_rate_source and stays on ERAPI")
