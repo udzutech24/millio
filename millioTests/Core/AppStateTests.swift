@@ -145,6 +145,18 @@ struct AppStateTests {
         #expect(UserDefaults.standard.array(forKey: "AppleLanguages") as? [String] != ["en"])
         #expect(UserDefaults.standard.string(forKey: "selectedLanguage") == "system")
     }
+
+    @Test("LanguageManager выбирает system для поддерживаемых системных языков")
+    func testLanguageManagerDefaultLanguageSupportedSystem() {
+        #expect(LanguageManager.defaultLanguage(forPreferredLanguage: "ru-RU") == .system)
+        #expect(LanguageManager.defaultLanguage(forPreferredLanguage: "en-US") == .system)
+    }
+
+    @Test("LanguageManager выбирает english для неподдерживаемого системного языка")
+    func testLanguageManagerDefaultLanguageUnsupportedSystem() {
+        #expect(LanguageManager.defaultLanguage(forPreferredLanguage: "de-DE") == .english)
+        #expect(LanguageManager.defaultLanguage(forPreferredLanguage: nil) == .english)
+    }
 }
 
 @Suite(.serialized)

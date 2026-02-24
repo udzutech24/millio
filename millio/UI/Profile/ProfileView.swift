@@ -133,23 +133,36 @@ struct ProfileView: View {
                         
                         sectionHeader("Отладка")
                         card {
-                            Toggle(isOn: Binding(
-                                get: { appState.isPro },
-                                set: { newValue in
-                                    if newValue {
-                                        SubscriptionManager.shared.grantDebugPremium()
-                                    } else {
-                                        SubscriptionManager.shared.revokeDebugPremium()
+                            VStack(spacing: 16) {
+                                Toggle(isOn: Binding(
+                                    get: { appState.isPro },
+                                    set: { newValue in
+                                        if newValue {
+                                            SubscriptionManager.shared.grantDebugPremium()
+                                        } else {
+                                            SubscriptionManager.shared.revokeDebugPremium()
+                                        }
+                                        appState.subscriptionStatus = SubscriptionManager.shared.status
+                                        appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
+                                        appState.isTrialActive = SubscriptionManager.shared.isTrialActive
                                     }
-                                    appState.subscriptionStatus = SubscriptionManager.shared.status
-                                    appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
-                                    appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+                                )) {
+                                    settingsRow(iconSystemName: "crown", title: "Премиум доступ") { EmptyView() }
                                 }
-                            )) {
-                                settingsRow(iconSystemName: "crown", title: "Премиум доступ") { EmptyView() }
+                                .tint(AppColors.toggleOnGreen)
+                                .accessibilityIdentifier("profile.debugPremiumToggle")
+
+                                Button {
+                                    UserDefaults.standard.set(false, forKey: "hasCompletedOnboarding")
+                                    appState.lifecycle = .onboarding
+                                } label: {
+                                    settingsRow(iconSystemName: "sparkles", title: "Показать онбординг") {
+                                        chevron
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("profile.debugOnboardingButton")
                             }
-                            .tint(AppColors.toggleOnGreen)
-                            .accessibilityIdentifier("profile.debugPremiumToggle")
                         }
                     }
                 }
