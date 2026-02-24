@@ -56,16 +56,7 @@ struct ShareRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image("flag")
-                .resizable()
-                .renderingMode(.template)
-                .foregroundStyle(Color.white)
-                .frame(width: 28, height: 28)
-                .frame(width: 64, height: 64)
-                .background(
-                    Circle()
-                        .fill(flagCircleBackground)
-                )
+            flagIcon
 
             HStack {
                 Text(code)
@@ -93,6 +84,28 @@ struct ShareRow: View {
                 Capsule(style: .continuous)
                     .fill(rowBackground)
             )
+        }
+    }
+
+    @ViewBuilder
+    private var flagIcon: some View {
+        if let assetName = CurrencyFlags.assetName(for: code) {
+            Image(assetName)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 64, height: 64)
+                .clipShape(Circle())
+        } else {
+            Image("flag")
+                .resizable()
+                .renderingMode(.template)
+                .foregroundStyle(Color.white)
+                .frame(width: 28, height: 28)
+                .frame(width: 64, height: 64)
+                .background(
+                    Circle()
+                        .fill(flagCircleBackground)
+                )
         }
     }
 

@@ -378,44 +378,35 @@ public struct CurrencyPickerView: View {
     @ViewBuilder
     private func currencyIcon(for code: String) -> some View {
         let c = code.uppercased()
+        let iconSize: CGFloat = 24
         
         if CurrencySelectionSupport.isCrypto(c) {
             // Для криптовалют используем эмодзи через Text
             let emoji = CurrencySelectionSupport.emoji(for: c)
             if !emoji.isEmpty {
                 Text(emoji)
-                    .frame(width: 16, height: 16)
+                    .frame(width: iconSize, height: iconSize)
             } else {
                 Image("flag")
                     .resizable()
                     .renderingMode(.template)
                     .foregroundStyle(AppColors.textPrimary)
-                    .frame(width: 16, height: 16)
+                    .frame(width: iconSize, height: iconSize)
             }
         } else {
-            // Для фиатных валют пытаемся загрузить флаг по коду
-            let flagName = "flag_\(c.lowercased())"
-            #if os(iOS)
-            if UIImage(named: flagName) != nil {
-                Image(flagName)
+            if let assetName = CurrencyFlags.assetName(for: c) {
+                Image(assetName)
                     .resizable()
-                    .renderingMode(.template)
-                    .foregroundStyle(AppColors.textPrimary)
-                    .frame(width: 16, height: 16)
+                    .scaledToFill()
+                    .frame(width: iconSize, height: iconSize)
+                    .clipShape(Circle())
             } else {
                 Image("flag")
                     .resizable()
                     .renderingMode(.template)
                     .foregroundStyle(AppColors.textPrimary)
-                    .frame(width: 16, height: 16)
+                    .frame(width: iconSize, height: iconSize)
             }
-            #else
-            Image("flag")
-                .resizable()
-                .renderingMode(.template)
-                .foregroundStyle(AppColors.textPrimary)
-                .frame(width: 16, height: 16)
-            #endif
         }
     }
 

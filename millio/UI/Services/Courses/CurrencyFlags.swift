@@ -6,6 +6,11 @@
 //
 
 import Foundation
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 /// Маппинг валют к флагам эмодзи
 enum CurrencyFlags {
@@ -163,6 +168,36 @@ enum CurrencyFlags {
         }
         return "🏳️" // Флаг по умолчанию
     }
+
+    /// Возвращает имя ассета флага из Assets.xcassets/Icons/Flags.
+    /// Для большинства валют берется регион, связанный с кодом валюты.
+    /// Если ассет не найден, возвращается fallback-иконка "xx".
+    static func assetName(for currencyCode: String) -> String? {
+        let code = currencyCode.uppercased()
+        guard !CurrencySelectionSupport.isCrypto(code) else { return nil }
+
+        if let explicitFlag = flags[code],
+           let explicitRegion = regionCode(fromFlagEmoji: explicitFlag),
+           hasAsset(named: explicitRegion.lowercased()) {
+            return explicitRegion.lowercased()
+        }
+
+        if let regionCode = CurrencySelectionSupport.currencyToRegion(for: code)?.lowercased(),
+           hasAsset(named: regionCode) {
+            return regionCode
+        }
+
+        let fallbackByCurrencyCode = code.lowercased()
+        if hasAsset(named: fallbackByCurrencyCode) {
+            return fallbackByCurrencyCode
+        }
+
+        if hasAsset(named: "xx") {
+            return "xx"
+        }
+
+        return nil
+    }
     
     /// Генерация флага эмодзи из кода региона (2 буквы)
     private static func generateFlagEmoji(fromRegionCode regionCode: String) -> String {
@@ -179,5 +214,32 @@ enum CurrencyFlags {
             if let s = UnicodeScalar(indicator) { scalars.append(s) }
         }
         return String(String.UnicodeScalarView(scalars))
+    }
+
+    private static func regionCode(fromFlagEmoji emoji: String) -> String? {
+        let indicators = Array(emoji.unicodeScalars.filter { scalar in
+            scalar.value >= 0x1F1E6 && scalar.value <= 0x1F1FF
+        })
+        guard indicators.count == 2 else { return nil }
+
+        let aScalar = UnicodeScalar("A").value
+        let first = indicators[0].value - 0x1F1E6 + aScalar
+        let second = indicators[1].value - 0x1F1E6 + aScalar
+
+        guard let firstLetter = UnicodeScalar(first), let secondLetter = UnicodeScalar(second) else {
+            return nil
+        }
+
+        return String(firstLetter) + String(secondLetter)
+    }
+
+    private static func hasAsset(named name: String) -> Bool {
+#if canImport(UIKit)
+        return UIImage(named: name) != nil
+#elseif canImport(AppKit)
+        return NSImage(named: NSImage.Name(name)) != nil
+#else
+        return false
+#endif
     }
 }

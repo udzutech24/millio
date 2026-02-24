@@ -38,6 +38,26 @@ final class MockConverterRateRepository: RateRepositoryProtocol, @unchecked Send
 @MainActor
 struct ConverterViewModelTests {
 
+    @Test("По умолчанию fractionDigits = 2 при первом запуске")
+    func testDefaultFractionDigitsIsTwo() async {
+        let key = "conv_fraction_digits"
+        let defaults = UserDefaults.standard
+        let hadValue = defaults.object(forKey: key) != nil
+        let previousValue = defaults.integer(forKey: key)
+        defaults.removeObject(forKey: key)
+        defer {
+            if hadValue {
+                defaults.set(previousValue, forKey: key)
+            } else {
+                defaults.removeObject(forKey: key)
+            }
+        }
+
+        let mockRepo = MockConverterRateRepository()
+        let viewModel = ConverterViewModel(rateRepository: mockRepo)
+        #expect(viewModel.state.fractionDigits == 2)
+    }
+
     @Test("Инициализация загружает сохранённые валюты")
     func testInitializationLoadsStoredCurrencies() async {
         let mockRepo = MockConverterRateRepository()

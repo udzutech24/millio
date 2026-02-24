@@ -36,7 +36,7 @@ struct ConverterState {
     var hapticsEnabled: Bool = true
     var isOffline: Bool = false
     var isFetchingRates: Bool = false
-    var fractionDigits: Int = 4
+    var fractionDigits: Int = 2
     
     // Калькулятор
     var accumulator: Double? = nil
@@ -90,7 +90,12 @@ final class ConverterViewModel: ViewModelProtocol {
     }
     
     private var storedFractionDigits: Int {
-        get { defaults.integer(forKey: "conv_fraction_digits") == 0 ? 4 : defaults.integer(forKey: "conv_fraction_digits") }
+        get {
+            if defaults.object(forKey: "conv_fraction_digits") == nil {
+                return 2
+            }
+            return defaults.integer(forKey: "conv_fraction_digits")
+        }
         set {
             defaults.set(newValue, forKey: "conv_fraction_digits")
             CurrencyWidgetSyncService.setInt(newValue, forKey: "conv_fraction_digits")

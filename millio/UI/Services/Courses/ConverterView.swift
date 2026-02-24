@@ -552,6 +552,28 @@ struct ConverterView: View {
             )
         )
     }
+
+    @ViewBuilder
+    private func currencyFlagIcon(for code: String, size: CGFloat, isActive: Bool) -> some View {
+        if let assetName = CurrencyFlags.assetName(for: code) {
+            Image(assetName)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+        } else {
+            Image("flag")
+                .resizable()
+                .renderingMode(.template)
+                .foregroundStyle(AppColors.textPrimary)
+                .frame(width: 24, height: 24)
+                .frame(width: size, height: size)
+                .background(
+                    Circle()
+                        .fill(flagCircleBackground(isActive: isActive))
+                )
+        }
+    }
     
     
     // MARK: - Currency row
@@ -562,16 +584,7 @@ struct ConverterView: View {
             Button {
                 viewModel.handle(.replaceCurrency(index))
             } label: {
-                Image("flag")
-                    .resizable()
-                    .renderingMode(.template)
-                    .foregroundStyle(AppColors.textPrimary)
-                    .frame(width: 24, height: 24)
-                    .frame(width: safeRowHeight, height: safeRowHeight)
-                    .background(
-                        Circle()
-                            .fill(flagCircleBackground(isActive: isActive))
-                    )
+                currencyFlagIcon(for: code, size: safeRowHeight, isActive: isActive)
             }
             .buttonStyle(.plain)
             
