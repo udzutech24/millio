@@ -53,11 +53,7 @@ struct LanguageSelectionView: View {
                                         dismiss()
                                     },
                                     leading: {
-                                        Image(systemName: "globe")
-                                            .renderingMode(.template)
-                                            .resizable()
-                                            .scaledToFit()
-                                            .foregroundStyle(AppColors.textPrimary)
+                                        languageIcon(for: language)
                                     },
                                     trailing: {
                                         EmptyView()
@@ -74,6 +70,37 @@ struct LanguageSelectionView: View {
         .navigationTitle("Язык")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
+    }
+
+    @ViewBuilder
+    private func languageIcon(for language: Language) -> some View {
+        let size: CGFloat = 24
+        switch language {
+        case .russian:
+            Image("ru")
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+        case .english:
+            Image("us")
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+        case .system:
+            Image(systemName: "globe")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .foregroundStyle(AppColors.textPrimary)
+                .padding(5)
+                .frame(width: size, height: size)
+                .background(
+                    Circle()
+                        .fill(AppColors.textPrimary.opacity(0.12))
+                )
+        }
     }
 }
 

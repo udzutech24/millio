@@ -7,6 +7,9 @@
 
 import SwiftUI
 import WidgetKit
+#if canImport(UIKit)
+import UIKit
+#endif
 
 private struct CurrencyConverterWidgetRow: Identifiable, Equatable {
     let code: String
@@ -147,10 +150,12 @@ private struct CurrencyConverterPremiumWidgetEntryView: View {
 
             ForEach(entry.rows.prefix(maxRows)) { row in
                 HStack(spacing: 6) {
+                    widgetFlagIcon(for: row.code)
+
                     Text(row.code)
                         .font(.system(size: 12, weight: row.isActive ? .semibold : .regular))
                         .foregroundStyle(row.isActive ? Color.white : Color.white.opacity(0.85))
-                        .frame(width: 38, alignment: .leading)
+                        .frame(width: 32, alignment: .leading)
 
                     Text(row.valueText)
                         .font(.system(size: 12, weight: row.isActive ? .semibold : .regular))
@@ -170,6 +175,91 @@ private struct CurrencyConverterPremiumWidgetEntryView: View {
             }
         }
         .padding(12)
+    }
+
+    @ViewBuilder
+    private func widgetFlagIcon(for code: String) -> some View {
+        let size: CGFloat = 14
+        let resolvedCode = code.uppercased()
+
+        if let assetName = widgetFlagAssetName(for: resolvedCode) {
+            Image(assetName)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+        } else {
+            Text(widgetFlagEmoji(for: resolvedCode))
+                .font(.system(size: 11))
+                .frame(width: size, height: size)
+        }
+    }
+
+    private func widgetFlagAssetName(for currencyCode: String) -> String? {
+        let explicit: [String: String] = [
+            "RUB": "ru",
+            "USD": "us",
+            "EUR": "eu",
+            "KZT": "kz",
+            "GBP": "gb",
+            "TRY": "tr",
+            "JPY": "jp",
+            "CNY": "cn"
+        ]
+
+        if let explicitRegion = explicit[currencyCode], widgetHasAsset(named: explicitRegion) {
+            return explicitRegion
+        }
+
+        if let region = widgetCurrencyRegionCode(for: currencyCode), widgetHasAsset(named: region.lowercased()) {
+            return region.lowercased()
+        }
+
+        let fallbackByCode = currencyCode.lowercased()
+        if widgetHasAsset(named: fallbackByCode) {
+            return fallbackByCode
+        }
+
+        if widgetHasAsset(named: "xx") {
+            return "xx"
+        }
+
+        return nil
+    }
+
+    private func widgetCurrencyRegionCode(for currencyCode: String) -> String? {
+        for identifier in Locale.availableIdentifiers {
+            let locale = Locale(identifier: identifier)
+            if locale.currency?.identifier.uppercased() == currencyCode,
+               let region = locale.region?.identifier.uppercased(),
+               region.count == 2 {
+                return region
+            }
+        }
+        return nil
+    }
+
+    private func widgetFlagEmoji(for currencyCode: String) -> String {
+        guard let region = widgetCurrencyRegionCode(for: currencyCode) else { return "🏳️" }
+        let base: UInt32 = 0x1F1E6
+        let a = UnicodeScalar("A").value
+        var scalars: [UnicodeScalar] = []
+        for scalar in region.unicodeScalars {
+            let value = scalar.value
+            guard value >= a, value <= UnicodeScalar("Z").value else { return "🏳️" }
+            if let regionalIndicator = UnicodeScalar(base + (value - a)) {
+                scalars.append(regionalIndicator)
+            }
+        }
+        return String(String.UnicodeScalarView(scalars))
+    }
+
+    private func widgetHasAsset(named name: String) -> Bool {
+#if canImport(UIKit)
+        UIImage(named: name) != nil
+#else
+        false
+#endif
     }
 
     private var lockedView: some View {
