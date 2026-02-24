@@ -1,0 +1,235 @@
+//
+//  CurrencyConverterPremiumWidget.swift
+//  millioCurrencyWidgetExtension
+//
+//  Created by Codex on 24.02.2026.
+//
+
+import SwiftUI
+import WidgetKit
+
+private struct CurrencyConverterWidgetRow: Identifiable, Equatable {
+    let code: String
+    let valueText: String
+    let isActive: Bool
+
+    var id: String { code }
+}
+
+private struct CurrencyConverterWidgetEntry: TimelineEntry {
+    let date: Date
+    let hasPremiumAccess: Bool
+    let activeCode: String
+    let inputText: String
+    let rows: [CurrencyConverterWidgetRow]
+    let lastUpdatedAt: Date?
+}
+
+private struct CurrencyConverterWidgetProvider: TimelineProvider {
+    func placeholder(in context: Context) -> CurrencyConverterWidgetEntry {
+        CurrencyConverterWidgetEntry(
+            date: Date(),
+            hasPremiumAccess: true,
+            activeCode: "USD",
+            inputText: "1200",
+            rows: [
+                CurrencyConverterWidgetRow(code: "USD", valueText: "1 200", isActive: true),
+                CurrencyConverterWidgetRow(code: "EUR", valueText: "1 104", isActive: false),
+                CurrencyConverterWidgetRow(code: "RUB", valueText: "108 000", isActive: false)
+            ],
+            lastUpdatedAt: Date()
+        )
+    }
+
+    func getSnapshot(in context: Context, completion: @escaping (CurrencyConverterWidgetEntry) -> Void) {
+        completion(makeEntry(now: Date()))
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<CurrencyConverterWidgetEntry>) -> Void) {
+        let now = Date()
+        let entry = makeEntry(now: now)
+        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 30, to: now) ?? now.addingTimeInterval(1800)
+        completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
+    }
+
+    private func makeEntry(now: Date) -> CurrencyConverterWidgetEntry {
+        let defaults = UserDefaults(suiteName: CurrencyWidgetShared.appGroupID) ?? .standard
+        let subscription = CurrencyWidgetShared.SubscriptionSnapshot.load(from: defaults)
+        let converter = CurrencyWidgetShared.ConverterSnapshot.load(from: defaults)
+        let hasPremiumAccess = subscription.hasPremiumAccess(now: now)
+
+        let rows = hasPremiumAccess
+            ? makeRows(converter: converter)
+            : []
+
+        return CurrencyConverterWidgetEntry(
+            date: now,
+            hasPremiumAccess: hasPremiumAccess,
+            activeCode: converter.activeCode,
+            inputText: converter.inputText,
+            rows: rows,
+            lastUpdatedAt: converter.lastUpdatedAt
+        )
+    }
+
+    private func makeRows(converter: CurrencyWidgetShared.ConverterSnapshot) -> [CurrencyConverterWidgetRow] {
+        let orderedCodes = [converter.activeCode] + converter.selectedCodes.filter { $0 != converter.activeCode }
+        let amount = CurrencyWidgetShared.parseAmount(converter.inputText) ?? 0
+
+        return orderedCodes.map { code in
+            if code == converter.activeCode {
+                let formatted = CurrencyWidgetShared.formatValue(amount, maxFractionDigits: 4)
+                return CurrencyConverterWidgetRow(code: code, valueText: formatted, isActive: true)
+            }
+
+            guard
+                let converted = CurrencyWidgetShared.convert(
+                    amount: amount,
+                    from: converter.activeCode,
+                    to: code,
+                    rates: converter.rates
+                )
+            else {
+                return CurrencyConverterWidgetRow(code: code, valueText: "—", isActive: false)
+            }
+
+            let formatted = CurrencyWidgetShared.formatValue(converted, maxFractionDigits: 4)
+            return CurrencyConverterWidgetRow(code: code, valueText: formatted, isActive: false)
+        }
+    }
+}
+
+private struct CurrencyConverterPremiumWidgetEntryView: View {
+    let entry: CurrencyConverterWidgetEntry
+    @Environment(\.widgetFamily) private var family
+
+    private var maxRows: Int {
+        switch family {
+        case .systemSmall:
+            return 3
+        case .systemMedium:
+            return 5
+        default:
+            return 3
+        }
+    }
+
+    var body: some View {
+        Group {
+            if entry.hasPremiumAccess {
+                premiumView
+            } else {
+                lockedView
+            }
+        }
+        .containerBackground(for: .widget) {
+            LinearGradient(
+                colors: [Color(hex: "101828"), Color(hex: "0B1220")],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+    }
+
+    private var premiumView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Конвертер")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+
+                Spacer(minLength: 8)
+
+                Text(entry.activeCode)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.7))
+            }
+
+            ForEach(entry.rows.prefix(maxRows)) { row in
+                HStack(spacing: 6) {
+                    Text(row.code)
+                        .font(.system(size: 12, weight: row.isActive ? .semibold : .regular))
+                        .foregroundStyle(row.isActive ? Color.white : Color.white.opacity(0.85))
+                        .frame(width: 38, alignment: .leading)
+
+                    Text(row.valueText)
+                        .font(.system(size: 12, weight: row.isActive ? .semibold : .regular))
+                        .foregroundStyle(row.isActive ? Color(hex: "7DD3FC") : Color.white.opacity(0.85))
+                        .lineLimit(1)
+
+                    Spacer(minLength: 0)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            if let lastUpdatedAt = entry.lastUpdatedAt {
+                Text("Обновлено: \(lastUpdatedAt.formatted(date: .omitted, time: .shortened))")
+                    .font(.system(size: 10, weight: .regular))
+                    .foregroundStyle(Color.white.opacity(0.55))
+            }
+        }
+        .padding(12)
+    }
+
+    private var lockedView: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Color(hex: "FDE68A"))
+
+            Text("Premium")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(.white)
+
+            Text("Виджет конвертера доступен только для Premium-пользователей")
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(Color.white.opacity(0.8))
+                .lineLimit(family == .systemSmall ? 3 : 2)
+
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+    }
+}
+
+struct CurrencyConverterPremiumWidget: Widget {
+    static let kind = "CurrencyConverterPremiumWidget"
+
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: Self.kind, provider: CurrencyConverterWidgetProvider()) { entry in
+            CurrencyConverterPremiumWidgetEntryView(entry: entry)
+        }
+        .configurationDisplayName("Конвертер валют")
+        .description("Конвертация валют в формате виджета. Доступно для Premium.")
+        .supportedFamilies([.systemSmall, .systemMedium])
+    }
+}
+
+private extension Color {
+    init(hex: String) {
+        let cleaned = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var value: UInt64 = 0
+        Scanner(string: cleaned).scanHexInt64(&value)
+
+        let r, g, b: UInt64
+        switch cleaned.count {
+        case 6:
+            r = (value >> 16) & 0xFF
+            g = (value >> 8) & 0xFF
+            b = value & 0xFF
+        default:
+            r = 255
+            g = 255
+            b = 255
+        }
+
+        self.init(
+            .sRGB,
+            red: Double(r) / 255,
+            green: Double(g) / 255,
+            blue: Double(b) / 255,
+            opacity: 1
+        )
+    }
+}

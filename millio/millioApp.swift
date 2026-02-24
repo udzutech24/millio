@@ -105,6 +105,7 @@ struct millioApp: App {
                         appState.subscriptionStatus = SubscriptionManager.shared.status
                         appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
                         appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+                        CurrencyWidgetSyncService.bootstrapFromStandardDefaults()
 
                         if appState.isAppLockEnabled {
                             appState.isAppLocked = true
@@ -168,6 +169,7 @@ struct millioApp: App {
             appState.subscriptionStatus = SubscriptionManager.shared.status
             appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
             appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+            CurrencyWidgetSyncService.bootstrapFromStandardDefaults()
 
             if appState.isAppLockEnabled {
                 _ = await unlockWithBiometricsIfEnabled()

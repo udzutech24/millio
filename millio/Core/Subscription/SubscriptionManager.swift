@@ -93,6 +93,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
             self.status = .subscribed
             self.expirationDate = expiration
             self.isTrialActive = false
+            syncWidgetSubscriptionSnapshot()
             logger.info("Debug premium is active, expires: \(expiration)")
             return
         }
@@ -213,6 +214,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         self.status = .subscribed
         self.expirationDate = expirationDate
         self.isTrialActive = false
+        syncWidgetSubscriptionSnapshot()
         // Не вызываем saveLocalStatus(), чтобы не перезаписать реальную дату подписки
         
         logger.info("Debug premium granted, expires: \(expirationDate)")
@@ -227,6 +229,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         self.status = .notSubscribed
         self.expirationDate = nil  // Очищаем память от debug значения
         self.isTrialActive = false
+        syncWidgetSubscriptionSnapshot()
         // Не вызываем saveLocalStatus(), чтобы не затереть реальную дату истечения подписки StoreKit
         // Если есть реальная подписка, вызывающий код должен вызвать checkSubscriptionStatus()
         
@@ -266,6 +269,8 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
             let trialEndDate = trialStartDate.addingTimeInterval(TimeInterval(self.trialDurationDays * 24 * 60 * 60))
             self.isTrialActive = trialEndDate > now()
         }
+        
+        syncWidgetSubscriptionSnapshot()
     }
     
     private func saveLocalStatus() {
@@ -275,6 +280,8 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         if !defaults.bool(forKey: debugPremiumKey) {
             defaults.set(expirationDate, forKey: subscriptionExpirationKey)
         }
+        
+        syncWidgetSubscriptionSnapshot()
     }
     
     private func checkTrialStatus() {
@@ -319,6 +326,16 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         case .verified(let safe):
             return safe
         }
+    }
+    
+    private func syncWidgetSubscriptionSnapshot() {
+        CurrencyWidgetSyncService.syncSubscription(
+            statusRaw: status.rawValue,
+            expirationDate: expirationDate,
+            isTrialActive: isTrialActive,
+            debugPremiumEnabled: defaults.bool(forKey: debugPremiumKey),
+            debugPremiumExpiration: defaults.object(forKey: debugSubscriptionExpirationKey) as? Date
+        )
     }
     
     // MARK: - Product IDs

@@ -67,47 +67,81 @@ final class ConverterViewModel: ViewModelProtocol {
     
     private var selectedCodesRaw: String {
         get { defaults.string(forKey: "conv_selected_codes") ?? "RUB,USD,EUR,TRY,GBP,KZT" }
-        set { defaults.set(newValue, forKey: "conv_selected_codes") }
+        set {
+            defaults.set(newValue, forKey: "conv_selected_codes")
+            CurrencyWidgetSyncService.setString(newValue, forKey: CurrencyWidgetShared.Keys.selectedCodes)
+        }
     }
     
     private var storedActive: String {
         get { defaults.string(forKey: "conv_active_code") ?? "TRY" }
-        set { defaults.set(newValue, forKey: "conv_active_code") }
+        set {
+            defaults.set(newValue, forKey: "conv_active_code")
+            CurrencyWidgetSyncService.setString(newValue, forKey: CurrencyWidgetShared.Keys.activeCode)
+        }
     }
     
     private var storedInput: String {
         get { defaults.string(forKey: "conv_input_text") ?? "1200" }
-        set { defaults.set(newValue, forKey: "conv_input_text") }
+        set {
+            defaults.set(newValue, forKey: "conv_input_text")
+            CurrencyWidgetSyncService.setString(newValue, forKey: CurrencyWidgetShared.Keys.inputText)
+        }
     }
     
     private var storedFractionDigits: Int {
         get { defaults.integer(forKey: "conv_fraction_digits") == 0 ? 4 : defaults.integer(forKey: "conv_fraction_digits") }
-        set { defaults.set(newValue, forKey: "conv_fraction_digits") }
+        set {
+            defaults.set(newValue, forKey: "conv_fraction_digits")
+            CurrencyWidgetSyncService.setInt(newValue, forKey: "conv_fraction_digits")
+        }
     }
     
     private var storedRateSource: String {
         get { defaults.string(forKey: "conv_rate_source") ?? "erapi" }
-        set { defaults.set(newValue, forKey: "conv_rate_source") }
+        set {
+            defaults.set(newValue, forKey: "conv_rate_source")
+            CurrencyWidgetSyncService.setString(newValue, forKey: CurrencyWidgetShared.Keys.rateSource)
+        }
     }
     
     private var storedShowOfflineBadge: Bool {
         get { defaults.object(forKey: "conv_show_offline_badge") as? Bool ?? true }
-        set { defaults.set(newValue, forKey: "conv_show_offline_badge") }
+        set {
+            defaults.set(newValue, forKey: "conv_show_offline_badge")
+            CurrencyWidgetSyncService.setBool(newValue, forKey: "conv_show_offline_badge")
+        }
     }
     
     private var storedHapticsEnabled: Bool {
         get { defaults.object(forKey: "conv_haptics_enabled") as? Bool ?? true }
-        set { defaults.set(newValue, forKey: "conv_haptics_enabled") }
+        set {
+            defaults.set(newValue, forKey: "conv_haptics_enabled")
+            CurrencyWidgetSyncService.setBool(newValue, forKey: "conv_haptics_enabled")
+        }
     }
     
     private var storedLastRatesTS: Double {
         get {
-            let key = "conv_last_rates_ts_\(state.rateSource.rawValue)"
+            let key = CurrencyWidgetShared.Keys.lastRatesTimestamp(for: state.rateSource.rawValue)
             return defaults.double(forKey: key)
         }
         set {
-            let key = "conv_last_rates_ts_\(state.rateSource.rawValue)"
+            let key = CurrencyWidgetShared.Keys.lastRatesTimestamp(for: state.rateSource.rawValue)
             defaults.set(newValue, forKey: key)
+            CurrencyWidgetSyncService.setLastRatesTimestamp(newValue, forSource: state.rateSource.rawValue)
+        }
+    }
+    
+    private var storedCachedRates: [String: Double] {
+        get {
+            let key = CurrencyWidgetShared.Keys.cachedRates(for: state.rateSource.rawValue)
+            return CurrencyWidgetShared.decodeRates(from: defaults.object(forKey: key))
+        }
+        set {
+            let key = CurrencyWidgetShared.Keys.cachedRates(for: state.rateSource.rawValue)
+            defaults.set(newValue, forKey: key)
+            CurrencyWidgetSyncService.setRates(newValue, forSource: state.rateSource.rawValue)
         }
     }
     
@@ -174,6 +208,9 @@ final class ConverterViewModel: ViewModelProtocol {
     }
     
     func handle(_ action: Action) {
+        let previousInput = state.inputText
+        defer { persistInputIfNeeded(previousInput: previousInput) }
+        
         switch action {
         case .selectCurrency(let code):
             state.activeCode = code
@@ -201,8 +238,6 @@ final class ConverterViewModel: ViewModelProtocol {
             
         case .updateInputText(let text):
             state.inputText = text
-            storedInput = text
-            mirrorToICloud(key: "conv_input_text", value: text)
             state.entering = true
             state.justEvaluated = false
             
@@ -237,6 +272,11 @@ final class ConverterViewModel: ViewModelProtocol {
             state.rateSource = source
             storedRateSource = source.rawValue
             mirrorToICloud(key: "conv_rate_source", value: source.rawValue)
+            let cachedRates = storedCachedRates
+            if cachedRates.count > 1 {
+                state.allRates = cachedRates
+                filterSelectedCurrenciesToAvailable()
+            }
             Task { await fetchRates(haptic: false, force: true) }
             
         case .setShowOfflineBadge(let value):
@@ -303,6 +343,14 @@ final class ConverterViewModel: ViewModelProtocol {
         
         // Синхронизация состояния
         state.fractionDigits = storedFractionDigits
+        
+        let cachedRates = storedCachedRates
+        if cachedRates.count > 1 {
+            state.allRates = cachedRates
+            filterSelectedCurrenciesToAvailable()
+        }
+        
+        syncWidgetConverterSnapshot()
     }
     
     // MARK: - Currency Management
@@ -328,6 +376,8 @@ final class ConverterViewModel: ViewModelProtocol {
         let removed = state.selectedCurrencies.remove(at: index)
         if removed == state.activeCode {
             state.activeCode = state.selectedCurrencies.first ?? "USD"
+            storedActive = state.activeCode
+            mirrorToICloud(key: "conv_active_code", value: state.activeCode)
         }
         persistSelected()
     }
@@ -384,6 +434,8 @@ final class ConverterViewModel: ViewModelProtocol {
         if !state.selectedCurrencies.contains(state.activeCode) {
             state.activeCode = state.selectedCurrencies.first ?? "USD"
         }
+        storedActive = state.activeCode
+        mirrorToICloud(key: "conv_active_code", value: state.activeCode)
         persistSelected()
         state.showPicker = false
     }
@@ -603,11 +655,13 @@ final class ConverterViewModel: ViewModelProtocol {
         do {
             let snapshot = try await rateRepository.getLatestRates(source: state.rateSource, forceRefresh: true, allowStaleOnError: false)
             state.allRates = snapshot.rates
+            storedCachedRates = snapshot.rates
             storedLastRatesTS = snapshot.updatedAt
             state.isOffline = false
             
             // Фильтруем выбранные валюты, оставляя только те, что есть в новом источнике
             filterSelectedCurrenciesToAvailable()
+            syncWidgetConverterSnapshot()
             
             // Тактильный отклик теперь только в UI при нажатии на кнопку
         } catch {
@@ -717,6 +771,27 @@ final class ConverterViewModel: ViewModelProtocol {
     
     var canAddCurrency: Bool {
         state.selectedCurrencies.count < maxCurrencies
+    }
+    
+    private func persistInputIfNeeded(previousInput: String) {
+        guard state.inputText != previousInput else { return }
+        storedInput = state.inputText
+        mirrorToICloud(key: "conv_input_text", value: state.inputText)
+    }
+    
+    private func syncWidgetConverterSnapshot() {
+        CurrencyWidgetSyncService.setString(
+            state.selectedCurrencies.joined(separator: ","),
+            forKey: CurrencyWidgetShared.Keys.selectedCodes
+        )
+        CurrencyWidgetSyncService.setString(state.activeCode, forKey: CurrencyWidgetShared.Keys.activeCode)
+        CurrencyWidgetSyncService.setString(state.inputText, forKey: CurrencyWidgetShared.Keys.inputText)
+        CurrencyWidgetSyncService.setString(state.rateSource.rawValue, forKey: CurrencyWidgetShared.Keys.rateSource)
+        CurrencyWidgetSyncService.setRates(state.allRates, forSource: state.rateSource.rawValue)
+        
+        if storedLastRatesTS > 0 {
+            CurrencyWidgetSyncService.setLastRatesTimestamp(storedLastRatesTS, forSource: state.rateSource.rawValue)
+        }
     }
 }
 
