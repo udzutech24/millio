@@ -124,6 +124,9 @@ final class Cashback: Persistable {
     
     /// Процент кешбэка (0.0 - 100.0)
     var percentage: Double = 0.0
+
+    /// Месяц действия кешбэка в формате yyyy-MM
+    var monthKey: String = Cashback.monthKey(for: Date())
     
     /// ID привязанных карт - массив для поддержки нескольких карт
     var cardIDs: [String] = []
@@ -173,12 +176,14 @@ final class Cashback: Persistable {
         name: String,
         category: CashbackCategory = .other,
         percentage: Double = 0.0,
-        cardIDs: [String] = []
+        cardIDs: [String] = [],
+        monthKey: String = Cashback.monthKey(for: Date())
     ) {
         self.name = name
         self.categoryRaw = category.rawValue
         self.percentage = percentage
         self.cardIDs = cardIDs
+        self.monthKey = monthKey
         self.createdAt = Date()
         self.updatedAt = Date()
     }
@@ -187,14 +192,33 @@ final class Cashback: Persistable {
         name: String,
         categoryRaw: String,
         percentage: Double = 0.0,
-        cardIDs: [String] = []
+        cardIDs: [String] = [],
+        monthKey: String = Cashback.monthKey(for: Date())
     ) {
         self.name = name
         self.categoryRaw = categoryRaw
         self.percentage = percentage
         self.cardIDs = cardIDs
+        self.monthKey = monthKey
         self.createdAt = Date()
         self.updatedAt = Date()
+    }
+
+    static func monthKey(for date: Date, calendar: Calendar = .current) -> String {
+        let comps = calendar.dateComponents([.year, .month], from: date)
+        let year = comps.year ?? 1970
+        let month = comps.month ?? 1
+        return String(format: "%04d-%02d", year, month)
+    }
+
+    static func startOfMonth(for monthKey: String, calendar: Calendar = .current) -> Date? {
+        let parts = monthKey.split(separator: "-")
+        guard parts.count == 2,
+              let year = Int(parts[0]),
+              let month = Int(parts[1]) else {
+            return nil
+        }
+        return calendar.date(from: DateComponents(year: year, month: month, day: 1))
     }
     
     // MARK: - Exportable
@@ -206,6 +230,7 @@ final class Cashback: Persistable {
             "categoryRaw": categoryRaw,
             "percentage": percentage,
             "cardIDs": cardIDs,
+            "monthKey": monthKey,
             "createdAt": createdAt.timeIntervalSince1970,
             "updatedAt": updatedAt.timeIntervalSince1970
         ]

@@ -71,12 +71,13 @@ private struct CashbackContentViewInternal: View {
         ZStack {
             GradientBackground()
 
-            if viewModel.state.cashbacks.isEmpty {
+            if viewModel.state.visibleCashbacks.isEmpty {
                 emptyStateView
                     .padding(.horizontal, 16)
             } else {
                 ScrollView {
                     VStack(spacing: 24) {
+                        monthSelector
                         cashbacksList
                     }
                     .padding(.bottom, 100)
@@ -100,30 +101,73 @@ private struct CashbackContentViewInternal: View {
     // MARK: - Empty State
 
     private var emptyStateView: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "percent")
-                .font(.system(size: 76, weight: .bold))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: AppColors.cashbackGradient,
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+        VStack(spacing: 24) {
+            monthSelector
+
+            VStack(spacing: 20) {
+                Image(systemName: "percent")
+                    .font(.system(size: 76, weight: .bold))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: AppColors.cashbackGradient,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
                     )
-                )
 
-            Text("Нет кешбэка в этом месяце")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(AppColors.textPrimary)
-                .multilineTextAlignment(.center)
+                Text("Нет кешбэка в этом месяце")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .multilineTextAlignment(.center)
 
-            Text("Добавьте категории кешбэка - начните с быстрой настройки")
-                .font(.system(size: 16, weight: .regular))
-                .foregroundStyle(AppColors.textTertiary)
-                .multilineTextAlignment(.center)
+                Text("Добавьте категории кешбэка - начните с быстрой настройки")
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundStyle(AppColors.textTertiary)
+                    .multilineTextAlignment(.center)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 20)
         .padding(.bottom, 120)
+    }
+
+    private var monthSelector: some View {
+        HStack(spacing: 14) {
+            Button {
+                viewModel.handle(.moveMonthBackward)
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .frame(width: 36, height: 36)
+                    .background {
+                        Circle().fill(darkCircleFill)
+                    }
+            }
+            .buttonStyle(.plain)
+
+            Text(viewModel.selectedMonthTitle)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(AppColors.textPrimary)
+                .frame(minWidth: 140)
+
+            Button {
+                viewModel.handle(.moveMonthForward)
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .frame(width: 36, height: 36)
+                    .background {
+                        Circle().fill(darkCircleFill)
+                    }
+            }
+            .buttonStyle(.plain)
+            .disabled(!viewModel.canMoveMonthForward())
+            .opacity(viewModel.canMoveMonthForward() ? 1 : 0.45)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 4)
     }
 
     private var addCashbackFAB: some View {
@@ -162,7 +206,7 @@ private struct CashbackContentViewInternal: View {
 
     private var cashbacksList: some View {
         VStack(spacing: 16) {
-            ForEach(viewModel.state.cashbacks) { cashback in
+            ForEach(viewModel.state.visibleCashbacks) { cashback in
                 CashbackRowView(cashback: cashback, viewModel: viewModel)
             }
         }
@@ -426,6 +470,8 @@ private struct CashbackEditorView: View {
                                     .fill(darkCircleFill)
                             }
                     }
+                    .buttonStyle(.plain)
+                    .contentShape(Circle())
                     .foregroundStyle(AppColors.textPrimary)
                 }
             }
@@ -888,8 +934,9 @@ private struct CashbackEditorView: View {
     // MARK: - Helpers
 
     private func preloadCategories(for cardID: String) {
+        let selectedMonthKey = Cashback.monthKey(for: viewModel.state.selectedMonth)
         let existingForCard = viewModel.state.cashbacks.filter { cashback in
-            cashback.cardIDs.contains(cardID)
+            cashback.cardIDs.contains(cardID) && cashback.monthKey == selectedMonthKey
         }
 
         selectedCategoryRaws = Set(existingForCard.map(\.categoryRaw))

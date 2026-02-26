@@ -32,6 +32,10 @@ struct CashbackViewModelCustomCategoryTests {
         return context
     }
 
+    private func monthDate(year: Int, month: Int) -> Date {
+        Calendar.current.date(from: DateComponents(year: year, month: month, day: 1)) ?? Date()
+    }
+
     @Test("Создание пользовательской категории сохраняет её и возвращает custom raw")
     func testCreateCustomCategoryStoresModel() throws {
         let context = try createModelContext()
@@ -170,5 +174,90 @@ struct CashbackViewModelCustomCategoryTests {
         #expect(viewModel.state.cashbacks.count == 1)
         #expect(viewModel.state.cashbacks[0].categoryRaw == CashbackCategory.other.rawValue)
         #expect(viewModel.state.cashbacks[0].name == CashbackCategory.other.displayName)
+    }
+
+    @Test("Список кэшбэков фильтруется по выбранному месяцу")
+    func testVisibleCashbacksAreFilteredBySelectedMonth() throws {
+        let context = try createModelContext()
+
+        let january = monthDate(year: 2026, month: 1)
+        let february = monthDate(year: 2026, month: 2)
+
+        context.insert(Cashback(
+            name: "Январь",
+            category: .pharmacy,
+            percentage: 5,
+            cardIDs: [],
+            monthKey: Cashback.monthKey(for: january)
+        ))
+        context.insert(Cashback(
+            name: "Февраль",
+            category: .restaurant,
+            percentage: 7,
+            cardIDs: [],
+            monthKey: Cashback.monthKey(for: february)
+        ))
+        try context.save()
+
+        let viewModel = CashbackViewModel(modelContext: context, now: { february })
+        #expect(viewModel.state.visibleCashbacks.count == 1)
+        #expect(viewModel.state.visibleCashbacks.first?.name == "Февраль")
+
+        viewModel.handle(.setSelectedMonth(january))
+        #expect(viewModel.state.visibleCashbacks.count == 1)
+        #expect(viewModel.state.visibleCashbacks.first?.name == "Январь")
+    }
+
+    @Test("Одинаковая категория и карта создаются раздельно для разных месяцев")
+    func testUpdateCashbacksForCardSeparatesByMonth() throws {
+        let context = try createModelContext()
+        let january = monthDate(year: 2026, month: 1)
+        let february = monthDate(year: 2026, month: 2)
+
+        let card = Card(
+            name: "Тест карта",
+            cardNumber: "1111 2222 3333 4444",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 1_000
+        )
+        context.insert(card)
+        try context.save()
+
+        let viewModel = CashbackViewModel(modelContext: context, now: { february })
+        let custom = viewModel.createCustomCategory("Кофейни")
+        #expect(custom != nil)
+        guard let custom else { return }
+
+        viewModel.handle(.setSelectedMonth(january))
+        viewModel.handle(.updateCashbacksForCard(
+            cardID: card.cardUniqueID,
+            cashbacks: [(
+                categoryRaw: custom.rawValue,
+                categoryName: custom.displayName,
+                percentage: 5
+            )]
+        ))
+
+        viewModel.handle(.setSelectedMonth(february))
+        viewModel.handle(.updateCashbacksForCard(
+            cardID: card.cardUniqueID,
+            cashbacks: [(
+                categoryRaw: custom.rawValue,
+                categoryName: custom.displayName,
+                percentage: 10
+            )]
+        ))
+
+        #expect(viewModel.state.cashbacks.count == 2)
+
+        let janKey = Cashback.monthKey(for: january)
+        let febKey = Cashback.monthKey(for: february)
+        let janCashback = viewModel.state.cashbacks.first { $0.monthKey == janKey }
+        let febCashback = viewModel.state.cashbacks.first { $0.monthKey == febKey }
+
+        #expect(janCashback?.percentage == 5)
+        #expect(febCashback?.percentage == 10)
     }
 }

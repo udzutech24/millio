@@ -74,6 +74,7 @@ struct CashbackImporter: ModelImporter {
               let updatedAt = data["updatedAt"] as? TimeInterval else {
             throw AppError.backupCorrupted
         }
+        let monthKey = (data["monthKey"] as? String) ?? Cashback.monthKey(for: Date(timeIntervalSince1970: createdAt))
         
         let cardDescriptor = FetchDescriptor<Card>()
         let cards = (try? context.fetch(cardDescriptor)) ?? []
@@ -86,7 +87,8 @@ struct CashbackImporter: ModelImporter {
             name: name,
             categoryRaw: categoryRaw,
             percentage: percentage,
-            cardIDs: cardIDs
+            cardIDs: cardIDs,
+            monthKey: monthKey
         )
         
         // Восстанавливаем даты
