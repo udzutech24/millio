@@ -230,8 +230,12 @@ private struct CashbackRowView: View {
                 viewModel.handle(.editCashback(cashback))
             } label: {
                 HStack(spacing: 16) {
+                    let categoryOption = viewModel.categoryOption(
+                        for: cashback.categoryRaw,
+                        fallbackName: cashback.name
+                    )
                     // Иконка категории
-                    Image(systemName: cashback.displayCategoryIcon)
+                    Image(systemName: categoryOption.icon)
                         .font(.system(size: 28, weight: .semibold))
                         .foregroundStyle(
                             LinearGradient(
@@ -404,16 +408,21 @@ private struct CashbackRowView: View {
 
 // MARK: - Cashback Editor View
 
+private enum CashbackCategoryEditorMode {
+    case create
+    case edit(rawValue: String)
+}
+
 private struct CashbackEditorView: View {
     @ObservedObject var viewModel: CashbackViewModel
     @Environment(\.dismiss) private var dismiss
 
     @State private var showCardPicker: Bool = false
-    @State private var showCreateCategoryAlert: Bool = false
-    @State private var showRenameCategoryAlert: Bool = false
+    @State private var showCategoryEditorSheet: Bool = false
     @State private var showDeleteCategoryAlert: Bool = false
-    @State private var newCategoryName: String = ""
-    @State private var renameCategoryName: String = ""
+    @State private var categoryEditorMode: CashbackCategoryEditorMode = .create
+    @State private var categoryEditorName: String = ""
+    @State private var categoryEditorIcon: String = CashbackCustomCategory.defaultIcon
     @State private var pendingCategoryRawAction: String?
     @State private var selectedCardID: String? = nil
     @State private var searchText: String = ""
@@ -480,6 +489,17 @@ private struct CashbackEditorView: View {
                     ),
                     availableCards: viewModel.state.availableCards
                 )
+            }
+            .sheet(isPresented: $showCategoryEditorSheet) {
+                CashbackCategoryEditorSheet(
+                    mode: categoryEditorMode,
+                    name: categoryEditorName,
+                    selectedIcon: categoryEditorIcon
+                ) { name, icon in
+                    handleCategoryEditorSave(name: name, icon: icon)
+                }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
             }
             .onAppear {
                 if let editing = viewModel.state.editingCashback {
@@ -620,10 +640,8 @@ private struct CashbackEditorView: View {
                             .buttonStyle(.plain)
                             .contextMenu {
                                 if category.isCustom {
-                                    Button("Переименовать") {
-                                        pendingCategoryRawAction = category.rawValue
-                                        renameCategoryName = category.displayName
-                                        showRenameCategoryAlert = true
+                                    Button("Редактировать") {
+                                        openEditCategorySheet(for: category)
                                     }
 
                                     Button("Удалить", role: .destructive) {
@@ -637,7 +655,7 @@ private struct CashbackEditorView: View {
 
                     HStack {
                         Button {
-                            showCreateCategoryAlert = true
+                            openCreateCategorySheet()
                         } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: "plus")
@@ -687,51 +705,6 @@ private struct CashbackEditorView: View {
                 }
                 .padding(16)
             }
-            .alert("Создание категории", isPresented: $showCreateCategoryAlert) {
-                TextField("Название категории", text: $newCategoryName)
-                Button("Отмена", role: .cancel) {
-                    newCategoryName = ""
-                }
-                Button("Создать") {
-                    if let option = viewModel.createCustomCategory(newCategoryName) {
-                        selectedCategoryRaws.insert(option.rawValue)
-                        if cardCashbacks[option.rawValue] == nil {
-                            cardCashbacks[option.rawValue] = "5"
-                        }
-                    }
-                    newCategoryName = ""
-                }
-            } message: {
-                Text("Введите название новой категории")
-            }
-            .alert("Переименовать категорию", isPresented: $showRenameCategoryAlert) {
-                TextField("Новое название", text: $renameCategoryName)
-                Button("Отмена", role: .cancel) {
-                    renameCategoryName = ""
-                    pendingCategoryRawAction = nil
-                }
-                Button("Сохранить") {
-                    guard let raw = pendingCategoryRawAction else { return }
-                    let oldRaw = raw
-                    if viewModel.renameCustomCategory(rawValue: oldRaw, newName: renameCategoryName) {
-                        if selectedCategoryRaws.contains(oldRaw) {
-                            let newOption = viewModel.categoryOptions().first(where: {
-                                $0.displayName.caseInsensitiveCompare(renameCategoryName.trimmingCharacters(in: .whitespacesAndNewlines)) == .orderedSame
-                            })
-                            selectedCategoryRaws.remove(oldRaw)
-                            if let newOption {
-                                selectedCategoryRaws.insert(newOption.rawValue)
-                                cardCashbacks[newOption.rawValue] = cardCashbacks[oldRaw] ?? "5"
-                            }
-                            cardCashbacks.removeValue(forKey: oldRaw)
-                        }
-                    }
-                    renameCategoryName = ""
-                    pendingCategoryRawAction = nil
-                }
-            } message: {
-                Text("Введите новое название категории. Связанные кешбэки будут обновлены автоматически.")
-            }
             .alert("Удалить категорию?", isPresented: $showDeleteCategoryAlert) {
                 Button("Отмена", role: .cancel) {
                     pendingCategoryRawAction = nil
@@ -773,7 +746,7 @@ private struct CashbackEditorView: View {
                     VStack(spacing: 0) {
                         ForEach(Array(selectedCategoriesList.enumerated()), id: \.element) { index, category in
                             HStack(spacing: 12) {
-                                Image(systemName: "flag")
+                                Image(systemName: category.icon)
                                     .font(.system(size: 18, weight: .regular))
                                     .foregroundStyle(AppColors.textPrimary)
                                     .frame(width: 24, height: 24)
@@ -825,10 +798,8 @@ private struct CashbackEditorView: View {
                             .padding(.vertical, 14)
                             .contextMenu {
                                 if category.isCustom {
-                                    Button("Переименовать") {
-                                        pendingCategoryRawAction = category.rawValue
-                                        renameCategoryName = category.displayName
-                                        showRenameCategoryAlert = true
+                                    Button("Редактировать") {
+                                        openEditCategorySheet(for: category)
                                     }
 
                                     Button("Удалить", role: .destructive) {
@@ -930,6 +901,62 @@ private struct CashbackEditorView: View {
 
     // MARK: - Helpers
 
+    private func openCreateCategorySheet() {
+        categoryEditorMode = .create
+        categoryEditorName = ""
+        categoryEditorIcon = CashbackCustomCategory.defaultIcon
+        showCategoryEditorSheet = true
+    }
+
+    private func openEditCategorySheet(for category: CashbackCategoryOption) {
+        guard category.isCustom else { return }
+        categoryEditorMode = .edit(rawValue: category.rawValue)
+        categoryEditorName = category.displayName
+        categoryEditorIcon = category.icon
+        showCategoryEditorSheet = true
+    }
+
+    private func handleCategoryEditorSave(name: String, icon: String) {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+
+        switch categoryEditorMode {
+        case .create:
+            if let option = viewModel.createCustomCategory(trimmedName, icon: icon) {
+                selectedCategoryRaws.insert(option.rawValue)
+                if cardCashbacks[option.rawValue] == nil {
+                    cardCashbacks[option.rawValue] = "5"
+                }
+            }
+
+        case .edit(let oldRaw):
+            let wasSelected = selectedCategoryRaws.contains(oldRaw)
+            let previousPercentage = cardCashbacks[oldRaw]
+            guard viewModel.renameCustomCategory(rawValue: oldRaw, newName: trimmedName, newIcon: icon) else {
+                return
+            }
+
+            guard wasSelected else { break }
+
+            selectedCategoryRaws.remove(oldRaw)
+            cardCashbacks.removeValue(forKey: oldRaw)
+
+            let updatedOption = viewModel.categoryOptions().first { $0.rawValue == oldRaw }
+                ?? viewModel.categoryOptions().first {
+                    $0.displayName.caseInsensitiveCompare(trimmedName) == .orderedSame
+                }
+
+            if let updatedOption {
+                selectedCategoryRaws.insert(updatedOption.rawValue)
+                if cardCashbacks[updatedOption.rawValue] == nil {
+                    cardCashbacks[updatedOption.rawValue] = previousPercentage ?? "5"
+                }
+            }
+        }
+
+        showCategoryEditorSheet = false
+    }
+
     private func preloadCategories(for cardID: String) {
         let selectedMonthKey = Cashback.monthKey(for: viewModel.state.selectedMonth)
         let existingForCard = viewModel.state.cashbacks.filter { cashback in
@@ -972,6 +999,102 @@ private struct CashbackEditorView: View {
         let text = percentageText(for: clamped)
         for raw in selectedCategoryRaws {
             cardCashbacks[raw] = text
+        }
+    }
+}
+
+private struct CashbackCategoryEditorSheet: View {
+    let mode: CashbackCategoryEditorMode
+    @State var name: String
+    @State var selectedIcon: String
+    let onSave: (_ name: String, _ icon: String) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    private var title: String {
+        switch mode {
+        case .create:
+            return "Новая категория"
+        case .edit:
+            return "Редактировать категорию"
+        }
+    }
+
+    private var isValid: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                GradientBackground()
+
+                ScrollView {
+                    VStack(spacing: 18) {
+                        FinancesSectionHeader(title: "Название")
+                        FinancesGlassCard(accentColor: cashbackAccent) {
+                            TextField("Например: Кофейни", text: $name)
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(AppColors.textPrimary)
+                                .padding(16)
+                        }
+
+                        FinancesSectionHeader(title: "Иконка")
+                        FinancesGlassCard(accentColor: cashbackAccent) {
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 58), spacing: 10)], spacing: 10) {
+                                ForEach(CashbackCustomCategory.allowedIcons, id: \.self) { icon in
+                                    let isSelected = selectedIcon == icon
+                                    Button {
+                                        selectedIcon = icon
+                                    } label: {
+                                        Image(systemName: icon)
+                                            .font(.system(size: 22, weight: .semibold))
+                                            .foregroundStyle(AppColors.textPrimary)
+                                            .frame(width: 54, height: 54)
+                                            .background {
+                                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                                    .fill(isSelected ? Color.white.opacity(0.22) : darkCircleFill)
+                                                    .overlay(
+                                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                                            .stroke(cashbackAccent.opacity(isSelected ? 0.75 : 0.15), lineWidth: 1)
+                                                    )
+                                            }
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(12)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 16)
+                }
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Отмена") {
+                        dismiss()
+                    }
+                    .foregroundStyle(AppColors.textPrimary)
+                }
+
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Сохранить") {
+                        onSave(name, selectedIcon)
+                        dismiss()
+                    }
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: AppColors.cashbackGradient,
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .disabled(!isValid)
+                }
+            }
         }
     }
 }

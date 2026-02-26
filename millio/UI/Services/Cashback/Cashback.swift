@@ -49,6 +49,26 @@ enum CashbackCategory: String, Codable, CaseIterable {
 /// Пользовательская категория кешбэка
 @Model
 final class CashbackCustomCategory: Persistable {
+    static let defaultIcon = "tag.fill"
+    static let allowedIcons: [String] = [
+        "tag.fill",
+        "cart.fill",
+        "fuelpump.fill",
+        "fork.knife",
+        "cross.case.fill",
+        "car.fill",
+        "gamecontroller.fill",
+        "globe",
+        "house.fill",
+        "figure.walk",
+        "cup.and.saucer.fill",
+        "gift.fill",
+        "airplane",
+        "iphone",
+        "bolt.fill",
+        "heart.fill"
+    ]
+
     /// Уникальный идентификатор категории
     var categoryID: String = UUID().uuidString
 
@@ -58,17 +78,21 @@ final class CashbackCustomCategory: Persistable {
     /// Нормализованное имя для дедупликации
     var normalizedName: String = ""
 
+    /// Иконка категории (SF Symbol)
+    var icon: String = defaultIcon
+
     /// Дата создания
     var createdAt: Date = Date()
 
     /// Дата обновления
     var updatedAt: Date = Date()
 
-    init(name: String) {
+    init(name: String, icon: String = CashbackCustomCategory.defaultIcon) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         self.categoryID = UUID().uuidString
         self.name = trimmed
         self.normalizedName = CashbackCustomCategory.normalize(trimmed)
+        self.icon = CashbackCustomCategory.normalizeIcon(icon)
         self.createdAt = Date()
         self.updatedAt = Date()
     }
@@ -77,12 +101,17 @@ final class CashbackCustomCategory: Persistable {
         value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
+    static func normalizeIcon(_ icon: String) -> String {
+        allowedIcons.contains(icon) ? icon : defaultIcon
+    }
+
     func export() throws -> Data {
         let dict: [String: Any] = [
             "type": "CashbackCustomCategory",
             "categoryID": categoryID,
             "name": name,
             "normalizedName": normalizedName,
+            "icon": icon,
             "createdAt": createdAt.timeIntervalSince1970,
             "updatedAt": updatedAt.timeIntervalSince1970
         ]

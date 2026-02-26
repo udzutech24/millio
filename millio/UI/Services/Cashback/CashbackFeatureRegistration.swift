@@ -115,11 +115,15 @@ struct CashbackCustomCategoryImporter: ModelImporter {
         }
 
         let normalizedName = (data["normalizedName"] as? String) ?? CashbackCustomCategory.normalize(name)
+        let icon = CashbackCustomCategory.normalizeIcon(
+            (data["icon"] as? String) ?? CashbackCustomCategory.defaultIcon
+        )
 
         let category = CashbackCustomCategory(name: name)
         category.categoryID = categoryID
         category.name = name
         category.normalizedName = normalizedName
+        category.icon = icon
         category.createdAt = Date(timeIntervalSince1970: createdAt)
         category.updatedAt = Date(timeIntervalSince1970: updatedAt)
 

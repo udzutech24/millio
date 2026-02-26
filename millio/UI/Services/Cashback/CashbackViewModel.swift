@@ -197,7 +197,7 @@ final class CashbackViewModel: ViewModelProtocol {
             return CashbackCategoryOption(
                 rawValue: raw,
                 displayName: custom.name,
-                icon: "tag.fill",
+                icon: custom.icon,
                 isCustom: true
             )
         }
@@ -206,7 +206,7 @@ final class CashbackViewModel: ViewModelProtocol {
         return CashbackCategoryOption(
             rawValue: raw,
             displayName: safeFallbackName.isEmpty ? CashbackCategory.other.displayName : safeFallbackName,
-            icon: "tag.fill",
+            icon: CashbackCustomCategory.defaultIcon,
             isCustom: true
         )
     }
@@ -230,9 +230,10 @@ final class CashbackViewModel: ViewModelProtocol {
     }
 
     @discardableResult
-    func createCustomCategory(_ name: String) -> CashbackCategoryOption? {
+    func createCustomCategory(_ name: String, icon: String = CashbackCustomCategory.defaultIcon) -> CashbackCategoryOption? {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
+        let normalizedIcon = CashbackCustomCategory.normalizeIcon(icon)
 
         if let systemMatch = systemCategoryOptions.first(where: {
             $0.displayName.caseInsensitiveCompare(trimmed) == .orderedSame
@@ -245,7 +246,7 @@ final class CashbackViewModel: ViewModelProtocol {
             return categoryOption(for: Self.customRawValue(from: existing.categoryID), fallbackName: existing.name)
         }
 
-        let customCategory = CashbackCustomCategory(name: trimmed)
+        let customCategory = CashbackCustomCategory(name: trimmed, icon: normalizedIcon)
         modelContext.insert(customCategory)
 
         do {
@@ -259,7 +260,11 @@ final class CashbackViewModel: ViewModelProtocol {
     }
 
     @discardableResult
-    func renameCustomCategory(rawValue: String, newName: String) -> Bool {
+    func renameCustomCategory(
+        rawValue: String,
+        newName: String,
+        newIcon: String? = nil
+    ) -> Bool {
         guard let sourceCustomID = Self.customCategoryID(from: rawValue),
               let sourceCategory = state.customCategories.first(where: { $0.categoryID == sourceCustomID }) else {
             return false
@@ -268,6 +273,7 @@ final class CashbackViewModel: ViewModelProtocol {
         let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
         let normalized = CashbackCustomCategory.normalize(trimmed)
+        let normalizedIcon = CashbackCustomCategory.normalizeIcon(newIcon ?? sourceCategory.icon)
 
         let linkedCashbacks = state.cashbacks.filter { $0.categoryRaw == rawValue }
         let now = Date()
@@ -299,6 +305,7 @@ final class CashbackViewModel: ViewModelProtocol {
 
         sourceCategory.name = trimmed
         sourceCategory.normalizedName = normalized
+        sourceCategory.icon = normalizedIcon
         sourceCategory.updatedAt = now
 
         for cashback in linkedCashbacks {
@@ -585,7 +592,7 @@ final class CashbackViewModel: ViewModelProtocol {
             CashbackCategoryOption(
                 rawValue: Self.customRawValue(from: $0.categoryID),
                 displayName: $0.name,
-                icon: "tag.fill",
+                icon: $0.icon,
                 isCustom: true
             )
         }

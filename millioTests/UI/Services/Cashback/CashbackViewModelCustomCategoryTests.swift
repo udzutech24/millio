@@ -41,14 +41,16 @@ struct CashbackViewModelCustomCategoryTests {
         let context = try createModelContext()
         let viewModel = CashbackViewModel(modelContext: context)
 
-        let option = viewModel.createCustomCategory("Кофейни")
+        let option = viewModel.createCustomCategory("Кофейни", icon: "cup.and.saucer.fill")
 
         #expect(option != nil)
         #expect(option?.isCustom == true)
         #expect(option?.rawValue.hasPrefix(Cashback.customCategoryPrefix) == true)
         #expect(option?.displayName == "Кофейни")
+        #expect(option?.icon == "cup.and.saucer.fill")
         #expect(viewModel.state.customCategories.count == 1)
         #expect(viewModel.state.customCategories.first?.name == "Кофейни")
+        #expect(viewModel.state.customCategories.first?.icon == "cup.and.saucer.fill")
     }
 
     @Test("Создание дубликата категории возвращает уже существующую")
@@ -130,13 +132,19 @@ struct CashbackViewModelCustomCategoryTests {
             )]
         ))
 
-        let renamed = viewModel.renameCustomCategory(rawValue: custom.rawValue, newName: "Кинотеатры")
+        let renamed = viewModel.renameCustomCategory(
+            rawValue: custom.rawValue,
+            newName: "Кинотеатры",
+            newIcon: "gift.fill"
+        )
         #expect(renamed)
         #expect(viewModel.state.customCategories.count == 1)
         #expect(viewModel.state.customCategories.first?.name == "Кинотеатры")
+        #expect(viewModel.state.customCategories.first?.icon == "gift.fill")
         #expect(viewModel.state.cashbacks.count == 1)
         #expect(viewModel.state.cashbacks[0].categoryRaw == custom.rawValue)
         #expect(viewModel.state.cashbacks[0].name == "Кинотеатры")
+        #expect(viewModel.categoryOption(for: custom.rawValue).icon == "gift.fill")
     }
 
     @Test("deleteCustomCategory переносит связанные Cashback в Другое и удаляет категорию")
@@ -259,5 +267,17 @@ struct CashbackViewModelCustomCategoryTests {
 
         #expect(janCashback?.percentage == 5)
         #expect(febCashback?.percentage == 10)
+    }
+
+    @Test("Невалидная иконка пользовательской категории заменяется на дефолтную")
+    func testCustomCategoryInvalidIconFallsBackToDefault() throws {
+        let context = try createModelContext()
+        let viewModel = CashbackViewModel(modelContext: context)
+
+        let option = viewModel.createCustomCategory("Поездки", icon: "not.valid.icon")
+
+        #expect(option != nil)
+        #expect(option?.icon == CashbackCustomCategory.defaultIcon)
+        #expect(viewModel.state.customCategories.first?.icon == CashbackCustomCategory.defaultIcon)
     }
 }
