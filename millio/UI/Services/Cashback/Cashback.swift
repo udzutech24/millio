@@ -46,9 +46,76 @@ enum CashbackCategory: String, Codable, CaseIterable {
     }
 }
 
+/// Пользовательская категория кешбэка
+@Model
+final class CashbackCustomCategory: Persistable {
+    /// Уникальный идентификатор категории
+    var categoryID: String = UUID().uuidString
+
+    /// Отображаемое имя
+    var name: String = ""
+
+    /// Нормализованное имя для дедупликации
+    var normalizedName: String = ""
+
+    /// Дата создания
+    var createdAt: Date = Date()
+
+    /// Дата обновления
+    var updatedAt: Date = Date()
+
+    init(name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.categoryID = UUID().uuidString
+        self.name = trimmed
+        self.normalizedName = CashbackCustomCategory.normalize(trimmed)
+        self.createdAt = Date()
+        self.updatedAt = Date()
+    }
+
+    static func normalize(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    func export() throws -> Data {
+        let dict: [String: Any] = [
+            "type": "CashbackCustomCategory",
+            "categoryID": categoryID,
+            "name": name,
+            "normalizedName": normalizedName,
+            "createdAt": createdAt.timeIntervalSince1970,
+            "updatedAt": updatedAt.timeIntervalSince1970
+        ]
+        return try JSONSerialization.data(withJSONObject: dict)
+    }
+
+    static func `import`(_ data: Data) throws {
+        guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              dict["categoryID"] as? String != nil,
+              dict["name"] as? String != nil,
+              dict["createdAt"] as? TimeInterval != nil,
+              dict["updatedAt"] as? TimeInterval != nil else {
+            throw AppError.backupCorrupted
+        }
+    }
+}
+
+/// Унифицированная категория для UI (системная или пользовательская)
+struct CashbackCategoryOption: Identifiable, Hashable {
+    /// Стабильный raw-ключ для хранения в Cashback.categoryRaw
+    let rawValue: String
+    let displayName: String
+    let icon: String
+    let isCustom: Bool
+
+    var id: String { rawValue }
+}
+
 /// Кешбэк
 @Model
 final class Cashback: Persistable {
+    static let customCategoryPrefix = "custom:"
+
     /// Название кешбэка
     var name: String = ""
     
@@ -71,6 +138,27 @@ final class Cashback: Persistable {
         get { CashbackCategory(rawValue: categoryRaw) ?? .other }
         set { categoryRaw = newValue.rawValue }
     }
+
+    /// Категория является пользовательской
+    var isCustomCategory: Bool {
+        categoryRaw.hasPrefix(Self.customCategoryPrefix)
+    }
+
+    /// Отображаемое имя категории (системное или пользовательское)
+    var displayCategoryName: String {
+        if let systemCategory = CashbackCategory(rawValue: categoryRaw) {
+            return systemCategory.displayName
+        }
+        if isCustomCategory, !name.isEmpty {
+            return name
+        }
+        return CashbackCategory.other.displayName
+    }
+
+    /// Отображаемая иконка категории (для пользовательской используем общий тег)
+    var displayCategoryIcon: String {
+        CashbackCategory(rawValue: categoryRaw)?.icon ?? "tag.fill"
+    }
     
     /// Форматированный процент для отображения
     var formattedPercentage: String {
@@ -89,6 +177,20 @@ final class Cashback: Persistable {
     ) {
         self.name = name
         self.categoryRaw = category.rawValue
+        self.percentage = percentage
+        self.cardIDs = cardIDs
+        self.createdAt = Date()
+        self.updatedAt = Date()
+    }
+
+    init(
+        name: String,
+        categoryRaw: String,
+        percentage: Double = 0.0,
+        cardIDs: [String] = []
+    ) {
+        self.name = name
+        self.categoryRaw = categoryRaw
         self.percentage = percentage
         self.cardIDs = cardIDs
         self.createdAt = Date()

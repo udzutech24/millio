@@ -31,6 +31,15 @@ private let cashbackGlow = LinearGradient(
 )
 
 private let darkCircleFill = Color.white.opacity(0.08)
+private let cashbackFabFill = LinearGradient(
+    colors: [
+        Color(red: 0.03, green: 0.07, blue: 0.11),
+        Color(red: 0.02, green: 0.04, blue: 0.06),
+        Color.black
+    ],
+    startPoint: .topLeading,
+    endPoint: .bottomTrailing
+)
 
 struct CashbackView: View {
     @Environment(\.modelContext) private var modelContext
@@ -62,37 +71,24 @@ private struct CashbackContentViewInternal: View {
         ZStack {
             GradientBackground()
 
-            ScrollView {
-                VStack(spacing: 24) {
-                    if viewModel.state.cashbacks.isEmpty {
-                        emptyStateView
-                    } else {
+            if viewModel.state.cashbacks.isEmpty {
+                emptyStateView
+                    .padding(.horizontal, 16)
+            } else {
+                ScrollView {
+                    VStack(spacing: 24) {
                         cashbacksList
                     }
+                    .padding(.bottom, 100)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 16)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 16)
             }
+
+            addCashbackFAB
         }
         .navigationTitle("Кешбэк")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    viewModel.handle(.addCashback)
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: AppColors.cashbackGradient,
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                }
-            }
-        }
         .sheet(isPresented: Binding(
             get: { viewModel.state.showCashbackEditor },
             set: { if !$0 { viewModel.handle(.hideCashbackEditor) } }
@@ -104,9 +100,9 @@ private struct CashbackContentViewInternal: View {
     // MARK: - Empty State
 
     private var emptyStateView: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 20) {
             Image(systemName: "percent")
-                .font(.system(size: 64))
+                .font(.system(size: 76, weight: .bold))
                 .foregroundStyle(
                     LinearGradient(
                         colors: AppColors.cashbackGradient,
@@ -115,16 +111,51 @@ private struct CashbackContentViewInternal: View {
                     )
                 )
 
-            Text("Нет кешбэков")
+            Text("Нет кешбэка в этом месяце")
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(AppColors.textPrimary)
+                .multilineTextAlignment(.center)
 
-            Text("Добавьте свой первый кешбэк")
-                .font(.system(size: 14, weight: .regular))
+            Text("Добавьте категории кешбэка - начните с быстрой настройки")
+                .font(.system(size: 16, weight: .regular))
                 .foregroundStyle(AppColors.textTertiary)
                 .multilineTextAlignment(.center)
         }
-        .padding(.vertical, 60)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 120)
+    }
+
+    private var addCashbackFAB: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                Button {
+                    viewModel.handle(.addCashback)
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 56, height: 56)
+                        .background(
+                            Circle()
+                                .fill(cashbackFabFill)
+                                .overlay(
+                                    Circle()
+                                        .fill(cashbackGlow)
+                                        .opacity(0.6)
+                                )
+                                .overlay(
+                                    Circle()
+                                        .stroke(cashbackAccent.opacity(0.55), lineWidth: 1)
+                                )
+                        )
+                }
+                .padding(.trailing, 24)
+                .padding(.bottom, 24)
+            }
+        }
     }
 
     // MARK: - Cashbacks List
@@ -152,7 +183,7 @@ private struct CashbackRowView: View {
             } label: {
                 HStack(spacing: 16) {
                     // Иконка категории
-                    Image(systemName: cashback.category.icon)
+                    Image(systemName: cashback.displayCategoryIcon)
                         .font(.system(size: 28, weight: .semibold))
                         .foregroundStyle(
                             LinearGradient(
@@ -169,7 +200,7 @@ private struct CashbackRowView: View {
 
                     // Информация
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(cashback.category.displayName)
+                        Text(cashback.displayCategoryName)
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
                             .lineLimit(1)
@@ -325,28 +356,42 @@ private struct CashbackRowView: View {
 
 // MARK: - Cashback Editor View
 
-/// Режим создания кэшбеков
-enum CashbackCreationMode {
-    case createCashback // Создать кэшбек → выбрать карты
-    case addToCard // Выбрать карту → добавить кэшбеки
-}
-
 private struct CashbackEditorView: View {
     @ObservedObject var viewModel: CashbackViewModel
     @Environment(\.dismiss) private var dismiss
 
-    @State private var creationMode: CashbackCreationMode = .createCashback
-    @State private var selectedCategory: CashbackCategory = .other
-    @State private var percentageText: String = ""
-    @State private var selectedCardIDs: Set<String> = []
     @State private var showCardPicker: Bool = false
-
-    // Режим "Добавить к карте"
+    @State private var showCreateCategoryAlert: Bool = false
+    @State private var showRenameCategoryAlert: Bool = false
+    @State private var showDeleteCategoryAlert: Bool = false
+    @State private var newCategoryName: String = ""
+    @State private var renameCategoryName: String = ""
+    @State private var pendingCategoryRawAction: String?
     @State private var selectedCardID: String? = nil
-    @State private var cardCashbacks: [CashbackCategory: String] = [:]
+    @State private var searchText: String = ""
+    @State private var isShowingAllCategories: Bool = false
+    @State private var selectedCategoryRaws: Set<String> = []
+    @State private var cardCashbacks: [String: String] = [:]
 
-    var isEditing: Bool {
-        viewModel.state.editingCashback != nil
+    private var filteredCategories: [CashbackCategoryOption] {
+        viewModel.categoryOptions(matching: searchText)
+    }
+
+    private var visibleCategories: [CashbackCategoryOption] {
+        if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isShowingAllCategories {
+            return filteredCategories
+        }
+        return Array(filteredCategories.prefix(6))
+    }
+
+    private var canShowMoreCategories: Bool {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && filteredCategories.count > 6
+    }
+
+    private var selectedCategoriesList: [CashbackCategoryOption] {
+        selectedCategoryRaws
+            .map { viewModel.categoryOption(for: $0) }
+            .sorted { $0.displayName < $1.displayName }
     }
 
     var body: some View {
@@ -356,32 +401,17 @@ private struct CashbackEditorView: View {
 
                 ScrollView {
                     VStack(spacing: 24) {
-                        if !isEditing {
-                            VStack(alignment: .leading, spacing: 10) {
-                                FinancesSectionHeader(title: "Режим создания")
-                                FinancesGlassCard(accentColor: cashbackAccent) {
-                                    Picker("Режим", selection: $creationMode) {
-                                        Text("Создать кэшбек").tag(CashbackCreationMode.createCashback)
-                                        Text("Добавить к карте").tag(CashbackCreationMode.addToCard)
-                                    }
-                                    .pickerStyle(.segmented)
-                                    .padding(16)
-                                }
-                            }
-                        }
-
-                        if creationMode == .createCashback || isEditing {
-                            createCashbackModeContent
-                        } else {
-                            addToCardModeContent
-                        }
+                        cardPickerSection
+                        categoriesSection
+                        selectedCategoriesSection
+                        saveButton
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 20)
-                    .padding(.bottom, 40)
+                    .padding(.bottom, 24)
                 }
             }
-            .navigationTitle(isEditing ? "Редактирование" : "Новый кешбэк")
+            .navigationTitle("Новый кешбэк")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -389,151 +419,195 @@ private struct CashbackEditorView: View {
                         dismiss()
                     } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: 20, weight: .semibold))
+                            .frame(width: 44, height: 44)
+                            .background {
+                                Circle()
+                                    .fill(darkCircleFill)
+                            }
                     }
                     .foregroundStyle(AppColors.textPrimary)
                 }
-
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        saveCashback()
-                    } label: {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .semibold))
-                    }
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: AppColors.cashbackGradient,
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .disabled(!isValid)
-                }
             }
             .sheet(isPresented: $showCardPicker) {
-                if creationMode == .createCashback || isEditing {
-                    CashbackCardPickerView(
-                        selectedCardIDs: $selectedCardIDs,
-                        availableCards: viewModel.state.availableCards
-                    )
-                } else {
-                    CashbackSingleCardPickerView(
-                        selectedCardID: Binding(
-                            get: { selectedCardID ?? "" },
-                            set: { selectedCardID = $0.isEmpty ? nil : $0 }
-                        ),
-                        availableCards: viewModel.state.availableCards
-                    )
-                }
+                CashbackSingleCardPickerView(
+                    selectedCardID: Binding(
+                        get: { selectedCardID ?? "" },
+                        set: { selectedCardID = $0.isEmpty ? nil : $0 }
+                    ),
+                    availableCards: viewModel.state.availableCards
+                )
             }
             .onAppear {
                 if let editing = viewModel.state.editingCashback {
-                    selectedCategory = editing.category
-                    percentageText = String(format: "%.1f", editing.percentage)
-                    let validCardIDs = editing.cardIDs.filter { cardID in
+                    selectedCardID = editing.cardIDs.first { cardID in
                         viewModel.getCard(byID: cardID) != nil
                     }
-                    selectedCardIDs = Set(validCardIDs)
                 }
+
+                if let cardID = selectedCardID {
+                    preloadCategories(for: cardID)
+                }
+            }
+            .onChange(of: selectedCardID) { _, newValue in
+                guard let cardID = newValue else {
+                    selectedCategoryRaws.removeAll()
+                    cardCashbacks.removeAll()
+                    return
+                }
+                preloadCategories(for: cardID)
             }
         }
     }
 
-    // MARK: - Create Cashback Mode Content
+    // MARK: - Sections
 
-    var createCashbackModeContent: some View {
-        VStack(spacing: 24) {
-            // Категория
-            VStack(alignment: .leading, spacing: 10) {
-                FinancesSectionHeader(title: "Категория")
+    private var cardPickerSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Выберите карту")
 
-                LazyVGrid(columns: [
-                    GridItem(.flexible()),
-                    GridItem(.flexible())
-                ], spacing: 12) {
-                    ForEach(CashbackCategory.allCases, id: \.self) { category in
-                        Button {
-                            selectedCategory = category
-                        } label: {
-                            VStack(spacing: 8) {
-                                Image(systemName: category.icon)
-                                    .font(.system(size: 24, weight: .semibold))
-                                    .foregroundStyle(
-                                        selectedCategory == category ?
-                                        LinearGradient(
-                                            colors: AppColors.cashbackGradient,
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        ) :
-                                        LinearGradient(
-                                            colors: [AppColors.textTertiary, AppColors.textTertiary],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
-
-                                Text(category.displayName)
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundStyle(
-                                        selectedCategory == category ?
-                                        AppColors.textPrimary :
-                                        AppColors.textSecondary
-                                    )
-                                    .lineLimit(1)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background {
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .fill(darkCardFill)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                            .fill(cashbackGlow)
-                                            .opacity(selectedCategory == category ? 0.6 : 0)
-                                    )
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                            .stroke(
-                                                cashbackAccent.opacity(selectedCategory == category ? 0.55 : 0.2),
-                                                lineWidth: 1
-                                            )
-                                    )
-                            }
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-
-            // Процент
-            VStack(alignment: .leading, spacing: 10) {
-                FinancesSectionHeader(title: "Процент кешбэка")
+            Button {
+                showCardPicker = true
+            } label: {
                 FinancesGlassCard(accentColor: cashbackAccent) {
-                    HStack(spacing: 12) {
-                        TextField("0", text: $percentageText)
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary)
-                            .keyboardType(.decimalPad)
+                    HStack(spacing: 16) {
+                        if let cardID = selectedCardID, let card = viewModel.getCard(byID: cardID) {
+                            Image(systemName: card.cardType.icon)
+                                .font(.system(size: 22, weight: .semibold))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: AppColors.cashbackGradient,
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: 44, height: 44)
+                                .background {
+                                    Circle()
+                                        .fill(darkCircleFill)
+                                }
 
-                        Text("%")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(AppColors.textSecondary)
+                            Text(card.name)
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(AppColors.textPrimary)
+                                .lineLimit(1)
+
+                            Spacer()
+                        } else {
+                            Image(systemName: "plus")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(.black.opacity(0.85))
+                                .frame(width: 44, height: 44)
+                                .background {
+                                    Circle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: AppColors.cashbackGradient,
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                }
+
+                            Text("Выбрать карту")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(AppColors.textPrimary)
+
+                            Spacer()
+                        }
+
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppColors.textTertiary)
                     }
                     .padding(16)
                 }
             }
+            .buttonStyle(.plain)
+        }
+    }
 
-            // Привязанные карты
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    FinancesSectionHeader(title: "Привязанные карты")
+    private var categoriesSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Выбор категорий")
 
-                    Spacer()
+            FinancesGlassCard(accentColor: cashbackAccent) {
+                VStack(spacing: 14) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 24, weight: .regular))
+                            .foregroundStyle(AppColors.textPrimary)
 
-                    if !selectedCardIDs.isEmpty {
-                        Text("\(selectedCardIDs.count)")
-                            .font(.system(size: 14, weight: .semibold))
+                        TextField("Поиск категорий", text: $searchText)
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(AppColors.textPrimary)
+                    }
+                    .padding(.top, 4)
+
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                        ForEach(visibleCategories, id: \.self) { category in
+                            let isSelected = selectedCategoryRaws.contains(category.rawValue)
+                            Button {
+                                if isSelected {
+                                    selectedCategoryRaws.remove(category.rawValue)
+                                    cardCashbacks.removeValue(forKey: category.rawValue)
+                                } else {
+                                    selectedCategoryRaws.insert(category.rawValue)
+                                    if cardCashbacks[category.rawValue] == nil {
+                                        cardCashbacks[category.rawValue] = "5"
+                                    }
+                                }
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: category.icon)
+                                        .font(.system(size: 14, weight: .semibold))
+                                    Text(category.displayName)
+                                        .font(.system(size: 13, weight: .medium))
+                                        .lineLimit(1)
+                                }
+                                .foregroundStyle(AppColors.textPrimary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background {
+                                    Capsule()
+                                        .fill(isSelected ? Color.white.opacity(0.30) : darkCircleFill)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                if category.isCustom {
+                                    Button("Переименовать") {
+                                        pendingCategoryRawAction = category.rawValue
+                                        renameCategoryName = category.displayName
+                                        showRenameCategoryAlert = true
+                                    }
+
+                                    Button("Удалить", role: .destructive) {
+                                        pendingCategoryRawAction = category.rawValue
+                                        showDeleteCategoryAlert = true
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    HStack {
+                        Button {
+                            showCreateCategoryAlert = true
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .frame(width: 32, height: 32)
+                                    .background {
+                                        Circle()
+                                            .stroke(cashbackAccent, lineWidth: 1.5)
+                                    }
+
+                                Text("Создать категорию")
+                                    .font(.system(size: 16, weight: .medium))
+                            }
                             .foregroundStyle(
                                 LinearGradient(
                                     colors: AppColors.cashbackGradient,
@@ -541,441 +615,319 @@ private struct CashbackEditorView: View {
                                     endPoint: .trailing
                                 )
                             )
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background {
-                                Capsule()
-                                    .fill(darkCircleFill)
-                            }
-                    }
-                }
-
-                Button {
-                    showCardPicker = true
-                } label: {
-                    FinancesGlassCard(accentColor: cashbackAccent) {
-                        HStack(spacing: 16) {
-                            let validCardIDs = selectedCardIDs.filter { viewModel.getCard(byID: $0) != nil }
-
-                            if !validCardIDs.isEmpty {
-                                HStack(spacing: -8) {
-                                    ForEach(Array(validCardIDs.prefix(3)), id: \.self) { cardID in
-                                        if let card = viewModel.getCard(byID: cardID) {
-                                            Image(systemName: card.cardType.icon)
-                                                .font(.system(size: 20, weight: .semibold))
-                                                .foregroundStyle(
-                                                    LinearGradient(
-                                                        colors: AppColors.cashbackGradient,
-                                                        startPoint: .leading,
-                                                        endPoint: .trailing
-                                                    )
-                                                )
-                                                .frame(width: 40, height: 40)
-                                                .background {
-                                                    Circle()
-                                                        .fill(darkCircleFill)
-                                                        .overlay {
-                                                            Circle()
-                                                                .stroke(cashbackAccent.opacity(0.55), lineWidth: 2)
-                                                        }
-                                                }
-                                        }
-                                    }
-
-                                    if validCardIDs.count > 3 {
-                                        Text("+\(validCardIDs.count - 3)")
-                                            .font(.system(size: 12, weight: .semibold))
-                                            .foregroundStyle(AppColors.textPrimary)
-                                            .frame(width: 40, height: 40)
-                                            .background {
-                                                Circle()
-                                                    .fill(darkCircleFill)
-                                                    .overlay {
-                                                        Circle()
-                                                            .stroke(cashbackAccent.opacity(0.55), lineWidth: 2)
-                                                    }
-                                            }
-                                    }
-                                }
-
-                                VStack(alignment: .leading, spacing: 4) {
-                                    let validCardCount = selectedCardIDs.filter { viewModel.getCard(byID: $0) != nil }.count
-                                    Text(validCardCount == 1 ? "1 карта" : "\(validCardCount) карт")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundStyle(AppColors.textPrimary)
-
-                                    Text("Нажмите для изменения")
-                                        .font(.system(size: 13, weight: .regular))
-                                        .foregroundStyle(AppColors.textSecondary)
-                                }
-
-                                Spacer()
-                            } else {
-                                Image(systemName: "plus.circle.fill")
-                                    .font(.system(size: 24, weight: .semibold))
-                                    .foregroundStyle(
-                                        LinearGradient(
-                                            colors: AppColors.cashbackGradient,
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
-
-                                Text("Выбрать карты")
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundStyle(AppColors.textPrimary)
-
-                                Spacer()
-                            }
-
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(AppColors.textTertiary)
                         }
-                        .padding(16)
+                        .buttonStyle(.plain)
+
+                        Spacer()
+
+                        Button {
+                            isShowingAllCategories.toggle()
+                        } label: {
+                            HStack(spacing: 8) {
+                                Text(isShowingAllCategories ? "Свернуть" : "Показать ещё")
+                                    .font(.system(size: 16, weight: .medium))
+                                Image(systemName: isShowingAllCategories ? "chevron.up" : "chevron.right")
+                                    .font(.system(size: 16, weight: .semibold))
+                            }
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: AppColors.cashbackGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .opacity(canShowMoreCategories || isShowingAllCategories ? 1 : 0.5)
+                        .disabled(!canShowMoreCategories && !isShowingAllCategories)
                     }
                 }
-                .buttonStyle(.plain)
+                .padding(16)
+            }
+            .alert("Создание категории", isPresented: $showCreateCategoryAlert) {
+                TextField("Название категории", text: $newCategoryName)
+                Button("Отмена", role: .cancel) {
+                    newCategoryName = ""
+                }
+                Button("Создать") {
+                    if let option = viewModel.createCustomCategory(newCategoryName) {
+                        selectedCategoryRaws.insert(option.rawValue)
+                        if cardCashbacks[option.rawValue] == nil {
+                            cardCashbacks[option.rawValue] = "5"
+                        }
+                    }
+                    newCategoryName = ""
+                }
+            } message: {
+                Text("Введите название новой категории")
+            }
+            .alert("Переименовать категорию", isPresented: $showRenameCategoryAlert) {
+                TextField("Новое название", text: $renameCategoryName)
+                Button("Отмена", role: .cancel) {
+                    renameCategoryName = ""
+                    pendingCategoryRawAction = nil
+                }
+                Button("Сохранить") {
+                    guard let raw = pendingCategoryRawAction else { return }
+                    let oldRaw = raw
+                    if viewModel.renameCustomCategory(rawValue: oldRaw, newName: renameCategoryName) {
+                        if selectedCategoryRaws.contains(oldRaw) {
+                            let newOption = viewModel.categoryOptions().first(where: {
+                                $0.displayName.caseInsensitiveCompare(renameCategoryName.trimmingCharacters(in: .whitespacesAndNewlines)) == .orderedSame
+                            })
+                            selectedCategoryRaws.remove(oldRaw)
+                            if let newOption {
+                                selectedCategoryRaws.insert(newOption.rawValue)
+                                cardCashbacks[newOption.rawValue] = cardCashbacks[oldRaw] ?? "5"
+                            }
+                            cardCashbacks.removeValue(forKey: oldRaw)
+                        }
+                    }
+                    renameCategoryName = ""
+                    pendingCategoryRawAction = nil
+                }
+            } message: {
+                Text("Введите новое название категории. Связанные кешбэки будут обновлены автоматически.")
+            }
+            .alert("Удалить категорию?", isPresented: $showDeleteCategoryAlert) {
+                Button("Отмена", role: .cancel) {
+                    pendingCategoryRawAction = nil
+                }
+                Button("Удалить", role: .destructive) {
+                    guard let raw = pendingCategoryRawAction else { return }
+                    if viewModel.deleteCustomCategory(rawValue: raw) {
+                        selectedCategoryRaws.remove(raw)
+                        cardCashbacks.removeValue(forKey: raw)
+                    }
+                    pendingCategoryRawAction = nil
+                }
+            } message: {
+                Text("Все связанные кешбэки этой категории будут безопасно перенесены в категорию \"Другое\".")
             }
         }
     }
 
-    // MARK: - Add To Card Mode Content
-
-    var addToCardModeContent: some View {
-        VStack(spacing: 24) {
-            // Выбор карты
-            VStack(alignment: .leading, spacing: 10) {
-                FinancesSectionHeader(title: "Выберите карту")
-
-                Button {
-                    showCardPicker = true
-                } label: {
-                    FinancesGlassCard(accentColor: cashbackAccent) {
-                        HStack(spacing: 16) {
-                            if let cardID = selectedCardID, let card = viewModel.getCard(byID: cardID) {
-                                Image(systemName: card.cardType.icon)
-                                    .font(.system(size: 24, weight: .semibold))
-                                    .foregroundStyle(
-                                        LinearGradient(
-                                            colors: AppColors.cashbackGradient,
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
-                                    .frame(width: 48, height: 48)
-                                    .background {
-                                        Circle()
-                                            .fill(darkCircleFill)
-                                    }
-
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(card.name)
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundStyle(AppColors.textPrimary)
-
-                                    Text(card.bank.displayName)
-                                        .font(.system(size: 13, weight: .regular))
-                                        .foregroundStyle(AppColors.textSecondary)
-                                }
-
-                                Spacer()
-                            } else {
-                                Image(systemName: "plus.circle.fill")
-                                    .font(.system(size: 24, weight: .semibold))
-                                    .foregroundStyle(
-                                        LinearGradient(
-                                            colors: AppColors.cashbackGradient,
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
-
-                                Text("Выбрать карту")
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundStyle(AppColors.textPrimary)
-
-                                Spacer()
-                            }
-
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(AppColors.textTertiary)
-                        }
-                        .padding(16)
-                    }
+    private var selectedCategoriesSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                FinancesSectionHeader(title: "Выбранные категории")
+                Spacer()
+                HStack(spacing: 8) {
+                    quickFillButton(5)
+                    quickFillButton(10)
+                    quickFillButton(15)
                 }
-                .buttonStyle(.plain)
             }
 
-            // Кэшбеки для карты
-            if selectedCardID != nil {
-                VStack(alignment: .leading, spacing: 10) {
-                    FinancesSectionHeader(title: "Кэшбеки для карты")
+            FinancesGlassCard(accentColor: cashbackAccent) {
+                if selectedCategoriesList.isEmpty {
+                    Text("Выберите хотя бы одну категорию")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(AppColors.textTertiary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(Array(selectedCategoriesList.enumerated()), id: \.element) { index, category in
+                            HStack(spacing: 12) {
+                                Image(systemName: "flag")
+                                    .font(.system(size: 18, weight: .regular))
+                                    .foregroundStyle(AppColors.textPrimary)
+                                    .frame(width: 24, height: 24)
 
-                    FinancesGlassCard(accentColor: cashbackAccent) {
-                        VStack(spacing: 0) {
-                            ForEach(Array(CashbackCategory.allCases.enumerated()), id: \.element) { index, category in
-                                HStack(spacing: 12) {
-                                    Image(systemName: category.icon)
-                                        .font(.system(size: 20, weight: .semibold))
-                                        .foregroundStyle(
-                                            LinearGradient(
-                                                colors: AppColors.cashbackGradient,
-                                                startPoint: .leading,
-                                                endPoint: .trailing
-                                            )
+                                Text(category.displayName)
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundStyle(AppColors.textPrimary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                                HStack(spacing: 14) {
+                                    Button {
+                                        adjustPercentage(for: category.rawValue, delta: -1)
+                                    } label: {
+                                        Text("-")
+                                            .font(.system(size: 18, weight: .semibold))
+                                            .foregroundStyle(AppColors.textPrimary)
+                                    }
+
+                                    Rectangle()
+                                        .fill(Color.white.opacity(0.35))
+                                        .frame(width: 1, height: 18)
+
+                                    Button {
+                                        adjustPercentage(for: category.rawValue, delta: 1)
+                                    } label: {
+                                        Text("+")
+                                            .font(.system(size: 18, weight: .semibold))
+                                            .foregroundStyle(AppColors.textPrimary)
+                                    }
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .background {
+                                    Capsule()
+                                        .fill(darkCircleFill)
+                                }
+
+                                Text("\(formattedPercentage(for: category.rawValue)) %")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: AppColors.cashbackGradient,
+                                            startPoint: .leading,
+                                            endPoint: .trailing
                                         )
-                                        .frame(width: 40, height: 40)
-                                        .background {
-                                            Circle()
-                                                .fill(darkCircleFill)
-                                        }
-
-                                    Text(category.displayName)
-                                        .font(.system(size: 15, weight: .medium))
-                                        .foregroundStyle(AppColors.textPrimary)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                                    HStack(spacing: 4) {
-                                        TextField("0", text: Binding(
-                                            get: { cardCashbacks[category] ?? "" },
-                                            set: { cardCashbacks[category] = $0 }
-                                        ))
-                                        .font(.system(size: 15, weight: .semibold))
-                                        .foregroundStyle(AppColors.textPrimary)
-                                        .keyboardType(.decimalPad)
-                                        .frame(width: 60)
-                                        .multilineTextAlignment(.trailing)
-
-                                        Text("%")
-                                            .font(.system(size: 14, weight: .medium))
-                                            .foregroundStyle(AppColors.textSecondary)
+                                    )
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                            .contextMenu {
+                                if category.isCustom {
+                                    Button("Переименовать") {
+                                        pendingCategoryRawAction = category.rawValue
+                                        renameCategoryName = category.displayName
+                                        showRenameCategoryAlert = true
                                     }
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background {
-                                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                            .fill(darkCircleFill)
+
+                                    Button("Удалить", role: .destructive) {
+                                        pendingCategoryRawAction = category.rawValue
+                                        showDeleteCategoryAlert = true
                                     }
                                 }
-                                .padding(.vertical, 10)
-                                .padding(.horizontal, 16)
+                            }
 
-                                if index < CashbackCategory.allCases.count - 1 {
-                                    FinancesRowDivider()
-                                }
+                            if index < selectedCategoriesList.count - 1 {
+                                FinancesRowDivider()
                             }
                         }
                     }
                 }
             }
         }
+    }
+
+    private func quickFillButton(_ value: Int) -> some View {
+        Button {
+            applyPercentageToAllSelected(Double(value))
+        } label: {
+            Text("\(value)%")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(AppColors.textPrimary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background {
+                    Capsule()
+                        .fill(darkCircleFill)
+                }
+        }
+        .buttonStyle(.plain)
+        .disabled(selectedCategoryRaws.isEmpty)
+        .opacity(selectedCategoryRaws.isEmpty ? 0.45 : 1)
+    }
+
+    private var saveButton: some View {
+        Button {
+            saveCashback()
+        } label: {
+            Text("Сохранить")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(AppColors.textPrimary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 56)
+                .background {
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .fill(darkCardFill)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                                .fill(cashbackGlow)
+                                .opacity(0.6)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                                .stroke(cashbackAccent.opacity(0.55), lineWidth: 1)
+                        )
+                }
+        }
+        .buttonStyle(.plain)
+        .disabled(!isValid)
+        .opacity(isValid ? 1 : 0.5)
     }
 
     // MARK: - Validation
-
     var isValid: Bool {
-        if creationMode == .createCashback || isEditing {
-            guard let percentage = Double(percentageText.replacingOccurrences(of: ",", with: ".")),
-                  percentage >= 0 && percentage <= 100 else {
-                return false
-            }
-            return !selectedCardIDs.isEmpty
-        } else {
-            guard selectedCardID != nil else { return false }
-            return cardCashbacks.values.contains { text in
-                if let percentage = Double(text.replacingOccurrences(of: ",", with: ".")) {
-                    return percentage > 0 && percentage <= 100
-                }
-                return false
-            }
+        guard selectedCardID != nil else { return false }
+        return selectedCategoryRaws.contains { raw in
+            guard let percentage = percentageValue(for: raw) else { return false }
+            return percentage > 0 && percentage <= 100
         }
     }
 
     // MARK: - Save
 
     func saveCashback() {
-        if creationMode == .createCashback || isEditing {
-            guard let percentage = Double(percentageText.replacingOccurrences(of: ",", with: ".")),
-                  percentage >= 0 && percentage <= 100 else {
-                return
+        guard let cardID = selectedCardID else { return }
+
+        let validCashbacks = selectedCategoryRaws.compactMap { raw -> (categoryRaw: String, categoryName: String, percentage: Double)? in
+            guard let percentage = percentageValue(for: raw),
+                  percentage > 0 && percentage <= 100 else {
+                return nil
             }
-
-            viewModel.handle(.updateCashback(
-                category: selectedCategory,
-                percentage: percentage,
-                cardIDs: Array(selectedCardIDs)
-            ))
-        } else {
-            guard let cardID = selectedCardID else { return }
-
-            let validCashbacks = cardCashbacks.compactMap { (category, text) -> (CashbackCategory, Double)? in
-                guard let percentage = Double(text.replacingOccurrences(of: ",", with: ".")),
-                      percentage > 0 && percentage <= 100 else {
-                    return nil
-                }
-                return (category, percentage)
-            }
-
-            guard !validCashbacks.isEmpty else { return }
-
-            viewModel.handle(.updateCashbacksForCard(
-                cardID: cardID,
-                cashbacks: validCashbacks
-            ))
+            let option = viewModel.categoryOption(for: raw)
+            return (categoryRaw: raw, categoryName: option.displayName, percentage: percentage)
         }
+
+        guard !validCashbacks.isEmpty else { return }
+
+        viewModel.handle(.updateCashbacksForCard(
+            cardID: cardID,
+            cashbacks: validCashbacks
+        ))
 
         dismiss()
     }
-}
 
-// MARK: - Cashback Card Picker View
+    // MARK: - Helpers
 
-private struct CashbackCardPickerView: View {
-    @Binding var selectedCardIDs: Set<String>
-    let availableCards: [Card]
-    @Environment(\.dismiss) private var dismiss
+    private func preloadCategories(for cardID: String) {
+        let existingForCard = viewModel.state.cashbacks.filter { cashback in
+            cashback.cardIDs.contains(cardID)
+        }
 
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                GradientBackground()
+        selectedCategoryRaws = Set(existingForCard.map(\.categoryRaw))
+        cardCashbacks = Dictionary(
+            uniqueKeysWithValues: existingForCard.map { ($0.categoryRaw, percentageText(for: $0.percentage)) }
+        )
+    }
 
-                if availableCards.isEmpty {
-                    VStack(spacing: 16) {
-                        Image(systemName: "creditcard.trianglebadge.exclamationmark")
-                            .font(.system(size: 64))
-                            .foregroundStyle(AppColors.textTertiary)
+    private func percentageValue(for categoryRaw: String) -> Double? {
+        guard let text = cardCashbacks[categoryRaw] else { return nil }
+        return Double(text.replacingOccurrences(of: ",", with: "."))
+    }
 
-                        Text("Нет доступных карт")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary)
+    private func percentageText(for value: Double) -> String {
+        let rounded = (value * 10).rounded() / 10
+        if rounded == rounded.rounded() {
+            return String(Int(rounded))
+        }
+        return String(format: "%.1f", rounded)
+    }
 
-                        Text("Добавьте карту в сервисе \"Карты\"")
-                            .font(.system(size: 14, weight: .regular))
-                            .foregroundStyle(AppColors.textTertiary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .padding(24)
-                } else {
-                    ScrollView {
-                        VStack(spacing: 12) {
-                            ForEach(availableCards) { card in
-                                let cardID = card.cardUniqueID
-                                let isSelected = selectedCardIDs.contains(cardID)
+    private func formattedPercentage(for categoryRaw: String) -> String {
+        guard let value = percentageValue(for: categoryRaw) else { return "0" }
+        return percentageText(for: value)
+    }
 
-                                Button {
-                                    if isSelected {
-                                        selectedCardIDs.remove(cardID)
-                                    } else {
-                                        selectedCardIDs.insert(cardID)
-                                    }
-                                } label: {
-                                    HStack(spacing: 16) {
-                                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                                            .font(.system(size: 24, weight: .semibold))
-                                            .foregroundStyle(
-                                                isSelected ?
-                                                LinearGradient(
-                                                    colors: AppColors.cashbackGradient,
-                                                    startPoint: .leading,
-                                                    endPoint: .trailing
-                                                ) :
-                                                LinearGradient(
-                                                    colors: [AppColors.textTertiary, AppColors.textTertiary],
-                                                    startPoint: .leading,
-                                                    endPoint: .trailing
-                                                )
-                                            )
+    private func adjustPercentage(for categoryRaw: String, delta: Double) {
+        let current = percentageValue(for: categoryRaw) ?? 0
+        let next = min(100, max(0, current + delta))
+        cardCashbacks[categoryRaw] = percentageText(for: next)
+    }
 
-                                        Image(systemName: card.cardType.icon)
-                                            .font(.system(size: 28, weight: .semibold))
-                                            .foregroundStyle(
-                                                LinearGradient(
-                                                    colors: AppColors.cashbackGradient,
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
-                                            .frame(width: 48, height: 48)
-                                            .background {
-                                                Circle()
-                                                    .fill(darkCircleFill)
-                                            }
-
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            HStack {
-                                                Text(card.name)
-                                                    .font(.system(size: 16, weight: .semibold))
-                                                    .foregroundStyle(AppColors.textPrimary)
-
-                                                if card.isFavorite {
-                                                    Image(systemName: "star.fill")
-                                                        .font(.system(size: 12))
-                                                        .foregroundStyle(
-                                                            LinearGradient(
-                                                                colors: AppColors.cashbackGradient,
-                                                                startPoint: .leading,
-                                                                endPoint: .trailing
-                                                            )
-                                                        )
-                                                }
-                                            }
-
-                                            Text(card.bank.displayName)
-                                                .font(.system(size: 14, weight: .regular))
-                                                .foregroundStyle(AppColors.textSecondary)
-
-                                            Text(card.maskedNumber)
-                                                .font(.system(size: 13, weight: .regular))
-                                                .foregroundStyle(AppColors.textTertiary)
-                                        }
-
-                                        Spacer()
-                                    }
-                                    .padding(16)
-                                    .background {
-                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                            .fill(darkCardFill)
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                                    .fill(cashbackGlow)
-                                                    .opacity(isSelected ? 0.6 : 0)
-                                            )
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                                    .stroke(
-                                                        cashbackAccent.opacity(isSelected ? 0.55 : 0.2),
-                                                        lineWidth: 1
-                                                    )
-                                            )
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 16)
-                    }
-                }
-            }
-            .navigationTitle("Выбор карт")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Готово") {
-                        dismiss()
-                    }
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: AppColors.cashbackGradient,
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                }
-            }
+    private func applyPercentageToAllSelected(_ value: Double) {
+        guard !selectedCategoryRaws.isEmpty else { return }
+        let clamped = min(100, max(0, value))
+        let text = percentageText(for: clamped)
+        for raw in selectedCategoryRaws {
+            cardCashbacks[raw] = text
         }
     }
 }

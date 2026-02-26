@@ -13,6 +13,8 @@ struct CashbackFeatureRegistration {
     static func register() {
         // Регистрируем модели
         ModelTypeRegistry.shared.register(Cashback.self, typeName: "Cashback")
+        ModelTypeRegistry.shared.register(CashbackCustomCategory.self, typeName: "CashbackCustomCategory")
+
         ModelTypeRegistry.shared.registerBackupExporter("Cashback") { context in
             let cashbackDescriptor = FetchDescriptor<Cashback>()
             let cashbacks = try context.fetch(cashbackDescriptor)
@@ -30,9 +32,27 @@ struct CashbackFeatureRegistration {
             
             return exported
         }
+
+        ModelTypeRegistry.shared.registerBackupExporter("CashbackCustomCategory") { context in
+            let descriptor = FetchDescriptor<CashbackCustomCategory>()
+            let customCategories = try context.fetch(descriptor)
+
+            var exported: [[String: Any]] = []
+            exported.reserveCapacity(customCategories.count)
+
+            for category in customCategories {
+                let data = try category.export()
+                var json = try BackupJSON.decodeExportedDict(data, typeName: "CashbackCustomCategory")
+                json["_type"] = "CashbackCustomCategory"
+                exported.append(json)
+            }
+
+            return exported
+        }
         
         // Регистрируем импортеры
         ModelTypeRegistry.shared.registerImporter(CashbackImporter.self)
+        ModelTypeRegistry.shared.registerImporter(CashbackCustomCategoryImporter.self)
     }
 }
 
@@ -64,7 +84,7 @@ struct CashbackImporter: ModelImporter {
         
         let cashback = Cashback(
             name: name,
-            category: CashbackCategory(rawValue: categoryRaw) ?? .other,
+            categoryRaw: categoryRaw,
             percentage: percentage,
             cardIDs: cardIDs
         )
@@ -74,5 +94,33 @@ struct CashbackImporter: ModelImporter {
         cashback.updatedAt = Date(timeIntervalSince1970: updatedAt)
         
         context.insert(cashback)
+    }
+}
+
+struct CashbackCustomCategoryImporter: ModelImporter {
+    static func importType() -> String {
+        "CashbackCustomCategory"
+    }
+
+    static var importPriority: Int { 20 }
+
+    static func `import`(from data: [String : Any], context: ModelContext) throws {
+        guard let categoryID = data["categoryID"] as? String,
+              let name = data["name"] as? String,
+              let createdAt = data["createdAt"] as? TimeInterval,
+              let updatedAt = data["updatedAt"] as? TimeInterval else {
+            throw AppError.backupCorrupted
+        }
+
+        let normalizedName = (data["normalizedName"] as? String) ?? CashbackCustomCategory.normalize(name)
+
+        let category = CashbackCustomCategory(name: name)
+        category.categoryID = categoryID
+        category.name = name
+        category.normalizedName = normalizedName
+        category.createdAt = Date(timeIntervalSince1970: createdAt)
+        category.updatedAt = Date(timeIntervalSince1970: updatedAt)
+
+        context.insert(category)
     }
 }
