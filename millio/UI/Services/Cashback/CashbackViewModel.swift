@@ -74,10 +74,16 @@ final class CashbackViewModel: ViewModelProtocol {
     
     let modelContext: ModelContext
     private let now: () -> Date
+    private let importedCategoryResolver: CashbackImportCategoryResolver
     
-    init(modelContext: ModelContext, now: @escaping () -> Date = Date.init) {
+    init(
+        modelContext: ModelContext,
+        now: @escaping () -> Date = Date.init,
+        importedCategoryResolver: CashbackImportCategoryResolver = CashbackImportCategoryResolver()
+    ) {
         self.modelContext = modelContext
         self.now = now
+        self.importedCategoryResolver = importedCategoryResolver
         self.state.selectedMonth = Calendar.current.date(
             from: Calendar.current.dateComponents([.year, .month], from: now())
         ) ?? now()
@@ -209,6 +215,23 @@ final class CashbackViewModel: ViewModelProtocol {
             icon: CashbackCustomCategory.defaultIcon,
             isCustom: true
         )
+    }
+
+    func categoryOptionForImportedName(_ name: String) -> CashbackCategoryOption {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return categoryOption(for: CashbackCategory.other.rawValue)
+        }
+
+        if let systemRaw = importedCategoryResolver.resolveSystemCategoryRaw(for: trimmed) {
+            return categoryOption(for: systemRaw, fallbackName: trimmed)
+        }
+
+        if let custom = createCustomCategory(trimmed) {
+            return custom
+        }
+
+        return categoryOption(for: CashbackCategory.other.rawValue, fallbackName: trimmed)
     }
 
     var selectedMonthTitle: String {

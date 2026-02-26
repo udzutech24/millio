@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import PhotosUI
 
 // MARK: - Хелпер для тёмного фона (стиль финансов)
 
@@ -429,6 +430,10 @@ private struct CashbackEditorView: View {
     @State private var isShowingAllCategories: Bool = false
     @State private var selectedCategoryRaws: Set<String> = []
     @State private var cardCashbacks: [String: String] = [:]
+    @State private var screenshotPhotoItem: PhotosPickerItem?
+    @State private var isImportingFromScreenshot: Bool = false
+    @State private var importAlertMessage: String?
+    private let screenshotParser = CashbackScreenshotParser()
 
     private var filteredCategories: [CashbackCategoryOption] {
         viewModel.categoryOptions(matching: searchText)
@@ -449,6 +454,17 @@ private struct CashbackEditorView: View {
         selectedCategoryRaws
             .map { viewModel.categoryOption(for: $0) }
             .sorted { $0.displayName < $1.displayName }
+    }
+
+    private var isShowingImportAlert: Binding<Bool> {
+        Binding(
+            get: { importAlertMessage != nil },
+            set: { isPresented in
+                if !isPresented {
+                    importAlertMessage = nil
+                }
+            }
+        )
     }
 
     var body: some View {
@@ -519,6 +535,19 @@ private struct CashbackEditorView: View {
                     return
                 }
                 preloadCategories(for: cardID)
+            }
+            .onChange(of: screenshotPhotoItem) { _, newValue in
+                guard let item = newValue else { return }
+                Task {
+                    await importFromScreenshot(item: item)
+                }
+            }
+            .alert("Импорт из скриншота", isPresented: isShowingImportAlert) {
+                Button("OK", role: .cancel) {
+                    importAlertMessage = nil
+                }
+            } message: {
+                Text(importAlertMessage ?? "")
             }
         }
     }
@@ -593,6 +622,34 @@ private struct CashbackEditorView: View {
     private var categoriesSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: "Выбор категорий")
+            HStack {
+                PhotosPicker(
+                    selection: $screenshotPhotoItem,
+                    matching: .images
+                ) {
+                    HStack(spacing: 8) {
+                        if isImportingFromScreenshot {
+                            ProgressView()
+                                .tint(AppColors.textPrimary)
+                        } else {
+                            Image(systemName: "photo.badge.magnifyingglass")
+                                .font(.system(size: 16, weight: .regular))
+                        }
+                        Text(isImportingFromScreenshot ? "Распознаю скриншот..." : "Импорт со скриншота")
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .foregroundStyle(AppColors.textPrimary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background {
+                        Capsule()
+                            .fill(darkCircleFill)
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(isImportingFromScreenshot)
+                Spacer()
+            }
 
             FinancesGlassCard(accentColor: cashbackAccent) {
                 VStack(spacing: 14) {
@@ -900,6 +957,53 @@ private struct CashbackEditorView: View {
     }
 
     // MARK: - Helpers
+
+    @MainActor
+    private func importFromScreenshot(item: PhotosPickerItem) async {
+        isImportingFromScreenshot = true
+        defer {
+            isImportingFromScreenshot = false
+            screenshotPhotoItem = nil
+        }
+
+        guard let data = try? await item.loadTransferable(type: Data.self) else {
+            importAlertMessage = "Не удалось прочитать изображение. Попробуйте выбрать другой скриншот."
+            return
+        }
+
+        do {
+            let parsed = try await screenshotParser.parse(from: data)
+            applyImportedItems(parsed)
+            importAlertMessage = "Распознано категорий: \(parsed.count). Проверь и нажми «Сохранить»."
+        } catch let error as CashbackScreenshotImportError {
+            importAlertMessage = error.errorDescription
+        } catch {
+            importAlertMessage = "Не удалось распознать скриншот. Попробуйте более чёткое изображение."
+        }
+    }
+
+    @MainActor
+    private func applyImportedItems(_ items: [CashbackScreenshotImportItem]) {
+        var importedCategoryRaws: Set<String> = []
+        var importedPercentages: [String: String] = [:]
+
+        for item in items {
+            let option = viewModel.categoryOptionForImportedName(item.categoryName)
+            importedCategoryRaws.insert(option.rawValue)
+
+            let newPercentage = item.percentage
+            if let existingText = importedPercentages[option.rawValue],
+               let existingValue = Double(existingText.replacingOccurrences(of: ",", with: ".")) {
+                importedPercentages[option.rawValue] = percentageText(for: max(existingValue, newPercentage))
+            } else {
+                importedPercentages[option.rawValue] = percentageText(for: newPercentage)
+            }
+        }
+
+        guard !importedCategoryRaws.isEmpty else { return }
+        selectedCategoryRaws = importedCategoryRaws
+        cardCashbacks = importedPercentages
+    }
 
     private func openCreateCategorySheet() {
         categoryEditorMode = .create
