@@ -101,8 +101,10 @@ private struct CashbackContentViewInternal: View {
     // MARK: - Empty State
 
     private var emptyStateView: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 0) {
             monthSelector
+
+            Spacer(minLength: 0)
 
             VStack(spacing: 20) {
                 Image(systemName: "percent")
@@ -125,8 +127,10 @@ private struct CashbackContentViewInternal: View {
                     .foregroundStyle(AppColors.textTertiary)
                     .multilineTextAlignment(.center)
             }
+
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.horizontal, 20)
         .padding(.bottom, 120)
     }
@@ -463,15 +467,8 @@ private struct CashbackEditorView: View {
                         dismiss()
                     } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 20, weight: .semibold))
-                            .frame(width: 44, height: 44)
-                            .background {
-                                Circle()
-                                    .fill(darkCircleFill)
-                            }
+                            .font(.system(size: 14, weight: .semibold))
                     }
-                    .buttonStyle(.plain)
-                    .contentShape(Circle())
                     .foregroundStyle(AppColors.textPrimary)
                 }
             }
@@ -644,15 +641,15 @@ private struct CashbackEditorView: View {
                         } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: "plus")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .frame(width: 32, height: 32)
+                                    .font(.system(size: 15, weight: .regular))
+                                    .frame(width: 24, height: 24)
                                     .background {
                                         Circle()
-                                            .stroke(cashbackAccent, lineWidth: 1.5)
+                                            .stroke(cashbackAccent, lineWidth: 1)
                                     }
 
                                 Text("Создать категорию")
-                                    .font(.system(size: 16, weight: .medium))
+                                    .font(.system(size: 15, weight: .regular))
                             }
                             .foregroundStyle(
                                 LinearGradient(
@@ -671,9 +668,9 @@ private struct CashbackEditorView: View {
                         } label: {
                             HStack(spacing: 8) {
                                 Text(isShowingAllCategories ? "Свернуть" : "Показать ещё")
-                                    .font(.system(size: 16, weight: .medium))
+                                    .font(.system(size: 15, weight: .regular))
                                 Image(systemName: isShowingAllCategories ? "chevron.up" : "chevron.right")
-                                    .font(.system(size: 16, weight: .semibold))
+                                    .font(.system(size: 15, weight: .regular))
                             }
                             .foregroundStyle(
                                 LinearGradient(
