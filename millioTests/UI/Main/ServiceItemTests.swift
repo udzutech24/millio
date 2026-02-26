@@ -13,7 +13,8 @@ import Testing
 struct ServiceItemTests {
     @Test("Список сервисов содержит только актуальные разделы")
     func testAllServicesContainsOnlyActiveItems() {
-        let ids = ServiceItem.allServices().map { $0.id }
+        let services = ServiceItem.allServices()
+        let ids = services.map { $0.id }
 
         #expect(ids.contains("finances"))
         #expect(ids.contains("courses"))
@@ -23,6 +24,9 @@ struct ServiceItemTests {
         #expect(!ids.contains("credits"))
         #expect(!ids.contains("cards"))
         #expect(!ids.contains("investments"))
+
+        let cashback = services.first { $0.id == "cashback" }
+        #expect(cashback?.icon == ServiceItem.cashbackIconAssetName)
     }
 
     @Test("Порядок сервисов игнорирует удаленные разделы")

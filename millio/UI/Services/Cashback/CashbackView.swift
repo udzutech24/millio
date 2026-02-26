@@ -108,15 +108,10 @@ private struct CashbackContentViewInternal: View {
             Spacer(minLength: 0)
 
             VStack(spacing: 20) {
-                Image(systemName: "percent")
-                    .font(.system(size: 76, weight: .bold))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: AppColors.cashbackGradient,
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                Image(ServiceItem.cashbackIconAssetName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 120, height: 120)
 
                 Text("Нет кешбэка в этом месяце")
                     .font(.system(size: 20, weight: .semibold))
