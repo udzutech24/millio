@@ -241,14 +241,18 @@ final class CashbackViewModel: ViewModelProtocol {
         return formatter.string(from: state.selectedMonth).capitalized
     }
 
+    var maxSelectableMonth: Date {
+        Calendar.current.date(
+            from: Calendar.current.dateComponents([.year, .month], from: now())
+        ) ?? now()
+    }
+
     func canMoveMonthForward() -> Bool {
         let calendar = Calendar.current
         let selected = calendar.date(
             from: calendar.dateComponents([.year, .month], from: state.selectedMonth)
         ) ?? state.selectedMonth
-        let current = calendar.date(
-            from: calendar.dateComponents([.year, .month], from: now())
-        ) ?? now()
+        let current = maxSelectableMonth
         return selected < current
     }
 
@@ -386,9 +390,7 @@ final class CashbackViewModel: ViewModelProtocol {
         let selected = calendar.date(
             from: calendar.dateComponents([.year, .month], from: state.selectedMonth)
         ) ?? state.selectedMonth
-        let current = calendar.date(
-            from: calendar.dateComponents([.year, .month], from: now())
-        ) ?? now()
+        let current = maxSelectableMonth
         let candidate = calendar.date(byAdding: .month, value: delta, to: selected) ?? selected
         state.selectedMonth = min(candidate, current)
         applyFilters()

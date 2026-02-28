@@ -67,6 +67,7 @@ struct CashbackView: View {
 
 private struct CashbackContentViewInternal: View {
     @ObservedObject var viewModel: CashbackViewModel
+    @State private var showMonthPickerSheet: Bool = false
 
     var body: some View {
         ZStack {
@@ -78,7 +79,6 @@ private struct CashbackContentViewInternal: View {
             } else {
                 ScrollView {
                     VStack(spacing: 24) {
-                        monthSelector
                         cashbacksList
                     }
                     .padding(.bottom, 100)
@@ -89,13 +89,39 @@ private struct CashbackContentViewInternal: View {
 
             addCashbackFAB
         }
-        .navigationTitle("Кешбэк")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Button {
+                    showMonthPickerSheet = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(viewModel.selectedMonthTitle)
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .lineLimit(1)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Выбрать месяц кешбэка")
+            }
+        }
         .sheet(isPresented: Binding(
             get: { viewModel.state.showCashbackEditor },
             set: { if !$0 { viewModel.handle(.hideCashbackEditor) } }
         )) {
             CashbackEditorView(viewModel: viewModel)
+        }
+        .sheet(isPresented: $showMonthPickerSheet) {
+            CashbackMonthPickerSheet(
+                selectedMonth: viewModel.state.selectedMonth,
+                maxMonth: viewModel.maxSelectableMonth
+            ) { newMonth in
+                viewModel.handle(.setSelectedMonth(newMonth))
+            }
         }
     }
 
@@ -103,8 +129,6 @@ private struct CashbackContentViewInternal: View {
 
     private var emptyStateView: some View {
         VStack(spacing: 0) {
-            monthSelector
-
             Spacer(minLength: 0)
 
             VStack(spacing: 20) {
@@ -146,48 +170,9 @@ private struct CashbackContentViewInternal: View {
 
             Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 20)
-        .padding(.bottom, 120)
-    }
-
-    private var monthSelector: some View {
-        HStack(spacing: 14) {
-            Button {
-                viewModel.handle(.moveMonthBackward)
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-                    .frame(width: 36, height: 36)
-                    .background {
-                        Circle().fill(darkCircleFill)
-                    }
-            }
-            .buttonStyle(.plain)
-
-            Text(viewModel.selectedMonthTitle)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(AppColors.textPrimary)
-                .frame(minWidth: 140)
-
-            Button {
-                viewModel.handle(.moveMonthForward)
-            } label: {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-                    .frame(width: 36, height: 36)
-                    .background {
-                        Circle().fill(darkCircleFill)
-                    }
-            }
-            .buttonStyle(.plain)
-            .disabled(!viewModel.canMoveMonthForward())
-            .opacity(viewModel.canMoveMonthForward() ? 1 : 0.45)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 4)
+        .padding(.bottom, 72)
     }
 
     private var addCashbackFAB: some View {
@@ -228,6 +213,67 @@ private struct CashbackContentViewInternal: View {
         VStack(spacing: 16) {
             ForEach(viewModel.state.visibleCashbacks) { cashback in
                 CashbackRowView(cashback: cashback, viewModel: viewModel)
+            }
+        }
+    }
+}
+
+private struct CashbackMonthPickerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let maxMonth: Date
+    let onApply: (Date) -> Void
+    @State private var draftMonth: Date
+
+    init(selectedMonth: Date, maxMonth: Date, onApply: @escaping (Date) -> Void) {
+        self.maxMonth = maxMonth
+        self.onApply = onApply
+        _draftMonth = State(initialValue: selectedMonth)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                GradientBackground()
+
+                Form {
+                    Section {
+                        DatePicker(
+                            "Месяц",
+                            selection: $draftMonth,
+                            in: ...maxMonth,
+                            displayedComponents: .date
+                        )
+                        .datePickerStyle(.graphical)
+                        .foregroundStyle(AppColors.textPrimary)
+                    } header: {
+                        Text("Выберите месяц")
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
+                }
+                .scrollContentBackground(.hidden)
+            }
+            .navigationTitle("Период кешбэка")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Отмена") {
+                        dismiss()
+                    }
+                    .foregroundStyle(AppColors.textPrimary)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Применить") {
+                        onApply(draftMonth)
+                        dismiss()
+                    }
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: AppColors.cashbackGradient,
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                }
             }
         }
     }

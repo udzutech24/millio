@@ -216,6 +216,17 @@ struct CashbackViewModelCustomCategoryTests {
         #expect(viewModel.state.visibleCashbacks.first?.name == "Январь")
     }
 
+    @Test("maxSelectableMonth нормализуется до начала текущего месяца")
+    func testMaxSelectableMonthIsNormalizedToStartOfCurrentMonth() throws {
+        let context = try createModelContext()
+        let now = Calendar.current.date(from: DateComponents(year: 2026, month: 2, day: 21)) ?? Date()
+        let expected = Calendar.current.date(from: DateComponents(year: 2026, month: 2, day: 1)) ?? now
+
+        let viewModel = CashbackViewModel(modelContext: context, now: { now })
+
+        #expect(viewModel.maxSelectableMonth == expected)
+    }
+
     @Test("Одинаковая категория и карта создаются раздельно для разных месяцев")
     func testUpdateCashbacksForCardSeparatesByMonth() throws {
         let context = try createModelContext()
