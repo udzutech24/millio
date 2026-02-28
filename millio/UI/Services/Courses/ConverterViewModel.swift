@@ -12,6 +12,17 @@ import UIKit
 import AudioToolbox
 #endif
 
+struct ConverterShareHistoryItem: Codable, Equatable, Identifiable {
+    let id: UUID
+    let createdAt: Date
+    let activeCode: String
+    let inputText: String
+    let selectedCodes: [String]
+    let imageFileName: String?
+    var shareTitle: String?
+    var note: String?
+}
+
 // MARK: - Converter State
 
 struct ConverterState {
@@ -44,11 +55,16 @@ struct ConverterState {
     var entering: Bool = true
     var justEvaluated: Bool = false
     var expressionText: String = ""
-    var calcModeOn: Bool = true
+    var calcModeOn: Bool = false
     
     // Share
     var shareImage: UIImage? = nil
+    var shareDraftTitle: String = ""
+    var shareDraftMessage: String = ""
+    var showSharePreviewSheet: Bool = false
     var showShareSheet: Bool = false
+    var shareHistory: [ConverterShareHistoryItem] = []
+    var showShareHistorySheet: Bool = false
     
     // Toast
     var toastMessage: String? = nil
@@ -125,6 +141,21 @@ final class ConverterViewModel: ViewModelProtocol {
             CurrencyWidgetSyncService.setBool(newValue, forKey: "conv_haptics_enabled")
         }
     }
+
+    private var storedShareHistoryData: Data? {
+        get { defaults.data(forKey: "conv_share_history") }
+        set { defaults.set(newValue, forKey: "conv_share_history") }
+    }
+
+    private var storedShareSequence: Int {
+        get {
+            guard defaults.object(forKey: "conv_share_sequence") != nil else { return 0 }
+            return defaults.integer(forKey: "conv_share_sequence")
+        }
+        set {
+            defaults.set(newValue, forKey: "conv_share_sequence")
+        }
+    }
     
     private var storedLastRatesTS: Double {
         get {
@@ -151,6 +182,7 @@ final class ConverterViewModel: ViewModelProtocol {
     }
     
     private let maxCurrencies: Int = 6
+    private let maxShareHistoryItems: Int = 30
     
     private var decSep: String { Locale.current.decimalSeparator ?? "," }
     
@@ -210,6 +242,14 @@ final class ConverterViewModel: ViewModelProtocol {
         
         // Share
         case prepareShare
+        case hideSharePreview
+        case updateShareDraftMessage(String)
+        case sendShareFromPreview
+        case shareCompleted(Bool, Data?)
+        case showShareHistory
+        case hideShareHistory
+        case clearShareHistory
+        case deleteShareHistoryItem(UUID)
     }
     
     func handle(_ action: Action) {
@@ -219,6 +259,7 @@ final class ConverterViewModel: ViewModelProtocol {
         switch action {
         case .selectCurrency(let code):
             state.activeCode = code
+            state.calcModeOn = false
             storedActive = code
             mirrorToICloud(key: "conv_active_code", value: code)
             
@@ -325,7 +366,53 @@ final class ConverterViewModel: ViewModelProtocol {
             state.searchText = text
             
         case .prepareShare:
+            state.shareDraftTitle = nextShareDraftTitle()
+            state.shareDraftMessage = ""
+            state.showSharePreviewSheet = true
+
+        case .hideSharePreview:
+            state.showSharePreviewSheet = false
+
+        case .updateShareDraftMessage(let text):
+            state.shareDraftMessage = text
+
+        case .sendShareFromPreview:
+            state.showSharePreviewSheet = false
             state.showShareSheet = true
+
+        case .shareCompleted(let completed, let imageData):
+            state.showShareSheet = false
+            if completed {
+                let title = state.shareDraftTitle.isEmpty ? nextShareDraftTitle() : state.shareDraftTitle
+                let note = state.shareDraftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+                appendShareHistoryEntry(
+                    imageData: imageData,
+                    shareTitle: title,
+                    note: note.isEmpty ? nil : note
+                )
+                storedShareSequence += 1
+            }
+            state.shareDraftMessage = ""
+            state.shareDraftTitle = ""
+
+        case .showShareHistory:
+            state.showShareHistorySheet = true
+
+        case .hideShareHistory:
+            state.showShareHistorySheet = false
+
+        case .clearShareHistory:
+            for item in state.shareHistory {
+                deleteHistoryImage(fileName: item.imageFileName)
+            }
+            state.shareHistory = []
+            persistShareHistory()
+
+        case .deleteShareHistoryItem(let id):
+            guard let index = state.shareHistory.firstIndex(where: { $0.id == id }) else { return }
+            let item = state.shareHistory.remove(at: index)
+            deleteHistoryImage(fileName: item.imageFileName)
+            persistShareHistory()
         }
     }
     
@@ -348,6 +435,7 @@ final class ConverterViewModel: ViewModelProtocol {
         
         // Синхронизация состояния
         state.fractionDigits = storedFractionDigits
+        state.shareHistory = loadShareHistory()
         
         let cachedRates = storedCachedRates
         if cachedRates.count > 1 {
@@ -724,6 +812,78 @@ final class ConverterViewModel: ViewModelProtocol {
     
     func setShareImage(_ image: UIImage?) {
         state.shareImage = image
+    }
+
+    private func appendShareHistoryEntry(imageData: Data?, shareTitle: String, note: String?) {
+        let imageFileName = saveHistoryImage(data: imageData)
+        let entry = ConverterShareHistoryItem(
+            id: UUID(),
+            createdAt: Date(),
+            activeCode: state.activeCode,
+            inputText: state.inputText,
+            selectedCodes: state.selectedCurrencies,
+            imageFileName: imageFileName,
+            shareTitle: shareTitle,
+            note: note
+        )
+        state.shareHistory.insert(entry, at: 0)
+        if state.shareHistory.count > maxShareHistoryItems {
+            let overflow = state.shareHistory.dropFirst(maxShareHistoryItems)
+            for item in overflow {
+                deleteHistoryImage(fileName: item.imageFileName)
+            }
+            state.shareHistory = Array(state.shareHistory.prefix(maxShareHistoryItems))
+        }
+        persistShareHistory()
+    }
+
+    private func loadShareHistory() -> [ConverterShareHistoryItem] {
+        guard let data = storedShareHistoryData else { return [] }
+        do {
+            return try JSONDecoder().decode([ConverterShareHistoryItem].self, from: data)
+        } catch {
+            return []
+        }
+    }
+
+    private func persistShareHistory() {
+        do {
+            storedShareHistoryData = try JSONEncoder().encode(state.shareHistory)
+        } catch {
+            storedShareHistoryData = nil
+        }
+    }
+
+    private func saveHistoryImage(data: Data?) -> String? {
+        guard let data, !data.isEmpty else { return nil }
+        let fileName = "share_\(UUID().uuidString).jpg"
+        let url = historyImagesDirectoryURL().appendingPathComponent(fileName)
+        do {
+            try FileManager.default.createDirectory(
+                at: historyImagesDirectoryURL(),
+                withIntermediateDirectories: true
+            )
+            try data.write(to: url, options: .atomic)
+            return fileName
+        } catch {
+            return nil
+        }
+    }
+
+    private func deleteHistoryImage(fileName: String?) {
+        guard let fileName, !fileName.isEmpty else { return }
+        let url = historyImagesDirectoryURL().appendingPathComponent(fileName)
+        try? FileManager.default.removeItem(at: url)
+    }
+
+    private func historyImagesDirectoryURL() -> URL {
+        let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+        ?? FileManager.default.temporaryDirectory
+        return base.appendingPathComponent("ConverterShareHistory", isDirectory: true)
+    }
+
+    private func nextShareDraftTitle() -> String {
+        "Отправка #\(storedShareSequence + 1)"
     }
     
     

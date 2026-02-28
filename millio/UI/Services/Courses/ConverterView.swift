@@ -9,11 +9,19 @@ struct ConverterView: View {
     @StateObject private var viewModel = ConverterViewModel()
     @State private var deleteButtonTapCount = 0
     @State private var isRateSourceExpanded = false
+    @State private var historyPreviewImage: UIImage? = nil
+    @State private var showHistoryPreview: Bool = false
     
     private var decSep: String { Locale.current.decimalSeparator ?? "," }
     
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var hSize
+
+    private let rowStrokeColor = Color.white.opacity(0.16)
+    private let rowInactiveStrokeColor = Color.white.opacity(0.07)
+    private let rowCornerRadius: CGFloat = 18
+    private let neonCyan = Color(hex: "47D7FF")
+    private let neonViolet = Color(hex: "8A6BFF")
     
     
     // MARK: - Sounds
@@ -37,79 +45,65 @@ struct ConverterView: View {
     private struct Layout {
         let totalH: CGFloat
         let bottomSafe: CGFloat
-        let headerH: CGFloat
+        let contentGap: CGFloat
         let keySpacing: CGFloat
         let desiredRows: Int
         let rowSpacing: CGFloat
         let rowH: CGFloat
         let keyH: CGFloat
         let fontSize: CGFloat
+        let listBlockH: CGFloat
+        let keypadBlockH: CGFloat
     }
     
     
-    private func makeLayout(totalH: CGFloat) -> Layout {
-#if os(iOS)
-        let bottomSafe = converterSafeAreaBottom()
-#else
-        let bottomSafe: CGFloat = 0
-#endif
-        let headerH: CGFloat = 52
-        let topPadding: CGFloat = 4
+    private func makeLayout(totalH: CGFloat, bottomSafe: CGFloat) -> Layout {
+        let isTallScreen = totalH >= 900
+        let contentGap: CGFloat = isTallScreen ? 14 : 20
         
-        // Фиксированная высота кнопок клавиатуры по дизайну
-        let minKeyHeight: CGFloat = 64
-        let minKeySpacing: CGFloat = 4
-        let keypadRows: Int = 5
+        let availableHeight = max(
+            0,
+            totalH - bottomSafe - contentGap - 8
+        )
         
-        // Вычисляем минимальную высоту клавиатуры (без лишних отступов)
-        let minKeypadHeight = CGFloat(keypadRows) * minKeyHeight + CGFloat(keypadRows - 1) * minKeySpacing + bottomSafe
+        // На высоких экранах даем больше места клавиатуре.
+        let listRatio: CGFloat = isTallScreen ? 0.56 : 0.60
+        let rawListH = floor(availableHeight * listRatio)
+        let rawKeypadH = max(0, availableHeight - rawListH)
+        let listBlockH = max(280, rawListH)
+        let keypadBlockH = max(200, rawKeypadH)
         
-        // Доступная высота для контента (исключая header и клавиатуру)
-        let availableForContent = max(0, totalH - headerH - minKeypadHeight - topPadding)
-        
-        // Адаптируем размеры клавиатуры под доступное место
-        let keypadAvailableHeight = max(minKeypadHeight, totalH - headerH - availableForContent - topPadding)
-        
-        // Вычисляем размеры кнопок и отступы с учетом доступного места
-        let keypadContentHeight = max(0, keypadAvailableHeight - bottomSafe)
-        let keyH = minKeyHeight
-        
-        // Адаптируем spacing между кнопками
-        let actualKeypadContentHeight = CGFloat(keypadRows) * keyH
-        let remainingSpace = max(0, keypadContentHeight - actualKeypadContentHeight)
-        let keySpacing = min(5, minKeySpacing + (remainingSpace > 0 ? floor(remainingSpace / CGFloat(keypadRows - 1)) : 0))
-        
-        // Для фиксированной высоты 64 используем фиксированный размер шрифта
-        let fontSize: CGFloat = 22
-        
-        // Для списка валют используем адаптивную высоту строк
         let desiredRows: Int = 6
-        let rowSpacing: CGFloat = 8
-        let minRowHeight: CGFloat = 58
-        let maxRowHeight: CGFloat = 80
+        let rowSpacing: CGFloat = availableHeight < 700 ? 8 : 10
+        let keySpacing: CGFloat = availableHeight < 700 ? 8 : 10
         
-        // Вычисляем высоту строки списка валют (гарантируем, что все 6 ячеек влезут)
-        let listAvailableHeight = max(0, availableForContent - topPadding)
-        let calculatedRowH = (listAvailableHeight - CGFloat(desiredRows - 1) * rowSpacing) / CGFloat(desiredRows)
-        let rowH = min(maxRowHeight, max(minRowHeight, floor(max(0, calculatedRowH))))
+        let rawRowH = (listBlockH - CGFloat(desiredRows - 1) * rowSpacing) / CGFloat(desiredRows)
+        let rowH = min(74, max(56, floor(rawRowH)))
+        
+        let rawKeyH = (keypadBlockH - CGFloat(5 - 1) * keySpacing) / 5
+        let keyHMax: CGFloat = isTallScreen ? 80 : 74
+        let keyH = min(keyHMax, max(52, floor(rawKeyH)))
+        let fontSize: CGFloat = keyH >= 68 ? 24 : (keyH >= 60 ? 22 : 20)
         
         // Гарантируем, что все значения конечные и положительные
-        let safeKeyH = keyH.isFinite && keyH > 0 ? keyH : minKeyHeight
-        let safeKeySpacing = keySpacing.isFinite && keySpacing >= 0 ? keySpacing : minKeySpacing
-        let safeRowH = rowH.isFinite && rowH > 0 ? rowH : minRowHeight
+        let safeKeyH = keyH.isFinite && keyH > 0 ? keyH : 60
+        let safeKeySpacing = keySpacing.isFinite && keySpacing >= 0 ? keySpacing : 8
+        let safeRowH = rowH.isFinite && rowH > 0 ? rowH : 62
         let safeRowSpacing = rowSpacing.isFinite && rowSpacing >= 0 ? rowSpacing : 8
         let safeFontSize = fontSize.isFinite && fontSize > 0 ? fontSize : 18
         
         return Layout(
             totalH: totalH,
             bottomSafe: bottomSafe,
-            headerH: headerH,
+            contentGap: contentGap,
             keySpacing: safeKeySpacing,
             desiredRows: desiredRows,
             rowSpacing: safeRowSpacing,
             rowH: safeRowH,
             keyH: safeKeyH,
-            fontSize: safeFontSize
+            fontSize: safeFontSize,
+            listBlockH: listBlockH,
+            keypadBlockH: keypadBlockH
         )
     }
     
@@ -119,7 +113,10 @@ struct ConverterView: View {
                 .ignoresSafeArea()
             
             GeometryReader { geo in
-                let layout = makeLayout(totalH: geo.size.height)
+                let layout = makeLayout(
+                    totalH: geo.size.height,
+                    bottomSafe: geo.safeAreaInsets.bottom
+                )
                 mainContent(layout: layout)
             }
             
@@ -163,21 +160,51 @@ struct ConverterView: View {
             Button("Отмена", role: .cancel) {}
         }
         .sheet(isPresented: Binding(
+            get: { viewModel.state.showSharePreviewSheet },
+            set: {
+                if !$0 {
+                    viewModel.handle(.hideSharePreview)
+                }
+            }
+        )) {
+            sharePreviewSheet
+        }
+        .sheet(isPresented: Binding(
             get: { viewModel.state.showShareSheet },
-            set: { 
+            set: {
                 if !$0 {
                     viewModel.state.showShareSheet = false
-                    viewModel.state.shareImage = nil
                 }
             }
         )) {
 #if os(iOS)
             if let img = viewModel.state.shareImage {
-                ActivityView(activityItems: [ImageItem(image: img, compressionQuality: 0.92)])
+                let shareSubject = viewModel.state.shareDraftTitle.isEmpty ? "millio — курсы валют" : viewModel.state.shareDraftTitle
+                let shareText = preparedShareText(
+                    title: viewModel.state.shareDraftTitle,
+                    message: viewModel.state.shareDraftMessage
+                )
+                ActivityView(
+                    activityItems: [
+                        shareText,
+                        ImageItem(image: img, compressionQuality: 0.92, subject: shareSubject)
+                    ],
+                    onComplete: { completed in
+                        let imageData = completed ? img.jpegData(compressionQuality: 0.88) : nil
+                        viewModel.handle(.shareCompleted(completed, imageData))
+                    }
+                )
                     .ignoresSafeArea()
             }
 #endif
         }
+        .sheet(isPresented: Binding(
+            get: { viewModel.state.showShareHistorySheet },
+            set: { if !$0 { viewModel.handle(.hideShareHistory) } }
+        )) {
+            shareHistorySheet
+        }
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar { topToolbar }
@@ -190,31 +217,27 @@ struct ConverterView: View {
         VStack(spacing: 0) {
             currencyList(layout: layout)
                 .padding(.horizontal, 16)
-                .padding(.top, 4)
-                .padding(.bottom, 28)
-
-            Spacer(minLength: 0)
-
-            calculatorPanel
-                .padding(.horizontal, 16)
-                .padding(.top, 4)
+                .frame(height: layout.listBlockH, alignment: .top)
+            
+            Color.clear
+                .frame(height: layout.contentGap)
             
             // Клавиатура всегда внизу
             VStack(spacing: 0) {
                 keypad(height: layout.keyH, spacing: layout.keySpacing, fontSize: layout.fontSize)
                     .padding(.horizontal, 16)
-                    .padding(.top, 4)
-                    .padding(.bottom, layout.bottomSafe) // Минимальный отступ только для safe area
+                    .frame(height: layout.keypadBlockH, alignment: .bottom)
             }
             .background(Color.clear)
         }
+        .padding(.bottom, max(0, layout.bottomSafe - 8))
     }
     
     @ViewBuilder
     private func currencyList(layout: Layout) -> some View {
         let safeRowSpacing = layout.rowSpacing.isFinite && layout.rowSpacing >= 0 ? layout.rowSpacing : 8
-        let regularRowHeight: CGFloat = 40
-        let activeRowHeight: CGFloat = 46
+        let regularRowHeight: CGFloat = layout.rowH
+        let activeRowHeight: CGFloat = min(layout.rowH + 4, 76)
         
         VStack(spacing: safeRowSpacing) {
             ForEach(Array(viewModel.state.selectedCurrencies.enumerated()), id: \.offset) { idx, code in
@@ -440,147 +463,400 @@ struct ConverterView: View {
     
     @ToolbarContentBuilder
     private var topToolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.headline.weight(.semibold))
-            }
-            .accessibilityLabel("Назад")
+        let itemSize: CGFloat = 28
+        let iconSize: CGFloat = 16
+
+        ToolbarItem(placement: .principal) {
+            EmptyView()
         }
-        
+
+        ToolbarItem(placement: .topBarLeading) {
+            HStack(spacing: 6) {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: iconSize, weight: .semibold))
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(Color.white.opacity(0.96))
+                        .frame(width: itemSize, height: itemSize)
+                }
+                .buttonStyle(.plain)
+
+                Button {} label: {
+                    Image(systemName: "square.grid.2x2")
+                        .font(.system(size: iconSize, weight: .regular))
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(Color.white.opacity(0.90))
+                        .frame(width: itemSize, height: itemSize)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 40)
+        }
+
         ToolbarItem(placement: .topBarTrailing) {
-            HStack(spacing: 12) {
+            HStack(spacing: 6) {
+                Button {
+                    viewModel.handle(.showShareHistory)
+                } label: {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(size: iconSize + 1, weight: .regular))
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(Color.white.opacity(0.96))
+                        .frame(width: itemSize, height: itemSize)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("История отправленных скриншотов")
+
                 Button {
                     guard viewModel.canRemoveCurrency else { return }
                     viewModel.handle(.removeLastCurrency)
                 } label: {
-                    Image(systemName: "minus.circle.fill")
-                        .font(.title3.weight(.semibold))
-                        .opacity(viewModel.canRemoveCurrency ? 1.0 : 0.35)
-                        .frame(width: 28, height: 28)
+                    Image(systemName: "minus")
+                        .font(.system(size: iconSize, weight: .semibold))
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(viewModel.canRemoveCurrency ? Color.white.opacity(0.94) : Color.white.opacity(0.35))
+                        .frame(width: itemSize, height: itemSize)
                 }
                 .disabled(!viewModel.canRemoveCurrency)
+                .buttonStyle(.plain)
                 .accessibilityLabel("Убрать валюту")
-                
-                Button {
-                    guard viewModel.canAddCurrency else { return }
-                    viewModel.handle(.addCurrency)
-                } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title3.weight(.semibold))
-                        .opacity(viewModel.canAddCurrency ? 1.0 : 0.35)
-                        .frame(width: 28, height: 28)
+
+                if viewModel.canAddCurrency {
+                    Button {
+                        viewModel.handle(.addCurrency)
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: iconSize, weight: .semibold))
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(Color.white.opacity(0.94))
+                            .frame(width: itemSize, height: itemSize)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Добавить валюту")
                 }
-                .disabled(!viewModel.canAddCurrency)
-                .accessibilityLabel("Добавить валюту")
-                
+
                 Button {
                     handleShareTap()
                 } label: {
                     Image(systemName: "square.and.arrow.up")
-                        .font(.title3.weight(.semibold))
-                        .frame(width: 28, height: 28)
+                        .font(.system(size: iconSize, weight: .regular))
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(Color.white.opacity(0.94))
+                        .frame(width: itemSize, height: itemSize)
                 }
+                .buttonStyle(.plain)
                 .accessibilityLabel("Поделиться")
-                
+
                 Button {
                     viewModel.handle(.showSettingsSheet)
                 } label: {
                     Image(systemName: "gearshape.fill")
-                        .font(.title3.weight(.semibold))
-                        .frame(width: 28, height: 28)
+                        .font(.system(size: iconSize, weight: .regular))
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(Color.white.opacity(0.94))
+                        .frame(width: itemSize, height: itemSize)
                 }
+                .buttonStyle(.plain)
                 .accessibilityLabel("Настройки точности")
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 40)
+        }
+    }
+
+    private var shareHistorySheet: some View {
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                if viewModel.state.shareHistory.isEmpty {
+                    Text("История пока пустая")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(AppColors.textTertiary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .padding(.top, 24)
+                        .padding(.horizontal, 16)
+                } else {
+                    List {
+                        ForEach(viewModel.state.shareHistory) { item in
+                            historyRow(item: item)
+                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        viewModel.handle(.deleteShareHistoryItem(item.id))
+                                    } label: {
+                                        Label("Удалить", systemImage: "trash")
+                                    }
+                                }
+                        }
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .background(Color.clear)
+                }
+            }
+            .navigationTitle("История скринов")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Закрыть") {
+                        viewModel.handle(.hideShareHistory)
+                    }
+                }
+            }
+            .sheet(isPresented: $showHistoryPreview) {
+#if os(iOS)
+                historyPreviewScreen
+#endif
             }
         }
     }
-    
-    private var calculatorPanel: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(viewModel.state.expressionText)
-                .font(.system(size: 15, weight: .regular))
-                .foregroundStyle(AppColors.textTertiary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-            Spacer(minLength: 8)
-            Text(viewModel.state.inputText)
-                .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(AppColors.textPrimary)
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
+
+    private func historyRow(item: ConverterShareHistoryItem) -> some View {
+        Button {
+#if os(iOS)
+            if let image = historyImage(for: item.imageFileName) {
+                historyPreviewImage = image
+                showHistoryPreview = true
+            }
+#endif
+        } label: {
+            HStack(spacing: 12) {
+#if os(iOS)
+                Group {
+                    if let image = historyImage(for: item.imageFileName) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.white.opacity(0.06))
+                            .overlay(
+                                Image(systemName: "photo")
+                                    .font(.system(size: 16, weight: .regular))
+                                    .foregroundStyle(Color.white.opacity(0.6))
+                            )
+                    }
+                }
+                .frame(width: 56, height: 96)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                )
+#endif
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text(item.shareTitle ?? "Отправка")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        Text(shareHistoryDateText(item.createdAt))
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundStyle(AppColors.textTertiary.opacity(0.85))
+                    }
+                    Text("\(item.activeCode) • \(item.inputText)")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                    Text(item.selectedCodes.joined(separator: " · "))
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(AppColors.textTertiary)
+                    if let note = item.note, !note.isEmpty {
+                        Text("За что: \(note)")
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundStyle(Color.white.opacity(0.82))
+                            .lineLimit(2)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.white.opacity(0.04))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            )
         }
-        .frame(maxWidth: .infinity)
+        .buttonStyle(.plain)
     }
+
+    private var sharePreviewSheet: some View {
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                VStack(alignment: .leading, spacing: 10) {
+                    shareCardPreview
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(viewModel.state.shareDraftTitle)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Color.white.opacity(0.94))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.white.opacity(0.08))
+                            )
+                        TextField(
+                            "Добавь подпись: что отправляешь и зачем",
+                            text: Binding(
+                                get: { viewModel.state.shareDraftMessage },
+                                set: { viewModel.handle(.updateShareDraftMessage($0)) }
+                            ),
+                            axis: .vertical
+                        )
+                        .lineLimit(2...5)
+                        .textInputAutocapitalization(.sentences)
+                        .autocorrectionDisabled(false)
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(Color.white.opacity(0.92))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(.ultraThinMaterial)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                        )
+                    }
+                }
+                .padding(14)
+            }
+            .navigationTitle("Preview отправки")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Отмена") {
+                        viewModel.handle(.hideSharePreview)
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Отправить") {
+                        #if os(iOS)
+                        if let image = renderCurrentShareImage() {
+                            viewModel.setShareImage(image)
+                            viewModel.handle(.sendShareFromPreview)
+                        }
+                        #endif
+                    }
+                }
+            }
+        }
+    }
+
+    private func shareHistoryDateText(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: Locale.current.identifier)
+        formatter.dateFormat = "dd MMM • HH:mm"
+        return formatter.string(from: date)
+    }
+
+#if os(iOS)
+    private func historyImage(for fileName: String?) -> UIImage? {
+        guard let fileName, !fileName.isEmpty else { return nil }
+        let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+        ?? FileManager.default.temporaryDirectory
+        let url = base.appendingPathComponent("ConverterShareHistory", isDirectory: true).appendingPathComponent(fileName)
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return UIImage(data: data)
+    }
+
+    private var historyPreviewScreen: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            if let image = historyPreviewImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .ignoresSafeArea()
+            }
+            VStack {
+                HStack {
+                    Spacer()
+                    Button {
+                        showHistoryPreview = false
+                        historyPreviewImage = nil
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Color.white)
+                            .frame(width: 34, height: 34)
+                            .background(Circle().fill(Color.black.opacity(0.55)))
+                    }
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 8)
+                Spacer()
+            }
+        }
+    }
+
+#endif
     
-    private func courseRowBackground(isActive: Bool) -> LinearGradient {
-        if isActive {
-            return LinearGradient(
-                colors: [Color(hex: "F7933A"), Color(hex: "F58A37")],
+    private func courseRowBackground(isActive: Bool) -> AnyShapeStyle {
+        AnyShapeStyle(
+            LinearGradient(
+                colors: [Color(hex: "1F2430"), Color(hex: "1A1F2B")],
                 startPoint: .leading,
                 endPoint: .trailing
             )
-        }
-        return LinearGradient(
-            colors: [Color(hex: "2F3035"), Color(hex: "25262A")],
-            startPoint: .leading,
-            endPoint: .trailing
         )
     }
     
-    private func codePillBackground(isActive: Bool) -> Color {
-        isActive ? Color(hex: "E9B183") : Color(hex: "5A5C61")
-    }
-    
-    private func flagCircleBackground(isActive: Bool) -> some ShapeStyle {
+    private func rowBorderStyle(isActive: Bool) -> AnyShapeStyle {
         if isActive {
             return AnyShapeStyle(
                 LinearGradient(
-                    colors: [Color(hex: "F79B41"), Color(hex: "F58A37")],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
+                    colors: [neonCyan.opacity(0.72), neonViolet.opacity(0.62)],
+                    startPoint: .leading,
+                    endPoint: .trailing
                 )
             )
         }
-        return AnyShapeStyle(
-            LinearGradient(
-                colors: [Color(hex: "34353A"), Color(hex: "26272B")],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
+        return AnyShapeStyle(rowInactiveStrokeColor)
     }
-
+    
     @ViewBuilder
     private func currencyFlagIcon(for code: String, size: CGFloat, isActive: Bool) -> some View {
-        if let assetName = CurrencyFlags.assetName(for: code) {
-            Image(assetName)
-                .resizable()
-                .scaledToFill()
-                .frame(width: size, height: size)
-                .clipShape(Circle())
-        } else {
-            Image("flag")
-                .resizable()
-                .renderingMode(.template)
-                .foregroundStyle(AppColors.textPrimary)
-                .frame(width: 24, height: 24)
-                .frame(width: size, height: size)
-                .background(
-                    Circle()
-                        .fill(flagCircleBackground(isActive: isActive))
+        ZStack {
+            RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                .fill(Color(hex: "141A25"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                        .stroke(rowBorderStyle(isActive: isActive), lineWidth: 1)
                 )
+
+            if let assetName = CurrencyFlags.assetName(for: code) {
+                Image(assetName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: size * 0.40, height: size * 0.40)
+            } else {
+                Image("flag")
+                    .resizable()
+                    .renderingMode(.template)
+                    .foregroundStyle(AppColors.textPrimary)
+                    .frame(width: size * 0.32, height: size * 0.32)
+            }
         }
+        .frame(width: size, height: size)
     }
     
     
     // MARK: - Currency row
     private func currencyRow(index: Int, code: String, valueText: String, isActive: Bool, rowHeight: CGFloat) -> some View {
-        let safeRowHeight = rowHeight.isFinite && rowHeight > 0 ? rowHeight : 58
+        let safeRowHeight = rowHeight.isFinite && rowHeight > 0 ? rowHeight : 66
         
-        return HStack(spacing: 10) {
+        return HStack(spacing: 8) {
             Button {
                 viewModel.handle(.replaceCurrency(index))
             } label: {
@@ -588,7 +864,74 @@ struct ConverterView: View {
             }
             .buttonStyle(.plain)
             
-            Button {
+            HStack(spacing: 14) {
+                Text(code)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.92))
+                if isActive {
+                    Button {
+                        viewModel.handle(.toggleCalcMode)
+                    } label: {
+                        Image(systemName: "circle.grid.3x3.fill")
+                            .font(.system(size: 10, weight: .semibold))
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(Color.white.opacity(0.75))
+                            .frame(width: 18, height: 18)
+                            .background(Circle().fill(Color.white.opacity(0.08)))
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer()
+                if isActive && viewModel.state.calcModeOn {
+                    VStack(alignment: .trailing, spacing: 3) {
+                        if !viewModel.state.expressionText.isEmpty {
+                            Text(viewModel.state.expressionText)
+                                .font(.system(size: 10, weight: .regular))
+                                .foregroundStyle(Color.white.opacity(0.60))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.6)
+                        }
+                        Text(viewModel.state.inputText)
+                            .font(.system(size: 17, weight: .bold))
+                            .monospacedDigit()
+                            .minimumScaleFactor(0.6)
+                            .foregroundStyle(Color.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                    .fill(Color.white.opacity(0.08))
+                            )
+                    }
+                    .padding(.trailing, 2)
+                } else {
+                    Text(isActive ? viewModel.state.inputText : valueText)
+                        .font(.system(size: isActive ? 18 : 17, weight: isActive ? .bold : .semibold))
+                        .monospacedDigit()
+                        .minimumScaleFactor(0.6)
+                        .foregroundStyle(Color.white.opacity(0.95))
+                        .padding(.trailing, 2)
+                }
+            }
+            .padding(.leading, 16)
+            .padding(.trailing, 16)
+            .frame(height: safeRowHeight)
+            .background(
+                RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                    .fill(courseRowBackground(isActive: isActive))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                    .stroke(rowBorderStyle(isActive: isActive), lineWidth: 1)
+            )
+            .shadow(
+                color: isActive ? neonCyan.opacity(0.14) : .clear,
+                radius: isActive ? 8 : 0,
+                x: 0,
+                y: 0
+            )
+            .contentShape(RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous))
+            .onTapGesture {
                 #if os(iOS)
                 if viewModel.state.hapticsEnabled {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -597,34 +940,7 @@ struct ConverterView: View {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
                     viewModel.handle(.selectCurrency(code))
                 }
-            } label: {
-                HStack(spacing: 14) {
-                    let codePillHeight: CGFloat = isActive ? 34 : 30
-                    Text(code)
-                        .font(.system(size: 13, weight: .regular))
-                        .foregroundStyle(Color.white)
-                        .frame(width: 86, height: codePillHeight)
-                        .background(
-                            Capsule(style: .continuous)
-                                .fill(codePillBackground(isActive: isActive))
-                        )
-                    Spacer()
-                    Text(valueText)
-                        .font(isActive ? .system(size: 17, weight: .bold) : .system(size: 15, weight: .regular))
-                        .monospacedDigit()
-                        .minimumScaleFactor(0.6)
-                        .foregroundStyle(Color.white)
-                        .padding(.trailing, 2)
-                }
-                .padding(.leading, isActive ? 12 : 8)
-                .padding(.trailing, 12)
-                .frame(height: safeRowHeight)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(courseRowBackground(isActive: isActive))
-                )
             }
-            .buttonStyle(.plain)
             .contextMenu {
                 Button {
 #if os(iOS)
@@ -644,9 +960,9 @@ struct ConverterView: View {
     }
     
     private func placeholderRow(rowHeight: CGFloat) -> some View {
-        let safeRowHeight = rowHeight.isFinite && rowHeight > 0 ? rowHeight : 58
+        let safeRowHeight = rowHeight.isFinite && rowHeight > 0 ? rowHeight : 66
         
-        return HStack(spacing: 10) {
+        return HStack(spacing: 8) {
             Image("flag")
                 .resizable()
                 .renderingMode(.template)
@@ -654,14 +970,12 @@ struct ConverterView: View {
                 .frame(width: 24, height: 24)
                 .frame(width: safeRowHeight, height: safeRowHeight)
                 .background(
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color(hex: "34353A"), Color(hex: "26272B")],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                    RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                        .fill(Color(hex: "141A25"))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                        .stroke(rowInactiveStrokeColor, lineWidth: 1)
                 )
             HStack {
                 Spacer()
@@ -672,14 +986,18 @@ struct ConverterView: View {
             .padding(.horizontal, 12)
             .frame(height: safeRowHeight)
             .background(
-                Capsule(style: .continuous)
+                RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
                     .fill(
                         LinearGradient(
-                            colors: [Color(hex: "2F3035"), Color(hex: "25262A")],
+                            colors: [Color(hex: "1F2430"), Color(hex: "1A1F2B")],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
                     )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                    .stroke(rowInactiveStrokeColor, lineWidth: 1)
             )
         }
         .contentShape(Rectangle())
@@ -687,12 +1005,53 @@ struct ConverterView: View {
     
     
     // MARK: - Keypad (нижний ряд заполняет ширину)
-    private enum KeyKind { case dark, gray, grayTop, accent }
+    private enum KeyKind { case base, secondary, top, accent }
     
-    @ViewBuilder
-    private func neonCapsule(background: Color, corner: CGFloat = 28) -> some View {
-        Capsule(style: .continuous)
-            .fill(background)
+    private func materialCapsule(kind: KeyKind) -> some View {
+        return Capsule(style: .continuous)
+            .fill(backgroundColor(for: kind))
+            .overlay(
+                Group {
+                    if kind == .accent {
+                        Capsule(style: .continuous)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [neonCyan.opacity(0.72), neonViolet.opacity(0.64)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ),
+                                lineWidth: 1
+                            )
+                    } else {
+                        Capsule(style: .continuous)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [neonCyan.opacity(0.62), neonViolet.opacity(0.58)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ),
+                                lineWidth: 1
+                            )
+                    }
+                }
+            )
+            .shadow(
+                color: kind == .accent ? neonCyan.opacity(0.16) : .clear,
+                radius: kind == .accent ? 7 : 0,
+                x: 0,
+                y: 0
+            )
+    }
+
+    private func backgroundColor(for kind: KeyKind) -> Color {
+        switch kind {
+        case .base, .accent:
+            return Color.black
+        case .secondary:
+            return Color(hex: "20222A")
+        case .top:
+            return Color(hex: "2B2D33")
+        }
     }
     
     private struct NeonPressStyle: ButtonStyle {
@@ -716,9 +1075,9 @@ struct ConverterView: View {
                 // Rows 1-4 в сетке 4x4
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: safeSpacing), count: 4), spacing: safeSpacing) {
                 // Row 1
-                iconKey("delete.left", kind: .grayTop, height: safeHeight, fontSize: safeFontSize) { viewModel.handle(.backspace) }
-                key("C", kind: .grayTop, height: safeHeight, fontSize: safeFontSize) { viewModel.handle(.clearAll) }
-                key("%", kind: .grayTop, height: safeHeight, fontSize: safeFontSize) { viewModel.handle(.percent) }
+                iconKey("delete.left", kind: .top, height: safeHeight, fontSize: safeFontSize) { viewModel.handle(.backspace) }
+                key("C", kind: .top, height: safeHeight, fontSize: safeFontSize) { viewModel.handle(.clearAll) }
+                key("%", kind: .top, height: safeHeight, fontSize: safeFontSize) { viewModel.handle(.percent) }
                 iconKey("divide", kind: .accent, height: safeHeight, fontSize: safeFontSize) { viewModel.handle(.operation("/")) }
                     
                     // Row 2
@@ -777,8 +1136,9 @@ struct ConverterView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: height)
                 .background(
-                    neonCapsule(background: backgroundColor(for: kind))
+                    materialCapsule(kind: kind)
                 )
+                .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(Color.white)
         }
         .buttonStyle(.plain)
@@ -786,7 +1146,7 @@ struct ConverterView: View {
     }
     
     @ViewBuilder
-    private func key(_ title: String, kind: KeyKind = .dark, height: CGFloat, fontSize: CGFloat, action: @escaping () -> Void) -> some View {
+    private func key(_ title: String, kind: KeyKind = .base, height: CGFloat, fontSize: CGFloat, action: @escaping () -> Void) -> some View {
         Button {
 #if os(iOS)
             playKeyTapSound()
@@ -798,7 +1158,7 @@ struct ConverterView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: height)
                 .background(
-                    neonCapsule(background: backgroundColor(for: kind))
+                    materialCapsule(kind: kind)
                 )
                 .foregroundStyle(Color.white)
         }
@@ -806,35 +1166,67 @@ struct ConverterView: View {
         .buttonStyle(NeonPressStyle())
     }
     
-    private func backgroundColor(for kind: KeyKind) -> Color {
-        switch kind {
-        case .dark: return Color(hex: "D9D9D9").opacity(0.2) // Светло-серый с opacity 20% для цифр
-        case .gray: return Color(hex: "D9D9D9").opacity(0.2) // Светло-серый с opacity 20% для запятой
-        case .grayTop: return Color(hex: "D9D9D9").opacity(0.4) // Светло-серый с opacity 40% для первых трех кнопок (удаление, C, %)
-        case .accent: return Color(hex: "68A5FF").opacity(0.6) // Синий с opacity 60% для операторов и =
-        }
-    }
-    
     
     // MARK: - Share
     
     private func handleShareTap() {
-        #if os(iOS)
+        viewModel.handle(.prepareShare)
+    }
+
+    private func preparedShareText(title: String, message: String) -> String {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedTitle.isEmpty && trimmedMessage.isEmpty {
+            return "Курсы валют из millio"
+        }
+        if trimmedMessage.isEmpty {
+            return trimmedTitle
+        }
+        if trimmedTitle.isEmpty {
+            return trimmedMessage
+        }
+        return "\(trimmedTitle)\n\(trimmedMessage)"
+    }
+
+    private var shareCardPreview: some View {
         let shareData = viewModel.getShareData()
-        let size = CGSize(width: 1080, height: 900)
+        return ShareCardView(
+            dateString: shareData.dateString,
+            rows: shareData.rows,
+            highlightedCode: shareData.highlightedCode,
+            baseSummary: "База: \(viewModel.state.inputText) \(viewModel.state.activeCode)",
+            appStoreURLText: "https://apps.apple.com"
+        )
+        .frame(maxWidth: .infinity)
+        .frame(height: 540)
+    }
+
+#if os(iOS)
+    private func renderCurrentShareImage() -> UIImage? {
+        let shareData = viewModel.getShareData()
+        let screenBounds = UIScreen.main.bounds
+        let size: CGSize
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            size = CGSize(
+                width: min(screenBounds.width, screenBounds.height),
+                height: max(screenBounds.width, screenBounds.height)
+            )
+        } else {
+            size = screenBounds.size
+        }
+
         let card = ShareCardView(
             dateString: shareData.dateString,
             rows: shareData.rows,
-            highlightedCode: shareData.highlightedCode
+            highlightedCode: shareData.highlightedCode,
+            baseSummary: "База: \(viewModel.state.inputText) \(viewModel.state.activeCode)",
+            appStoreURLText: "https://apps.apple.com"
         )
         .frame(width: size.width, height: size.height)
-        
-        if let img = ShareRenderer.render(card: card, size: size, scale: 4) {
-            viewModel.setShareImage(img)
-            viewModel.handle(.prepareShare)
-        }
-        #endif
+
+        return ShareRenderer.render(card: card, size: size, scale: UIScreen.main.scale)
     }
+#endif
     
 #if os(iOS)
     private func converterSafeAreaBottom() -> CGFloat {

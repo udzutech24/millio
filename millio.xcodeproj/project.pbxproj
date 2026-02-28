@@ -10,8 +10,6 @@
 		777D081C2F2CF17B004777D8 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 777D081B2F2CF17B004777D8 /* FirebaseAnalytics */; };
 		777D081E2F2CF1C9004777D8 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 777D081D2F2CF1C9004777D8 /* GoogleService-Info.plist */; };
 		777D08212F2D1234004777D8 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = 777D08202F2D1234004777D8 /* FirebaseCrashlytics */; };
-		77A080C62F3E8AE400274316 /* millio/Config/Debug.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 77E1A0012F40000100E1A001 /* millio/Config/Debug.xcconfig */; };
-		77A080C72F3E8AEA00274316 /* millio/Config/Release.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 77E1A0022F40000200E1A001 /* millio/Config/Release.xcconfig */; };
 		77B22ECF2F146CDC005146C6 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 77B22ECE2F146CDC005146C6 /* StoreKit.framework */; };
 		78A100022F50000200A10001 /* millioCurrencyWidgetExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 78A100012F50000100A10001 /* millioCurrencyWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
@@ -62,7 +60,6 @@
 		77B22ECE2F146CDC005146C6 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		77E1A0012F40000100E1A001 /* millio/Config/Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = millio/Config/Debug.xcconfig; sourceTree = "<group>"; };
 		77E1A0022F40000200E1A001 /* millio/Config/Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = millio/Config/Release.xcconfig; sourceTree = "<group>"; };
-		77E1A0032F40000300E1A001 /* millio/Config/Secrets.local.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = millio/Config/Secrets.local.xcconfig; sourceTree = "<group>"; };
 		78A100012F50000100A10001 /* millioCurrencyWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = millioCurrencyWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -158,7 +155,6 @@
 				777D081D2F2CF1C9004777D8 /* GoogleService-Info.plist */,
 				77E1A0012F40000100E1A001 /* millio/Config/Debug.xcconfig */,
 				77E1A0022F40000200E1A001 /* millio/Config/Release.xcconfig */,
-				77E1A0032F40000300E1A001 /* millio/Config/Secrets.local.xcconfig */,
 				772BE51F2F12DBED00193DE9 /* millio */,
 				78A100032F50000300A10001 /* Shared */,
 				772BE52F2F12DBEF00193DE9 /* millioTests */,
@@ -344,8 +340,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				77A080C72F3E8AEA00274316 /* millio/Config/Release.xcconfig in Resources */,
-				77A080C62F3E8AE400274316 /* millio/Config/Debug.xcconfig in Resources */,
 				777D081E2F2CF1C9004777D8 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

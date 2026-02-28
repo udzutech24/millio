@@ -1,2 +1,2 @@
 TWELVE_DATA_API_KEY =
-#include? "Secrets.local.xcconfig"
+#include? "Secrets.local"

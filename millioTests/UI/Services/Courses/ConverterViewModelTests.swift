@@ -253,6 +253,19 @@ struct ConverterViewModelTests {
         #expect(viewModel.state.calcModeOn == initial)
     }
 
+    @Test("При выборе другой валюты режим калькулятора выключается")
+    func testSelectCurrencyDisablesCalcMode() async {
+        let viewModel = ConverterViewModel(rateRepository: MockConverterRateRepository())
+        if !viewModel.state.calcModeOn {
+            viewModel.handle(.toggleCalcMode)
+        }
+        #expect(viewModel.state.calcModeOn == true)
+
+        viewModel.handle(.selectCurrency("USD"))
+        #expect(viewModel.state.activeCode == "USD")
+        #expect(viewModel.state.calcModeOn == false)
+    }
+
     @Test("displayValue конвертирует правильно")
     func testDisplayValueConversion() async {
         let mockRepo = MockConverterRateRepository()
@@ -271,5 +284,54 @@ struct ConverterViewModelTests {
         if let parsed = Double(rubValue.replacingOccurrences(of: ",", with: ".").replacingOccurrences(of: " ", with: "")) {
             #expect(abs(parsed - 9000) < 100) // допускаем погрешность форматирования
         }
+    }
+
+    @Test("История шаринга пополняется только после успешной отправки")
+    func testShareHistoryAddedOnlyOnCompletedShare() async {
+        let key = "conv_share_history"
+        let defaults = UserDefaults.standard
+        let previous = defaults.data(forKey: key)
+        defaults.removeObject(forKey: key)
+        defer {
+            if let previous {
+                defaults.set(previous, forKey: key)
+            } else {
+                defaults.removeObject(forKey: key)
+            }
+        }
+
+        let viewModel = ConverterViewModel(rateRepository: MockConverterRateRepository())
+
+        viewModel.handle(.shareCompleted(false, nil))
+        #expect(viewModel.state.shareHistory.isEmpty)
+
+        viewModel.handle(.shareCompleted(true, nil))
+        #expect(viewModel.state.shareHistory.count == 1)
+        #expect(viewModel.state.shareHistory.first?.activeCode == viewModel.state.activeCode)
+    }
+
+    @Test("История шаринга ограничена 30 записями и очищается")
+    func testShareHistoryLimitAndClear() async {
+        let key = "conv_share_history"
+        let defaults = UserDefaults.standard
+        let previous = defaults.data(forKey: key)
+        defaults.removeObject(forKey: key)
+        defer {
+            if let previous {
+                defaults.set(previous, forKey: key)
+            } else {
+                defaults.removeObject(forKey: key)
+            }
+        }
+
+        let viewModel = ConverterViewModel(rateRepository: MockConverterRateRepository())
+
+        for _ in 0..<40 {
+            viewModel.handle(.shareCompleted(true, nil))
+        }
+        #expect(viewModel.state.shareHistory.count == 30)
+
+        viewModel.handle(.clearShareHistory)
+        #expect(viewModel.state.shareHistory.isEmpty)
     }
 }

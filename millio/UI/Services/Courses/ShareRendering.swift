@@ -11,10 +11,12 @@ import LinkPresentation
 final class ImageItem: NSObject, UIActivityItemSource {
     private let image: UIImage
     private let jpegData: Data
+    private let subject: String
 
-    init(image: UIImage, compressionQuality: CGFloat = 0.92) {
+    init(image: UIImage, compressionQuality: CGFloat = 0.92, subject: String = "millio — курсы валют") {
         self.image = image
         self.jpegData = image.jpegData(compressionQuality: compressionQuality) ?? Data()
+        self.subject = subject
         super.init()
     }
 
@@ -27,12 +29,12 @@ final class ImageItem: NSObject, UIActivityItemSource {
     }
 
     func activityViewController(_ activityViewController: UIActivityViewController, subjectForActivityType activityType: UIActivity.ActivityType?) -> String {
-        return "millio — курс за секунду"
+        return subject
     }
 
     func activityViewControllerLinkMetadata(_ activityViewController: UIActivityViewController) -> LPLinkMetadata? {
         let meta = LPLinkMetadata()
-        meta.title = "millio — курс за секунду"
+        meta.title = subject
         meta.iconProvider = NSItemProvider(object: image)
         return meta
     }
@@ -55,35 +57,42 @@ struct ShareRow: View {
     let highlighted: Bool
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             flagIcon
 
-            HStack {
+            HStack(spacing: 10) {
                 Text(code)
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundStyle(.white)
-                    .frame(width: 134, height: 44)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(codePillBackground)
-                    )
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.92))
+
+                if highlighted {
+                    Image(systemName: "circle.grid.3x3.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.75))
+                        .frame(width: 22, height: 22)
+                        .background(Circle().fill(Color.white.opacity(0.09)))
+                }
 
                 Spacer()
-
                 Text(value)
-                    .font(.system(size: 36, weight: .bold))
+                    .font(.system(size: 30, weight: .bold))
                     .monospacedDigit()
-                    .foregroundStyle(.white)
-                    .minimumScaleFactor(0.65)
+                    .foregroundStyle(Color.white.opacity(0.95))
+                    .minimumScaleFactor(0.6)
                     .lineLimit(1)
             }
-            .padding(.leading, highlighted ? 14 : 10)
-            .padding(.trailing, 16)
-            .frame(height: 64)
+            .padding(.leading, 18)
+            .padding(.trailing, 20)
+            .frame(height: 76)
             .background(
                 Capsule(style: .continuous)
                     .fill(rowBackground)
             )
+            .overlay(
+                Capsule(style: .continuous)
+                    .stroke(rowBorderStyle, lineWidth: 1)
+            )
+            .shadow(color: highlighted ? Color(hex: "47D7FF").opacity(0.14) : .clear, radius: 10, x: 0, y: 0)
         }
     }
 
@@ -92,57 +101,55 @@ struct ShareRow: View {
         if let assetName = CurrencyFlags.assetName(for: code) {
             Image(assetName)
                 .resizable()
-                .scaledToFill()
-                .frame(width: 64, height: 64)
-                .clipShape(Circle())
+                .scaledToFit()
+                .frame(width: 28, height: 28)
+                .frame(width: 76, height: 76)
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color(hex: "141A25"))
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
         } else {
             Image("flag")
                 .resizable()
                 .renderingMode(.template)
                 .foregroundStyle(Color.white)
-                .frame(width: 28, height: 28)
-                .frame(width: 64, height: 64)
+                .frame(width: 24, height: 24)
+                .frame(width: 76, height: 76)
                 .background(
-                    Circle()
-                        .fill(flagCircleBackground)
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color(hex: "141A25"))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
                 )
         }
     }
 
     private var rowBackground: LinearGradient {
-        if highlighted {
-            return LinearGradient(
-                colors: [Color(hex: "F7933A"), Color(hex: "F58A37")],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-        }
-
-        return LinearGradient(
-            colors: [Color(hex: "2F3035"), Color(hex: "25262A")],
+        LinearGradient(
+            colors: [Color(hex: "1F2430"), Color(hex: "1A1F2B")],
             startPoint: .leading,
             endPoint: .trailing
         )
     }
 
-    private var codePillBackground: Color {
-        highlighted ? Color(hex: "E9B183") : Color(hex: "5A5C61")
-    }
-
-    private var flagCircleBackground: LinearGradient {
+    private var rowBorderStyle: AnyShapeStyle {
         if highlighted {
-            return LinearGradient(
-                colors: [Color(hex: "F79B41"), Color(hex: "F58A37")],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [Color(hex: "47D7FF").opacity(0.8), Color(hex: "8A6BFF").opacity(0.72)],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
             )
         }
-
-        return LinearGradient(
-            colors: [Color(hex: "34353A"), Color(hex: "26272B")],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        return AnyShapeStyle(Color.white.opacity(0.08))
     }
 }
 
@@ -151,76 +158,24 @@ struct ShareCardView: View {
     let dateString: String
     let rows: [ShareRowModel]
     let highlightedCode: String
+    let baseSummary: String
+    let appStoreURLText: String
 
     var body: some View {
         ZStack {
-            background
-
-            VStack(alignment: .leading, spacing: 16) {
-                header
-
-                VStack(spacing: 10) {
-                    ForEach(rows) { row in
-                        ShareRow(
-                            flag: row.flag,
-                            code: row.code,
-                            value: row.value,
-                            highlighted: row.code.uppercased() == highlightedCode.uppercased()
-                        )
-                    }
-                }
-                .padding(.top, 2)
-
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 18)
-            .padding(.bottom, 16)
-        }
-    }
-
-    private var background: some View {
-        Color.black
-        .overlay(
-            RadialGradient(
-                colors: [Color(hex: "F58A37").opacity(0.20), .clear],
-                center: .topLeading,
-                startRadius: 80,
-                endRadius: 520
-            )
-        )
-        .overlay(
-            RadialGradient(
-                colors: [Color(hex: "68A5FF").opacity(0.18), .clear],
-                center: .bottomTrailing,
-                startRadius: 80,
-                endRadius: 520
-            )
-        )
-        .ignoresSafeArea()
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                Text("Курсы")
-                    .font(.system(size: 44, weight: .bold))
-                    .foregroundStyle(Color.white)
-                Spacer()
-                Text("millio")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.95))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(Color.white.opacity(0.08))
+            Color.black.ignoresSafeArea()
+            VStack(spacing: 12) {
+                ForEach(rows) { row in
+                    ShareRow(
+                        flag: row.flag,
+                        code: row.code,
+                        value: row.value,
+                        highlighted: row.code.uppercased() == highlightedCode.uppercased()
                     )
+                }
             }
-
-            Text(dateString)
-                .font(.system(size: 22, weight: .medium))
-                .foregroundStyle(Color.white.opacity(0.72))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
         }
     }
 }
@@ -282,9 +237,14 @@ enum ShareRenderer {
 struct ActivityView: UIViewControllerRepresentable {
     let activityItems: [Any]
     let applicationActivities: [UIActivity]? = nil
+    var onComplete: ((Bool) -> Void)? = nil
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: activityItems, applicationActivities: applicationActivities)
+        let controller = UIActivityViewController(activityItems: activityItems, applicationActivities: applicationActivities)
+        controller.completionWithItemsHandler = { _, completed, _, _ in
+            onComplete?(completed)
+        }
+        return controller
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
@@ -308,7 +268,9 @@ struct ActivityView: UIViewControllerRepresentable {
     let card = ShareCardView(
         dateString: formatter.string(from: date),
         rows: rows,
-        highlightedCode: "USD"
+        highlightedCode: "USD",
+        baseSummary: "База: 1 USD",
+        appStoreURLText: "https://apps.apple.com"
     )
 
     // Use a typical iPhone screen size in points for preview.

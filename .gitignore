@@ -30,4 +30,4 @@ fastlane/test_output
 .trae/
 
 # Local secrets
-millio/Config/Secrets.local.xcconfig
+millio/Config/Secrets.local
