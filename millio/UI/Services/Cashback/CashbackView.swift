@@ -122,6 +122,26 @@ private struct CashbackContentViewInternal: View {
                     .font(.system(size: 16, weight: .regular))
                     .foregroundStyle(AppColors.textTertiary)
                     .multilineTextAlignment(.center)
+
+                Button {
+                    viewModel.handle(.addCashback)
+                } label: {
+                    Text("Добавить кешбэк")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 48)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(cashbackFabFill)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .stroke(cashbackAccent.opacity(0.45), lineWidth: 1)
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 4)
             }
 
             Spacer(minLength: 0)
