@@ -28,6 +28,7 @@ fastlane/test_output
 .DS_Store
 
 .trae/
+.idea/
 
 # Local secrets
 millio/Config/Secrets.local.xcconfig
