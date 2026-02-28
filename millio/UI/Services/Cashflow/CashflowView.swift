@@ -190,15 +190,6 @@ private struct CashflowContentView: View {
                         .foregroundStyle(positiveColor(for: viewModel.state.assetValueChange))
                 }
 
-                HStack {
-                    Text("Курсовая разница")
-                        .font(.system(size: 13, weight: .regular))
-                        .foregroundStyle(AppColors.textSecondary)
-                    Spacer()
-                    Text(formatSignedMoney(viewModel.state.currencyDifference))
-                        .font(.system(size: 16, weight: .regular))
-                        .foregroundStyle(positiveColor(for: viewModel.state.currencyDifference))
-                }
             }
             .padding(12)
             .background(financeInnerBackground(cornerRadius: 16))

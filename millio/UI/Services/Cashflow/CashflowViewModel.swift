@@ -103,9 +103,6 @@ struct CashflowState {
     /// Изменение стоимости активов по формуле
     var assetValueChange: Double = 0.0
 
-    /// Курсовая разница (пока равна изменению стоимости активов)
-    var currencyDifference: Double = 0.0
-
     /// Итого за период (end-start)
     var periodTotalChange: Double = 0.0
 
@@ -561,7 +558,6 @@ final class CashflowViewModel: ViewModelProtocol {
         state.assetsAtPeriodEnd = endAssets
         state.contributedExpense = expense
         state.assetValueChange = valueChange
-        state.currencyDifference = valueChange
         state.periodTotalChange = periodTotalChange
     }
 
