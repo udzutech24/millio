@@ -1384,6 +1384,7 @@ private struct CashbackCategoryEditorSheet: View {
     let onSave: (_ name: String, _ icon: String) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @FocusState private var isNameFieldFocused: Bool
 
     private var title: String {
         switch mode {
@@ -1410,6 +1411,7 @@ private struct CashbackCategoryEditorSheet: View {
                             TextField("Например: Кофейни", text: $name)
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(AppColors.textPrimary)
+                                .focused($isNameFieldFocused)
                                 .padding(16)
                         }
 
@@ -1473,6 +1475,11 @@ private struct CashbackCategoryEditorSheet: View {
                         )
                     )
                     .disabled(!isValid)
+                }
+            }
+            .onAppear {
+                DispatchQueue.main.async {
+                    isNameFieldFocused = true
                 }
             }
         }
