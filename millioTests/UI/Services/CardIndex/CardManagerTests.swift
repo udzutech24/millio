@@ -65,6 +65,26 @@ struct CardManagerTests {
         #expect(cards.first?.name == "Избранная")
     }
 
+    @Test("getAllCards сортирует по приоритету внутри избранных")
+    func testGetAllCardsSortsByPriorityWithinFavorites() throws {
+        let context = try createTestModelContext()
+
+        let lowPriority = Card(name: "Избранная Низкий", cardNumber: "1111", bank: .sberbank, cardType: .debit, priority: .low, currency: "RUB", isFavorite: true)
+        let highPriority = Card(name: "Избранная Высокий", cardNumber: "2222", bank: .tinkoff, cardType: .debit, priority: .high, currency: "RUB", isFavorite: true)
+        let normalPriority = Card(name: "Избранная Обычный", cardNumber: "3333", bank: .vtb, cardType: .debit, priority: .normal, currency: "RUB", isFavorite: true)
+
+        context.insert(lowPriority)
+        context.insert(highPriority)
+        context.insert(normalPriority)
+        try context.save()
+
+        CardManager.shared.setup(modelContext: context)
+        let cards = CardManager.shared.getAllCards()
+
+        #expect(cards.count == 3)
+        #expect(cards.map(\.name) == ["Избранная Высокий", "Избранная Обычный", "Избранная Низкий"])
+    }
+
     @Test("getFavoriteCards возвращает только избранные")
     func testGetFavoriteCards() throws {
         let context = try createTestModelContext()
@@ -84,6 +104,24 @@ struct CardManagerTests {
 
         #expect(favorites.count == 1)
         #expect(favorites.first?.name == "Избранная")
+    }
+
+    @Test("getFavoriteCards сортирует по приоритету")
+    func testGetFavoriteCardsSortsByPriority() throws {
+        let context = try createTestModelContext()
+
+        let lowPriority = Card(name: "Низкий", cardNumber: "1111", bank: .sberbank, cardType: .debit, priority: .low, currency: "RUB", isFavorite: true)
+        let highPriority = Card(name: "Высокий", cardNumber: "2222", bank: .tinkoff, cardType: .debit, priority: .high, currency: "RUB", isFavorite: true)
+
+        context.insert(lowPriority)
+        context.insert(highPriority)
+        try context.save()
+
+        CardManager.shared.setup(modelContext: context)
+        let favorites = CardManager.shared.getFavoriteCards()
+
+        #expect(favorites.count == 2)
+        #expect(favorites.map(\.name) == ["Высокий", "Низкий"])
     }
 
     @Test("getCards(by currency) фильтрует по валюте")

@@ -28,13 +28,8 @@ final class CardManager {
         
         let descriptor = FetchDescriptor<Card>()
         let cards = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.archivedAt == nil }
-        
-        return cards.sorted { card1, card2 in
-            if card1.isFavorite != card2.isFavorite {
-                return card1.isFavorite
-            }
-            return card1.updatedAt > card2.updatedAt
-        }
+
+        return sortCards(cards)
     }
     
     /// Получить избранные карты
@@ -45,8 +40,8 @@ final class CardManager {
             predicate: #Predicate<Card> { $0.isFavorite == true }
         )
         let cards = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.archivedAt == nil }
-        
-        return cards.sorted { $0.updatedAt > $1.updatedAt }
+
+        return sortCards(cards)
     }
     
     /// Получить карты по валюте
@@ -57,13 +52,8 @@ final class CardManager {
             predicate: #Predicate<Card> { $0.currency == currency }
         )
         let cards = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.archivedAt == nil }
-        
-        return cards.sorted { card1, card2 in
-            if card1.isFavorite != card2.isFavorite {
-                return card1.isFavorite
-            }
-            return card1.updatedAt > card2.updatedAt
-        }
+
+        return sortCards(cards)
     }
     
     /// Получить карты по банку
@@ -74,13 +64,8 @@ final class CardManager {
             predicate: #Predicate<Card> { $0.bankRaw == bank.rawValue }
         )
         let cards = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.archivedAt == nil }
-        
-        return cards.sorted { card1, card2 in
-            if card1.isFavorite != card2.isFavorite {
-                return card1.isFavorite
-            }
-            return card1.updatedAt > card2.updatedAt
-        }
+
+        return sortCards(cards)
     }
     
     /// Получить карту по ID
@@ -97,5 +82,17 @@ final class CardManager {
     /// Общий баланс по валюте
     func getTotalBalance(currency: String) -> Double {
         getCards(by: currency).reduce(0) { $0 + $1.balance }
+    }
+
+    private func sortCards(_ cards: [Card]) -> [Card] {
+        cards.sorted { card1, card2 in
+            if card1.isFavorite != card2.isFavorite {
+                return card1.isFavorite
+            }
+            if card1.priority.sortOrder != card2.priority.sortOrder {
+                return card1.priority.sortOrder < card2.priority.sortOrder
+            }
+            return card1.updatedAt > card2.updatedAt
+        }
     }
 }

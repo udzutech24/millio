@@ -1526,28 +1526,28 @@ private struct CashbackSingleCardPickerView: View {
                                                     .fill(darkCircleFill)
                                             }
 
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            HStack {
-                                                Text(card.name)
-                                                    .font(.system(size: 16, weight: .semibold))
-                                                    .foregroundStyle(AppColors.textPrimary)
+                                        VStack(alignment: .leading, spacing: 6) {
+                                            Text(card.name)
+                                                .font(.system(size: 16, weight: .semibold))
+                                                .foregroundStyle(AppColors.textPrimary)
+
+                                            HStack(spacing: 8) {
+                                                Text(card.bank.displayName)
+                                                    .font(.system(size: 14, weight: .regular))
+                                                    .foregroundStyle(AppColors.textSecondary)
 
                                                 if card.isFavorite {
-                                                    Image(systemName: "star.fill")
-                                                        .font(.system(size: 12))
-                                                        .foregroundStyle(
-                                                            LinearGradient(
-                                                                colors: AppColors.cashbackGradient,
-                                                                startPoint: .leading,
-                                                                endPoint: .trailing
-                                                            )
+                                                    Label("Избранная", systemImage: "star.fill")
+                                                        .font(.system(size: 11, weight: .semibold))
+                                                        .foregroundStyle(AppColors.textPrimary)
+                                                        .padding(.horizontal, 8)
+                                                        .padding(.vertical, 3)
+                                                        .background(
+                                                            Capsule()
+                                                                .fill(Color.white.opacity(0.12))
                                                         )
                                                 }
                                             }
-
-                                            Text(card.bank.displayName)
-                                                .font(.system(size: 14, weight: .regular))
-                                                .foregroundStyle(AppColors.textSecondary)
 
                                             Text(card.maskedNumber)
                                                 .font(.system(size: 13, weight: .regular))
