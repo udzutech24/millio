@@ -41,13 +41,10 @@ struct FinanceAddAccountView: View {
     @State private var investmentData: (name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)?
     @State private var selectedArchivedAccountID: String? = nil
     @State private var accountName: String = ""
+    @FocusState private var isNameFieldFocused: Bool
     
     private var navigationTitle: String {
-        switch selectedAccountType {
-        case .card: return "Новая карта"
-        case .credit: return "Новый кредит"
-        case .investment: return "Новый актив"
-        }
+        "Новый продукт"
     }
     
     private var resolvedGroup: FinanceGroup? {
@@ -76,6 +73,7 @@ struct FinanceAddAccountView: View {
                     
                     TextField(placeholderForSelectedType, text: $accountName)
                         .foregroundStyle(AppColors.textPrimary)
+                        .focused($isNameFieldFocused)
                         .textInputAutocapitalization(selectedAccountType == .card ? .words : .sentences)
                         .submitLabel(.done)
                 }
@@ -147,7 +145,7 @@ struct FinanceAddAccountView: View {
             if viewModel.state.groups.isEmpty {
                 FinancesGlassCard(contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)) {
                     VStack(spacing: 12) {
-                        Text("Сначала создайте группу")
+                        Text("Продукт будет добавлен в «Без группы»")
                             .font(.system(size: 14, weight: .regular))
                             .foregroundStyle(AppColors.textTertiary)
                             .frame(maxWidth: .infinity, alignment: .center)
@@ -172,11 +170,40 @@ struct FinanceAddAccountView: View {
                 }
             } else {
                 let currentGroupID = resolvedGroup?.groupUniqueID
-                let currentGroupName = resolvedGroup?.name ?? "Не выбрано"
+                let currentGroupName = resolvedGroup?.name ?? "Без группы"
+                let selectableGroups = viewModel.state.groups.filter { $0.name != "Без группы" }
                 
                 FinancesGlassCard {
                     Menu {
-                        ForEach(viewModel.state.groups) { group in
+                        Button {
+                            selectedGroupID = nil
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "tray")
+                                    .foregroundStyle(AppColors.textTertiary)
+                                    .frame(width: 12, height: 12)
+
+                                Text("Без группы")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundStyle(AppColors.textPrimary)
+
+                                Spacer()
+
+                                if currentGroupID == nil {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundStyle(
+                                            LinearGradient(
+                                                colors: AppColors.financesGradient,
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                }
+                            }
+                        }
+
+                        ForEach(selectableGroups) { group in
                             Button {
                                 selectedGroupID = group.groupUniqueID
                             } label: {
@@ -295,6 +322,8 @@ struct FinanceAddAccountView: View {
                 InlineCardCreateForm(
                     viewModel: vm,
                     name: $accountName,
+                    selectedProductType: selectedAccountType,
+                    onProductTypeSelected: { selectedAccountType = $0 },
                     onCardDataChanged: { card in
                         self.cardData = card
                     }
@@ -441,7 +470,9 @@ struct FinanceAddAccountView: View {
                     nameSection
                 }
                 
-                accountTypeSection
+                if !(addAccountMode == .create && selectedAccountType == .card) {
+                    accountTypeSection
+                }
                 addAccountModeSection
                 
                 if addAccountMode == .create {
@@ -454,6 +485,8 @@ struct FinanceAddAccountView: View {
             .padding(.top, 16)
             .padding(.bottom, 32)
         }
+        .scrollDismissesKeyboard(.immediately)
+        .dismissKeyboardOnTap()
         .scrollIndicators(.hidden)
     }
     
@@ -494,8 +527,8 @@ struct FinanceAddAccountView: View {
         .onAppear {
             if let preselectedGroup = viewModel.state.selectedGroupForAccount {
                 selectedGroupID = preselectedGroup.groupUniqueID
-            } else if let firstGroup = viewModel.state.groups.first {
-                selectedGroupID = firstGroup.groupUniqueID
+            } else {
+                selectedGroupID = nil
             }
             viewModel.handle(.loadAccounts)
         }
@@ -509,13 +542,18 @@ struct FinanceAddAccountView: View {
                     if newValue == .create {
                         selectedArchivedAccountID = nil
                     }
+                    focusNameFieldIfNeeded()
+                }
+                .onChange(of: selectedAccountType) { _, _ in
+                    focusNameFieldIfNeeded()
+                }
+                .onAppear {
+                    focusNameFieldIfNeeded()
                 }
         }
     }
     
     private var isValid: Bool {
-        guard targetGroup != nil else { return false }
-
         if addAccountMode == .archived {
             return selectedArchivedAccountID != nil
         }
@@ -532,10 +570,20 @@ struct FinanceAddAccountView: View {
             return investmentData != nil
         }
     }
+
+    private func focusNameFieldIfNeeded() {
+        guard addAccountMode == .create else {
+            isNameFieldFocused = false
+            return
+        }
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            isNameFieldFocused = true
+        }
+    }
     
     private func addAccount() {
-        guard let targetGroup = targetGroup else { return }
-
         if addAccountMode == .archived {
             guard let archivedAccountID = selectedArchivedAccountID else { return }
             viewModel.handle(.restoreArchivedAccountToGroup(
@@ -567,7 +615,7 @@ struct FinanceAddAccountView: View {
         }
     }
     
-    private func createCardAndAddToGroup(cardViewModel: CardViewModel, group: FinanceGroup) {
+    private func createCardAndAddToGroup(cardViewModel: CardViewModel, group: FinanceGroup?) {
         guard let cardData = cardData else { return }
         
         if cardData.uniqueID.isEmpty {
@@ -589,7 +637,7 @@ struct FinanceAddAccountView: View {
         dismiss()
     }
     
-    private func createCreditAndAddToGroup(creditViewModel: CreditViewModel, group: FinanceGroup) {
+    private func createCreditAndAddToGroup(creditViewModel: CreditViewModel, group: FinanceGroup?) {
         guard let creditData = creditData else { return }
         let createdCreditID = UUID().uuidString
         
@@ -618,7 +666,7 @@ struct FinanceAddAccountView: View {
         dismiss()
     }
     
-    private func createInvestmentAndAddToGroup(investmentViewModel: InvestmentViewModel, group: FinanceGroup) {
+    private func createInvestmentAndAddToGroup(investmentViewModel: InvestmentViewModel, group: FinanceGroup?) {
         guard let investmentData = investmentData else { return }
         let createdInvestmentID = UUID().uuidString
         
@@ -694,6 +742,6 @@ enum FinanceAddAccountGroupSelection {
             return preselectedGroup
         }
         
-        return groups.first
+        return nil
     }
 }

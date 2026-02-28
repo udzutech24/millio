@@ -164,6 +164,8 @@ struct DisplayCurrencySheet: View {
                 }
             }
         }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
     }
 }
 

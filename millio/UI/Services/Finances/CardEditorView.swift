@@ -18,6 +18,7 @@ struct CardEditorView: View {
 
     @Environment(\.dismiss) private var dismiss
 
+    @State private var balanceText: String = ""
     @State private var creditLimitText: String = ""
     @State private var availableCurrencies: [String] = ["RUB", "USD", "EUR"]
     @State private var isLoadingCurrencies: Bool = false
@@ -44,6 +45,7 @@ struct CardEditorView: View {
             )
             newCard.uniqueID = editing.uniqueID
             _card = State(initialValue: newCard)
+            _balanceText = State(initialValue: AmountInputFormatter.plainString(from: editing.balance))
             _creditLimitText = State(initialValue: editing.creditLimit.map { String(format: "%.2f", $0) } ?? "")
             _isNewCard = State(initialValue: false)
         } else {
@@ -56,6 +58,7 @@ struct CardEditorView: View {
                 currency: "RUB",
                 balance: 0.0
             ))
+            _balanceText = State(initialValue: "")
             _creditLimitText = State(initialValue: "")
             _isNewCard = State(initialValue: true)
         }
@@ -76,6 +79,8 @@ struct CardEditorView: View {
                     .padding(.bottom, 40)
                     .padding(.horizontal, 16)
                 }
+                .scrollDismissesKeyboard(.immediately)
+                .dismissKeyboardOnTap()
             }
             .navigationTitle(isNewCard ? "Новая карта" : "Редактирование")
             .navigationBarTitleDisplayMode(.inline)
@@ -182,6 +187,8 @@ struct CardEditorView: View {
                             if newValue == CardType.debit.rawValue {
                                 card.creditLimit = nil
                                 creditLimitText = ""
+                            } else {
+                                card.includeInTotal = true
                             }
                         }
                     }
@@ -223,7 +230,14 @@ struct CardEditorView: View {
                         Text("Баланс")
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        TextField("0", value: $card.balance, format: .number)
+                        TextField("0", text: Binding(
+                            get: { AmountInputFormatter.display(balanceText) },
+                            set: { newValue in
+                                let sanitized = AmountInputFormatter.sanitize(newValue)
+                                balanceText = AmountInputFormatter.display(sanitized)
+                                card.balance = AmountInputFormatter.parse(balanceText) ?? 0
+                            }
+                        ))
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                             .foregroundStyle(AppColors.textPrimary)
@@ -239,18 +253,22 @@ struct CardEditorView: View {
                             Text("Кредитный лимит")
                                 .foregroundStyle(AppColors.textPrimary)
                             Spacer()
-                            TextField("0", text: $creditLimitText)
+                            TextField("0", text: Binding(
+                                get: { AmountInputFormatter.display(creditLimitText) },
+                                set: { newValue in
+                                    let sanitized = AmountInputFormatter.sanitize(newValue)
+                                    creditLimitText = AmountInputFormatter.display(sanitized)
+                                    if let limit = AmountInputFormatter.parse(creditLimitText) {
+                                        card.creditLimit = limit
+                                    } else if creditLimitText.isEmpty {
+                                        card.creditLimit = nil
+                                    }
+                                }
+                            ))
                                 .keyboardType(.decimalPad)
                                 .multilineTextAlignment(.trailing)
                                 .foregroundStyle(AppColors.textPrimary)
                                 .frame(maxWidth: 150)
-                                .onChange(of: creditLimitText) { _, newValue in
-                                    if let limit = Double(newValue.replacingOccurrences(of: ",", with: ".")) {
-                                        card.creditLimit = limit
-                                    } else if newValue.isEmpty {
-                                        card.creditLimit = nil
-                                    }
-                                }
                         }
                         .padding(.vertical, 12)
                         .padding(.horizontal, 16)

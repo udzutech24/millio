@@ -37,8 +37,8 @@ struct FinanceAddAccountGroupSelectionTests {
         #expect(resolved?.groupUniqueID == primary.groupUniqueID)
     }
 
-    @Test("Падает назад на первую группу, если нет выбранной и предвыбранной")
-    func testResolveSelectedGroupFallsBackToFirstGroup() {
+    @Test("Возвращает nil, если нет выбранной и предвыбранной группы")
+    func testResolveSelectedGroupReturnsNilWithoutExplicitSelection() {
         let primary = FinanceGroup(name: "Основная", colorHex: "#FF0000")
         let secondary = FinanceGroup(name: "Дополнительная", colorHex: "#00FF00")
 
@@ -48,7 +48,7 @@ struct FinanceAddAccountGroupSelectionTests {
             groups: [primary, secondary]
         )
 
-        #expect(resolved?.groupUniqueID == primary.groupUniqueID)
+        #expect(resolved == nil)
     }
 
     @Test("Возвращает nil, когда групп нет")

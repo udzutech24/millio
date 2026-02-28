@@ -49,6 +49,8 @@ struct FinanceGroupEditorView: View {
                     .padding(.bottom, 40)
                     .padding(.horizontal, 16)
                 }
+                .scrollDismissesKeyboard(.immediately)
+                .dismissKeyboardOnTap()
             }
             .navigationTitle(viewModel.state.editingGroup == nil ? "Новая группа" : "Редактировать")
             .navigationBarTitleDisplayMode(.inline)
@@ -117,7 +119,7 @@ struct FinanceGroupEditorView: View {
                         }
                     }
                 }
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
         }

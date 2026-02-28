@@ -47,6 +47,8 @@ struct CreditEditorView: View {
                     .padding(.bottom, 40)
                     .padding(.horizontal, 16)
                 }
+                .scrollDismissesKeyboard(.immediately)
+                .dismissKeyboardOnTap()
             }
             .navigationTitle(viewModel.state.editingCredit == nil ? "Новый кредит" : "Редактировать")
             .navigationBarTitleDisplayMode(.inline)
@@ -127,9 +129,8 @@ struct CreditEditorView: View {
                         TextField("0", text: Binding(
                             get: { formatNumberForDisplay(amountText) },
                             set: { newValue in
-                                let normalized = newValue.replacingOccurrences(of: " ", with: "")
-                                    .replacingOccurrences(of: ",", with: ".")
-                                amountText = normalized
+                                let sanitized = AmountInputFormatter.sanitize(newValue)
+                                amountText = AmountInputFormatter.display(sanitized)
                             }
                         ))
                         .keyboardType(.decimalPad)
@@ -149,9 +150,8 @@ struct CreditEditorView: View {
                         TextField("0", text: Binding(
                             get: { formatNumberForDisplay(remainingAmountText) },
                             set: { newValue in
-                                let normalized = newValue.replacingOccurrences(of: " ", with: "")
-                                    .replacingOccurrences(of: ",", with: ".")
-                                remainingAmountText = normalized
+                                let sanitized = AmountInputFormatter.sanitize(newValue)
+                                remainingAmountText = AmountInputFormatter.display(sanitized)
                             }
                         ))
                         .keyboardType(.decimalPad)
@@ -286,8 +286,7 @@ struct CreditEditorView: View {
     }
 
     private func parseNumber(_ text: String) -> Double? {
-        let normalized = normalizeNumber(text)
-        return Double(normalized)
+        AmountInputFormatter.parse(text)
     }
 
     private func parseDecimal(_ text: String) -> Double? {
@@ -296,26 +295,7 @@ struct CreditEditorView: View {
     }
 
     private func formatNumberForDisplay(_ text: String) -> String {
-        guard !text.isEmpty else { return text }
-
-        guard let number = parseNumber(text) else {
-            return text
-        }
-
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.groupingSeparator = " "
-        formatter.usesGroupingSeparator = true
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 2
-
-        let normalized = normalizeNumber(text)
-        let hasDecimal = normalized.contains(".")
-        if !hasDecimal {
-            formatter.maximumFractionDigits = 0
-        }
-
-        return formatter.string(from: NSNumber(value: number)) ?? text
+        AmountInputFormatter.display(text)
     }
 
     private func saveCredit() {

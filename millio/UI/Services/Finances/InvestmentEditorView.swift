@@ -101,6 +101,8 @@ struct InvestmentEditorView: View {
                     .padding(.bottom, 40)
                     .padding(.horizontal, 16)
                 }
+                .scrollDismissesKeyboard(.immediately)
+                .dismissKeyboardOnTap()
             }
             .navigationTitle(viewModel.state.editingInvestment == nil ? "Новый актив" : "Редактировать")
             .navigationBarTitleDisplayMode(.inline)
@@ -174,7 +176,7 @@ struct InvestmentEditorView: View {
                 MarketSymbolSearchSheet(filter: marketFilter) { symbol in
                     applySelectedMarketSymbol(symbol)
                 }
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
         }
@@ -303,10 +305,8 @@ struct InvestmentEditorView: View {
                 TextField("0", text: Binding(
                     get: { formatNumberForDisplay(marketQuantityText) },
                     set: { newValue in
-                        let normalized = newValue
-                            .replacingOccurrences(of: " ", with: "")
-                            .replacingOccurrences(of: ",", with: ".")
-                        marketQuantityText = normalized
+                        let sanitized = AmountInputFormatter.sanitize(newValue)
+                        marketQuantityText = AmountInputFormatter.display(sanitized)
                     }
                 ))
                 .keyboardType(.decimalPad)
@@ -377,9 +377,8 @@ struct InvestmentEditorView: View {
                 TextField("0", text: Binding(
                     get: { formatNumberForDisplay(amountText) },
                     set: { newValue in
-                        let normalized = newValue.replacingOccurrences(of: " ", with: "")
-                            .replacingOccurrences(of: ",", with: ".")
-                        amountText = normalized
+                        let sanitized = AmountInputFormatter.sanitize(newValue)
+                        amountText = AmountInputFormatter.display(sanitized)
                     }
                 ))
                 .keyboardType(.decimalPad)
@@ -578,8 +577,7 @@ struct InvestmentEditorView: View {
     }
 
     private func parseNumber(_ text: String) -> Double? {
-        let normalized = normalizeNumber(text)
-        return Double(normalized)
+        AmountInputFormatter.parse(text)
     }
 
     private func formatOptionalPrice(_ value: Double?) -> String {
@@ -600,26 +598,7 @@ struct InvestmentEditorView: View {
     }
 
     private func formatNumberForDisplay(_ text: String) -> String {
-        guard !text.isEmpty else { return text }
-
-        guard let number = parseNumber(text) else {
-            return text
-        }
-
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.groupingSeparator = " "
-        formatter.usesGroupingSeparator = true
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 2
-
-        let normalized = normalizeNumber(text)
-        let hasDecimal = normalized.contains(".")
-        if !hasDecimal {
-            formatter.maximumFractionDigits = 0
-        }
-
-        return formatter.string(from: NSNumber(value: number)) ?? text
+        AmountInputFormatter.display(text)
     }
 
     private func saveInvestment() {

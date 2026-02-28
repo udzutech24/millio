@@ -210,6 +210,8 @@ final class FinanceViewModel: ViewModelProtocol {
     let currencyService: CurrencyRateServiceProtocol
 
     private let defaults = UserDefaults.standard
+    private let ungroupedGroupName = "Без группы"
+    private let ungroupedGroupColorHex = "#3C4B5E"
     private var financeEventsSubscriptionID: UUID?
 
     /// Быстрые словари для поиска счетов по ID (O(1) вместо O(n))
@@ -1090,8 +1092,8 @@ final class FinanceViewModel: ViewModelProtocol {
     }
     
     private func addAccountToGroup(accountType: FinanceAccountType, accountID: String, group: FinanceGroup?) {
-        guard let targetGroup = group else {
-            AppLogger.log(.error, category: "Finance", "Group is required")
+        guard let targetGroup = group ?? ensureUngroupedGroup() else {
+            AppLogger.log(.error, category: "Finance", "Failed to resolve target group")
             return
         }
         
@@ -1246,13 +1248,8 @@ final class FinanceViewModel: ViewModelProtocol {
     }
 
     private func restoreArchivedAccountToGroup(accountType: FinanceAccountType, accountID: String, group: FinanceGroup?) {
-        guard let targetGroup = group else {
-            AppLogger.log(.error, category: "Finance", "Group is required")
-            return
-        }
-
         let kind = updateUnderlyingArchiveState(accountType: accountType, accountID: accountID, archivedAt: nil)
-        addAccountToGroup(accountType: accountType, accountID: accountID, group: targetGroup)
+        addAccountToGroup(accountType: accountType, accountID: accountID, group: group)
 
         if kind == .card {
             EventBus.shared.publish(FinanceEvent.cardsUpdated)
@@ -1260,6 +1257,29 @@ final class FinanceViewModel: ViewModelProtocol {
         if kind == .credit {
             EventBus.shared.publish(FinanceEvent.creditsUpdated)
         }
+    }
+
+    private func ensureUngroupedGroup() -> FinanceGroup? {
+        if let existing = state.groups.first(where: { $0.name == ungroupedGroupName }) {
+            return existing
+        }
+
+        let descriptor = FetchDescriptor<FinanceGroup>()
+        if let groups = try? modelContext.fetch(descriptor),
+           let existing = groups.first(where: { $0.name == ungroupedGroupName }) {
+            return existing
+        }
+
+        let maxOrder = state.groups.map(\.order).max() ?? -1
+        let group = FinanceGroup(
+            name: ungroupedGroupName,
+            colorHex: ungroupedGroupColorHex,
+            order: maxOrder + 1,
+            isFavorite: false,
+            priority: .low
+        )
+        modelContext.insert(group)
+        return group
     }
     
     private func editAccount(_ account: FinanceAccount) {

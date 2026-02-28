@@ -85,6 +85,8 @@ struct CashflowTransactionEditorView: View {
                     .padding(.bottom, 40)
                     .padding(.horizontal, 16)
                 }
+                .scrollDismissesKeyboard(.immediately)
+                .dismissKeyboardOnTap()
             }
             .navigationTitle(editingTransaction == nil ? "Новая операция" : "Редактировать")
             .navigationBarTitleDisplayMode(.inline)
@@ -171,7 +173,7 @@ struct CashflowTransactionEditorView: View {
                         }
                     }
                 }
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
         }
@@ -290,9 +292,8 @@ struct CashflowTransactionEditorView: View {
                         TextField("0", text: Binding(
                             get: { formatNumberForDisplay(amountText) },
                             set: { newValue in
-                                let normalized = newValue.replacingOccurrences(of: " ", with: "")
-                                    .replacingOccurrences(of: ",", with: ".")
-                                amountText = normalized
+                                let sanitized = AmountInputFormatter.sanitize(newValue)
+                                amountText = AmountInputFormatter.display(sanitized)
                             }
                         ))
                         .keyboardType(.decimalPad)
@@ -655,7 +656,9 @@ struct CashflowTransactionEditorView: View {
     }
 
     private func parseAmount() -> Double? {
-        let normalized = amountText.replacingOccurrences(of: ",", with: ".")
+        let normalized = amountText
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: ",", with: ".")
         return Double(normalized)
     }
 
