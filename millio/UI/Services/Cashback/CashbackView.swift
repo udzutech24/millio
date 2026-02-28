@@ -735,7 +735,13 @@ private struct CashbackEditorView: View {
                     .padding(.top, 20)
                     .padding(.bottom, 24)
                 }
+                .scrollDismissesKeyboard(.immediately)
             }
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    dismissKeyboard()
+                }
+            )
             .navigationTitle(viewModel.state.editingCashback == nil ? "Новый кешбэк" : "Редактировать кешбэк")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -929,6 +935,12 @@ private struct CashbackEditorView: View {
                                         cardCashbacks[category.rawValue] = "5"
                                     }
                                 }
+
+                                if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    searchText = ""
+                                    isShowingAllCategories = false
+                                }
+                                dismissKeyboard()
                             } label: {
                                 HStack(spacing: 8) {
                                     Image(systemName: category.icon)
@@ -1357,6 +1369,12 @@ private struct CashbackEditorView: View {
             cardCashbacks[raw] = text
         }
     }
+
+    private func dismissKeyboard() {
+        #if canImport(UIKit)
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        #endif
+    }
 }
 
 private struct CashbackCategoryEditorSheet: View {
@@ -1425,7 +1443,13 @@ private struct CashbackCategoryEditorSheet: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 16)
                 }
+                .scrollDismissesKeyboard(.immediately)
             }
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    dismissKeyboard()
+                }
+            )
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1452,6 +1476,12 @@ private struct CashbackCategoryEditorSheet: View {
                 }
             }
         }
+    }
+
+    private func dismissKeyboard() {
+        #if canImport(UIKit)
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        #endif
     }
 }
 
