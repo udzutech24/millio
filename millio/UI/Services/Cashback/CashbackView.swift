@@ -441,7 +441,9 @@ private struct CashbackRowView: View {
     @State private var dragOriginOffset: CGFloat?
 
     private let deleteRevealWidth: CGFloat = 122
-    private let pinRevealWidth: CGFloat = 124
+    private let pinButtonWidth: CGFloat = 124
+    private let editButtonWidth: CGFloat = 124
+    private var leadingActionsWidth: CGFloat { pinButtonWidth + editButtonWidth + 8 }
     private var isFavoriteCategory: Bool {
         viewModel.isFavoriteCategory(rawValue: cashback.categoryRaw)
     }
@@ -456,30 +458,55 @@ private struct CashbackRowView: View {
 
         ZStack(alignment: .trailing) {
             HStack {
-                Button {
-                    withAnimation(.easeOut(duration: 0.16)) {
-                        rowOffset = 0
+                HStack(spacing: 8) {
+                    Button {
+                        withAnimation(.easeOut(duration: 0.16)) {
+                            rowOffset = 0
+                        }
+                        activeSwipeCashbackID = nil
+                        viewModel.handle(.togglePinnedCategory(rawValue: cashback.categoryRaw))
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: isPinned ? "pin.slash.fill" : "pin.fill")
+                                .font(.system(size: 15, weight: .semibold))
+                            Text(isPinned ? "Открепить" : "Вверх")
+                                .font(.system(size: 15, weight: .semibold))
+                        }
+                        .foregroundStyle(.white)
+                        .frame(width: pinButtonWidth, height: 44)
+                        .background(
+                            Capsule()
+                                .fill(Color.orange)
+                        )
                     }
-                    activeSwipeCashbackID = nil
-                    viewModel.handle(.togglePinnedCategory(rawValue: cashback.categoryRaw))
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: isPinned ? "pin.slash.fill" : "pin.fill")
-                            .font(.system(size: 15, weight: .semibold))
-                        Text(isPinned ? "Открепить" : "Вверх")
-                            .font(.system(size: 15, weight: .semibold))
+                    .buttonStyle(.plain)
+                    .disabled(isFavorite)
+                    .opacity(isFavorite ? 0.45 : 1)
+
+                    Button {
+                        withAnimation(.easeOut(duration: 0.16)) {
+                            rowOffset = 0
+                        }
+                        activeSwipeCashbackID = nil
+                        viewModel.handle(.editCashback(cashback))
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 15, weight: .semibold))
+                            Text("Изменить")
+                                .font(.system(size: 15, weight: .semibold))
+                        }
+                        .foregroundStyle(.white)
+                        .frame(width: editButtonWidth, height: 44)
+                        .background(
+                            Capsule()
+                                .fill(cashbackAccent)
+                        )
                     }
-                    .foregroundStyle(.white)
-                    .frame(width: pinRevealWidth, height: 44)
-                    .background(
-                        Capsule()
-                            .fill(Color.orange)
-                    )
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
                 .padding(.leading, 12)
                 .opacity(rowOffset > 12 ? 1 : 0)
-                .disabled(isFavorite)
 
                 Spacer()
             }
@@ -604,7 +631,7 @@ private struct CashbackRowView: View {
                 }
                 let origin = dragOriginOffset ?? rowOffset
                 let proposed = origin + value.translation.width
-                let maxRight = isFavoriteCategory ? CGFloat.zero : pinRevealWidth
+                let maxRight = leadingActionsWidth
                 rowOffset = min(maxRight, max(-deleteRevealWidth, proposed))
             }
             .onEnded { value in
@@ -612,13 +639,13 @@ private struct CashbackRowView: View {
                 guard abs(value.translation.width) > abs(value.translation.height) else { return }
 
                 let shouldRevealLeft = value.predictedEndTranslation.width < -70 || rowOffset < -56
-                let shouldRevealRight = !isFavoriteCategory && (value.predictedEndTranslation.width > 70 || rowOffset > 56)
+                let shouldRevealRight = value.predictedEndTranslation.width > 90 || rowOffset > 70
                 withAnimation(.easeOut(duration: 0.16)) {
                     if shouldRevealLeft {
                         rowOffset = -deleteRevealWidth
                         activeSwipeCashbackID = cashbackID
                     } else if shouldRevealRight {
-                        rowOffset = pinRevealWidth
+                        rowOffset = leadingActionsWidth
                         activeSwipeCashbackID = cashbackID
                     } else {
                         rowOffset = 0
@@ -720,7 +747,7 @@ private struct CashbackEditorView: View {
                     .padding(.bottom, 24)
                 }
             }
-            .navigationTitle("Новый кешбэк")
+            .navigationTitle(viewModel.state.editingCashback == nil ? "Новый кешбэк" : "Редактировать кешбэк")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
