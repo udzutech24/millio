@@ -60,4 +60,40 @@ struct CashbackScreenshotParserTests {
         #expect(parsed.contains { $0.categoryName == "Топливо и АЗС" && $0.percentage == 7 })
         #expect(parsed.contains { $0.categoryName == "Все покупки" && $0.percentage == 1 })
     }
+
+    @Test("Парсер поддерживает формат категории с процентом в конце строки")
+    func testParseRecognizedLinesSupportsTrailingPercentFormat() {
+        let lines = [
+            "Кешбэк при оплате онлайн и на кассе",
+            "Все покупки +2%",
+            "Кафе, бары и рестораны +7%",
+            "Аптеки +10%",
+            "Кешбэк в Яндекс Такси",
+            "Эконом +15%"
+        ]
+
+        let parsed = CashbackScreenshotParser.parseRecognizedLines(lines)
+
+        #expect(parsed.count == 4)
+        #expect(parsed.contains { $0.categoryName == "Все покупки" && $0.percentage == 2 })
+        #expect(parsed.contains { $0.categoryName == "Кафе, бары и рестораны" && $0.percentage == 7 })
+        #expect(parsed.contains { $0.categoryName == "Аптеки" && $0.percentage == 10 })
+        #expect(parsed.contains { $0.categoryName == "Эконом" && $0.percentage == 15 })
+    }
+
+    @Test("Парсер поддерживает процент со знаком плюс на отдельной строке")
+    func testParseRecognizedLinesSupportsSplitRowsWithPlusSign() {
+        let lines = [
+            "+2%",
+            "Все покупки",
+            "＋7%",
+            "Кафе"
+        ]
+
+        let parsed = CashbackScreenshotParser.parseRecognizedLines(lines)
+
+        #expect(parsed.count == 2)
+        #expect(parsed.contains { $0.categoryName == "Все покупки" && $0.percentage == 2 })
+        #expect(parsed.contains { $0.categoryName == "Кафе" && $0.percentage == 7 })
+    }
 }

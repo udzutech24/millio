@@ -27,7 +27,7 @@ enum CashbackScreenshotImportError: LocalizedError {
         case .noTextFound:
             return "Текст на скриншоте не распознан."
         case .noCashbackLinesFound:
-            return "Не нашёл строки с кешбэком формата «5% Категория»."
+            return "Не нашёл строки с кешбэком формата «5% Категория» или «Категория +5%»."
         }
     }
 }
@@ -85,7 +85,7 @@ struct VisionCashbackScreenshotTextRecognizer: CashbackScreenshotTextRecognizing
 }
 
 /// Парсер скриншотов с категориями кешбэка. Распознаёт строки вида
-/// `5% Супермаркеты` и `до 10% Отели`.
+/// `5% Супермаркеты`, `до 10% Отели` и `Супермаркеты +5%`.
 struct CashbackScreenshotParser {
     private let textRecognizer: any CashbackScreenshotTextRecognizing
 
@@ -133,6 +133,17 @@ struct CashbackScreenshotParser {
                 continue
             }
 
+            if let (percentage, categoryName) = parseTrailingCashbackLine(currentLine) {
+                parsedItems.append(
+                    CashbackScreenshotImportItem(
+                        categoryName: categoryName,
+                        percentage: percentage
+                    )
+                )
+                index += 1
+                continue
+            }
+
             if let percentage = parsePercentageOnlyLine(currentLine),
                index + 1 < lines.count {
                 let categoryCandidate = normalizeCategoryName(lines[index + 1])
@@ -155,7 +166,7 @@ struct CashbackScreenshotParser {
     }
 
     private static func parseInlineCashbackLine(_ line: String) -> (Double, String)? {
-        let pattern = #"^(?:до\s*)?(\d{1,3}(?:[.,]\d{1,2})?)\s*%\s+(.+)$"#
+        let pattern = #"^(?:\S\s*)?(?:до\s*)?(\d{1,3}(?:[.,]\d{1,2})?)\s*%\s+(.+)$"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
             return nil
         }
@@ -177,8 +188,31 @@ struct CashbackScreenshotParser {
         return (percentage, categoryName)
     }
 
+    private static func parseTrailingCashbackLine(_ line: String) -> (Double, String)? {
+        let pattern = #"^(.+?)\s+(?:\S\s*)?(\d{1,3}(?:[.,]\d{1,2})?)\s*%$"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return nil
+        }
+        let range = NSRange(line.startIndex..<line.endIndex, in: line)
+        guard let match = regex.firstMatch(in: line, options: [], range: range),
+              match.numberOfRanges == 3,
+              let categoryRange = Range(match.range(at: 1), in: line),
+              let percentageRange = Range(match.range(at: 2), in: line) else {
+            return nil
+        }
+
+        let percentageText = String(line[percentageRange]).replacingOccurrences(of: ",", with: ".")
+        guard let percentage = Double(percentageText), percentage > 0, percentage <= 100 else {
+            return nil
+        }
+
+        let categoryName = normalizeCategoryName(String(line[categoryRange]))
+        guard !categoryName.isEmpty else { return nil }
+        return (percentage, categoryName)
+    }
+
     private static func parsePercentageOnlyLine(_ line: String) -> Double? {
-        let pattern = #"^(?:до\s*)?(\d{1,3}(?:[.,]\d{1,2})?)\s*%$"#
+        let pattern = #"^(?:\S\s*)?(?:до\s*)?(\d{1,3}(?:[.,]\d{1,2})?)\s*%$"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
             return nil
         }

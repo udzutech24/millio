@@ -38,6 +38,12 @@ struct CashbackState {
     var selectedMonth: Date = Calendar.current.date(
         from: Calendar.current.dateComponents([.year, .month], from: Date())
     ) ?? Date()
+
+    /// Избранные категории кешбэка (raw keys)
+    var favoriteCategoryRaws: Set<String> = []
+
+    /// Закрепленные категории кешбэка (raw keys)
+    var pinnedCategoryRaws: Set<String> = []
 }
 
 // MARK: - Cashback Actions
@@ -52,6 +58,8 @@ enum CashbackAction {
     case moveMonthForward
     case renameCustomCategory(rawValue: String, newName: String)
     case deleteCustomCategory(rawValue: String)
+    case toggleFavoriteCategory(rawValue: String)
+    case togglePinnedCategory(rawValue: String)
     case addCashback
     case editCashback(Cashback)
     case deleteCashback(Cashback)
@@ -75,18 +83,25 @@ final class CashbackViewModel: ViewModelProtocol {
     let modelContext: ModelContext
     private let now: () -> Date
     private let importedCategoryResolver: CashbackImportCategoryResolver
+    private let defaults: UserDefaults
+    private static let favoriteCategoryRawsKey = "cashback.favorite_category_raws"
+    private static let pinnedCategoryRawsKey = "cashback.pinned_category_raws"
     
     init(
         modelContext: ModelContext,
         now: @escaping () -> Date = Date.init,
-        importedCategoryResolver: CashbackImportCategoryResolver = CashbackImportCategoryResolver()
+        importedCategoryResolver: CashbackImportCategoryResolver = CashbackImportCategoryResolver(),
+        defaults: UserDefaults = .standard
     ) {
         self.modelContext = modelContext
         self.now = now
         self.importedCategoryResolver = importedCategoryResolver
+        self.defaults = defaults
         self.state.selectedMonth = Calendar.current.date(
             from: Calendar.current.dateComponents([.year, .month], from: now())
         ) ?? now()
+        self.state.favoriteCategoryRaws = loadFavoriteCategoryRaws()
+        self.state.pinnedCategoryRaws = loadPinnedCategoryRaws()
         // Инициализируем CardManager
         CardManager.shared.setup(modelContext: modelContext)
         // Сначала загружаем карты, потом кешбэки, чтобы правильно проверить связи
@@ -140,6 +155,12 @@ final class CashbackViewModel: ViewModelProtocol {
 
         case .deleteCustomCategory(let rawValue):
             _ = deleteCustomCategory(rawValue: rawValue)
+
+        case .toggleFavoriteCategory(let rawValue):
+            toggleFavoriteCategory(rawValue: rawValue)
+
+        case .togglePinnedCategory(let rawValue):
+            togglePinnedCategory(rawValue: rawValue)
             
         case .addCashback:
             state.editingCashback = nil
@@ -234,6 +255,14 @@ final class CashbackViewModel: ViewModelProtocol {
         return categoryOption(for: CashbackCategory.other.rawValue, fallbackName: trimmed)
     }
 
+    func isFavoriteCategory(rawValue: String) -> Bool {
+        state.favoriteCategoryRaws.contains(rawValue)
+    }
+
+    func isPinnedCategory(rawValue: String) -> Bool {
+        state.pinnedCategoryRaws.contains(rawValue)
+    }
+
     var selectedMonthTitle: String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ru_RU")
@@ -241,14 +270,18 @@ final class CashbackViewModel: ViewModelProtocol {
         return formatter.string(from: state.selectedMonth).capitalized
     }
 
+    var maxSelectableMonth: Date {
+        Calendar.current.date(
+            from: Calendar.current.dateComponents([.year, .month], from: now())
+        ) ?? now()
+    }
+
     func canMoveMonthForward() -> Bool {
         let calendar = Calendar.current
         let selected = calendar.date(
             from: calendar.dateComponents([.year, .month], from: state.selectedMonth)
         ) ?? state.selectedMonth
-        let current = calendar.date(
-            from: calendar.dateComponents([.year, .month], from: now())
-        ) ?? now()
+        let current = maxSelectableMonth
         return selected < current
     }
 
@@ -386,9 +419,7 @@ final class CashbackViewModel: ViewModelProtocol {
         let selected = calendar.date(
             from: calendar.dateComponents([.year, .month], from: state.selectedMonth)
         ) ?? state.selectedMonth
-        let current = calendar.date(
-            from: calendar.dateComponents([.year, .month], from: now())
-        ) ?? now()
+        let current = maxSelectableMonth
         let candidate = calendar.date(byAdding: .month, value: delta, to: selected) ?? selected
         state.selectedMonth = min(candidate, current)
         applyFilters()
@@ -519,7 +550,16 @@ final class CashbackViewModel: ViewModelProtocol {
         let selectedMonthKey = Cashback.monthKey(for: state.selectedMonth)
         state.visibleCashbacks = state.cashbacks
             .filter { $0.monthKey == selectedMonthKey }
-            .sorted { $0.updatedAt > $1.updatedAt }
+            .sorted { lhs, rhs in
+                let lhsFavorite = state.favoriteCategoryRaws.contains(lhs.categoryRaw)
+                let rhsFavorite = state.favoriteCategoryRaws.contains(rhs.categoryRaw)
+                if lhsFavorite != rhsFavorite { return lhsFavorite && !rhsFavorite }
+                let lhsPinned = state.pinnedCategoryRaws.contains(lhs.categoryRaw)
+                let rhsPinned = state.pinnedCategoryRaws.contains(rhs.categoryRaw)
+                if lhsPinned != rhsPinned { return lhsPinned && !rhsPinned }
+                if lhs.percentage != rhs.percentage { return lhs.percentage > rhs.percentage }
+                return lhs.updatedAt > rhs.updatedAt
+            }
     }
     
     private func deleteCashback(_ cashback: Cashback) {
@@ -675,5 +715,48 @@ final class CashbackViewModel: ViewModelProtocol {
         } catch {
             AppLogger.log(.error, category: "Cashback", "Failed to save cashbacks: \(error.localizedDescription)")
         }
+    }
+
+    private func toggleFavoriteCategory(rawValue: String) {
+        if state.favoriteCategoryRaws.contains(rawValue) {
+            state.favoriteCategoryRaws.remove(rawValue)
+        } else {
+            state.favoriteCategoryRaws.insert(rawValue)
+            state.pinnedCategoryRaws.remove(rawValue)
+            savePinnedCategoryRaws()
+        }
+        saveFavoriteCategoryRaws()
+        applyFilters()
+    }
+
+    private func loadFavoriteCategoryRaws() -> Set<String> {
+        let stored = defaults.array(forKey: Self.favoriteCategoryRawsKey) as? [String] ?? []
+        return Set(stored.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })
+    }
+
+    private func saveFavoriteCategoryRaws() {
+        defaults.set(Array(state.favoriteCategoryRaws).sorted(), forKey: Self.favoriteCategoryRawsKey)
+    }
+
+    private func togglePinnedCategory(rawValue: String) {
+        if state.favoriteCategoryRaws.contains(rawValue) {
+            return
+        }
+        if state.pinnedCategoryRaws.contains(rawValue) {
+            state.pinnedCategoryRaws.remove(rawValue)
+        } else {
+            state.pinnedCategoryRaws.insert(rawValue)
+        }
+        savePinnedCategoryRaws()
+        applyFilters()
+    }
+
+    private func loadPinnedCategoryRaws() -> Set<String> {
+        let stored = defaults.array(forKey: Self.pinnedCategoryRawsKey) as? [String] ?? []
+        return Set(stored.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })
+    }
+
+    private func savePinnedCategoryRaws() {
+        defaults.set(Array(state.pinnedCategoryRaws).sorted(), forKey: Self.pinnedCategoryRawsKey)
     }
 }
