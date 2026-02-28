@@ -22,6 +22,7 @@ struct PrimaryCurrencySelectionView: View {
                 selectedCodes: favoriteCurrencyCodes,
                 favoriteCodes: Set(favoriteCurrencyCodes),
                 currentSelection: primaryCurrencyCode,
+                primaryPinnedCode: primaryCurrencyCode,
                 onToggleFavorite: toggleFavorite,
                 onSelect: { code in
                     primaryCurrencyCode = code

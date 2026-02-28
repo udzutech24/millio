@@ -233,6 +233,10 @@ public struct CurrencyPickerView: View {
     public let selectedCodes: [String]   // закрепленные сверху (контекстно: избранные / выбранные)
     public let favoriteCodes: Set<String>
     public let currentSelection: String?
+    /// Отдельно закрепленный сверху код (например, основная валюта в профиле).
+    public let primaryPinnedCode: String?
+    /// Заголовок для отдельной верхней секции.
+    public let primaryPinnedTitle: String
     public let onToggleFavorite: ((String) -> Void)?
     public let onSelect: (String) -> Void
 
@@ -242,6 +246,8 @@ public struct CurrencyPickerView: View {
         selectedCodes: [String],
         favoriteCodes: Set<String> = [],
         currentSelection: String? = nil,
+        primaryPinnedCode: String? = nil,
+        primaryPinnedTitle: String = "Основная валюта",
         onToggleFavorite: ((String) -> Void)? = nil,
         onSelect: @escaping (String) -> Void
     ) {
@@ -250,6 +256,8 @@ public struct CurrencyPickerView: View {
         self.selectedCodes = selectedCodes.map { $0.uppercased() }
         self.favoriteCodes = Set(favoriteCodes.map { $0.uppercased() })
         self.currentSelection = currentSelection?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        self.primaryPinnedCode = primaryPinnedCode?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        self.primaryPinnedTitle = primaryPinnedTitle
         self.onToggleFavorite = onToggleFavorite
         self.onSelect = onSelect
     }
@@ -281,6 +289,7 @@ public struct CurrencyPickerView: View {
         return allCodes
             .filter { matches($0) }
             .filter { !setSelected.contains($0.uppercased()) }
+            .filter { $0.uppercased() != primaryDisplayCode }
             .sorted()
     }
 
@@ -290,8 +299,23 @@ public struct CurrencyPickerView: View {
         // return selectedCodes
 
         // Вариант B (лучше): избранные сверху, но только если подходят под поиск
-        if q.isEmpty { return selectedCodes }
-        return selectedCodes.filter { matches($0) }
+        let filteredByPrimary = selectedCodes.filter { $0.uppercased() != primaryDisplayCode }
+        if q.isEmpty { return filteredByPrimary }
+        return filteredByPrimary.filter { matches($0) }
+    }
+
+    /// Основная валюта отдельной секцией сверху.
+    private var primarySectionCode: String? {
+        guard let primaryDisplayCode else { return nil }
+        guard allCodes.contains(primaryDisplayCode) else { return nil }
+        if q.isEmpty || matches(primaryDisplayCode) {
+            return primaryDisplayCode
+        }
+        return nil
+    }
+
+    private var primaryDisplayCode: String? {
+        primaryPinnedCode ?? currentSelection
     }
 
     public var body: some View {
@@ -306,13 +330,34 @@ public struct CurrencyPickerView: View {
                 
                 ScrollView {
                     LazyVStack(spacing: 8) {
+                        if let primaryCode = primarySectionCode {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(primaryPinnedTitle)
+                                    .font(.system(size: 16, weight: .regular))
+                                    .foregroundStyle(AppColors.textSecondary)
+                                    .padding(.horizontal, 20)
+                                    .padding(.top, 8)
+
+                                SelectionSectionCard {
+                                    currencyRow(
+                                        code: primaryCode,
+                                        isSelected: currentSelection == primaryCode.uppercased(),
+                                        isFavorite: favoriteCodes.contains(primaryCode.uppercased()),
+                                        showDivider: false,
+                                        dividerColor: AppColors.textPrimary.opacity(0.08)
+                                    )
+                                }
+                                .padding(.horizontal, 16)
+                            }
+                        }
+
                         if !pinnedFavorites.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Избранные")
                                     .font(.system(size: 16, weight: .regular))
                                     .foregroundStyle(AppColors.textSecondary)
                                     .padding(.horizontal, 20)
-                                    .padding(.top, 8)
+                                    .padding(.top, primarySectionCode == nil ? 8 : 16)
 
                                 SelectionSectionCard {
                                     ForEach(Array(pinnedFavorites.enumerated()), id: \.element) { index, code in
@@ -333,7 +378,7 @@ public struct CurrencyPickerView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 // Если есть избранные, отступаем больше
                                 // Если избранных нет (например, поиск всё отфильтровал), то отступ меньше
-                                let topPadding: CGFloat = pinnedFavorites.isEmpty ? 8 : 16
+                                let topPadding: CGFloat = (pinnedFavorites.isEmpty && primarySectionCode == nil) ? 8 : 16
                                 
                                 // Заголовок секции, если нужно (в дизайне "Все валюты" может не быть, но оставим для ясности)
                                 // На скрине "Избранные" есть. А для списка ниже заголовка не видно, но лучше оставить или убрать?
