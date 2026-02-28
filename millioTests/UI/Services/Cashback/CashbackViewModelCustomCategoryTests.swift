@@ -36,6 +36,13 @@ struct CashbackViewModelCustomCategoryTests {
         Calendar.current.date(from: DateComponents(year: year, month: month, day: 1)) ?? Date()
     }
 
+    private func makeDefaults() -> UserDefaults {
+        let suiteName = "CashbackViewModelCustomCategoryTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName) ?? .standard
+        defaults.removePersistentDomain(forName: suiteName)
+        return defaults
+    }
+
     @Test("Создание пользовательской категории сохраняет её и возвращает custom raw")
     func testCreateCustomCategoryStoresModel() throws {
         let context = try createModelContext()
@@ -222,9 +229,70 @@ struct CashbackViewModelCustomCategoryTests {
         let now = Calendar.current.date(from: DateComponents(year: 2026, month: 2, day: 21)) ?? Date()
         let expected = Calendar.current.date(from: DateComponents(year: 2026, month: 2, day: 1)) ?? now
 
-        let viewModel = CashbackViewModel(modelContext: context, now: { now })
+        let viewModel = CashbackViewModel(
+            modelContext: context,
+            now: { now },
+            defaults: makeDefaults()
+        )
 
         #expect(viewModel.maxSelectableMonth == expected)
+    }
+
+    @Test("Избранные категории сортируются выше остальных")
+    func testFavoriteCategoriesAreSortedFirst() throws {
+        let context = try createModelContext()
+        let defaults = makeDefaults()
+        let february = monthDate(year: 2026, month: 2)
+
+        context.insert(Cashback(
+            name: "Бензин",
+            category: .gasStation,
+            percentage: 5,
+            cardIDs: [],
+            monthKey: Cashback.monthKey(for: february)
+        ))
+        context.insert(Cashback(
+            name: "Аптеки",
+            category: .pharmacy,
+            percentage: 10,
+            cardIDs: [],
+            monthKey: Cashback.monthKey(for: february)
+        ))
+        try context.save()
+
+        let viewModel = CashbackViewModel(
+            modelContext: context,
+            now: { february },
+            defaults: defaults
+        )
+
+        #expect(viewModel.state.visibleCashbacks.first?.categoryRaw == CashbackCategory.pharmacy.rawValue)
+
+        viewModel.handle(.toggleFavoriteCategory(rawValue: CashbackCategory.gasStation.rawValue))
+
+        #expect(viewModel.state.visibleCashbacks.first?.categoryRaw == CashbackCategory.gasStation.rawValue)
+    }
+
+    @Test("Избранные категории кешбэка сохраняются в UserDefaults")
+    func testFavoriteCategoriesPersistAcrossViewModelInstances() throws {
+        let context = try createModelContext()
+        let defaults = makeDefaults()
+        let now = monthDate(year: 2026, month: 2)
+
+        let first = CashbackViewModel(
+            modelContext: context,
+            now: { now },
+            defaults: defaults
+        )
+        first.handle(.toggleFavoriteCategory(rawValue: CashbackCategory.restaurant.rawValue))
+        #expect(first.isFavoriteCategory(rawValue: CashbackCategory.restaurant.rawValue))
+
+        let second = CashbackViewModel(
+            modelContext: context,
+            now: { now },
+            defaults: defaults
+        )
+        #expect(second.isFavoriteCategory(rawValue: CashbackCategory.restaurant.rawValue))
     }
 
     @Test("Одинаковая категория и карта создаются раздельно для разных месяцев")
