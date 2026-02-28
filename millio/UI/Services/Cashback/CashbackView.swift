@@ -69,6 +69,7 @@ private struct CashbackContentViewInternal: View {
     @ObservedObject var viewModel: CashbackViewModel
     @State private var showMonthPickerSheet: Bool = false
     @State private var showFavoriteCategoriesSheet: Bool = false
+    @State private var activeSwipeCashbackID: PersistentIdentifier?
 
     var body: some View {
         ZStack {
@@ -229,7 +230,12 @@ private struct CashbackContentViewInternal: View {
 
         return VStack(spacing: 0) {
             ForEach(Array(viewModel.state.visibleCashbacks.enumerated()), id: \.element.id) { index, cashback in
-                CashbackRowView(cashback: cashback, viewModel: viewModel)
+                CashbackRowView(
+                    cashback: cashback,
+                    cashbackID: cashback.id,
+                    activeSwipeCashbackID: $activeSwipeCashbackID,
+                    viewModel: viewModel
+                )
                 if index < viewModel.state.visibleCashbacks.count - 1 {
                     Rectangle()
                         .fill(Color.white.opacity(0.08))
@@ -428,20 +434,56 @@ private struct CashbackFavoriteCategoriesSheet: View {
 
 private struct CashbackRowView: View {
     let cashback: Cashback
+    let cashbackID: PersistentIdentifier
+    @Binding var activeSwipeCashbackID: PersistentIdentifier?
     @ObservedObject var viewModel: CashbackViewModel
     @State private var rowOffset: CGFloat = 0
     @State private var dragOriginOffset: CGFloat?
 
     private let deleteRevealWidth: CGFloat = 122
+    private let pinRevealWidth: CGFloat = 124
+    private var isFavoriteCategory: Bool {
+        viewModel.isFavoriteCategory(rawValue: cashback.categoryRaw)
+    }
 
     var body: some View {
         let categoryOption = viewModel.categoryOption(
             for: cashback.categoryRaw,
             fallbackName: cashback.name
         )
-        let isFavorite = viewModel.isFavoriteCategory(rawValue: cashback.categoryRaw)
+        let isFavorite = isFavoriteCategory
+        let isPinned = viewModel.isPinnedCategory(rawValue: cashback.categoryRaw)
 
         ZStack(alignment: .trailing) {
+            HStack {
+                Button {
+                    withAnimation(.easeOut(duration: 0.16)) {
+                        rowOffset = 0
+                    }
+                    activeSwipeCashbackID = nil
+                    viewModel.handle(.togglePinnedCategory(rawValue: cashback.categoryRaw))
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: isPinned ? "pin.slash.fill" : "pin.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                        Text(isPinned ? "Открепить" : "Вверх")
+                            .font(.system(size: 15, weight: .semibold))
+                    }
+                    .foregroundStyle(.white)
+                    .frame(width: pinRevealWidth, height: 44)
+                    .background(
+                        Capsule()
+                            .fill(Color.orange)
+                    )
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, 12)
+                .opacity(rowOffset > 12 ? 1 : 0)
+                .disabled(isFavorite)
+
+                Spacer()
+            }
+
             HStack(spacing: 14) {
                 Image(systemName: categoryOption.icon)
                     .font(.system(size: 20, weight: .semibold))
@@ -474,6 +516,16 @@ private struct CashbackRowView: View {
                                     Capsule()
                                         .fill(Color.orange.opacity(0.2))
                                 )
+                        } else if isPinned {
+                            Text("PIN")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(AppColors.textPrimary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule()
+                                        .fill(Color.white.opacity(0.14))
+                                )
                         }
                     }
 
@@ -494,14 +546,22 @@ private struct CashbackRowView: View {
             .offset(x: rowOffset)
             .gesture(deleteSwipeGesture)
             .onTapGesture {
-                if rowOffset < 0 {
+                if rowOffset != 0 {
+                    withAnimation(.easeOut(duration: 0.16)) {
+                        rowOffset = 0
+                    }
+                    activeSwipeCashbackID = nil
+                }
+            }
+            .animation(.easeOut(duration: 0.16), value: rowOffset)
+            .clipped()
+            .onChange(of: activeSwipeCashbackID) { _, newValue in
+                if newValue != cashbackID && rowOffset != 0 {
                     withAnimation(.easeOut(duration: 0.16)) {
                         rowOffset = 0
                     }
                 }
             }
-            .animation(.easeOut(duration: 0.16), value: rowOffset)
-            .clipped()
 
             HStack {
                 Spacer()
@@ -509,6 +569,7 @@ private struct CashbackRowView: View {
                     withAnimation(.easeOut(duration: 0.16)) {
                         rowOffset = 0
                     }
+                    activeSwipeCashbackID = nil
                     viewModel.handle(.deleteCashback(cashback))
                 } label: {
                     HStack(spacing: 8) {
@@ -535,20 +596,36 @@ private struct CashbackRowView: View {
         DragGesture(minimumDistance: 8)
             .onChanged { value in
                 guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                if activeSwipeCashbackID != cashbackID {
+                    activeSwipeCashbackID = cashbackID
+                }
                 if dragOriginOffset == nil {
                     dragOriginOffset = rowOffset
                 }
                 let origin = dragOriginOffset ?? rowOffset
                 let proposed = origin + value.translation.width
-                rowOffset = min(0, max(-deleteRevealWidth, proposed))
+                let maxRight = isFavoriteCategory ? CGFloat.zero : pinRevealWidth
+                rowOffset = min(maxRight, max(-deleteRevealWidth, proposed))
             }
             .onEnded { value in
                 defer { dragOriginOffset = nil }
                 guard abs(value.translation.width) > abs(value.translation.height) else { return }
 
-                let shouldReveal = value.predictedEndTranslation.width < -70 || rowOffset < -56
+                let shouldRevealLeft = value.predictedEndTranslation.width < -70 || rowOffset < -56
+                let shouldRevealRight = !isFavoriteCategory && (value.predictedEndTranslation.width > 70 || rowOffset > 56)
                 withAnimation(.easeOut(duration: 0.16)) {
-                    rowOffset = shouldReveal ? -deleteRevealWidth : 0
+                    if shouldRevealLeft {
+                        rowOffset = -deleteRevealWidth
+                        activeSwipeCashbackID = cashbackID
+                    } else if shouldRevealRight {
+                        rowOffset = pinRevealWidth
+                        activeSwipeCashbackID = cashbackID
+                    } else {
+                        rowOffset = 0
+                        if activeSwipeCashbackID == cashbackID {
+                            activeSwipeCashbackID = nil
+                        }
+                    }
                 }
             }
     }

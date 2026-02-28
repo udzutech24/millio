@@ -41,6 +41,9 @@ struct CashbackState {
 
     /// Избранные категории кешбэка (raw keys)
     var favoriteCategoryRaws: Set<String> = []
+
+    /// Закрепленные категории кешбэка (raw keys)
+    var pinnedCategoryRaws: Set<String> = []
 }
 
 // MARK: - Cashback Actions
@@ -56,6 +59,7 @@ enum CashbackAction {
     case renameCustomCategory(rawValue: String, newName: String)
     case deleteCustomCategory(rawValue: String)
     case toggleFavoriteCategory(rawValue: String)
+    case togglePinnedCategory(rawValue: String)
     case addCashback
     case editCashback(Cashback)
     case deleteCashback(Cashback)
@@ -81,6 +85,7 @@ final class CashbackViewModel: ViewModelProtocol {
     private let importedCategoryResolver: CashbackImportCategoryResolver
     private let defaults: UserDefaults
     private static let favoriteCategoryRawsKey = "cashback.favorite_category_raws"
+    private static let pinnedCategoryRawsKey = "cashback.pinned_category_raws"
     
     init(
         modelContext: ModelContext,
@@ -96,6 +101,7 @@ final class CashbackViewModel: ViewModelProtocol {
             from: Calendar.current.dateComponents([.year, .month], from: now())
         ) ?? now()
         self.state.favoriteCategoryRaws = loadFavoriteCategoryRaws()
+        self.state.pinnedCategoryRaws = loadPinnedCategoryRaws()
         // Инициализируем CardManager
         CardManager.shared.setup(modelContext: modelContext)
         // Сначала загружаем карты, потом кешбэки, чтобы правильно проверить связи
@@ -152,6 +158,9 @@ final class CashbackViewModel: ViewModelProtocol {
 
         case .toggleFavoriteCategory(let rawValue):
             toggleFavoriteCategory(rawValue: rawValue)
+
+        case .togglePinnedCategory(let rawValue):
+            togglePinnedCategory(rawValue: rawValue)
             
         case .addCashback:
             state.editingCashback = nil
@@ -248,6 +257,10 @@ final class CashbackViewModel: ViewModelProtocol {
 
     func isFavoriteCategory(rawValue: String) -> Bool {
         state.favoriteCategoryRaws.contains(rawValue)
+    }
+
+    func isPinnedCategory(rawValue: String) -> Bool {
+        state.pinnedCategoryRaws.contains(rawValue)
     }
 
     var selectedMonthTitle: String {
@@ -541,6 +554,9 @@ final class CashbackViewModel: ViewModelProtocol {
                 let lhsFavorite = state.favoriteCategoryRaws.contains(lhs.categoryRaw)
                 let rhsFavorite = state.favoriteCategoryRaws.contains(rhs.categoryRaw)
                 if lhsFavorite != rhsFavorite { return lhsFavorite && !rhsFavorite }
+                let lhsPinned = state.pinnedCategoryRaws.contains(lhs.categoryRaw)
+                let rhsPinned = state.pinnedCategoryRaws.contains(rhs.categoryRaw)
+                if lhsPinned != rhsPinned { return lhsPinned && !rhsPinned }
                 if lhs.percentage != rhs.percentage { return lhs.percentage > rhs.percentage }
                 return lhs.updatedAt > rhs.updatedAt
             }
@@ -706,6 +722,8 @@ final class CashbackViewModel: ViewModelProtocol {
             state.favoriteCategoryRaws.remove(rawValue)
         } else {
             state.favoriteCategoryRaws.insert(rawValue)
+            state.pinnedCategoryRaws.remove(rawValue)
+            savePinnedCategoryRaws()
         }
         saveFavoriteCategoryRaws()
         applyFilters()
@@ -718,5 +736,27 @@ final class CashbackViewModel: ViewModelProtocol {
 
     private func saveFavoriteCategoryRaws() {
         defaults.set(Array(state.favoriteCategoryRaws).sorted(), forKey: Self.favoriteCategoryRawsKey)
+    }
+
+    private func togglePinnedCategory(rawValue: String) {
+        if state.favoriteCategoryRaws.contains(rawValue) {
+            return
+        }
+        if state.pinnedCategoryRaws.contains(rawValue) {
+            state.pinnedCategoryRaws.remove(rawValue)
+        } else {
+            state.pinnedCategoryRaws.insert(rawValue)
+        }
+        savePinnedCategoryRaws()
+        applyFilters()
+    }
+
+    private func loadPinnedCategoryRaws() -> Set<String> {
+        let stored = defaults.array(forKey: Self.pinnedCategoryRawsKey) as? [String] ?? []
+        return Set(stored.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })
+    }
+
+    private func savePinnedCategoryRaws() {
+        defaults.set(Array(state.pinnedCategoryRaws).sorted(), forKey: Self.pinnedCategoryRawsKey)
     }
 }

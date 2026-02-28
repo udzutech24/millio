@@ -273,6 +273,83 @@ struct CashbackViewModelCustomCategoryTests {
         #expect(viewModel.state.visibleCashbacks.first?.categoryRaw == CashbackCategory.gasStation.rawValue)
     }
 
+    @Test("Без избранного и закрепленного категории сортируются по проценту убыванию")
+    func testVisibleCashbacksAreSortedByPercentageDescending() throws {
+        let context = try createModelContext()
+        let defaults = makeDefaults()
+        let now = monthDate(year: 2026, month: 2)
+
+        context.insert(Cashback(
+            name: "Транспорт",
+            category: .transport,
+            percentage: 5,
+            cardIDs: [],
+            monthKey: Cashback.monthKey(for: now)
+        ))
+        context.insert(Cashback(
+            name: "Рестораны",
+            category: .restaurant,
+            percentage: 10,
+            cardIDs: [],
+            monthKey: Cashback.monthKey(for: now)
+        ))
+        try context.save()
+
+        let viewModel = CashbackViewModel(
+            modelContext: context,
+            now: { now },
+            defaults: defaults
+        )
+
+        #expect(viewModel.state.visibleCashbacks.count == 2)
+        #expect(viewModel.state.visibleCashbacks[0].categoryRaw == CashbackCategory.restaurant.rawValue)
+        #expect(viewModel.state.visibleCashbacks[1].categoryRaw == CashbackCategory.transport.rawValue)
+    }
+
+    @Test("Закрепленные выше обычных, но ниже избранных")
+    func testPinnedCategoriesAreBetweenFavoritesAndRegular() throws {
+        let context = try createModelContext()
+        let defaults = makeDefaults()
+        let now = monthDate(year: 2026, month: 2)
+
+        context.insert(Cashback(
+            name: "Рестораны",
+            category: .restaurant,
+            percentage: 5,
+            cardIDs: [],
+            monthKey: Cashback.monthKey(for: now)
+        ))
+        context.insert(Cashback(
+            name: "Транспорт",
+            category: .transport,
+            percentage: 15,
+            cardIDs: [],
+            monthKey: Cashback.monthKey(for: now)
+        ))
+        context.insert(Cashback(
+            name: "Супермаркеты",
+            category: .supermarket,
+            percentage: 10,
+            cardIDs: [],
+            monthKey: Cashback.monthKey(for: now)
+        ))
+        try context.save()
+
+        let viewModel = CashbackViewModel(
+            modelContext: context,
+            now: { now },
+            defaults: defaults
+        )
+
+        viewModel.handle(.togglePinnedCategory(rawValue: CashbackCategory.supermarket.rawValue))
+        viewModel.handle(.toggleFavoriteCategory(rawValue: CashbackCategory.restaurant.rawValue))
+
+        #expect(viewModel.state.visibleCashbacks.count == 3)
+        #expect(viewModel.state.visibleCashbacks[0].categoryRaw == CashbackCategory.restaurant.rawValue)
+        #expect(viewModel.state.visibleCashbacks[1].categoryRaw == CashbackCategory.supermarket.rawValue)
+        #expect(viewModel.state.visibleCashbacks[2].categoryRaw == CashbackCategory.transport.rawValue)
+    }
+
     @Test("Избранные категории кешбэка сохраняются в UserDefaults")
     func testFavoriteCategoriesPersistAcrossViewModelInstances() throws {
         let context = try createModelContext()
