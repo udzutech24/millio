@@ -27,8 +27,8 @@ struct CreditViewModelTests {
     /// Получить чистый контекст (очищаем данные от предыдущих тестов)
     private func createTestModelContext() throws -> ModelContext {
         let context = Self.sharedContainer.mainContext
-        try context.delete(model: CashflowTransaction.self)
-        try context.delete(model: Credit.self)
+        try context.deleteAll(CashflowTransaction.self)
+        try context.deleteAll(Credit.self)
         try context.save()
         return context
     }
@@ -64,7 +64,8 @@ struct CreditViewModelTests {
             bank: credit.bank,
             creditType: credit.creditType,
             isFavorite: credit.isFavorite,
-            includeInTotal: credit.includeInTotal
+            includeInTotal: credit.includeInTotal,
+            uniqueID: nil
         ))
 
         let descriptor = FetchDescriptor<CashflowTransaction>()
@@ -73,5 +74,78 @@ struct CreditViewModelTests {
         #expect(transactions.count == 1)
         #expect(transactions.first?.transactionType == .creditDebtAdjustment)
         #expect(abs((transactions.first?.amount ?? 0) - 200.0) < 0.01)
+    }
+
+    @Test("Ручная корректировка остатка долга сохраняется после автопересчета")
+    func testManualDebtAdjustmentPersistsAfterAutoRecalc() throws {
+        let modelContext = try createTestModelContext()
+        let viewModel = CreditViewModel(modelContext: modelContext)
+
+        let calendar = Calendar.current
+        let startDate = calendar.date(byAdding: .month, value: -2, to: Date()) ?? Date()
+        let endDate = calendar.date(byAdding: .month, value: 12, to: startDate) ?? Date()
+
+        let credit = Credit(
+            name: "Кредит с корректировкой",
+            amount: 1200.0,
+            interestRate: 0.0,
+            monthlyPayment: 100.0,
+            startDate: startDate,
+            termMonths: 12,
+            currency: "RUB",
+            bank: .other,
+            creditType: .consumer,
+            endDate: endDate
+        )
+        credit.remainingAmount = 1200.0
+        modelContext.insert(credit)
+        try modelContext.save()
+
+        viewModel.handle(.editCredit(credit))
+        viewModel.handle(.updateCredit(
+            name: credit.name,
+            amount: credit.amount,
+            monthlyPayment: credit.monthlyPayment,
+            endDate: endDate,
+            remainingAmount: 850.0,
+            currency: credit.currency,
+            bank: credit.bank,
+            creditType: credit.creditType,
+            isFavorite: credit.isFavorite,
+            includeInTotal: credit.includeInTotal,
+            uniqueID: nil
+        ))
+
+        viewModel.handle(.loadCredits)
+
+        let updated = viewModel.state.credits.first
+        #expect(abs((updated?.remainingAmount ?? 0) - 850.0) < 0.01)
+        #expect(abs((updated?.remainingAmountAdjustment ?? 0)) > 0.01)
+    }
+
+    @Test("Отрицательное значение долга клампится в 0 и корректно пишет adjustment")
+    func testNegativeRemainingAmountIsClamped() throws {
+        let modelContext = try createTestModelContext()
+        _ = CreditViewModel(modelContext: modelContext)
+
+        let credit = Credit(
+            name: "Кредит",
+            amount: 1000.0,
+            interestRate: 0.0,
+            monthlyPayment: 100.0,
+            startDate: Date(),
+            termMonths: 12,
+            currency: "RUB",
+            bank: .other,
+            creditType: .consumer
+        )
+        credit.remainingAmount = 500.0
+        modelContext.insert(credit)
+        try modelContext.save()
+
+        credit.applyManualRemainingAmount(-100.0)
+
+        #expect(credit.remainingAmount == 0.0)
+        #expect(credit.remainingAmountAdjustment <= 0.0)
     }
 }

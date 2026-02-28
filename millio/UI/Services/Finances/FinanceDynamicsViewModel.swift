@@ -89,6 +89,12 @@ struct FinanceDynamicsState {
     
     /// Показывать ли sheet с выбором периода
     var showPeriodSelector: Bool = false
+
+    /// Показывать ли архивные счета в динамике
+    var showArchivedAccounts: Bool = false
+
+    /// Предупреждение о конвертации валют в истории
+    var currencyConversionWarning: String? = nil
 }
 
 // MARK: - Dynamics Period
@@ -151,6 +157,7 @@ struct DynamicsBreakdownItem: Identifiable {
     let icon: String?
     let accountType: FinanceAccountType?
     let isCreditCard: Bool
+    let isArchived: Bool
 }
 
 // MARK: - Finance Dynamics Actions
@@ -175,6 +182,7 @@ enum FinanceDynamicsAction {
     case deselectAllAccounts
     case showPeriodSelector
     case hidePeriodSelector
+    case setShowArchivedAccounts(Bool)
 }
 
 // MARK: - Finance Dynamics ViewModel
@@ -188,8 +196,12 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     
     let modelContext: ModelContext
     let financeViewModel: FinanceViewModel
+    let currencyService: CurrencyRateServiceProtocol
+    private let historicalRateStore: HistoricalRateStore
     
     let defaults = UserDefaults.standard
+    private var eventSubscriptionID: UUID?
+    private var selectionUpdateTask: Task<Void, Never>?
     
     // Кэши для оптимизации производительности
     var cardsCache: [String: Card] = [:]
@@ -201,9 +213,19 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     var initialBalancesCache: [String: Double] = [:]
     var balanceCache: [String: Double] = [:] // Кэш для calculateBalanceAtDate: "accountID_date" -> balance
     
-    init(modelContext: ModelContext, financeViewModel: FinanceViewModel, initialGroupID: String? = nil, initialGroupCurrency: String? = nil, initialAccountID: String? = nil, initialAccountCurrency: String? = nil) {
+    init(
+        modelContext: ModelContext,
+        financeViewModel: FinanceViewModel,
+        initialGroupID: String? = nil,
+        initialGroupCurrency: String? = nil,
+        initialAccountID: String? = nil,
+        initialAccountCurrency: String? = nil,
+        currencyService: CurrencyRateServiceProtocol
+    ) {
         self.modelContext = modelContext
         self.financeViewModel = financeViewModel
+        self.currencyService = currencyService
+        self.historicalRateStore = HistoricalRateStore(modelContext: modelContext, currencyService: currencyService)
         
         // Если передан initialAccountID, устанавливаем его как выбранный счет и включаем режим одного счета
         if let accountID = initialAccountID {
@@ -230,6 +252,48 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         // Устанавливаем период по умолчанию
         if state.period == .custom && state.customPeriod == nil {
             state.period = .month
+        }
+        
+        subscribeToEvents()
+    }
+
+    convenience init(
+        modelContext: ModelContext,
+        financeViewModel: FinanceViewModel,
+        initialGroupID: String? = nil,
+        initialGroupCurrency: String? = nil,
+        initialAccountID: String? = nil,
+        initialAccountCurrency: String? = nil
+    ) {
+        self.init(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            initialGroupID: initialGroupID,
+            initialGroupCurrency: initialGroupCurrency,
+            initialAccountID: initialAccountID,
+            initialAccountCurrency: initialAccountCurrency,
+            currencyService: CurrencyRateService.shared
+        )
+    }
+    
+    deinit {
+        selectionUpdateTask?.cancel()
+        if let id = eventSubscriptionID {
+            Task { @MainActor in
+                EventBus.shared.unsubscribe(id)
+            }
+        }
+    }
+    
+    private func subscribeToEvents() {
+        eventSubscriptionID = EventBus.shared.subscribe { [weak self] event in
+            guard let self else { return }
+            switch event {
+            case BackupEvent.restoreCompleted:
+                self.loadData()
+            default:
+                break
+            }
         }
     }
     
@@ -271,8 +335,11 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             
         case .selectDateOnChart(let date):
             state.selectedDate = date
-            Task {
-                await updateCurrentBalanceAndDelta()
+            selectionUpdateTask?.cancel()
+            let selectedDateSnapshot = date
+            selectionUpdateTask = Task { [weak self] in
+                guard let self else { return }
+                await self.updateCurrentBalanceAndDelta(for: selectedDateSnapshot)
             }
             
         case .setDynamicsMode(let mode):
@@ -296,6 +363,10 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             
         case .hidePeriodSelector:
             state.showPeriodSelector = false
+
+        case .setShowArchivedAccounts(let isOn):
+            state.showArchivedAccounts = isOn
+            updateChartData()
             
         case .selectAllGroups:
             state.selectedGroupIDs = Set(state.groups.map { $0.groupUniqueID })
@@ -312,7 +383,11 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             state.selectedAccountIDs = Set(accounts.map { $0.accountUniqueID })
             // Автоматически переключаем режим
             if state.selectedAccountIDs.count == 1 {
-                state.dynamicsMode = .singleAccount(state.selectedAccountIDs.first!)
+                if let accountID = state.selectedAccountIDs.first {
+                    state.dynamicsMode = .singleAccount(accountID)
+                } else {
+                    state.dynamicsMode = .aggregated
+                }
             } else {
                 // Для нескольких счетов всегда используем агрегированный режим
                 state.dynamicsMode = .aggregated
@@ -346,7 +421,11 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 }
                 // Автоматически переключаем режим
                 if state.selectedAccountIDs.count == 1 {
-                    state.dynamicsMode = .singleAccount(state.selectedAccountIDs.first!)
+                    if let accountID = state.selectedAccountIDs.first {
+                        state.dynamicsMode = .singleAccount(accountID)
+                    } else {
+                        state.dynamicsMode = .aggregated
+                    }
                 } else {
                     // Для нескольких счетов всегда используем агрегированный режим
                     state.dynamicsMode = .aggregated
@@ -391,13 +470,13 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     /// Перестроить кэши для оптимизации производительности
     func rebuildCaches() {
         // Кэш карт
-        cardsCache = Dictionary(uniqueKeysWithValues: state.availableCards.map { ($0.cardUniqueID, $0) })
+        cardsCache = Dictionary(state.availableCards.map { ($0.cardUniqueID, $0) }, uniquingKeysWith: { first, _ in first })
         
         // Кэш кредитов
-        creditsCache = Dictionary(uniqueKeysWithValues: state.availableCredits.map { ($0.creditUniqueID, $0) })
+        creditsCache = Dictionary(state.availableCredits.map { ($0.creditUniqueID, $0) }, uniquingKeysWith: { first, _ in first })
         
         // Кэш инвестиций
-        investmentsCache = Dictionary(uniqueKeysWithValues: state.availableInvestments.map { ($0.investmentUniqueID, $0) })
+        investmentsCache = Dictionary(state.availableInvestments.map { ($0.investmentUniqueID, $0) }, uniquingKeysWith: { first, _ in first })
         
         // Очищаем кэши балансов при перезагрузке данных
         initialBalancesCache.removeAll()
@@ -466,7 +545,9 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     }
     
     func updateChartData() {
+        state.currencyConversionWarning = nil
         Task {
+            await prefetchHistoricalRatesForCurrentSelection()
             await updateChartDataAsync()
             await updateCurrentBalanceAndDelta()
             await updateDynamicsBreakdown()
@@ -526,6 +607,14 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     
     /// Обновить текущий баланс и дельту
     func updateCurrentBalanceAndDelta() async {
+        await updateCurrentBalanceAndDelta(for: state.selectedDate)
+    }
+
+    /// Обновить текущий баланс и дельту для конкретной выбранной даты.
+    /// Используется, чтобы избежать race condition при быстром выборе точек на графике.
+    private func updateCurrentBalanceAndDelta(for selectedDate: Date?) async {
+        if Task.isCancelled { return }
+
         let (startDate, endDate) = getPeriodDates()
         state.periodStartDate = startDate
         state.periodEndDate = endDate
@@ -535,14 +624,27 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         let useNetTotals = shouldUseNetTotals()
         
         // Рассчитываем текущий баланс
-        let targetDate = state.selectedDate ?? endDate
-        state.currentBalance = await calculateBalanceAtDate(
+        let targetDate: Date
+        if let selectedDate {
+            targetDate = Calendar.current.date(
+                bySettingHour: 23,
+                minute: 59,
+                second: 59,
+                of: selectedDate
+            ) ?? selectedDate
+        } else {
+            targetDate = endDate
+        }
+        let currentBalance = await calculateBalanceAtDate(
             accounts: accounts,
             date: targetDate,
             accountCardIDs: Set(accounts.compactMap { $0.accountType == .card ? $0.accountID : nil }),
             debtAsNegative: useNetTotals,
             includeInitialBeforeCreation: false
         )
+        if Task.isCancelled { return }
+        if selectedDate != state.selectedDate { return }
+        state.currentBalance = currentBalance
         
         // Рассчитываем баланс на начало периода
         let startBalance = await calculateBalanceAtDate(
@@ -552,6 +654,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             debtAsNegative: useNetTotals,
             includeInitialBeforeCreation: true
         )
+        if Task.isCancelled { return }
+        if selectedDate != state.selectedDate { return }
         
         // Рассчитываем дельту
         let rawDelta = state.currentBalance - startBalance
@@ -608,13 +712,19 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         
         // Убираем дубликаты
         var seenIDs: Set<String> = []
-        return accounts.filter { account in
+        let uniqueAccounts = accounts.filter { account in
             if seenIDs.contains(account.accountUniqueID) {
                 return false
             }
             seenIDs.insert(account.accountUniqueID)
             return true
         }
+        
+        guard state.showArchivedAccounts == false else {
+            return uniqueAccounts
+        }
+        
+        return uniqueAccounts.filter { !isAccountArchived($0) }
     }
     
     /// Обновить список динамики
@@ -719,7 +829,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                             deltaPercent: percent,
                             icon: nil,
                             accountType: nil,
-                            isCreditCard: false
+                            isCreditCard: false,
+                            isArchived: false
                         )
                     }
                 }
@@ -735,14 +846,15 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             // Показываем каждый счет отдельно - вычисляем параллельно
             // Подготавливаем данные для счетов до входа в TaskGroup
             let accountsData = await MainActor.run {
-                accounts.compactMap { account -> (String, String, String, String, Bool)? in
-                    guard let accountInfo = self.financeViewModel.getAccountInfo(account: account) else {
+                accounts.compactMap { account -> (String, String, String, String, Bool, Bool)? in
+                    guard let accountInfo = self.getAccountInfoForDynamics(account: account) else {
                         return nil
                     }
                     let accountID = account.accountUniqueID
                     let accountCardID = account.accountID
                     let isCard = account.accountType == .card
-                    return (accountID, accountInfo.name, accountCardID, accountID, isCard)
+                    let isArchived = self.isAccountArchived(account)
+                    return (accountID, accountInfo.name, accountCardID, accountID, isCard, isArchived)
                 }
             }
             
@@ -753,7 +865,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             }
             
             await withTaskGroup(of: DynamicsBreakdownItem?.self) { group in
-                for (accountUniqueID, accountName, accountCardID, _, isCard) in accountsData {
+                for (accountUniqueID, accountName, accountCardID, _, isCard, isArchived) in accountsData {
                     group.addTask { @MainActor in
                         let accountCardIDs = isCard ? Set([accountCardID]) : Set<String>()
                         
@@ -820,7 +932,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                         let percent = self.calculateDeltaPercent(delta: delta, startBalance: startBalance)
                         
                         // Получаем информацию о счете для иконки
-                        guard let accountInfo = self.financeViewModel.getAccountInfo(account: account) else {
+                        guard let accountInfo = self.getAccountInfoForDynamics(account: account) else {
                             return nil
                         }
                         
@@ -833,7 +945,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                             deltaPercent: percent,
                             icon: accountInfo.icon,
                             accountType: account.accountType,
-                            isCreditCard: isCreditCard
+                            isCreditCard: isCreditCard,
+                            isArchived: isArchived
                         )
                     }
                 }
@@ -875,7 +988,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     accounts: [account],
                     startDate: getPeriodDates().start,
                     endDate: getPeriodDates().end,
-                    label: financeViewModel.getAccountInfo(account: account)?.name ?? "Счет",
+                    label: getAccountInfoForDynamics(account: account)?.name ?? "Счет",
                     debtAsNegative: false
                 )
                 allDataPoints.append(contentsOf: accountData)
@@ -889,7 +1002,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     accounts: [account],
                     startDate: getPeriodDates().start,
                     endDate: getPeriodDates().end,
-                    label: financeViewModel.getAccountInfo(account: account)?.name ?? "Счет",
+                    label: getAccountInfoForDynamics(account: account)?.name ?? "Счет",
                     debtAsNegative: false
                 )
             } else {
@@ -1189,6 +1302,10 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     continue
                 }
                 
+                if let archivedAt = card.archivedAt, date > archivedAt {
+                    continue
+                }
+                
                 guard card.includeInTotal else {
                     continue
                 }
@@ -1232,9 +1349,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                         switch transaction.transactionType {
                         case .income:
                             if transaction.cardID == account.accountID {
-                                let converted = await convertAmount(
-                                    value: transaction.amount,
-                                    from: transaction.currency,
+                                let converted = await convertTransactionAmount(
+                                    transaction,
                                     to: accountCurrency
                                 )
                                 cardBalance += converted
@@ -1242,9 +1358,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                             
                         case .expense:
                             if transaction.cardID == account.accountID {
-                                let converted = await convertAmount(
-                                    value: transaction.amount,
-                                    from: transaction.currency,
+                                let converted = await convertTransactionAmount(
+                                    transaction,
                                     to: accountCurrency
                                 )
                                 cardBalance = max(0, cardBalance - converted)
@@ -1252,16 +1367,14 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                             
                         case .transfer:
                             if transaction.cardID == account.accountID {
-                                let converted = await convertAmount(
-                                    value: transaction.amount,
-                                    from: transaction.currency,
+                                let converted = await convertTransactionAmount(
+                                    transaction,
                                     to: accountCurrency
                                 )
                                 cardBalance = max(0, cardBalance - converted)
                             } else if transaction.toCardID == account.accountID {
-                                let converted = await convertAmount(
-                                    value: transaction.amount,
-                                    from: transaction.currency,
+                                let converted = await convertTransactionAmount(
+                                    transaction,
                                     to: accountCurrency
                                 )
                                 cardBalance += converted
@@ -1271,9 +1384,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                             // Применяем изменение баланса/долга: положительное = увеличение баланса, отрицательное = уменьшение
                             // Для кредитных карт это меняет доступный баланс (debt = limit - balance)
                             if transaction.cardID == account.accountID {
-                                let converted = await convertAmount(
-                                    value: transaction.amount,
-                                    from: transaction.currency,
+                                let converted = await convertTransactionAmount(
+                                    transaction,
                                     to: accountCurrency
                                 )
                                 cardBalance += converted
@@ -1297,6 +1409,10 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     continue
                 }
                 
+                if let archivedAt = credit.archivedAt, date > archivedAt {
+                    continue
+                }
+                
                 guard credit.includeInTotal else {
                     continue
                 }
@@ -1317,11 +1433,15 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     continue
                 }
                 
+                if let archivedAt = investment.archivedAt, date > archivedAt {
+                    continue
+                }
+                
                 guard investment.includeInTotal else {
                     continue
                 }
                 
-                accountCurrency = investment.currency
+                accountCurrency = resolvedInvestmentCurrency(investment)
                 shouldInclude = true
                 
                 // Активы = оценочная стоимость + история изменений
@@ -1331,9 +1451,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     var totalDelta: Double = 0.0
                     for transaction in investmentTransactions where transaction.transactionType == .balanceAdjustment &&
                         transaction.investmentID == investment.investmentUniqueID {
-                        let converted = await convertAmount(
-                            value: transaction.amount,
-                            from: transaction.currency,
+                        let converted = await convertTransactionAmount(
+                            transaction,
                             to: accountCurrency
                         )
                         totalDelta += converted
@@ -1360,12 +1479,21 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                         .sorted(by: { $0.transactionDate < $1.transactionDate })
                     
                     for transaction in balanceAdjustmentTransactions {
-                        let converted = await convertAmount(
-                            value: transaction.amount,
-                            from: transaction.currency,
+                        let converted = await convertTransactionAmount(
+                            transaction,
                             to: accountCurrency
                         )
                         investmentBalance += converted
+                    }
+
+                    // Если история неполная (например, для рыночных активов при изменении цены/количества
+                    // без создания balanceAdjustment), фиксируем актуальное значение на дату последнего обновления.
+                    let actualSignedAmount = investment.investmentType == .positive ? investment.amount : -investment.amount
+                    if date >= investment.updatedAt {
+                        let deltaToActual = actualSignedAmount - investmentBalance
+                        if abs(deltaToActual) > 0.01 {
+                            investmentBalance += deltaToActual
+                        }
                     }
                     
                     accountBalance = investmentBalance
@@ -1377,7 +1505,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 let converted = await convertAmount(
                     value: accountBalance,
                     from: accountCurrency,
-                    to: state.displayCurrency
+                    to: state.displayCurrency,
+                    at: date
                 )
                 let isLiability = debtAsNegative && isLiabilityAccount(account)
                 if isLiability {
@@ -1441,14 +1570,13 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         // Восстанавливаем базу, чтобы ручные правки не "сдвигали" историю
         let cardTransactions = transactionsByCardCache[card.cardUniqueID] ?? []
         var totalAdjustments: Double = 0.0
-        for transaction in cardTransactions where
+            for transaction in cardTransactions where
             (transaction.transactionType == .balanceAdjustment ||
              transaction.transactionType == .cardBalanceAdjustment ||
              transaction.transactionType == .creditDebtAdjustment) &&
             transaction.cardID == card.cardUniqueID {
-            let converted = await convertAmount(
-                value: transaction.amount,
-                from: transaction.currency,
+            let converted = await convertTransactionAmount(
+                transaction,
                 to: accountCurrency
             )
             totalAdjustments += converted
@@ -1458,20 +1586,19 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     
     /// Рассчитать остаток долга по кредиту на конкретную дату с учетом транзакций корректировки
     func calculateCreditRemainingAmount(credit: Credit, at date: Date, accountCurrency: String) async -> Double {
+        let creditTransactions = transactionsByCreditCache[credit.creditUniqueID] ?? []
         // Базовый остаток (фиксируем, чтобы ручные правки не сдвигали историю)
         var baseAmount: Double
         if credit.hasInitialRemainingAmount {
             baseAmount = credit.initialRemainingAmount
         } else {
-            let creditTransactions = transactionsByCreditCache[credit.creditUniqueID] ?? []
             var totalAdjustments: Double = 0.0
             for transaction in creditTransactions where
                 (transaction.transactionType == .balanceAdjustment ||
                  transaction.transactionType == .creditDebtAdjustment) &&
                 transaction.creditID == credit.creditUniqueID {
-                let converted = await convertAmount(
-                    value: transaction.amount,
-                    from: transaction.currency,
+                let converted = await convertTransactionAmount(
+                    transaction,
                     to: accountCurrency
                 )
                 totalAdjustments += converted
@@ -1480,7 +1607,6 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
         
         // Применяем транзакции корректировки с датой <= запрашиваемой даты
-        let creditTransactions = transactionsByCreditCache[credit.creditUniqueID] ?? []
         let balanceAdjustmentTransactions = creditTransactions
             .filter { transaction in
                 (transaction.transactionType == .balanceAdjustment ||
@@ -1492,12 +1618,20 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         
         var remainingAmount = baseAmount
         for transaction in balanceAdjustmentTransactions {
-            let converted = await convertAmount(
-                value: transaction.amount,
-                from: transaction.currency,
+            let converted = await convertTransactionAmount(
+                transaction,
                 to: accountCurrency
             )
             remainingAmount = max(0, remainingAmount - converted)
+        }
+
+        // Если итог расходится с текущим остатком, фиксируем актуальное значение
+        // на дату последнего изменения (legacy/ручные правки без полной истории транзакций).
+        if date >= credit.updatedAt {
+            let deltaToActual = credit.remainingAmount - remainingAmount
+            if abs(deltaToActual) > 0.01 {
+                remainingAmount = max(0, remainingAmount + deltaToActual)
+            }
         }
         
         return remainingAmount
@@ -1517,7 +1651,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         guard let accounts = group.accounts else { return 0.0 }
         
         for account in accounts {
-            if let accountInfo = financeViewModel.getAccountInfo(account: account) {
+            if let accountInfo = getAccountInfoForDynamics(account: account) {
                 let converted = await convertAmount(
                     value: accountInfo.amount,
                     from: accountInfo.currency,
@@ -1529,21 +1663,172 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         
         return total
     }
+
+    func getAccountInfoForDynamics(account: FinanceAccount) -> (name: String, amount: Double, currency: String, icon: String, isCreditCardDebt: Bool)? {
+        switch account.accountType {
+        case .card:
+            if let card = cardsCache[account.accountID] {
+                if card.cardType == .credit, let limit = card.creditLimit {
+                    let amount = max(0, limit - card.balance)
+                    return (card.name, amount, card.currency, card.cardType.icon, true)
+                }
+                return (card.name, card.balance, card.currency, card.cardType.icon, false)
+            }
+        case .credit:
+            if let credit = creditsCache[account.accountID] {
+                return (credit.name, credit.remainingAmount, credit.currency, credit.creditType.icon, false)
+            }
+        case .investment:
+            if let investment = investmentsCache[account.accountID] {
+                return (investment.name, investment.amount, resolvedInvestmentCurrency(investment), investment.category.icon, false)
+            }
+        }
+        
+        return nil
+    }
     
-    func convertAmount(value: Double, from: String, to: String) async -> Double {
-        if from == to {
+    func convertAmount(value: Double, from: String, to: String, at date: Date? = nil) async -> Double {
+        let normalizedFrom = normalizedConversionCurrency(from)
+        let normalizedTo = normalizedConversionCurrency(to)
+
+        if normalizedFrom == normalizedTo {
             return value
         }
         
-        if let converted = await CurrencyRateService.shared.convert(
+        if let date = date {
+            let result = await historicalRateStore.getRate(on: date, from: normalizedFrom, to: normalizedTo)
+            if result.resolution != .exact {
+                if state.currencyConversionWarning == nil {
+                    state.currencyConversionWarning = "Часть значений рассчитана по оценочному курсу."
+                }
+            }
+            if let rate = result.rate {
+                return value * rate
+            }
+        }
+        
+        if let converted = await currencyService.convert(
             amount: value,
-            from: from,
-            to: to
+            from: normalizedFrom,
+            to: normalizedTo
         ) {
+            if state.currencyConversionWarning == nil {
+                state.currencyConversionWarning = "Часть значений рассчитана по оценочному курсу."
+            }
             return converted
         }
         
         return value
+    }
+
+    private func convertTransactionAmount(_ transaction: CashflowTransaction, to targetCurrency: String) async -> Double {
+        let normalizedTarget = normalizedConversionCurrency(targetCurrency)
+        let normalizedSource = normalizedConversionCurrency(transaction.currency)
+
+        if normalizedSource == normalizedTarget {
+            return transaction.amount
+        }
+
+        if let frozenRate = transaction.exchangeRate,
+           frozenRate > 0,
+           let frozenCurrency = transaction.exchangeRateCurrency {
+            let normalizedFrozenCurrency = normalizedConversionCurrency(frozenCurrency)
+            if normalizedFrozenCurrency == normalizedTarget {
+                return transaction.amount * frozenRate
+            }
+        }
+
+        return await convertAmount(
+            value: transaction.amount,
+            from: transaction.currency,
+            to: targetCurrency,
+            at: transaction.transactionDate
+        )
+    }
+
+    private func normalizedConversionCurrency(_ currency: String) -> String {
+        let trimmed = currency
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+        guard !trimmed.isEmpty else { return "USD" }
+
+        let stablecoinToUSD: Set<String> = ["USDT", "USDC", "BUSD", "TUSD", "FDUSD", "DAI"]
+        if stablecoinToUSD.contains(trimmed) {
+            return "USD"
+        }
+
+        if trimmed.contains("/") {
+            let parts = trimmed.split(separator: "/").map(String.init)
+            if let quote = parts.last {
+                return normalizedConversionCurrency(quote)
+            }
+        }
+
+        if trimmed.contains("-") {
+            let parts = trimmed.split(separator: "-").map(String.init)
+            if let quote = parts.last {
+                return normalizedConversionCurrency(quote)
+            }
+        }
+
+        return trimmed
+    }
+
+    private func prefetchHistoricalRatesForCurrentSelection() async {
+        let accounts = getAccountsForCalculation()
+        guard !accounts.isEmpty else { return }
+
+        let displayCurrency = normalizedConversionCurrency(state.displayCurrency)
+
+        var sourceCurrencies: Set<String> = []
+        for account in accounts {
+            if let info = getAccountInfoForDynamics(account: account) {
+                let currency = normalizedConversionCurrency(info.currency)
+                if currency != displayCurrency {
+                    sourceCurrencies.insert(currency)
+                }
+            }
+        }
+        guard !sourceCurrencies.isEmpty else { return }
+
+        let (startDate, endDate) = getPeriodDates()
+        let calendar = Calendar.current
+        let startDay = calendar.startOfDay(for: startDate)
+        let endDay = calendar.startOfDay(for: endDate)
+        let days = max(0, calendar.dateComponents([.day], from: startDay, to: endDay).day ?? 0)
+        let step = max(1, days / 90)
+
+        var dates: [Date] = [startDay, endDay]
+        if days > 0 {
+            var offset = 0
+            while offset <= days {
+                if let date = calendar.date(byAdding: .day, value: offset, to: startDay) {
+                    dates.append(date)
+                }
+                offset += step
+            }
+        }
+
+        let pairs = sourceCurrencies.map { (from: $0, to: displayCurrency) }
+        await historicalRateStore.prefetchExactRates(on: Array(Set(dates)), pairs: pairs)
+    }
+
+    private func resolvedInvestmentCurrency(_ investment: Investment) -> String {
+        let normalizedCurrency = investment.currency
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+        if !normalizedCurrency.isEmpty {
+            return normalizedCurrency
+        }
+
+        if let marketCurrency = investment.marketCurrency?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased(),
+           !marketCurrency.isEmpty {
+            return marketCurrency
+        }
+
+        return "USD"
     }
     
     /// Получить список счетов для выбранных групп
@@ -1559,6 +1844,30 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             }
         }
         
-        return accounts
+        guard state.showArchivedAccounts == false else {
+            return accounts
+        }
+        
+        return accounts.filter { !isAccountArchived($0) }
+    }
+
+    /// Получить список счетов внутри группы (с учетом архива)
+    func getAccounts(for group: FinanceGroup) -> [FinanceAccount] {
+        guard let groupAccounts = group.accounts else { return [] }
+        if state.showArchivedAccounts {
+            return groupAccounts
+        }
+        return groupAccounts.filter { !isAccountArchived($0) }
+    }
+
+    private func isAccountArchived(_ account: FinanceAccount) -> Bool {
+        switch account.accountType {
+        case .card:
+            return cardsCache[account.accountID]?.archivedAt != nil
+        case .credit:
+            return creditsCache[account.accountID]?.archivedAt != nil
+        case .investment:
+            return investmentsCache[account.accountID]?.archivedAt != nil
+        }
     }
 }

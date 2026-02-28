@@ -7,12 +7,12 @@
 
 import Foundation
 
-nonisolated struct BackupInfo: Codable {
+struct BackupInfo: Codable {
     let date: Date
     let size: Int64
     let version: String
     
-    nonisolated var backupVersion: BackupVersion? {
+    var backupVersion: BackupVersion? {
         BackupVersion(string: version)
     }
 }

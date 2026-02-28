@@ -12,17 +12,25 @@ protocol SettingsManagerProtocol {
     var isBackupEnabled: Bool { get set }
     var isEncryptionEnabled: Bool { get set }
     var isDailyReminderEnabled: Bool { get set }
+    var isAppLockEnabled: Bool { get set }
+    var isBiometricUnlockEnabled: Bool { get set }
 }
 
-nonisolated final class SettingsManager: SettingsManagerProtocol {
-    nonisolated static let shared = SettingsManager()
+final class SettingsManager: SettingsManagerProtocol {
+    static let shared = SettingsManager()
     
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "SettingsManager")
     private let backupEnabledKey = "isBackupEnabled"
     private let encryptionEnabledKey = "isEncryptionEnabled"
     private let dailyReminderEnabledKey = "isDailyReminderEnabled"
+    private let appLockEnabledKey = "isAppLockEnabled"
+    private let biometricUnlockEnabledKey = "isBiometricUnlockEnabled"
+    private let profileDisplayNameKey = "profileDisplayName"
+    private let profileAvatarFilePathKey = "profileAvatarFilePath"
+    private let primaryCurrencyCodeKey = "primaryCurrencyCode"
+    private let favoriteCurrencyCodesKey = "favoriteCurrencyCodes"
     
-    nonisolated var isBackupEnabled: Bool {
+    var isBackupEnabled: Bool {
         get {
             // По умолчанию backup отключен
             UserDefaults.standard.object(forKey: backupEnabledKey) as? Bool ?? false
@@ -33,7 +41,7 @@ nonisolated final class SettingsManager: SettingsManagerProtocol {
         }
     }
     
-    nonisolated var isEncryptionEnabled: Bool {
+    var isEncryptionEnabled: Bool {
         get {
             UserDefaults.standard.object(forKey: encryptionEnabledKey) as? Bool ?? false
         }
@@ -43,7 +51,7 @@ nonisolated final class SettingsManager: SettingsManagerProtocol {
         }
     }
     
-    nonisolated var isDailyReminderEnabled: Bool {
+    var isDailyReminderEnabled: Bool {
         get {
             UserDefaults.standard.object(forKey: dailyReminderEnabledKey) as? Bool ?? false
         }
@@ -52,6 +60,92 @@ nonisolated final class SettingsManager: SettingsManagerProtocol {
             logger.info("Daily reminder enabled: \(newValue)")
         }
     }
+
+    var isAppLockEnabled: Bool {
+        get {
+            UserDefaults.standard.object(forKey: appLockEnabledKey) as? Bool ?? false
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: appLockEnabledKey)
+            logger.info("App lock enabled: \(newValue)")
+        }
+    }
+
+    var isBiometricUnlockEnabled: Bool {
+        get {
+            UserDefaults.standard.object(forKey: biometricUnlockEnabledKey) as? Bool ?? false
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: biometricUnlockEnabledKey)
+            logger.info("Biometric unlock enabled: \(newValue)")
+        }
+    }
     
-    nonisolated private init() {}
+    var profileDisplayName: String {
+        get {
+            UserDefaults.standard.string(forKey: profileDisplayNameKey) ?? "Гость"
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: profileDisplayNameKey)
+            logger.info("Profile display name updated")
+        }
+    }
+    
+    var profileAvatarFilePath: String? {
+        get {
+            UserDefaults.standard.string(forKey: profileAvatarFilePathKey)
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: profileAvatarFilePathKey)
+            logger.info("Profile avatar path updated")
+        }
+    }
+
+    /// Основная валюта приложения (используется как дефолт во всех денежных сервисах).
+    /// Хранится в UserDefaults, чтобы быть доступной на уровне Core.
+    var primaryCurrencyCode: String {
+        get {
+            UserDefaults.standard.string(forKey: primaryCurrencyCodeKey) ?? "RUB"
+        }
+        set {
+            let normalized = newValue.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            guard !normalized.isEmpty else { return }
+            UserDefaults.standard.set(normalized, forKey: primaryCurrencyCodeKey)
+            logger.info("Primary currency code updated: \(normalized)")
+        }
+    }
+
+    /// Избранные валюты для быстрых выборов в UI.
+    /// Хранятся в UserDefaults (строки ISO-кодов в верхнем регистре).
+    var favoriteCurrencyCodes: [String] {
+        get {
+            if UserDefaults.standard.object(forKey: favoriteCurrencyCodesKey) == nil {
+                return ["RUB", "USD", "EUR"]
+            }
+            let raw = UserDefaults.standard.array(forKey: favoriteCurrencyCodesKey) as? [String] ?? []
+            return Self.normalizeCurrencyCodes(raw)
+        }
+        set {
+            let normalized = Self.normalizeCurrencyCodes(newValue)
+            UserDefaults.standard.set(normalized, forKey: favoriteCurrencyCodesKey)
+            logger.info("Favorite currency codes updated: \(normalized.count)")
+        }
+    }
+    
+    static func normalizeCurrencyCodes(_ codes: [String]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        
+        for raw in codes {
+            let c = raw.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            guard !c.isEmpty else { continue }
+            if seen.contains(c) { continue }
+            seen.insert(c)
+            result.append(c)
+        }
+        
+        return result
+    }
+    
+    private init() {}
 }

@@ -9,6 +9,48 @@ import Foundation
 import CloudKit
 import OSLog
 
+protocol CloudBackupContainerProtocol {
+    var privateCloudDatabase: CloudBackupDatabaseProtocol { get }
+    func accountStatus() async throws -> CKAccountStatus
+}
+
+protocol CloudBackupDatabaseProtocol {
+    func record(for recordID: CKRecord.ID) async throws -> CKRecord
+    func save(_ record: CKRecord) async throws -> CKRecord
+}
+
+struct CKContainerAdapter: CloudBackupContainerProtocol {
+    private let container: CKContainer
+    
+    init(container: CKContainer) {
+        self.container = container
+    }
+    
+    var privateCloudDatabase: CloudBackupDatabaseProtocol {
+        CKDatabaseAdapter(database: container.privateCloudDatabase)
+    }
+    
+    func accountStatus() async throws -> CKAccountStatus {
+        try await container.accountStatus()
+    }
+}
+
+struct CKDatabaseAdapter: CloudBackupDatabaseProtocol {
+    private let database: CKDatabase
+    
+    init(database: CKDatabase) {
+        self.database = database
+    }
+    
+    func record(for recordID: CKRecord.ID) async throws -> CKRecord {
+        try await database.record(for: recordID)
+    }
+    
+    func save(_ record: CKRecord) async throws -> CKRecord {
+        try await database.save(record)
+    }
+}
+
 protocol CloudBackupStoreProtocol {
     func isAvailable() async -> Bool
     func uploadBackup(_ data: Data) async throws
@@ -16,13 +58,17 @@ protocol CloudBackupStoreProtocol {
     func getLatestBackupInfo() async throws -> BackupInfo?
 }
 
-nonisolated final class CloudBackupStore: CloudBackupStoreProtocol {
+final class CloudBackupStore: CloudBackupStoreProtocol {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "CloudBackupStore")
-    private let container: CKContainer
+    private let container: CloudBackupContainerProtocol
     private let recordType = "AppBackup"
     private let recordID = CKRecord.ID(recordName: "latest_backup")
     
-    nonisolated init(container: CKContainer = .default()) {
+    init(container: CKContainer = .default()) {
+        self.container = CKContainerAdapter(container: container)
+    }
+    
+    init(container: CloudBackupContainerProtocol) {
         self.container = container
     }
     
@@ -48,16 +94,14 @@ nonisolated final class CloudBackupStore: CloudBackupStoreProtocol {
         defer { try? FileManager.default.removeItem(at: tempURL) }
         
         let asset = CKAsset(fileURL: tempURL)
-        
-        // Удаляем старый backup если есть
+        let record: CKRecord
         do {
-            try await privateDB.deleteRecord(withID: recordID)
+            record = try await privateDB.record(for: recordID)
+        } catch let error as CKError where error.code == .unknownItem {
+            record = CKRecord(recordType: recordType, recordID: recordID)
         } catch {
-            // Игнорируем ошибку если записи нет
+            throw AppError.backupFailed(error.localizedDescription)
         }
-        
-        // Создаём новую запись
-        let record = CKRecord(recordType: recordType, recordID: recordID)
         record["backupData"] = asset
         record["backupDate"] = Date()
         record["backupVersion"] = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -82,7 +126,9 @@ nonisolated final class CloudBackupStore: CloudBackupStoreProtocol {
                 throw AppError.backupCorrupted
             }
             
-            let data = try Data(contentsOf: fileURL)
+            let data = try await Task.detached(priority: .utility) {
+                try Data(contentsOf: fileURL)
+            }.value
             logger.info("Backup downloaded successfully, size: \(data.count) bytes")
             return data
             

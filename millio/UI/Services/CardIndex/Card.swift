@@ -152,6 +152,9 @@ final class Card: Persistable {
     
     /// Дата последнего обновления
     var updatedAt: Date = Date()
+    
+    /// Дата архивирования (nil = активная карта)
+    var archivedAt: Date?
 
     /// Стабильный идентификатор для связей между сущностями
     var uniqueID: String = ""
@@ -269,6 +272,10 @@ final class Card: Persistable {
             "updatedAt": updatedAt.timeIntervalSince1970,
             "cardUniqueID": cardUniqueID // Сохраняем уникальный ID для восстановления связей
         ]
+        
+        if let archivedAt = archivedAt {
+            dict["archivedAt"] = archivedAt.timeIntervalSince1970
+        }
         
         // Экспортируем зашифрованные данные, если есть
         if let encryptedFullNumber = encryptedFullNumber {

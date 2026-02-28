@@ -9,7 +9,17 @@ import Foundation
 import UserNotifications
 import OSLog
 
+protocol UserNotificationCenterProtocol {
+    func requestAuthorization(options: UNAuthorizationOptions) async throws -> Bool
+    func add(_ request: UNNotificationRequest) async throws
+    func removePendingNotificationRequests(withIdentifiers identifiers: [String])
+    func removeDeliveredNotifications(withIdentifiers identifiers: [String])
+}
+
+extension UNUserNotificationCenter: UserNotificationCenterProtocol {}
+
 /// Протокол для управления уведомлениями
+@MainActor
 protocol NotificationManagerProtocol {
     func requestAuthorization() async -> Bool
     func scheduleDailyReminder(enabled: Bool) async
@@ -22,29 +32,39 @@ final class NotificationManager: NotificationManagerProtocol {
     static let shared = NotificationManager()
     
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "NotificationManager")
-    private let notificationCenter = UNUserNotificationCenter.current()
+    private let notificationCenter: any UserNotificationCenterProtocol
+    private let now: () -> Date
+    private let calendar: Calendar
     private let dailyReminderIdentifier = "daily_reminder"
     
     // Дружелюбные сообщения для ежедневных напоминаний
     private let reminderMessages = [
         "Привет! Не забудь зафиксировать свои финансы сегодня 📊",
-        "Добрый день! Время проверить свои финансовые цели 💰",
+        "Привет! Время проверить свои финансовые цели 💰",
         "Привет! Как дела с финансами? Запиши сегодняшние траты 📝",
         "Добро пожаловать! Не забудь обновить свои финансовые данные ✨",
         "Привет! Время подумать о своих финансах и целях 🎯",
-        "Добрый день! Проверь свои счета и транзакции сегодня 💳",
+        "Привет! Проверь свои счета и транзакции сегодня 💳",
         "Привет! Не забудь записать свои доходы и расходы 📈",
         "Добро пожаловать! Время обновить свои финансовые планы 🌟",
         "Привет! Как твои финансовые цели? Проверь прогресс 🚀",
-        "Добрый день! Не забудь зафиксировать важные финансовые операции 💎",
+        "Привет! Не забудь зафиксировать важные финансовые операции 💎",
         "Привет! Время подвести итоги дня и записать финансы 📊",
         "Добро пожаловать! Проверь свои карты и счета сегодня 💳",
         "Привет! Не забудь обновить информацию о своих финансах ✨",
-        "Добрый день! Время записать сегодняшние финансовые операции 📝",
+        "Привет! Время записать сегодняшние финансовые операции 📝",
         "Привет! Как дела? Проверь свои финансовые цели и прогресс 🎯"
     ]
     
-    private init() {}
+    init(
+        notificationCenter: any UserNotificationCenterProtocol = UNUserNotificationCenter.current(),
+        now: @escaping () -> Date = Date.init,
+        calendar: Calendar = .current
+    ) {
+        self.notificationCenter = notificationCenter
+        self.now = now
+        self.calendar = calendar
+    }
     
     // MARK: - Public Methods
     
@@ -112,7 +132,7 @@ final class NotificationManager: NotificationManagerProtocol {
     
     private func getRandomMessage() -> String {
         // Используем день месяца для выбора сообщения (чтобы было предсказуемо, но разнообразно)
-        let day = Calendar.current.component(.day, from: Date())
+        let day = calendar.component(.day, from: now())
         let index = day % reminderMessages.count
         return reminderMessages[index]
     }

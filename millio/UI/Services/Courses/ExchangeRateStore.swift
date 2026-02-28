@@ -146,7 +146,10 @@ final class ExchangeRateStore: ObservableObject {
 
     func refreshRates() async {
         do {
-            let url = URL(string: "https://open.er-api.com/v6/latest/USD")!
+            guard let url = URL(string: "https://open.er-api.com/v6/latest/USD") else {
+                sanitize()
+                return
+            }
             let (data, response) = try await URLSession.shared.data(from: url)
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                 throw URLError(.badServerResponse)
@@ -204,7 +207,7 @@ final class ExchangeRateStore: ObservableObject {
         let ids = codes.compactMap { cryptoCodeToId[$0] }
         guard !ids.isEmpty else { return }
 
-        var comps = URLComponents(string: "https://api.coingecko.com/api/v3/simple/price")!
+        guard var comps = URLComponents(string: "https://api.coingecko.com/api/v3/simple/price") else { return }
         comps.queryItems = [
             URLQueryItem(name: "ids", value: ids.joined(separator: ",")),
             URLQueryItem(name: "vs_currencies", value: "usd")
@@ -257,6 +260,7 @@ final class ExchangeRateStore: ObservableObject {
 
 // MARK: - Service adapter (если нужно для твоей архитектуры)
 
+@MainActor
 protocol ExchangeRateService: AnyObject {
     // Возвращает курс: сколько TO за 1 единицу FROM на дату date
     func getRate(from: String, to: String, date: Date) async -> Double?

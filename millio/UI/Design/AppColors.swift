@@ -62,7 +62,7 @@ enum AppColors {
     static let textPrimary = Color.white
     
     /// Вторичный цвет текста (белый с прозрачностью)
-    static let textSecondary = Color.white.opacity(0.9)
+    static let textSecondary = Color.white.opacity(0.7)
     
     /// Третичный цвет текста (белый с меньшей прозрачностью)
     static let textTertiary = Color.white.opacity(0.7)
@@ -76,7 +76,7 @@ enum AppColors {
     static let coursesGradient = [Color.green, Color.mint]
     
     /// Градиент для кнопки "Кешбэк"
-    static let cashbackGradient = [Color.purple, Color.pink]
+    static let cashbackGradient = [Color.blue, Color.cyan]
     
     /// Градиент для кнопки "Кредиты"
     static let creditsGradient = [Color.blue, Color.indigo]
@@ -106,8 +106,36 @@ enum AppColors {
     /// Градиент для кнопки "Доход" (зеленый -> синий)
     static let incomeGradient = [Color(hex: "19E694").opacity(0.5), Color(hex: "0947E4").opacity(0.5)]
     
-    // MARK: - UI Elements
+    // MARK: - Accent
     
+    /// Тёмный синий (RGB 22, 21, 67)
+    static let accentDarkBlue = Color(red: 22/255.0, green: 21/255.0, blue: 67/255.0)
+    
+    /// Brand primary (RGB 104, 165, 255)
+    static let brandPrimary = Color(red: 104/255.0, green: 165/255.0, blue: 255/255.0)
+
+    static let profileValueAccent = Color(hex: "6AA8FF")
+    static let toggleOnGreen = Color(hex: "34C759")
+
+    static let profileCardBackgroundGradient = [
+        Color(hex: "712382").opacity(0.1),
+        Color(hex: "bd00e7").opacity(0.1)
+    ]
+
+    static let profileCardStrokeGradient = [
+        Color(hex: "bd00e7").opacity(0.3),
+        Color(hex: "3f1249").opacity(0.3)
+    ]
+
+    static let profileCardGlow = Color(hex: "8B00FF").opacity(0.18)
+    
+    // MARK: - Premium
+
+    /// Градиент для блока Premium
+    static let premiumGradient = [Color(hex: "0081e7"), Color(hex: "bd00e7")]
+
+    // MARK: - UI Elements
+
     /// Цвет для иконок в кнопках действий (белый)
     static let iconColor = Color.white
     

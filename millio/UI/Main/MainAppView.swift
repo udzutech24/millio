@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct MainAppView: View {
     @Bindable var router: AppRouter
@@ -16,6 +17,7 @@ struct MainAppView: View {
     @State private var cashflowViewModel: CashflowViewModel?
     @State private var showExpenseSheet = false
     @State private var showIncomeSheet = false
+    @State private var showCashflowHistory = false
     
     init(router: AppRouter) {
         self.router = router
@@ -30,42 +32,22 @@ struct MainAppView: View {
                 VStack(spacing: 0) {
                     // Header
                     HStack {
-                        // Иконка профиля слева
+                        // Аватарка или иконка профиля слева
                         Button {
                             viewModel.handle(.navigateToProfile)
                         } label: {
-                            Image("profile")
+                            headerProfileImage
                         }
                         
                         Spacer()
                         
-                        // Кнопка PRO справа
+                        // История операций справа
                         Button {
-                            viewModel.handle(.navigateToSubscription)
+                            showCashflowHistory = true
                         } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: appState.isPro ? "star.fill" : "star")
-                                    .font(.system(size: 14))
-                                Text("PRO")
-                                    .font(.system(size: 15, weight: .medium))
-                            }
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .background {
-                                Capsule()
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: appState.isPro
-                                                ? AppColors.incomeGradient
-                                                : [AppColors.textPrimary.opacity(0.3)],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        ),
-                                        lineWidth: 1.5
-                                    )
-                            }
+                            Image("operations")  
                         }
+                        .accessibilityLabel("История операций")
                     }
                     .padding(.horizontal, 24)
                     .padding(.top, 16)
@@ -81,7 +63,7 @@ struct MainAppView: View {
                     HStack(spacing: 16) {
                         ActionButton(
                             title: "Расход",
-                            icon: "minus",
+                            icon: .asset("minus"),
                             gradientColors: AppColors.expenseGradient
                         ) {
                             showExpenseSheet = true
@@ -89,7 +71,7 @@ struct MainAppView: View {
                         
                         ActionButton(
                             title: "Доход",
-                            icon: "plus",
+                            icon: .asset("plus"),
                             gradientColors: AppColors.incomeGradient
                         ) {
                             showIncomeSheet = true
@@ -118,6 +100,11 @@ struct MainAppView: View {
                     )
                 }
             }
+            .sheet(isPresented: $showCashflowHistory) {
+                if let cashflowViewModel = cashflowViewModel {
+                    CashflowTransactionsHistoryView(viewModel: cashflowViewModel)
+                }
+            }
             .onAppear {
                 loadServices()
                 if cashflowViewModel == nil {
@@ -133,6 +120,25 @@ struct MainAppView: View {
                 }
             }
         }
+    }
+    
+    private var headerProfileImage: some View {
+        let size: CGFloat = 40
+        return Group {
+            if let path = appState.profileAvatarPath,
+               FileManager.default.fileExists(atPath: path),
+               let uiImage = UIImage(contentsOfFile: path) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Image("profile")
+                    .resizable()
+                    .scaledToFit()
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
     }
     
     // MARK: - Services Grid

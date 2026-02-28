@@ -27,7 +27,7 @@ final class CardManager {
         guard let modelContext = modelContext else { return [] }
         
         let descriptor = FetchDescriptor<Card>()
-        let cards = (try? modelContext.fetch(descriptor)) ?? []
+        let cards = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.archivedAt == nil }
         
         return cards.sorted { card1, card2 in
             if card1.isFavorite != card2.isFavorite {
@@ -44,7 +44,7 @@ final class CardManager {
         let descriptor = FetchDescriptor<Card>(
             predicate: #Predicate<Card> { $0.isFavorite == true }
         )
-        let cards = (try? modelContext.fetch(descriptor)) ?? []
+        let cards = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.archivedAt == nil }
         
         return cards.sorted { $0.updatedAt > $1.updatedAt }
     }
@@ -56,7 +56,7 @@ final class CardManager {
         let descriptor = FetchDescriptor<Card>(
             predicate: #Predicate<Card> { $0.currency == currency }
         )
-        let cards = (try? modelContext.fetch(descriptor)) ?? []
+        let cards = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.archivedAt == nil }
         
         return cards.sorted { card1, card2 in
             if card1.isFavorite != card2.isFavorite {
@@ -73,7 +73,7 @@ final class CardManager {
         let descriptor = FetchDescriptor<Card>(
             predicate: #Predicate<Card> { $0.bankRaw == bank.rawValue }
         )
-        let cards = (try? modelContext.fetch(descriptor)) ?? []
+        let cards = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.archivedAt == nil }
         
         return cards.sorted { card1, card2 in
             if card1.isFavorite != card2.isFavorite {

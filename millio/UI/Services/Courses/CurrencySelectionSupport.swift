@@ -186,6 +186,43 @@ public struct CurrencySelectionSupport {
         }
         return map
     }()
+
+    /// Полный список кодов валют для UI-пикеров.
+    /// Собирается из локалей системы, чтобы не зависеть от загруженных курсов и наличия интернета.
+    static let allCurrencyCodesForPicker: [String] = {
+        var set = Set<String>()
+        
+        for id in Locale.availableIdentifiers {
+            let loc = Locale(identifier: id)
+            if let code = loc.currency?.identifier.trimmingCharacters(in: .whitespacesAndNewlines).uppercased(), !code.isEmpty {
+                set.insert(code)
+            }
+        }
+        
+        if #available(iOS 16.0, *) {
+            for code in Locale.commonISOCurrencyCodes {
+                let normalized = code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+                if !normalized.isEmpty {
+                    set.insert(normalized)
+                }
+            }
+        }
+        
+        set.insert("USD")
+        return Array(set).sorted()
+    }()
+    
+    static func pinnedCurrencyCodes(for current: String) -> [String] {
+        let base = ["RUB", "USD", "EUR"]
+        let normalizedCurrent = current.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if normalizedCurrent.isEmpty {
+            return base
+        }
+        if base.contains(normalizedCurrent) {
+            return base
+        }
+        return [normalizedCurrent] + base
+    }
 }
 
 // MARK: - Picker with pinned favorites on top + RU/EN search
@@ -193,13 +230,27 @@ public struct CurrencySelectionSupport {
 public struct CurrencyPickerView: View {
     public let allCodes: [String]
     @Binding public var searchText: String
-    public let selectedCodes: [String]   // избранные
+    public let selectedCodes: [String]   // закрепленные сверху (контекстно: избранные / выбранные)
+    public let favoriteCodes: Set<String>
+    public let currentSelection: String?
+    public let onToggleFavorite: ((String) -> Void)?
     public let onSelect: (String) -> Void
 
-    public init(allCodes: [String], searchText: Binding<String>, selectedCodes: [String], onSelect: @escaping (String) -> Void) {
+    public init(
+        allCodes: [String],
+        searchText: Binding<String>,
+        selectedCodes: [String],
+        favoriteCodes: Set<String> = [],
+        currentSelection: String? = nil,
+        onToggleFavorite: ((String) -> Void)? = nil,
+        onSelect: @escaping (String) -> Void
+    ) {
         self.allCodes = allCodes.map { $0.uppercased() }
         self._searchText = searchText
         self.selectedCodes = selectedCodes.map { $0.uppercased() }
+        self.favoriteCodes = Set(favoriteCodes.map { $0.uppercased() })
+        self.currentSelection = currentSelection?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        self.onToggleFavorite = onToggleFavorite
         self.onSelect = onSelect
     }
 
@@ -247,144 +298,160 @@ public struct CurrencyPickerView: View {
         ZStack {
             GradientBackground()
             
-            ScrollView {
-                LazyVStack(spacing: 8) {
-                    if !pinnedFavorites.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Избранные")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(AppColors.textPrimary)
-                                .padding(.horizontal, 20)
-                                .padding(.top, 8)
-                            
-                            ForEach(pinnedFavorites, id: \.self) { code in
-                                row(code: code, showStar: true)
-                                    .padding(.horizontal, 16)
-                            }
-                        }
-                    }
+            VStack(spacing: 0) {
+                InlineSearchBar(text: $searchText, placeholder: "Код или название (RU/EN)")
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                    .padding(.bottom, 8)
+                
+                ScrollView {
+                    LazyVStack(spacing: 8) {
+                        if !pinnedFavorites.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Избранные")
+                                    .font(.system(size: 16, weight: .regular))
+                                    .foregroundStyle(AppColors.textSecondary)
+                                    .padding(.horizontal, 20)
+                                    .padding(.top, 8)
 
-                    if !filteredOthers.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Все валюты")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(AppColors.textPrimary)
-                                .padding(.horizontal, 20)
-                                .padding(.top, pinnedFavorites.isEmpty ? 8 : 16)
-                            
-                            ForEach(filteredOthers, id: \.self) { code in
-                                row(code: code, showStar: selectedCodes.contains(code.uppercased()))
-                                    .padding(.horizontal, 16)
+                                SelectionSectionCard {
+                                    ForEach(Array(pinnedFavorites.enumerated()), id: \.element) { index, code in
+                                        currencyRow(
+                                            code: code,
+                                            isSelected: currentSelection == code.uppercased(),
+                                            isFavorite: true,
+                                            showDivider: index != pinnedFavorites.count - 1,
+                                            dividerColor: AppColors.textPrimary.opacity(0.08)
+                                        )
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                            }
+                        }
+
+                        if !filteredOthers.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                // Если есть избранные, отступаем больше
+                                // Если избранных нет (например, поиск всё отфильтровал), то отступ меньше
+                                let topPadding: CGFloat = pinnedFavorites.isEmpty ? 8 : 16
+                                
+                                // Заголовок секции, если нужно (в дизайне "Все валюты" может не быть, но оставим для ясности)
+                                // На скрине "Избранные" есть. А для списка ниже заголовка не видно, но лучше оставить или убрать?
+                                // Оставим как было, но с более мелким шрифтом как "Избранные"
+                                
+                                // Но на скрине после "Избранные" идет просто список.
+                                // Если избранных нет, то список просто идет.
+                                // Оставим заголовок, чтобы разделять.
+                                
+                                Text("Все валюты")
+                                    .font(.system(size: 16, weight: .regular))
+                                    .foregroundStyle(AppColors.textSecondary)
+                                    .padding(.horizontal, 20)
+                                    .padding(.top, topPadding)
+
+                                SelectionSectionCard {
+                                    ForEach(Array(filteredOthers.enumerated()), id: \.element) { index, code in
+                                        let uppercasedCode = code.uppercased()
+                                        currencyRow(
+                                            code: uppercasedCode,
+                                            isSelected: currentSelection == uppercasedCode,
+                                            isFavorite: favoriteCodes.contains(uppercasedCode),
+                                            showDivider: index != filteredOthers.count - 1,
+                                            dividerColor: AppColors.textPrimary.opacity(0.08)
+                                        )
+                                    }
+                                }
+                                .padding(.horizontal, 16)
                             }
                         }
                     }
+                    .padding(.vertical, 8)
                 }
-                .padding(.vertical, 8)
             }
         }
         // Важно: это помогает вводить и тикеры (BTC), и англ. слова — без автозамены
         .textInputAutocapitalization(.never)
         .autocorrectionDisabled(true)
         .keyboardType(.asciiCapable)
-        .searchable(
-            text: $searchText,
-            placement: .navigationBarDrawer(displayMode: .always),
-            prompt: "Код или название (RU/EN)"
-        )
     }
 
     @ViewBuilder
     private func currencyIcon(for code: String) -> some View {
         let c = code.uppercased()
+        let iconSize: CGFloat = 24
         
         if CurrencySelectionSupport.isCrypto(c) {
             // Для криптовалют используем эмодзи через Text
             let emoji = CurrencySelectionSupport.emoji(for: c)
             if !emoji.isEmpty {
                 Text(emoji)
-                    .frame(width: 16, height: 16)
+                    .frame(width: iconSize, height: iconSize)
             } else {
                 Image("flag")
                     .resizable()
                     .renderingMode(.template)
                     .foregroundStyle(AppColors.textPrimary)
-                    .frame(width: 16, height: 16)
+                    .frame(width: iconSize, height: iconSize)
             }
         } else {
-            // Для фиатных валют пытаемся загрузить флаг по коду
-            let flagName = "flag_\(c.lowercased())"
-            #if os(iOS)
-            if UIImage(named: flagName) != nil {
-                Image(flagName)
+            if let assetName = CurrencyFlags.assetName(for: c) {
+                Image(assetName)
                     .resizable()
-                    .renderingMode(.template)
-                    .foregroundStyle(AppColors.textPrimary)
-                    .frame(width: 16, height: 16)
+                    .scaledToFill()
+                    .frame(width: iconSize, height: iconSize)
+                    .clipShape(Circle())
             } else {
                 Image("flag")
                     .resizable()
                     .renderingMode(.template)
                     .foregroundStyle(AppColors.textPrimary)
-                    .frame(width: 16, height: 16)
+                    .frame(width: iconSize, height: iconSize)
             }
-            #else
-            Image("flag")
-                .resizable()
-                .renderingMode(.template)
-                .foregroundStyle(AppColors.textPrimary)
-                .frame(width: 16, height: 16)
-            #endif
         }
     }
 
     @ViewBuilder
-    private func row(code: String, showStar: Bool) -> some View {
+    private func currencyRow(
+        code: String,
+        isSelected: Bool,
+        isFavorite: Bool,
+        showDivider: Bool,
+        dividerColor: Color
+    ) -> some View {
         let c = code.uppercased()
+        let ruName = CurrencySelectionSupport.nameRu(for: c) ?? ""
 
-        HStack(spacing: 12) {
-            currencyIcon(for: c)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(c)
-                    .font(.headline)
-                    .foregroundStyle(AppColors.textPrimary)
-
-                // Для крипты покажем русское имя, для фиата — русскую локализацию
-                let ruName = CurrencySelectionSupport.nameRu(for: c) ?? ""
-                if !ruName.isEmpty {
-                    Text(ruName)
-                        .font(.caption)
-                        .foregroundStyle(AppColors.textTertiary)
+        SelectionItemRow(
+            title: c,
+            subtitle: ruName.isEmpty ? nil : ruName,
+            isSelected: isSelected,
+            dividerColor: dividerColor,
+            showDivider: showDivider,
+            onTap: { onSelect(c) },
+            leading: {
+                currencyIcon(for: c)
+            },
+            trailing: {
+                if let onToggleFavorite {
+                    Button {
+                        onToggleFavorite(c)
+                    } label: {
+                        Image(systemName: isFavorite ? "star.fill" : "star")
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: AppColors.coursesGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .opacity(isFavorite ? 1 : 0.55)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("currencyPicker.favorite.\(c)")
+                } else {
+                    EmptyView()
                 }
             }
-
-            Spacer()
-
-            if showStar {
-                Image(systemName: "star.fill")
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: AppColors.coursesGradient,
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-            }
-        }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 16)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(AppColors.textPrimary.opacity(0.1), lineWidth: 1)
-                )
         )
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onSelect(c)
-        }
     }
 }
-

@@ -19,6 +19,7 @@ enum SubscriptionStatus {
 }
 
 /// Протокол для управления подпиской
+@MainActor
 protocol SubscriptionManagerProtocol {
     var status: SubscriptionStatus { get }
     var expirationDate: Date? { get }
@@ -36,7 +37,8 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
     static let shared = SubscriptionManager()
     
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "SubscriptionManager")
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
+    private let now: () -> Date
     
     // Ключи для хранения статуса локально (offline-first)
     private let subscriptionStatusKey = "subscription_status"
@@ -56,16 +58,22 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
     
     private var updateListenerTask: Task<Void, Never>?
     
-    private init() {
+    init(
+        defaults: UserDefaults = .standard,
+        startTransactionListener: Bool = true,
+        now: @escaping () -> Date = Date.init
+    ) {
+        self.defaults = defaults
+        self.now = now
+        
         // Загружаем локально сохраненный статус (offline-first)
         loadLocalStatus()
         
         // Запускаем слушатель обновлений транзакций
-        updateListenerTask = listenForTransactions()
-        
-        // Проверяем статус при инициализации
-        Task {
-            await checkSubscriptionStatus()
+        if startTransactionListener {
+            updateListenerTask = listenForTransactions()
+        } else {
+            updateListenerTask = nil
         }
     }
     
@@ -78,18 +86,17 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
     func checkSubscriptionStatus() async {
         logger.info("Checking subscription status...")
         
-        #if DEBUG
         // Если включен дебаг-премиум, не проверяем StoreKit
         if defaults.bool(forKey: debugPremiumKey),
            let expiration = defaults.object(forKey: debugSubscriptionExpirationKey) as? Date,
-           expiration > Date() {
+           expiration > now() {
             self.status = .subscribed
             self.expirationDate = expiration
             self.isTrialActive = false
+            syncWidgetSubscriptionSnapshot()
             logger.info("Debug premium is active, expires: \(expiration)")
             return
         }
-        #endif
         
         // Проверяем локальный статус триала
         checkTrialStatus()
@@ -103,7 +110,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
             switch result {
             case .verified(let transaction):
                 if let expirationDate = transaction.expirationDate,
-                   expirationDate > Date() {
+                   expirationDate > now() {
                     hasActiveSubscription = true
                     if latestExpirationDate == nil || expirationDate > latestExpirationDate! {
                         latestExpirationDate = expirationDate
@@ -186,7 +193,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         }
         
         // Устанавливаем дату начала триала
-        let trialStartDate = Date()
+        let trialStartDate = now()
         defaults.set(trialStartDate, forKey: trialStartDateKey)
         defaults.set(true, forKey: "trial_used")
         
@@ -197,17 +204,17 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         logger.info("Trial started, expires: \(trialStartDate.addingTimeInterval(TimeInterval(self.trialDurationDays * 24 * 60 * 60)))")
     }
     
-    #if DEBUG
     func grantDebugPremium() {
         logger.info("Granting debug premium access...")
         
         // Устанавливаем премиум доступ на год вперед
-        let expirationDate = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
+        let expirationDate = Calendar.current.date(byAdding: .year, value: 1, to: now()) ?? now()
         defaults.set(true, forKey: debugPremiumKey)
         defaults.set(expirationDate, forKey: debugSubscriptionExpirationKey)
         self.status = .subscribed
         self.expirationDate = expirationDate
         self.isTrialActive = false
+        syncWidgetSubscriptionSnapshot()
         // Не вызываем saveLocalStatus(), чтобы не перезаписать реальную дату подписки
         
         logger.info("Debug premium granted, expires: \(expirationDate)")
@@ -222,6 +229,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         self.status = .notSubscribed
         self.expirationDate = nil  // Очищаем память от debug значения
         self.isTrialActive = false
+        syncWidgetSubscriptionSnapshot()
         // Не вызываем saveLocalStatus(), чтобы не затереть реальную дату истечения подписки StoreKit
         // Если есть реальная подписка, вызывающий код должен вызвать checkSubscriptionStatus()
         
@@ -232,24 +240,21 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         defaults.bool(forKey: debugPremiumKey) && 
         status == .subscribed && 
         expirationDate != nil && 
-        expirationDate! > Date()
+        expirationDate! > now()
     }
-    #endif
     
     // MARK: - Private Methods
     
     private func loadLocalStatus() {
-        #if DEBUG
         // Если включен дебаг-премиум, загружаем его статус из debug ключа
         if defaults.bool(forKey: debugPremiumKey),
            let expiration = defaults.object(forKey: debugSubscriptionExpirationKey) as? Date,
-           expiration > Date() {
+           expiration > now() {
             self.status = .subscribed
             self.expirationDate = expiration
             self.isTrialActive = false
             return
         }
-        #endif
         
         if let statusRaw = defaults.string(forKey: subscriptionStatusKey),
            let status = SubscriptionStatus(rawValue: statusRaw) {
@@ -262,21 +267,21 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         
         if let trialStartDate = defaults.object(forKey: trialStartDateKey) as? Date {
             let trialEndDate = trialStartDate.addingTimeInterval(TimeInterval(self.trialDurationDays * 24 * 60 * 60))
-            self.isTrialActive = trialEndDate > Date()
+            self.isTrialActive = trialEndDate > now()
         }
+        
+        syncWidgetSubscriptionSnapshot()
     }
     
     private func saveLocalStatus() {
         defaults.set(status.rawValue, forKey: subscriptionStatusKey)
         // Не сохраняем expirationDate в subscriptionExpirationKey если включен debug premium,
         // чтобы не перезаписать реальную дату истечения подписки StoreKit
-        #if DEBUG
         if !defaults.bool(forKey: debugPremiumKey) {
             defaults.set(expirationDate, forKey: subscriptionExpirationKey)
         }
-        #else
-        defaults.set(expirationDate, forKey: subscriptionExpirationKey)
-        #endif
+        
+        syncWidgetSubscriptionSnapshot()
     }
     
     private func checkTrialStatus() {
@@ -286,7 +291,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         
         let trialEndDate = trialStartDate.addingTimeInterval(TimeInterval(self.trialDurationDays * 24 * 60 * 60))
         
-        if trialEndDate > Date() {
+        if trialEndDate > now() {
             self.isTrialActive = true
             if status != .subscribed {
                 self.status = .trial
@@ -314,13 +319,23 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         }
     }
     
-    private nonisolated func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
+    private func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
         switch result {
         case .unverified:
             throw SubscriptionError.verificationFailed
         case .verified(let safe):
             return safe
         }
+    }
+    
+    private func syncWidgetSubscriptionSnapshot() {
+        CurrencyWidgetSyncService.syncSubscription(
+            statusRaw: status.rawValue,
+            expirationDate: expirationDate,
+            isTrialActive: isTrialActive,
+            debugPremiumEnabled: defaults.bool(forKey: debugPremiumKey),
+            debugPremiumExpiration: defaults.object(forKey: debugSubscriptionExpirationKey) as? Date
+        )
     }
     
     // MARK: - Product IDs

@@ -27,7 +27,7 @@ final class InvestmentManager {
         guard let modelContext = modelContext else { return [] }
         
         let descriptor = FetchDescriptor<Investment>()
-        let investments = (try? modelContext.fetch(descriptor)) ?? []
+        let investments = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.archivedAt == nil }
         
         return investments.sorted { inv1, inv2 in
             if inv1.isFavorite != inv2.isFavorite {
@@ -47,7 +47,7 @@ final class InvestmentManager {
         let descriptor = FetchDescriptor<Investment>(
             predicate: #Predicate<Investment> { $0.investmentTypeRaw == type.rawValue }
         )
-        let investments = (try? modelContext.fetch(descriptor)) ?? []
+        let investments = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.archivedAt == nil }
         
         return investments.sorted { inv1, inv2 in
             if inv1.isFavorite != inv2.isFavorite {
@@ -67,7 +67,7 @@ final class InvestmentManager {
         let descriptor = FetchDescriptor<Investment>(
             predicate: #Predicate<Investment> { $0.categoryRaw == category.rawValue }
         )
-        let investments = (try? modelContext.fetch(descriptor)) ?? []
+        let investments = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.archivedAt == nil }
         
         return investments.sorted { inv1, inv2 in
             if inv1.isFavorite != inv2.isFavorite {
@@ -87,7 +87,7 @@ final class InvestmentManager {
         let descriptor = FetchDescriptor<Investment>(
             predicate: #Predicate<Investment> { $0.includeInTotal == true }
         )
-        let investments = (try? modelContext.fetch(descriptor)) ?? []
+        let investments = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.archivedAt == nil }
         
         return investments.sorted { inv1, inv2 in
             if inv1.isFavorite != inv2.isFavorite {
@@ -107,7 +107,7 @@ final class InvestmentManager {
         let descriptor = FetchDescriptor<Investment>(
             predicate: #Predicate<Investment> { $0.isFavorite == true }
         )
-        let investments = (try? modelContext.fetch(descriptor)) ?? []
+        let investments = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.archivedAt == nil }
         
         return investments.sorted { inv1, inv2 in
             if inv1.priority.sortOrder != inv2.priority.sortOrder {

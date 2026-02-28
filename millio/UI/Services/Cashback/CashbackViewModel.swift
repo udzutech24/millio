@@ -15,6 +15,9 @@ import Combine
 struct CashbackState {
     /// Все кешбэки
     var cashbacks: [Cashback] = []
+
+    /// Кешбэки выбранного месяца
+    var visibleCashbacks: [Cashback] = []
     
     /// Показывать ли экран добавления/редактирования
     var showCashbackEditor: Bool = false
@@ -27,7 +30,14 @@ struct CashbackState {
     
     /// Все доступные карты
     var availableCards: [Card] = []
-    
+
+    /// Пользовательские категории кешбэка
+    var customCategories: [CashbackCustomCategory] = []
+
+    /// Выбранный месяц на экране кешбэка
+    var selectedMonth: Date = Calendar.current.date(
+        from: Calendar.current.dateComponents([.year, .month], from: Date())
+    ) ?? Date()
 }
 
 // MARK: - Cashback Actions
@@ -35,11 +45,21 @@ struct CashbackState {
 enum CashbackAction {
     case loadCashbacks
     case loadCards
+    case loadCustomCategories
+    case createCustomCategory(String)
+    case setSelectedMonth(Date)
+    case moveMonthBackward
+    case moveMonthForward
+    case renameCustomCategory(rawValue: String, newName: String)
+    case deleteCustomCategory(rawValue: String)
     case addCashback
     case editCashback(Cashback)
     case deleteCashback(Cashback)
     case updateCashback(category: CashbackCategory, percentage: Double, cardIDs: [String])
-    case updateCashbacksForCard(cardID: String, cashbacks: [(category: CashbackCategory, percentage: Double)])
+    case updateCashbacksForCard(
+        cardID: String,
+        cashbacks: [(categoryRaw: String, categoryName: String, percentage: Double)]
+    )
     case showCashbackEditor
     case hideCashbackEditor
     case showCardPicker
@@ -53,24 +73,30 @@ final class CashbackViewModel: ViewModelProtocol {
     @Published var state = CashbackState()
     
     let modelContext: ModelContext
+    private let now: () -> Date
+    private let importedCategoryResolver: CashbackImportCategoryResolver
     
-    init(modelContext: ModelContext) {
+    init(
+        modelContext: ModelContext,
+        now: @escaping () -> Date = Date.init,
+        importedCategoryResolver: CashbackImportCategoryResolver = CashbackImportCategoryResolver()
+    ) {
         self.modelContext = modelContext
+        self.now = now
+        self.importedCategoryResolver = importedCategoryResolver
+        self.state.selectedMonth = Calendar.current.date(
+            from: Calendar.current.dateComponents([.year, .month], from: now())
+        ) ?? now()
         // Инициализируем CardManager
         CardManager.shared.setup(modelContext: modelContext)
         // Сначала загружаем карты, потом кешбэки, чтобы правильно проверить связи
         loadCards()
+        loadCustomCategories()
         loadCashbacks()
         
-        // Логирование для отладки
-        AppLogger.log(.info, category: "Cashback", "Loaded \(state.availableCards.count) cards, \(state.cashbacks.count) cashbacks")
-        for cashback in state.cashbacks {
-            AppLogger.log(.info, category: "Cashback", "Cashback '\(cashback.category.displayName)' has \(cashback.cardIDs.count) cardIDs")
-            for cardID in cashback.cardIDs {
-                let cardExists = state.availableCards.contains { $0.cardUniqueID == cardID }
-                AppLogger.log(.info, category: "Cashback", "  CardID '\(cardID)' exists: \(cardExists)")
-            }
-        }
+        #if DEBUG
+        AppLogger.log(.debug, category: "Cashback", "Loaded \(state.availableCards.count) cards, \(state.cashbacks.count) cashbacks")
+        #endif
         
         // Автоматически проверяем и очищаем невалидные связи при первом запуске
         cleanInvalidCardIDs(in: state.cashbacks)
@@ -86,6 +112,34 @@ final class CashbackViewModel: ViewModelProtocol {
             
         case .loadCards:
             loadCards()
+
+        case .loadCustomCategories:
+            loadCustomCategories()
+
+        case .createCustomCategory(let name):
+            createCustomCategory(name)
+
+        case .setSelectedMonth(let date):
+            let normalized = Calendar.current.date(
+                from: Calendar.current.dateComponents([.year, .month], from: date)
+            ) ?? date
+            let current = Calendar.current.date(
+                from: Calendar.current.dateComponents([.year, .month], from: now())
+            ) ?? now()
+            state.selectedMonth = min(normalized, current)
+            applyFilters()
+
+        case .moveMonthBackward:
+            shiftSelectedMonth(by: -1)
+
+        case .moveMonthForward:
+            shiftSelectedMonth(by: 1)
+
+        case .renameCustomCategory(let rawValue, let newName):
+            _ = renameCustomCategory(rawValue: rawValue, newName: newName)
+
+        case .deleteCustomCategory(let rawValue):
+            _ = deleteCustomCategory(rawValue: rawValue)
             
         case .addCashback:
             state.editingCashback = nil
@@ -120,6 +174,225 @@ final class CashbackViewModel: ViewModelProtocol {
             
         }
     }
+
+    // MARK: - Categories
+
+    func categoryOptions(matching query: String = "") -> [CashbackCategoryOption] {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let allOptions = systemCategoryOptions + customCategoryOptions
+
+        guard !trimmedQuery.isEmpty else { return allOptions }
+
+        return allOptions.filter { option in
+            option.displayName.localizedCaseInsensitiveContains(trimmedQuery)
+        }
+    }
+
+    func categoryOption(for raw: String, fallbackName: String = "") -> CashbackCategoryOption {
+        if let system = CashbackCategory(rawValue: raw) {
+            return CashbackCategoryOption(
+                rawValue: raw,
+                displayName: system.displayName,
+                icon: system.icon,
+                isCustom: false
+            )
+        }
+
+        if let customCategoryID = Self.customCategoryID(from: raw),
+           let custom = state.customCategories.first(where: { $0.categoryID == customCategoryID }) {
+            return CashbackCategoryOption(
+                rawValue: raw,
+                displayName: custom.name,
+                icon: custom.icon,
+                isCustom: true
+            )
+        }
+
+        let safeFallbackName = fallbackName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return CashbackCategoryOption(
+            rawValue: raw,
+            displayName: safeFallbackName.isEmpty ? CashbackCategory.other.displayName : safeFallbackName,
+            icon: CashbackCustomCategory.defaultIcon,
+            isCustom: true
+        )
+    }
+
+    func categoryOptionForImportedName(_ name: String) -> CashbackCategoryOption {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return categoryOption(for: CashbackCategory.other.rawValue)
+        }
+
+        if let systemRaw = importedCategoryResolver.resolveSystemCategoryRaw(for: trimmed) {
+            return categoryOption(for: systemRaw, fallbackName: trimmed)
+        }
+
+        if let custom = createCustomCategory(trimmed) {
+            return custom
+        }
+
+        return categoryOption(for: CashbackCategory.other.rawValue, fallbackName: trimmed)
+    }
+
+    var selectedMonthTitle: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.dateFormat = "LLLL yyyy"
+        return formatter.string(from: state.selectedMonth).capitalized
+    }
+
+    func canMoveMonthForward() -> Bool {
+        let calendar = Calendar.current
+        let selected = calendar.date(
+            from: calendar.dateComponents([.year, .month], from: state.selectedMonth)
+        ) ?? state.selectedMonth
+        let current = calendar.date(
+            from: calendar.dateComponents([.year, .month], from: now())
+        ) ?? now()
+        return selected < current
+    }
+
+    @discardableResult
+    func createCustomCategory(_ name: String, icon: String = CashbackCustomCategory.defaultIcon) -> CashbackCategoryOption? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let normalizedIcon = CashbackCustomCategory.normalizeIcon(icon)
+
+        if let systemMatch = systemCategoryOptions.first(where: {
+            $0.displayName.caseInsensitiveCompare(trimmed) == .orderedSame
+        }) {
+            return systemMatch
+        }
+
+        let normalized = CashbackCustomCategory.normalize(trimmed)
+        if let existing = state.customCategories.first(where: { $0.normalizedName == normalized }) {
+            return categoryOption(for: Self.customRawValue(from: existing.categoryID), fallbackName: existing.name)
+        }
+
+        let customCategory = CashbackCustomCategory(name: trimmed, icon: normalizedIcon)
+        modelContext.insert(customCategory)
+
+        do {
+            try modelContext.save()
+            loadCustomCategories()
+            return categoryOption(for: Self.customRawValue(from: customCategory.categoryID), fallbackName: customCategory.name)
+        } catch {
+            AppLogger.log(.error, category: "Cashback", "Failed to create custom category: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    @discardableResult
+    func renameCustomCategory(
+        rawValue: String,
+        newName: String,
+        newIcon: String? = nil
+    ) -> Bool {
+        guard let sourceCustomID = Self.customCategoryID(from: rawValue),
+              let sourceCategory = state.customCategories.first(where: { $0.categoryID == sourceCustomID }) else {
+            return false
+        }
+
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        let normalized = CashbackCustomCategory.normalize(trimmed)
+        let normalizedIcon = CashbackCustomCategory.normalizeIcon(newIcon ?? sourceCategory.icon)
+
+        let linkedCashbacks = state.cashbacks.filter { $0.categoryRaw == rawValue }
+        let now = Date()
+
+        if let system = systemCategoryOptions.first(where: {
+            $0.displayName.caseInsensitiveCompare(trimmed) == .orderedSame
+        }) {
+            for cashback in linkedCashbacks {
+                cashback.categoryRaw = system.rawValue
+                cashback.name = system.displayName
+                cashback.updatedAt = now
+            }
+            modelContext.delete(sourceCategory)
+            return saveCategoriesAndCashbacks()
+        }
+
+        if let duplicate = state.customCategories.first(where: {
+            $0.normalizedName == normalized && $0.categoryID != sourceCustomID
+        }) {
+            let duplicateRaw = Self.customRawValue(from: duplicate.categoryID)
+            for cashback in linkedCashbacks {
+                cashback.categoryRaw = duplicateRaw
+                cashback.name = duplicate.name
+                cashback.updatedAt = now
+            }
+            modelContext.delete(sourceCategory)
+            return saveCategoriesAndCashbacks()
+        }
+
+        sourceCategory.name = trimmed
+        sourceCategory.normalizedName = normalized
+        sourceCategory.icon = normalizedIcon
+        sourceCategory.updatedAt = now
+
+        for cashback in linkedCashbacks {
+            cashback.name = trimmed
+            cashback.updatedAt = now
+        }
+
+        return saveCategoriesAndCashbacks()
+    }
+
+    @discardableResult
+    func deleteCustomCategory(rawValue: String) -> Bool {
+        let fallback = CashbackCategoryOption(
+            rawValue: CashbackCategory.other.rawValue,
+            displayName: CashbackCategory.other.displayName,
+            icon: CashbackCategory.other.icon,
+            isCustom: false
+        )
+        return deleteCustomCategory(rawValue: rawValue, migrateTo: fallback)
+    }
+
+    @discardableResult
+    func deleteCustomCategory(rawValue: String, migrateTo target: CashbackCategoryOption) -> Bool {
+        guard let sourceCustomID = Self.customCategoryID(from: rawValue),
+              let sourceCategory = state.customCategories.first(where: { $0.categoryID == sourceCustomID }) else {
+            return false
+        }
+
+        let safeTarget: CashbackCategoryOption
+        if target.rawValue == rawValue {
+            safeTarget = CashbackCategoryOption(
+                rawValue: CashbackCategory.other.rawValue,
+                displayName: CashbackCategory.other.displayName,
+                icon: CashbackCategory.other.icon,
+                isCustom: false
+            )
+        } else {
+            safeTarget = target
+        }
+
+        let now = Date()
+        let linkedCashbacks = state.cashbacks.filter { $0.categoryRaw == rawValue }
+        for cashback in linkedCashbacks {
+            cashback.categoryRaw = safeTarget.rawValue
+            cashback.name = safeTarget.displayName
+            cashback.updatedAt = now
+        }
+
+        modelContext.delete(sourceCategory)
+        return saveCategoriesAndCashbacks()
+    }
+
+    private func shiftSelectedMonth(by delta: Int) {
+        let calendar = Calendar.current
+        let selected = calendar.date(
+            from: calendar.dateComponents([.year, .month], from: state.selectedMonth)
+        ) ?? state.selectedMonth
+        let current = calendar.date(
+            from: calendar.dateComponents([.year, .month], from: now())
+        ) ?? now()
+        let candidate = calendar.date(byAdding: .month, value: delta, to: selected) ?? selected
+        state.selectedMonth = min(candidate, current)
+        applyFilters()
+    }
     
     // MARK: - Private Methods
     
@@ -129,23 +402,57 @@ final class CashbackViewModel: ViewModelProtocol {
         )
         if let cashbacks = try? modelContext.fetch(descriptor) {
             state.cashbacks = cashbacks
+            normalizeMissingMonthKeys()
             applyFilters()
+        }
+    }
+
+    private func loadCustomCategories() {
+        let descriptor = FetchDescriptor<CashbackCustomCategory>(
+            sortBy: [SortDescriptor(\.createdAt, order: .forward)]
+        )
+        if let categories = try? modelContext.fetch(descriptor) {
+            state.customCategories = categories
+        }
+    }
+
+    @discardableResult
+    private func saveCategoriesAndCashbacks() -> Bool {
+        do {
+            try modelContext.save()
+            loadCustomCategories()
+            loadCashbacks()
+            return true
+        } catch {
+            AppLogger.log(.error, category: "Cashback", "Failed to save custom cashback categories: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    private func normalizeMissingMonthKeys() {
+        var hasChanges = false
+        for cashback in state.cashbacks {
+            if Cashback.startOfMonth(for: cashback.monthKey) == nil {
+                cashback.monthKey = Cashback.monthKey(for: cashback.createdAt)
+                cashback.updatedAt = Date()
+                hasChanges = true
+            }
+        }
+
+        guard hasChanges else { return }
+        do {
+            try modelContext.save()
+        } catch {
+            AppLogger.log(.error, category: "Cashback", "Failed to normalize cashback month keys: \(error.localizedDescription)")
         }
     }
     
     /// Очищает несуществующие cardIDs из кешбэков
     private func cleanInvalidCardIDs(in cashbacks: [Cashback]) {
-        // Создаем маппинг cardUniqueID -> Card для стабильной идентификации
-        let cardUniqueIDMap: [String: Card] = Dictionary(uniqueKeysWithValues: state.availableCards.map { card in
-            (card.cardUniqueID, card)
-        })
-        
-        // Также создаем маппинг старых persistentModelID -> cardUniqueID для миграции
-        var oldIDToUniqueID: [String: String] = [:]
-        for card in state.availableCards {
-            let oldID = String(describing: card.persistentModelID)
-            oldIDToUniqueID[oldID] = card.cardUniqueID
-        }
+        let cardUniqueIDMap: [String: Card] = Dictionary(
+            state.availableCards.map { ($0.cardUniqueID, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
         
         AppLogger.log(.info, category: "Cashback", "Available \(state.availableCards.count) cards with unique IDs")
         
@@ -154,29 +461,16 @@ final class CashbackViewModel: ViewModelProtocol {
         for cashback in cashbacks {
             let originalCount = cashback.cardIDs.count
             let validCardIDs = cashback.cardIDs.compactMap { cardIDString -> String? in
-                // Если это уже cardUniqueID, проверяем напрямую
                 if let card = cardUniqueIDMap[cardIDString] {
                     return card.cardUniqueID
                 }
                 
-                // Если это старый формат (persistentModelID), конвертируем в cardUniqueID
-                if let uniqueID = oldIDToUniqueID[cardIDString] {
-                    AppLogger.log(.info, category: "Cashback", "Migrating old cardID '\(cardIDString.prefix(50))...' to uniqueID '\(uniqueID)'")
-                    return uniqueID
-                }
-                
-                // Пробуем найти по прямому сравнению (на случай если формат немного отличается)
-                if let card = state.availableCards.first(where: { String(describing: $0.persistentModelID) == cardIDString }) {
-                    AppLogger.log(.info, category: "Cashback", "Found card by direct comparison, using uniqueID")
-                    return card.cardUniqueID
-                }
-                
-                AppLogger.log(.info, category: "Cashback", "Invalid cardID '\(cardIDString.prefix(50))...' in cashback '\(cashback.category.displayName)'")
+                AppLogger.log(.info, category: "Cashback", "Invalid cardID '\(cardIDString.prefix(50))...' in cashback '\(cashback.displayCategoryName)'")
                 return nil
             }
             
             if validCardIDs.count != originalCount || validCardIDs != cashback.cardIDs {
-                AppLogger.log(.info, category: "Cashback", "Updating cardIDs for cashback '\(cashback.category.displayName)'. Original count: \(originalCount), Valid count: \(validCardIDs.count)")
+                AppLogger.log(.info, category: "Cashback", "Updating cardIDs for cashback '\(cashback.displayCategoryName)'. Original count: \(originalCount), Valid count: \(validCardIDs.count)")
                 cashback.cardIDs = validCardIDs
                 cashback.updatedAt = Date()
                 hasChanges = true
@@ -196,9 +490,9 @@ final class CashbackViewModel: ViewModelProtocol {
     }
     
     private func loadCards() {
-        let oldCardIDs = Set(state.availableCards.map { String(describing: $0.persistentModelID) })
+        let oldCardIDs = Set(state.availableCards.map(\.cardUniqueID))
         state.availableCards = CardManager.shared.getAllCards()
-        let newCardIDs = Set(state.availableCards.map { String(describing: $0.persistentModelID) })
+        let newCardIDs = Set(state.availableCards.map(\.cardUniqueID))
         
         // Очищаем несуществующие cardIDs если:
         // 1. Карты действительно удалены (список уменьшился)
@@ -215,14 +509,17 @@ final class CashbackViewModel: ViewModelProtocol {
             )
             if let cashbacks = try? modelContext.fetch(descriptor) {
                 state.cashbacks = cashbacks
+                normalizeMissingMonthKeys()
                 applyFilters()
             }
         }
     }
     
     private func applyFilters() {
-        // Фильтрация по поисковому запросу будет в View
-        // Здесь можно добавить дополнительную логику фильтрации
+        let selectedMonthKey = Cashback.monthKey(for: state.selectedMonth)
+        state.visibleCashbacks = state.cashbacks
+            .filter { $0.monthKey == selectedMonthKey }
+            .sorted { $0.updatedAt > $1.updatedAt }
     }
     
     private func deleteCashback(_ cashback: Cashback) {
@@ -240,14 +537,10 @@ final class CashbackViewModel: ViewModelProtocol {
         // Фильтруем только существующие карты перед сохранением
         // Используем cardUniqueID для стабильной идентификации
         let availableUniqueIDs = Set(state.availableCards.map { $0.cardUniqueID })
+        let selectedMonthKey = Cashback.monthKey(for: state.selectedMonth)
         let validCardIDs = cardIDs.compactMap { cardIDString -> String? in
-            // Если это уже uniqueID, проверяем напрямую
             if availableUniqueIDs.contains(cardIDString) {
                 return cardIDString
-            }
-            // Если это старый формат (persistentModelID), конвертируем
-            if let card = state.availableCards.first(where: { String(describing: $0.persistentModelID) == cardIDString }) {
-                return card.cardUniqueID
             }
             return nil
         }
@@ -255,16 +548,19 @@ final class CashbackViewModel: ViewModelProtocol {
         if let existing = state.editingCashback {
             // Обновляем существующий кешбэк
             existing.category = category
+            existing.name = category.displayName
             existing.percentage = percentage
             existing.cardIDs = validCardIDs
+            existing.monthKey = selectedMonthKey
             existing.updatedAt = Date()
         } else {
             // Создаем новый кешбэк (name будет пустым, используется только категория)
             let newCashback = Cashback(
-                name: "",
+                name: category.displayName,
                 category: category,
                 percentage: percentage,
-                cardIDs: validCardIDs
+                cardIDs: validCardIDs,
+                monthKey: selectedMonthKey
             )
             modelContext.insert(newCashback)
         }
@@ -282,10 +578,7 @@ final class CashbackViewModel: ViewModelProtocol {
     /// Получить карту по ID
     func getCard(byID cardID: String?) -> Card? {
         guard let cardID = cardID else { return nil }
-        // Ищем карту по cardUniqueID (новый формат) или persistentModelID (старый формат)
-        return state.availableCards.first { card in
-            card.cardUniqueID == cardID || String(describing: card.persistentModelID) == cardID
-        }
+        return state.availableCards.first(where: { $0.cardUniqueID == cardID })
     }
     
     /// Получить карты, которые можно использовать для получения кешбэка
@@ -296,8 +589,42 @@ final class CashbackViewModel: ViewModelProtocol {
             getCard(byID: cardID)
         }
     }
-    
-    private func updateCashbacksForCard(cardID: String, cashbacks: [(category: CashbackCategory, percentage: Double)]) {
+
+    private static func customRawValue(from categoryID: String) -> String {
+        "\(Cashback.customCategoryPrefix)\(categoryID)"
+    }
+
+    private static func customCategoryID(from rawValue: String) -> String? {
+        guard rawValue.hasPrefix(Cashback.customCategoryPrefix) else { return nil }
+        return String(rawValue.dropFirst(Cashback.customCategoryPrefix.count))
+    }
+
+    private var systemCategoryOptions: [CashbackCategoryOption] {
+        CashbackCategory.allCases.map {
+            CashbackCategoryOption(
+                rawValue: $0.rawValue,
+                displayName: $0.displayName,
+                icon: $0.icon,
+                isCustom: false
+            )
+        }
+    }
+
+    private var customCategoryOptions: [CashbackCategoryOption] {
+        state.customCategories.map {
+            CashbackCategoryOption(
+                rawValue: Self.customRawValue(from: $0.categoryID),
+                displayName: $0.name,
+                icon: $0.icon,
+                isCustom: true
+            )
+        }
+    }
+
+    private func updateCashbacksForCard(
+        cardID: String,
+        cashbacks: [(categoryRaw: String, categoryName: String, percentage: Double)]
+    ) {
         // Фильтруем только валидные кэшбеки (с процентом > 0)
         let validCashbacks = cashbacks.filter { $0.percentage > 0 }
         
@@ -306,12 +633,15 @@ final class CashbackViewModel: ViewModelProtocol {
         // Проверяем, что карта существует
         guard let card = getCard(byID: cardID) else { return }
         let validCardID = card.cardUniqueID
+        let selectedMonthKey = Cashback.monthKey(for: state.selectedMonth)
         
         // Создаем кэшбеки для выбранной карты
-        for (category, percentage) in validCashbacks {
+        for (categoryRaw, categoryName, percentage) in validCashbacks {
             // Проверяем, не существует ли уже такой кэшбек для этой карты
             let existingCashback = state.cashbacks.first { cashback in
-                cashback.category == category && cashback.cardIDs.contains(validCardID)
+                cashback.categoryRaw == categoryRaw &&
+                cashback.monthKey == selectedMonthKey &&
+                cashback.cardIDs.contains(validCardID)
             }
             
             if let existing = existingCashback {
@@ -319,15 +649,19 @@ final class CashbackViewModel: ViewModelProtocol {
                 if !existing.cardIDs.contains(validCardID) {
                     existing.cardIDs.append(validCardID)
                 }
+                existing.categoryRaw = categoryRaw
+                existing.name = categoryName
+                existing.monthKey = selectedMonthKey
                 existing.percentage = percentage
                 existing.updatedAt = Date()
             } else {
                 // Создаем новый кэшбэк
                 let newCashback = Cashback(
-                    name: "",
-                    category: category,
+                    name: categoryName,
+                    categoryRaw: categoryRaw,
                     percentage: percentage,
-                    cardIDs: [validCardID]
+                    cardIDs: [validCardID],
+                    monthKey: selectedMonthKey
                 )
                 modelContext.insert(newCashback)
             }

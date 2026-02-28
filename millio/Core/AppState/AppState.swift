@@ -11,6 +11,7 @@ import Foundation
 // (определен в SubscriptionManager.swift)
 
 @Observable
+@MainActor
 final class AppState {
     var lifecycle: AppLifecycleState = .launching
     var isICloudAvailable: Bool = false
@@ -20,8 +21,37 @@ final class AppState {
             LanguageManager.shared.setLanguage(selectedLanguage)
         }
     }
+    var primaryCurrencyCode: String = "RUB" {
+        didSet {
+            let normalized = primaryCurrencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            guard !normalized.isEmpty else {
+                primaryCurrencyCode = oldValue
+                return
+            }
+            if normalized != primaryCurrencyCode {
+                primaryCurrencyCode = normalized
+                return
+            }
+            SettingsManager.shared.primaryCurrencyCode = normalized
+        }
+    }
     var isBackupEnabled: Bool = false
     var isDailyReminderEnabled: Bool = false
+    var isAppLockEnabled: Bool = false {
+        didSet {
+            SettingsManager.shared.isAppLockEnabled = isAppLockEnabled
+            if !isAppLockEnabled {
+                isBiometricUnlockEnabled = false
+                isAppLocked = false
+            }
+        }
+    }
+    var isBiometricUnlockEnabled: Bool = false {
+        didSet {
+            SettingsManager.shared.isBiometricUnlockEnabled = isBiometricUnlockEnabled
+        }
+    }
+    var isAppLocked: Bool = false
     
     // Subscription status
     var subscriptionStatus: SubscriptionStatus = .notSubscribed
@@ -32,17 +62,19 @@ final class AppState {
         subscriptionStatus == .subscribed || subscriptionStatus == .trial
     }
     
+    // Профиль: имя и путь к аватарке
+    var profileDisplayName: String = "Гость"
+    var profileAvatarPath: String?
+    
     init() {
         self.isBackupEnabled = SettingsManager.shared.isBackupEnabled
         self.isDailyReminderEnabled = SettingsManager.shared.isDailyReminderEnabled
+        self.isAppLockEnabled = SettingsManager.shared.isAppLockEnabled
+        self.isBiometricUnlockEnabled = SettingsManager.shared.isBiometricUnlockEnabled
         self.selectedLanguage = LanguageManager.shared.currentLanguage
-        
-        // Загружаем статус подписки из менеджера
-        Task { @MainActor in
-            await SubscriptionManager.shared.checkSubscriptionStatus()
-            self.subscriptionStatus = SubscriptionManager.shared.status
-            self.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
-            self.isTrialActive = SubscriptionManager.shared.isTrialActive
-        }
+        self.primaryCurrencyCode = SettingsManager.shared.primaryCurrencyCode
+        self.profileDisplayName = SettingsManager.shared.profileDisplayName
+        self.profileAvatarPath = SettingsManager.shared.profileAvatarFilePath
+        self.isAppLocked = self.isAppLockEnabled
     }
 }

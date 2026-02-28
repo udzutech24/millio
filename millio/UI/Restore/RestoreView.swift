@@ -10,16 +10,15 @@ import SwiftUI
 struct RestoreView: View {
     @Bindable var appState: AppState
     @Bindable var router: AppRouter
-    @Environment(\.modelContext) private var modelContext
-    @Environment(\.modelContainer) private var modelContainer
+    @Environment(\.diContainer) private var diContainer
+    @Environment(\.dismiss) private var dismiss
     @State private var isRestoring = false
     @State private var restoreError: AppError?
     @State private var showSkipConfirmation = false
+    @State private var backupPassphrase: String = ""
     
     private var backupManager: BackupManagerProtocol? {
-        guard let modelContainer = modelContainer else { return nil }
-        let dataRepository = DataRepository(modelContext: modelContext, modelContainer: modelContainer)
-        return BackupManager(dataRepository: dataRepository)
+        diContainer?.backupManager
     }
     
     var body: some View {
@@ -81,10 +80,14 @@ struct RestoreView: View {
         ) {
             Button("Пропустить", role: .destructive) {
                 appState.lifecycle = .ready
+                dismiss()
             }
             Button("Отмена", role: .cancel) {}
         } message: {
             Text("Вы уверены, что хотите пропустить восстановление? Все данные из резервной копии будут потеряны.")
+        }
+        .task {
+            await refreshBackupStatusIfNeeded()
         }
     }
     
@@ -92,26 +95,29 @@ struct RestoreView: View {
     
     private var backupDisabledView: some View {
         VStack(spacing: 24) {
-            VStack(spacing: 12) {
-                Text("Резервное копирование отключено")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-                    .multilineTextAlignment(.center)
-                
-                Text("Включите резервное копирование в настройках для восстановления данных")
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(AppColors.textSecondary)
-                    .multilineTextAlignment(.center)
+            FinancesGlassCard {
+                VStack(spacing: 12) {
+                    Text("Резервное копирование отключено")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .multilineTextAlignment(.center)
+                    
+                    Text("Включите резервное копирование в настройках для восстановления данных")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(24)
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 24)
             
             ActionButton(
                 title: "Продолжить",
-                icon: "arrow.right",
+                icon: .system("arrow.right"),
                 gradientColors: AppColors.incomeGradient
             ) {
                 appState.lifecycle = .ready
+                dismiss()
             }
         }
         .padding(.horizontal, 24)
@@ -120,23 +126,28 @@ struct RestoreView: View {
     // MARK: - Restoring View
     
     private var restoringView: some View {
-        VStack(spacing: 24) {
-            ProgressView()
-                .scaleEffect(1.5)
-                .tint(.white)
-            
-            Text("Восстановление данных...")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(AppColors.textPrimary)
-                .multilineTextAlignment(.center)
-            
-            Text("Пожалуйста, подождите")
-                .font(.system(size: 14, weight: .regular))
-                .foregroundStyle(AppColors.textTertiary)
-                .multilineTextAlignment(.center)
+        FinancesGlassCard {
+            VStack(spacing: 24) {
+                ProgressView()
+                    .scaleEffect(1.5)
+                    .tint(AppColors.textPrimary)
+                
+                VStack(spacing: 8) {
+                    Text("Восстановление данных...")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .multilineTextAlignment(.center)
+                    
+                    Text("Пожалуйста, подождите")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(AppColors.textTertiary)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .padding(40)
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
+        .padding(.horizontal, 24)
     }
     
     // MARK: - Backup Found View
@@ -144,40 +155,27 @@ struct RestoreView: View {
     private func backupFoundView(backupDate: Date) -> some View {
         VStack(spacing: 24) {
             // Backup info card
-            VStack(spacing: 16) {
-                VStack(spacing: 8) {
-                    Text("Найдена резервная копия")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                        .multilineTextAlignment(.center)
-                    
-                    HStack(spacing: 8) {
-                        Image(systemName: "calendar")
-                            .font(.system(size: 14, weight: .regular))
-                            .foregroundStyle(AppColors.textTertiary)
+            FinancesGlassCard {
+                VStack(spacing: 16) {
+                    VStack(spacing: 8) {
+                        Text("Найдена резервная копия")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .multilineTextAlignment(.center)
                         
-                        Text(backupDate.formatted(date: .abbreviated, time: .shortened))
-                            .font(.system(size: 14, weight: .regular))
-                            .foregroundStyle(AppColors.textTertiary)
+                        HStack(spacing: 8) {
+                            Image(systemName: "calendar")
+                                .font(.system(size: 14, weight: .regular))
+                                .foregroundStyle(AppColors.textTertiary)
+                            
+                            Text(backupDate.formatted(date: .abbreviated, time: .shortened))
+                                .font(.system(size: 14, weight: .regular))
+                                .foregroundStyle(AppColors.textTertiary)
+                        }
                     }
                 }
-            }
-            .padding(24)
-            .frame(maxWidth: .infinity)
-            .background {
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(
-                                LinearGradient(
-                                    colors: AppColors.incomeGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ),
-                                lineWidth: 1.5
-                            )
-                    }
+                .padding(24)
+                .frame(maxWidth: .infinity)
             }
             
             // Warning text
@@ -186,12 +184,29 @@ struct RestoreView: View {
                 .foregroundStyle(AppColors.textTertiary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
+
+            VStack(spacing: 8) {
+                Text("Парольная фраза (если backup был зашифрован)")
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(AppColors.textTertiary)
+                    .multilineTextAlignment(.center)
+                
+                FinancesGlassCard(contentPadding: EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)) {
+                    SecureField("Введите парольную фразу", text: $backupPassphrase)
+                        .textContentType(.password)
+                        .privacySensitive()
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                }
+            }
+            .padding(.horizontal, 24)
             
             // Action buttons
             VStack(spacing: 16) {
                 ActionButton(
                     title: "Восстановить",
-                    icon: "arrow.down.circle.fill",
+                    icon: .system("arrow.down.circle.fill"),
                     gradientColors: AppColors.incomeGradient
                 ) {
                     restore()
@@ -217,26 +232,29 @@ struct RestoreView: View {
     
     private var noBackupView: some View {
         VStack(spacing: 24) {
-            VStack(spacing: 12) {
-                Text("Резервная копия не найдена")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-                    .multilineTextAlignment(.center)
-                
-                Text("Продолжите работу с приложением")
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(AppColors.textSecondary)
-                    .multilineTextAlignment(.center)
+            FinancesGlassCard {
+                VStack(spacing: 12) {
+                    Text("Резервная копия не найдена")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .multilineTextAlignment(.center)
+                    
+                    Text("Продолжите работу с приложением")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(24)
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 24)
             
             ActionButton(
                 title: "Продолжить",
-                icon: "arrow.right",
+                icon: .system("arrow.right"),
                 gradientColors: AppColors.incomeGradient
             ) {
                 appState.lifecycle = .ready
+                dismiss()
             }
         }
         .padding(.horizontal, 24)
@@ -255,24 +273,65 @@ struct RestoreView: View {
         
         Task {
             do {
-                try await backupManager.restoreLatest()
+                let passphrase = backupPassphrase.trimmingCharacters(in: .whitespacesAndNewlines)
+                try await backupManager.restoreLatest(passphrase: passphrase.isEmpty ? nil : passphrase)
                 await MainActor.run {
                     isRestoring = false
                     appState.lifecycle = .ready
+                    dismiss()
                 }
             } catch let error as AppError {
                 await MainActor.run {
                     isRestoring = false
                     restoreError = error
-                    appState.lifecycle = .error(error)
                 }
             } catch {
                 await MainActor.run {
                     isRestoring = false
                     restoreError = .unknown(error)
-                    appState.lifecycle = .error(.unknown(error))
                 }
             }
+        }
+    }
+    
+    @MainActor
+    private func refreshBackupStatusIfNeeded() async {
+        guard appState.isBackupEnabled, !isRestoring else { return }
+        
+        let available = await withTimeout(seconds: 3) {
+            await CloudBackupStore().isAvailable()
+        }
+        appState.isICloudAvailable = available ?? false
+        
+        guard appState.isICloudAvailable, let backupManager else { return }
+        let info = await withTimeout(seconds: 3) {
+            await backupManager.lastBackupInfo()
+        }
+        if let infoOptional = info, let info = infoOptional {
+            appState.lastBackupDate = info.date
+        }
+    }
+    
+    private func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async -> T) async -> T? {
+        await withTaskGroup(of: T?.self) { group in
+            group.addTask {
+                await operation()
+            }
+            
+            group.addTask {
+                try? await Task.sleep(for: .seconds(seconds))
+                return nil
+            }
+            
+            var result: T? = nil
+            for await value in group {
+                if let value = value {
+                    result = value
+                    break
+                }
+            }
+            group.cancelAll()
+            return result
         }
     }
 }

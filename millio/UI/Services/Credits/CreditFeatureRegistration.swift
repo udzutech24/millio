@@ -68,11 +68,15 @@ struct CreditImporter: ModelImporter {
             existingCredit.interestRate = interestRate
             existingCredit.monthlyPayment = monthlyPayment
             existingCredit.remainingAmount = remainingAmount
+            existingCredit.remainingAmountAdjustment = data["remainingAmountAdjustment"] as? Double ?? 0.0
             existingCredit.earlyPaymentsAmount = data["earlyPaymentsAmount"] as? Double ?? 0.0
             existingCredit.isClosed = data["isClosed"] as? Bool ?? false
             existingCredit.isFavorite = data["isFavorite"] as? Bool ?? false
             existingCredit.includeInTotal = data["includeInTotal"] as? Bool ?? true
             existingCredit.updatedAt = Date(timeIntervalSince1970: updatedAt)
+            if let archivedAt = data["archivedAt"] as? TimeInterval {
+                existingCredit.archivedAt = Date(timeIntervalSince1970: archivedAt)
+            }
             existingCredit.updateRemainingAmount()
             existingCredit.ensureUniqueID()
             
@@ -95,6 +99,7 @@ struct CreditImporter: ModelImporter {
         
         credit.endDate = endDate > 0 ? Date(timeIntervalSince1970: endDate) : nil
         credit.remainingAmount = remainingAmount
+        credit.remainingAmountAdjustment = data["remainingAmountAdjustment"] as? Double ?? 0.0
         if let initialRemainingAmount = data["initialRemainingAmount"] as? Double {
             credit.initialRemainingAmount = initialRemainingAmount
             credit.hasInitialRemainingAmount = data["hasInitialRemainingAmount"] as? Bool ?? true
@@ -108,6 +113,9 @@ struct CreditImporter: ModelImporter {
         credit.includeInTotal = data["includeInTotal"] as? Bool ?? true
         credit.createdAt = Date(timeIntervalSince1970: createdAt)
         credit.updatedAt = Date(timeIntervalSince1970: updatedAt)
+        if let archivedAt = data["archivedAt"] as? TimeInterval {
+            credit.archivedAt = Date(timeIntervalSince1970: archivedAt)
+        }
         if let uniqueID = data["creditUniqueID"] as? String, !uniqueID.isEmpty {
             credit.uniqueID = uniqueID
         }

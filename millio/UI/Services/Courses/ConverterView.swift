@@ -8,6 +8,7 @@ import AudioToolbox
 struct ConverterView: View {
     @StateObject private var viewModel = ConverterViewModel()
     @State private var deleteButtonTapCount = 0
+    @State private var isRateSourceExpanded = false
     
     private var decSep: String { Locale.current.decimalSeparator ?? "," }
     
@@ -53,11 +54,11 @@ struct ConverterView: View {
         let bottomSafe: CGFloat = 0
 #endif
         let headerH: CGFloat = 52
-        let topPadding: CGFloat = 8
+        let topPadding: CGFloat = 4
         
-        // Минимальные размеры для клавиатуры
-        let minKeyHeight: CGFloat = 44
-        let minKeySpacing: CGFloat = 6
+        // Фиксированная высота кнопок клавиатуры по дизайну
+        let minKeyHeight: CGFloat = 64
+        let minKeySpacing: CGFloat = 4
         let keypadRows: Int = 5
         
         // Вычисляем минимальную высоту клавиатуры (без лишних отступов)
@@ -71,15 +72,15 @@ struct ConverterView: View {
         
         // Вычисляем размеры кнопок и отступы с учетом доступного места
         let keypadContentHeight = max(0, keypadAvailableHeight - bottomSafe)
-        let keyH = max(minKeyHeight, floor(max(0, (keypadContentHeight - CGFloat(keypadRows - 1) * minKeySpacing) / CGFloat(keypadRows))))
+        let keyH = minKeyHeight
         
         // Адаптируем spacing между кнопками
         let actualKeypadContentHeight = CGFloat(keypadRows) * keyH
         let remainingSpace = max(0, keypadContentHeight - actualKeypadContentHeight)
-        let keySpacing = minKeySpacing + (remainingSpace > 0 ? floor(remainingSpace / CGFloat(keypadRows - 1)) : 0)
+        let keySpacing = min(5, minKeySpacing + (remainingSpace > 0 ? floor(remainingSpace / CGFloat(keypadRows - 1)) : 0))
         
-        // Размер шрифта зависит от высоты кнопки
-        let fontSize: CGFloat = keyH >= 60 ? 22 : (keyH >= 54 ? 20 : (keyH >= 48 ? 18 : 16))
+        // Для фиксированной высоты 64 используем фиксированный размер шрифта
+        let fontSize: CGFloat = 22
         
         // Для списка валют используем адаптивную высоту строк
         let desiredRows: Int = 6
@@ -114,12 +115,8 @@ struct ConverterView: View {
     
     var body: some View {
         ZStack {
-            GradientBackground(
-                topGradientColor: "F78C3B",
-                topGradientFadeColor: "1942E6",
-                bottomGradientColor: "1942E6",
-                bottomGradientFadeColor: "F78C3B"
-            )
+            Color.black
+                .ignoresSafeArea()
             
             GeometryReader { geo in
                 let layout = makeLayout(totalH: geo.size.height)
@@ -191,18 +188,22 @@ struct ConverterView: View {
     @ViewBuilder
     private func mainContent(layout: Layout) -> some View {
         VStack(spacing: 0) {
-            // Список валют с возможностью скролла
-            ScrollView {
-                currencyList(layout: layout)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-            }
+            currencyList(layout: layout)
+                .padding(.horizontal, 16)
+                .padding(.top, 4)
+                .padding(.bottom, 28)
+
+            Spacer(minLength: 0)
+
+            calculatorPanel
+                .padding(.horizontal, 16)
+                .padding(.top, 4)
             
             // Клавиатура всегда внизу
             VStack(spacing: 0) {
                 keypad(height: layout.keyH, spacing: layout.keySpacing, fontSize: layout.fontSize)
                     .padding(.horizontal, 16)
-                    .padding(.top, 8)
+                    .padding(.top, 4)
                     .padding(.bottom, layout.bottomSafe) // Минимальный отступ только для safe area
             }
             .background(Color.clear)
@@ -211,15 +212,14 @@ struct ConverterView: View {
     
     @ViewBuilder
     private func currencyList(layout: Layout) -> some View {
-        // Гарантируем валидные значения
-        let safeRowH = layout.rowH.isFinite && layout.rowH > 0 ? layout.rowH : 58
         let safeRowSpacing = layout.rowSpacing.isFinite && layout.rowSpacing >= 0 ? layout.rowSpacing : 8
+        let regularRowHeight: CGFloat = 40
+        let activeRowHeight: CGFloat = 46
         
         VStack(spacing: safeRowSpacing) {
             ForEach(Array(viewModel.state.selectedCurrencies.enumerated()), id: \.offset) { idx, code in
                 let isActive = (viewModel.state.activeCode == code)
-                let effectiveRowH = isActive ? safeRowH * 1.20 : safeRowH
-                let finalRowH = effectiveRowH.isFinite && effectiveRowH > 0 ? effectiveRowH : safeRowH
+                let finalRowH = isActive ? activeRowHeight : regularRowHeight
                 currencyRow(index: idx,
                             code: code,
                             valueText: viewModel.displayValue(for: code),
@@ -228,7 +228,7 @@ struct ConverterView: View {
             }
             let placeholders = max(0, layout.desiredRows - viewModel.state.selectedCurrencies.count)
             ForEach(0..<placeholders, id: \.self) { _ in
-                placeholderRow(rowHeight: safeRowH)
+                placeholderRow(rowHeight: regularRowHeight)
                     .onTapGesture {
                         viewModel.handle(.addCurrency)
                     }
@@ -267,116 +267,162 @@ struct ConverterView: View {
         NavigationStack {
             ZStack {
                 GradientBackground()
-                
-                List {
-                    Section {
-                        DisclosureGroup {
-                            ForEach(RateSource.allCases) { src in
-                                Button {
-                                    viewModel.handle(.setRateSource(src))
-                                } label: {
-                                    HStack(alignment: .center, spacing: 10) {
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(src.title)
-                                                .font(.body)
+                ScrollView {
+                    VStack(spacing: 22) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            FinancesSectionHeader(title: "Курс")
+                            FinancesGlassCard(accentColor: AppColors.financesGradient.first ?? AppColors.brandPrimary) {
+                                VStack(spacing: 0) {
+                                    Button {
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            isRateSourceExpanded.toggle()
+                                        }
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            Text("Источник курса")
+                                                .font(.system(size: 16, weight: .medium))
                                                 .foregroundStyle(AppColors.textPrimary)
-                                            Text(src.subtitle)
-                                                .font(.caption)
+                                            Spacer()
+                                            Text(viewModel.state.rateSource.title)
+                                                .font(.system(size: 14, weight: .regular))
+                                                .foregroundStyle(AppColors.textTertiary)
+                                            Image(systemName: isRateSourceExpanded ? "chevron.up" : "chevron.down")
+                                                .font(.system(size: 12, weight: .semibold))
                                                 .foregroundStyle(AppColors.textTertiary)
                                         }
-                                        Spacer()
-                                        if src == viewModel.state.rateSource {
-                                            Image(systemName: "checkmark")
-                                                .foregroundStyle(
-                                                    LinearGradient(
-                                                        colors: AppColors.coursesGradient,
-                                                        startPoint: .leading,
-                                                        endPoint: .trailing
-                                                    )
-                                                )
+                                        .padding(.vertical, 14)
+                                        .padding(.horizontal, 16)
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    if isRateSourceExpanded {
+                                        FinancesRowDivider(leadingPadding: 16)
+                                        VStack(spacing: 0) {
+                                            ForEach(Array(RateSource.allCases.enumerated()), id: \.element.id) { index, src in
+                                                Button {
+                                                    viewModel.handle(.setRateSource(src))
+                                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                                        isRateSourceExpanded = false
+                                                    }
+                                                } label: {
+                                                    HStack(spacing: 12) {
+                                                        VStack(alignment: .leading, spacing: 2) {
+                                                            Text(src.title)
+                                                                .font(.system(size: 15, weight: .medium))
+                                                                .foregroundStyle(AppColors.textPrimary)
+                                                            Text(src.subtitle)
+                                                                .font(.system(size: 12, weight: .regular))
+                                                                .foregroundStyle(AppColors.textTertiary)
+                                                                .multilineTextAlignment(.leading)
+                                                        }
+                                                        Spacer()
+                                                        if src == viewModel.state.rateSource {
+                                                            Image(systemName: "checkmark")
+                                                                .font(.system(size: 13, weight: .semibold))
+                                                                .foregroundStyle(
+                                                                    LinearGradient(
+                                                                        colors: AppColors.financesGradient,
+                                                                        startPoint: .leading,
+                                                                        endPoint: .trailing
+                                                                    )
+                                                                )
+                                                        }
+                                                    }
+                                                    .padding(.vertical, 12)
+                                                    .padding(.horizontal, 16)
+                                                }
+                                                .buttonStyle(.plain)
+
+                                                if index < RateSource.allCases.count - 1 {
+                                                    FinancesRowDivider(leadingPadding: 16)
+                                                }
+                                            }
                                         }
                                     }
-                                    .padding(.vertical, 4)
+
+                                    FinancesRowDivider(leadingPadding: 16)
+
+                                    HStack(spacing: 12) {
+                                        Text("Последнее обновление")
+                                            .font(.system(size: 16, weight: .medium))
+                                            .foregroundStyle(AppColors.textPrimary)
+                                        Spacer()
+                                        Text(viewModel.lastUpdatedText)
+                                            .font(.system(size: 14, weight: .regular))
+                                            .foregroundStyle(AppColors.textTertiary)
+                                    }
+                                    .padding(.vertical, 14)
+                                    .padding(.horizontal, 16)
+
+                                    FinancesRowDivider(leadingPadding: 16)
+
+                                    Button {
+                                        #if os(iOS)
+                                        if viewModel.state.hapticsEnabled {
+                                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                        }
+                                        #endif
+                                        viewModel.handle(.refreshRates(force: true))
+                                    } label: {
+                                        HStack(spacing: 10) {
+                                            Image(systemName: "arrow.clockwise")
+                                            Text(viewModel.state.isFetchingRates ? "Обновляем..." : "Обновить курсы")
+                                        }
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundStyle(
+                                            LinearGradient(
+                                                colors: AppColors.financesGradient,
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.vertical, 14)
+                                        .padding(.horizontal, 16)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .disabled(viewModel.state.isFetchingRates)
+                                    .opacity(viewModel.state.isFetchingRates ? 0.5 : 1.0)
                                 }
                             }
-                        } label: {
-                            HStack {
-                                Text("Источник курса")
-                                    .foregroundStyle(AppColors.textPrimary)
-                                Spacer()
-                                Text(viewModel.state.rateSource.title)
-                                    .font(.subheadline)
-                                    .foregroundStyle(AppColors.textTertiary)
+                        }
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            FinancesSectionHeader(title: "Точность")
+                            FinancesGlassCard(accentColor: AppColors.financesGradient.first ?? AppColors.brandPrimary, contentPadding: EdgeInsets(top: 14, leading: 16, bottom: 16, trailing: 16)) {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Text("Знаков после запятой")
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundStyle(AppColors.textPrimary)
+                                    Picker("Знаков после запятой", selection: Binding(
+                                        get: { viewModel.state.fractionDigits },
+                                        set: { viewModel.handle(.setFractionDigits($0)) }
+                                    )) {
+                                        ForEach(0...8, id: \.self) { n in
+                                            Text("\(n)").tag(n)
+                                        }
+                                    }
+                                    .pickerStyle(.segmented)
+                                }
                             }
                         }
-                        
-                        HStack {
-                            Text("Последнее обновление")
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            FinancesSectionHeader(title: "Ощущения")
+                            FinancesGlassCard(accentColor: AppColors.financesGradient.first ?? AppColors.brandPrimary, contentPadding: EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16)) {
+                                Toggle("Тактильный отклик", isOn: Binding(
+                                    get: { viewModel.state.hapticsEnabled },
+                                    set: { viewModel.handle(.setHapticsEnabled($0)) }
+                                ))
+                                .tint(AppColors.financesGradient.first ?? AppColors.brandPrimary)
                                 .foregroundStyle(AppColors.textPrimary)
-                            Spacer()
-                            Text(viewModel.lastUpdatedText)
-                                .font(.subheadline)
-                                .foregroundStyle(AppColors.textTertiary)
-                        }
-                        
-                        Button {
-                            #if os(iOS)
-                            if viewModel.state.hapticsEnabled {
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            }
-                            #endif
-                            viewModel.handle(.refreshRates(force: true))
-                        } label: {
-                            HStack {
-                                Image(systemName: "arrow.clockwise")
-                                Text("Обновить курсы")
-                            }
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: AppColors.coursesGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                        }
-                        .disabled(viewModel.state.isFetchingRates)
-                    } header: {
-                        Text("Курс")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary)
-                    }
-                    
-                    Section {
-                        Picker("Знаков после запятой", selection: Binding(
-                            get: { viewModel.state.fractionDigits },
-                            set: { viewModel.handle(.setFractionDigits($0)) }
-                        )) {
-                            ForEach(0...8, id: \.self) { n in
-                                Text("\(n)").tag(n)
                             }
                         }
-                        .pickerStyle(.segmented)
-                    } header: {
-                        Text("Точность")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary)
                     }
-                    
-                    Section {
-                        Toggle("Тактильный отклик", isOn: Binding(
-                            get: { viewModel.state.hapticsEnabled },
-                            set: { viewModel.handle(.setHapticsEnabled($0)) }
-                        ))
-                        .foregroundStyle(AppColors.textPrimary)
-                    } header: {
-                        Text("Ощущения")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary)
-                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 20)
+                    .padding(.bottom, 32)
                 }
-                .listStyle(.insetGrouped)
-                .scrollContentBackground(.hidden)
-                .background(Color.clear)
             }
             .navigationTitle("Конвертор")
             .navigationBarTitleDisplayMode(.inline)
@@ -451,6 +497,84 @@ struct ConverterView: View {
         }
     }
     
+    private var calculatorPanel: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(viewModel.state.expressionText)
+                .font(.system(size: 15, weight: .regular))
+                .foregroundStyle(AppColors.textTertiary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Spacer(minLength: 8)
+            Text(viewModel.state.inputText)
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(AppColors.textPrimary)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+        }
+        .frame(maxWidth: .infinity)
+    }
+    
+    private func courseRowBackground(isActive: Bool) -> LinearGradient {
+        if isActive {
+            return LinearGradient(
+                colors: [Color(hex: "F7933A"), Color(hex: "F58A37")],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        }
+        return LinearGradient(
+            colors: [Color(hex: "2F3035"), Color(hex: "25262A")],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+    }
+    
+    private func codePillBackground(isActive: Bool) -> Color {
+        isActive ? Color(hex: "E9B183") : Color(hex: "5A5C61")
+    }
+    
+    private func flagCircleBackground(isActive: Bool) -> some ShapeStyle {
+        if isActive {
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [Color(hex: "F79B41"), Color(hex: "F58A37")],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+        }
+        return AnyShapeStyle(
+            LinearGradient(
+                colors: [Color(hex: "34353A"), Color(hex: "26272B")],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+    }
+
+    @ViewBuilder
+    private func currencyFlagIcon(for code: String, size: CGFloat, isActive: Bool) -> some View {
+        if let assetName = CurrencyFlags.assetName(for: code) {
+            Image(assetName)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+        } else {
+            Image("flag")
+                .resizable()
+                .renderingMode(.template)
+                .foregroundStyle(AppColors.textPrimary)
+                .frame(width: 24, height: 24)
+                .frame(width: size, height: size)
+                .background(
+                    Circle()
+                        .fill(flagCircleBackground(isActive: isActive))
+                )
+        }
+    }
+    
     
     // MARK: - Currency row
     private func currencyRow(index: Int, code: String, valueText: String, isActive: Bool, rowHeight: CGFloat) -> some View {
@@ -460,16 +584,7 @@ struct ConverterView: View {
             Button {
                 viewModel.handle(.replaceCurrency(index))
             } label: {
-                Image("flag")
-                    .resizable()
-                    .renderingMode(.template)
-                    .foregroundStyle(AppColors.textPrimary)
-                    .frame(width: 24, height: 24)
-                    .frame(width: 60, height: safeRowHeight)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(.ultraThinMaterial)
-                    )
+                currencyFlagIcon(for: code, size: safeRowHeight, isActive: isActive)
             }
             .buttonStyle(.plain)
             
@@ -483,98 +598,31 @@ struct ConverterView: View {
                     viewModel.handle(.selectCurrency(code))
                 }
             } label: {
-                HStack(spacing: 12) {
-                    HStack(spacing: 8) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(code)
-                                .font(isActive ? .title3.weight(.semibold) : .headline.weight(.semibold))
-                                .foregroundStyle(AppColors.textPrimary)
-                        }
-                        if isActive {
-                            Button {
-                                viewModel.handle(.toggleCalcMode)
-                            } label: {
-                                Image(systemName: viewModel.state.calcModeOn ? "circle.grid.3x3.fill" : "circle.grid.3x3")
-                                    .font(.footnote.weight(.semibold))
-                                    .foregroundStyle(viewModel.state.calcModeOn ? AppColors.textPrimary : AppColors.textTertiary)
-                                    .frame(width: 22, height: 22)
-                                    .background(
-                                        Circle().fill(viewModel.state.calcModeOn ? AppColors.coursesGradient.first!.opacity(0.85) : AppColors.iconBackground)
-                                    )
-                                    .overlay(
-                                        Circle().strokeBorder(AppColors.textPrimary.opacity(viewModel.state.calcModeOn ? 0.0 : 0.12))
-                                    )
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Калькулятор")
-                        }
-                    }
+                HStack(spacing: 14) {
+                    let codePillHeight: CGFloat = isActive ? 34 : 30
+                    Text(code)
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(Color.white)
+                        .frame(width: 86, height: codePillHeight)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(codePillBackground(isActive: isActive))
+                        )
                     Spacer()
-                    if isActive && viewModel.state.calcModeOn {
-                        VStack(alignment: .trailing, spacing: 2) {
-                            // Строка выражения: 100-2+3 или 100-2+3=101
-                            if !viewModel.state.expressionText.isEmpty {
-                                Text(viewModel.state.expressionText)
-                                    .font(.caption2)
-                                    .foregroundStyle(AppColors.textTertiary)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.6)
-                            }
-                            HStack(spacing: 6) {
-                                TextField("0", text: Binding(
-                                    get: { viewModel.state.inputText },
-                                    set: { viewModel.handle(.updateInputText($0)) }
-                                ))
-                                .keyboardType(.decimalPad)
-                                .font(.title3.weight(.semibold))
-                                .monospacedDigit()
-                                .multilineTextAlignment(.trailing)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled(true)
-                                .submitLabel(.done)
-                                .frame(minWidth: 80)
-                            }
-                            .padding(.vertical, 6)
-                            .padding(.horizontal, 8)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(.ultraThinMaterial)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .strokeBorder(AppColors.textPrimary.opacity(0.1))
-                            )
-                        }
-                    } else {
-                        Text(valueText)
-                            .font(isActive ? .title2.weight(.bold) : .title3.weight(.semibold))
-                            .monospacedDigit()
-                            .minimumScaleFactor(0.6)
-                            .foregroundStyle(AppColors.textPrimary)
-                            .padding(.trailing, 4)
-                    }
+                    Text(valueText)
+                        .font(isActive ? .system(size: 17, weight: .bold) : .system(size: 15, weight: .regular))
+                        .monospacedDigit()
+                        .minimumScaleFactor(0.6)
+                        .foregroundStyle(Color.white)
+                        .padding(.trailing, 2)
                 }
-                .padding(.horizontal, 12)
+                .padding(.leading, isActive ? 12 : 8)
+                .padding(.trailing, 12)
                 .frame(height: safeRowHeight)
                 .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(.ultraThinMaterial)
+                    Capsule(style: .continuous)
+                        .fill(courseRowBackground(isActive: isActive))
                 )
-                .overlay(
-                    Group {
-                        if isActive {
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .stroke(
-                                    LinearGradient(colors: AppColors.coursesGradient, startPoint: .leading, endPoint: .trailing),
-                                    lineWidth: 1.5
-                                )
-                        } else {
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .stroke(AppColors.textPrimary.opacity(0.1), lineWidth: 1)
-                        }
-                    }
-                )
-                .shadow(color: .black.opacity(isActive ? 0.22 : 0.10), radius: isActive ? 9 : 5, x: 0, y: isActive ? 6 : 3)
             }
             .buttonStyle(.plain)
             .contextMenu {
@@ -599,29 +647,39 @@ struct ConverterView: View {
         let safeRowHeight = rowHeight.isFinite && rowHeight > 0 ? rowHeight : 58
         
         return HStack(spacing: 10) {
-            Image(systemName: "plus.circle.fill")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(AppColors.textTertiary)
-                .frame(width: 60, height: safeRowHeight)
+            Image("flag")
+                .resizable()
+                .renderingMode(.template)
+                .foregroundStyle(AppColors.textPrimary)
+                .frame(width: 24, height: 24)
+                .frame(width: safeRowHeight, height: safeRowHeight)
                 .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(.ultraThinMaterial)
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(hex: "34353A"), Color(hex: "26272B")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                 )
             HStack {
-                Text("Добавить валюту")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(AppColors.textTertiary)
                 Spacer()
+                Text("Добавить валюту")
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundStyle(Color.white.opacity(0.55))
             }
             .padding(.horizontal, 12)
-                .frame(height: safeRowHeight)
+            .frame(height: safeRowHeight)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(.ultraThinMaterial)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(AppColors.textPrimary.opacity(0.1), lineWidth: 1)
+                Capsule(style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(hex: "2F3035"), Color(hex: "25262A")],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
             )
         }
         .contentShape(Rectangle())
@@ -802,4 +860,3 @@ struct ConverterView_Previews: PreviewProvider {
     }
 }
 #endif
-

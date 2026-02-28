@@ -19,6 +19,15 @@ struct FinanceQuickEditAccountView: View {
     var accountInfo: (name: String, amount: Double, currency: String, icon: String, isCreditCardDebt: Bool)? {
         viewModel.getAccountInfo(account: account)
     }
+
+    private var marketInvestment: Investment? {
+        guard account.accountType == .investment else { return nil }
+        return viewModel.state.availableInvestments.first(where: { $0.investmentUniqueID == account.accountID && $0.isMarketPriced })
+    }
+
+    private var isMarketInvestment: Bool {
+        marketInvestment != nil
+    }
     
     var isCreditCard: Bool {
         if account.accountType == .card,
@@ -56,7 +65,7 @@ struct FinanceQuickEditAccountView: View {
                         
                         // Поле ввода суммы
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(isCreditCard ? "Задолженность" : "Сумма")
+                            Text(fieldTitle)
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundStyle(AppColors.textSecondary)
                             
@@ -70,14 +79,14 @@ struct FinanceQuickEditAccountView: View {
                                     .autocorrectionDisabled()
                                     .textInputAutocapitalization(.never)
                                 
-                                Text(info.currency)
+                                Text(valueSuffix(for: info))
                                     .font(.system(size: 20, weight: .semibold))
                                     .foregroundStyle(AppColors.textSecondary)
                             }
                             .task {
                                 // Инициализируем значение при первом появлении
                                 if amountText.isEmpty {
-                                    amountText = formatAmountForInput(info.amount)
+                                    amountText = formatAmountForInput(currentEditableValue(fallbackAmount: info.amount))
                                 }
                                 // Автоматически устанавливаем фокус на поле ввода
                                 try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 секунды
@@ -126,7 +135,7 @@ struct FinanceQuickEditAccountView: View {
                     }
                 }
             }
-            .navigationTitle("Редактирование суммы")
+            .navigationTitle(isMarketInvestment ? "Редактирование количества" : "Редактирование суммы")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -159,8 +168,8 @@ struct FinanceQuickEditAccountView: View {
             // Целое число - без десятичных знаков
             formatter.maximumFractionDigits = 0
         } else {
-            // Для чисел с дробной частью используем 2 знака (стандарт для денежных сумм)
-            formatter.maximumFractionDigits = 2
+            // Для количества монет/акций нужны дробные значения точнее, чем у обычных сумм
+            formatter.maximumFractionDigits = isMarketInvestment ? 8 : 2
         }
         
         return formatter.string(from: NSNumber(value: amount)) ?? "0"
@@ -187,5 +196,23 @@ struct FinanceQuickEditAccountView: View {
         viewModel.handle(.updateAccountAmount(account, amount))
         isLoading = false
         dismiss()
+    }
+
+    private var fieldTitle: String {
+        if isMarketInvestment {
+            return "Количество"
+        }
+        return isCreditCard ? "Задолженность" : "Сумма"
+    }
+
+    private func valueSuffix(for info: (name: String, amount: Double, currency: String, icon: String, isCreditCardDebt: Bool)) -> String {
+        isMarketInvestment ? "шт." : info.currency
+    }
+
+    private func currentEditableValue(fallbackAmount: Double) -> Double {
+        if let investment = marketInvestment {
+            return investment.marketQuantity ?? 0
+        }
+        return fallbackAmount
     }
 }

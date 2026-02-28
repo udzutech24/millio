@@ -28,8 +28,8 @@ enum CashflowTransactionType: String, Codable, CaseIterable {
         case .income: return "Доход"
         case .expense: return "Расход"
         case .transfer: return "Перевод"
-        case .balanceAdjustment: return "Изменение баланса"
-        case .cardBalanceAdjustment: return "Корректировка баланса"
+        case .balanceAdjustment: return "Изменение стоимости актива"
+        case .cardBalanceAdjustment: return "Корректировка баланса счета"
         case .creditDebtAdjustment: return "Корректировка долга"
         }
     }
@@ -139,6 +139,15 @@ final class CashflowTransaction: Persistable {
     
     /// Валюта
     var currency: String = "RUB"
+
+    /// Зафиксированный курс для истории (transaction.currency -> exchangeRateCurrency)
+    var exchangeRate: Double?
+
+    /// Дата курса (дневная гранулярность)
+    var exchangeRateDate: Date?
+
+    /// Валюта, к которой применяется exchangeRate
+    var exchangeRateCurrency: String?
     
     /// Дата транзакции
     var transactionDate: Date = Date()
@@ -251,6 +260,15 @@ final class CashflowTransaction: Persistable {
         }
         if let note = note {
             dict["note"] = note
+        }
+        if let exchangeRate = exchangeRate {
+            dict["exchangeRate"] = exchangeRate
+        }
+        if let exchangeRateDate = exchangeRateDate {
+            dict["exchangeRateDate"] = exchangeRateDate.timeIntervalSince1970
+        }
+        if let exchangeRateCurrency = exchangeRateCurrency {
+            dict["exchangeRateCurrency"] = exchangeRateCurrency
         }
         
         return try JSONSerialization.data(withJSONObject: dict)

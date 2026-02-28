@@ -1,6 +1,6 @@
 # Статус ядра — Millio
 
-**Дата обновления:** 2026-01-27
+**Дата обновления:** 2026-01-30
 
 ## ✅ Реализовано в коде
 
@@ -8,8 +8,12 @@
 - **AppSchema + ModelTypeRegistry** — динамическая схема SwiftData и регистрация моделей
 - **Backup/Restore** через CloudKit (`Core/Backup`)
 - **Backup metadata/versioning** (`BackupMetadata`, `BackupVersion`, `BackupInfo`)
-- **Опциональное шифрование backup** (AES-GCM + Keychain)
+- **Fail-fast backup импорт/экспорт** (валидируется metadata/schemaVersion/modelCount, неизвестные `_type` считаются ошибкой)
+- **Опциональное шифрование backup**:
+  - `aesgcm-keychain` (device-only, ключ в Keychain)
+  - `aesgcm-passphrase` (PBKDF2 + парольная фраза, переносимо)
 - **Сжатие backup** (Compression LZFSE)
+- **CrashReporting (Release)** — non-fatal ошибки backup/restore отправляются в Crashlytics
 - **Retry механизм** для сетевых операций (`RetryPolicy`, `withRetry`)
 - **ErrorRecoveryManager** со стратегиями восстановления
 - **EventBus** для слабой связанности
@@ -17,6 +21,8 @@
 - **AppState + AppLifecycleUseCase**
 - **AppRouter + RootViewResolver** для навигации
 - **Мультиязычность** (String Catalog + LanguageManager)
+- **Основная валюта приложения** (persisted-настройка в профиле, используется как дефолт в денежных сервисах)
+- **Курсы валют:** глобально фиксированы на ERAPI; выбор источника внутри конвертера изолирован и не влияет на остальные экраны
 - **Subscription/Notification менеджеры** на уровне Core
 
 ## ✅ Соответствие CORE_RULES.md (в целом)
@@ -29,31 +35,28 @@
 
 ## ⚠️ Компромиссы и отступления
 
-1. **Core знает бизнес-сущности**
-   - `DataRepository` использует явные типы (`Card`, `Cashback`, `FinanceGroup` и т.д.) для экспорта/очистки.
-
-2. **SwiftUI в Core**
+1. **SwiftUI в Core**
    - `RootViewResolver` и `AppRouter` находятся в Core и зависят от SwiftUI.
    - `ViewModelProtocol` использует `ObservableObject`.
 
-3. **ModelContext в View слое**
+2. **ModelContext в View слое**
    - Во многих экранах `ModelContext` используется для инициализации ViewModel/репозиториев
      (например, `ProfileView`, `RestoreView`, `FinancesView`).
 
-4. **Restore не запускается автоматически**
+3. **Restore не запускается автоматически**
    - Экран восстановления открывается вручную из профиля.
    - `checkRestoreNeeded()` есть, но сейчас не используется.
 
-5. **UI для шифрования отсутствует**
-   - Флаг есть в `SettingsManager`, но отдельного тоггла нет.
+4. **UI для backup/шифрования частично завершен**
+   - В профиле есть экран управления backup (включение/статус/ручной backup/restore).
+   - Passphrase-backup требует ввода парольной фразы и сейчас используется только для ручного backup.
 
-6. **BackupMonitor не подключен к UI**
+5. **BackupMonitor не подключен к UI**
    - Монитор реализован, но прогресс/статусы в интерфейсе не отображаются.
 
 ## 📌 Открытые улучшения (если захотите развивать)
 
-- Вынести явные зависимости Core → Feature модели (унифицировать экспорт/очистку)
-- Добавить UI для ручного backup и переключателя шифрования
+- Продумать passphrase-backup для авто-backup (безопасное хранение/ввод парольной фразы)
 - Подключить `BackupMonitor` к интерфейсу
 - Решить вопрос автоматического restore при старте (или убрать `restoring` из lifecycle)
 

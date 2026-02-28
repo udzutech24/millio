@@ -48,36 +48,12 @@ struct CashflowTransactionImporter: ModelImporter {
         let creditID = dict["creditID"] as? String
         let investmentID = dict["investmentID"] as? String
         let note = dict["note"] as? String
+        let exchangeRate = dict["exchangeRate"] as? Double
+        let exchangeRateDate = (dict["exchangeRateDate"] as? TimeInterval).map { Date(timeIntervalSince1970: $0) }
+        let exchangeRateCurrency = dict["exchangeRateCurrency"] as? String
         
         let incomeCategory = incomeCategoryRaw.flatMap { IncomeCategory(rawValue: $0) }
         let expenseCategory = expenseCategoryRaw.flatMap { ExpenseCategory(rawValue: $0) }
-        
-        // Проверяем, не существует ли уже такая транзакция
-        let uniqueID = dict["transactionUniqueID"] as? String
-        if let uniqueID = uniqueID {
-            let existingDescriptor = FetchDescriptor<CashflowTransaction>(
-                predicate: #Predicate<CashflowTransaction> { transaction in
-                    transaction.transactionUniqueID == uniqueID
-                }
-            )
-            
-            if let existing = try? context.fetch(existingDescriptor).first {
-                // Обновляем существующую транзакцию
-                existing.transactionTypeRaw = transactionTypeRaw
-                existing.amount = amount
-                existing.currency = currency
-                existing.transactionDate = transactionDate
-                existing.cardID = cardID
-                existing.toCardID = toCardID
-                existing.creditID = creditID
-                existing.investmentID = investmentID
-                existing.incomeCategoryRaw = incomeCategoryRaw
-                existing.expenseCategoryRaw = expenseCategoryRaw
-                existing.note = note
-                existing.updatedAt = updatedAt
-                return
-            }
-        }
         
         // Создаем новую транзакцию
         let transaction = CashflowTransaction(
@@ -95,6 +71,9 @@ struct CashflowTransactionImporter: ModelImporter {
         )
         transaction.createdAt = createdAt
         transaction.updatedAt = updatedAt
+        transaction.exchangeRate = exchangeRate
+        transaction.exchangeRateDate = exchangeRateDate
+        transaction.exchangeRateCurrency = exchangeRateCurrency
         
         context.insert(transaction)
     }

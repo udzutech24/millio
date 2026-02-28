@@ -17,7 +17,6 @@ struct CardEditorView: View {
     @State private var isNewCard: Bool
 
     @Environment(\.dismiss) private var dismiss
-    @State private var showDeleteConfirmation = false
 
     @State private var creditLimitText: String = ""
     @State private var availableCurrencies: [String] = ["RUB", "USD", "EUR"]
@@ -67,109 +66,16 @@ struct CardEditorView: View {
             ZStack {
                 GradientBackground()
 
-                Form {
-                    Section {
-                        TextField("Название карты", text: $card.name)
-                            .foregroundStyle(AppColors.textPrimary)
-
-                        TextField("Номер карты (последние 4 цифры, необязательно)", text: Binding(
-                            get: { card.cardNumber },
-                            set: { newValue in
-                                let filtered = newValue.filter { $0.isNumber }
-                                if filtered.count <= 4 {
-                                    card.cardNumber = filtered
-                                }
-                            }
-                        ))
-                        .keyboardType(.numberPad)
-                        .foregroundStyle(AppColors.textPrimary)
-
-                        Picker("Банк", selection: $card.bankRaw) {
-                            ForEach(Bank.allCases, id: \.rawValue) { bank in
-                                Text(bank.displayName).tag(bank.rawValue)
-                            }
-                        }
-                        .foregroundStyle(AppColors.textPrimary)
-
-                        Picker("Тип карты", selection: $card.cardTypeRaw) {
-                            ForEach(CardType.allCases, id: \.rawValue) { type in
-                                Text(type.displayName).tag(type.rawValue)
-                            }
-                        }
-                        .foregroundStyle(AppColors.textPrimary)
-                        .onChange(of: card.cardTypeRaw) { _, newValue in
-                            if newValue == CardType.debit.rawValue {
-                                card.creditLimit = nil
-                                creditLimitText = ""
-                            }
-                        }
-                    } header: {
-                        Text("Основная информация")
-                            .foregroundStyle(AppColors.textSecondary)
+                ScrollView {
+                    VStack(spacing: 24) {
+                        mainInfoSection
+                        financeSection
+                        additionalSection
                     }
-
-                    Section {
-                        if isLoadingCurrencies {
-                            HStack {
-                                Text("Валюта")
-                                    .foregroundStyle(AppColors.textPrimary)
-                                Spacer()
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                                    .tint(AppColors.textTertiary)
-                            }
-                        } else {
-                            Picker("Валюта", selection: $card.currency) {
-                                ForEach(availableCurrencies, id: \.self) { currency in
-                                    Text(currency).tag(currency)
-                                }
-                            }
-                            .foregroundStyle(AppColors.textPrimary)
-                        }
-
-                        TextField("Баланс", value: $card.balance, format: .number)
-                            .keyboardType(.decimalPad)
-                            .foregroundStyle(AppColors.textPrimary)
-
-                        if card.cardType == .credit {
-                            TextField("Кредитный лимит", text: $creditLimitText)
-                                .keyboardType(.decimalPad)
-                                .foregroundStyle(AppColors.textPrimary)
-                                .onChange(of: creditLimitText) { _, newValue in
-                                    if let limit = Double(newValue.replacingOccurrences(of: ",", with: ".")) {
-                                        card.creditLimit = limit
-                                    } else if newValue.isEmpty {
-                                        card.creditLimit = nil
-                                    }
-                                }
-                        }
-                    } header: {
-                        Text("Финансы")
-                            .foregroundStyle(AppColors.textSecondary)
-                    }
-
-                    Section {
-                        Picker("Приоритет", selection: Binding(
-                            get: { card.priority },
-                            set: { card.priority = $0 }
-                        )) {
-                            ForEach(CardPriority.allCases, id: \.self) { priority in
-                                Text(priority.displayName).tag(priority)
-                            }
-                        }
-                        .foregroundStyle(AppColors.textPrimary)
-
-                        Toggle("Избранная", isOn: $card.isFavorite)
-                            .foregroundStyle(AppColors.textPrimary)
-
-                        Toggle("Учитывать в общих финансах", isOn: $card.includeInTotal)
-                            .foregroundStyle(AppColors.textPrimary)
-                    } header: {
-                        Text("Дополнительно")
-                            .foregroundStyle(AppColors.textSecondary)
-                    }
+                    .padding(.top, 20)
+                    .padding(.bottom, 40)
+                    .padding(.horizontal, 16)
                 }
-                .scrollContentBackground(.hidden)
             }
             .navigationTitle(isNewCard ? "Новая карта" : "Редактирование")
             .navigationBarTitleDisplayMode(.inline)
@@ -207,19 +113,191 @@ struct CardEditorView: View {
                 if onDelete != nil, !isNewCard {
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button("Удалить", role: .destructive) {
-                            showDeleteConfirmation = true
+                            onDelete?()
                         }
                     }
                 }
             }
-            .confirmationDialog("Удалить счет полностью?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
-                Button("Удалить", role: .destructive) {
-                    onDelete?()
-                }
-                Button("Отмена", role: .cancel) {}
-            }
             .onAppear {
                 loadAvailableCurrencies()
+            }
+        }
+    }
+    
+    private var mainInfoSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Основная информация")
+            FinancesGlassCard {
+                VStack(spacing: 0) {
+                    TextField("Название карты", text: $card.name)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+
+                    FinancesRowDivider()
+
+                    TextField("Номер карты (последние 4 цифры)", text: Binding(
+                        get: { card.cardNumber },
+                        set: { newValue in
+                            let filtered = newValue.filter { $0.isNumber }
+                            if filtered.count <= 4 {
+                                card.cardNumber = filtered
+                            }
+                        }
+                    ))
+                    .keyboardType(.numberPad)
+                    .foregroundStyle(AppColors.textPrimary)
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+
+                    FinancesRowDivider()
+
+                    HStack {
+                        Text("Банк")
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        Picker("Банк", selection: $card.bankRaw) {
+                            ForEach(Bank.allCases, id: \.rawValue) { bank in
+                                Text(bank.displayName).tag(bank.rawValue)
+                            }
+                        }
+                        .tint(AppColors.textTertiary)
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 16)
+
+                    FinancesRowDivider()
+
+                    HStack {
+                        Text("Тип карты")
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        Picker("Тип карты", selection: $card.cardTypeRaw) {
+                            ForEach(CardType.allCases, id: \.rawValue) { type in
+                                Text(type.displayName).tag(type.rawValue)
+                            }
+                        }
+                        .tint(AppColors.textTertiary)
+                        .onChange(of: card.cardTypeRaw) { _, newValue in
+                            if newValue == CardType.debit.rawValue {
+                                card.creditLimit = nil
+                                creditLimitText = ""
+                            }
+                        }
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 16)
+                }
+            }
+        }
+    }
+    
+    private var financeSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Финансы")
+            FinancesGlassCard {
+                VStack(spacing: 0) {
+                    HStack {
+                        Text("Валюта")
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        if isLoadingCurrencies {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                                .tint(AppColors.textTertiary)
+                        } else {
+                            Picker("Валюта", selection: $card.currency) {
+                                ForEach(availableCurrencies, id: \.self) { currency in
+                                    Text(currency).tag(currency)
+                                }
+                            }
+                            .tint(AppColors.textTertiary)
+                        }
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 16)
+
+                    FinancesRowDivider()
+
+                    HStack {
+                        Text("Баланс")
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        TextField("0", value: $card.balance, format: .number)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .foregroundStyle(AppColors.textPrimary)
+                            .frame(maxWidth: 150)
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+
+                    if card.cardType == .credit {
+                        FinancesRowDivider()
+                        
+                        HStack {
+                            Text("Кредитный лимит")
+                                .foregroundStyle(AppColors.textPrimary)
+                            Spacer()
+                            TextField("0", text: $creditLimitText)
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .foregroundStyle(AppColors.textPrimary)
+                                .frame(maxWidth: 150)
+                                .onChange(of: creditLimitText) { _, newValue in
+                                    if let limit = Double(newValue.replacingOccurrences(of: ",", with: ".")) {
+                                        card.creditLimit = limit
+                                    } else if newValue.isEmpty {
+                                        card.creditLimit = nil
+                                    }
+                                }
+                        }
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                    }
+                }
+            }
+        }
+    }
+    
+    private var additionalSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Дополнительно")
+            FinancesGlassCard {
+                VStack(spacing: 0) {
+                    HStack {
+                        Text("Приоритет")
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        Picker("Приоритет", selection: Binding(
+                            get: { card.priority },
+                            set: { card.priority = $0 }
+                        )) {
+                            ForEach(CardPriority.allCases, id: \.self) { priority in
+                                Text(priority.displayName).tag(priority)
+                            }
+                        }
+                        .tint(AppColors.textTertiary)
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 16)
+
+                    FinancesRowDivider()
+
+                    Toggle("Избранная", isOn: $card.isFavorite)
+                        .tint(AppColors.toggleOnGreen)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+
+                    FinancesRowDivider()
+
+                    Toggle("Учитывать в общих", isOn: $card.includeInTotal)
+                        .tint(AppColors.toggleOnGreen)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                }
             }
         }
     }

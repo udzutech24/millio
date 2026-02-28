@@ -27,19 +27,29 @@ final class DIContainer {
         self.backupManager = backupManager
     }
     
+    @MainActor
     static func create(
         appState: AppState,
         modelContainer: ModelContainer
     ) -> DIContainer {
         let modelContext = modelContainer.mainContext
+        do {
+            try DataIntegrityCleaner.runIfNeeded(modelContext: modelContext)
+        } catch {
+            AppLogger.log(.error, category: "Integrity", "Data integrity cleanup failed: \(error.localizedDescription)")
+        }
         let dataRepository = DataRepository(
             modelContext: modelContext,
             modelContainer: modelContainer
         )
         
-        let backupManager: BackupManagerProtocol = appState.isBackupEnabled
-            ? BackupManager(dataRepository: dataRepository) // BackupManager сам проверяет настройки шифрования
-            : MockBackupManager()
+        let enabledBackupManager: BackupManagerProtocol = BackupManager(dataRepository: dataRepository)
+        let disabledBackupManager: BackupManagerProtocol = MockBackupManager()
+        let backupManager: BackupManagerProtocol = SwitchingBackupManager(
+            appState: appState,
+            enabled: enabledBackupManager,
+            disabled: disabledBackupManager
+        )
         
         return DIContainer(
             appState: appState,

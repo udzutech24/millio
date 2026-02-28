@@ -10,6 +10,8 @@ import SwiftUI
 
 /// Элемент сервиса для главного экрана
 struct ServiceItem: Identifiable, Equatable {
+    static let cashbackIconAssetName = "cashback"
+
     let id: String
     let route: AppRoute
     let title: String
@@ -36,7 +38,7 @@ struct ServiceItem: Identifiable, Equatable {
                 id: "cashback",
                 route: .cashback,
                 title: "Кешбэк",
-                icon: "cashback",
+                icon: cashbackIconAssetName,
                 gradientColors: AppColors.cashbackGradient
             ),
             ServiceItem(

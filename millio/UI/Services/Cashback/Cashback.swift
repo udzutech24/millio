@@ -46,9 +46,105 @@ enum CashbackCategory: String, Codable, CaseIterable {
     }
 }
 
+/// Пользовательская категория кешбэка
+@Model
+final class CashbackCustomCategory: Persistable {
+    static let defaultIcon = "tag.fill"
+    static let allowedIcons: [String] = [
+        "tag.fill",
+        "cart.fill",
+        "fuelpump.fill",
+        "fork.knife",
+        "cross.case.fill",
+        "car.fill",
+        "gamecontroller.fill",
+        "globe",
+        "house.fill",
+        "figure.walk",
+        "cup.and.saucer.fill",
+        "gift.fill",
+        "airplane",
+        "iphone",
+        "bolt.fill",
+        "heart.fill"
+    ]
+
+    /// Уникальный идентификатор категории
+    var categoryID: String = UUID().uuidString
+
+    /// Отображаемое имя
+    var name: String = ""
+
+    /// Нормализованное имя для дедупликации
+    var normalizedName: String = ""
+
+    /// Иконка категории (SF Symbol)
+    var icon: String = defaultIcon
+
+    /// Дата создания
+    var createdAt: Date = Date()
+
+    /// Дата обновления
+    var updatedAt: Date = Date()
+
+    init(name: String, icon: String = CashbackCustomCategory.defaultIcon) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.categoryID = UUID().uuidString
+        self.name = trimmed
+        self.normalizedName = CashbackCustomCategory.normalize(trimmed)
+        self.icon = CashbackCustomCategory.normalizeIcon(icon)
+        self.createdAt = Date()
+        self.updatedAt = Date()
+    }
+
+    static func normalize(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    static func normalizeIcon(_ icon: String) -> String {
+        allowedIcons.contains(icon) ? icon : defaultIcon
+    }
+
+    func export() throws -> Data {
+        let dict: [String: Any] = [
+            "type": "CashbackCustomCategory",
+            "categoryID": categoryID,
+            "name": name,
+            "normalizedName": normalizedName,
+            "icon": icon,
+            "createdAt": createdAt.timeIntervalSince1970,
+            "updatedAt": updatedAt.timeIntervalSince1970
+        ]
+        return try JSONSerialization.data(withJSONObject: dict)
+    }
+
+    static func `import`(_ data: Data) throws {
+        guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              dict["categoryID"] as? String != nil,
+              dict["name"] as? String != nil,
+              dict["createdAt"] as? TimeInterval != nil,
+              dict["updatedAt"] as? TimeInterval != nil else {
+            throw AppError.backupCorrupted
+        }
+    }
+}
+
+/// Унифицированная категория для UI (системная или пользовательская)
+struct CashbackCategoryOption: Identifiable, Hashable {
+    /// Стабильный raw-ключ для хранения в Cashback.categoryRaw
+    let rawValue: String
+    let displayName: String
+    let icon: String
+    let isCustom: Bool
+
+    var id: String { rawValue }
+}
+
 /// Кешбэк
 @Model
 final class Cashback: Persistable {
+    static let customCategoryPrefix = "custom:"
+
     /// Название кешбэка
     var name: String = ""
     
@@ -57,6 +153,9 @@ final class Cashback: Persistable {
     
     /// Процент кешбэка (0.0 - 100.0)
     var percentage: Double = 0.0
+
+    /// Месяц действия кешбэка в формате yyyy-MM
+    var monthKey: String = Cashback.monthKey(for: Date())
     
     /// ID привязанных карт - массив для поддержки нескольких карт
     var cardIDs: [String] = []
@@ -70,6 +169,27 @@ final class Cashback: Persistable {
     var category: CashbackCategory {
         get { CashbackCategory(rawValue: categoryRaw) ?? .other }
         set { categoryRaw = newValue.rawValue }
+    }
+
+    /// Категория является пользовательской
+    var isCustomCategory: Bool {
+        categoryRaw.hasPrefix(Self.customCategoryPrefix)
+    }
+
+    /// Отображаемое имя категории (системное или пользовательское)
+    var displayCategoryName: String {
+        if let systemCategory = CashbackCategory(rawValue: categoryRaw) {
+            return systemCategory.displayName
+        }
+        if isCustomCategory, !name.isEmpty {
+            return name
+        }
+        return CashbackCategory.other.displayName
+    }
+
+    /// Отображаемая иконка категории (для пользовательской используем общий тег)
+    var displayCategoryIcon: String {
+        CashbackCategory(rawValue: categoryRaw)?.icon ?? "tag.fill"
     }
     
     /// Форматированный процент для отображения
@@ -85,29 +205,61 @@ final class Cashback: Persistable {
         name: String,
         category: CashbackCategory = .other,
         percentage: Double = 0.0,
-        cardIDs: [String] = []
+        cardIDs: [String] = [],
+        monthKey: String = Cashback.monthKey(for: Date())
     ) {
         self.name = name
         self.categoryRaw = category.rawValue
         self.percentage = percentage
         self.cardIDs = cardIDs
+        self.monthKey = monthKey
         self.createdAt = Date()
         self.updatedAt = Date()
+    }
+
+    init(
+        name: String,
+        categoryRaw: String,
+        percentage: Double = 0.0,
+        cardIDs: [String] = [],
+        monthKey: String = Cashback.monthKey(for: Date())
+    ) {
+        self.name = name
+        self.categoryRaw = categoryRaw
+        self.percentage = percentage
+        self.cardIDs = cardIDs
+        self.monthKey = monthKey
+        self.createdAt = Date()
+        self.updatedAt = Date()
+    }
+
+    static func monthKey(for date: Date, calendar: Calendar = .current) -> String {
+        let comps = calendar.dateComponents([.year, .month], from: date)
+        let year = comps.year ?? 1970
+        let month = comps.month ?? 1
+        return String(format: "%04d-%02d", year, month)
+    }
+
+    static func startOfMonth(for monthKey: String, calendar: Calendar = .current) -> Date? {
+        let parts = monthKey.split(separator: "-")
+        guard parts.count == 2,
+              let year = Int(parts[0]),
+              let month = Int(parts[1]) else {
+            return nil
+        }
+        return calendar.date(from: DateComponents(year: year, month: month, day: 1))
     }
     
     // MARK: - Exportable
     
     func export() throws -> Data {
-        // Конвертируем persistentModelID в cardUniqueID для восстановления связей при restore
-        // Для этого нужно получить карты из ModelContext
-        // Но так как мы не имеем доступа к ModelContext здесь, сохраняем как есть
-        // и конвертируем в DataRepository при экспорте
         let dict: [String: Any] = [
             "type": "Cashback",
             "name": name,
             "categoryRaw": categoryRaw,
             "percentage": percentage,
-            "cardIDs": cardIDs, // Это persistentModelID, конвертируем в cardUniqueID в DataRepository
+            "cardIDs": cardIDs,
+            "monthKey": monthKey,
             "createdAt": createdAt.timeIntervalSince1970,
             "updatedAt": updatedAt.timeIntervalSince1970
         ]

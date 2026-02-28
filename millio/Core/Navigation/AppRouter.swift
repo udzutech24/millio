@@ -25,6 +25,7 @@ enum AppRoute: Hashable {
 }
 
 @Observable
+@MainActor
 final class AppRouter {
     var currentRoute: AppRoute = .onboarding
     var navigationPath = NavigationPath()

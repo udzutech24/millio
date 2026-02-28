@@ -24,13 +24,24 @@ final class LanguageManager: LanguageManagerProtocol {
             logger.info("Language changed to: \(self.currentLanguage.rawValue)")
         }
     }
+
+    private static let supportedSystemLanguageCodes: Set<String> = ["ru", "en"]
     
     private init() {
         if let saved = UserDefaults.standard.string(forKey: userDefaultsKey),
            let language = Language(rawValue: saved) {
             self.currentLanguage = language
         } else {
-            self.currentLanguage = .system
+            let fallback = Self.defaultLanguage(forPreferredLanguage: Locale.preferredLanguages.first)
+            self.currentLanguage = fallback
+            UserDefaults.standard.set(fallback.rawValue, forKey: userDefaultsKey)
+
+            if let locale = fallback.locale {
+                UserDefaults.standard.set([locale.identifier], forKey: "AppleLanguages")
+            } else {
+                UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+            }
+            UserDefaults.standard.synchronize()
         }
     }
     
@@ -47,5 +58,20 @@ final class LanguageManager: LanguageManagerProtocol {
             UserDefaults.standard.removeObject(forKey: "AppleLanguages")
             UserDefaults.standard.synchronize()
         }
+    }
+
+    static func defaultLanguage(forPreferredLanguage preferredLanguage: String?) -> Language {
+        guard
+            let preferredLanguage,
+            let rawLanguageCode = preferredLanguage.split(whereSeparator: { $0 == "-" || $0 == "_" }).first
+        else {
+            return .english
+        }
+
+        let languageCode = String(rawLanguageCode).lowercased()
+        if supportedSystemLanguageCodes.contains(languageCode) {
+            return .system
+        }
+        return .english
     }
 }

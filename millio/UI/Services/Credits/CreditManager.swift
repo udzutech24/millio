@@ -27,7 +27,7 @@ final class CreditManager {
         guard let modelContext = modelContext else { return [] }
         
         let descriptor = FetchDescriptor<Credit>()
-        let credits = (try? modelContext.fetch(descriptor)) ?? []
+        let credits = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.archivedAt == nil }
         
         return credits.sorted { credit1, credit2 in
             if credit1.isFavorite != credit2.isFavorite {
@@ -44,7 +44,7 @@ final class CreditManager {
         let descriptor = FetchDescriptor<Credit>(
             predicate: #Predicate<Credit> { $0.isFavorite == true }
         )
-        let credits = (try? modelContext.fetch(descriptor)) ?? []
+        let credits = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.archivedAt == nil }
         
         return credits.sorted { $0.updatedAt > $1.updatedAt }
     }
@@ -56,7 +56,7 @@ final class CreditManager {
         let descriptor = FetchDescriptor<Credit>(
             predicate: #Predicate<Credit> { $0.currency == currency }
         )
-        let credits = (try? modelContext.fetch(descriptor)) ?? []
+        let credits = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.archivedAt == nil }
         
         return credits.sorted { credit1, credit2 in
             if credit1.isFavorite != credit2.isFavorite {
@@ -73,7 +73,7 @@ final class CreditManager {
         let descriptor = FetchDescriptor<Credit>(
             predicate: #Predicate<Credit> { $0.bankRaw == bank.rawValue }
         )
-        let credits = (try? modelContext.fetch(descriptor)) ?? []
+        let credits = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.archivedAt == nil }
         
         return credits.sorted { credit1, credit2 in
             if credit1.isFavorite != credit2.isFavorite {
@@ -90,7 +90,7 @@ final class CreditManager {
         let descriptor = FetchDescriptor<Credit>(
             predicate: #Predicate<Credit> { $0.creditTypeRaw == type.rawValue }
         )
-        let credits = (try? modelContext.fetch(descriptor)) ?? []
+        let credits = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.archivedAt == nil }
         
         return credits.sorted { credit1, credit2 in
             if credit1.isFavorite != credit2.isFavorite {

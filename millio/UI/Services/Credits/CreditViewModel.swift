@@ -89,7 +89,8 @@ enum CreditAction {
         bank: Bank,
         creditType: CreditType,
         isFavorite: Bool,
-        includeInTotal: Bool
+        includeInTotal: Bool,
+        uniqueID: String?
     )
     case search(String)
     case filterByBank(Bank?)
@@ -145,7 +146,7 @@ final class CreditViewModel: ViewModelProtocol {
         case .toggleFavorite(let credit):
             toggleFavorite(credit)
             
-        case .updateCredit(let name, let amount, let monthlyPayment, let endDate, let remainingAmount, let currency, let bank, let creditType, let isFavorite, let includeInTotal):
+        case .updateCredit(let name, let amount, let monthlyPayment, let endDate, let remainingAmount, let currency, let bank, let creditType, let isFavorite, let includeInTotal, let uniqueID):
             updateCredit(
                 name: name,
                 amount: amount,
@@ -156,7 +157,8 @@ final class CreditViewModel: ViewModelProtocol {
                 bank: bank,
                 creditType: creditType,
                 isFavorite: isFavorite,
-                includeInTotal: includeInTotal
+                includeInTotal: includeInTotal,
+                uniqueID: uniqueID
             )
             
         case .search(let text):
@@ -232,16 +234,21 @@ final class CreditViewModel: ViewModelProtocol {
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
         if let credits = try? modelContext.fetch(descriptor) {
+            let activeCredits = credits.filter { $0.archivedAt == nil }
             // Обновляем остатки долга только для незакрытых кредитов
-            for credit in credits {
+            for credit in activeCredits {
                 // Не пересчитываем остаток для закрытых кредитов (где остаток был установлен вручную = 0)
                 if !credit.isClosed {
                     credit.updateRemainingAmount()
                 }
             }
-            try? modelContext.save()
+            do {
+                try modelContext.save()
+            } catch {
+                AppLogger.log(.error, category: "CreditViewModel", "Failed to save credits: \(error.localizedDescription)")
+            }
             
-            state.credits = credits
+            state.credits = activeCredits
             applyFilters()
             calculateStats()
         }
@@ -331,7 +338,8 @@ final class CreditViewModel: ViewModelProtocol {
     }
     
     private func deleteCredit(_ credit: Credit) {
-        modelContext.delete(credit)
+        credit.archivedAt = Date()
+        credit.updatedAt = Date()
         
         do {
             try modelContext.save()
@@ -363,7 +371,8 @@ final class CreditViewModel: ViewModelProtocol {
         bank: Bank,
         creditType: CreditType,
         isFavorite: Bool,
-        includeInTotal: Bool
+        includeInTotal: Bool,
+        uniqueID: String?
     ) {
         // Вычисляем startDate и termMonths для внутреннего использования
         // Устанавливаем startDate примерно за год до endDate (или используем существующую дату)
@@ -391,7 +400,7 @@ final class CreditViewModel: ViewModelProtocol {
             existing.amount = amount
             existing.monthlyPayment = monthlyPayment
             existing.endDate = endDate
-            existing.remainingAmount = remainingAmount
+            existing.applyManualRemainingAmount(remainingAmount)
             existing.currency = currency
             existing.bank = bank
             existing.creditType = creditType
@@ -434,15 +443,18 @@ final class CreditViewModel: ViewModelProtocol {
                 bank: bank,
                 creditType: creditType,
                 includeInTotal: includeInTotal
-            )
-            newCredit.endDate = endDate
-            newCredit.remainingAmount = remainingAmount
-            newCredit.isFavorite = isFavorite
-            // Если остаток = 0, помечаем кредит как закрытый
-            if remainingAmount <= 0 {
-                newCredit.isClosed = true
-                newCredit.remainingAmount = 0
+        )
+            if let uniqueID, !uniqueID.isEmpty {
+                newCredit.uniqueID = uniqueID
             }
+        newCredit.endDate = endDate
+        newCredit.applyManualRemainingAmount(remainingAmount)
+        newCredit.isFavorite = isFavorite
+        // Если остаток = 0, помечаем кредит как закрытый
+        if remainingAmount <= 0 {
+            newCredit.isClosed = true
+            newCredit.remainingAmount = 0
+        }
             modelContext.insert(newCredit)
         }
         
@@ -451,6 +463,7 @@ final class CreditViewModel: ViewModelProtocol {
             loadCredits()
             state.showCreditEditor = false
             state.editingCredit = nil
+            EventBus.shared.publish(FinanceEvent.creditsUpdated)
         } catch {
             AppLogger.log(.error, category: "Credit", "Failed to save credit: \(error.localizedDescription)")
         }

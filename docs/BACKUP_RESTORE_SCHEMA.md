@@ -2,8 +2,8 @@
 
 Документ описывает механизм резервного копирования и восстановления данных в приложении Millio.
 
-**Версия:** 1.1  
-**Дата:** 2026-01-27
+**Версия:** 2.0  
+**Дата:** 2026-01-30
 
 ---
 
@@ -26,6 +26,11 @@
 - Используется **только Private CloudKit Database**
 - Данные доступны **только владельцу iCloud аккаунта**
 - Мы не имеем доступа к данным пользователя
+
+### 1.4. Совместимость
+
+- Начиная с версии **2.0**, backup **не совместим** с предыдущими версиями.
+- Старые backup-файлы считаются устаревшими и не поддерживаются.
 
 ---
 
@@ -52,7 +57,12 @@
 
 #### Ручной backup
 
-В UI **кнопки ручного backup нет**. Для отладки можно вызвать:
+В UI доступен экран управления backup, где можно:
+- проверить статус iCloud и дату последнего backup
+- создать backup вручную
+- выбрать режим шифрования (device-key / passphrase)
+
+Для отладки из кода можно вызвать:
 
 ```swift
 try await backupManager.backupNow()
@@ -85,7 +95,7 @@ try await backupManager.backupNow()
                      ▼
 ┌─────────────────────────────────────────────────────────┐
 │ 4. ЭКСПОРТ ДАННЫХ                                       │
-│    DataRepository.exportAllData()                       │
+│    DataRepository.exportAllDataAsync()                  │
 │    • metadata + массив моделей                           │
 │    • JSON сериализация                                  │
 └────────────────────┬────────────────────────────────────┘
@@ -94,16 +104,21 @@ try await backupManager.backupNow()
 ┌─────────────────────────────────────────────────────────┐
 │ 5. СЖАТИЕ                                               │
 │    Compression framework (LZFSE)                        │
-│    • если не удалось — возвращаем исходные данные       │
+│    • применяется только если уменьшает размер            │
+│    • ошибки сжатия считаются критическими               │
 └────────────────────┬────────────────────────────────────┘
                      │
                      ▼
 ┌─────────────────────────────────────────────────────────┐
 │ 6. ШИФРОВАНИЕ (опционально)                             │
-│    KeychainBackupEncryption (AES-GCM)                   │
-│    • ключи в iOS Keychain                               │
-│    • включается флагом SettingsManager                  │
-│    • UI-тоггл пока отсутствует                          │
+│    AES-GCM                                                │
+│    • keychain-mode: ключ в iOS Keychain (device-only)      │
+│      - удобно, но restore на новом устройстве/после         │
+│        переустановки может быть невозможен                 │
+│    • passphrase-mode: PBKDF2(HMAC-SHA256)+salt → ключ      │
+│      - переносимо между устройствами, если пользователь     │
+│        знает парольную фразу                               │
+│    • режим выбирается в экране управления backup            │
 └────────────────────┬────────────────────────────────────┘
                      │
                      ▼
@@ -127,12 +142,40 @@ try await backupManager.backupNow()
 
 ### 2.3. Формат данных backup
 
-Backup содержит **metadata** и массив моделей:
+Backup сохраняется в CloudKit как **envelope**:
+
+- `UInt32` (big-endian) — длина JSON-заголовка
+- JSON-заголовок (`BackupEnvelopeHeader`)
+- payload (данные экспорта, опционально сжатые/зашифрованные)
+
+#### 2.3.1. Заголовок envelope
+
+`BackupEnvelopeHeader` содержит:
+- `formatVersion` — версия envelope-формата
+- `metadata` — метаданные backup
+- `compression` — алгоритм/оригинальный размер (если применялось)
+- `encryption` — алгоритм и параметры KDF (если применялось)
+
+Payload формируется так:
+1) `DataRepository.exportAllDataAsync()` → JSON (metadata + models)  
+2) опционально сжатие LZFSE  
+3) опционально шифрование AES-GCM  
+
+`encryption.algorithm`:
+- `aesgcm-keychain` — ключ хранится в iOS Keychain (device-only)
+- `aesgcm-passphrase` — ключ derive'ится из парольной фразы, `encryption.kdf` обязателен:
+  - `algorithm`: `pbkdf2-hmac-sha256`
+  - `iterations`
+  - `saltBase64`
+
+#### 2.3.2. Экспорт данных (payload до сжатия/шифрования)
+
+Экспорт содержит **metadata** и массив моделей:
 
 - `BackupMetadata`:
   - `version` (`BackupVersion`, сейчас `1.0.0`)
   - `timestamp`
-  - `schemaVersion` (строка, сейчас `"1.0"`)
+  - `schemaVersion` (строка, сейчас `"2.0"`)
   - `modelCount`
 
 ### 2.4. Обработка ошибок
@@ -140,6 +183,7 @@ Backup содержит **metadata** и массив моделей:
 - **iCloud недоступен:** `AppError.iCloudUnavailable`, логируется, приложение продолжает работу
 - **Сетевая ошибка:** повтор через `withRetry` (3 попытки, экспоненциальная задержка)
 - **Ошибка шифрования:** backup не создается, ошибка пробрасывается
+- **Crashlytics (Release):** ошибки backup/restore отправляются как non-fatal через `CrashReporting.record(error:)`
 
 ---
 
@@ -182,7 +226,10 @@ Backup содержит **metadata** и массив моделей:
                      ▼
 ┌─────────────────────────────────────────────────────────┐
 │ 4. РАСШИФРОВКА (если было зашифровано)                  │
-│    KeychainBackupEncryption.decrypt()                   │
+│    По envelope-заголовку:                               │
+│    • aesgcm-keychain → KeychainBackupEncryption.decrypt()│
+│    • aesgcm-passphrase → PassphraseBackupEncryption      │
+│      (нужна парольная фраза)                             │
 └────────────────────┬────────────────────────────────────┘
                      │
                      ▼

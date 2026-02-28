@@ -2,7 +2,7 @@
 //  CashflowViewModelTests.swift
 //  millioTests
 //
-//  Created by Александр Сидоркин on 27.01.2026.
+//  Created by Александр Сидоркин on 29.01.2026.
 //
 
 import Foundation
@@ -13,108 +13,280 @@ import SwiftData
 @Suite(.serialized)
 @MainActor
 struct CashflowViewModelTests {
-
-    /// Общий контейнер для всех тестов (SwiftData нестабилен при создании множества контейнеров)
     private static let sharedContainer: ModelContainer = {
         let schema = Schema([
             Card.self,
             CashflowTransaction.self,
+            HistoricalRate.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         return try! ModelContainer(for: schema, configurations: [config])
     }()
 
-    /// Получить чистый контекст (очищаем данные от предыдущих тестов)
     private func createTestModelContext() throws -> ModelContext {
         let context = Self.sharedContainer.mainContext
-        try context.delete(model: CashflowTransaction.self)
-        try context.delete(model: Card.self)
+        try context.deleteAll(CashflowTransaction.self)
+        try context.deleteAll(HistoricalRate.self)
+        try context.deleteAll(Card.self)
         try context.save()
         return context
     }
 
-    @Test("Открытие создания транзакции подтягивает новые карты")
-    func testAddTransactionRefreshesCards() throws {
+    @Test("Расход не превышает доступный баланс карты")
+    func testExpenseCannotExceedBalance() async throws {
         let modelContext = try createTestModelContext()
-        let viewModel = CashflowViewModel(modelContext: modelContext)
-
-        #expect(viewModel.state.availableCards.isEmpty)
-
-        let newCard = Card(
-            name: "Новая карта",
-            cardNumber: "1234",
+        let card = Card(
+            name: "Карта",
+            cardNumber: "0000",
             bank: .other,
             cardType: .debit,
             currency: "RUB",
-            balance: 100.0
+            balance: 1_000.0
         )
-        modelContext.insert(newCard)
-        try modelContext.save()
-
-        viewModel.handle(.addTransaction(.expense))
-
-        let cardIDs = Set(viewModel.state.availableCards.map { $0.cardUniqueID })
-        #expect(cardIDs.contains(newCard.cardUniqueID))
-    }
-
-    @Test("Удаленная карта не попадает в список при создании транзакции")
-    func testAddTransactionRefreshesCardsAfterDelete() throws {
-        let modelContext = try createTestModelContext()
-
-        let firstCard = Card(
-            name: "Первая карта",
-            cardNumber: "1111",
-            bank: .sberbank,
-            cardType: .debit,
-            currency: "RUB",
-            balance: 50.0
-        )
-        let secondCard = Card(
-            name: "Вторая карта",
-            cardNumber: "2222",
-            bank: .vtb,
-            cardType: .debit,
-            currency: "RUB",
-            balance: 75.0
-        )
-        modelContext.insert(firstCard)
-        modelContext.insert(secondCard)
+        modelContext.insert(card)
         try modelContext.save()
 
         let viewModel = CashflowViewModel(modelContext: modelContext)
-        #expect(viewModel.state.availableCards.count == 2)
+        viewModel.handle(.loadCards)
 
-        modelContext.delete(secondCard)
-        try modelContext.save()
-
-        viewModel.handle(.addTransaction(.income))
-
-        let cardIDs = Set(viewModel.state.availableCards.map { $0.cardUniqueID })
-        #expect(cardIDs.contains(firstCard.cardUniqueID))
-        #expect(!cardIDs.contains(secondCard.cardUniqueID))
+        let available = try await viewModel.isAmountAvailable(
+            amount: 1_500.0,
+            currency: "RUB",
+            fromCardID: card.cardUniqueID,
+            on: Date()
+        )
+        #expect(!available)
     }
 
-    @Test("Событие обновления карт синхронизирует список в Кэшфлоу")
-    func testCardsUpdatedEventRefreshesCashflowCards() throws {
+    @Test("Перевод разрешен в пределах доступного баланса")
+    func testTransferWithinBalanceAllowed() async throws {
         let modelContext = try createTestModelContext()
-
-        let viewModel = CashflowViewModel(modelContext: modelContext)
-        #expect(viewModel.state.availableCards.isEmpty)
-
-        let newCard = Card(
-            name: "Карта для события",
-            cardNumber: "9999",
+        let card = Card(
+            name: "Карта",
+            cardNumber: "0000",
             bank: .other,
             cardType: .debit,
             currency: "RUB",
-            balance: 10.0
+            balance: 1_000.0
         )
-        modelContext.insert(newCard)
+        modelContext.insert(card)
         try modelContext.save()
 
-        EventBus.shared.publish(FinanceEvent.cardsUpdated)
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+        viewModel.handle(.loadCards)
 
-        let cardIDs = Set(viewModel.state.availableCards.map { $0.cardUniqueID })
-        #expect(cardIDs.contains(newCard.cardUniqueID))
+        let available = try await viewModel.isAmountAvailable(
+            amount: 500.0,
+            currency: "RUB",
+            fromCardID: card.cardUniqueID,
+            on: Date()
+        )
+        #expect(available)
+    }
+
+    @Test("Cashflow обновляет историю по событию transactionsUpdated")
+    func testTransactionsUpdatedEventReloadsTransactions() async throws {
+        let modelContext = try createTestModelContext()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+        #expect(viewModel.state.transactions.isEmpty)
+
+        let transaction = CashflowTransaction(
+            transactionType: .income,
+            amount: 1000,
+            currency: "RUB",
+            transactionDate: Date(),
+            cardID: nil,
+            note: "Тест"
+        )
+        modelContext.insert(transaction)
+        try modelContext.save()
+
+        EventBus.shared.publish(FinanceEvent.transactionsUpdated)
+
+        #expect(viewModel.state.transactions.count == 1)
+        #expect(viewModel.state.transactions.first?.note == "Тест")
+    }
+
+    @Test("Стрелки периода переключают месяцы и не уходят в будущее")
+    func testMonthNavigationByArrows() async throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 2, day: 13)) ?? Date()
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+
+        let calendar = Calendar.current
+        let initialMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: fixedNow)) ?? fixedNow
+
+        #expect(!viewModel.canMovePeriodForward())
+
+        viewModel.handle(.movePeriodBackward)
+        #expect(viewModel.state.chartPeriod == .specificMonth)
+        #expect(calendar.component(.month, from: viewModel.state.selectedMonth) == 1)
+        #expect(calendar.component(.year, from: viewModel.state.selectedMonth) == 2026)
+        #expect(viewModel.canMovePeriodForward())
+
+        viewModel.handle(.movePeriodForward)
+        #expect(calendar.component(.month, from: viewModel.state.selectedMonth) == calendar.component(.month, from: initialMonth))
+        #expect(calendar.component(.year, from: viewModel.state.selectedMonth) == calendar.component(.year, from: initialMonth))
+        #expect(!viewModel.canMovePeriodForward())
+
+        viewModel.handle(.movePeriodForward)
+        #expect(calendar.component(.month, from: viewModel.state.selectedMonth) == calendar.component(.month, from: initialMonth))
+        #expect(calendar.component(.year, from: viewModel.state.selectedMonth) == calendar.component(.year, from: initialMonth))
+    }
+
+    @Test("Сводка активов считает изменение стоимости по формуле и использует снапшот из Финансов")
+    func testAssetsBreakdownFormula() async throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 2, day: 13)) ?? Date()
+        let defaults = UserDefaults.standard
+        let previousDisplayCurrency = defaults.string(forKey: "cashflow_display_currency")
+        defaults.set("RUB", forKey: "cashflow_display_currency")
+        defer {
+            if let previousDisplayCurrency {
+                defaults.set(previousDisplayCurrency, forKey: "cashflow_display_currency")
+            } else {
+                defaults.removeObject(forKey: "cashflow_display_currency")
+            }
+        }
+
+        let income = CashflowTransaction(
+            transactionType: .income,
+            amount: 500,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: nil
+        )
+        let expense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 100,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: nil
+        )
+        modelContext.insert(income)
+        modelContext.insert(expense)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(
+            modelContext: modelContext,
+            now: { fixedNow },
+            assetsSnapshotProvider: { _, _, _ in
+                (start: 1_000, end: 1_300)
+            }
+        )
+
+        viewModel.handle(.loadTransactions)
+
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            abs(viewModel.state.assetsAtPeriodStart - 1_000) < 0.01 &&
+            abs(viewModel.state.assetsAtPeriodEnd - 1_300) < 0.01 &&
+            abs(viewModel.state.totalIncome - 500) < 0.01 &&
+            abs(viewModel.state.contributedExpense - 100) < 0.01 &&
+            abs(viewModel.state.assetValueChange + 100) < 0.01 &&
+            abs(viewModel.state.periodTotalChange - 300) < 0.01
+        }
+
+        #expect(abs(viewModel.state.assetsAtPeriodStart - 1_000) < 0.01)
+        #expect(abs(viewModel.state.assetsAtPeriodEnd - 1_300) < 0.01)
+        #expect(abs(viewModel.state.totalIncome - 500) < 0.01)
+        #expect(abs(viewModel.state.contributedExpense - 100) < 0.01)
+        #expect(abs(viewModel.state.assetValueChange + 100) < 0.01) // 300 - 500 + 100 = -100
+        #expect(abs(viewModel.state.periodTotalChange - 300) < 0.01)
+    }
+
+    @Test("Детализация расходов сортируется по убыванию и учитывает доходы отдельно")
+    func testBreakdownSortingByAmount() async throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 2, day: 13)) ?? Date()
+        let defaults = UserDefaults.standard
+        let previousDisplayCurrency = defaults.string(forKey: "cashflow_display_currency")
+        defaults.set("RUB", forKey: "cashflow_display_currency")
+        defer {
+            if let previousDisplayCurrency {
+                defaults.set(previousDisplayCurrency, forKey: "cashflow_display_currency")
+            } else {
+                defaults.removeObject(forKey: "cashflow_display_currency")
+            }
+        }
+
+        let expenseSmall = CashflowTransaction(
+            transactionType: .expense,
+            amount: 100,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: nil,
+            expenseCategory: .groceries,
+            note: "Small"
+        )
+        let expenseLarge = CashflowTransaction(
+            transactionType: .expense,
+            amount: 300,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: nil,
+            expenseCategory: .shopping,
+            note: "Large"
+        )
+        let expenseMedium = CashflowTransaction(
+            transactionType: .expense,
+            amount: 200,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: nil,
+            expenseCategory: .cafe,
+            note: "Medium"
+        )
+        let income = CashflowTransaction(
+            transactionType: .income,
+            amount: 400,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: nil,
+            incomeCategory: .salary,
+            note: "Income"
+        )
+
+        modelContext.insert(expenseSmall)
+        modelContext.insert(expenseLarge)
+        modelContext.insert(expenseMedium)
+        modelContext.insert(income)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(
+            modelContext: modelContext,
+            now: { fixedNow },
+            assetsSnapshotProvider: { _, _, _ in
+                (start: 0, end: 0)
+            }
+        )
+
+        viewModel.handle(.loadTransactions)
+
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            viewModel.state.expenseBreakdown.count == 3 &&
+            viewModel.state.incomeBreakdown.count == 1
+        }
+
+        let expenseBreakdown = viewModel.state.expenseBreakdown
+        #expect(expenseBreakdown.map { $0.title } == ["Покупки", "Кафе", "Продукты"])
+        #expect(expenseBreakdown.map { $0.convertedAmount } == [300, 200, 100])
+        #expect(viewModel.state.incomeBreakdown.first?.title == "Зарплата")
+        #expect(viewModel.state.incomeBreakdown.first?.convertedAmount == 400)
+    }
+
+    private func waitUntil(
+        timeoutNanoseconds: UInt64,
+        intervalNanoseconds: UInt64 = 50_000_000,
+        condition: @escaping @MainActor () -> Bool
+    ) async throws {
+        let start = DispatchTime.now().uptimeNanoseconds
+        while DispatchTime.now().uptimeNanoseconds - start < timeoutNanoseconds {
+            if condition() {
+                return
+            }
+            try await Task.sleep(nanoseconds: intervalNanoseconds)
+        }
+        #expect(Bool(false), "Condition was not met before timeout")
     }
 }

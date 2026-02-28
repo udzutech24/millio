@@ -36,7 +36,13 @@ final class BackupMonitor: BackupMonitorProtocol {
         isBackupInProgress = true
         defer { isBackupInProgress = false }
         
-        // lastBackupInfo() не выбрасывает ошибки, возвращает nil при ошибке
+        if !(await backupManager.isAvailable()) {
+            lastBackupDate = nil
+            backupSize = nil
+            lastBackupError = .iCloudUnavailable
+            return
+        }
+        
         if let info = await backupManager.lastBackupInfo() {
             lastBackupDate = info.date
             backupSize = info.size
@@ -44,8 +50,7 @@ final class BackupMonitor: BackupMonitorProtocol {
         } else {
             lastBackupDate = nil
             backupSize = nil
-            // Если нужно отслеживать ошибки, можно добавить проверку доступности
-            // или изменить lastBackupInfo() чтобы он выбрасывал ошибки
+            lastBackupError = nil
         }
     }
 }

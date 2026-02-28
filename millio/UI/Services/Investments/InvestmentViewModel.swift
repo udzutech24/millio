@@ -47,6 +47,18 @@ struct InvestmentState {
     var isLoadingRates: Bool = false
 }
 
+// MARK: - Market Data Draft
+
+struct InvestmentMarketData: Equatable {
+    var symbol: String?
+    var exchange: String?
+    var currency: String?
+    var quantity: Double?
+    var unitPrice: Double?
+    var priceUpdatedAt: Date?
+    var providerRaw: String?
+}
+
 // MARK: - Investment Actions
 
 enum InvestmentAction {
@@ -63,7 +75,10 @@ enum InvestmentAction {
         currency: String,
         includeInTotal: Bool,
         priority: InvestmentPriority,
-        isFavorite: Bool
+        isFavorite: Bool,
+        marketData: InvestmentMarketData?,
+        createCashflowTransaction: Bool,
+        uniqueID: String?
     )
     case showInvestmentEditor
     case hideInvestmentEditor
@@ -83,7 +98,7 @@ final class InvestmentViewModel: ViewModelProtocol {
     private let defaults = UserDefaults.standard
     
     private var storedDisplayCurrency: String {
-        get { defaults.string(forKey: "investment_display_currency") ?? "RUB" }
+        get { defaults.string(forKey: "investment_display_currency") ?? SettingsManager.shared.primaryCurrencyCode }
         set { defaults.set(newValue, forKey: "investment_display_currency") }
     }
     
@@ -112,7 +127,19 @@ final class InvestmentViewModel: ViewModelProtocol {
         case .toggleFavorite(let investment):
             toggleFavorite(investment)
             
-        case .updateInvestment(let name, let investmentType, let category, let amount, let currency, let includeInTotal, let priority, let isFavorite):
+        case .updateInvestment(
+            let name,
+            let investmentType,
+            let category,
+            let amount,
+            let currency,
+            let includeInTotal,
+            let priority,
+            let isFavorite,
+            let marketData,
+            let createCashflowTransaction,
+            let uniqueID
+        ):
             updateInvestment(
                 name: name,
                 investmentType: investmentType,
@@ -121,7 +148,10 @@ final class InvestmentViewModel: ViewModelProtocol {
                 currency: currency,
                 includeInTotal: includeInTotal,
                 priority: priority,
-                isFavorite: isFavorite
+                isFavorite: isFavorite,
+                marketData: marketData,
+                createCashflowTransaction: createCashflowTransaction,
+                uniqueID: uniqueID
             )
             
         case .showInvestmentEditor:
@@ -151,8 +181,9 @@ final class InvestmentViewModel: ViewModelProtocol {
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
         if let investments = try? modelContext.fetch(descriptor) {
+            let activeInvestments = investments.filter { $0.archivedAt == nil }
             // Сортируем: сначала избранные, потом по приоритету, потом по дате
-            state.investments = investments.sorted { inv1, inv2 in
+            state.investments = activeInvestments.sorted { inv1, inv2 in
                 if inv1.isFavorite != inv2.isFavorite {
                     return inv1.isFavorite
                 }
@@ -224,7 +255,8 @@ final class InvestmentViewModel: ViewModelProtocol {
     }
     
     private func deleteInvestment(_ investment: Investment) {
-        modelContext.delete(investment)
+        investment.archivedAt = Date()
+        investment.updatedAt = Date()
         
         do {
             try modelContext.save()
@@ -254,10 +286,16 @@ final class InvestmentViewModel: ViewModelProtocol {
         currency: String,
         includeInTotal: Bool,
         priority: InvestmentPriority,
-        isFavorite: Bool
+        isFavorite: Bool,
+        marketData: InvestmentMarketData?,
+        createCashflowTransaction: Bool,
+        uniqueID: String?
     ) {
         var editedInvestment: Investment? = nil
         var oldAmount: Double = 0.0
+        var newAmountForTransaction: Double?
+        var quantityWasChanged: Bool = false
+        var didCreateTransaction: Bool = false
         
         if let existing = state.editingInvestment {
             if existing.uniqueID.isEmpty {
@@ -268,6 +306,7 @@ final class InvestmentViewModel: ViewModelProtocol {
                 existing.hasInitialAmount = true
             }
             oldAmount = existing.amount
+            let previousQuantity = existing.marketQuantity
             editedInvestment = existing
             // Обновляем существующую инвестицию
             existing.name = name
@@ -278,6 +317,18 @@ final class InvestmentViewModel: ViewModelProtocol {
             existing.includeInTotal = includeInTotal
             existing.priority = priority
             existing.isFavorite = isFavorite
+            applyMarketData(
+                marketData,
+                to: existing,
+                category: category
+            )
+            existing.recalculateAmountFromPosition()
+            newAmountForTransaction = existing.amount
+            if category == .stocks || category == .crypto {
+                let oldQuantity = previousQuantity ?? 0
+                let updatedQuantity = existing.marketQuantity ?? 0
+                quantityWasChanged = abs(oldQuantity - updatedQuantity) > 0.0000001
+            }
             existing.updatedAt = Date()
         } else {
             // Создаем новую инвестицию
@@ -291,12 +342,21 @@ final class InvestmentViewModel: ViewModelProtocol {
                 priority: priority,
                 isFavorite: isFavorite
             )
+            if let uniqueID, !uniqueID.isEmpty {
+                newInvestment.uniqueID = uniqueID
+            }
+            applyMarketData(
+                marketData,
+                to: newInvestment,
+                category: category
+            )
+            newInvestment.recalculateAmountFromPosition()
             modelContext.insert(newInvestment)
         }
         
         // Создание CashflowTransaction если нужно (перед save для атомарности)
-        if let existing = editedInvestment {
-            let delta = amount - oldAmount
+        if createCashflowTransaction, let existing = editedInvestment {
+            let delta = (newAmountForTransaction ?? amount) - oldAmount
             if abs(delta) > 0.01 {
                 let transaction = CashflowTransaction(
                     transactionType: .balanceAdjustment,
@@ -304,9 +364,11 @@ final class InvestmentViewModel: ViewModelProtocol {
                     currency: existing.currency,
                     transactionDate: Date(),
                     investmentID: existing.investmentUniqueID,
-                    note: "Ручное изменение стоимости актива"
+                    note: quantityWasChanged ? "Ручное изменение количества актива" : "Ручное изменение стоимости актива"
                 )
+                stampFrozenRate(on: transaction, targetCurrency: existing.currency)
                 modelContext.insert(transaction)
+                didCreateTransaction = true
             }
         }
         
@@ -316,8 +378,77 @@ final class InvestmentViewModel: ViewModelProtocol {
             loadInvestments()
             state.showInvestmentEditor = false
             state.editingInvestment = nil
+            if didCreateTransaction {
+                EventBus.shared.publish(FinanceEvent.transactionsUpdated)
+            }
         } catch {
             AppLogger.log(.error, category: "Investment", "Failed to save investment: \(error.localizedDescription)")
+        }
+    }
+
+    private func applyMarketData(
+        _ marketData: InvestmentMarketData?,
+        to investment: Investment,
+        category: InvestmentCategory
+    ) {
+        let isMarketCategory = (category == .stocks || category == .crypto)
+
+        if !isMarketCategory {
+            investment.marketSymbol = nil
+            investment.marketExchange = nil
+            investment.marketCurrency = nil
+            investment.marketQuantity = nil
+            investment.lastKnownUnitPrice = nil
+            investment.lastKnownPriceUpdatedAt = nil
+            investment.marketProviderRaw = nil
+            return
+        }
+
+        investment.marketSymbol = marketData?.symbol
+        investment.marketExchange = marketData?.exchange
+        investment.marketCurrency = marketData?.currency
+        investment.marketQuantity = marketData?.quantity
+        investment.lastKnownUnitPrice = marketData?.unitPrice
+        investment.lastKnownPriceUpdatedAt = marketData?.priceUpdatedAt
+        investment.marketProviderRaw = marketData?.providerRaw
+    }
+
+    private func normalizedConversionCurrency(_ currency: String) -> String {
+        let trimmed = currency
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+        guard !trimmed.isEmpty else { return "USD" }
+
+        let stablecoinToUSD: Set<String> = ["USDT", "USDC", "BUSD", "TUSD", "FDUSD", "DAI"]
+        if stablecoinToUSD.contains(trimmed) {
+            return "USD"
+        }
+
+        if trimmed.contains("/") {
+            let parts = trimmed.split(separator: "/").map(String.init)
+            if let quote = parts.last {
+                return normalizedConversionCurrency(quote)
+            }
+        }
+
+        if trimmed.contains("-") {
+            let parts = trimmed.split(separator: "-").map(String.init)
+            if let quote = parts.last {
+                return normalizedConversionCurrency(quote)
+            }
+        }
+
+        return trimmed
+    }
+
+    private func stampFrozenRate(on transaction: CashflowTransaction, targetCurrency: String) {
+        let normalizedSource = normalizedConversionCurrency(transaction.currency)
+        let normalizedTarget = normalizedConversionCurrency(targetCurrency)
+        transaction.currency = normalizedSource
+        transaction.exchangeRateCurrency = normalizedTarget
+        transaction.exchangeRateDate = Calendar.current.startOfDay(for: transaction.transactionDate)
+        if normalizedSource == normalizedTarget {
+            transaction.exchangeRate = 1.0
         }
     }
 }

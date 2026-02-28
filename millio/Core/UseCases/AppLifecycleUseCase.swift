@@ -8,12 +8,14 @@
 import Foundation
 import OSLog
 
+@MainActor
 protocol AppLifecycleUseCaseProtocol {
     func initialize() async
     func checkOnboardingStatus() -> Bool
     func checkRestoreNeeded() async -> Bool
 }
 
+@MainActor
 final class AppLifecycleUseCase: AppLifecycleUseCaseProtocol {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "AppLifecycleUseCase")
     private let appState: AppState
@@ -26,27 +28,11 @@ final class AppLifecycleUseCase: AppLifecycleUseCaseProtocol {
     }
     
     func initialize() async {
+        let overallStart = DispatchTime.now()
         logger.info("Initializing app...")
-        
-        // Проверяем iCloud только если backup включен
-        if appState.isBackupEnabled {
-            appState.isICloudAvailable = await withTimeout(seconds: 3, operation: {
-                await self.backupManager.isAvailable()
-            }) ?? false
-            
-            // Получаем информацию о последнем backup с таймаутом
-            let backupInfoResult = await withTimeout(seconds: 3, operation: {
-                await self.backupManager.lastBackupInfo()
-            })
-            if let backupInfoOptional = backupInfoResult, let backupInfo = backupInfoOptional {
-                appState.lastBackupDate = backupInfo.date
-            }
-        } else {
-            appState.isICloudAvailable = false
-            appState.lastBackupDate = nil
-        }
-        
+
         // Определяем следующий шаг
+        let lifecycleStart = DispatchTime.now()
         if !checkOnboardingStatus() {
             appState.lifecycle = .onboarding
         } else {
@@ -54,30 +40,34 @@ final class AppLifecycleUseCase: AppLifecycleUseCaseProtocol {
             // Пользователь может перейти к нему из настроек
             appState.lifecycle = .ready
         }
+        logger.info("Lifecycle decision finished in \(Double(DispatchTime.now().uptimeNanoseconds - lifecycleStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
         
-        logger.info("App initialized, lifecycle: \(String(describing: self.appState.lifecycle))")
-    }
-    
-    private func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async -> T) async -> T? {
-        await withTaskGroup(of: T?.self) { group in
-            group.addTask {
-                await operation()
-            }
-            
-            group.addTask {
-                try? await Task.sleep(for: .seconds(seconds))
-                return nil
-            }
-            
-            var result: T? = nil
-            for await value in group {
-                if let value = value {
-                    result = value
-                    break
+        logger.info("App initialized in \(Double(DispatchTime.now().uptimeNanoseconds - overallStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms, lifecycle: \(String(describing: self.appState.lifecycle))")
+        
+        // Проверяем iCloud только если backup включен (в фоне, не блокируя lifecycle)
+        if appState.isBackupEnabled {
+            let backupManager = self.backupManager
+            Task.detached {
+                let iCloudStart = DispatchTime.now()
+                let result = await withTimeout(seconds: 3, operation: {
+                    async let available = backupManager.isAvailable()
+                    async let info = backupManager.lastBackupInfo()
+                    return await (available, info)
+                })
+                
+                let available = result?.0 ?? false
+                let info = result?.1 ?? nil
+                
+                await MainActor.run {
+                    self.appState.isICloudAvailable = available
+                    self.appState.lastBackupDate = info?.date
                 }
+                
+                self.logger.info("iCloud status refresh finished in \(Double(DispatchTime.now().uptimeNanoseconds - iCloudStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
             }
-            group.cancelAll()
-            return result
+        } else {
+            appState.isICloudAvailable = false
+            appState.lastBackupDate = nil
         }
     }
     

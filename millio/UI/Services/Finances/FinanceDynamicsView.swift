@@ -4,10 +4,15 @@
 //
 //  Created by Александр Сидоркин on 13.01.2026.
 //
+//  Обновлено: Новый дизайн графика с интерактивным выбором точки,
+//  collapsing header и улучшенным UX.
+//
 
 import SwiftUI
 import SwiftData
 import Charts
+
+// MARK: - Finance Dynamics View
 
 struct FinanceDynamicsView: View {
     @Environment(\.modelContext) private var modelContext
@@ -15,25 +20,25 @@ struct FinanceDynamicsView: View {
     @ObservedObject var financeViewModel: FinanceViewModel
     @State private var dynamicsViewModel: FinanceDynamicsViewModel?
     @State private var showSubscriptionSheet = false
-    
+
     /// ID группы для предустановки фильтров (опционально)
     var initialGroupID: String? = nil
-    
+
     /// Валюта группы для предустановки (опционально)
     var initialGroupCurrency: String? = nil
-    
+
     /// ID счета для предустановки фильтров (опционально)
     var initialAccountID: String? = nil
-    
+
     /// Валюта счета для предустановки (опционально)
     var initialAccountCurrency: String? = nil
 
     /// Счет для действий (редактирование/удаление) в режиме одного счета
     var initialAccount: FinanceAccount? = nil
-    
+
     /// Нужно ли оборачивать в NavigationStack (для sheet'ов нужен, для navigationDestination - нет)
     var wrapInNavigationStack: Bool = true
-    
+
     var body: some View {
         let content = Group {
             if let dynamicsViewModel = dynamicsViewModel {
@@ -69,19 +74,16 @@ struct FinanceDynamicsView: View {
         .onChange(of: financeViewModel.state.availableCards.map {
             "\($0.cardUniqueID)_\($0.balance)_\($0.updatedAt.timeIntervalSince1970)"
         }) { _, _ in
-            // Обновляем данные при изменении карт (количество или баланс)
             dynamicsViewModel?.handle(.loadData)
         }
         .onChange(of: financeViewModel.state.availableCredits.map {
             "\($0.creditUniqueID)_\($0.remainingAmount)_\($0.updatedAt.timeIntervalSince1970)"
         }) { _, _ in
-            // Обновляем данные при изменении кредитов (количество или остаток)
             dynamicsViewModel?.handle(.loadData)
         }
         .onChange(of: financeViewModel.state.availableInvestments.map {
             "\($0.investmentUniqueID)_\($0.amount)_\($0.updatedAt.timeIntervalSince1970)"
         }) { _, _ in
-            // Обновляем данные при изменении инвестиций (количество или сумма)
             dynamicsViewModel?.handle(.loadData)
         }
 
@@ -107,28 +109,67 @@ private struct FinanceDynamicsContentView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var showEditForm = false
-    
+    @State private var collapseProgress: CGFloat = 0
+    @State private var lastCollapseProgress: CGFloat = 0
+
+    // Локальное состояние для кастомного периода
+    @State private var useCustomPeriod: Bool = false
+    @State private var customStartDate: Date = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+    @State private var customEndDate: Date = Date()
+    @State private var showCustomPeriodSheet: Bool = false
+    @State private var draftStartDate: Date = Date()
+    @State private var draftEndDate: Date = Date()
+    @State private var showDisplayCurrencySheet: Bool = false
+    @State private var displayCurrencySearchText: String = ""
+
+    // Кэшированные значения для графика
+    @State private var cachedSelectedPoint: (date: Date, value: Double)? = nil
+
     var body: some View {
         ZStack {
             GradientBackground()
-            
+
             if showEditForm, viewModel.state.isSingleAccountMode, let account = initialAccount {
                 editForm(for: account)
             } else {
                 ScrollView {
-                    VStack(spacing: 24) {
-                        // Верхняя панель с балансом и дельтой
-                        topPanel
-                        
-                        // График
-                        chartSection
-                        
+                    VStack(spacing: 16) {
+                        // Якорь для измерения скролла
+                        Color.clear
+                            .frame(height: 0)
+                            .background(
+                                GeometryReader { proxy in
+                                    Color.clear
+                                        .preference(
+                                            key: ScrollOffsetKey.self,
+                                            value: proxy.frame(in: .named("dynScroll")).minY
+                                        )
+                                }
+                            )
+
+                        // Карточка графика
+                        chartCard
+
+                        if let warning = viewModel.state.currencyConversionWarning {
+                            currencyWarningView(text: warning)
+                        }
+
                         // Список динамики
-                        dynamicsList
+                        dynamicsListCard
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 16)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
                     .padding(.bottom, 32)
+                }
+                .coordinateSpace(name: "dynScroll")
+                .onPreferenceChange(ScrollOffsetKey.self) { y in
+                    let threshold: CGFloat = 140
+                    let p = min(max(-y / threshold, 0), 1)
+                    let quant: CGFloat = 0.02
+                    if abs(p - lastCollapseProgress) > quant {
+                        lastCollapseProgress = p
+                        collapseProgress = p
+                    }
                 }
             }
         }
@@ -150,30 +191,28 @@ private struct FinanceDynamicsContentView: View {
         )) {
             FinanceDynamicsFilterSheet(viewModel: viewModel)
         }
-        .sheet(isPresented: Binding(
-            get: { viewModel.state.showPeriodSelector },
-            set: { if !$0 { viewModel.handle(.hidePeriodSelector) } }
-        )) {
-            FinanceDynamicsPeriodSelectorView(viewModel: viewModel)
+        .sheet(isPresented: $showCustomPeriodSheet) {
+            customPeriodSheet
         }
         .sheet(isPresented: $showSubscriptionSheet) {
             NavigationStack {
                 SubscriptionView()
             }
         }
+        .sheet(isPresented: $showDisplayCurrencySheet) {
+            displayCurrencySheet
+        }
         .sheet(isPresented: Binding(
-            get: { financeViewModel.state.showEditCardSheet || financeViewModel.state.showEditCreditSheet || financeViewModel.state.showEditInvestmentSheet },
+            get: {
+                financeViewModel.state.showEditCardSheet ||
+                financeViewModel.state.showEditCreditSheet ||
+                financeViewModel.state.showEditInvestmentSheet
+            },
             set: { if !$0 {
-                if financeViewModel.state.showEditCardSheet {
-                    financeViewModel.handle(.hideEditCardSheet)
-                }
-                if financeViewModel.state.showEditCreditSheet {
-                    financeViewModel.handle(.hideEditCreditSheet)
-                }
-                if financeViewModel.state.showEditInvestmentSheet {
-                    financeViewModel.handle(.hideEditInvestmentSheet)
-                }
-            } }
+                if financeViewModel.state.showEditCardSheet { financeViewModel.handle(.hideEditCardSheet) }
+                if financeViewModel.state.showEditCreditSheet { financeViewModel.handle(.hideEditCreditSheet) }
+                if financeViewModel.state.showEditInvestmentSheet { financeViewModel.handle(.hideEditInvestmentSheet) }
+            }}
         )) {
             if let cardID = financeViewModel.state.editingCardID,
                let card = financeViewModel.state.availableCards.first(where: { $0.cardUniqueID == cardID }) {
@@ -186,7 +225,795 @@ private struct FinanceDynamicsContentView: View {
                 FinanceEditInvestmentView(investment: investment, viewModel: financeViewModel)
             }
         }
+        .onAppear {
+            // Синхронизация с ViewModel при появлении
+            if let customPeriod = viewModel.state.customPeriod {
+                customStartDate = customPeriod.start
+                customEndDate = customPeriod.end
+                useCustomPeriod = viewModel.state.period == .custom
+            }
+        }
     }
+
+    // MARK: - Chart Card
+
+    private var chartCard: some View {
+        let expandedHeight: CGFloat = 260
+        let minHeight: CGFloat = 64
+        let currentHeight = minHeight + (expandedHeight - minHeight) * max(0, 1 - collapseProgress)
+
+        return ZStack(alignment: .bottom) {
+            VStack(alignment: .leading, spacing: 8) {
+                // Header с балансом и дельтой
+                chartHeader
+
+                // График
+                if !appState.isPro {
+                    proBlockedView
+                } else if viewModel.state.isLoading {
+                    ProgressView()
+                        .tint(AppColors.textPrimary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: max(0, currentHeight - 64))
+                } else if viewModel.state.chartData.isEmpty {
+                    emptyChartView
+                        .frame(height: max(0, currentHeight - 64))
+                } else {
+                    chartContent
+                        .frame(height: max(0, currentHeight - 64))
+                        .padding(.top, 8)
+                        .animation(.easeInOut(duration: 0.25), value: viewModel.state.period)
+                        .animation(.easeInOut(duration: 0.25), value: viewModel.state.displayCurrency)
+                }
+
+                // Селектор периодов
+                periodSelector
+            }
+            .scaleEffect(x: 1, y: max(CGFloat(0.6), CGFloat(1) - collapseProgress * CGFloat(0.6)), anchor: .top)
+            .clipped()
+            .opacity(Double(max(CGFloat(0.35), CGFloat(1) - collapseProgress * CGFloat(0.65))))
+
+            // Градиент при сворачивании
+            if collapseProgress > 0.05 {
+                LinearGradient(
+                    colors: [AppColors.textTertiary.opacity(0.14), Color.clear],
+                    startPoint: .bottom,
+                    endPoint: .top
+                )
+                .frame(height: max(12, 24 * collapseProgress))
+                .transition(.opacity)
+                .allowsHitTesting(false)
+            }
+        }
+        .padding(.vertical, 12)
+        .background {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.black.opacity(0.3))
+        }
+        .clipped()
+        .frame(height: currentHeight + 100)
+    }
+
+    // MARK: - Chart Header
+
+    private var chartHeader: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                // Баланс с валютой
+                Button {
+                    showDisplayCurrencySheet = true
+                } label: {
+                    let symbol = MonetaCurrency(rawValue: viewModel.state.displayCurrency)?.symbol ?? viewModel.state.displayCurrency
+                    HStack(spacing: 6) {
+                        Text(formatBalance(viewModel.state.currentBalance))
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                        Text(symbol)
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                           
+                         
+                    }
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                // Бейдж с дельтой
+                if viewModel.state.chartData.count >= 2 {
+                    let delta = viewModel.state.periodDelta
+                    let positiveText = Color(.sRGB, red: 127.0 / 255.0, green: 1.0, blue: 189.0 / 255.0, opacity: 1.0)
+                    let positiveBg = Color(.sRGB, red: 127.0 / 255.0, green: 1.0, blue: 189.0 / 255.0, opacity: 0.3)
+                    let negativeText = Color(.sRGB, red: 1.0, green: 0.37, blue: 0.37, opacity: 1.0)
+                    let negativeBg = Color(.sRGB, red: 1.0, green: 0.37, blue: 0.37, opacity: 0.3)
+                    let neutralText = Color(.sRGB, red: 181.0 / 255.0, green: 181.0 / 255.0, blue: 181.0 / 255.0, opacity: 1.0)
+                    let neutralBg = Color(.sRGB, red: 181.0 / 255.0, green: 181.0 / 255.0, blue: 181.0 / 255.0, opacity: 0.3)
+                    let isPositive = delta.absolute > 0
+                    let isNegative = delta.absolute < 0
+                    let color: Color = isPositive ? positiveText : (isNegative ? negativeText : neutralText)
+                    let bg: Color = isPositive ? positiveBg : (isNegative ? negativeBg : neutralBg)
+                    HStack(spacing: 6) {
+                        Text(formatDelta(delta.absolute))
+                            .font(.caption.weight(.semibold))
+                        Text(formatPercent(delta.percent))
+                            .font(.caption.weight(.semibold))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(bg))
+                    .foregroundStyle(color)
+                }
+            }
+
+            // Бейдж счета (если выбран один счет)
+            if case .singleAccount(let accountID) = viewModel.state.dynamicsMode,
+               let account = viewModel.getAccountsForSelectedGroups().first(where: { $0.accountUniqueID == accountID }),
+               let accountInfo = viewModel.getAccountInfoForDynamics(account: account) {
+                HStack(spacing: 6) {
+                    Image(systemName: accountInfo.icon)
+                        .font(.caption)
+                    Text(accountInfo.name)
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(Color.white.opacity(0.1)))
+                .foregroundStyle(AppColors.textSecondary)
+            }
+
+            // Период
+            let (startDate, endDate) = viewModel.getPeriodDates()
+            let sameYear = Calendar.current.component(.year, from: startDate) == Calendar.current.component(.year, from: endDate)
+            let startFormat: Date.FormatStyle = sameYear ? .dateTime.day().month(.abbreviated) : .dateTime.day().month(.abbreviated).year()
+            let endFormat: Date.FormatStyle = .dateTime.day().month(.abbreviated).year()
+            Text("\(startDate.formatted(startFormat)) — \(endDate.formatted(endFormat))")
+                .font(.caption2)
+                .foregroundStyle(AppColors.textSecondary)
+        }
+        .padding(.horizontal, 0)
+    }
+
+    // MARK: - Chart Content
+
+    private var chartContent: some View {
+        let points = viewModel.state.chartData
+        let values = points.map { $0.value }
+        let niceY = NiceYScale.make(values: values)
+        let (startDate, endDate) = viewModel.getPeriodDates()
+        let xDomain = startDate...endDate
+
+        let seriesColor = Color(red: 0.47, green: 0.69, blue: 1.0)
+        return FinanceChartContainerView(
+            points: points,
+            selectedPoint: cachedSelectedPoint,
+            seriesColor: seriesColor,
+            niceY: niceY,
+            xDomain: xDomain,
+            xAxisStride: xAxisStride,
+            xAxisCount: xAxisCount,
+            currencyCode: viewModel.state.displayCurrency,
+            onSelectPoint: { newPoint in
+                if let pt = newPoint {
+                    cachedSelectedPoint = (date: pt.0, value: pt.1)
+                } else {
+                    cachedSelectedPoint = nil
+                }
+            }
+        )
+    }
+
+    private var displayCurrencySheet: some View {
+        NavigationStack {
+            CurrencyPickerView(
+                allCodes: viewModel.state.availableCurrencies.isEmpty
+                    ? CurrencySelectionSupport.allCurrencyCodesForPicker
+                    : viewModel.state.availableCurrencies,
+                searchText: $displayCurrencySearchText,
+                selectedCodes: CurrencySelectionSupport.pinnedCurrencyCodes(for: viewModel.state.displayCurrency),
+                favoriteCodes: [],
+                currentSelection: viewModel.state.displayCurrency,
+                onToggleFavorite: nil,
+                onSelect: { code in
+                    viewModel.handle(.setDisplayCurrency(code))
+                    displayCurrencySearchText = ""
+                    showDisplayCurrencySheet = false
+                }
+            )
+            .navigationTitle("Валюта")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Закрыть") {
+                        displayCurrencySearchText = ""
+                        showDisplayCurrencySheet = false
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    // MARK: - Period Selector
+
+    private var periodSelector: some View {
+        let periodBg = Color(.sRGB, red: 217.0 / 255.0, green: 217.0 / 255.0, blue: 217.0 / 255.0, opacity: 0.2)
+        let calendarBg = Color(.sRGB, red: 217.0 / 255.0, green: 217.0 / 255.0, blue: 217.0 / 255.0, opacity: 0.4)
+        return HStack(spacing: 8) {
+            // Кнопки периодов
+            ForEach([DynamicsPeriod.all, .week, .month, .year], id: \.self) { period in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        viewModel.handle(.setPeriod(period))
+                        useCustomPeriod = false
+                    }
+                    cachedSelectedPoint = nil
+                } label: {
+                    Text(period.rawValue)
+                        .font(.system(size: 13, weight: .regular))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 7)
+                        .background(
+                            Capsule().fill(
+                                period == viewModel.state.period && !useCustomPeriod
+                                    ? periodBg
+                                    : periodBg
+                            )
+                        )
+                        .overlay(
+                            Capsule().stroke(
+                                Color.white.opacity(
+                                    period == viewModel.state.period && !useCustomPeriod ? 0.20 : 0.08
+                                ),
+                                lineWidth: 0
+                            )
+                        )
+                        .foregroundStyle(
+                            period == viewModel.state.period && !useCustomPeriod
+                                ? AppColors.textPrimary
+                                : AppColors.textSecondary
+                        )
+                }
+                .buttonStyle(.plain)
+                .frame(width: 60, height: 32)
+            }
+
+            Spacer(minLength: 8)
+
+            // Кнопка календаря
+            Button {
+                draftStartDate = customStartDate
+                draftEndDate = customEndDate
+                showCustomPeriodSheet = true
+            } label: {
+                Image("calendar")
+                    .frame(width: 24, height: 24)
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(calendarBg))
+                    .foregroundStyle(useCustomPeriod ? AppColors.textPrimary : AppColors.textSecondary)
+            }
+            .buttonStyle(.plain)
+            .frame(width: 60, height: 32)
+        }
+        .frame(maxWidth: .infinity)
+//        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+    }
+
+    // MARK: - Custom Period Sheet
+
+    private var customPeriodSheet: some View {
+        NavigationStack {
+            ZStack {
+                GradientBackground()
+
+                VStack(spacing: 16) {
+                    // Header с информацией о периоде
+                    VStack(alignment: .leading, spacing: 6) {
+                        let sameYear = Calendar.current.component(.year, from: draftStartDate) == Calendar.current.component(.year, from: draftEndDate)
+                        let startFormat: Date.FormatStyle = sameYear ? .dateTime.day().month(.abbreviated) : .dateTime.day().month(.abbreviated).year()
+                        let endFormat: Date.FormatStyle = .dateTime.day().month(.abbreviated).year()
+                        Text("Период: \(min(draftStartDate, draftEndDate).formatted(startFormat)) — \(max(draftStartDate, draftEndDate).formatted(endFormat))")
+                            .font(.headline)
+                            .foregroundStyle(AppColors.textPrimary)
+                        Text("Выберите начало и конец периода на календаре")
+                            .font(.callout)
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
+                    .padding(.horizontal, 0)
+                    .padding(.top, 4)
+
+                    // Календарь
+                    CalendarRangeMonthView(startDate: $draftStartDate, endDate: $draftEndDate)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showCustomPeriodSheet = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .foregroundStyle(AppColors.textPrimary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                let gradient = LinearGradient(
+                    colors: [
+                        Color(red: 0.12, green: 0.02, blue: 0.12),
+                        Color(red: 0.02, green: 0.12, blue: 0.10)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+
+                HStack(spacing: 12) {
+                    Button {
+                        draftStartDate = Date()
+                        draftEndDate = Date()
+                        customStartDate = draftStartDate
+                        customEndDate = draftEndDate
+                        useCustomPeriod = false
+                        viewModel.handle(.setPeriod(.month))
+                        cachedSelectedPoint = nil
+                        showCustomPeriodSheet = false
+                    } label: {
+                        Text("Сбросить")
+                            .font(.system(size: 16, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(
+                                Capsule()
+                                    .stroke(Color.white.opacity(0.7), lineWidth: 1)
+                            )
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        let start = min(draftStartDate, draftEndDate)
+                        let end = max(draftStartDate, draftEndDate)
+                        let clampedEnd = min(end, Calendar.current.startOfDay(for: Date()))
+                        let clampedStart = min(start, clampedEnd)
+                        customStartDate = clampedStart
+                        customEndDate = clampedEnd
+                        useCustomPeriod = true
+                        viewModel.handle(.setCustomPeriod(start: clampedStart, end: clampedEnd))
+                        cachedSelectedPoint = nil
+                        showCustomPeriodSheet = false
+                    } label: {
+                        Text("Показать")
+                            .font(.system(size: 16, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(
+                                Capsule()
+                                    .fill(gradient)
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(
+                                                LinearGradient(
+                                                    colors: AppColors.financesGradient,
+                                                    startPoint: .leading,
+                                                    endPoint: .trailing
+                                                ),
+                                                lineWidth: 1
+                                            )
+                                    )
+                            )
+                            .foregroundStyle(Color.white)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+            }
+        }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+
+    // MARK: - Dynamics List Card
+
+    private var dynamicsListCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Панель с фильтром и переключателем
+            HStack(spacing: 12) {
+                Button {
+                    viewModel.handle(.showFilterSheet)
+                } label: {
+                    let accentColor = AppColors.financesGradient.first ?? .cyan
+                    let fillGradient = LinearGradient(
+                        colors: [
+                            Color(red: 0.03, green: 0.07, blue: 0.11),
+                            Color(red: 0.02, green: 0.04, blue: 0.06),
+                            Color.black
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    let glowGradient = LinearGradient(
+                        colors: [
+                            accentColor.opacity(0.18),
+                            Color.clear
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+
+                    Image(systemName: "line.3.horizontal.decrease.circle")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .background(
+                            Circle()
+                                .fill(fillGradient)
+                                .overlay(
+                                    Circle()
+                                        .fill(glowGradient)
+                                        .opacity(0.6)
+                                )
+                                .overlay(
+                                    Circle()
+                                        .stroke(accentColor.opacity(0.55), lineWidth: 1)
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+
+                dynamicsSegmentedControl
+            }
+
+            // Блок таблицы
+            if viewModel.state.dynamicsBreakdown.isEmpty {
+                emptyStateView
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 40)
+                    .background(dynamicsCardBackground)
+            } else {
+                LazyVStack(spacing: 0) {
+                    // Заголовок таблицы
+                    tableHeader
+
+                    // Итого
+                    if let total = totalRow {
+                        totalRowView(total)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                        Divider()
+                            .overlay(Color.white.opacity(0.06))
+                            .padding(.horizontal, 16)
+                    }
+
+                    // Строки данных
+                    ForEach(viewModel.state.dynamicsBreakdown) { item in
+                        rowView(item)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                    }
+                }
+                .padding(.vertical, 12)
+                .background(dynamicsCardBackground)
+            }
+        }
+    }
+
+    // MARK: - Empty State
+
+    private var emptyStateView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: viewModel.state.viewMode == .groups ? "folder.fill" : "creditcard.fill")
+                .font(.system(size: 64))
+                .foregroundStyle(AppColors.textSecondary.opacity(0.5))
+            
+            VStack(spacing: 6) {
+                Text(viewModel.state.viewMode == .groups ? "Нет групп" : "Нет продуктов")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(AppColors.textPrimary)
+                
+                Text(viewModel.state.viewMode == .groups ? "Создайте первую группу" : "Создайте первый продукт")
+                    .font(.subheadline)
+                    .foregroundStyle(AppColors.textSecondary)
+            }
+        }
+    }
+
+    // MARK: - Table Header
+
+    private var tableHeader: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Text("")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Spacer(minLength: 12)
+                Text("Начало")
+                    .font(.caption2).foregroundStyle(AppColors.textSecondary)
+                    .frame(width: 92, alignment: .trailing)
+                Text("Конец")
+                    .font(.caption2).foregroundStyle(AppColors.textSecondary)
+                    .frame(width: 92, alignment: .trailing)
+            }
+            .padding(.vertical, 4)
+            Divider()
+                .overlay(Color.white.opacity(0.2))
+                .padding(.horizontal, 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 4)
+    }
+
+    private var dynamicsSegmentedControl: some View {
+        let borderGradient = LinearGradient(
+            colors: AppColors.financesGradient,
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+        let baseGradient = LinearGradient(
+            colors: [
+                Color(red: 0.03, green: 0.07, blue: 0.11),
+                Color.black
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+
+        return Picker("Режим динамики", selection: dynamicsViewModeSelection) {
+            Text("Группы").tag(0)
+            Text("Счета").tag(1)
+        }
+        .pickerStyle(.segmented)
+        .padding(4)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(baseGradient)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(borderGradient, lineWidth: 1)
+        )
+    }
+
+    private var dynamicsViewModeSelection: Binding<Int> {
+        Binding {
+            viewModel.state.viewMode == .groups ? 0 : 1
+        } set: { value in
+            viewModel.handle(.setViewMode(value == 0 ? .groups : .accounts))
+        }
+    }
+
+    private var dynamicsCardBackground: some View {
+        let accentColor = AppColors.financesGradient.first ?? .cyan
+        let fillGradient = LinearGradient(
+            colors: [
+                Color(red: 0.03, green: 0.07, blue: 0.11),
+                Color(red: 0.02, green: 0.04, blue: 0.06),
+                Color.black
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        let glowGradient = LinearGradient(
+            colors: [
+                accentColor.opacity(0.18),
+                Color.clear
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+
+        return RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .fill(fillGradient)
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(glowGradient)
+                    .opacity(0.6)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: AppColors.financesGradient,
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        lineWidth: 1
+                    )
+            )
+    }
+
+    // MARK: - Row Views
+
+    @ViewBuilder
+    private func rowView(_ item: DynamicsBreakdownItem) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                // Иконка (для счетов)
+                if viewModel.state.viewMode == .accounts, let icon = item.icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(
+                            (item.accountType == .credit || item.isCreditCard)
+                                ? LinearGradient(colors: [AppColors.error, AppColors.error], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                : LinearGradient(colors: AppColors.financesGradient, startPoint: .topLeading, endPoint: .bottomTrailing)
+                        )
+                        .frame(width: 20, height: 20)
+                }
+
+                Text(item.name)
+                    .font(.subheadline)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .foregroundStyle(AppColors.textPrimary)
+                
+                if item.isArchived {
+                    Text("архив")
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Color.white.opacity(0.08)))
+                        .foregroundStyle(AppColors.textSecondary)
+                }
+
+                Spacer(minLength: 12)
+
+                VStack(alignment: .trailing, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(formatBalance(item.startValue))
+                            .font(.footnote.monospacedDigit())
+                            .foregroundStyle(AppColors.textSecondary)
+                            .frame(width: 92, alignment: .trailing)
+                        Text(formatBalance(item.endValue))
+                            .font(.footnote.monospacedDigit())
+                            .foregroundStyle(AppColors.textPrimary)
+                            .frame(width: 92, alignment: .trailing)
+                    }
+
+                    // Бейдж с изменением
+                    let badgeColor = deltaColor(for: item)
+                    let badgeBg = deltaBackground(for: item)
+                    let badgeText = "\(formatDelta(item.delta))  •  \(formatPercent(item.deltaPercent))"
+                    Text(badgeText)
+                        .font(.caption.weight(.semibold).monospacedDigit())
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(badgeBg))
+                        .foregroundStyle(badgeColor)
+                        .fixedSize()
+                }
+            }
+        }
+        .listRowSeparator(.visible)
+    }
+
+    @ViewBuilder
+    private func totalRowView(_ item: DynamicsBreakdownItem) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text(item.name)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+
+                Spacer(minLength: 12)
+
+                VStack(alignment: .trailing, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(formatBalance(item.startValue))
+                            .font(.footnote.monospacedDigit().weight(.semibold))
+                            .foregroundStyle(AppColors.textSecondary)
+                            .frame(width: 92, alignment: .trailing)
+                        Text(formatBalance(item.endValue))
+                            .font(.footnote.monospacedDigit().weight(.semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .frame(width: 92, alignment: .trailing)
+                    }
+
+                    let badgeColor = deltaColor(for: item)
+                    let badgeBg = deltaBackground(for: item)
+                    let badgeText = "\(formatDelta(item.delta))  •  \(formatPercent(item.deltaPercent))"
+                    Text(badgeText)
+                        .font(.caption.weight(.semibold).monospacedDigit())
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(badgeBg))
+                        .foregroundStyle(badgeColor)
+                        .fixedSize()
+                }
+            }
+        }
+    }
+
+    // MARK: - Total Row
+
+    private var totalRow: DynamicsBreakdownItem? {
+        guard !viewModel.state.dynamicsBreakdown.isEmpty else { return nil }
+        let startSum = viewModel.state.dynamicsBreakdown.reduce(0) { $0 + $1.startValue }
+        let endSum = viewModel.state.dynamicsBreakdown.reduce(0) { $0 + $1.endValue }
+        let delta = endSum - startSum
+        let percent: Double = abs(startSum) > 0.01 ? (delta / abs(startSum)) * 100 : 0
+        return DynamicsBreakdownItem(
+            id: "total",
+            name: "Итого",
+            startValue: startSum,
+            endValue: endSum,
+            delta: delta,
+            deltaPercent: percent,
+            icon: nil,
+            accountType: nil,
+            isCreditCard: false,
+            isArchived: false
+        )
+    }
+
+    // MARK: - Blocked/Empty Views
+
+    private var proBlockedView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 48))
+                .foregroundStyle(AppColors.textTertiary)
+
+            Text("График доступен в PRO версии")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(AppColors.textPrimary)
+
+            Text("Оформите подписку для доступа к расширенной аналитике")
+                .font(.system(size: 14))
+                .foregroundStyle(AppColors.textSecondary)
+                .multilineTextAlignment(.center)
+
+            Button {
+                showSubscriptionSheet = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 14))
+                    Text("Оформить PRO")
+                        .font(.system(size: 16, weight: .semibold))
+                }
+                .foregroundStyle(AppColors.textPrimary)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .background {
+                    Capsule()
+                        .fill(.ultraThinMaterial)
+                        .overlay {
+                            Capsule().stroke(
+                                LinearGradient(
+                                    colors: AppColors.incomeGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ),
+                                lineWidth: 2
+                            )
+                        }
+                }
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 200)
+        .padding(24)
+    }
+
+    private var emptyChartView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "chart.line.uptrend.xyaxis")
+                .font(.system(size: 48))
+                .foregroundStyle(AppColors.textTertiary)
+
+            Text("Нет данных для отображения")
+                .font(.system(size: 16))
+                .foregroundStyle(AppColors.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Edit Form
 
     @ViewBuilder
     private func editForm(for account: FinanceAccount) -> some View {
@@ -226,763 +1053,27 @@ private struct FinanceDynamicsContentView: View {
         financeViewModel.handle(.hideAccountDynamics)
         dismiss()
     }
-    
-    // MARK: - Filter Sheet View
-    
-    private struct FinanceDynamicsFilterSheet: View {
-        @ObservedObject var viewModel: FinanceDynamicsViewModel
-        @Environment(\.dismiss) private var dismiss
-        
-        var body: some View {
-            NavigationStack {
-                ZStack {
-                    GradientBackground()
-                    
-                    ScrollView {
-                        VStack(spacing: 24) {
-                            // Валюта
-                            currencyPicker
-                            
-                            // Фильтр групп (скрываем в режиме одной группы или одного счета)
-                            if !viewModel.state.isSingleGroupMode && !viewModel.state.isSingleAccountMode {
-                                groupsFilterSection
-                            }
-                            
-                            // Фильтр счетов (скрываем в режиме одного счета, показываем если выбраны группы или в режиме одной группы)
-                            if !viewModel.state.isSingleAccountMode && (!viewModel.state.selectedGroupIDs.isEmpty || viewModel.state.isSingleGroupMode) {
-                                accountsFilterSection
-                            }
-                        }
-                        .padding(.horizontal, 24)
-                        .padding(.top, 16)
-                        .padding(.bottom, 32)
-                    }
-                }
-                .navigationTitle("Фильтры")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button("Готово") {
-                            dismiss()
-                        }
-                        .foregroundStyle(AppColors.textPrimary)
-                    }
-                }
-            }
-        }
-        
-        private var currencyPicker: some View {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Валюта")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(AppColors.textSecondary)
-                
-                if viewModel.state.availableCurrencies.isEmpty {
-                    HStack {
-                        Text("Загрузка...")
-                            .font(.system(size: 14))
-                            .foregroundStyle(AppColors.textTertiary)
-                        Spacer()
-                        ProgressView()
-                            .scaleEffect(0.8)
-                            .tint(AppColors.textTertiary)
-                    }
-                } else {
-                    Menu {
-                        ForEach(viewModel.state.availableCurrencies, id: \.self) { currency in
-                            Button {
-                                viewModel.handle(.setDisplayCurrency(currency))
-                            } label: {
-                                HStack {
-                                    Text(currency)
-                                    if currency == viewModel.state.displayCurrency {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-                        }
-                    } label: {
-                        HStack {
-                            Text(viewModel.state.displayCurrency)
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(AppColors.textPrimary)
-                            Spacer()
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(AppColors.textSecondary)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.white.opacity(0.1))
-                        )
-                    }
-                }
-            }
-            .padding(20)
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color.black.opacity(0.3))
-            )
-        }
-        
-        private var groupsFilterSection: some View {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Text("Группы")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                    
-                    Spacer()
-                    
-                    // Кнопки управления
-                    HStack(spacing: 12) {
-                        Button {
-                            viewModel.handle(.selectAllGroups)
-                        } label: {
-                            Text("Все")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(AppColors.textPrimary)
-                        }
-                        
-                        Button {
-                            viewModel.handle(.deselectAllGroups)
-                        } label: {
-                            Text("Снять")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(AppColors.textSecondary)
-                        }
-                    }
-                }
-                
-                if viewModel.state.groups.isEmpty {
-                    Text("Нет групп")
-                        .font(.system(size: 14))
-                        .foregroundStyle(AppColors.textTertiary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    VStack(spacing: 12) {
-                        ForEach(viewModel.state.groups) { group in
-                            let groupAccounts = group.accounts ?? []
-                            
-                            // Показываем группу только если в ней есть счета или выбраны все счета
-                            if !groupAccounts.isEmpty || viewModel.state.selectedAccountIDs.isEmpty {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    HStack {
-                                        Button {
-                                            viewModel.handle(.toggleGroup(group.groupUniqueID))
-                                        } label: {
-                                            HStack {
-                                                Circle()
-                                                    .fill(group.color)
-                                                    .frame(width: 12, height: 12)
-                                                
-                                                Text(group.name)
-                                                    .font(.system(size: 16, weight: .medium))
-                                                    .foregroundStyle(AppColors.textPrimary)
-                                                
-                                                Spacer()
-                                                
-                                                Image(systemName: viewModel.state.selectedGroupIDs.contains(group.groupUniqueID) ? "checkmark.circle.fill" : "circle")
-                                                    .font(.system(size: 20))
-                                                    .foregroundStyle(viewModel.state.selectedGroupIDs.contains(group.groupUniqueID) ? Color.green : AppColors.textTertiary)
-                                            }
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                    
-                                    // Показываем счета группы, если группа выбрана
-                                    if viewModel.state.selectedGroupIDs.contains(group.groupUniqueID) || viewModel.state.selectedGroupIDs.isEmpty {
-                                        VStack(alignment: .leading, spacing: 8) {
-                                            HStack {
-                                                Text("Счета")
-                                                    .font(.system(size: 14, weight: .medium))
-                                                    .foregroundStyle(AppColors.textSecondary)
-                                                
-                                                Spacer()
-                                                
-                                                HStack(spacing: 12) {
-                                                    Button {
-                                                        // Выбрать все счета группы
-                                                        let allAccountIDs = Set(groupAccounts.map { $0.accountUniqueID })
-                                                        let currentSelected = viewModel.state.selectedAccountIDs
-                                                        let newSelected = currentSelected.union(allAccountIDs)
-                                                        viewModel.handle(.selectAccounts(newSelected))
-                                                    } label: {
-                                                        Text("Все")
-                                                            .font(.system(size: 12, weight: .medium))
-                                                            .foregroundStyle(AppColors.textSecondary)
-                                                    }
-                                                    
-                                                    Button {
-                                                        // Снять выбор всех счетов группы
-                                                        let groupAccountIDs = Set(groupAccounts.map { $0.accountUniqueID })
-                                                        let newSelected = viewModel.state.selectedAccountIDs.subtracting(groupAccountIDs)
-                                                        viewModel.handle(.selectAccounts(newSelected))
-                                                    } label: {
-                                                        Text("Снять")
-                                                            .font(.system(size: 12, weight: .medium))
-                                                            .foregroundStyle(AppColors.textSecondary)
-                                                    }
-                                                }
-                                            }
-                                            
-                                            if groupAccounts.isEmpty {
-                                                Text("Нет счетов")
-                                                    .font(.system(size: 14))
-                                                    .foregroundStyle(AppColors.textTertiary)
-                                                    .padding(.leading, 24)
-                                            } else {
-                                                ForEach(groupAccounts) { account in
-                                                    if let accountInfo = viewModel.financeViewModel.getAccountInfo(account: account) {
-                                                        Button {
-                                                            viewModel.handle(.toggleAccount(account.accountUniqueID))
-                                                        } label: {
-                                                            HStack {
-                                                                Image(systemName: accountInfo.icon)
-                                                                    .font(.system(size: 14))
-                                                                    .foregroundStyle(AppColors.textSecondary)
-                                                                    .frame(width: 20)
-                                                                
-                                                                Text(accountInfo.name)
-                                                                    .font(.system(size: 14, weight: .regular))
-                                                                    .foregroundStyle(AppColors.textPrimary)
-                                                                
-                                                                Spacer()
-                                                                
-                                                                Image(systemName: viewModel.state.selectedAccountIDs.contains(account.accountUniqueID) ? "checkmark.circle.fill" : "circle")
-                                                                    .font(.system(size: 18))
-                                                                    .foregroundStyle(viewModel.state.selectedAccountIDs.contains(account.accountUniqueID) ? Color.green : AppColors.textTertiary)
-                                                            }
-                                                            .padding(.leading, 24)
-                                                        }
-                                                        .buttonStyle(.plain)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                .padding(16)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(Color.white.opacity(0.05))
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-            .padding(20)
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color.black.opacity(0.3))
-            )
-        }
-        
-        private var accountsFilterSection: some View {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Text("Счета")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                    
-                    Spacer()
-                    
-                    // Кнопки управления
-                    HStack(spacing: 12) {
-                        Button {
-                            viewModel.handle(.selectAllAccounts)
-                        } label: {
-                            Text("Все")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(AppColors.textPrimary)
-                        }
-                        
-                        Button {
-                            viewModel.handle(.deselectAllAccounts)
-                        } label: {
-                            Text("Снять")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(AppColors.textSecondary)
-                        }
-                    }
-                }
-                
-                let accounts = viewModel.getAccountsForSelectedGroups()
-                
-                if accounts.isEmpty {
-                    Text("Нет счетов")
-                        .font(.system(size: 14))
-                        .foregroundStyle(AppColors.textTertiary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    VStack(spacing: 8) {
-                        ForEach(accounts) { account in
-                            if let accountInfo = viewModel.financeViewModel.getAccountInfo(account: account) {
-                                Button {
-                                    viewModel.handle(.toggleAccount(account.accountUniqueID))
-                                } label: {
-                                    HStack {
-                                        Image(systemName: accountInfo.icon)
-                                            .font(.system(size: 14))
-                                            .foregroundStyle(AppColors.textSecondary)
-                                            .frame(width: 20)
-                                        
-                                        Text(accountInfo.name)
-                                            .font(.system(size: 14, weight: .regular))
-                                            .foregroundStyle(AppColors.textPrimary)
-                                        
-                                        Spacer()
-                                        
-                                        Image(systemName: viewModel.state.selectedAccountIDs.contains(account.accountUniqueID) ? "checkmark.circle.fill" : "circle")
-                                            .font(.system(size: 18))
-                                            .foregroundStyle(viewModel.state.selectedAccountIDs.contains(account.accountUniqueID) ? Color.green : AppColors.textTertiary)
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                }
-            }
-            .padding(20)
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color.black.opacity(0.3))
-            )
+
+    // MARK: - Helpers
+
+    private var xAxisStride: Calendar.Component {
+        switch viewModel.state.period {
+        case .week: return .day
+        case .month: return .day
+        case .year: return .month
+        case .all, .custom: return .month
         }
     }
-    
-    // MARK: - Chart Section
-    
-    private var chartSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            customPeriodHeader
-            
-            if !appState.isPro {
-                // Блокировка графика для бесплатной версии
-                VStack(spacing: 16) {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 48))
-                        .foregroundStyle(AppColors.textTertiary)
-                    
-                    Text("График доступен в PRO версии")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                    
-                    Text("Оформите подписку для доступа к расширенной аналитике")
-                        .font(.system(size: 14))
-                        .foregroundStyle(AppColors.textSecondary)
-                        .multilineTextAlignment(.center)
-                    
-                    Button {
-                        showSubscriptionSheet = true
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "star.fill")
-                                .font(.system(size: 14))
-                            Text("Оформить PRO")
-                                .font(.system(size: 16, weight: .semibold))
-                        }
-                        .foregroundStyle(AppColors.textPrimary)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
-                        .background {
-                            Capsule()
-                                .fill(.ultraThinMaterial)
-                                .overlay {
-                                    Capsule()
-                                        .stroke(
-                                            LinearGradient(
-                                                colors: AppColors.incomeGradient,
-                                                startPoint: .leading,
-                                                endPoint: .trailing
-                                            ),
-                                            lineWidth: 2
-                                        )
-                                }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 300)
-                .padding(24)
-            } else if viewModel.state.isLoading {
-                ProgressView()
-                    .tint(AppColors.textPrimary)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 300)
-            } else if viewModel.state.chartData.isEmpty {
-                VStack(spacing: 16) {
-                    Image(systemName: "chart.line.uptrend.xyaxis")
-                        .font(.system(size: 48))
-                        .foregroundStyle(AppColors.textTertiary)
-                    
-                    Text("Нет данных для отображения")
-                        .font(.system(size: 16))
-                        .foregroundStyle(AppColors.textSecondary)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 300)
-            } else {
-                financeChart
-                
-                // Выбор периода под графиком
-                periodSelectorUnderChart
-            }
+
+    private var xAxisCount: Int {
+        switch viewModel.state.period {
+        case .week: return 1
+        case .month: return 7
+        case .year: return 2
+        case .all, .custom: return 3
         }
     }
-    
-    // MARK: - Custom Period Header
-    
-    private var customPeriodHeader: some View {
-        Group {
-            if viewModel.state.period == .custom, let customPeriod = viewModel.state.customPeriod {
-                HStack {
-                    Image(systemName: "calendar")
-                        .font(.system(size: 14))
-                        .foregroundStyle(AppColors.textSecondary)
-                    
-                    Text(formatPeriodRange(customPeriod.start, customPeriod.end))
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(AppColors.textPrimary)
-                    
-                    Spacer()
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.white.opacity(0.1))
-                )
-            }
-        }
-    }
-    
-    // MARK: - Finance Chart
-    
-    private var financeChart: some View {
-        let seriesColor = Color(red: 1.0, green: 0.5, blue: 0.0)
-        
-        // Вычисляем нижнюю границу для AreaMark (минимальное значение с небольшим отступом)
-        let values = viewModel.state.chartData.map { $0.value }
-        let minValue = values.min() ?? 0
-        let maxValue = values.max() ?? 0
-        let range = maxValue - minValue
-        let niceLower = minValue - max(0.5, range * 0.05)
-        
-        let chartContent = buildChartContent(
-            seriesColor: seriesColor,
-            niceLower: niceLower
-        )
-        
-        let chartWithAxes = chartContent
-            .chartYAxis {
-                AxisMarks(position: .trailing, values: .automatic(desiredCount: 6)) { value in
-                    AxisGridLine()
-                        .foregroundStyle(AppColors.textTertiary.opacity(0.4))
-                    AxisValueLabel {
-                        if let doubleValue = value.as(Double.self) {
-                            Text(formatCompactAmount(doubleValue))
-                                .foregroundStyle(AppColors.textSecondary)
-                                .font(.system(size: 10))
-                        }
-                    }
-                }
-            }
-            .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 6)) { value in
-                    AxisGridLine()
-                        .foregroundStyle(AppColors.textTertiary.opacity(0.4))
-                    if viewModel.state.period != .all {
-                        AxisValueLabel {
-                            if let dateValue = value.as(Date.self) {
-                                Text(formatDate(dateValue))
-                                    .foregroundStyle(AppColors.textSecondary)
-                                    .font(.system(size: 10))
-                            }
-                        }
-                    }
-                }
-            }
-        
-        let chartWithSelection = chartWithAxes
-            .chartXSelection(value: Binding(
-                get: { viewModel.state.selectedDate },
-                set: { date in
-                    viewModel.handle(.selectDateOnChart(date))
-                }
-            ))
-            .chartGesture { proxy in
-                DragGesture(minimumDistance: 0)
-                    .onEnded { _ in
-                        viewModel.handle(.selectDateOnChart(nil))
-                    }
-            }
-        
-        return chartWithSelection
-            .overlay(alignment: .top) {
-                chartAnnotation(seriesColor: seriesColor)
-            }
-            .animation(.easeInOut(duration: 0.3), value: viewModel.state.chartData)
-            .animation(.easeInOut(duration: 0.2), value: viewModel.state.selectedDate)
-            .frame(height: 300)
-            .padding(20)
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color.black.opacity(0.3))
-            )
-    }
-    
-    // MARK: - Chart Content Builder
-    
-    @ViewBuilder
-    private func buildChartContent(seriesColor: Color, niceLower: Double) -> some View {
-        Chart {
-            // Всегда используем AreaMark с плавной интерполяцией для агрегированных данных
-            ForEach(viewModel.state.chartData) { dataPoint in
-                AreaMark(
-                    x: .value("Дата", dataPoint.date, unit: .day),
-                    yStart: .value("Низ", niceLower),
-                    yEnd: .value("Сумма", dataPoint.value)
-                )
-                .interpolationMethod(.cardinal)
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [
-                            seriesColor.opacity(0.35),
-                            seriesColor.opacity(0.20),
-                            seriesColor.opacity(0.10),
-                            seriesColor.opacity(0.05),
-                            Color.clear
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                
-                LineMark(
-                    x: .value("Дата", dataPoint.date, unit: .day),
-                    y: .value("Сумма", dataPoint.value)
-                )
-                .interpolationMethod(.cardinal)
-                .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
-                .foregroundStyle(seriesColor)
-            }
-            
-            // Визуализация выбранной точки
-            if let selectedDate = viewModel.state.selectedDate {
-                // Вертикальная линия на выбранной дате
-                RuleMark(x: .value("Дата", selectedDate, unit: .day))
-                    .foregroundStyle(seriesColor.opacity(0.5))
-                    .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
-                
-                // Точка на выбранной дате
-                PointMark(
-                    x: .value("Дата", selectedDate, unit: .day),
-                    y: .value("Сумма", viewModel.state.currentBalance)
-                )
-                .foregroundStyle(.white)
-                .symbolSize(80)
-                .shadow(color: seriesColor.opacity(0.6), radius: 4)
-            }
-        }
-    }
-    
-    
-    // MARK: - Chart Annotation
-    
-    private func chartAnnotation(seriesColor: Color) -> some View {
-        Group {
-            if let selectedDate = viewModel.state.selectedDate {
-                VStack(spacing: 4) {
-                    Text(formatBalance(viewModel.state.currentBalance))
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(AppColors.textPrimary)
-                    
-                    Text(formatDate(selectedDate))
-                        .font(.system(size: 12))
-                        .foregroundStyle(AppColors.textSecondary)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(seriesColor.opacity(0.3), lineWidth: 1)
-                        }
-                }
-                .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
-                .padding(.top, 8)
-            }
-        }
-    }
-    
-    // MARK: - Period Selector Under Chart
-    
-    private var periodSelectorUnderChart: some View {
-        HStack(spacing: 8) {
-            // Кнопки периодов
-            ForEach([DynamicsPeriod.all, .week, .month, .year], id: \.self) { period in
-                Button {
-                    viewModel.handle(.setPeriod(period))
-                } label: {
-                    Text(period.rawValue)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(viewModel.state.period == period ? Color.white : AppColors.textPrimary)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(
-                            Group {
-                                if viewModel.state.period == period {
-                                    Color.white.opacity(0.2)
-                                } else {
-                                    Color.white.opacity(0.1)
-                                }
-                            }
-                        )
-                        .clipShape(Capsule())
-                }
-            }
-            
-            // Кнопка календаря для кастомного периода
-            Button {
-                viewModel.handle(.showPeriodSelector)
-            } label: {
-                Image(systemName: "calendar")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(viewModel.state.period == .custom ? Color.white : AppColors.textPrimary)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(
-                        Group {
-                            if viewModel.state.period == .custom {
-                                Color.white.opacity(0.2)
-                            } else {
-                                Color.white.opacity(0.1)
-                            }
-                        }
-                    )
-                    .clipShape(Capsule())
-            }
-        }
-    }
-    
-    private func formatCompactAmount(_ amount: Double) -> String {
-        let absAmount = abs(amount)
-        
-        if absAmount >= 1_000_000_000 {
-            return String(format: "%.1f млрд", amount / 1_000_000_000)
-        } else if absAmount >= 1_000_000 {
-            return String(format: "%.1f млн", amount / 1_000_000)
-        } else if absAmount >= 1_000 {
-            return String(format: "%.0f тыс", amount / 1_000)
-        } else {
-            return String(format: "%.0f", amount)
-        }
-    }
-    
-    // MARK: - Top Panel
-    
-    private var topPanel: some View {
-        VStack(spacing: 16) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                // Текущий баланс
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(formatBalance(viewModel.state.currentBalance))
-                        .font(.system(size: 32, weight: .bold))
-                        .foregroundStyle(AppColors.textPrimary)
-                    
-                    // Подпись периода
-                    Text(periodLabel)
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundStyle(AppColors.textSecondary)
-                }
-                
-                Spacer()
-                
-                // Дельта за период
-                VStack(alignment: .trailing, spacing: 4) {
-                    HStack(spacing: 4) {
-                        Text(viewModel.state.periodDelta.absolute >= 0 ? "+" : "")
-                            .font(.system(size: 18, weight: .semibold))
-                        Text(formatBalance(viewModel.state.periodDelta.absolute))
-                            .font(.system(size: 18, weight: .semibold))
-                        Text(viewModel.state.displayCurrency)
-                            .font(.system(size: 14, weight: .medium))
-                    }
-                    .foregroundStyle(viewModel.state.periodDelta.absolute >= 0 ? Color.green : AppColors.error)
-                    
-                    HStack(spacing: 4) {
-                        if abs(viewModel.state.periodDelta.percent) >= 999999.0 {
-                            Text("∞")
-                                .font(.system(size: 14, weight: .medium))
-                        } else {
-                            Text(viewModel.state.periodDelta.percent >= 0 ? "+" : "")
-                                .font(.system(size: 14, weight: .medium))
-                            Text(String(format: "%.1f", viewModel.state.periodDelta.percent))
-                                .font(.system(size: 14, weight: .medium))
-                            Text("%")
-                                .font(.system(size: 14, weight: .medium))
-                        }
-                    }
-                    .foregroundStyle(viewModel.state.periodDelta.percent >= 0 ? Color.green : AppColors.error)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill((viewModel.state.periodDelta.absolute >= 0 ? Color.green : AppColors.error).opacity(0.2))
-                )
-            }
-            
-            // Бейдж счета (если выбран один счет)
-            if case .singleAccount(let accountID) = viewModel.state.dynamicsMode,
-               let account = viewModel.getAccountsForSelectedGroups().first(where: { $0.accountUniqueID == accountID }),
-               let accountInfo = financeViewModel.getAccountInfo(account: account) {
-                HStack {
-                    Image(systemName: accountInfo.icon)
-                        .font(.system(size: 14))
-                    Text(accountInfo.name)
-                        .font(.system(size: 14, weight: .medium))
-                }
-                .foregroundStyle(AppColors.textPrimary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule()
-                        .fill(Color.white.opacity(0.1))
-                )
-            }
-        }
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.black.opacity(0.3))
-        )
-    }
-    
-    private var periodLabel: String {
-        if let selectedDate = viewModel.state.selectedDate {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "d MMM yyyy"
-            return "До \(formatter.string(from: selectedDate))"
-        } else {
-            switch viewModel.state.period {
-            case .week: return "За 1W"
-            case .month: return "За 1M"
-            case .year: return "За 1Y"
-            case .all: return "За All"
-            case .custom: return "За период"
-            }
-        }
-    }
-    
+
     private func formatBalance(_ balance: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
@@ -992,249 +1083,398 @@ private struct FinanceDynamicsContentView: View {
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: balance)) ?? "0"
     }
-    
-    private func formatAmount(_ amount: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.groupingSeparator = " "
-        formatter.usesGroupingSeparator = true
-        formatter.minimumFractionDigits = 2
-        formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: amount)) ?? "0.00"
+
+    private func formatDelta(_ delta: Double) -> String {
+        let sign = delta >= 0 ? "+" : ""
+        return "\(sign)\(formatBalance(delta))"
     }
 
-    private func deltaLineText(delta: Double, percent: Double, currency: String) -> String {
-        let deltaSign = delta >= 0 ? "+" : "-"
-        let percentSign = percent >= 0 ? "+" : "-"
-        let percentText = abs(percent) >= 999999.0 ? "∞" : String(format: "%.1f", abs(percent))
-        let currencyLetter = String(currency.prefix(1))
-        return "\(deltaSign)\(formatBalance(abs(delta))) \(currencyLetter) • \(percentSign)\(percentText) %"
-    }
-    
-    private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        
-        switch viewModel.state.period {
-        case .week:
-            formatter.dateFormat = "dd.MM"
-        case .month:
-            formatter.dateFormat = "dd.MM"
-        case .year:
-            formatter.dateFormat = "MMM"
-        case .all:
-            formatter.dateFormat = "MMM yyyy"
-        case .custom:
-            formatter.dateFormat = "dd.MM"
+    private func formatPercent(_ percent: Double) -> String {
+        if abs(percent) >= 999999 {
+            return percent > 0 ? "+∞" : "-∞"
         }
-        
-        return formatter.string(from: date)
+        return String(format: "%+.1f%%", percent)
     }
-    
-    private func formatPeriodRange(_ start: Date, _ end: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "d MMM yyyy"
-        
-        let startString = formatter.string(from: start)
-        let endString = formatter.string(from: end)
-        
-        return "\(startString) - \(endString)"
-    }
-    
-    // MARK: - Dynamics List
-    
-    private var dynamicsList: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Панель переключения и фильтр
-            HStack(spacing: 12) {
-                // Кнопка фильтра
-                Button {
-                    viewModel.handle(.showFilterSheet)
-                } label: {
-                    Image(systemName: "line.3.horizontal.decrease.circle")
-                        .font(.system(size: 20))
-                        .foregroundStyle(AppColors.textSecondary)
-                }
-                
-                // Переключение групп/счетов
-                Picker("Режим просмотра", selection: Binding(
-                    get: { viewModel.state.viewMode },
-                    set: { viewModel.handle(.setViewMode($0)) }
-                )) {
-                    Text("Группы").tag(DynamicsViewMode.groups)
-                    Text("Счета").tag(DynamicsViewMode.accounts)
-                }
-                .pickerStyle(.segmented)
-            }
-            
-            // Таблица динамики
-            if viewModel.state.dynamicsBreakdown.isEmpty {
-                VStack(spacing: 16) {
-                    Image(systemName: "list.bullet.rectangle")
-                        .font(.system(size: 48))
-                        .foregroundStyle(AppColors.textTertiary)
-                    
-                    Text("Нет данных")
-                        .font(.system(size: 16))
-                        .foregroundStyle(AppColors.textSecondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 40)
-            } else {
-                VStack(spacing: 0) {
-                    // Заголовки таблицы
-                    HStack(spacing: 12) {
-                        // Отступ для иконки (если есть счета с иконками)
-                        if viewModel.state.viewMode == .accounts && viewModel.state.dynamicsBreakdown.contains(where: { $0.icon != nil }) {
-                            Spacer()
-                                .frame(width: 20)
-                        } else if viewModel.state.viewMode == .accounts {
-                            // Если режим счетов, но нет иконок, все равно добавляем отступ для выравнивания
-                            Spacer()
-                                .frame(width: 0)
-                        }
-                        
-                        Text("Название")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(AppColors.textSecondary)
-                            .frame(minWidth: 100, maxWidth: .infinity, alignment: .leading)
-                        
-                        Text("Начало")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(AppColors.textSecondary)
-                            .frame(width: 80, alignment: .trailing)
-                        
-                        Text("Конец")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(AppColors.textSecondary)
-                            .frame(width: 100, alignment: .trailing)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color.white.opacity(0.05))
-                    )
-                    
-                    // Строки данных
-                    ForEach(viewModel.state.dynamicsBreakdown) { item in
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 12) {
-                                // Иконка счета (если есть) или фиксированное место для выравнивания
-                                if viewModel.state.viewMode == .accounts {
-                                    if let icon = item.icon {
-                                        Image(systemName: icon)
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundStyle(
-                                                (item.accountType == .credit || item.isCreditCard)
-                                                    ? LinearGradient(
-                                                        colors: [AppColors.error, AppColors.error],
-                                                        startPoint: .topLeading,
-                                                        endPoint: .bottomTrailing
-                                                    )
-                                                    : LinearGradient(
-                                                        colors: AppColors.financesGradient,
-                                                        startPoint: .topLeading,
-                                                        endPoint: .bottomTrailing
-                                                    )
-                                            )
-                                            .frame(width: 20, height: 20)
-                                    } else {
-                                        // Фиксированное место для выравнивания, если иконки нет
-                                        Spacer()
-                                            .frame(width: 20)
-                                    }
-                                }
-                                
-                                Text(item.name)
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundStyle(AppColors.textPrimary)
-                                    .frame(minWidth: 100, maxWidth: .infinity, alignment: .leading)
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                                
-                                Text(formatBalance(item.startValue))
-                                    .font(.system(size: 14))
-                                    .foregroundStyle(AppColors.textSecondary)
-                                    .frame(width: 80, alignment: .trailing)
-                                
-                                Text(formatBalance(item.endValue))
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundStyle(AppColors.textPrimary)
-                                    .frame(width: 100, alignment: .trailing)
-                            }
-                            
-                            // Подстрока с динамикой, чтобы не накладываться на "Начало"
-                            HStack(spacing: 12) {
-                                if viewModel.state.viewMode == .accounts {
-                                    Spacer().frame(width: 20)
-                                }
-                                Spacer(minLength: 0)
-                                    .frame(minWidth: 100, maxWidth: .infinity, alignment: .leading)
-                                Spacer().frame(width: 80)
-                                
-                                // Для кредитов и кредитных карт инвертируем логику: уменьшение долга = хорошо (зеленый плюс)
-                                // Дельта уже инвертирована в ViewModel для кредитных карт и кредитов
-                                let displayDelta = item.delta
-                                let displayDeltaPercent = item.deltaPercent
-                                
-                                Text(deltaLineText(
-                                    delta: displayDelta,
-                                    percent: displayDeltaPercent,
-                                    currency: viewModel.state.displayCurrency
-                                ))
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundStyle(displayDelta >= 0 ? Color.green : AppColors.error)
-                                    .fixedSize(horizontal: true, vertical: false)
-                                    .frame(minWidth: 120, alignment: .trailing)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.white.opacity(0.05))
-                        )
-                    }
-                }
-            }
+
+    private func deltaColor(for item: DynamicsBreakdownItem) -> Color {
+        let positiveText = Color(.sRGB, red: 127.0 / 255.0, green: 1.0, blue: 189.0 / 255.0, opacity: 1.0)
+        let negativeText = Color(.sRGB, red: 1.0, green: 0.37, blue: 0.37, opacity: 1.0)
+        let neutralText = Color(.sRGB, red: 181.0 / 255.0, green: 181.0 / 255.0, blue: 181.0 / 255.0, opacity: 1.0)
+        if item.accountType == .credit || item.isCreditCard {
+            // Для долгов: уменьшение = хорошо (зелёный), рост = плохо (красный)
+            let startAbs = abs(item.startValue)
+            let endAbs = abs(item.endValue)
+            if endAbs < startAbs { return positiveText }
+            if endAbs > startAbs { return negativeText }
+            return neutralText
+        } else {
+            if item.delta > 0 { return positiveText }
+            if item.delta < 0 { return negativeText }
+            return neutralText
         }
-        .padding(20)
+    }
+
+    private func deltaBackground(for item: DynamicsBreakdownItem) -> Color {
+        let positiveBg = Color(.sRGB, red: 127.0 / 255.0, green: 1.0, blue: 189.0 / 255.0, opacity: 0.3)
+        let negativeBg = Color(.sRGB, red: 1.0, green: 0.37, blue: 0.37, opacity: 0.3)
+        let neutralBg = Color(.sRGB, red: 181.0 / 255.0, green: 181.0 / 255.0, blue: 181.0 / 255.0, opacity: 0.3)
+        if item.accountType == .credit || item.isCreditCard {
+            let startAbs = abs(item.startValue)
+            let endAbs = abs(item.endValue)
+            if endAbs < startAbs { return positiveBg }
+            if endAbs > startAbs { return negativeBg }
+            return neutralBg
+        } else {
+            if item.delta > 0 { return positiveBg }
+            if item.delta < 0 { return negativeBg }
+            return neutralBg
+        }
+    }
+
+    private func currencyWarningView(text: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 14))
+                .foregroundStyle(AppColors.textSecondary)
+            Text(text)
+                .font(.system(size: 13))
+                .foregroundStyle(AppColors.textSecondary)
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.black.opacity(0.3))
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.white.opacity(0.05))
         )
+        .padding(.horizontal, 16)
     }
 }
 
-// MARK: - Filter Chip
+// MARK: - Filter Sheet
 
-private struct FilterChip: View {
-    let title: String
-    let isSelected: Bool
-    let color: [Color]
-    let action: () -> Void
-    
+private struct FinanceDynamicsFilterSheet: View {
+    @ObservedObject var viewModel: FinanceDynamicsViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var filterSearchText: String = ""
+
     var body: some View {
+        NavigationStack {
+            ZStack {
+                GradientBackground()
+
+                ScrollView {
+                    VStack(spacing: 20) {
+                        filterSearchBar
+
+                        if !viewModel.state.isSingleGroupMode && !viewModel.state.isSingleAccountMode {
+                            groupsFilterSection
+                        }
+
+                        archivedToggleSection
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, 32)
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                filterApplyButton
+            }
+            .navigationTitle("Фильтры")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { }
+        }
+    }
+
+    private var filterSearchBar: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(AppColors.textSecondary)
+            TextField("Поиск", text: $filterSearchText)
+                .foregroundStyle(AppColors.textPrimary)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+            Spacer()
+            Button("Отменить") {
+                filterSearchText = ""
+            }
+            .foregroundStyle(Color(red: 0.46, green: 0.67, blue: 1.0))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            Capsule()
+                .stroke(Color.white.opacity(0.7), lineWidth: 1)
+        )
+    }
+
+    private var filterApplyButton: some View {
+        let gradient = LinearGradient(
+            colors: [
+                Color(red: 0.12, green: 0.02, blue: 0.12),
+                Color(red: 0.02, green: 0.12, blue: 0.10)
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+
+        return Button {
+            dismiss()
+        } label: {
+            Text("Принять фильтр")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Color.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(
+                    Capsule()
+                        .fill(gradient)
+                        .overlay(
+                            Capsule()
+                                .stroke(
+                                    LinearGradient(
+                                        colors: AppColors.financesGradient,
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    ),
+                                    lineWidth: 1
+                                )
+                        )
+                )
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 8)
+    }
+
+    private var groupsFilterSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 10) {
+                filterPrimaryButton(title: "Показать все") {
+                    viewModel.handle(.selectAllGroups)
+                }
+                .frame(maxWidth: .infinity)
+
+                filterSecondaryButton(title: "Снять выбор") {
+                    viewModel.handle(.deselectAllGroups)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .frame(maxWidth: .infinity)
+
+            let filteredGroups = viewModel.state.groups.filter { group in
+                let q = filterSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                return q.isEmpty || group.name.lowercased().contains(q)
+            }
+
+            if filteredGroups.isEmpty {
+                Text("Нет групп")
+                    .font(.system(size: 14))
+                    .foregroundStyle(AppColors.textTertiary)
+            } else {
+                VStack(spacing: 16) {
+                    ForEach(filteredGroups) { group in
+                        let accountsForGroup = viewModel.getAccounts(for: group).filter { account in
+                            let q = filterSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                            guard !q.isEmpty else { return true }
+                            if let info = viewModel.getAccountInfoForDynamics(account: account) {
+                                return info.name.lowercased().contains(q)
+                            }
+                            return false
+                        }
+                        let selectedCount = accountsForGroup.filter { viewModel.state.selectedAccountIDs.contains($0.accountUniqueID) }.count
+                        let totalCount = accountsForGroup.count
+
+                        VStack(spacing: 0) {
+                            Button {
+                                viewModel.handle(.toggleGroup(group.groupUniqueID))
+                            } label: {
+                                HStack(spacing: 12) {
+                                    filterCheckbox(isSelected: viewModel.state.selectedGroupIDs.contains(group.groupUniqueID))
+                                    Text(group.name)
+                                        .font(.system(size: 18, weight: .medium))
+                                        .foregroundStyle(AppColors.textPrimary)
+                                    Spacer()
+                                    Text("\(selectedCount)/\(max(totalCount, 1))")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundStyle(AppColors.textSecondary)
+                                    Image(systemName: "folder")
+                                        .font(.system(size: 18))
+                                        .foregroundStyle(AppColors.textSecondary)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+                            }
+                            .buttonStyle(.plain)
+
+                            Divider()
+                                .overlay(Color.white.opacity(0.12))
+                                .padding(.horizontal, 16)
+
+                            VStack(spacing: 0) {
+                                ForEach(Array(accountsForGroup.enumerated()), id: \.element.id) { index, account in
+                                    if let accountInfo = viewModel.getAccountInfoForDynamics(account: account) {
+                                        Button {
+                                            viewModel.handle(.toggleAccount(account.accountUniqueID))
+                                        } label: {
+                                            HStack(spacing: 12) {
+                                                filterCheckbox(isSelected: viewModel.state.selectedAccountIDs.contains(account.accountUniqueID))
+                                                Text(accountInfo.name)
+                                                    .font(.system(size: 16, weight: .regular))
+                                                    .foregroundStyle(AppColors.textPrimary)
+                                                Spacer()
+                                            }
+                                            .padding(.horizontal, 16)
+                                            .padding(.vertical, 12)
+                                        }
+                                        .buttonStyle(.plain)
+
+                                        if index != accountsForGroup.count - 1 {
+                                            Divider()
+                                                .overlay(Color.white.opacity(0.12))
+                                                .padding(.horizontal, 16)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .background(filterCardBackground)
+                    }
+                }
+            }
+        }
+    }
+
+    private var archivedToggleSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Архив")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(AppColors.textPrimary)
+            
+            Toggle("Показывать архивные счета", isOn: Binding(
+                get: { viewModel.state.showArchivedAccounts },
+                set: { viewModel.handle(.setShowArchivedAccounts($0)) }
+            ))
+            .tint(.blue)
+        }
+        .padding(20)
+        .background(
+            filterCardBackground
+        )
+    }
+
+    private var filterCardBackground: some View {
+        let accentColor = AppColors.financesGradient.first ?? .cyan
+        let fillGradient = LinearGradient(
+            colors: [
+                Color(red: 0.03, green: 0.07, blue: 0.11),
+                Color(red: 0.02, green: 0.04, blue: 0.06),
+                Color.black
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        let glowGradient = LinearGradient(
+            colors: [
+                accentColor.opacity(0.18),
+                Color.clear
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+
+        return RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .fill(fillGradient)
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(glowGradient)
+                    .opacity(0.6)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: AppColors.financesGradient,
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        lineWidth: 1
+                    )
+            )
+    }
+
+    private func filterPrimaryButton(title: String, action: @escaping () -> Void) -> some View {
+        let gradient = LinearGradient(
+            colors: [
+                Color(red: 0.12, green: 0.02, blue: 0.12),
+                Color(red: 0.02, green: 0.12, blue: 0.10)
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+        return Button(action: action) {
+            Text(title)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Color.white)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(
+                    Capsule()
+                        .fill(gradient)
+                        .overlay(
+                            Capsule()
+                                .stroke(
+                                    LinearGradient(
+                                        colors: AppColors.financesGradient,
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    ),
+                                    lineWidth: 1
+                                )
+                        )
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func filterSecondaryButton(title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(isSelected ? Color.white : AppColors.textPrimary)
+                .foregroundStyle(AppColors.textSecondary)
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+                .padding(.vertical, 10)
                 .background(
-                    Group {
-                        if isSelected {
-                            LinearGradient(
-                                colors: color,
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        } else {
-                            Color.white.opacity(0.1)
-                        }
-                    }
+                    Capsule()
+                        .stroke(Color.white.opacity(0.7), lineWidth: 1)
                 )
-                .clipShape(Capsule())
         }
+        .buttonStyle(.plain)
+    }
+
+    private func filterCheckbox(isSelected: Bool) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .stroke(Color.white.opacity(0.8), lineWidth: 1.2)
+                .frame(width: 22, height: 22)
+            if isSelected {
+                Circle()
+                    .fill(Color(red: 0.46, green: 0.67, blue: 1.0))
+                    .frame(width: 10, height: 10)
+            }
+        }
+    }
+}
+
+// MARK: - Scroll Offset Key
+
+private struct ScrollOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }

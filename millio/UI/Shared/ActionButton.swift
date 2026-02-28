@@ -7,11 +7,25 @@
 
 import SwiftUI
 
+enum ActionButtonIcon: Hashable {
+    case system(String)
+    case asset(String)
+}
+
 struct ActionButton: View {
     let title: String
-    let icon: String
+    let icon: ActionButtonIcon
     let gradientColors: [Color]
     let action: () -> Void
+    
+    private var iconImage: Image {
+        switch icon {
+        case .system(let name):
+            return Image(systemName: name)
+        case .asset(let name):
+            return Image(name)
+        }
+    }
     
     var body: some View {
         Button(action: action) {
@@ -35,7 +49,7 @@ struct ActionButton: View {
                         .frame(width: 48, height: 48)
                         
                     
-                    Image(icon)
+                    iconImage
                         .renderingMode(.template)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
@@ -73,5 +87,3 @@ struct ActionButton: View {
         .buttonStyle(.plain)
     }
 }
-
-

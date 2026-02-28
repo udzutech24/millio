@@ -8,15 +8,21 @@
 import SwiftUI
 import SwiftData
 import UIKit
+import FirebaseCore
+import OSLog
 
 @main
 struct millioApp: App {
+    @UIApplicationDelegateAdaptor(FirebaseAppDelegate.self) private var firebaseDelegate
     @State private var appState = AppState()
     @State private var diContainer: DIContainer?
     @State private var lifecycleUseCase: AppLifecycleUseCase?
+    @State private var isBiometricUnlockInProgress = false
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "App")
     
     var sharedModelContainer: ModelContainer? = {
         // Регистрируем фичи ДО создания схемы
+        CurrencyFeatureRegistration.register()
         CardFeatureRegistration.register()
         CashbackFeatureRegistration.register()
         CreditFeatureRegistration.register()
@@ -62,32 +68,51 @@ struct millioApp: App {
     var body: some Scene {
         WindowGroup {
             if let container = sharedModelContainer {
-                RootViewResolver(appState: appState)
-                    .preferredColorScheme(.dark)
-                    .environment(appState)
-                    .environment(\.modelContainer, container)
-                    .environment(\.diContainer, diContainer)
-                    .environment(\.locale, appState.selectedLanguage.locale ?? Locale.current)
-                    .task {
-                        await initializeApp(container: container)
-                        
-                        // Восстанавливаем расписание уведомлений, если они включены
-                        if appState.isDailyReminderEnabled {
-                            await NotificationManager.shared.scheduleDailyReminder(enabled: true)
+                ZStack {
+                    RootViewResolver(appState: appState)
+                        .zIndex(0)
+
+                    if appState.isAppLocked && appState.lifecycle == .ready {
+                        AppLockScreenView {
+                            await unlockWithBiometricsIfEnabled()
                         }
+                        .zIndex(1)
                     }
-                    .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
-                        triggerBackgroundBackup()
+                }
+                .preferredColorScheme(.dark)
+                .environment(appState)
+                .modelContainer(container)
+                .environment(\.diContainer, diContainer)
+                .environment(\.locale, appState.selectedLanguage.locale ?? Locale.current)
+                .task {
+                    await initializeApp(container: container)
+
+                    // Восстанавливаем расписание уведомлений, если они включены
+                    if appState.isDailyReminderEnabled {
+                        await NotificationManager.shared.scheduleDailyReminder(enabled: true)
                     }
-                    .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+                    triggerBackgroundBackup()
+                    if appState.isAppLockEnabled {
+                        appState.isAppLocked = true
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                    Task { @MainActor in
                         // Обновляем статус подписки при возврате из фона
-                        Task { @MainActor in
-                            await SubscriptionManager.shared.checkSubscriptionStatus()
-                            appState.subscriptionStatus = SubscriptionManager.shared.status
-                            appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
-                            appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+                        await SubscriptionManager.shared.checkSubscriptionStatus()
+                        appState.subscriptionStatus = SubscriptionManager.shared.status
+                        appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
+                        appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+                        CurrencyWidgetSyncService.bootstrapFromStandardDefaults()
+
+                        if appState.isAppLockEnabled {
+                            appState.isAppLocked = true
+                            _ = await unlockWithBiometricsIfEnabled()
                         }
                     }
+                }
             } else {
                 ErrorView(
                     error: .unknown(NSError(
@@ -102,18 +127,30 @@ struct millioApp: App {
                 .environment(appState)
             }
         }
-        .modelContainer(sharedModelContainer ?? (try! ModelContainer(for: Schema([]), configurations: [])))
     }
     
+    @MainActor
     private func initializeApp(container: ModelContainer) async {
+        let start = DispatchTime.now()
+
+        if appState.isAppLockEnabled && !AppLockPinStore.shared.hasPin() {
+            appState.isAppLockEnabled = false
+            appState.isBiometricUnlockEnabled = false
+            appState.isAppLocked = false
+        } else if appState.isAppLockEnabled {
+            appState.isAppLocked = true
+        }
+
         // Фичи уже зарегистрированы при создании ModelContainer
         
         // Используем DIContainer для создания зависимостей
+        let diStart = DispatchTime.now()
         let container = DIContainer.create(
             appState: appState,
             modelContainer: container
         )
         self.diContainer = container
+        logger.info("DIContainer.create finished in \(Double(DispatchTime.now().uptimeNanoseconds - diStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
         
         // Создаем UseCase через DI Container
         let useCase = AppLifecycleUseCase(
@@ -122,7 +159,22 @@ struct millioApp: App {
         )
         
         self.lifecycleUseCase = useCase
+        let initStart = DispatchTime.now()
         await useCase.initialize()
+        logger.info("AppLifecycleUseCase.initialize finished in \(Double(DispatchTime.now().uptimeNanoseconds - initStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
+        logger.info("initializeApp finished in \(Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
+        
+        Task { @MainActor in
+            await SubscriptionManager.shared.checkSubscriptionStatus()
+            appState.subscriptionStatus = SubscriptionManager.shared.status
+            appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
+            appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+            CurrencyWidgetSyncService.bootstrapFromStandardDefaults()
+
+            if appState.isAppLockEnabled {
+                _ = await unlockWithBiometricsIfEnabled()
+            }
+        }
     }
     
     private func triggerBackgroundBackup() {
@@ -138,5 +190,19 @@ struct millioApp: App {
                 AppLogger.log(.error, category: "App", "Background backup failed: \(error.localizedDescription)")
             }
         }
+    }
+
+    @MainActor
+    private func unlockWithBiometricsIfEnabled() async -> Bool {
+        guard appState.isAppLockEnabled, appState.isBiometricUnlockEnabled, !isBiometricUnlockInProgress else {
+            return false
+        }
+        isBiometricUnlockInProgress = true
+        defer { isBiometricUnlockInProgress = false }
+        let success = await AppLockBiometricAuth.authenticate(reason: "Разблокируйте доступ к данным приложения")
+        if success {
+            appState.isAppLocked = false
+        }
+        return success
     }
 }

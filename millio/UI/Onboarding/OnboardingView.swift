@@ -14,6 +14,8 @@ struct OnboardingView: View {
     
     @State private var scale: CGFloat = 0.8
     @State private var opacity: Double = 0.5
+    @State private var showCurrencySettings = false
+    @State private var favoriteCurrencyCodes: [String] = SettingsManager.shared.favoriteCurrencyCodes
     
     var body: some View {
         ZStack {
@@ -68,6 +70,46 @@ struct OnboardingView: View {
                         )
                     }
                     .padding(.horizontal, 24)
+                    .padding(.bottom, 20)
+                    .opacity(opacity)
+
+                    VStack(spacing: 12) {
+                        HStack {
+                            Text("Основная валюта")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(AppColors.textPrimary)
+                            Spacer()
+                            Text(appState.primaryCurrencyCode)
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(AppColors.textSecondary)
+                        }
+
+                        HStack(alignment: .top, spacing: 8) {
+                            Text("Избранные")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(AppColors.textPrimary)
+                            Spacer()
+                            Text(favoriteCurrencyCodes.joined(separator: ", "))
+                                .font(.system(size: 14, weight: .regular))
+                                .foregroundStyle(AppColors.textSecondary)
+                                .multilineTextAlignment(.trailing)
+                        }
+
+                        Button {
+                            showCurrencySettings = true
+                        } label: {
+                            Text("Настроить валюты")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(AppColors.textPrimary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(GlassBackground(gradient: AppColors.financesGradient, strokeWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(20)
+                    .background(GlassBackground(gradient: AppColors.financesGradient))
+                    .padding(.horizontal, 24)
                     .padding(.bottom, 48)
                     .opacity(opacity)
                     
@@ -86,21 +128,7 @@ struct OnboardingView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 18)
-                        .background {
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(.ultraThinMaterial)
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 20)
-                                        .stroke(
-                                            LinearGradient(
-                                                colors: AppColors.incomeGradient,
-                                                startPoint: .leading,
-                                                endPoint: .trailing
-                                            ),
-                                            lineWidth: 2
-                                        )
-                                }
-                        }
+                        .background(GlassBackground(gradient: AppColors.incomeGradient, strokeWidth: 2))
                     }
                     .buttonStyle(.plain)
                     .padding(.horizontal, 24)
@@ -110,9 +138,27 @@ struct OnboardingView: View {
             }
         }
         .onAppear {
+            favoriteCurrencyCodes = SettingsManager.shared.favoriteCurrencyCodes
             withAnimation(.easeOut(duration: 0.6)) {
                 scale = 1.0
                 opacity = 1.0
+            }
+        }
+        .sheet(isPresented: $showCurrencySettings, onDismiss: {
+            favoriteCurrencyCodes = SettingsManager.shared.favoriteCurrencyCodes
+        }) {
+            NavigationStack {
+                PrimaryCurrencySelectionView(primaryCurrencyCode: Binding(
+                    get: { appState.primaryCurrencyCode },
+                    set: { appState.primaryCurrencyCode = $0 }
+                ))
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Готово") {
+                            showCurrencySettings = false
+                        }
+                    }
+                }
             }
         }
     }
@@ -135,20 +181,12 @@ private struct FeatureCard: View {
         HStack(spacing: 16) {
             // Иконка
             ZStack {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(.ultraThinMaterial)
-                    .frame(width: 56, height: 56)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(
-                                LinearGradient(
-                                    colors: gradient,
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1.5
-                            )
-                    }
+                GlassBackground(
+                    gradient: gradient,
+                    cornerRadius: 16,
+                    strokeWidth: 1
+                )
+                .frame(width: 56, height: 56)
                 
                 Image(systemName: icon)
                     .font(.system(size: 24, weight: .semibold))
@@ -176,17 +214,7 @@ private struct FeatureCard: View {
             Spacer()
         }
         .padding(20)
-        .background {
-            RoundedRectangle(cornerRadius: 20)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(
-                            AppColors.textPrimary.opacity(0.1),
-                            lineWidth: 1
-                        )
-                }
-        }
+        .background(GlassBackground(gradient: gradient))
     }
 }
 

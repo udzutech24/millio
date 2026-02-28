@@ -78,6 +78,9 @@ final class Credit: Persistable {
 
     /// Флаг, что initialRemainingAmount установлен
     var hasInitialRemainingAmount: Bool = false
+
+    /// Ручная корректировка остатка долга относительно расчетного значения
+    var remainingAmountAdjustment: Double = 0.0
     
     /// Сумма досрочных платежей (для расчета)
     var earlyPaymentsAmount: Double = 0.0
@@ -96,6 +99,9 @@ final class Credit: Persistable {
     
     /// Дата последнего обновления
     var updatedAt: Date = Date()
+    
+    /// Дата архивирования (nil = активный кредит)
+    var archivedAt: Date?
 
     /// Стабильный идентификатор для связей между сущностями
     var uniqueID: String = ""
@@ -241,47 +247,48 @@ final class Credit: Persistable {
     /// Обновить остаток долга на основе прошедших месяцев
     /// Использует правильную формулу для аннуитетного кредита через оставшиеся платежи
     func updateRemainingAmount() {
-        let monthsPaid = min(monthsPassed, termMonths)
-        let monthsRemaining = max(0, termMonths - monthsPaid)
-        
-        // Если все платежи сделаны, остаток равен нулю
-        guard monthsRemaining > 0 else {
+        let scheduledRemaining = calculateScheduledRemainingAmount()
+
+        let adjustedRemaining = scheduledRemaining + remainingAmountAdjustment
+        if adjustedRemaining <= 0 {
             remainingAmount = 0
             isClosed = true
-            updatedAt = Date()
-            return
+        } else {
+            remainingAmount = adjustedRemaining
         }
-        
+
+        updatedAt = Date()
+    }
+
+    /// Рассчитать остаток долга без учета ручной корректировки
+    func calculateScheduledRemainingAmount() -> Double {
+        let monthsPaid = min(monthsPassed, termMonths)
+        let monthsRemaining = max(0, termMonths - monthsPaid)
+
+        // Если все платежи сделаны, остаток равен нулю
+        guard monthsRemaining > 0 else {
+            return 0
+        }
+
         // Если платежей не было, остаток равен сумме кредита
         guard monthsPaid > 0 else {
-            remainingAmount = amount - earlyPaymentsAmount
-            updatedAt = Date()
-            return
+            return max(0, amount - earlyPaymentsAmount)
         }
-        
+
         let monthlyRate = interestRate / 12.0 / 100.0
-        
+
         if monthlyRate == 0 {
             // Без процентов: просто вычитаем выплаченное
             let paid = monthlyPayment * Double(monthsPaid)
-            remainingAmount = max(0, amount - paid - earlyPaymentsAmount)
-        } else {
-            // Формула для расчета остатка долга через текущую стоимость оставшихся платежей:
-            // S_n = M * ((1 - (1 + r)^-n_remaining) / r)
-            // где M - ежемесячный платеж, r - месячная ставка, n_remaining - оставшиеся месяцы
-            // Это более точная формула, которая дает правильный остаток
-            let discountFactor = pow(1 + monthlyRate, -Double(monthsRemaining))
-            let remaining = monthlyPayment * ((1 - discountFactor) / monthlyRate)
-            remainingAmount = max(0, remaining - earlyPaymentsAmount)
+            return max(0, amount - paid - earlyPaymentsAmount)
         }
-        
-        // Если остаток равен нулю, кредит закрыт
-        if remainingAmount <= 0 {
-            isClosed = true
-            remainingAmount = 0
-        }
-        
-        updatedAt = Date()
+
+        // Формула для расчета остатка долга через текущую стоимость оставшихся платежей:
+        // S_n = M * ((1 - (1 + r)^-n_remaining) / r)
+        // где M - ежемесячный платеж, r - месячная ставка, n_remaining - оставшиеся месяцы
+        let discountFactor = pow(1 + monthlyRate, -Double(monthsRemaining))
+        let remaining = monthlyPayment * ((1 - discountFactor) / monthlyRate)
+        return max(0, remaining - earlyPaymentsAmount)
     }
     
     /// Рассчитать новый срок при досрочном погашении с уменьшением срока
@@ -336,6 +343,14 @@ final class Credit: Persistable {
             annualInterestRate: interestRate,
             termMonths: monthsRemaining
         )
+    }
+
+    /// Применить ручную корректировку остатка долга (из формы/быстрого редактирования)
+    func applyManualRemainingAmount(_ newAmount: Double) {
+        let clampedAmount = max(0, newAmount)
+        let scheduledRemaining = calculateScheduledRemainingAmount()
+        remainingAmountAdjustment = clampedAmount - scheduledRemaining
+        remainingAmount = clampedAmount
     }
     
     /// Применить досрочное погашение
@@ -394,7 +409,7 @@ final class Credit: Persistable {
     }
     
     func export() throws -> Data {
-        let dict: [String: Any] = [
+        var dict: [String: Any] = [
             "type": "Credit",
             "name": name,
             "amount": amount,
@@ -409,6 +424,7 @@ final class Credit: Persistable {
             "remainingAmount": remainingAmount,
             "initialRemainingAmount": initialRemainingAmount,
             "hasInitialRemainingAmount": hasInitialRemainingAmount,
+            "remainingAmountAdjustment": remainingAmountAdjustment,
             "earlyPaymentsAmount": earlyPaymentsAmount,
             "isClosed": isClosed,
             "isFavorite": isFavorite,
@@ -417,6 +433,10 @@ final class Credit: Persistable {
             "updatedAt": updatedAt.timeIntervalSince1970,
             "creditUniqueID": creditUniqueID
         ]
+        
+        if let archivedAt = archivedAt {
+            dict["archivedAt"] = archivedAt.timeIntervalSince1970
+        }
         
         return try JSONSerialization.data(withJSONObject: dict)
     }
