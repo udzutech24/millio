@@ -31,4 +31,4 @@ fastlane/test_output
 .idea/
 
 # Local secrets
-millio/Config/Secrets.local.xcconfig
+millio/Config/Secrets.local

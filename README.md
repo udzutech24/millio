@@ -100,6 +100,18 @@ millio/
 
 ## Использование
 
+### Локальные секреты (Twelve Data)
+
+- Локальный файл: `millio/Config/Secrets.local`
+- Пример: `millio/Config/Secrets.local.example`
+- Формат:
+
+```xcconfig
+TWELVE_DATA_API_KEY = your_key_here
+```
+
+`Secrets.local` подключается из `Debug.xcconfig` и `Release.xcconfig` через `#include?`, поэтому файл можно не коммитить.
+
 ### Ручной backup (из кода)
 
 ```swift
