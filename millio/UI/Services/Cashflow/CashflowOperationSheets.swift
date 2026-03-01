@@ -35,6 +35,8 @@ private struct CashflowCategoryTransactionSheet: View {
     @State private var monthlyTotal: Double = 0
     @State private var isLoadingMonthlyTotal: Bool = false
     @State private var monthTotalTask: Task<Void, Never>?
+    @State private var showRecurringManagement: Bool = false
+    @State private var showPlannedManagement: Bool = false
 
     @State private var showCreateCategorySheet: Bool = false
     @State private var newCategoryName: String = ""
@@ -76,6 +78,7 @@ private struct CashflowCategoryTransactionSheet: View {
                     VStack(alignment: .leading, spacing: 14) {
                         monthSelectorSection
                         monthlyTotalSection
+                        managementSection
                         searchSection
                         categoriesSection
                     }
@@ -108,6 +111,20 @@ private struct CashflowCategoryTransactionSheet: View {
                     preselectedIncomeCategoryRaw: kind.categoryKind == .income ? option.rawValue : nil,
                     preselectedExpenseCategoryRaw: kind.categoryKind == .expense ? option.rawValue : nil,
                     onSave: { dismiss() }
+                )
+            }
+            .navigationDestination(isPresented: $showRecurringManagement) {
+                CashflowScheduledTransactionsView(
+                    viewModel: viewModel,
+                    kind: kind.categoryKind,
+                    mode: .recurring
+                )
+            }
+            .navigationDestination(isPresented: $showPlannedManagement) {
+                CashflowScheduledTransactionsView(
+                    viewModel: viewModel,
+                    kind: kind.categoryKind,
+                    mode: .plannedOneTime
                 )
             }
             .sheet(isPresented: $showCreateCategorySheet) {
@@ -245,6 +262,72 @@ private struct CashflowCategoryTransactionSheet: View {
                         .stroke(Color.white.opacity(0.10), lineWidth: 1)
                 )
         )
+    }
+
+    private var managementSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            FinancesSectionHeader(title: "Управление операциями")
+
+            HStack(spacing: 10) {
+                managementButton(
+                    title: "Регулярные",
+                    subtitle: "Ежемесячные операции",
+                    icon: "repeat",
+                    action: { showRecurringManagement = true }
+                )
+
+                managementButton(
+                    title: "Запланированные",
+                    subtitle: "Разовые будущие",
+                    icon: "calendar.badge.plus",
+                    action: { showPlannedManagement = true }
+                )
+            }
+        }
+    }
+
+    private func managementButton(
+        title: String,
+        subtitle: String,
+        icon: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        Circle()
+                            .fill(Color.white.opacity(0.10))
+                    )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                    Text(subtitle)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.white.opacity(0.07))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private var categoriesSection: some View {

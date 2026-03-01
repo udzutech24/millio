@@ -16,6 +16,7 @@ struct CashflowTransactionEditorView: View {
     let editingTransaction: CashflowTransaction?
     let showsTransactionTypeSection: Bool
     let showsCategorySection: Bool
+    let showsRecurrenceSection: Bool
     let wrapsInNavigationStack: Bool
     let showsDismissButton: Bool
     let customNavigationTitle: String?
@@ -48,11 +49,13 @@ struct CashflowTransactionEditorView: View {
         transaction: CashflowTransaction? = nil,
         showsTransactionTypeSection: Bool = true,
         showsCategorySection: Bool = true,
+        showsRecurrenceSection: Bool = true,
         wrapsInNavigationStack: Bool = true,
         showsDismissButton: Bool = true,
         customNavigationTitle: String? = nil,
         preselectedIncomeCategoryRaw: String? = nil,
         preselectedExpenseCategoryRaw: String? = nil,
+        initialRecurrenceRule: CashflowRecurrenceRule? = nil,
         onSave: (() -> Void)? = nil
     ) {
         self.viewModel = viewModel
@@ -60,6 +63,7 @@ struct CashflowTransactionEditorView: View {
         self.editingTransaction = transaction
         self.showsTransactionTypeSection = showsTransactionTypeSection
         self.showsCategorySection = showsCategorySection
+        self.showsRecurrenceSection = showsRecurrenceSection
         self.wrapsInNavigationStack = wrapsInNavigationStack
         self.showsDismissButton = showsDismissButton
         self.customNavigationTitle = customNavigationTitle
@@ -85,10 +89,10 @@ struct CashflowTransactionEditorView: View {
             } else if type == .expense {
                 _selectedExpenseCategoryRaw = State(initialValue: preselectedExpenseCategoryRaw ?? ExpenseCategory.groceries.rawValue)
             }
-            _recurrenceRule = State(initialValue: .none)
+            _recurrenceRule = State(initialValue: initialRecurrenceRule ?? .none)
         } else {
             _selectedTransactionType = State(initialValue: .expense)
-            _recurrenceRule = State(initialValue: .none)
+            _recurrenceRule = State(initialValue: initialRecurrenceRule ?? .none)
         }
     }
 
@@ -123,7 +127,7 @@ struct CashflowTransactionEditorView: View {
                     }
 
                     mainInfoSection
-                    if selectedTransactionType == .income || selectedTransactionType == .expense {
+                    if showsRecurrenceSection && (selectedTransactionType == .income || selectedTransactionType == .expense) {
                         recurrenceSection
                     }
                     cardSection
@@ -698,8 +702,9 @@ struct CashflowTransactionEditorView: View {
         let resolvedExpenseCategoryRaw: String? = selectedTransactionType == .expense
             ? (selectedExpenseCategoryRaw ?? ExpenseCategory.groceries.rawValue)
             : nil
+        let effectiveRecurrenceRule: CashflowRecurrenceRule = showsRecurrenceSection ? recurrenceRule : .none
         let resolvedRecurrenceSeriesID: String? = {
-            if recurrenceRule == .none {
+            if effectiveRecurrenceRule == .none {
                 if editingTransaction?.isRecurringTemplate == true {
                     return nil
                 }
@@ -722,7 +727,7 @@ struct CashflowTransactionEditorView: View {
                 incomeCategoryRaw: resolvedIncomeCategoryRaw,
                 expenseCategoryRaw: resolvedExpenseCategoryRaw,
                 note: note.isEmpty ? nil : note,
-                recurrenceRule: recurrenceRule,
+                recurrenceRule: effectiveRecurrenceRule,
                 recurrenceSeriesID: resolvedRecurrenceSeriesID
             )
         }
@@ -736,7 +741,7 @@ struct CashflowTransactionEditorView: View {
         transaction.incomeCategoryRaw = resolvedIncomeCategoryRaw
         transaction.expenseCategoryRaw = resolvedExpenseCategoryRaw
         transaction.note = note.isEmpty ? nil : note
-        transaction.recurrenceRuleRaw = recurrenceRule.rawValue
+        transaction.recurrenceRuleRaw = effectiveRecurrenceRule.rawValue
         transaction.recurrenceSeriesID = resolvedRecurrenceSeriesID
 
         viewModel.handle(.updateTransaction(transaction))

@@ -561,6 +561,136 @@ struct CashflowViewModelTests {
         #expect(dayByMonth.map(\.day) == [31, 28, 31])
     }
 
+    @Test("Регулярные шаблоны фильтруются по типу и сортируются по ближайшей дате")
+    func testRecurringTemplatesFilterAndSortByNextOccurrence() throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 10)) ?? Date()
+
+        let recurringDayFive = CashflowTransaction(
+            transactionType: .income,
+            amount: 100,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 1, day: 5)) ?? fixedNow,
+            incomeCategory: .salary,
+            recurrenceRule: .monthly,
+            recurrenceSeriesID: "series-income-5"
+        )
+        let recurringDayTwentyFive = CashflowTransaction(
+            transactionType: .income,
+            amount: 120,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 1, day: 25)) ?? fixedNow,
+            incomeCategory: .bonus,
+            recurrenceRule: .monthly,
+            recurrenceSeriesID: "series-income-25"
+        )
+        let recurringExpense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 200,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 1, day: 8)) ?? fixedNow,
+            expenseCategory: .bills,
+            recurrenceRule: .monthly,
+            recurrenceSeriesID: "series-expense-8"
+        )
+        let oneTimeIncome = CashflowTransaction(
+            transactionType: .income,
+            amount: 90,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 12)) ?? fixedNow,
+            incomeCategory: .gift,
+            recurrenceRule: .none
+        )
+
+        modelContext.insert(recurringDayFive)
+        modelContext.insert(recurringDayTwentyFive)
+        modelContext.insert(recurringExpense)
+        modelContext.insert(oneTimeIncome)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        let templates = viewModel.recurringTemplates(for: .income, relativeTo: fixedNow)
+
+        #expect(templates.count == 2)
+        #expect(templates.first?.recurrenceSeriesID == "series-income-25")
+        #expect(templates.last?.recurrenceSeriesID == "series-income-5")
+
+        let nextForDayFive = viewModel.nextOccurrenceDate(for: recurringDayFive, relativeTo: fixedNow)
+        let nextComponents = nextForDayFive.map { calendar.dateComponents([.year, .month, .day], from: $0) }
+        #expect(nextComponents?.year == 2026)
+        #expect(nextComponents?.month == 4)
+        #expect(nextComponents?.day == 5)
+    }
+
+    @Test("Запланированные одноразовые операции включают только будущие без автоповтора")
+    func testPlannedOneTimeTransactionsIncludeFutureNonRecurringOnly() throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 10)) ?? Date()
+
+        let plannedA = CashflowTransaction(
+            transactionType: .expense,
+            amount: 50,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 12)) ?? fixedNow,
+            expenseCategory: .transport
+        )
+        let plannedB = CashflowTransaction(
+            transactionType: .expense,
+            amount: 70,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 20)) ?? fixedNow,
+            expenseCategory: .shopping
+        )
+        let pastOneTime = CashflowTransaction(
+            transactionType: .expense,
+            amount: 30,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 9)) ?? fixedNow,
+            expenseCategory: .cafe
+        )
+        let todayOneTime = CashflowTransaction(
+            transactionType: .expense,
+            amount: 40,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            expenseCategory: .groceries
+        )
+        let recurringFuture = CashflowTransaction(
+            transactionType: .expense,
+            amount: 90,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 15)) ?? fixedNow,
+            expenseCategory: .bills,
+            recurrenceRule: .monthly,
+            recurrenceSeriesID: "series-expense-future"
+        )
+        let incomePlanned = CashflowTransaction(
+            transactionType: .income,
+            amount: 100,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 18)) ?? fixedNow,
+            incomeCategory: .salary
+        )
+
+        modelContext.insert(plannedA)
+        modelContext.insert(plannedB)
+        modelContext.insert(pastOneTime)
+        modelContext.insert(todayOneTime)
+        modelContext.insert(recurringFuture)
+        modelContext.insert(incomePlanned)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        let planned = viewModel.plannedOneTimeTransactions(for: .expense, relativeTo: fixedNow)
+
+        #expect(planned.count == 2)
+        #expect(planned.map(\.amount) == [50, 70])
+        #expect(planned.allSatisfy { $0.recurrenceRule == .none })
+        #expect(planned.allSatisfy { $0.transactionType == .expense })
+    }
+
     private func waitUntil(
         timeoutNanoseconds: UInt64,
         intervalNanoseconds: UInt64 = 50_000_000,

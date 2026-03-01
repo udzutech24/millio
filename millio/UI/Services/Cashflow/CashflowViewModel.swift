@@ -523,6 +523,85 @@ final class CashflowViewModel: ViewModelProtocol {
         await monthlyTotal(for: .expense, month: month, in: currency)
     }
 
+    // MARK: - Scheduled Transactions
+
+    func recurringTemplates(
+        for kind: CashflowCategoryKind,
+        relativeTo referenceDate: Date? = nil
+    ) -> [CashflowTransaction] {
+        let baseline = referenceDate ?? now()
+        let targetType: CashflowTransactionType = {
+            switch kind {
+            case .income: return .income
+            case .expense: return .expense
+            }
+        }()
+
+        return state.transactions
+            .filter { transaction in
+                transaction.transactionType == targetType
+                && transaction.isRecurringTemplate
+            }
+            .sorted { lhs, rhs in
+                let leftDate = nextOccurrenceDate(for: lhs, relativeTo: baseline) ?? lhs.transactionDate
+                let rightDate = nextOccurrenceDate(for: rhs, relativeTo: baseline) ?? rhs.transactionDate
+
+                if leftDate == rightDate {
+                    return lhs.createdAt < rhs.createdAt
+                }
+                return leftDate < rightDate
+            }
+    }
+
+    func plannedOneTimeTransactions(
+        for kind: CashflowCategoryKind,
+        relativeTo referenceDate: Date? = nil
+    ) -> [CashflowTransaction] {
+        let baseline = referenceDate ?? now()
+        let targetType: CashflowTransactionType = {
+            switch kind {
+            case .income: return .income
+            case .expense: return .expense
+            }
+        }()
+
+        return state.transactions
+            .filter { transaction in
+                guard transaction.transactionType == targetType else { return false }
+                guard transaction.recurrenceRule == .none else { return false }
+                return transaction.transactionDate > baseline
+            }
+            .sorted { $0.transactionDate < $1.transactionDate }
+    }
+
+    func nextOccurrenceDate(
+        for template: CashflowTransaction,
+        relativeTo referenceDate: Date? = nil
+    ) -> Date? {
+        guard template.isRecurringTemplate else { return nil }
+
+        let calendar = Calendar.current
+        let baseline = calendar.startOfDay(for: referenceDate ?? now())
+        let baselineMonthStart = Self.monthStart(for: baseline, calendar: calendar)
+        let anchorDay = calendar.component(.day, from: template.transactionDate)
+        var candidate = Self.makeMonthlyDate(
+            monthStart: baselineMonthStart,
+            day: anchorDay,
+            calendar: calendar
+        )
+
+        if candidate < baseline,
+           let nextMonth = calendar.date(byAdding: .month, value: 1, to: baselineMonthStart) {
+            candidate = Self.makeMonthlyDate(
+                monthStart: nextMonth,
+                day: anchorDay,
+                calendar: calendar
+            )
+        }
+
+        return candidate
+    }
+
     private func monthlyTotal(
         for type: CashflowTransactionType,
         month: Date,
