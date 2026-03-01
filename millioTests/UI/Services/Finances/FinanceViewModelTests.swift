@@ -43,6 +43,23 @@ final class MockCurrencyRateService: CurrencyRateServiceProtocol {
     }
 }
 
+actor MockMarketDataClient: MarketDataClientProtocol {
+    var pricesBySymbol: [String: Double?]
+
+    init(pricesBySymbol: [String: Double?] = [:]) {
+        self.pricesBySymbol = pricesBySymbol
+    }
+
+    func searchSymbols(query: String, outputSize: Int) async throws -> [TwelveDataSymbol] {
+        []
+    }
+
+    func latestPrice(symbol: String, forceRefresh: Bool) async throws -> Double? {
+        let key = symbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        return pricesBySymbol[key] ?? nil
+    }
+}
+
 // MARK: - Тесты
 
 @Suite(.serialized)
@@ -590,6 +607,186 @@ struct FinanceViewModelTests {
         let descriptor = FetchDescriptor<CashflowTransaction>()
         let transactions = try modelContext.fetch(descriptor)
         #expect(transactions.count == 2)
+    }
+
+    @Test("Обновление акций обновляет котировки только категории stocks")
+    func testRefreshStockPricesUpdatesOnlyStocks() async throws {
+        let modelContext = try createTestModelContext()
+
+        let stockInvestment = Investment(
+            name: "Apple",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 100.0,
+            currency: "USD"
+        )
+        stockInvestment.marketSymbol = "AAPL"
+        stockInvestment.marketQuantity = 2
+        stockInvestment.lastKnownUnitPrice = 50
+        modelContext.insert(stockInvestment)
+
+        let cryptoInvestment = Investment(
+            name: "Bitcoin",
+            investmentType: .positive,
+            category: .crypto,
+            amount: 500.0,
+            currency: "USD"
+        )
+        cryptoInvestment.marketSymbol = "BTC/USD"
+        cryptoInvestment.marketQuantity = 0.01
+        cryptoInvestment.lastKnownUnitPrice = 50_000
+        modelContext.insert(cryptoInvestment)
+
+        try modelContext.save()
+
+        let marketClient = MockMarketDataClient(pricesBySymbol: [
+            "AAPL": 120.0,
+            "BTC/USD": 90_000.0
+        ])
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            marketDataClient: marketClient,
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadAccounts)
+
+        await viewModel.refreshStockPrices()
+
+        #expect(abs((stockInvestment.lastKnownUnitPrice ?? 0) - 120.0) < 0.000001)
+        #expect(abs(stockInvestment.amount - 240.0) < 0.01)
+        #expect(abs((cryptoInvestment.lastKnownUnitPrice ?? 0) - 50_000.0) < 0.000001)
+        #expect(abs(cryptoInvestment.amount - 500.0) < 0.01)
+        #expect(viewModel.state.isLoadingRates == false)
+    }
+
+    @Test("Быстрое редактирование кредитной карты обновляет лимит, долг и создает корректировку")
+    func testQuickEditCreditCardFields() throws {
+        let modelContext = try createTestModelContext()
+
+        let group = FinanceGroup(name: "Карты", colorHex: "#22AAFF")
+        modelContext.insert(group)
+
+        let card = Card(
+            name: "Кредитка",
+            cardNumber: "1234",
+            bank: .tinkoff,
+            cardType: .credit,
+            currency: "RUB",
+            balance: 7000,
+            creditLimit: 10_000
+        )
+        card.includeInTotal = true
+        modelContext.insert(card)
+
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadGroups)
+        viewModel.handle(.loadAccounts)
+
+        let oldDebt = max(0, (card.creditLimit ?? 0) - card.balance)
+        #expect(abs(oldDebt - 3000) < 0.01)
+
+        var didPublishTransactionsUpdated = false
+        let subscriptionID = EventBus.shared.subscribe { event in
+            if case FinanceEvent.transactionsUpdated = event {
+                didPublishTransactionsUpdated = true
+            }
+        }
+        defer { EventBus.shared.unsubscribe(subscriptionID) }
+
+        viewModel.handle(.updateCreditCardQuickFields(account: account, creditLimit: 12_000, debt: 4_500))
+
+        #expect(abs((card.creditLimit ?? 0) - 12_000) < 0.01)
+        #expect(abs(card.balance - 7_500) < 0.01)
+        #expect(didPublishTransactionsUpdated)
+
+        let descriptor = FetchDescriptor<CashflowTransaction>()
+        let transactions = try modelContext.fetch(descriptor)
+        #expect(transactions.count == 1)
+
+        guard let transaction = transactions.first else { return }
+        #expect(transaction.transactionType == .creditDebtAdjustment)
+        #expect(abs(transaction.amount + 1_500) < 0.01)
+        #expect(transaction.cardID == card.cardUniqueID)
+    }
+
+    @Test("Для кредитной карты возвращается остаток лимита")
+    func testCreditCardLimitRemainingSubtitleData() throws {
+        let modelContext = try createTestModelContext()
+
+        let group = FinanceGroup(name: "Карты", colorHex: "#22AAFF")
+        modelContext.insert(group)
+
+        let card = Card(
+            name: "Кредитка",
+            cardNumber: "9999",
+            bank: .alfa,
+            cardType: .credit,
+            currency: "RUB",
+            balance: 7_778,
+            creditLimit: 10_000
+        )
+        modelContext.insert(card)
+
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadAccounts)
+
+        let limitInfo = viewModel.getCreditCardLimitRemaining(account: account)
+        #expect(limitInfo != nil)
+        #expect(abs((limitInfo?.amount ?? 0) - 7_778) < 0.01)
+        #expect(limitInfo?.currency == "RUB")
+    }
+
+    @Test("Для дебетовой карты остаток лимита не возвращается")
+    func testDebitCardHasNoCreditLimitRemaining() throws {
+        let modelContext = try createTestModelContext()
+
+        let group = FinanceGroup(name: "Карты", colorHex: "#22AAFF")
+        modelContext.insert(group)
+
+        let card = Card(
+            name: "Дебетовая",
+            cardNumber: "1111",
+            bank: .sberbank,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 2_000
+        )
+        modelContext.insert(card)
+
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadAccounts)
+
+        let limitInfo = viewModel.getCreditCardLimitRemaining(account: account)
+        #expect(limitInfo == nil)
     }
 
     @Test("Невалидные связи FinanceAccount очищаются при загрузке счетов")

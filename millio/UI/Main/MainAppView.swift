@@ -7,6 +7,7 @@
 
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 struct MainAppView: View {
     @Bindable var router: AppRouter
@@ -14,10 +15,12 @@ struct MainAppView: View {
     @Environment(\.modelContext) private var modelContext
     @StateObject private var viewModel: MainAppViewModel
     @State private var services: [ServiceItem] = []
+    @State private var draggedService: ServiceItem?
     @State private var cashflowViewModel: CashflowViewModel?
     @State private var showExpenseSheet = false
     @State private var showIncomeSheet = false
     @State private var showCashflowHistory = false
+    private let serviceOrderManager = ServiceOrderManager()
     
     init(router: AppRouter) {
         self.router = router
@@ -55,7 +58,7 @@ struct MainAppView: View {
                     // Service buttons grid
                     servicesGrid
                         .padding(.horizontal, 24)
-                        .padding(.top, 24)
+                        .padding(.top, 34)
                     
                     Spacer()
                     
@@ -71,7 +74,7 @@ struct MainAppView: View {
                         
                         ActionButton(
                             title: "Доход",
-                            icon: .asset("plus"),
+                            icon: .asset("Plus"),
                             gradientColors: AppColors.incomeGradient
                         ) {
                             showIncomeSheet = true
@@ -138,9 +141,7 @@ struct MainAppView: View {
     // MARK: - Services Grid
     
     private var servicesGrid: some View {
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 2)
-        
-        return LazyVGrid(columns: columns, spacing: 8) {
+        VStack(spacing: 8) {
             ForEach(services) { service in
                 ServiceButton(
                     title: service.title,
@@ -149,6 +150,21 @@ struct MainAppView: View {
                 ) {
                     viewModel.handle(.navigateToService(service.route))
                 }
+                .frame(maxWidth: .infinity)
+                .opacity(draggedService?.id == service.id ? 0.75 : 1.0)
+                .onDrag {
+                    draggedService = service
+                    return NSItemProvider(object: NSString(string: service.id))
+                }
+                .onDrop(
+                    of: [UTType.text],
+                    delegate: ServiceReorderDropDelegate(
+                        targetService: service,
+                        services: $services,
+                        draggedService: $draggedService,
+                        onReorderFinished: persistServiceOrder
+                    )
+                )
             }
         }
     }
@@ -156,8 +172,11 @@ struct MainAppView: View {
     // MARK: - Helpers
     
     private func loadServices() {
-        // Показываем только актуальные сервисы
-        services = ServiceItem.allServices()
+        services = serviceOrderManager.getOrderedServices()
+    }
+
+    private func persistServiceOrder() {
+        serviceOrderManager.saveOrder(services.map(\.id))
     }
     
     @ViewBuilder
@@ -178,6 +197,36 @@ struct MainAppView: View {
         default:
             EmptyView()
         }
+    }
+}
+
+private struct ServiceReorderDropDelegate: DropDelegate {
+    let targetService: ServiceItem
+    @Binding var services: [ServiceItem]
+    @Binding var draggedService: ServiceItem?
+    let onReorderFinished: () -> Void
+
+    func dropEntered(info: DropInfo) {
+        guard let draggedService, draggedService != targetService else { return }
+        guard let fromIndex = services.firstIndex(of: draggedService),
+              let toIndex = services.firstIndex(of: targetService) else { return }
+
+        withAnimation(.easeInOut(duration: 0.2)) {
+            services.move(
+                fromOffsets: IndexSet(integer: fromIndex),
+                toOffset: toIndex > fromIndex ? toIndex + 1 : toIndex
+            )
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        draggedService = nil
+        onReorderFinished()
+        return true
     }
 }
 
