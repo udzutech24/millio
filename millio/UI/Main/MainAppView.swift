@@ -48,7 +48,14 @@ struct MainAppView: View {
                         Button {
                             showCashflowHistory = true
                         } label: {
-                            Image("operations")  
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.system(size: 20, weight: .regular))
+                                .foregroundStyle(Color.white.opacity(0.95))
+                                .frame(width: 40, height: 40)
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.white.opacity(0.95), lineWidth: 1.3)
+                                )
                         }
                         .accessibilityLabel("История операций")
                     }
