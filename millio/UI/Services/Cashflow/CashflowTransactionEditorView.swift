@@ -920,28 +920,22 @@ private struct CashflowCategorySelectionSheet: View {
                                                     .font(.system(size: 13, weight: .semibold))
                                                     .foregroundStyle(AppColors.textPrimary)
                                             }
-                                            Menu {
-                                                Button("Редактировать") {
-                                                    openEditSheet(for: option)
-                                                }
-                                                if viewModel.canDeleteCategory(rawValue: option.rawValue, kind: kind) {
-                                                    Button("Удалить", role: .destructive) {
-                                                        pendingDeleteRaw = option.rawValue
-                                                        showDeleteAlert = true
-                                                    }
-                                                }
-                                            } label: {
-                                                Image(systemName: "ellipsis.circle")
-                                                    .font(.system(size: 16, weight: .semibold))
-                                                    .foregroundStyle(AppColors.textTertiary)
-                                            }
-                                            .buttonStyle(.plain)
-                                            .padding(.leading, 6)
                                         }
                                         .padding(.vertical, 10)
                                         .padding(.horizontal, 14)
                                     }
                                     .buttonStyle(.plain)
+                                    .contextMenu {
+                                        Button("Редактировать") {
+                                            openEditSheet(for: option)
+                                        }
+                                        if viewModel.canDeleteCategory(rawValue: option.rawValue, kind: kind) {
+                                            Button("Удалить", role: .destructive) {
+                                                pendingDeleteRaw = option.rawValue
+                                                showDeleteAlert = true
+                                            }
+                                        }
+                                    }
 
                                     if index < options.count - 1 {
                                         FinancesRowDivider()

@@ -336,57 +336,48 @@ private struct CashflowCategoryTransactionSheet: View {
     private var categoriesSection: some View {
         LazyVGrid(columns: categoryColumns, spacing: 10) {
             ForEach(categories) { option in
-                ZStack(alignment: .topTrailing) {
-                    Button {
-                        selectedCategory = option
-                    } label: {
-                        VStack(spacing: 8) {
-                            Image(systemName: option.icon)
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(AppColors.textPrimary)
-                            Text(option.displayName)
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(AppColors.textPrimary)
-                                .multilineTextAlignment(.center)
-                                .lineLimit(2)
-                                .frame(minHeight: 30, alignment: .center)
+                Button {
+                    selectedCategory = option
+                } label: {
+                    VStack(spacing: 8) {
+                        Image(systemName: option.icon)
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                        Text(option.displayName)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .frame(minHeight: 30, alignment: .center)
 
-                            Text(formattedCategoryTotal(for: option))
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(AppColors.textSecondary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 108)
-                        .padding(.horizontal, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(Color.white.opacity(0.08))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                                )
-                        )
-                    }
-                    .buttonStyle(.plain)
-
-                    Menu {
-                        Button("Редактировать") {
-                            openCategoryEditor(for: option)
-                        }
-                        if viewModel.canDeleteCategory(rawValue: option.rawValue, kind: kind.categoryKind) {
-                            Button("Удалить", role: .destructive) {
-                                pendingDeleteCategoryRaw = option.rawValue
-                                showDeleteCategoryAlert = true
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle.fill")
-                            .font(.system(size: 17, weight: .semibold))
+                        Text(formattedCategoryTotal(for: option))
+                            .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(AppColors.textSecondary)
-                            .padding(8)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
-                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity, minHeight: 108)
+                    .padding(.horizontal, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color.white.opacity(0.08))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
+                .contextMenu {
+                    Button("Редактировать") {
+                        openCategoryEditor(for: option)
+                    }
+                    if viewModel.canDeleteCategory(rawValue: option.rawValue, kind: kind.categoryKind) {
+                        Button("Удалить", role: .destructive) {
+                            pendingDeleteCategoryRaw = option.rawValue
+                            showDeleteCategoryAlert = true
+                        }
+                    }
                 }
             }
         }
