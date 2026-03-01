@@ -20,6 +20,7 @@ struct CardEditorView: View {
 
     @State private var balanceText: String = ""
     @State private var creditLimitText: String = ""
+    @State private var creditDebtText: String = ""
     @State private var availableCurrencies: [String] = ["RUB", "USD", "EUR"]
     @State private var isLoadingCurrencies: Bool = false
 
@@ -46,7 +47,9 @@ struct CardEditorView: View {
             newCard.uniqueID = editing.uniqueID
             _card = State(initialValue: newCard)
             _balanceText = State(initialValue: AmountInputFormatter.plainString(from: editing.balance))
-            _creditLimitText = State(initialValue: editing.creditLimit.map { String(format: "%.2f", $0) } ?? "")
+            _creditLimitText = State(initialValue: editing.creditLimit.map { AmountInputFormatter.plainString(from: $0) } ?? "")
+            let editingDebt = max(0, (editing.creditLimit ?? 0) - editing.balance)
+            _creditDebtText = State(initialValue: editing.cardType == .credit ? AmountInputFormatter.plainString(from: editingDebt) : "")
             _isNewCard = State(initialValue: false)
         } else {
             _card = State(initialValue: Card(
@@ -60,6 +63,7 @@ struct CardEditorView: View {
             ))
             _balanceText = State(initialValue: "")
             _creditLimitText = State(initialValue: "")
+            _creditDebtText = State(initialValue: "")
             _isNewCard = State(initialValue: true)
         }
     }
@@ -125,6 +129,13 @@ struct CardEditorView: View {
             }
             .onAppear {
                 loadAvailableCurrencies()
+                if card.cardType == .credit {
+                    card.includeInTotal = true
+                    if creditDebtText.isEmpty {
+                        let debt = max(0, (AmountInputFormatter.parse(creditLimitText) ?? 0) - card.balance)
+                        creditDebtText = AmountInputFormatter.plainString(from: debt)
+                    }
+                }
             }
         }
     }
@@ -187,8 +198,15 @@ struct CardEditorView: View {
                             if newValue == CardType.debit.rawValue {
                                 card.creditLimit = nil
                                 creditLimitText = ""
+                                creditDebtText = ""
                             } else {
                                 card.includeInTotal = true
+                                let limit = AmountInputFormatter.parse(creditLimitText) ?? card.creditLimit ?? 0
+                                if creditLimitText.isEmpty {
+                                    creditLimitText = AmountInputFormatter.plainString(from: limit)
+                                }
+                                let debt = max(0, limit - card.balance)
+                                creditDebtText = AmountInputFormatter.plainString(from: debt)
                             }
                         }
                     }
@@ -226,29 +244,7 @@ struct CardEditorView: View {
 
                     FinancesRowDivider()
 
-                    HStack {
-                        Text("Баланс")
-                            .foregroundStyle(AppColors.textPrimary)
-                        Spacer()
-                        TextField("0", text: Binding(
-                            get: { AmountInputFormatter.display(balanceText) },
-                            set: { newValue in
-                                let sanitized = AmountInputFormatter.sanitize(newValue)
-                                balanceText = AmountInputFormatter.display(sanitized)
-                                card.balance = AmountInputFormatter.parse(balanceText) ?? 0
-                            }
-                        ))
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .foregroundStyle(AppColors.textPrimary)
-                            .frame(maxWidth: 150)
-                    }
-                    .padding(.vertical, 12)
-                    .padding(.horizontal, 16)
-
                     if card.cardType == .credit {
-                        FinancesRowDivider()
-                        
                         HStack {
                             Text("Кредитный лимит")
                                 .foregroundStyle(AppColors.textPrimary)
@@ -257,12 +253,69 @@ struct CardEditorView: View {
                                 get: { AmountInputFormatter.display(creditLimitText) },
                                 set: { newValue in
                                     let sanitized = AmountInputFormatter.sanitize(newValue)
-                                    creditLimitText = AmountInputFormatter.display(sanitized)
-                                    if let limit = AmountInputFormatter.parse(creditLimitText) {
-                                        card.creditLimit = limit
-                                    } else if creditLimitText.isEmpty {
-                                        card.creditLimit = nil
-                                    }
+                                    creditLimitText = sanitized
+                                    let limit = AmountInputFormatter.parse(creditLimitText) ?? 0
+                                    let debt = AmountInputFormatter.parse(creditDebtText) ?? 0
+                                    card.creditLimit = creditLimitText.isEmpty ? nil : limit
+                                    card.balance = max(0, limit - debt)
+                                }
+                            ))
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .foregroundStyle(AppColors.textPrimary)
+                                .frame(maxWidth: 150)
+                        }
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+
+                        FinancesRowDivider()
+
+                        HStack {
+                            Text("Общий долг")
+                                .foregroundStyle(AppColors.textPrimary)
+                            Spacer()
+                            TextField("0", text: Binding(
+                                get: { AmountInputFormatter.display(creditDebtText) },
+                                set: { newValue in
+                                    let sanitized = AmountInputFormatter.sanitize(newValue)
+                                    creditDebtText = sanitized
+                                    let limit = AmountInputFormatter.parse(creditLimitText) ?? 0
+                                    let debt = AmountInputFormatter.parse(creditDebtText) ?? 0
+                                    card.balance = max(0, limit - debt)
+                                }
+                            ))
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .foregroundStyle(AppColors.textPrimary)
+                                .frame(maxWidth: 150)
+                        }
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+
+                        FinancesRowDivider()
+
+                        HStack {
+                            Text("Остаток лимита")
+                                .foregroundStyle(AppColors.textPrimary)
+                            Spacer()
+                            Text(AmountInputFormatter.display(String(creditRemainingLimit)))
+                                .multilineTextAlignment(.trailing)
+                                .foregroundStyle(AppColors.textPrimary)
+                                .frame(maxWidth: 150, alignment: .trailing)
+                        }
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                    } else {
+                        HStack {
+                            Text("Баланс")
+                                .foregroundStyle(AppColors.textPrimary)
+                            Spacer()
+                            TextField("0", text: Binding(
+                                get: { AmountInputFormatter.display(balanceText) },
+                                set: { newValue in
+                                    let sanitized = AmountInputFormatter.sanitize(newValue)
+                                    balanceText = sanitized
+                                    card.balance = AmountInputFormatter.parse(balanceText) ?? 0
                                 }
                             ))
                                 .keyboardType(.decimalPad)
@@ -310,11 +363,24 @@ struct CardEditorView: View {
 
                     FinancesRowDivider()
 
-                    Toggle("Учитывать в общих", isOn: $card.includeInTotal)
-                        .tint(AppColors.toggleOnGreen)
-                        .foregroundStyle(AppColors.textPrimary)
+                    if card.cardType == .credit {
+                        HStack {
+                            Text("Влияние на «Итого»")
+                                .foregroundStyle(AppColors.textPrimary)
+                            Spacer()
+                            Text("Уменьшает")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(AppColors.error.opacity(0.9))
+                        }
                         .padding(.vertical, 12)
                         .padding(.horizontal, 16)
+                    } else {
+                        Toggle("Учитывать в общих", isOn: $card.includeInTotal)
+                            .tint(AppColors.toggleOnGreen)
+                            .foregroundStyle(AppColors.textPrimary)
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 16)
+                    }
                 }
             }
         }
@@ -336,5 +402,11 @@ struct CardEditorView: View {
             }
             availableCurrencies = currencies.sorted()
         }
+    }
+
+    private var creditRemainingLimit: Double {
+        let limit = AmountInputFormatter.parse(creditLimitText) ?? 0
+        let debt = AmountInputFormatter.parse(creditDebtText) ?? 0
+        return max(0, limit - debt)
     }
 }

@@ -130,7 +130,7 @@ struct CreditEditorView: View {
                             get: { formatNumberForDisplay(amountText) },
                             set: { newValue in
                                 let sanitized = AmountInputFormatter.sanitize(newValue)
-                                amountText = AmountInputFormatter.display(sanitized)
+                                amountText = sanitized
                             }
                         ))
                         .keyboardType(.decimalPad)
@@ -151,7 +151,7 @@ struct CreditEditorView: View {
                             get: { formatNumberForDisplay(remainingAmountText) },
                             set: { newValue in
                                 let sanitized = AmountInputFormatter.sanitize(newValue)
-                                remainingAmountText = AmountInputFormatter.display(sanitized)
+                                remainingAmountText = sanitized
                             }
                         ))
                         .keyboardType(.decimalPad)

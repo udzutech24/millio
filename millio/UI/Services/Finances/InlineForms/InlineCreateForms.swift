@@ -11,13 +11,17 @@ struct InlineCardCreateForm<GroupSection: View>: View {
     @ObservedObject var viewModel: CardViewModel
     @Binding var name: String
     let selectedProductType: FinanceAccountType
+    let selectedInvestmentCategory: InvestmentCategory
     let onProductTypeSelected: (FinanceAccountType) -> Void
+    let onProductTitleSelected: (String) -> Void
+    let onInvestmentCategorySelected: (InvestmentCategory) -> Void
     let onCardDataChanged: (Card) -> Void
     let groupSection: GroupSection
     
     @State private var card: Card
     @State private var balanceText: String = ""
     @State private var creditLimitText: String = ""
+    @State private var creditDebtText: String = ""
     @State private var availableCurrencies: [String] = ["RUB", "USD", "EUR"]
     @State private var isLoadingCurrencies: Bool = false
     @State private var showCurrencyPicker: Bool = false
@@ -27,14 +31,20 @@ struct InlineCardCreateForm<GroupSection: View>: View {
         viewModel: CardViewModel,
         name: Binding<String>,
         selectedProductType: FinanceAccountType,
+        selectedInvestmentCategory: InvestmentCategory,
         onProductTypeSelected: @escaping (FinanceAccountType) -> Void,
+        onProductTitleSelected: @escaping (String) -> Void,
+        onInvestmentCategorySelected: @escaping (InvestmentCategory) -> Void,
         onCardDataChanged: @escaping (Card) -> Void,
         @ViewBuilder groupSection: () -> GroupSection
     ) {
         self.viewModel = viewModel
         self._name = name
         self.selectedProductType = selectedProductType
+        self.selectedInvestmentCategory = selectedInvestmentCategory
         self.onProductTypeSelected = onProductTypeSelected
+        self.onProductTitleSelected = onProductTitleSelected
+        self.onInvestmentCategorySelected = onInvestmentCategorySelected
         self.onCardDataChanged = onCardDataChanged
         self.groupSection = groupSection()
         _card = State(initialValue: Card(
@@ -52,11 +62,17 @@ struct InlineCardCreateForm<GroupSection: View>: View {
     var currentCard: Card {
         let result = card
         result.name = name
-        if let balance = AmountInputFormatter.parse(balanceText) {
-            result.balance = balance
-        }
-        if result.cardType == .credit, let limit = AmountInputFormatter.parse(creditLimitText) {
-            result.creditLimit = limit
+        if result.cardType == .credit {
+            let limit = AmountInputFormatter.parse(creditLimitText) ?? 0
+            let debt = AmountInputFormatter.parse(creditDebtText) ?? 0
+            result.creditLimit = creditLimitText.isEmpty ? nil : limit
+            result.balance = max(0, limit - debt)
+            result.includeInTotal = true
+        } else {
+            if let balance = AmountInputFormatter.parse(balanceText) {
+                result.balance = balance
+            }
+            result.creditLimit = nil
         }
         return result
     }
@@ -84,6 +100,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
             onCardDataChanged(currentCard)
         }
         .onChange(of: creditLimitText) { _, _ in onCardDataChanged(currentCard) }
+        .onChange(of: creditDebtText) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: card.priority) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: card.isFavorite) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: card.includeInTotal) { _, _ in onCardDataChanged(currentCard) }
@@ -122,11 +139,41 @@ struct InlineCardCreateForm<GroupSection: View>: View {
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     Menu {
-                        ForEach(FinanceAccountType.allCases, id: \.self) { type in
+                        Button {
+                            onProductTitleSelected(FinanceAccountType.card.displayName)
+                            onProductTypeSelected(.card)
+                        } label: {
+                            Label(FinanceAccountType.card.displayName, systemImage: FinanceAccountType.card.icon)
+                        }
+                        Button {
+                            onProductTitleSelected("Счет")
+                            onInvestmentCategorySelected(.other)
+                            onProductTypeSelected(.investment)
+                        } label: {
+                            Label("Счет", systemImage: "building.columns.fill")
+                        }
+
+                        Button {
+                            onProductTitleSelected(FinanceAccountType.credit.displayName)
+                            onProductTypeSelected(.credit)
+                        } label: {
+                            Label(FinanceAccountType.credit.displayName, systemImage: FinanceAccountType.credit.icon)
+                        }
+                        Button {
+                            onProductTitleSelected("Актив")
+                            onInvestmentCategorySelected(.other)
+                            onProductTypeSelected(.investment)
+                        } label: {
+                            Label("Актив", systemImage: FinanceAccountType.investment.icon)
+                        }
+
+                        ForEach(visibleInvestmentCategories, id: \.self) { category in
                             Button {
-                                onProductTypeSelected(type)
+                                onProductTitleSelected(category.displayName)
+                                onInvestmentCategorySelected(category)
+                                onProductTypeSelected(.investment)
                             } label: {
-                                Label(type.displayName, systemImage: type.icon)
+                                Label(category.displayName, systemImage: category.icon)
                             }
                         }
                     } label: {
@@ -138,7 +185,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                             Spacer()
 
                             HStack(spacing: 6) {
-                                Text(selectedProductType.displayName)
+                                Text(selectedProductTypeDisplayName)
                                     .font(.system(size: 16, weight: .regular))
                                     .foregroundStyle(
                                         LinearGradient(
@@ -205,10 +252,28 @@ struct InlineCardCreateForm<GroupSection: View>: View {
             if newValue == CardType.debit.rawValue {
                 card.creditLimit = nil
                 creditLimitText = ""
+                creditDebtText = ""
             } else {
                 card.includeInTotal = true
+                let limit = AmountInputFormatter.parse(creditLimitText) ?? card.creditLimit ?? 0
+                if creditLimitText.isEmpty {
+                    creditLimitText = AmountInputFormatter.plainString(from: limit)
+                }
+                let debt = max(0, limit - card.balance)
+                creditDebtText = AmountInputFormatter.plainString(from: debt)
             }
         }
+    }
+
+    private var selectedProductTypeDisplayName: String {
+        guard selectedProductType == .investment else {
+            return selectedProductType.displayName
+        }
+        return selectedInvestmentCategory.displayName
+    }
+
+    private var visibleInvestmentCategories: [InvestmentCategory] {
+        [.house, .stocks, .business, .crypto, .other]
     }
     
     private var balanceSection: some View {
@@ -216,28 +281,93 @@ struct InlineCardCreateForm<GroupSection: View>: View {
             FinancesSectionHeader(title: "Баланс")
             FinancesGlassCard {
                 VStack(spacing: 0) {
-                    HStack(spacing: 12) {
-                        Text("Сумма")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(AppColors.textPrimary)
-                        Spacer()
-                        TextField("0", text: Binding(
-                            get: { AmountInputFormatter.display(balanceText) },
-                            set: { newValue in
-                                let sanitized = AmountInputFormatter.sanitize(newValue)
-                                balanceText = AmountInputFormatter.display(sanitized)
-                            }
-                        ))
-                            .keyboardType(.decimalPad)
-                            .foregroundStyle(AppColors.textPrimary)
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 140)
+                    if card.cardType == .credit {
+                        HStack(spacing: 12) {
+                            Text("Кредитный лимит")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(AppColors.textPrimary)
+                            Spacer()
+                            TextField("0", text: Binding(
+                                get: { AmountInputFormatter.display(creditLimitText) },
+                                set: { newValue in
+                                    let sanitized = AmountInputFormatter.sanitize(newValue)
+                                    creditLimitText = sanitized
+                                    let limit = AmountInputFormatter.parse(creditLimitText) ?? 0
+                                    let debt = AmountInputFormatter.parse(creditDebtText) ?? 0
+                                    card.creditLimit = creditLimitText.isEmpty ? nil : limit
+                                    card.balance = max(0, limit - debt)
+                                }
+                            ))
+                                .keyboardType(.decimalPad)
+                                .foregroundStyle(AppColors.textPrimary)
+                                .multilineTextAlignment(.trailing)
+                                .frame(width: 140)
+                        }
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 16)
+
+                        FinancesRowDivider(leadingPadding: 16)
+                        
+                        HStack(spacing: 12) {
+                            Text("Общий долг")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(AppColors.textPrimary)
+                            Spacer()
+                            TextField("0", text: Binding(
+                                get: { AmountInputFormatter.display(creditDebtText) },
+                                set: { newValue in
+                                    let sanitized = AmountInputFormatter.sanitize(newValue)
+                                    creditDebtText = sanitized
+                                    let limit = AmountInputFormatter.parse(creditLimitText) ?? 0
+                                    let debt = AmountInputFormatter.parse(creditDebtText) ?? 0
+                                    card.balance = max(0, limit - debt)
+                                }
+                            ))
+                                .keyboardType(.decimalPad)
+                                .foregroundStyle(AppColors.textPrimary)
+                                .multilineTextAlignment(.trailing)
+                                .frame(width: 140)
+                        }
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 16)
+
+                        FinancesRowDivider(leadingPadding: 16)
+
+                        HStack(spacing: 12) {
+                            Text("Остаток лимита")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(AppColors.textPrimary)
+                            Spacer()
+                            Text(AmountInputFormatter.display(String(creditRemainingLimit)))
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(AppColors.textPrimary)
+                        }
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 16)
+                    } else {
+                        HStack(spacing: 12) {
+                            Text("Сумма")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(AppColors.textPrimary)
+                            Spacer()
+                            TextField("0", text: Binding(
+                                get: { AmountInputFormatter.display(balanceText) },
+                                set: { newValue in
+                                    let sanitized = AmountInputFormatter.sanitize(newValue)
+                                    balanceText = sanitized
+                                }
+                            ))
+                                .keyboardType(.decimalPad)
+                                .foregroundStyle(AppColors.textPrimary)
+                                .multilineTextAlignment(.trailing)
+                                .frame(width: 140)
+                        }
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 16)
                     }
-                    .padding(.vertical, 14)
-                    .padding(.horizontal, 16)
-                    
+
                     FinancesRowDivider(leadingPadding: 16)
-                    
+
                     HStack(spacing: 12) {
                         Text("Валюта")
                             .font(.system(size: 16, weight: .medium))
@@ -263,35 +393,6 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                     }
                     .padding(.vertical, 14)
                     .padding(.horizontal, 16)
-                    
-                    if card.cardType == .credit {
-                        FinancesRowDivider(leadingPadding: 16)
-                        
-                        HStack(spacing: 12) {
-                            Text("Лимит")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(AppColors.textPrimary)
-                            Spacer()
-                            TextField("0", text: Binding(
-                                get: { AmountInputFormatter.display(creditLimitText) },
-                                set: { newValue in
-                                    let sanitized = AmountInputFormatter.sanitize(newValue)
-                                    creditLimitText = AmountInputFormatter.display(sanitized)
-                                    if let limit = AmountInputFormatter.parse(creditLimitText) {
-                                        card.creditLimit = limit
-                                    } else if creditLimitText.isEmpty {
-                                        card.creditLimit = nil
-                                    }
-                                }
-                            ))
-                                .keyboardType(.decimalPad)
-                                .foregroundStyle(AppColors.textPrimary)
-                                .multilineTextAlignment(.trailing)
-                                .frame(width: 140)
-                        }
-                        .padding(.vertical, 14)
-                        .padding(.horizontal, 16)
-                    }
                 }
             }
         }
@@ -302,9 +403,20 @@ struct InlineCardCreateForm<GroupSection: View>: View {
             FinancesSectionHeader(title: "Подсчёты")
             FinancesGlassCard(contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)) {
                 VStack(alignment: .leading, spacing: 14) {
-                    Toggle("Учитывать в «Итого»", isOn: $card.includeInTotal)
-                        .tint(AppColors.toggleOnGreen)
-                        .foregroundStyle(AppColors.textPrimary)
+                    if card.cardType == .credit {
+                        HStack(spacing: 10) {
+                            Text("Влияние на «Итого»")
+                                .foregroundStyle(AppColors.textPrimary)
+                            Spacer()
+                            Text("Уменьшает")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(AppColors.error.opacity(0.9))
+                        }
+                    } else {
+                        Toggle("Учитывать в «Итого»", isOn: $card.includeInTotal)
+                            .tint(AppColors.toggleOnGreen)
+                            .foregroundStyle(AppColors.textPrimary)
+                    }
                     
                     Text("Определяет, как изменение баланса влияет на общий итог по всем продуктам.")
                         .font(.system(size: 12, weight: .regular))
@@ -312,7 +424,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                         .fixedSize(horizontal: false, vertical: true)
 
                     if card.cardType == .credit {
-                        Text("Для кредитной карты учитывается долг, он уменьшает «Итого».")
+                        Text("Для учета в «Итого» используется поле «Общий долг».")
                             .font(.system(size: 12, weight: .regular))
                             .foregroundStyle(AppColors.error.opacity(0.8))
                             .fixedSize(horizontal: false, vertical: true)
@@ -359,6 +471,12 @@ struct InlineCardCreateForm<GroupSection: View>: View {
             availableCurrencies = currencies.sorted()
         }
     }
+
+    private var creditRemainingLimit: Double {
+        let limit = AmountInputFormatter.parse(creditLimitText) ?? 0
+        let debt = AmountInputFormatter.parse(creditDebtText) ?? 0
+        return max(0, limit - debt)
+    }
 }
 
 struct InlineCreditCreateForm<GroupSection: View>: View {
@@ -371,7 +489,6 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
     @State private var remainingAmountText: String = ""
     @State private var selectedCurrency: String = "RUB"
     @State private var selectedBank: Bank = .other
-    @State private var selectedCreditType: CreditType = .consumer
     @State private var isFavorite: Bool = false
     @State private var includeInTotal: Bool = true
     @State private var availableCurrencies: [String] = ["RUB", "USD", "EUR"]
@@ -403,12 +520,11 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
         // Дефолты для упрощенной формы: срок 12 месяцев от текущей даты
         let endDate = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
         let monthlyPayment = amount / 12.0
-        return (name, amount, monthlyPayment, endDate, remainingAmount, selectedCurrency, selectedBank, selectedCreditType, isFavorite, includeInTotal)
+        return (name, amount, monthlyPayment, endDate, remainingAmount, selectedCurrency, selectedBank, .consumer, isFavorite, includeInTotal)
     }
     
     var body: some View {
         VStack(spacing: 18) {
-            typeSection
             balanceSection
             organizationSection
             groupSection
@@ -421,7 +537,6 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
         .onChange(of: remainingAmountText) { _, _ in onCreditDataChanged(getCreditData()) }
         .onChange(of: selectedCurrency) { _, _ in onCreditDataChanged(getCreditData()) }
         .onChange(of: selectedBank) { _, _ in onCreditDataChanged(getCreditData()) }
-        .onChange(of: selectedCreditType) { _, _ in onCreditDataChanged(getCreditData()) }
         .onChange(of: isFavorite) { _, _ in onCreditDataChanged(getCreditData()) }
         .onChange(of: includeInTotal) { _, _ in onCreditDataChanged(getCreditData()) }
         .sheet(isPresented: $showCurrencyPicker) {
@@ -451,35 +566,6 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
         }
     }
     
-    private var typeSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Тип")
-            FinancesGlassCard {
-                HStack(spacing: 12) {
-                    Text("Тип кредита")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(AppColors.textPrimary)
-                    Spacer()
-                    Menu {
-                        ForEach(CreditType.allCases, id: \.self) { type in
-                            Button(type.displayName) { selectedCreditType = type }
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(selectedCreditType.displayName)
-                                .font(.system(size: 16, weight: .semibold))
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 12, weight: .semibold))
-                        }
-                        .foregroundStyle(AppColors.textTertiary)
-                    }
-                }
-                .padding(.vertical, 14)
-                .padding(.horizontal, 16)
-            }
-        }
-    }
-    
     private var balanceSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: "Баланс")
@@ -494,7 +580,7 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
                             get: { formatNumberForDisplay(amountText) },
                             set: { newValue in
                                 let sanitized = AmountInputFormatter.sanitize(newValue)
-                                amountText = AmountInputFormatter.display(sanitized)
+                                amountText = sanitized
                             }
                         ))
                         .keyboardType(.decimalPad)
@@ -516,7 +602,7 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
                             get: { formatNumberForDisplay(remainingAmountText) },
                             set: { newValue in
                                 let sanitized = AmountInputFormatter.sanitize(newValue)
-                                remainingAmountText = AmountInputFormatter.display(sanitized)
+                                remainingAmountText = sanitized
                             }
                         ))
                         .keyboardType(.decimalPad)
@@ -642,11 +728,11 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
 struct InlineInvestmentCreateForm<GroupSection: View>: View {
     @ObservedObject var viewModel: InvestmentViewModel
     @Binding var name: String
+    @Binding var selectedCategory: InvestmentCategory
     let onInvestmentDataChanged: ((name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)?) -> Void
     let groupSection: GroupSection
     
     @State private var selectedInvestmentType: InvestmentType = .positive
-    @State private var selectedCategory: InvestmentCategory = .other
     @State private var amountText: String = ""
     @State private var selectedCurrency: String = "RUB"
     @State private var includeInTotal: Bool = true
@@ -672,12 +758,14 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     init(
         viewModel: InvestmentViewModel,
         name: Binding<String>,
+        selectedCategory: Binding<InvestmentCategory>,
         onInvestmentDataChanged: @escaping ((name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)?) -> Void,
         marketDataClient: MarketDataClientProtocol = TwelveDataClient.shared,
         @ViewBuilder groupSection: () -> GroupSection
     ) {
         self.viewModel = viewModel
         self._name = name
+        self._selectedCategory = selectedCategory
         self.onInvestmentDataChanged = onInvestmentDataChanged
         self.marketDataClient = marketDataClient
         self.groupSection = groupSection()
@@ -774,7 +862,6 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
             } else {
                 balanceSection
             }
-            organizationSection
             groupSection
             calculationsSection
             prioritySection
@@ -911,7 +998,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                             get: { formatNumberForDisplay(marketQuantityText) },
                             set: { newValue in
                                 let sanitized = AmountInputFormatter.sanitize(newValue)
-                                marketQuantityText = AmountInputFormatter.display(sanitized)
+                                marketQuantityText = sanitized
                             }
                         ))
                         .keyboardType(.decimalPad)
@@ -995,7 +1082,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                             get: { formatNumberForDisplay(amountText) },
                             set: { newValue in
                                 let sanitized = AmountInputFormatter.sanitize(newValue)
-                                amountText = AmountInputFormatter.display(sanitized)
+                                amountText = sanitized
                             }
                         ))
                         .keyboardType(.decimalPad)
@@ -1029,38 +1116,6 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                                 }
                                 .foregroundStyle(AppColors.textTertiary)
                             }
-                        }
-                    }
-                    .padding(.vertical, 14)
-                    .padding(.horizontal, 16)
-                }
-            }
-        }
-    }
-    
-    private var organizationSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Организация")
-            FinancesGlassCard {
-                VStack(spacing: 0) {
-                    HStack(spacing: 12) {
-                        Text("Категория")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(AppColors.textPrimary)
-                        Spacer()
-                        Menu {
-                            ForEach(InvestmentCategory.allCases, id: \.self) { category in
-                                Button(category.displayName) { selectedCategory = category }
-                            }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Text(selectedCategory.displayName)
-                                    .font(.system(size: 16, weight: .semibold))
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 12, weight: .semibold))
-                            }
-                            .foregroundStyle(AppColors.textTertiary)
-                            .lineLimit(1)
                         }
                     }
                     .padding(.vertical, 14)

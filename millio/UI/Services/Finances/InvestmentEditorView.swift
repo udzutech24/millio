@@ -306,7 +306,7 @@ struct InvestmentEditorView: View {
                     get: { formatNumberForDisplay(marketQuantityText) },
                     set: { newValue in
                         let sanitized = AmountInputFormatter.sanitize(newValue)
-                        marketQuantityText = AmountInputFormatter.display(sanitized)
+                        marketQuantityText = sanitized
                     }
                 ))
                 .keyboardType(.decimalPad)
@@ -378,7 +378,7 @@ struct InvestmentEditorView: View {
                     get: { formatNumberForDisplay(amountText) },
                     set: { newValue in
                         let sanitized = AmountInputFormatter.sanitize(newValue)
-                        amountText = AmountInputFormatter.display(sanitized)
+                        amountText = sanitized
                     }
                 ))
                 .keyboardType(.decimalPad)

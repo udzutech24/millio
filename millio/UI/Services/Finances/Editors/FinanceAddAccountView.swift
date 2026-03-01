@@ -32,6 +32,8 @@ struct FinanceAddAccountView: View {
     @State private var selectedAccountType: FinanceAccountType = .card
     @State private var addAccountMode: AddAccountMode = .create
     @State private var selectedGroupID: String? = nil
+    @State private var selectedInvestmentCategory: InvestmentCategory = .other
+    @State private var selectedProductTypeTitle: String = FinanceAccountType.card.displayName
     @State private var showCreateGroup = false
     @State private var cardViewModel: CardViewModel?
     @State private var creditViewModel: CreditViewModel?
@@ -104,11 +106,44 @@ struct FinanceAddAccountView: View {
             FinancesSectionHeader(title: "Тип")
             FinancesGlassCard {
                 Menu {
-                    ForEach(FinanceAccountType.allCases, id: \.self) { type in
+                    Button {
+                        selectedAccountType = .card
+                        selectedProductTypeTitle = "Карта"
+                    } label: {
+                        Label(FinanceAccountType.card.displayName, systemImage: FinanceAccountType.card.icon)
+                    }
+                    Button {
+                        selectedAccountType = .investment
+                        selectedInvestmentCategory = .other
+                        selectedProductTypeTitle = "Счет"
+                    } label: {
+                        Label("Счет", systemImage: "building.columns.fill")
+                    }
+
+                    Button {
+                        selectedAccountType = .credit
+                        selectedProductTypeTitle = "Кредит"
+                    } label: {
+                        Label(FinanceAccountType.credit.displayName, systemImage: FinanceAccountType.credit.icon)
+                    }
+
+                    if addAccountMode == .create {
                         Button {
-                            selectedAccountType = type
+                            selectedAccountType = .investment
+                            selectedInvestmentCategory = .other
+                            selectedProductTypeTitle = "Актив"
                         } label: {
-                            Label(type.displayName, systemImage: type.icon)
+                            Label("Актив", systemImage: FinanceAccountType.investment.icon)
+                        }
+
+                        ForEach(visibleInvestmentCategories, id: \.self) { category in
+                            Button {
+                                selectedAccountType = .investment
+                                selectedInvestmentCategory = category
+                                selectedProductTypeTitle = category.displayName
+                            } label: {
+                                Label(category.displayName, systemImage: category.icon)
+                            }
                         }
                     }
                 } label: {
@@ -119,7 +154,7 @@ struct FinanceAddAccountView: View {
                         
                         Spacer()
                         
-                        Text(selectedAccountType.displayName)
+                        Text(selectedProductTypeTitle)
                             .font(.system(size: 16, weight: .regular))
                             .foregroundStyle(
                                 LinearGradient(
@@ -136,6 +171,10 @@ struct FinanceAddAccountView: View {
                 }
             }
         }
+    }
+
+    private var visibleInvestmentCategories: [InvestmentCategory] {
+        [.house, .stocks, .business, .crypto, .other]
     }
     
     private var groupSection: some View {
@@ -323,7 +362,12 @@ struct FinanceAddAccountView: View {
                     viewModel: vm,
                     name: $accountName,
                     selectedProductType: selectedAccountType,
+                    selectedInvestmentCategory: selectedInvestmentCategory,
                     onProductTypeSelected: { selectedAccountType = $0 },
+                    onProductTitleSelected: { selectedProductTypeTitle = $0 },
+                    onInvestmentCategorySelected: { category in
+                        selectedInvestmentCategory = category
+                    },
                     onCardDataChanged: { card in
                         self.cardData = card
                     }
@@ -376,6 +420,7 @@ struct FinanceAddAccountView: View {
                 InlineInvestmentCreateForm(
                     viewModel: vm,
                     name: $accountName,
+                    selectedCategory: $selectedInvestmentCategory,
                     onInvestmentDataChanged: { data in
                         self.investmentData = data
                     }

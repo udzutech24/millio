@@ -210,4 +210,36 @@ struct CardManagerTests {
         let usdTotal = CardManager.shared.getTotalBalance(currency: "USD")
         #expect(abs(usdTotal - 500) < 0.01)
     }
+
+    @Test("Кредитная карта: долг и остаток лимита считаются из лимита и доступного баланса")
+    func testCreditCardDebtAndAvailableCreditCalculation() {
+        let card = Card(
+            name: "Кредитная",
+            cardNumber: "1234",
+            bank: .other,
+            cardType: .credit,
+            currency: "RUB",
+            balance: 7_000,
+            creditLimit: 10_000
+        )
+
+        #expect(abs(card.debt - 3_000) < 0.01)
+        #expect(abs(card.availableCredit - 3_000) < 0.01)
+    }
+
+    @Test("Кредитная карта: долг не уходит в минус при балансе выше лимита")
+    func testCreditCardDebtDoesNotBecomeNegative() {
+        let card = Card(
+            name: "Кредитная",
+            cardNumber: "1234",
+            bank: .other,
+            cardType: .credit,
+            currency: "RUB",
+            balance: 12_000,
+            creditLimit: 10_000
+        )
+
+        #expect(card.debt == 0)
+        #expect(card.availableCredit == 0)
+    }
 }
