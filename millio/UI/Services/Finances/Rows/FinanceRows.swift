@@ -375,6 +375,14 @@ private struct FinanceAccountRow: View {
     let onQuickEditAmount: () -> Void
     
     var body: some View {
+        if viewModel.getMarketInvestment(account: account) != nil {
+            marketInvestmentRow
+        } else {
+            defaultRow
+        }
+    }
+
+    private var defaultRow: some View {
         HStack(spacing: 12) {
             let iconGradientColors = (accountType == .credit || isCreditCardDebt) ? [AppColors.error, AppColors.error] : AppColors.financesGradient
             
@@ -449,8 +457,70 @@ private struct FinanceAccountRow: View {
             onEdit()
         }
     }
+
+    private var marketInvestmentRow: some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.white.opacity(0.07))
+                .overlay {
+                    Image(systemName: icon)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppColors.textSecondary)
+                }
+                .frame(width: 34, height: 34)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(name)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                if let subtitle = viewModel.getInvestmentPositionSubtitle(account: account) {
+                    Text(subtitle)
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+
+                if let performance = viewModel.getInvestmentPurchaseGrowthSubtitle(account: account) {
+                    Text(performance.text)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(performance.isPositive ? Color.green : AppColors.error)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button {
+                onQuickEditAmount()
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(formatBalance(amount, isHidden: viewModel.state.isAmountHidden, maximumFractionDigits: 2))
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(isCreditCardDebt ? AppColors.error : (amount >= 0 ? AppColors.textPrimary : AppColors.error))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+
+                    Text(MonetaCurrency(rawValue: currency)?.symbol ?? currency)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .lineLimit(1)
+                }
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onEdit()
+        }
+    }
     
-    private func formatBalance(_ balance: Double, isHidden: Bool = false) -> String {
+    private func formatBalance(_ balance: Double, isHidden: Bool = false, maximumFractionDigits: Int = 0) -> String {
         if isHidden {
             // Подсчитываем количество цифр в числе
             let digits = Int(balance.rounded())
@@ -464,7 +534,7 @@ private struct FinanceAccountRow: View {
         formatter.groupingSeparator = " "
         formatter.usesGroupingSeparator = true
         formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 0
+        formatter.maximumFractionDigits = maximumFractionDigits
         return formatter.string(from: NSNumber(value: balance)) ?? "0"
     }
     

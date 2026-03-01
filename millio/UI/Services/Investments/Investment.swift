@@ -123,6 +123,12 @@ final class Investment: Persistable {
     /// Последняя известная цена за единицу
     var lastKnownUnitPrice: Double?
 
+    /// Средняя цена покупки за единицу (cost basis)
+    var averagePurchaseUnitPrice: Double?
+
+    /// Суммарная стоимость покупки текущей позиции (cost basis total)
+    var totalPurchaseCost: Double?
+
     /// Дата/время последнего обновления цены
     var lastKnownPriceUpdatedAt: Date?
 
@@ -188,11 +194,87 @@ final class Investment: Persistable {
         return quantity * unitPrice
     }
 
+    /// Абсолютный прирост позиции относительно суммарной цены покупки.
+    var positionGrowthAbsolute: Double? {
+        guard let positionTotal,
+              let purchaseCost = totalPurchaseCost,
+              purchaseCost > 0 else {
+            return nil
+        }
+        return positionTotal - purchaseCost
+    }
+
+    /// Прирост позиции в процентах относительно суммарной цены покупки.
+    var positionGrowthPercent: Double? {
+        guard let growth = positionGrowthAbsolute,
+              let purchaseCost = totalPurchaseCost,
+              purchaseCost > 0 else {
+            return nil
+        }
+        return (growth / purchaseCost) * 100
+    }
+
     /// Пересчитывает amount на основе рыночной позиции, если есть количество и цена.
     func recalculateAmountFromPosition() {
         if let total = positionTotal {
             amount = total
         }
+    }
+
+    /// Применяет операцию покупки и пересчитывает среднюю цену позиции.
+    @discardableResult
+    func applyBuy(quantity: Double, unitPrice: Double) -> Bool {
+        guard quantity > 0, unitPrice >= 0 else {
+            return false
+        }
+
+        let oldQuantity = marketQuantity ?? 0
+        let oldCost = totalPurchaseCost ?? ((averagePurchaseUnitPrice ?? 0) * oldQuantity)
+        let newQuantity = oldQuantity + quantity
+        let newCost = oldCost + (quantity * unitPrice)
+
+        marketQuantity = newQuantity
+        totalPurchaseCost = newCost
+        averagePurchaseUnitPrice = newQuantity > 0 ? (newCost / newQuantity) : nil
+        lastKnownUnitPrice = unitPrice
+        lastKnownPriceUpdatedAt = Date()
+        recalculateAmountFromPosition()
+        return true
+    }
+
+    /// Применяет операцию продажи с сохранением среднего cost basis для остатка.
+    @discardableResult
+    func applySell(quantity: Double, unitPrice: Double) -> Bool {
+        guard quantity > 0, unitPrice >= 0 else {
+            return false
+        }
+
+        let oldQuantity = marketQuantity ?? 0
+        let epsilon = 0.0000001
+        guard oldQuantity + epsilon >= quantity else {
+            return false
+        }
+
+        let oldCost = totalPurchaseCost ?? ((averagePurchaseUnitPrice ?? 0) * oldQuantity)
+        let avgCost = oldQuantity > 0 ? (oldCost / oldQuantity) : 0
+        let newQuantityRaw = oldQuantity - quantity
+        let newQuantity = newQuantityRaw > epsilon ? newQuantityRaw : 0
+        let newCostRaw = oldCost - (avgCost * quantity)
+        let newCost = max(0, newCostRaw)
+
+        marketQuantity = newQuantity
+        if newQuantity > 0 {
+            totalPurchaseCost = newCost
+            averagePurchaseUnitPrice = newCost / newQuantity
+        } else {
+            totalPurchaseCost = 0
+            averagePurchaseUnitPrice = nil
+        }
+
+        lastKnownUnitPrice = unitPrice
+        lastKnownPriceUpdatedAt = Date()
+        recalculateAmountFromPosition()
+        return true
     }
     
     init(
@@ -274,6 +356,12 @@ final class Investment: Persistable {
         }
         if let lastKnownUnitPrice {
             dict["lastKnownUnitPrice"] = lastKnownUnitPrice
+        }
+        if let averagePurchaseUnitPrice {
+            dict["averagePurchaseUnitPrice"] = averagePurchaseUnitPrice
+        }
+        if let totalPurchaseCost {
+            dict["totalPurchaseCost"] = totalPurchaseCost
         }
         if let lastKnownPriceUpdatedAt {
             dict["lastKnownPriceUpdatedAt"] = lastKnownPriceUpdatedAt.timeIntervalSince1970

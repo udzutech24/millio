@@ -200,13 +200,16 @@ struct FinanceQuickEditAccountView: View {
 
     private var fieldTitle: String {
         if isMarketInvestment {
-            return "Количество"
+            return marketInvestment?.category == .crypto ? "Количество монет" : "Количество"
         }
         return isCreditCard ? "Задолженность" : "Сумма"
     }
 
     private func valueSuffix(for info: (name: String, amount: Double, currency: String, icon: String, isCreditCardDebt: Bool)) -> String {
-        isMarketInvestment ? "шт." : info.currency
+        if isMarketInvestment {
+            return marketInvestment?.category == .crypto ? "мон." : "шт."
+        }
+        return info.currency
     }
 
     private func currentEditableValue(fallbackAmount: Double) -> Double {

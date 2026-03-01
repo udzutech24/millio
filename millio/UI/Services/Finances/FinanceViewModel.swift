@@ -148,6 +148,11 @@ struct FinanceState {
     var currencyConversionWarning: String? = nil
 }
 
+enum InvestmentOrderSide: Hashable {
+    case buy
+    case sell
+}
+
 // MARK: - Finance Actions
 
 enum FinanceAction {
@@ -187,6 +192,8 @@ enum FinanceAction {
     case showQuickEditAccountSheet(FinanceAccount)
     case hideQuickEditAccountSheet
     case updateAccountAmount(FinanceAccount, Double)
+    case executeInvestmentOrder(account: FinanceAccount, side: InvestmentOrderSide, quantity: Double, unitPrice: Double)
+    case updateMarketInvestmentDetails(account: FinanceAccount, quantity: Double, unitPrice: Double, purchaseUnitPrice: Double?)
     case showGroupDynamics(FinanceGroup)
     case hideGroupDynamics
     case showAccountDynamics(FinanceAccount)
@@ -407,6 +414,22 @@ final class FinanceViewModel: ViewModelProtocol {
             
         case .updateAccountAmount(let account, let newAmount):
             updateAccountAmount(account: account, newAmount: newAmount)
+
+        case .executeInvestmentOrder(let account, let side, let quantity, let unitPrice):
+            executeInvestmentOrder(
+                account: account,
+                side: side,
+                quantity: quantity,
+                unitPrice: unitPrice
+            )
+
+        case .updateMarketInvestmentDetails(let account, let quantity, let unitPrice, let purchaseUnitPrice):
+            updateMarketInvestmentDetails(
+                account: account,
+                quantity: quantity,
+                unitPrice: unitPrice,
+                purchaseUnitPrice: purchaseUnitPrice
+            )
             
         case .toggleGroupFavorite(let group):
             group.isFavorite.toggle()
@@ -940,7 +963,7 @@ final class FinanceViewModel: ViewModelProtocol {
             
         case .investment:
             if let investment = investmentByID[account.accountID] {
-                return (investment.name, investment.amount, resolvedInvestmentCurrency(investment), investment.category.icon, false)
+                return (investmentDisplayName(investment), investment.amount, resolvedInvestmentCurrency(investment), investment.category.icon, false)
             }
         }
         
@@ -960,8 +983,38 @@ final class FinanceViewModel: ViewModelProtocol {
         let unitPriceText = formatMarketNumber(unitPrice, maximumFractionDigits: 2)
         let currencyCode = resolvedInvestmentCurrency(investment)
         let currencyLabel = MonetaCurrency(rawValue: currencyCode)?.symbol ?? currencyCode
+        let quantityUnit = investment.category == .crypto ? "мон." : "шт."
 
-        return "\(quantityText) шт. • \(unitPriceText) \(currencyLabel)/шт."
+        return "\(quantityText) \(quantityUnit) по \(unitPriceText) \(currencyLabel)"
+    }
+
+    func getInvestmentPurchaseGrowthSubtitle(account: FinanceAccount) -> (text: String, isPositive: Bool)? {
+        guard account.accountType == .investment,
+              let investment = investmentByID[account.accountID],
+              investment.isMarketPriced,
+              let purchaseUnitPrice = investment.averagePurchaseUnitPrice,
+              purchaseUnitPrice > 0 else {
+            return nil
+        }
+
+        let purchaseText = formatMarketNumber(purchaseUnitPrice, maximumFractionDigits: 2)
+        let currencyCode = resolvedInvestmentCurrency(investment)
+        let currencyLabel = MonetaCurrency(rawValue: currencyCode)?.symbol ?? currencyCode
+        let growthPercent = investment.positionGrowthPercent ?? 0
+        let growthText = formatSignedPercent(growthPercent)
+        let isPositive = growthPercent >= 0
+
+        return ("Покупка \(purchaseText) \(currencyLabel) • \(growthText)", isPositive)
+    }
+
+    func getMarketInvestment(account: FinanceAccount) -> Investment? {
+        guard account.accountType == .investment else {
+            return nil
+        }
+        guard let investment = investmentByID[account.accountID], investment.isMarketPriced else {
+            return nil
+        }
+        return investment
     }
 
     private func resolvedInvestmentCurrency(_ investment: Investment) -> String {
@@ -1019,6 +1072,173 @@ final class FinanceViewModel: ViewModelProtocol {
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = maximumFractionDigits
         return formatter.string(from: NSNumber(value: value)) ?? "0"
+    }
+
+    private func formatSignedPercent(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 2
+        let number = formatter.string(from: NSNumber(value: abs(value))) ?? "0"
+        let sign = value >= 0 ? "+" : "-"
+        return "\(sign)\(number)%"
+    }
+
+    private func investmentDisplayName(_ investment: Investment) -> String {
+        if let symbol = investment.marketSymbol?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !symbol.isEmpty {
+            return symbol.uppercased()
+        }
+        return investment.name
+    }
+
+    private func executeInvestmentOrder(
+        account: FinanceAccount,
+        side: InvestmentOrderSide,
+        quantity: Double,
+        unitPrice: Double
+    ) {
+        guard quantity > 0, unitPrice >= 0 else {
+            return
+        }
+        guard account.accountType == .investment,
+              let investment = investmentByID[account.accountID],
+              investment.isMarketPriced else {
+            return
+        }
+
+        let oldAmount = investment.amount
+        if !investment.hasInitialAmount {
+            investment.initialAmount = investment.amount
+            investment.hasInitialAmount = true
+        }
+
+        let didApply: Bool
+        switch side {
+        case .buy:
+            didApply = investment.applyBuy(quantity: quantity, unitPrice: unitPrice)
+        case .sell:
+            didApply = investment.applySell(quantity: quantity, unitPrice: unitPrice)
+        }
+        guard didApply else {
+            return
+        }
+        investment.updatedAt = Date()
+
+        do {
+            var didCreateTransaction = false
+            let difference = investment.amount - oldAmount
+            if abs(difference) > 0.01 {
+                let note = side == .buy ? "Покупка актива" : "Продажа актива"
+                let transaction = CashflowTransaction(
+                    transactionType: .balanceAdjustment,
+                    amount: difference,
+                    currency: investment.currency,
+                    transactionDate: Date(),
+                    investmentID: investment.investmentUniqueID,
+                    note: note
+                )
+                stampFrozenRate(on: transaction, targetCurrency: resolvedInvestmentCurrency(investment))
+                modelContext.insert(transaction)
+                didCreateTransaction = true
+            }
+
+            try modelContext.save()
+            loadAccounts()
+            calculateTotalAmount()
+
+            if let accountGroup = state.groups.first(where: { group in
+                group.accounts?.contains(where: { $0.id == account.id }) == true
+            }) {
+                Task {
+                    let currency = accountGroup.displayCurrency ?? state.displayCurrency
+                    let total = await calculateGroupTotal(group: accountGroup, in: currency)
+                    state.groupTotals[accountGroup.groupUniqueID] = total
+                }
+            }
+
+            if didCreateTransaction {
+                EventBus.shared.publish(FinanceEvent.transactionsUpdated)
+            }
+        } catch {
+            AppLogger.log(.error, category: "Finance", "Failed to execute market order: \(error.localizedDescription)")
+        }
+    }
+
+    private func updateMarketInvestmentDetails(
+        account: FinanceAccount,
+        quantity: Double,
+        unitPrice: Double,
+        purchaseUnitPrice: Double?
+    ) {
+        guard account.accountType == .investment,
+              let investment = investmentByID[account.accountID],
+              investment.isMarketPriced,
+              quantity > 0,
+              unitPrice > 0 else {
+            return
+        }
+
+        let oldAmount = investment.amount
+        if !investment.hasInitialAmount {
+            investment.initialAmount = investment.amount
+            investment.hasInitialAmount = true
+        }
+
+        investment.marketQuantity = quantity
+        investment.lastKnownUnitPrice = unitPrice
+        investment.lastKnownPriceUpdatedAt = Date()
+
+        if let purchaseUnitPrice, purchaseUnitPrice > 0 {
+            investment.averagePurchaseUnitPrice = purchaseUnitPrice
+            investment.totalPurchaseCost = purchaseUnitPrice * quantity
+        } else {
+            investment.averagePurchaseUnitPrice = nil
+            investment.totalPurchaseCost = nil
+        }
+
+        investment.recalculateAmountFromPosition()
+        investment.updatedAt = Date()
+
+        do {
+            var didCreateTransaction = false
+            let difference = investment.amount - oldAmount
+            if abs(difference) > 0.01 {
+                let transaction = CashflowTransaction(
+                    transactionType: .balanceAdjustment,
+                    amount: difference,
+                    currency: investment.currency,
+                    transactionDate: Date(),
+                    investmentID: investment.investmentUniqueID,
+                    note: "Редактирование параметров рыночной позиции"
+                )
+                stampFrozenRate(on: transaction, targetCurrency: resolvedInvestmentCurrency(investment))
+                modelContext.insert(transaction)
+                didCreateTransaction = true
+            }
+
+            try modelContext.save()
+            loadAccounts()
+            calculateTotalAmount()
+
+            if let accountGroup = state.groups.first(where: { group in
+                group.accounts?.contains(where: { $0.id == account.id }) == true
+            }) {
+                Task {
+                    let currency = accountGroup.displayCurrency ?? state.displayCurrency
+                    let total = await calculateGroupTotal(group: accountGroup, in: currency)
+                    state.groupTotals[accountGroup.groupUniqueID] = total
+                }
+            }
+
+            if didCreateTransaction {
+                EventBus.shared.publish(FinanceEvent.transactionsUpdated)
+            }
+        } catch {
+            AppLogger.log(.error, category: "Finance", "Failed to update market investment details: \(error.localizedDescription)")
+        }
     }
     
     func refreshRates() async {

@@ -108,6 +108,7 @@ private struct FinanceDynamicsContentView: View {
     var initialAccount: FinanceAccount? = nil
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @State private var showEditForm = false
     @State private var collapseProgress: CGFloat = 0
     @State private var lastCollapseProgress: CGFloat = 0
@@ -121,16 +122,36 @@ private struct FinanceDynamicsContentView: View {
     @State private var draftEndDate: Date = Date()
     @State private var showDisplayCurrencySheet: Bool = false
     @State private var displayCurrencySearchText: String = ""
+    @State private var showTradeSheet: Bool = false
+    @State private var tradeMode: InvestmentOrderSide = .buy
+    @State private var tradePriceMode: TradePriceMode = .market
+    @State private var tradeQuantityText: String = "1"
+    @State private var tradePriceText: String = ""
+    @State private var tradeErrorText: String?
+    @State private var isInlineMarketEdit: Bool = false
+    @State private var editQuantityText: String = ""
+    @State private var editUnitPriceText: String = ""
+    @State private var editPurchasePriceText: String = ""
+    @State private var showFullProductEditSheet: Bool = false
+    @State private var showCashflowHistory: Bool = false
+    @State private var cashflowViewModel: CashflowViewModel? = nil
 
     // Кэшированные значения для графика
     @State private var cachedSelectedPoint: (date: Date, value: Double)? = nil
+
+    private enum TradePriceMode: String, CaseIterable, Hashable {
+        case market
+        case custom
+    }
 
     var body: some View {
         ZStack {
             GradientBackground()
 
-            if showEditForm, viewModel.state.isSingleAccountMode, let account = initialAccount {
+            if showEditForm, viewModel.state.isSingleAccountMode, let account = initialAccount, marketInvestment == nil {
                 editForm(for: account)
+            } else if let marketInvestment = marketInvestment {
+                marketInvestmentDetailsView(marketInvestment)
             } else {
                 ScrollView {
                     VStack(spacing: 16) {
@@ -175,8 +196,9 @@ private struct FinanceDynamicsContentView: View {
         }
         .navigationTitle("Динамика")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(marketInvestment != nil ? .hidden : .visible, for: .navigationBar)
         .toolbar {
-            if viewModel.state.isSingleAccountMode, initialAccount != nil {
+            if viewModel.state.isSingleAccountMode, initialAccount != nil, marketInvestment == nil {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(showEditForm ? "Динамика" : "Редактировать") {
                         showEditForm.toggle()
@@ -201,6 +223,27 @@ private struct FinanceDynamicsContentView: View {
         }
         .sheet(isPresented: $showDisplayCurrencySheet) {
             displayCurrencySheet
+        }
+        .sheet(isPresented: $showTradeSheet) {
+            if let marketInvestment = marketInvestment {
+                tradeSheet(for: marketInvestment)
+            }
+        }
+        .sheet(isPresented: $showFullProductEditSheet) {
+            if let marketInvestment = marketInvestment {
+                FinanceAddAccountView(
+                    viewModel: financeViewModel,
+                    editingInvestment: marketInvestment
+                )
+                .onDisappear {
+                    viewModel.handle(.loadData)
+                }
+            }
+        }
+        .sheet(isPresented: $showCashflowHistory) {
+            if let cashflowViewModel {
+                CashflowTransactionsHistoryView(viewModel: cashflowViewModel)
+            }
         }
         .sheet(isPresented: Binding(
             get: {
@@ -232,7 +275,629 @@ private struct FinanceDynamicsContentView: View {
                 customEndDate = customPeriod.end
                 useCustomPeriod = viewModel.state.period == .custom
             }
+            if let marketInvestment {
+                syncMarketDraft(from: marketInvestment)
+            }
+            if cashflowViewModel == nil {
+                cashflowViewModel = CashflowViewModel(modelContext: modelContext)
+            }
         }
+        .onChange(of: marketInvestment?.updatedAt) { _, _ in
+            if let marketInvestment, !isInlineMarketEdit {
+                syncMarketDraft(from: marketInvestment)
+            }
+        }
+    }
+
+    private var marketInvestment: Investment? {
+        guard viewModel.state.isSingleAccountMode,
+              let account = initialAccount else {
+            return nil
+        }
+        return financeViewModel.getMarketInvestment(account: account)
+    }
+
+    private func marketInvestmentDetailsView(_ investment: Investment) -> some View {
+        GeometryReader { proxy in
+            let compactLayout = proxy.size.height < 820
+            let topInset = proxy.safeAreaInsets.top
+
+            VStack(spacing: compactLayout ? 10 : 14) {
+                marketScreenTopBar(for: investment, compactLayout: compactLayout)
+
+                FinancesGlassCard(
+                    accentColor: Color.cyan.opacity(0.95),
+                    cornerRadius: compactLayout ? 18 : 20,
+                    contentPadding: EdgeInsets(top: compactLayout ? 12 : 16, leading: 14, bottom: compactLayout ? 12 : 16, trailing: 14)
+                ) {
+                    VStack(alignment: .leading, spacing: compactLayout ? 10 : 14) {
+                        HStack {
+                            Text(investment.marketSymbol ?? investment.name)
+                                .font(.system(size: compactLayout ? 34 : 38, weight: .bold))
+                                .foregroundStyle(AppColors.textPrimary)
+                                .lineLimit(1)
+                            Spacer()
+                        }
+
+                        HStack(spacing: compactLayout ? 8 : 10) {
+                            RoundedRectangle(cornerRadius: compactLayout ? 14 : 16, style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color.white.opacity(0.1), Color.white.opacity(0.06)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .overlay {
+                                    VStack(spacing: compactLayout ? 4 : 6) {
+                                        Text("Позиция всего, \(resolvedInvestmentCurrency(investment))")
+                                            .font(.system(size: compactLayout ? 12 : 13, weight: .medium))
+                                            .foregroundStyle(AppColors.textSecondary)
+                                            .lineLimit(1)
+                                        Text(money(investment.positionTotal ?? investment.amount, currency: resolvedInvestmentCurrency(investment)))
+                                            .font(.system(size: compactLayout ? 28 : 32, weight: .bold))
+                                            .foregroundStyle(AppColors.textPrimary)
+                                            .lineLimit(1)
+                                            .minimumScaleFactor(0.65)
+                                    }
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, compactLayout ? 12 : 14)
+                                }
+                                .frame(maxWidth: .infinity)
+
+                            growthCard(for: investment, compactLayout: compactLayout)
+                                .frame(width: compactLayout ? 120 : 132)
+                        }
+                        .frame(height: compactLayout ? 90 : 102)
+
+                        Divider()
+                            .overlay(Color.white.opacity(0.12))
+
+                        Text("Информация об инструменте")
+                            .font(.system(size: compactLayout ? 22 : 24, weight: .bold))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: compactLayout ? 8 : 10) {
+                            statCell(
+                                marketQuantityTitle(for: investment),
+                                "\(marketNumber(investment.marketQuantity ?? 0, digits: 8)) \(marketQuantityUnit(for: investment))",
+                                isEditable: true,
+                                isEditing: isInlineMarketEdit,
+                                editText: $editQuantityText,
+                                keyboardType: .decimalPad,
+                                compactLayout: compactLayout
+                            )
+                            statCell(
+                                "Цена за единицу, \(resolvedInvestmentCurrency(investment))",
+                                money(investment.lastKnownUnitPrice ?? 0, currency: resolvedInvestmentCurrency(investment)),
+                                isEditable: true,
+                                isEditing: isInlineMarketEdit,
+                                editText: $editUnitPriceText,
+                                keyboardType: .decimalPad,
+                                compactLayout: compactLayout
+                            )
+                            statCell(
+                                "Цена покупки",
+                                money(investment.averagePurchaseUnitPrice ?? 0, currency: resolvedInvestmentCurrency(investment)),
+                                isEditable: true,
+                                isEditing: isInlineMarketEdit,
+                                editText: $editPurchasePriceText,
+                                keyboardType: .decimalPad,
+                                compactLayout: compactLayout
+                            )
+                            statCell(
+                                "Сумма покупки",
+                                money(investment.totalPurchaseCost ?? 0, currency: resolvedInvestmentCurrency(investment)),
+                                compactLayout: compactLayout
+                            )
+                        }
+
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: compactLayout ? 8 : 10) {
+                    Text("Действия")
+                        .font(.system(size: compactLayout ? 22 : 24, weight: .bold))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    FinancesGlassCard(
+                        accentColor: Color.cyan.opacity(0.95),
+                        contentPadding: EdgeInsets(top: compactLayout ? 12 : 16, leading: 14, bottom: compactLayout ? 12 : 16, trailing: 14)
+                    ) {
+                        HStack(spacing: compactLayout ? 10 : 14) {
+                            actionButton(title: "Купить", icon: "cart.badge.plus", color: Color.green, compactLayout: compactLayout) {
+                                tradeMode = .buy
+                                prepareTradeDraft(for: investment)
+                                showTradeSheet = true
+                            }
+                            actionButton(title: "Продать", icon: "cart.badge.minus", color: Color.red, compactLayout: compactLayout) {
+                                tradeMode = .sell
+                                prepareTradeDraft(for: investment)
+                                showTradeSheet = true
+                            }
+                        }
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, max(6, topInset + 2))
+            .padding(.bottom, 12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        .ignoresSafeArea(edges: .top)
+    }
+
+    private func marketScreenTopBar(for investment: Investment, compactLayout: Bool) -> some View {
+        HStack(spacing: 10) {
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: compactLayout ? 17 : 18, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .frame(width: compactLayout ? 36 : 40, height: compactLayout ? 36 : 40)
+                    .background(
+                        Circle().fill(Color.white.opacity(0.1))
+                    )
+            }
+            .buttonStyle(.plain)
+
+            Spacer(minLength: 4)
+
+            marketEditTopBar(for: investment, compactLayout: compactLayout)
+        }
+    }
+
+    private func marketEditTopBar(for investment: Investment, compactLayout: Bool) -> some View {
+        HStack(spacing: 10) {
+            let canFinish = canFinishInlineMarketEdit(for: investment)
+            if isInlineMarketEdit {
+                Button {
+                    if canFinish {
+                        finishInlineMarketEdit(for: investment)
+                    }
+                } label: {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: compactLayout ? 18 : 19, weight: .bold))
+                        .foregroundStyle(canFinish ? Color.black : Color.white.opacity(0.75))
+                        .frame(width: compactLayout ? 38 : 42, height: compactLayout ? 38 : 42)
+                        .background(
+                            Circle()
+                                .fill(canFinish ? Color.green : Color.white.opacity(0.12))
+                        )
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button {
+                    isInlineMarketEdit = true
+                    syncMarketDraft(from: investment)
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: compactLayout ? 20 : 21, weight: .semibold))
+                        .foregroundStyle(Color.cyan)
+                        .frame(width: compactLayout ? 38 : 42, height: compactLayout ? 38 : 42)
+                }
+                .buttonStyle(.plain)
+            }
+
+            Button {
+                if cashflowViewModel == nil {
+                    cashflowViewModel = CashflowViewModel(modelContext: modelContext)
+                }
+                cashflowViewModel?.handle(.loadTransactions)
+                showCashflowHistory = true
+            } label: {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: compactLayout ? 21 : 22, weight: .medium))
+                    .foregroundStyle(Color.cyan)
+                    .frame(width: compactLayout ? 38 : 42, height: compactLayout ? 38 : 42)
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                showFullProductEditSheet = true
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: compactLayout ? 21 : 22, weight: .medium))
+                    .foregroundStyle(Color.cyan)
+                    .frame(width: compactLayout ? 38 : 42, height: compactLayout ? 38 : 42)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, compactLayout ? 10 : 12)
+        .padding(.vertical, compactLayout ? 7 : 8)
+        .background(
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.1), Color.white.opacity(0.05)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(Color.cyan.opacity(0.45), lineWidth: 1)
+                )
+        )
+    }
+
+    private func statCell(
+        _ title: String,
+        _ value: String,
+        isEditable: Bool = false,
+        isEditing: Bool = false,
+        editText: Binding<String>? = nil,
+        keyboardType: UIKeyboardType = .default,
+        compactLayout: Bool = false
+    ) -> some View {
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .fill(Color.white.opacity(0.08))
+            .overlay {
+                VStack(spacing: 8) {
+                    Text(title)
+                        .font(.system(size: compactLayout ? 12 : 13, weight: .regular))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+
+                    if isEditable, isEditing, let editText {
+                        TextField("0", text: Binding(
+                            get: { AmountInputFormatter.display(editText.wrappedValue, maxFractionDigits: 8) },
+                            set: { newValue in
+                                editText.wrappedValue = AmountInputFormatter.sanitize(newValue, maxFractionDigits: 8)
+                            }
+                        ))
+                        .font(.system(size: compactLayout ? 16 : 18, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .keyboardType(keyboardType)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 8)
+                    } else {
+                        Text(value)
+                            .font(.system(size: compactLayout ? 16 : 18, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.72)
+                    }
+                }
+                .padding(12)
+            }
+            .overlay {
+                if isEditable && isEditing {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.green.opacity(0.8), lineWidth: 1.3)
+                }
+            }
+            .frame(height: compactLayout ? 88 : 100)
+    }
+
+    private func growthCard(for investment: Investment, compactLayout: Bool) -> some View {
+        let growth = investment.positionGrowthPercent ?? 0
+        let textColor: Color = growth > 0 ? .green : (growth < 0 ? .red : AppColors.textSecondary)
+
+        return RoundedRectangle(cornerRadius: compactLayout ? 14 : 16, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.09, green: 0.17, blue: 0.23),
+                        Color(red: 0.05, green: 0.08, blue: 0.12)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: compactLayout ? 14 : 16, style: .continuous)
+                    .stroke(Color.cyan.opacity(0.45), lineWidth: 1)
+            )
+            .overlay {
+                VStack(spacing: compactLayout ? 3 : 5) {
+                    Text("Рост")
+                        .font(.system(size: compactLayout ? 15 : 16, weight: .medium))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .lineLimit(1)
+                    Text(formatPercent(growth))
+                        .font(.system(size: compactLayout ? 19 : 20, weight: .bold))
+                        .foregroundStyle(textColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.9)
+                }
+                .padding(.horizontal, 6)
+            }
+    }
+
+    private func actionButton(
+        title: String,
+        icon: String,
+        color: Color,
+        compactLayout: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(spacing: compactLayout ? 6 : 8) {
+                Circle()
+                    .fill(color)
+                    .frame(width: compactLayout ? 56 : 62, height: compactLayout ? 56 : 62)
+                    .overlay {
+                        Image(systemName: icon)
+                            .font(.system(size: compactLayout ? 22 : 24, weight: .semibold))
+                            .foregroundStyle(.black)
+                    }
+                Text(title)
+                    .font(.system(size: compactLayout ? 16 : 18, weight: .medium))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func tradeSheet(for investment: Investment) -> some View {
+        NavigationStack {
+            ZStack {
+                GradientBackground()
+
+                ScrollView {
+                    VStack(spacing: 16) {
+                        Picker("Режим сделки", selection: $tradeMode) {
+                            Text("Купить").tag(InvestmentOrderSide.buy)
+                            Text("Продать").tag(InvestmentOrderSide.sell)
+                        }
+                        .pickerStyle(.segmented)
+
+                        FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 14, bottom: 14, trailing: 14)) {
+                            VStack(spacing: 12) {
+                                Picker("Режим цены", selection: $tradePriceMode) {
+                                    Text("Рыночная").tag(TradePriceMode.market)
+                                    Text("Своя").tag(TradePriceMode.custom)
+                                }
+                                .pickerStyle(.segmented)
+
+                                tradeRow(
+                                    title: "Цена, \(resolvedInvestmentCurrency(investment))",
+                                    valueText: Binding(
+                                        get: { tradePriceMode == .market ? money(investment.lastKnownUnitPrice ?? 0, currency: resolvedInvestmentCurrency(investment)) : AmountInputFormatter.display(tradePriceText) },
+                                        set: { newValue in tradePriceText = AmountInputFormatter.sanitize(newValue) }
+                                    ),
+                                    editable: tradePriceMode == .custom
+                                )
+                                tradeRow(
+                                    title: marketQuantityTitle(for: investment),
+                                    valueText: Binding(
+                                        get: { AmountInputFormatter.display(tradeQuantityText, maxFractionDigits: 8) },
+                                        set: { newValue in tradeQuantityText = AmountInputFormatter.sanitize(newValue, maxFractionDigits: 8) }
+                                    ),
+                                    editable: true
+                                )
+
+                                let qty = AmountInputFormatter.parse(tradeQuantityText) ?? 0
+                                let price = currentTradeUnitPrice(for: investment)
+                                tradeRow(
+                                    title: "Итого, \(resolvedInvestmentCurrency(investment))",
+                                    valueText: .constant(money(qty * price, currency: resolvedInvestmentCurrency(investment))),
+                                    editable: false
+                                )
+                            }
+                        }
+
+                        if let tradeErrorText, !tradeErrorText.isEmpty {
+                            Text(tradeErrorText)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(AppColors.error)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 4)
+                        }
+
+                        SwipeConfirmButton(
+                            title: tradeMode == .buy ? "Проведите вправо, чтобы купить" : "Проведите вправо, чтобы продать",
+                            accentColor: tradeMode == .buy ? Color.green : Color.red,
+                            isEnabled: canSubmitTrade(for: investment),
+                            onConfirmed: {
+                                submitTrade(for: investment)
+                            }
+                        )
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                    .padding(.bottom, 32)
+                }
+            }
+            .navigationTitle("Сделка")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showTradeSheet = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .foregroundStyle(AppColors.textPrimary)
+                    }
+                }
+            }
+        }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func tradeRow(title: String, valueText: Binding<String>, editable: Bool) -> some View {
+        HStack(spacing: 10) {
+            Text(title)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(AppColors.textSecondary)
+            Spacer()
+            if editable {
+                TextField("0", text: valueText)
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .frame(maxWidth: 170)
+            } else {
+                Text(valueText.wrappedValue)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.vertical, 10)
+    }
+
+    private func prepareTradeDraft(for investment: Investment) {
+        tradeErrorText = nil
+        tradeQuantityText = "1"
+        if let lastPrice = investment.lastKnownUnitPrice {
+            tradePriceText = String(lastPrice)
+        } else {
+            tradePriceText = ""
+        }
+        tradePriceMode = .market
+    }
+
+    private func currentTradeUnitPrice(for investment: Investment) -> Double {
+        switch tradePriceMode {
+        case .market:
+            return investment.lastKnownUnitPrice ?? 0
+        case .custom:
+            return AmountInputFormatter.parse(tradePriceText) ?? 0
+        }
+    }
+
+    private func canSubmitTrade(for investment: Investment) -> Bool {
+        let quantity = AmountInputFormatter.parse(tradeQuantityText) ?? 0
+        let unitPrice = currentTradeUnitPrice(for: investment)
+        guard quantity > 0, unitPrice > 0 else {
+            return false
+        }
+        if tradeMode == .sell {
+            let available = investment.marketQuantity ?? 0
+            return quantity <= available
+        }
+        return true
+    }
+
+    private func submitTrade(for investment: Investment) {
+        let quantity = AmountInputFormatter.parse(tradeQuantityText) ?? 0
+        let unitPrice = currentTradeUnitPrice(for: investment)
+        guard quantity > 0, unitPrice > 0 else {
+            tradeErrorText = "Проверьте количество и цену."
+            return
+        }
+
+        if tradeMode == .sell, quantity > (investment.marketQuantity ?? 0) {
+            tradeErrorText = "Недостаточно количества для продажи."
+            return
+        }
+
+        tradeErrorText = nil
+        if let account = initialAccount {
+            financeViewModel.handle(
+                .executeInvestmentOrder(
+                    account: account,
+                    side: tradeMode,
+                    quantity: quantity,
+                    unitPrice: unitPrice
+                )
+            )
+        }
+        showTradeSheet = false
+    }
+
+    private func resolvedInvestmentCurrency(_ investment: Investment) -> String {
+        let code = investment.currency
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+        if !code.isEmpty { return code }
+        if let marketCurrency = investment.marketCurrency?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !marketCurrency.isEmpty {
+            return marketCurrency.uppercased()
+        }
+        return viewModel.state.displayCurrency
+    }
+
+    private func money(_ value: Double, currency: String) -> String {
+        let number = marketNumber(value, digits: 2)
+        return "\(number) \(currency)"
+    }
+
+    private func marketQuantityTitle(for investment: Investment) -> String {
+        investment.category == .crypto ? "Количество монет" : "Количество"
+    }
+
+    private func marketQuantityUnit(for investment: Investment) -> String {
+        investment.category == .crypto ? "мон." : "шт"
+    }
+
+    private func marketNumber(_ value: Double, digits: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.groupingSeparator = " "
+        formatter.usesGroupingSeparator = true
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = digits
+        return formatter.string(from: NSNumber(value: value)) ?? "0"
+    }
+
+    private func syncMarketDraft(from investment: Investment) {
+        editQuantityText = rawNumberString(investment.marketQuantity ?? 0, maxFractionDigits: 8)
+        editUnitPriceText = rawNumberString(investment.lastKnownUnitPrice ?? 0, maxFractionDigits: 8)
+        editPurchasePriceText = rawNumberString(investment.averagePurchaseUnitPrice ?? 0, maxFractionDigits: 8)
+    }
+
+    private func canFinishInlineMarketEdit(for investment: Investment) -> Bool {
+        guard isInlineMarketEdit else {
+            return true
+        }
+        guard let quantity = AmountInputFormatter.parse(editQuantityText),
+              let unitPrice = AmountInputFormatter.parse(editUnitPriceText),
+              quantity > 0, unitPrice > 0 else {
+            return false
+        }
+
+        if let purchasePrice = AmountInputFormatter.parse(editPurchasePriceText), purchasePrice < 0 {
+            return false
+        }
+
+        return true
+    }
+
+    private func finishInlineMarketEdit(for investment: Investment) {
+        guard canFinishInlineMarketEdit(for: investment),
+              let quantity = AmountInputFormatter.parse(editQuantityText),
+              let unitPrice = AmountInputFormatter.parse(editUnitPriceText) else {
+            return
+        }
+
+        let purchasePrice = AmountInputFormatter.parse(editPurchasePriceText)
+        if let account = initialAccount {
+            financeViewModel.handle(
+                .updateMarketInvestmentDetails(
+                    account: account,
+                    quantity: quantity,
+                    unitPrice: unitPrice,
+                    purchaseUnitPrice: purchasePrice
+                )
+            )
+        }
+        isInlineMarketEdit = false
+    }
+
+    private func rawNumberString(_ value: Double, maxFractionDigits: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.decimalSeparator = "."
+        formatter.usesGroupingSeparator = false
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = maxFractionDigits
+        return formatter.string(from: NSNumber(value: value)) ?? "0"
     }
 
     // MARK: - Chart Card
@@ -1148,6 +1813,79 @@ private struct FinanceDynamicsContentView: View {
                 .fill(Color.white.opacity(0.05))
         )
         .padding(.horizontal, 16)
+    }
+}
+
+private struct SwipeConfirmButton: View {
+    let title: String
+    let accentColor: Color
+    let isEnabled: Bool
+    let onConfirmed: () -> Void
+
+    @State private var dragOffset: CGFloat = 0
+
+    private let knobSize: CGFloat = 52
+    private let height: CGFloat = 64
+
+    var body: some View {
+        GeometryReader { proxy in
+            let width = proxy.size.width
+            let maxOffset = max(0, width - knobSize - 10)
+            let progress = max(0, min(1, dragOffset / maxOffset))
+
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: height / 2, style: .continuous)
+                    .fill(Color.white.opacity(0.08))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: height / 2, style: .continuous)
+                            .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                    )
+
+                Rectangle()
+                    .fill(accentColor.opacity(0.35))
+                    .frame(width: max(knobSize, dragOffset + knobSize * 0.65))
+                    .clipShape(RoundedRectangle(cornerRadius: height / 2, style: .continuous))
+
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary.opacity(isEnabled ? 0.95 : 0.5))
+                    .frame(maxWidth: .infinity)
+
+                Circle()
+                    .fill(accentColor)
+                    .frame(width: knobSize, height: knobSize)
+                    .overlay(
+                        Image(systemName: progress > 0.93 ? "checkmark" : "chevron.right.2")
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(.black)
+                    )
+                    .offset(x: 5 + dragOffset)
+            }
+            .frame(height: height)
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        guard isEnabled else { return }
+                        dragOffset = min(max(0, value.translation.width), maxOffset)
+                    }
+                    .onEnded { _ in
+                        guard isEnabled else {
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                                dragOffset = 0
+                            }
+                            return
+                        }
+                        if progress > 0.93 {
+                            onConfirmed()
+                        }
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                            dragOffset = 0
+                        }
+                    }
+            )
+        }
+        .frame(height: height)
+        .opacity(isEnabled ? 1.0 : 0.55)
     }
 }
 

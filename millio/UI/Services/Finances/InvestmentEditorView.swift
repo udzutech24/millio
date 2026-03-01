@@ -30,6 +30,7 @@ struct InvestmentEditorView: View {
     @State private var marketExchange: String?
     @State private var marketCurrency: String?
     @State private var marketQuantityText: String = ""
+    @State private var purchaseUnitPriceText: String = ""
     @State private var lastKnownUnitPrice: Double?
     @State private var lastKnownPriceUpdatedAt: Date?
     @State private var marketProviderRaw: String?
@@ -155,6 +156,7 @@ struct InvestmentEditorView: View {
                     marketExchange = editing.marketExchange
                     marketCurrency = editing.marketCurrency
                     marketQuantityText = editing.marketQuantity.map { String($0) } ?? ""
+                    purchaseUnitPriceText = editing.averagePurchaseUnitPrice.map { String($0) } ?? ""
                     lastKnownUnitPrice = editing.lastKnownUnitPrice
                     lastKnownPriceUpdatedAt = editing.lastKnownPriceUpdatedAt
                     marketProviderRaw = editing.marketProviderRaw
@@ -338,6 +340,26 @@ struct InvestmentEditorView: View {
                         .foregroundStyle(AppColors.textTertiary)
                 }
                 .disabled(marketSymbol.isEmpty || isRefreshingPrice)
+            }
+            .padding(.vertical, 12)
+            .padding(.horizontal, 16)
+
+            FinancesRowDivider()
+
+            HStack {
+                Text("Цена покупки")
+                    .foregroundStyle(AppColors.textPrimary)
+                Spacer()
+                TextField("0", text: Binding(
+                    get: { formatNumberForDisplay(purchaseUnitPriceText) },
+                    set: { newValue in
+                        purchaseUnitPriceText = AmountInputFormatter.sanitize(newValue)
+                    }
+                ))
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                .foregroundStyle(AppColors.textPrimary)
+                .frame(maxWidth: 150)
             }
             .padding(.vertical, 12)
             .padding(.horizontal, 16)
@@ -535,6 +557,9 @@ struct InvestmentEditorView: View {
                     lastKnownUnitPrice = latestPrice
                     lastKnownPriceUpdatedAt = latestPrice == nil ? nil : Date()
                     marketProviderRaw = latestPrice == nil ? nil : "twelvedata"
+                    if let latestPrice, purchaseUnitPriceText.isEmpty {
+                        purchaseUnitPriceText = String(latestPrice)
+                    }
                     if let positionTotal {
                         amountText = String(positionTotal)
                     }
@@ -565,6 +590,7 @@ struct InvestmentEditorView: View {
         marketExchange = nil
         marketCurrency = nil
         marketQuantityText = ""
+        purchaseUnitPriceText = ""
         lastKnownUnitPrice = nil
         lastKnownPriceUpdatedAt = nil
         marketProviderRaw = nil
@@ -623,6 +649,7 @@ struct InvestmentEditorView: View {
                 currency: marketCurrency ?? selectedCurrency,
                 quantity: quantity,
                 unitPrice: lastKnownUnitPrice,
+                purchaseUnitPrice: parseNumber(purchaseUnitPriceText),
                 priceUpdatedAt: lastKnownPriceUpdatedAt,
                 providerRaw: marketProviderRaw
             )
