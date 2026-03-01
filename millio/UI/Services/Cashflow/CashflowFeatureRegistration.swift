@@ -14,10 +14,15 @@ struct CashflowFeatureRegistration {
         // Регистрируем модели
         ModelTypeRegistry.shared.register(CashflowTransaction.self, typeName: "CashflowTransaction")
         ModelTypeRegistry.shared.register(CashflowCustomCategory.self, typeName: "CashflowCustomCategory")
+        ModelTypeRegistry.shared.register(
+            CashflowSystemCategoryOverride.self,
+            typeName: "CashflowSystemCategoryOverride"
+        )
         
         // Регистрируем импортеры
         ModelTypeRegistry.shared.registerImporter(CashflowTransactionImporter.self)
         ModelTypeRegistry.shared.registerImporter(CashflowCustomCategoryImporter.self)
+        ModelTypeRegistry.shared.registerImporter(CashflowSystemCategoryOverrideImporter.self)
     }
 }
 
@@ -115,5 +120,50 @@ struct CashflowCustomCategoryImporter: ModelImporter {
         category.updatedAt = Date(timeIntervalSince1970: updatedAt)
 
         context.insert(category)
+    }
+}
+
+struct CashflowSystemCategoryOverrideImporter: ModelImporter {
+    static func importType() -> String {
+        "CashflowSystemCategoryOverride"
+    }
+
+    static var importPriority: Int { 21 }
+
+    static func `import`(from data: [String : Any], context: ModelContext) throws {
+        guard let overrideID = data["overrideID"] as? String,
+              let kindRaw = data["kindRaw"] as? String,
+              let categoryRaw = data["categoryRaw"] as? String,
+              let name = data["name"] as? String,
+              let isHidden = data["isHidden"] as? Bool,
+              let createdAt = data["createdAt"] as? TimeInterval,
+              let updatedAt = data["updatedAt"] as? TimeInterval else {
+            throw AppError.backupCorrupted
+        }
+
+        let kind = CashflowCategoryKind(rawValue: kindRaw) ?? .expense
+        let icon = CashflowCustomCategory.normalizeIcon(
+            (data["icon"] as? String) ?? CashflowCustomCategory.defaultIcon
+        )
+        let normalizedName = (data["normalizedName"] as? String) ?? CashflowCustomCategory.normalize(name)
+
+        let override = CashflowSystemCategoryOverride(
+            kind: kind,
+            categoryRaw: categoryRaw,
+            name: name,
+            icon: icon,
+            isHidden: isHidden
+        )
+        override.overrideID = overrideID
+        override.kindRaw = kind.rawValue
+        override.categoryRaw = categoryRaw
+        override.name = name
+        override.normalizedName = normalizedName
+        override.icon = icon
+        override.isHidden = isHidden
+        override.createdAt = Date(timeIntervalSince1970: createdAt)
+        override.updatedAt = Date(timeIntervalSince1970: updatedAt)
+
+        context.insert(override)
     }
 }

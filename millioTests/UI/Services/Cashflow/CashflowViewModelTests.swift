@@ -18,6 +18,7 @@ struct CashflowViewModelTests {
             Card.self,
             CashflowTransaction.self,
             CashflowCustomCategory.self,
+            CashflowSystemCategoryOverride.self,
             HistoricalRate.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
@@ -28,6 +29,7 @@ struct CashflowViewModelTests {
         let context = Self.sharedContainer.mainContext
         try context.deleteAll(CashflowTransaction.self)
         try context.deleteAll(CashflowCustomCategory.self)
+        try context.deleteAll(CashflowSystemCategoryOverride.self)
         try context.deleteAll(HistoricalRate.self)
         try context.deleteAll(Card.self)
         try context.save()
@@ -239,6 +241,70 @@ struct CashflowViewModelTests {
 
         #expect(abs(marchTotal - 400) < 0.01)
         #expect(abs(februaryTotal - 70) < 0.01)
+    }
+
+    @Test("Разбивка по категориям за месяц учитывает только выбранный тип и месяц")
+    func testMonthlyCategoryTotalsByKindAndMonth() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let marchDate = calendar.date(from: DateComponents(year: 2026, month: 3, day: 10)) ?? Date()
+
+        let salaryA = CashflowTransaction(
+            transactionType: .income,
+            amount: 300,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 1)) ?? marchDate,
+            cardID: nil,
+            incomeCategoryRaw: IncomeCategory.salary.rawValue
+        )
+        let salaryB = CashflowTransaction(
+            transactionType: .income,
+            amount: 100,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 20)) ?? marchDate,
+            cardID: nil,
+            incomeCategoryRaw: IncomeCategory.salary.rawValue
+        )
+        let gift = CashflowTransaction(
+            transactionType: .income,
+            amount: 250,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 15)) ?? marchDate,
+            cardID: nil,
+            incomeCategoryRaw: IncomeCategory.gift.rawValue
+        )
+        let februaryIncome = CashflowTransaction(
+            transactionType: .income,
+            amount: 999,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 2, day: 15)) ?? marchDate,
+            cardID: nil,
+            incomeCategoryRaw: IncomeCategory.salary.rawValue
+        )
+        let marchExpense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 500,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 12)) ?? marchDate,
+            cardID: nil,
+            expenseCategoryRaw: ExpenseCategory.groceries.rawValue
+        )
+
+        modelContext.insert(salaryA)
+        modelContext.insert(salaryB)
+        modelContext.insert(gift)
+        modelContext.insert(februaryIncome)
+        modelContext.insert(marchExpense)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+        let incomeTotals = await viewModel.monthlyCategoryTotals(for: .income, month: marchDate, in: "RUB")
+        let expenseTotals = await viewModel.monthlyCategoryTotals(for: .expense, month: marchDate, in: "RUB")
+
+        #expect(abs((incomeTotals[IncomeCategory.salary.rawValue] ?? 0) - 400) < 0.01)
+        #expect(abs((incomeTotals[IncomeCategory.gift.rawValue] ?? 0) - 250) < 0.01)
+        #expect(incomeTotals[ExpenseCategory.groceries.rawValue] == nil)
+        #expect(abs((expenseTotals[ExpenseCategory.groceries.rawValue] ?? 0) - 500) < 0.01)
     }
 
     @Test("Сводка активов считает изменение стоимости по формуле и использует снапшот из Финансов")
@@ -480,6 +546,60 @@ struct CashflowViewModelTests {
         #expect(resolved.isCustom)
     }
 
+    @Test("Редактирование системной категории сохраняет новое имя и иконку")
+    func testRenameSystemCategoryUpdatesNameAndIcon() throws {
+        let modelContext = try createTestModelContext()
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+
+        let renamed = viewModel.renameCategory(
+            rawValue: ExpenseCategory.groceries.rawValue,
+            kind: .expense,
+            newName: "Супермаркет",
+            newIcon: "cart.fill"
+        )
+
+        #expect(renamed)
+        let resolved = viewModel.categoryOption(for: ExpenseCategory.groceries.rawValue, kind: .expense)
+        #expect(resolved.displayName == "Супермаркет")
+        #expect(resolved.icon == "cart.fill")
+        #expect(!resolved.isCustom)
+    }
+
+    @Test("Удаление системной категории скрывает ее и мигрирует транзакции в Другое")
+    func testDeleteSystemCategoryHidesAndMigratesTransactions() async throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 2, day: 13)) ?? Date()
+        let viewModel = CashflowViewModel(
+            modelContext: modelContext,
+            now: { fixedNow },
+            assetsSnapshotProvider: { _, _, _ in
+                (start: 0, end: 0)
+            }
+        )
+
+        let transaction = CashflowTransaction(
+            transactionType: .expense,
+            amount: 750,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: nil,
+            expenseCategoryRaw: ExpenseCategory.shopping.rawValue
+        )
+        modelContext.insert(transaction)
+        try modelContext.save()
+
+        viewModel.handle(.loadTransactions)
+        #expect(viewModel.canDeleteCategory(rawValue: ExpenseCategory.shopping.rawValue, kind: .expense))
+        #expect(!viewModel.canDeleteCategory(rawValue: ExpenseCategory.other.rawValue, kind: .expense))
+
+        let deleted = viewModel.deleteCategory(rawValue: ExpenseCategory.shopping.rawValue, kind: .expense)
+        #expect(deleted)
+        #expect(transaction.expenseCategoryRaw == ExpenseCategory.other.rawValue)
+
+        let options = viewModel.categoryOptions(for: .expense)
+        #expect(!options.contains(where: { $0.rawValue == ExpenseCategory.shopping.rawValue }))
+    }
+
     @Test("Ежемесячный автоповтор создаёт пропущенные операции и не дублирует месяцы")
     func testMonthlyRecurringGeneratesMissingTransactions() async throws {
         let modelContext = try createTestModelContext()
@@ -509,8 +629,11 @@ struct CashflowViewModelTests {
         try modelContext.save()
 
         let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        // Стартовая загрузка и генерация происходят асинхронно — принудительно
+        // триггерим повторную загрузку, чтобы тест не флапал по таймингу.
+        viewModel.handle(.loadTransactions)
 
-        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+        try await waitUntil(timeoutNanoseconds: 5_000_000_000) {
             viewModel.state.transactions.count == 3
         }
 
@@ -543,8 +666,11 @@ struct CashflowViewModelTests {
         try modelContext.save()
 
         let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        // Стартовая загрузка и генерация происходят асинхронно — принудительно
+        // триггерим повторную загрузку, чтобы тест не флапал по таймингу.
+        viewModel.handle(.loadTransactions)
 
-        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+        try await waitUntil(timeoutNanoseconds: 5_000_000_000) {
             viewModel.state.transactions.count == 3
         }
 
@@ -689,6 +815,44 @@ struct CashflowViewModelTests {
         #expect(planned.map(\.amount) == [50, 70])
         #expect(planned.allSatisfy { $0.recurrenceRule == .none })
         #expect(planned.allSatisfy { $0.transactionType == .expense })
+    }
+
+    @Test("Удаление операции исключает ее из регулярных и запланированных списков")
+    func testDeleteTransactionRemovesItFromScheduledCollections() throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 10)) ?? Date()
+
+        let recurringIncome = CashflowTransaction(
+            transactionType: .income,
+            amount: 1200,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 1, day: 15)) ?? fixedNow,
+            incomeCategory: .salary,
+            recurrenceRule: .monthly,
+            recurrenceSeriesID: "series-income-delete"
+        )
+        let plannedExpense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 300,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 18)) ?? fixedNow,
+            expenseCategory: .shopping
+        )
+
+        modelContext.insert(recurringIncome)
+        modelContext.insert(plannedExpense)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        #expect(viewModel.recurringTemplates(for: .income, relativeTo: fixedNow).count == 1)
+        #expect(viewModel.plannedOneTimeTransactions(for: .expense, relativeTo: fixedNow).count == 1)
+
+        viewModel.handle(.deleteTransaction(recurringIncome))
+        viewModel.handle(.deleteTransaction(plannedExpense))
+
+        #expect(viewModel.recurringTemplates(for: .income, relativeTo: fixedNow).isEmpty)
+        #expect(viewModel.plannedOneTimeTransactions(for: .expense, relativeTo: fixedNow).isEmpty)
     }
 
     private func waitUntil(

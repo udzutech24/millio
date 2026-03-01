@@ -130,7 +130,6 @@ struct CashflowTransactionEditorView: View {
                     if showsRecurrenceSection && (selectedTransactionType == .income || selectedTransactionType == .expense) {
                         recurrenceSection
                     }
-                    cardSection
                     additionalSection
                 }
                 .padding(.top, 20)
@@ -357,7 +356,13 @@ struct CashflowTransactionEditorView: View {
                     .padding(.vertical, 12)
                     .padding(.horizontal, 16)
 
-                    FinancesRowDivider()
+                    if shouldShowCardSelectionInMainInfo {
+                        FinancesRowDivider()
+                        mainInfoCardRows
+                        FinancesRowDivider()
+                    } else {
+                        FinancesRowDivider()
+                    }
 
                     HStack {
                         Text("Валюта")
@@ -444,25 +449,12 @@ struct CashflowTransactionEditorView: View {
         }
     }
 
-    // MARK: - Карта
-
-    private var cardSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if selectedTransactionType == .transfer {
-                FinancesSectionHeader(title: "Перевод")
-            } else {
-                FinancesSectionHeader(title: "Карта")
-            }
-
-            FinancesGlassCard {
-                VStack(spacing: 0) {
-                    if selectedTransactionType == .income || selectedTransactionType == .expense {
-                        incomeExpenseCardContent
-                    } else if selectedTransactionType == .transfer {
-                        transferCardContent
-                    }
-                }
-            }
+    @ViewBuilder
+    private var mainInfoCardRows: some View {
+        if selectedTransactionType == .income || selectedTransactionType == .expense {
+            incomeExpenseCardContent
+        } else if selectedTransactionType == .transfer {
+            transferCardContent
         }
     }
 
@@ -638,6 +630,10 @@ struct CashflowTransactionEditorView: View {
 
     private var shouldShowSelectedCategorySummary: Bool {
         !showsCategorySection && (selectedTransactionType == .income || selectedTransactionType == .expense)
+    }
+
+    private var shouldShowCardSelectionInMainInfo: Bool {
+        Self.mainInfoRows(for: selectedTransactionType).contains(.fromCard)
     }
 
     private var selectedCategoryOption: CashflowCategoryOption {
@@ -838,6 +834,27 @@ struct CashflowTransactionEditorView: View {
     }
 }
 
+enum CashflowEditorMainInfoRow: Equatable {
+    case amount
+    case fromCard
+    case toCard
+    case currency
+    case date
+}
+
+extension CashflowTransactionEditorView {
+    static func mainInfoRows(for transactionType: CashflowTransactionType) -> [CashflowEditorMainInfoRow] {
+        switch transactionType {
+        case .income, .expense:
+            return [.amount, .fromCard, .currency, .date]
+        case .transfer:
+            return [.amount, .fromCard, .toCard, .currency, .date]
+        case .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
+            return [.amount, .currency, .date]
+        }
+    }
+}
+
 enum CashflowCategoryEditorMode {
     case create
     case edit(rawValue: String)
@@ -920,28 +937,22 @@ private struct CashflowCategorySelectionSheet: View {
                                                     .font(.system(size: 13, weight: .semibold))
                                                     .foregroundStyle(AppColors.textPrimary)
                                             }
-                                            if option.isCustom {
-                                                Menu {
-                                                    Button("Редактировать") {
-                                                        openEditSheet(for: option)
-                                                    }
-                                                    Button("Удалить", role: .destructive) {
-                                                        pendingDeleteRaw = option.rawValue
-                                                        showDeleteAlert = true
-                                                    }
-                                                } label: {
-                                                    Image(systemName: "ellipsis.circle")
-                                                        .font(.system(size: 16, weight: .semibold))
-                                                        .foregroundStyle(AppColors.textTertiary)
-                                                }
-                                                .buttonStyle(.plain)
-                                                .padding(.leading, 6)
-                                            }
                                         }
                                         .padding(.vertical, 10)
                                         .padding(.horizontal, 14)
                                     }
                                     .buttonStyle(.plain)
+                                    .contextMenu {
+                                        Button("Редактировать") {
+                                            openEditSheet(for: option)
+                                        }
+                                        if viewModel.canDeleteCategory(rawValue: option.rawValue, kind: kind) {
+                                            Button("Удалить", role: .destructive) {
+                                                pendingDeleteRaw = option.rawValue
+                                                showDeleteAlert = true
+                                            }
+                                        }
+                                    }
 
                                     if index < options.count - 1 {
                                         FinancesRowDivider()
@@ -996,7 +1007,7 @@ private struct CashflowCategorySelectionSheet: View {
                 }
                 Button("Удалить", role: .destructive) {
                     guard let raw = pendingDeleteRaw else { return }
-                    if viewModel.deleteCustomCategory(rawValue: raw, kind: kind), selectedRaw == raw {
+                    if viewModel.deleteCategory(rawValue: raw, kind: kind), selectedRaw == raw {
                         selectedRaw = fallbackRaw
                     }
                     pendingDeleteRaw = nil
@@ -1043,7 +1054,7 @@ private struct CashflowCategorySelectionSheet: View {
             }
 
         case .edit(let rawValue):
-            guard viewModel.renameCustomCategory(
+            guard viewModel.renameCategory(
                 rawValue: rawValue,
                 kind: kind,
                 newName: trimmed,

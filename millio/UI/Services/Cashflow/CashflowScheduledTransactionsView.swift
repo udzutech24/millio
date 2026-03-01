@@ -156,68 +156,85 @@ struct CashflowScheduledTransactionsView: View {
     }
 
     private var contentList: some View {
-        ScrollView {
-            LazyVStack(spacing: 10) {
-                ForEach(filteredTransactions) { transaction in
-                    Button {
-                        editingTransaction = transaction
-                    } label: {
-                        FinancesGlassCard(accentColor: kind.accentColor) {
-                            HStack(alignment: .top, spacing: 10) {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    HStack(spacing: 8) {
-                                        Image(systemName: icon(for: transaction))
-                                            .font(.system(size: 13, weight: .semibold))
-                                            .foregroundStyle(AppColors.textSecondary)
-                                        Text(title(for: transaction))
-                                            .font(.system(size: 15, weight: .semibold))
-                                            .foregroundStyle(AppColors.textPrimary)
-                                            .multilineTextAlignment(.leading)
-
-                                        if mode == .recurring {
-                                            Text("Ежемесячно")
-                                                .font(.system(size: 11, weight: .semibold))
-                                                .foregroundStyle(AppColors.textSecondary)
-                                                .padding(.horizontal, 8)
-                                                .padding(.vertical, 4)
-                                                .background(
-                                                    Capsule(style: .continuous)
-                                                        .fill(Color.white.opacity(0.08))
-                                                )
-                                        }
-                                    }
-
-                                    Text(subtitle(for: transaction))
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundStyle(AppColors.textSecondary)
-                                        .lineLimit(2)
-                                        .multilineTextAlignment(.leading)
-                                }
-
-                                Spacer(minLength: 8)
-
-                                Text(amountString(for: transaction))
-                                    .font(.system(size: 16, weight: .bold))
-                                    .foregroundStyle(AppColors.textPrimary)
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 12)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        Button("Редактировать") {
-                            editingTransaction = transaction
-                        }
-                        Button("Удалить", role: .destructive) {
-                            pendingDeleteTransaction = transaction
-                            showDeleteAlert = true
-                        }
-                    }
-                }
+        List {
+            ForEach(filteredTransactions) { transaction in
+                transactionRow(transaction)
+                    .listRowInsets(EdgeInsets(top: 5, leading: 0, bottom: 5, trailing: 0))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
             }
-            .padding(.vertical, 2)
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Color.clear)
+    }
+
+    private func transactionRow(_ transaction: CashflowTransaction) -> some View {
+        FinancesGlassCard(accentColor: kind.accentColor) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Image(systemName: icon(for: transaction))
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(AppColors.textSecondary)
+                        Text(title(for: transaction))
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .multilineTextAlignment(.leading)
+
+                        if mode == .recurring {
+                            Text("Ежемесячно")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(AppColors.textSecondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule(style: .continuous)
+                                        .fill(Color.white.opacity(0.08))
+                                )
+                        }
+                    }
+
+                    Text(subtitle(for: transaction))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+
+                Spacer(minLength: 8)
+
+                Text(amountString(for: transaction))
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(AppColors.textPrimary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            editingTransaction = transaction
+        }
+        .contextMenu {
+            Button("Редактировать") {
+                editingTransaction = transaction
+            }
+            Button("Удалить", role: .destructive) {
+                requestDelete(transaction)
+            }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                requestDelete(transaction)
+            } label: {
+                Label("Удалить", systemImage: "trash")
+            }
+        }
+    }
+
+    private func requestDelete(_ transaction: CashflowTransaction) {
+        pendingDeleteTransaction = transaction
+        showDeleteAlert = true
     }
 
     private func title(for transaction: CashflowTransaction) -> String {

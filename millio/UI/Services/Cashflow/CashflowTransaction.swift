@@ -143,6 +143,73 @@ enum CashflowCategoryKind: String, Codable, CaseIterable {
 }
 
 @Model
+final class CashflowSystemCategoryOverride: Persistable {
+    var overrideID: String = UUID().uuidString
+    var kindRaw: String = CashflowCategoryKind.expense.rawValue
+    var categoryRaw: String = ""
+    var name: String = ""
+    var normalizedName: String = ""
+    var icon: String = CashflowCustomCategory.defaultIcon
+    var isHidden: Bool = false
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+
+    var kind: CashflowCategoryKind {
+        get { CashflowCategoryKind(rawValue: kindRaw) ?? .expense }
+        set { kindRaw = newValue.rawValue }
+    }
+
+    init(
+        kind: CashflowCategoryKind,
+        categoryRaw: String,
+        name: String,
+        icon: String,
+        isHidden: Bool = false
+    ) {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.overrideID = UUID().uuidString
+        self.kindRaw = kind.rawValue
+        self.categoryRaw = categoryRaw
+        self.name = trimmedName
+        self.normalizedName = CashflowCustomCategory.normalize(trimmedName)
+        self.icon = CashflowCustomCategory.normalizeIcon(icon)
+        self.isHidden = isHidden
+        self.createdAt = Date()
+        self.updatedAt = Date()
+    }
+
+    func export() throws -> Data {
+        let dict: [String: Any] = [
+            "type": "CashflowSystemCategoryOverride",
+            "overrideID": overrideID,
+            "kindRaw": kindRaw,
+            "categoryRaw": categoryRaw,
+            "name": name,
+            "normalizedName": normalizedName,
+            "icon": icon,
+            "isHidden": isHidden,
+            "createdAt": createdAt.timeIntervalSince1970,
+            "updatedAt": updatedAt.timeIntervalSince1970
+        ]
+        return try JSONSerialization.data(withJSONObject: dict)
+    }
+
+    static func `import`(_ data: Data) throws {
+        guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              dict["overrideID"] as? String != nil,
+              dict["kindRaw"] as? String != nil,
+              dict["categoryRaw"] as? String != nil,
+              dict["name"] as? String != nil,
+              dict["icon"] as? String != nil,
+              dict["isHidden"] as? Bool != nil,
+              dict["createdAt"] as? TimeInterval != nil,
+              dict["updatedAt"] as? TimeInterval != nil else {
+            throw AppError.backupCorrupted
+        }
+    }
+}
+
+@Model
 final class CashflowCustomCategory: Persistable {
     static let defaultIcon = "tag.fill"
     static let allowedIcons: [String] = [
