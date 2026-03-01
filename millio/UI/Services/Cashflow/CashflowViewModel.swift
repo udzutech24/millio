@@ -51,6 +51,9 @@ struct CashflowState {
 
     /// Пользовательские категории операций
     var customCategories: [CashflowCustomCategory] = []
+
+    /// Переопределения системных категорий (rename/icon/hidden)
+    var systemCategoryOverrides: [CashflowSystemCategoryOverride] = []
     
     /// Период для графика
     var chartPeriod: ChartPeriod = .month
@@ -234,6 +237,7 @@ final class CashflowViewModel: ViewModelProtocol {
         loadCards()
         loadTransactions()
         loadCustomCategories()
+        loadSystemCategoryOverrides()
         loadAvailableCurrencies()
         subscribeToFinanceEvents()
     }
@@ -381,6 +385,13 @@ final class CashflowViewModel: ViewModelProtocol {
         state.customCategories = (try? modelContext.fetch(descriptor)) ?? []
     }
 
+    private func loadSystemCategoryOverrides() {
+        let descriptor = FetchDescriptor<CashflowSystemCategoryOverride>(
+            sortBy: [SortDescriptor(\.createdAt, order: .forward)]
+        )
+        state.systemCategoryOverrides = (try? modelContext.fetch(descriptor)) ?? []
+    }
+
     private func subscribeToFinanceEvents() {
         eventSubscriptionID = EventBus.shared.subscribe { [weak self] event in
             guard let self else { return }
@@ -393,6 +404,7 @@ final class CashflowViewModel: ViewModelProtocol {
                 self.loadTransactions()
                 self.loadCards()
                 self.loadCustomCategories()
+                self.loadSystemCategoryOverrides()
             default:
                 break
             }
@@ -757,6 +769,51 @@ final class CashflowViewModel: ViewModelProtocol {
     }
 
     @discardableResult
+    func renameCategory(
+        rawValue: String,
+        kind: CashflowCategoryKind,
+        newName: String,
+        newIcon: String? = nil
+    ) -> Bool {
+        if Self.customCategoryID(from: rawValue) != nil {
+            return renameCustomCategory(
+                rawValue: rawValue,
+                kind: kind,
+                newName: newName,
+                newIcon: newIcon
+            )
+        }
+        return renameSystemCategory(
+            rawValue: rawValue,
+            kind: kind,
+            newName: newName,
+            newIcon: newIcon
+        )
+    }
+
+    @discardableResult
+    func deleteCategory(rawValue: String, kind: CashflowCategoryKind) -> Bool {
+        if Self.customCategoryID(from: rawValue) != nil {
+            return deleteCustomCategory(rawValue: rawValue, kind: kind)
+        }
+        return deleteSystemCategory(rawValue: rawValue, kind: kind)
+    }
+
+    func canDeleteCategory(rawValue: String, kind: CashflowCategoryKind) -> Bool {
+        if Self.customCategoryID(from: rawValue) != nil {
+            return state.customCategories.contains {
+                Self.customRawValue(from: $0.categoryID) == rawValue && $0.kind == kind
+            }
+        }
+
+        let fallbackRaw = fallbackCategoryRaw(for: kind)
+        if rawValue == fallbackRaw {
+            return false
+        }
+        return baseSystemCategoryOption(for: rawValue, kind: kind) != nil
+    }
+
+    @discardableResult
     func renameCustomCategory(
         rawValue: String,
         kind: CashflowCategoryKind,
@@ -810,6 +867,86 @@ final class CashflowViewModel: ViewModelProtocol {
         let nowDate = Date()
         migrateTransactions(fromRaw: rawValue, toRaw: fallback.rawValue, kind: kind, nowDate: nowDate)
         modelContext.delete(sourceCategory)
+
+        return saveCategoriesAndTransactions()
+    }
+
+    @discardableResult
+    private func renameSystemCategory(
+        rawValue: String,
+        kind: CashflowCategoryKind,
+        newName: String,
+        newIcon: String? = nil
+    ) -> Bool {
+        guard let base = baseSystemCategoryOption(for: rawValue, kind: kind) else {
+            return false
+        }
+
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        let normalizedIcon = CashflowCustomCategory.normalizeIcon(newIcon ?? base.icon)
+        let nowDate = Date()
+
+        if let duplicateSystem = systemCategoryOptions(for: kind).first(where: {
+            $0.rawValue != rawValue && $0.displayName.caseInsensitiveCompare(trimmed) == .orderedSame
+        }) {
+            migrateTransactions(
+                fromRaw: rawValue,
+                toRaw: duplicateSystem.rawValue,
+                kind: kind,
+                nowDate: nowDate
+            )
+            setSystemCategoryOverride(
+                kind: kind,
+                categoryRaw: rawValue,
+                name: base.displayName,
+                icon: base.icon,
+                isHidden: true,
+                nowDate: nowDate
+            )
+            return saveCategoriesAndTransactions()
+        }
+
+        let isResetToBase = trimmed.caseInsensitiveCompare(base.displayName) == .orderedSame
+            && normalizedIcon == base.icon
+
+        if isResetToBase {
+            removeSystemCategoryOverride(kind: kind, categoryRaw: rawValue)
+        } else {
+            setSystemCategoryOverride(
+                kind: kind,
+                categoryRaw: rawValue,
+                name: trimmed,
+                icon: normalizedIcon,
+                isHidden: false,
+                nowDate: nowDate
+            )
+        }
+
+        return saveCategoriesAndTransactions()
+    }
+
+    @discardableResult
+    private func deleteSystemCategory(rawValue: String, kind: CashflowCategoryKind) -> Bool {
+        guard canDeleteCategory(rawValue: rawValue, kind: kind) else {
+            return false
+        }
+
+        guard let base = baseSystemCategoryOption(for: rawValue, kind: kind) else {
+            return false
+        }
+
+        let fallback = defaultCategoryOption(for: kind)
+        let nowDate = Date()
+        migrateTransactions(fromRaw: rawValue, toRaw: fallback.rawValue, kind: kind, nowDate: nowDate)
+        setSystemCategoryOverride(
+            kind: kind,
+            categoryRaw: rawValue,
+            name: base.displayName,
+            icon: base.icon,
+            isHidden: true,
+            nowDate: nowDate
+        )
 
         return saveCategoriesAndTransactions()
     }
@@ -1407,10 +1544,11 @@ final class CashflowViewModel: ViewModelProtocol {
         do {
             try modelContext.save()
             loadCustomCategories()
+            loadSystemCategoryOverrides()
             loadTransactions()
             return true
         } catch {
-            AppLogger.log(.error, category: "Cashflow", "Failed to save custom categories: \(error.localizedDescription)")
+            AppLogger.log(.error, category: "Cashflow", "Failed to save category changes: \(error.localizedDescription)")
             return false
         }
     }
@@ -1425,25 +1563,75 @@ final class CashflowViewModel: ViewModelProtocol {
     }
 
     private func defaultCategoryOption(for kind: CashflowCategoryKind) -> CashflowCategoryOption {
-        switch kind {
-        case .income:
-            return CashflowCategoryOption(
-                rawValue: IncomeCategory.other.rawValue,
-                displayName: IncomeCategory.other.displayName,
-                icon: IncomeCategory.other.icon,
-                isCustom: false
-            )
-        case .expense:
-            return CashflowCategoryOption(
-                rawValue: ExpenseCategory.other.rawValue,
-                displayName: ExpenseCategory.other.displayName,
-                icon: ExpenseCategory.other.icon,
-                isCustom: false
-            )
-        }
+        let fallbackRaw = fallbackCategoryRaw(for: kind)
+        return systemCategoryOption(for: fallbackRaw, kind: kind) ?? CashflowCategoryOption(
+            rawValue: fallbackRaw,
+            displayName: "Другое",
+            icon: "ellipsis.circle.fill",
+            isCustom: false
+        )
     }
 
     private func systemCategoryOption(for raw: String, kind: CashflowCategoryKind) -> CashflowCategoryOption? {
+        guard let base = baseSystemCategoryOption(for: raw, kind: kind) else {
+            return nil
+        }
+        if let override = systemCategoryOverride(for: raw, kind: kind) {
+            if override.isHidden {
+                return nil
+            }
+            return CashflowCategoryOption(
+                rawValue: raw,
+                displayName: override.name,
+                icon: override.icon,
+                isCustom: false
+            )
+        }
+        return base
+    }
+
+    private func systemCategoryOptions(for kind: CashflowCategoryKind) -> [CashflowCategoryOption] {
+        systemCategoryRaws(for: kind).compactMap { raw in
+            systemCategoryOption(for: raw, kind: kind)
+        }
+    }
+
+    private func customCategoryOptions(for kind: CashflowCategoryKind) -> [CashflowCategoryOption] {
+        state.customCategories
+            .filter { $0.kind == kind }
+            .map {
+                CashflowCategoryOption(
+                    rawValue: Self.customRawValue(from: $0.categoryID),
+                    displayName: $0.name,
+                    icon: $0.icon,
+                    isCustom: true
+                )
+            }
+    }
+
+    private func fallbackCategoryRaw(for kind: CashflowCategoryKind) -> String {
+        switch kind {
+        case .income: return IncomeCategory.other.rawValue
+        case .expense: return ExpenseCategory.other.rawValue
+        }
+    }
+
+    private func systemCategoryRaws(for kind: CashflowCategoryKind) -> [String] {
+        switch kind {
+        case .income:
+            return IncomeCategory.allCases.map(\.rawValue)
+        case .expense:
+            return ExpenseCategory.allCases.map(\.rawValue)
+        }
+    }
+
+    private func systemCategoryOverride(for raw: String, kind: CashflowCategoryKind) -> CashflowSystemCategoryOverride? {
+        state.systemCategoryOverrides.first {
+            $0.kind == kind && $0.categoryRaw == raw
+        }
+    }
+
+    private func baseSystemCategoryOption(for raw: String, kind: CashflowCategoryKind) -> CashflowCategoryOption? {
         switch kind {
         case .income:
             guard let category = IncomeCategory(rawValue: raw) else { return nil }
@@ -1464,39 +1652,41 @@ final class CashflowViewModel: ViewModelProtocol {
         }
     }
 
-    private func systemCategoryOptions(for kind: CashflowCategoryKind) -> [CashflowCategoryOption] {
-        switch kind {
-        case .income:
-            return IncomeCategory.allCases.map {
-                CashflowCategoryOption(
-                    rawValue: $0.rawValue,
-                    displayName: $0.displayName,
-                    icon: $0.icon,
-                    isCustom: false
-                )
-            }
-        case .expense:
-            return ExpenseCategory.allCases.map {
-                CashflowCategoryOption(
-                    rawValue: $0.rawValue,
-                    displayName: $0.displayName,
-                    icon: $0.icon,
-                    isCustom: false
-                )
-            }
+    private func setSystemCategoryOverride(
+        kind: CashflowCategoryKind,
+        categoryRaw: String,
+        name: String,
+        icon: String,
+        isHidden: Bool,
+        nowDate: Date
+    ) {
+        let normalizedName = CashflowCustomCategory.normalize(name)
+        let normalizedIcon = CashflowCustomCategory.normalizeIcon(icon)
+
+        if let existing = systemCategoryOverride(for: categoryRaw, kind: kind) {
+            existing.name = name
+            existing.normalizedName = normalizedName
+            existing.icon = normalizedIcon
+            existing.isHidden = isHidden
+            existing.updatedAt = nowDate
+            return
         }
+
+        let newOverride = CashflowSystemCategoryOverride(
+            kind: kind,
+            categoryRaw: categoryRaw,
+            name: name,
+            icon: normalizedIcon,
+            isHidden: isHidden
+        )
+        newOverride.updatedAt = nowDate
+        modelContext.insert(newOverride)
     }
 
-    private func customCategoryOptions(for kind: CashflowCategoryKind) -> [CashflowCategoryOption] {
-        state.customCategories
-            .filter { $0.kind == kind }
-            .map {
-                CashflowCategoryOption(
-                    rawValue: Self.customRawValue(from: $0.categoryID),
-                    displayName: $0.name,
-                    icon: $0.icon,
-                    isCustom: true
-                )
-            }
+    private func removeSystemCategoryOverride(kind: CashflowCategoryKind, categoryRaw: String) {
+        guard let existing = systemCategoryOverride(for: categoryRaw, kind: kind) else {
+            return
+        }
+        modelContext.delete(existing)
     }
 }

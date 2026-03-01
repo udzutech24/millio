@@ -920,23 +920,23 @@ private struct CashflowCategorySelectionSheet: View {
                                                     .font(.system(size: 13, weight: .semibold))
                                                     .foregroundStyle(AppColors.textPrimary)
                                             }
-                                            if option.isCustom {
-                                                Menu {
-                                                    Button("Редактировать") {
-                                                        openEditSheet(for: option)
-                                                    }
+                                            Menu {
+                                                Button("Редактировать") {
+                                                    openEditSheet(for: option)
+                                                }
+                                                if viewModel.canDeleteCategory(rawValue: option.rawValue, kind: kind) {
                                                     Button("Удалить", role: .destructive) {
                                                         pendingDeleteRaw = option.rawValue
                                                         showDeleteAlert = true
                                                     }
-                                                } label: {
-                                                    Image(systemName: "ellipsis.circle")
-                                                        .font(.system(size: 16, weight: .semibold))
-                                                        .foregroundStyle(AppColors.textTertiary)
                                                 }
-                                                .buttonStyle(.plain)
-                                                .padding(.leading, 6)
+                                            } label: {
+                                                Image(systemName: "ellipsis.circle")
+                                                    .font(.system(size: 16, weight: .semibold))
+                                                    .foregroundStyle(AppColors.textTertiary)
                                             }
+                                            .buttonStyle(.plain)
+                                            .padding(.leading, 6)
                                         }
                                         .padding(.vertical, 10)
                                         .padding(.horizontal, 14)
@@ -996,7 +996,7 @@ private struct CashflowCategorySelectionSheet: View {
                 }
                 Button("Удалить", role: .destructive) {
                     guard let raw = pendingDeleteRaw else { return }
-                    if viewModel.deleteCustomCategory(rawValue: raw, kind: kind), selectedRaw == raw {
+                    if viewModel.deleteCategory(rawValue: raw, kind: kind), selectedRaw == raw {
                         selectedRaw = fallbackRaw
                     }
                     pendingDeleteRaw = nil
@@ -1043,7 +1043,7 @@ private struct CashflowCategorySelectionSheet: View {
             }
 
         case .edit(let rawValue):
-            guard viewModel.renameCustomCategory(
+            guard viewModel.renameCategory(
                 rawValue: rawValue,
                 kind: kind,
                 newName: trimmed,

@@ -18,6 +18,7 @@ struct CashflowViewModelTests {
             Card.self,
             CashflowTransaction.self,
             CashflowCustomCategory.self,
+            CashflowSystemCategoryOverride.self,
             HistoricalRate.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
@@ -28,6 +29,7 @@ struct CashflowViewModelTests {
         let context = Self.sharedContainer.mainContext
         try context.deleteAll(CashflowTransaction.self)
         try context.deleteAll(CashflowCustomCategory.self)
+        try context.deleteAll(CashflowSystemCategoryOverride.self)
         try context.deleteAll(HistoricalRate.self)
         try context.deleteAll(Card.self)
         try context.save()
@@ -542,6 +544,60 @@ struct CashflowViewModelTests {
         #expect(resolved.displayName == "Фриланс проекты")
         #expect(resolved.icon == "laptopcomputer")
         #expect(resolved.isCustom)
+    }
+
+    @Test("Редактирование системной категории сохраняет новое имя и иконку")
+    func testRenameSystemCategoryUpdatesNameAndIcon() throws {
+        let modelContext = try createTestModelContext()
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+
+        let renamed = viewModel.renameCategory(
+            rawValue: ExpenseCategory.groceries.rawValue,
+            kind: .expense,
+            newName: "Супермаркет",
+            newIcon: "cart.fill"
+        )
+
+        #expect(renamed)
+        let resolved = viewModel.categoryOption(for: ExpenseCategory.groceries.rawValue, kind: .expense)
+        #expect(resolved.displayName == "Супермаркет")
+        #expect(resolved.icon == "cart.fill")
+        #expect(!resolved.isCustom)
+    }
+
+    @Test("Удаление системной категории скрывает ее и мигрирует транзакции в Другое")
+    func testDeleteSystemCategoryHidesAndMigratesTransactions() async throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 2, day: 13)) ?? Date()
+        let viewModel = CashflowViewModel(
+            modelContext: modelContext,
+            now: { fixedNow },
+            assetsSnapshotProvider: { _, _, _ in
+                (start: 0, end: 0)
+            }
+        )
+
+        let transaction = CashflowTransaction(
+            transactionType: .expense,
+            amount: 750,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: nil,
+            expenseCategoryRaw: ExpenseCategory.shopping.rawValue
+        )
+        modelContext.insert(transaction)
+        try modelContext.save()
+
+        viewModel.handle(.loadTransactions)
+        #expect(viewModel.canDeleteCategory(rawValue: ExpenseCategory.shopping.rawValue, kind: .expense))
+        #expect(!viewModel.canDeleteCategory(rawValue: ExpenseCategory.other.rawValue, kind: .expense))
+
+        let deleted = viewModel.deleteCategory(rawValue: ExpenseCategory.shopping.rawValue, kind: .expense)
+        #expect(deleted)
+        #expect(transaction.expenseCategoryRaw == ExpenseCategory.other.rawValue)
+
+        let options = viewModel.categoryOptions(for: .expense)
+        #expect(!options.contains(where: { $0.rawValue == ExpenseCategory.shopping.rawValue }))
     }
 
     @Test("Ежемесячный автоповтор создаёт пропущенные операции и не дублирует месяцы")

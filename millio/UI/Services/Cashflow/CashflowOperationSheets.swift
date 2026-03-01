@@ -152,7 +152,7 @@ private struct CashflowCategoryTransactionSheet: View {
                 }
                 Button("Удалить", role: .destructive) {
                     guard let raw = pendingDeleteCategoryRaw else { return }
-                    if viewModel.deleteCustomCategory(rawValue: raw, kind: kind.categoryKind),
+                    if viewModel.deleteCategory(rawValue: raw, kind: kind.categoryKind),
                        selectedCategory?.rawValue == raw {
                         selectedCategory = nil
                     }
@@ -370,23 +370,23 @@ private struct CashflowCategoryTransactionSheet: View {
                     }
                     .buttonStyle(.plain)
 
-                    if option.isCustom {
-                        Menu {
-                            Button("Редактировать") {
-                                openCategoryEditor(for: option)
-                            }
+                    Menu {
+                        Button("Редактировать") {
+                            openCategoryEditor(for: option)
+                        }
+                        if viewModel.canDeleteCategory(rawValue: option.rawValue, kind: kind.categoryKind) {
                             Button("Удалить", role: .destructive) {
                                 pendingDeleteCategoryRaw = option.rawValue
                                 showDeleteCategoryAlert = true
                             }
-                        } label: {
-                            Image(systemName: "ellipsis.circle.fill")
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundStyle(AppColors.textSecondary)
-                                .padding(8)
                         }
-                        .buttonStyle(.plain)
+                    } label: {
+                        Image(systemName: "ellipsis.circle.fill")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(AppColors.textSecondary)
+                            .padding(8)
                     }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -521,7 +521,7 @@ private struct CashflowCategoryTransactionSheet: View {
                 searchText = ""
             }
         case .edit(let rawValue):
-            guard viewModel.renameCustomCategory(
+            guard viewModel.renameCategory(
                 rawValue: rawValue,
                 kind: kind.categoryKind,
                 newName: trimmedName,
