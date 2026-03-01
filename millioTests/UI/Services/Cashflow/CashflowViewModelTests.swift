@@ -189,6 +189,58 @@ struct CashflowViewModelTests {
         #expect(abs(januaryTotal - 100) < 0.01)
     }
 
+    @Test("Итог расхода за месяц учитывает только расходы выбранного месяца")
+    func testMonthlyExpenseTotalUsesOnlySelectedMonthExpense() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let marchDate = calendar.date(from: DateComponents(year: 2026, month: 3, day: 10)) ?? Date()
+
+        let expenseMarchA = CashflowTransaction(
+            transactionType: .expense,
+            amount: 150,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 5)) ?? marchDate,
+            cardID: nil
+        )
+        let expenseMarchB = CashflowTransaction(
+            transactionType: .expense,
+            amount: 250,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 31)) ?? marchDate,
+            cardID: nil
+        )
+        let expenseFebruary = CashflowTransaction(
+            transactionType: .expense,
+            amount: 70,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 2, day: 20)) ?? marchDate,
+            cardID: nil
+        )
+        let incomeMarch = CashflowTransaction(
+            transactionType: .income,
+            amount: 500,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 15)) ?? marchDate,
+            cardID: nil
+        )
+
+        modelContext.insert(expenseMarchA)
+        modelContext.insert(expenseMarchB)
+        modelContext.insert(expenseFebruary)
+        modelContext.insert(incomeMarch)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+        let marchTotal = await viewModel.monthlyExpenseTotal(for: marchDate, in: "RUB")
+        let februaryTotal = await viewModel.monthlyExpenseTotal(
+            for: calendar.date(from: DateComponents(year: 2026, month: 2, day: 1)) ?? marchDate,
+            in: "RUB"
+        )
+
+        #expect(abs(marchTotal - 400) < 0.01)
+        #expect(abs(februaryTotal - 70) < 0.01)
+    }
+
     @Test("Сводка активов считает изменение стоимости по формуле и использует снапшот из Финансов")
     func testAssetsBreakdownFormula() async throws {
         let modelContext = try createTestModelContext()

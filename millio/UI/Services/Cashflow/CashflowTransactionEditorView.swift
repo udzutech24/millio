@@ -20,6 +20,7 @@ struct CashflowTransactionEditorView: View {
     let showsDismissButton: Bool
     let customNavigationTitle: String?
     let preselectedIncomeCategoryRaw: String?
+    let preselectedExpenseCategoryRaw: String?
     let onSave: (() -> Void)?
 
     @State private var selectedTransactionType: CashflowTransactionType
@@ -51,6 +52,7 @@ struct CashflowTransactionEditorView: View {
         showsDismissButton: Bool = true,
         customNavigationTitle: String? = nil,
         preselectedIncomeCategoryRaw: String? = nil,
+        preselectedExpenseCategoryRaw: String? = nil,
         onSave: (() -> Void)? = nil
     ) {
         self.viewModel = viewModel
@@ -62,6 +64,7 @@ struct CashflowTransactionEditorView: View {
         self.showsDismissButton = showsDismissButton
         self.customNavigationTitle = customNavigationTitle
         self.preselectedIncomeCategoryRaw = preselectedIncomeCategoryRaw
+        self.preselectedExpenseCategoryRaw = preselectedExpenseCategoryRaw
         self.onSave = onSave
 
         if let transaction = transaction {
@@ -80,7 +83,7 @@ struct CashflowTransactionEditorView: View {
             if type == .income {
                 _selectedIncomeCategoryRaw = State(initialValue: preselectedIncomeCategoryRaw ?? IncomeCategory.salary.rawValue)
             } else if type == .expense {
-                _selectedExpenseCategoryRaw = State(initialValue: ExpenseCategory.groceries.rawValue)
+                _selectedExpenseCategoryRaw = State(initialValue: preselectedExpenseCategoryRaw ?? ExpenseCategory.groceries.rawValue)
             }
             _recurrenceRule = State(initialValue: .none)
         } else {
@@ -174,7 +177,7 @@ struct CashflowTransactionEditorView: View {
             if editingTransaction == nil,
                selectedTransactionType == .expense,
                selectedExpenseCategoryRaw == nil {
-                selectedExpenseCategoryRaw = ExpenseCategory.groceries.rawValue
+                selectedExpenseCategoryRaw = preselectedExpenseCategoryRaw ?? ExpenseCategory.groceries.rawValue
             }
             validateAvailableBalance()
         }

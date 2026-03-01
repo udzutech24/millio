@@ -516,6 +516,18 @@ final class CashflowViewModel: ViewModelProtocol {
     }
 
     func monthlyIncomeTotal(for month: Date, in currency: String? = nil) async -> Double {
+        await monthlyTotal(for: .income, month: month, in: currency)
+    }
+
+    func monthlyExpenseTotal(for month: Date, in currency: String? = nil) async -> Double {
+        await monthlyTotal(for: .expense, month: month, in: currency)
+    }
+
+    private func monthlyTotal(
+        for type: CashflowTransactionType,
+        month: Date,
+        in currency: String? = nil
+    ) async -> Double {
         let calendar = Calendar.current
         let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: month)) ?? month
         let monthEnd = calendar.date(byAdding: DateComponents(month: 1, second: -1), to: monthStart) ?? monthStart
@@ -526,7 +538,7 @@ final class CashflowViewModel: ViewModelProtocol {
 
         var total: Double = 0
         for transaction in state.transactions {
-            guard transaction.transactionType == .income,
+            guard transaction.transactionType == type,
                   transaction.transactionDate >= monthStart,
                   transaction.transactionDate <= monthEnd else {
                 continue

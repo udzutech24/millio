@@ -9,13 +9,31 @@ import SwiftUI
 
 struct CashflowIncomeTransactionSheet: View {
     @ObservedObject var viewModel: CashflowViewModel
+
+    var body: some View {
+        CashflowCategoryTransactionSheet(viewModel: viewModel, kind: .income)
+    }
+}
+
+struct CashflowExpenseTransactionSheet: View {
+    @ObservedObject var viewModel: CashflowViewModel
+
+    var body: some View {
+        CashflowCategoryTransactionSheet(viewModel: viewModel, kind: .expense)
+    }
+}
+
+private struct CashflowCategoryTransactionSheet: View {
+    @ObservedObject var viewModel: CashflowViewModel
+    let kind: CashflowCategoryTransactionSheetKind
+
     @Environment(\.dismiss) private var dismiss
 
     @State private var selectedMonth: Date = Calendar.current.startOfMonth(for: Date())
     @State private var selectedCategory: CashflowCategoryOption?
     @State private var searchText: String = ""
-    @State private var monthlyIncomeTotal: Double = 0
-    @State private var isLoadingMonthlyIncomeTotal: Bool = false
+    @State private var monthlyTotal: Double = 0
+    @State private var isLoadingMonthlyTotal: Bool = false
     @State private var monthTotalTask: Task<Void, Never>?
 
     @State private var showCreateCategorySheet: Bool = false
@@ -39,8 +57,8 @@ struct CashflowIncomeTransactionSheet: View {
         return formatter.string(from: selectedMonth).capitalized
     }
 
-    private var incomeCategories: [CashflowCategoryOption] {
-        viewModel.categoryOptions(for: .income, matching: searchText)
+    private var categories: [CashflowCategoryOption] {
+        viewModel.categoryOptions(for: kind.categoryKind, matching: searchText)
     }
 
     var body: some View {
@@ -62,7 +80,7 @@ struct CashflowIncomeTransactionSheet: View {
                 .scrollDismissesKeyboard(.immediately)
                 .dismissKeyboardOnTap()
             }
-            .navigationTitle("Новый доход")
+            .navigationTitle(kind.navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -75,13 +93,14 @@ struct CashflowIncomeTransactionSheet: View {
             .navigationDestination(item: $selectedCategory) { option in
                 CashflowTransactionEditorView(
                     viewModel: viewModel,
-                    transactionType: .income,
+                    transactionType: kind.transactionType,
                     showsTransactionTypeSection: false,
                     showsCategorySection: false,
                     wrapsInNavigationStack: false,
                     showsDismissButton: false,
-                    customNavigationTitle: "Новый доход",
-                    preselectedIncomeCategoryRaw: option.rawValue,
+                    customNavigationTitle: kind.navigationTitle,
+                    preselectedIncomeCategoryRaw: kind.categoryKind == .income ? option.rawValue : nil,
+                    preselectedExpenseCategoryRaw: kind.categoryKind == .expense ? option.rawValue : nil,
                     onSave: { dismiss() }
                 )
             }
@@ -93,10 +112,10 @@ struct CashflowIncomeTransactionSheet: View {
                 )
             }
             .onAppear {
-                reloadMonthlyIncomeTotal()
+                reloadMonthlyTotal()
             }
             .onChange(of: selectedMonth) { _, _ in
-                reloadMonthlyIncomeTotal()
+                reloadMonthlyTotal()
             }
             .onDisappear {
                 monthTotalTask?.cancel()
@@ -108,7 +127,7 @@ struct CashflowIncomeTransactionSheet: View {
     }
 
     private var monthSelectorSection: some View {
-        FinancesGlassCard(accentColor: AppColors.incomeGradient.first) {
+        FinancesGlassCard(accentColor: kind.gradientColors.first) {
             HStack {
                 Button {
                     shiftMonth(by: -1)
@@ -148,23 +167,23 @@ struct CashflowIncomeTransactionSheet: View {
 
     private var monthlyTotalSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            FinancesSectionHeader(title: "Итого доход за месяц")
-            FinancesGlassCard(accentColor: AppColors.incomeGradient.first) {
+            FinancesSectionHeader(title: kind.monthlyTotalTitle)
+            FinancesGlassCard(accentColor: kind.gradientColors.first) {
                 HStack {
                     Text("Итого")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(AppColors.textSecondary)
                     Spacer()
-                    if isLoadingMonthlyIncomeTotal {
+                    if isLoadingMonthlyTotal {
                         ProgressView()
                             .tint(AppColors.textPrimary)
                             .scaleEffect(0.9)
                     } else {
-                        Text(formattedMonthlyIncome(monthlyIncomeTotal))
+                        Text(formattedMonthlyTotal(monthlyTotal))
                             .font(.system(size: 20, weight: .bold))
                             .foregroundStyle(
                                 LinearGradient(
-                                    colors: AppColors.incomeGradient,
+                                    colors: kind.gradientColors,
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
@@ -200,7 +219,7 @@ struct CashflowIncomeTransactionSheet: View {
 
     private var categoriesSection: some View {
         LazyVGrid(columns: categoryColumns, spacing: 10) {
-            ForEach(incomeCategories) { option in
+            ForEach(categories) { option in
                 Button {
                     selectedCategory = option
                 } label: {
@@ -269,22 +288,25 @@ struct CashflowIncomeTransactionSheet: View {
         }
     }
 
-    private func reloadMonthlyIncomeTotal() {
+    private func reloadMonthlyTotal() {
         monthTotalTask?.cancel()
         monthTotalTask = Task {
             await MainActor.run {
-                isLoadingMonthlyIncomeTotal = true
+                isLoadingMonthlyTotal = true
             }
 
-            let total = await viewModel.monthlyIncomeTotal(
-                for: selectedMonth,
-                in: viewModel.state.displayCurrency
-            )
+            let total: Double
+            switch kind {
+            case .income:
+                total = await viewModel.monthlyIncomeTotal(for: selectedMonth, in: viewModel.state.displayCurrency)
+            case .expense:
+                total = await viewModel.monthlyExpenseTotal(for: selectedMonth, in: viewModel.state.displayCurrency)
+            }
 
             guard !Task.isCancelled else { return }
             await MainActor.run {
-                monthlyIncomeTotal = total
-                isLoadingMonthlyIncomeTotal = false
+                monthlyTotal = total
+                isLoadingMonthlyTotal = false
             }
         }
     }
@@ -293,7 +315,7 @@ struct CashflowIncomeTransactionSheet: View {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
 
-        if let created = viewModel.createCustomCategory(kind: .income, name: trimmedName, icon: icon) {
+        if let created = viewModel.createCustomCategory(kind: kind.categoryKind, name: trimmedName, icon: icon) {
             selectedCategory = created
             searchText = ""
         }
@@ -303,7 +325,7 @@ struct CashflowIncomeTransactionSheet: View {
         showCreateCategorySheet = false
     }
 
-    private func formattedMonthlyIncome(_ value: Double) -> String {
+    private func formattedMonthlyTotal(_ value: Double) -> String {
         let formatter = NumberFormatter()
         formatter.locale = Locale(identifier: "ru_RU")
         formatter.numberStyle = .decimal
@@ -314,16 +336,43 @@ struct CashflowIncomeTransactionSheet: View {
     }
 }
 
-struct CashflowExpenseTransactionSheet: View {
-    @ObservedObject var viewModel: CashflowViewModel
+private enum CashflowCategoryTransactionSheetKind {
+    case income
+    case expense
 
-    var body: some View {
-        CashflowTransactionEditorView(
-            viewModel: viewModel,
-            transactionType: .expense,
-            showsTransactionTypeSection: false,
-            customNavigationTitle: "Новый расход"
-        )
+    var transactionType: CashflowTransactionType {
+        switch self {
+        case .income: return .income
+        case .expense: return .expense
+        }
+    }
+
+    var categoryKind: CashflowCategoryKind {
+        switch self {
+        case .income: return .income
+        case .expense: return .expense
+        }
+    }
+
+    var navigationTitle: String {
+        switch self {
+        case .income: return "Новый доход"
+        case .expense: return "Новый расход"
+        }
+    }
+
+    var monthlyTotalTitle: String {
+        switch self {
+        case .income: return "Итого доход за месяц"
+        case .expense: return "Итого расход за месяц"
+        }
+    }
+
+    var gradientColors: [Color] {
+        switch self {
+        case .income: return AppColors.incomeGradient
+        case .expense: return AppColors.expenseGradient
+        }
     }
 }
 
