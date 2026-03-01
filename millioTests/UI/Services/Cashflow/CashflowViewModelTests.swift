@@ -17,6 +17,7 @@ struct CashflowViewModelTests {
         let schema = Schema([
             Card.self,
             CashflowTransaction.self,
+            CashflowCustomCategory.self,
             HistoricalRate.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
@@ -26,6 +27,7 @@ struct CashflowViewModelTests {
     private func createTestModelContext() throws -> ModelContext {
         let context = Self.sharedContainer.mainContext
         try context.deleteAll(CashflowTransaction.self)
+        try context.deleteAll(CashflowCustomCategory.self)
         try context.deleteAll(HistoricalRate.self)
         try context.deleteAll(Card.self)
         try context.save()
@@ -273,6 +275,77 @@ struct CashflowViewModelTests {
         #expect(expenseBreakdown.map { $0.convertedAmount } == [300, 200, 100])
         #expect(viewModel.state.incomeBreakdown.first?.title == "Зарплата")
         #expect(viewModel.state.incomeBreakdown.first?.convertedAmount == 400)
+    }
+
+    @Test("Кастомная категория расхода создается и попадает в опции")
+    func testCreateCustomExpenseCategory() throws {
+        let modelContext = try createTestModelContext()
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+
+        let created = viewModel.createCustomCategory(
+            kind: .expense,
+            name: "Книги",
+            icon: "book.fill"
+        )
+
+        #expect(created != nil)
+        #expect(created?.displayName == "Книги")
+        #expect(created?.isCustom == true)
+        #expect(viewModel.categoryOptions(for: .expense).contains { $0.displayName == "Книги" && $0.isCustom })
+    }
+
+    @Test("Удаление кастомной категории расхода мигрирует транзакции в Другое")
+    func testDeleteCustomExpenseCategoryMigratesTransactions() async throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 2, day: 13)) ?? Date()
+        let defaults = UserDefaults.standard
+        let previousDisplayCurrency = defaults.string(forKey: "cashflow_display_currency")
+        defaults.set("RUB", forKey: "cashflow_display_currency")
+        defer {
+            if let previousDisplayCurrency {
+                defaults.set(previousDisplayCurrency, forKey: "cashflow_display_currency")
+            } else {
+                defaults.removeObject(forKey: "cashflow_display_currency")
+            }
+        }
+
+        let viewModel = CashflowViewModel(
+            modelContext: modelContext,
+            now: { fixedNow },
+            assetsSnapshotProvider: { _, _, _ in
+                (start: 0, end: 0)
+            }
+        )
+
+        guard let custom = viewModel.createCustomCategory(kind: .expense, name: "Такси", icon: "car.fill") else {
+            #expect(Bool(false), "Custom category was not created")
+            return
+        }
+
+        let transaction = CashflowTransaction(
+            transactionType: .expense,
+            amount: 300,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: nil,
+            expenseCategoryRaw: custom.rawValue
+        )
+        modelContext.insert(transaction)
+        try modelContext.save()
+
+        viewModel.handle(.loadTransactions)
+        #expect(viewModel.expenseCategoryDisplayName(for: custom.rawValue) == "Такси")
+
+        let deleted = viewModel.deleteCustomCategory(rawValue: custom.rawValue, kind: .expense)
+        #expect(deleted)
+        #expect(transaction.expenseCategoryRaw == ExpenseCategory.other.rawValue)
+
+        viewModel.handle(.loadTransactions)
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            viewModel.state.expenseBreakdown.contains(where: {
+                $0.title == ExpenseCategory.other.displayName && abs($0.convertedAmount - 300) < 0.01
+            })
+        }
     }
 
     private func waitUntil(

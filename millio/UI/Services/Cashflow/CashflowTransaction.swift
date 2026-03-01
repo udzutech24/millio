@@ -121,10 +121,114 @@ enum ExpenseCategory: String, Codable, CaseIterable {
     }
 }
 
+// MARK: - Custom Category
+
+enum CashflowCategoryKind: String, Codable, CaseIterable {
+    case income = "income"
+    case expense = "expense"
+}
+
+@Model
+final class CashflowCustomCategory: Persistable {
+    static let defaultIcon = "tag.fill"
+    static let allowedIcons: [String] = [
+        "tag.fill",
+        "briefcase.fill",
+        "laptopcomputer",
+        "chart.line.uptrend.xyaxis",
+        "gift.fill",
+        "star.fill",
+        "cart.fill",
+        "cup.and.saucer.fill",
+        "car.fill",
+        "bag.fill",
+        "tv.fill",
+        "doc.text.fill",
+        "cross.case.fill",
+        "book.fill",
+        "house.fill",
+        "airplane",
+        "figure.walk",
+        "bolt.fill"
+    ]
+
+    var categoryID: String = UUID().uuidString
+    var kindRaw: String = CashflowCategoryKind.expense.rawValue
+    var name: String = ""
+    var normalizedName: String = ""
+    var icon: String = defaultIcon
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+
+    var kind: CashflowCategoryKind {
+        get { CashflowCategoryKind(rawValue: kindRaw) ?? .expense }
+        set { kindRaw = newValue.rawValue }
+    }
+
+    init(
+        kind: CashflowCategoryKind,
+        name: String,
+        icon: String = CashflowCustomCategory.defaultIcon
+    ) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.categoryID = UUID().uuidString
+        self.kindRaw = kind.rawValue
+        self.name = trimmed
+        self.normalizedName = Self.normalize(trimmed)
+        self.icon = Self.normalizeIcon(icon)
+        self.createdAt = Date()
+        self.updatedAt = Date()
+    }
+
+    static func normalize(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    static func normalizeIcon(_ icon: String) -> String {
+        allowedIcons.contains(icon) ? icon : defaultIcon
+    }
+
+    func export() throws -> Data {
+        let dict: [String: Any] = [
+            "type": "CashflowCustomCategory",
+            "categoryID": categoryID,
+            "kindRaw": kindRaw,
+            "name": name,
+            "normalizedName": normalizedName,
+            "icon": icon,
+            "createdAt": createdAt.timeIntervalSince1970,
+            "updatedAt": updatedAt.timeIntervalSince1970
+        ]
+        return try JSONSerialization.data(withJSONObject: dict)
+    }
+
+    static func `import`(_ data: Data) throws {
+        guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              dict["categoryID"] as? String != nil,
+              dict["kindRaw"] as? String != nil,
+              dict["name"] as? String != nil,
+              dict["createdAt"] as? TimeInterval != nil,
+              dict["updatedAt"] as? TimeInterval != nil else {
+            throw AppError.backupCorrupted
+        }
+    }
+}
+
+struct CashflowCategoryOption: Identifiable, Hashable {
+    let rawValue: String
+    let displayName: String
+    let icon: String
+    let isCustom: Bool
+
+    var id: String { rawValue }
+}
+
 // MARK: - Cashflow Transaction
 
 @Model
 final class CashflowTransaction: Persistable {
+    static let customCategoryPrefix = "custom:"
+
     /// Тип транзакции
     var transactionTypeRaw: String = "expense"
     
@@ -205,6 +309,8 @@ final class CashflowTransaction: Persistable {
         investmentID: String? = nil,
         incomeCategory: IncomeCategory? = nil,
         expenseCategory: ExpenseCategory? = nil,
+        incomeCategoryRaw: String? = nil,
+        expenseCategoryRaw: String? = nil,
         note: String? = nil
     ) {
         self.transactionTypeRaw = transactionType.rawValue
@@ -215,8 +321,8 @@ final class CashflowTransaction: Persistable {
         self.toCardID = toCardID
         self.creditID = creditID
         self.investmentID = investmentID
-        self.incomeCategoryRaw = incomeCategory?.rawValue
-        self.expenseCategoryRaw = expenseCategory?.rawValue
+        self.incomeCategoryRaw = incomeCategoryRaw ?? incomeCategory?.rawValue
+        self.expenseCategoryRaw = expenseCategoryRaw ?? expenseCategory?.rawValue
         self.note = note
         self.createdAt = Date()
         self.updatedAt = Date()

@@ -48,6 +48,9 @@ struct CashflowState {
     
     /// Все карты (включая архивные) для истории
     var allCards: [Card] = []
+
+    /// Пользовательские категории операций
+    var customCategories: [CashflowCustomCategory] = []
     
     /// Период для графика
     var chartPeriod: ChartPeriod = .month
@@ -229,6 +232,7 @@ final class CashflowViewModel: ViewModelProtocol {
         state.selectedYear = now()
         loadTransactions()
         loadCards()
+        loadCustomCategories()
         loadAvailableCurrencies()
         subscribeToFinanceEvents()
     }
@@ -349,6 +353,13 @@ final class CashflowViewModel: ViewModelProtocol {
         state.availableCards = allCards.filter { $0.archivedAt == nil }
     }
 
+    private func loadCustomCategories() {
+        let descriptor = FetchDescriptor<CashflowCustomCategory>(
+            sortBy: [SortDescriptor(\.createdAt, order: .forward)]
+        )
+        state.customCategories = (try? modelContext.fetch(descriptor)) ?? []
+    }
+
     private func subscribeToFinanceEvents() {
         eventSubscriptionID = EventBus.shared.subscribe { [weak self] event in
             guard let self else { return }
@@ -360,6 +371,7 @@ final class CashflowViewModel: ViewModelProtocol {
             case BackupEvent.restoreCompleted:
                 self.loadTransactions()
                 self.loadCards()
+                self.loadCustomCategories()
             default:
                 break
             }
@@ -423,7 +435,7 @@ final class CashflowViewModel: ViewModelProtocol {
                     to: state.displayCurrency
                 )
                 totalIncome += converted
-                let title = transaction.incomeCategory?.displayName ?? "Без категории"
+                let title = incomeCategoryDisplayName(for: transaction.incomeCategoryRaw)
                 incomeByCategory[title, default: 0.0] += converted
                 
             case .expense:
@@ -432,7 +444,7 @@ final class CashflowViewModel: ViewModelProtocol {
                     to: state.displayCurrency
                 )
                 totalExpense += converted
-                let title = transaction.expenseCategory?.displayName ?? "Без категории"
+                let title = expenseCategoryDisplayName(for: transaction.expenseCategoryRaw)
                 expenseByCategory[title, default: 0.0] += converted
                 
             case .transfer, .balanceAdjustment:
@@ -480,6 +492,157 @@ final class CashflowViewModel: ViewModelProtocol {
         let selectedStart = calendar.date(from: calendar.dateComponents([.year, .month], from: state.selectedMonth)) ?? state.selectedMonth
         let currentStart = calendar.date(from: calendar.dateComponents([.year, .month], from: now())) ?? now()
         return selectedStart < currentStart
+    }
+
+    // MARK: - Categories
+
+    func categoryOptions(for kind: CashflowCategoryKind, matching query: String = "") -> [CashflowCategoryOption] {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let options = systemCategoryOptions(for: kind) + customCategoryOptions(for: kind)
+
+        guard !trimmedQuery.isEmpty else { return options }
+        return options.filter { $0.displayName.localizedCaseInsensitiveContains(trimmedQuery) }
+    }
+
+    func categoryOption(for raw: String, kind: CashflowCategoryKind, fallbackName: String = "") -> CashflowCategoryOption {
+        if let system = systemCategoryOption(for: raw, kind: kind) {
+            return system
+        }
+        if let customID = Self.customCategoryID(from: raw),
+           let custom = state.customCategories.first(where: { $0.categoryID == customID && $0.kind == kind }) {
+            return CashflowCategoryOption(
+                rawValue: raw,
+                displayName: custom.name,
+                icon: custom.icon,
+                isCustom: true
+            )
+        }
+
+        let fallback = fallbackName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let defaultOption = defaultCategoryOption(for: kind)
+        return CashflowCategoryOption(
+            rawValue: defaultOption.rawValue,
+            displayName: fallback.isEmpty ? defaultOption.displayName : fallback,
+            icon: defaultOption.icon,
+            isCustom: false
+        )
+    }
+
+    func incomeCategoryDisplayName(for raw: String?) -> String {
+        guard let raw else { return "Без категории" }
+        return categoryOption(for: raw, kind: .income).displayName
+    }
+
+    func expenseCategoryDisplayName(for raw: String?) -> String {
+        guard let raw else { return "Без категории" }
+        return categoryOption(for: raw, kind: .expense).displayName
+    }
+
+    @discardableResult
+    func createCustomCategory(
+        kind: CashflowCategoryKind,
+        name: String,
+        icon: String = CashflowCustomCategory.defaultIcon
+    ) -> CashflowCategoryOption? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        if let system = systemCategoryOptions(for: kind).first(where: {
+            $0.displayName.caseInsensitiveCompare(trimmed) == .orderedSame
+        }) {
+            return system
+        }
+
+        let normalized = CashflowCustomCategory.normalize(trimmed)
+        if let existing = state.customCategories.first(where: {
+            $0.kind == kind && $0.normalizedName == normalized
+        }) {
+            return CashflowCategoryOption(
+                rawValue: Self.customRawValue(from: existing.categoryID),
+                displayName: existing.name,
+                icon: existing.icon,
+                isCustom: true
+            )
+        }
+
+        let customCategory = CashflowCustomCategory(
+            kind: kind,
+            name: trimmed,
+            icon: CashflowCustomCategory.normalizeIcon(icon)
+        )
+        modelContext.insert(customCategory)
+
+        do {
+            try modelContext.save()
+            loadCustomCategories()
+            return CashflowCategoryOption(
+                rawValue: Self.customRawValue(from: customCategory.categoryID),
+                displayName: customCategory.name,
+                icon: customCategory.icon,
+                isCustom: true
+            )
+        } catch {
+            AppLogger.log(.error, category: "Cashflow", "Failed to create custom category: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    @discardableResult
+    func renameCustomCategory(
+        rawValue: String,
+        kind: CashflowCategoryKind,
+        newName: String,
+        newIcon: String? = nil
+    ) -> Bool {
+        guard let sourceID = Self.customCategoryID(from: rawValue),
+              let sourceCategory = state.customCategories.first(where: { $0.categoryID == sourceID && $0.kind == kind }) else {
+            return false
+        }
+
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        let normalized = CashflowCustomCategory.normalize(trimmed)
+        let normalizedIcon = CashflowCustomCategory.normalizeIcon(newIcon ?? sourceCategory.icon)
+        let nowDate = Date()
+
+        if let system = systemCategoryOptions(for: kind).first(where: {
+            $0.displayName.caseInsensitiveCompare(trimmed) == .orderedSame
+        }) {
+            migrateTransactions(fromRaw: rawValue, toRaw: system.rawValue, kind: kind, nowDate: nowDate)
+            modelContext.delete(sourceCategory)
+            return saveCategoriesAndTransactions()
+        }
+
+        if let duplicate = state.customCategories.first(where: {
+            $0.kind == kind && $0.normalizedName == normalized && $0.categoryID != sourceID
+        }) {
+            let duplicateRaw = Self.customRawValue(from: duplicate.categoryID)
+            migrateTransactions(fromRaw: rawValue, toRaw: duplicateRaw, kind: kind, nowDate: nowDate)
+            modelContext.delete(sourceCategory)
+            return saveCategoriesAndTransactions()
+        }
+
+        sourceCategory.name = trimmed
+        sourceCategory.normalizedName = normalized
+        sourceCategory.icon = normalizedIcon
+        sourceCategory.updatedAt = nowDate
+
+        return saveCategoriesAndTransactions()
+    }
+
+    @discardableResult
+    func deleteCustomCategory(rawValue: String, kind: CashflowCategoryKind) -> Bool {
+        guard let sourceID = Self.customCategoryID(from: rawValue),
+              let sourceCategory = state.customCategories.first(where: { $0.categoryID == sourceID && $0.kind == kind }) else {
+            return false
+        }
+
+        let fallback = defaultCategoryOption(for: kind)
+        let nowDate = Date()
+        migrateTransactions(fromRaw: rawValue, toRaw: fallback.rawValue, kind: kind, nowDate: nowDate)
+        modelContext.delete(sourceCategory)
+
+        return saveCategoriesAndTransactions()
     }
 
     private func getDateRange() -> (Date, Date) {
@@ -779,8 +942,8 @@ final class CashflowViewModel: ViewModelProtocol {
                 transactionDate: transaction.transactionDate,
                 cardID: transaction.cardID,
                 toCardID: transaction.toCardID,
-                incomeCategory: transaction.incomeCategory,
-                expenseCategory: transaction.expenseCategory,
+                incomeCategoryRaw: transaction.incomeCategoryRaw,
+                expenseCategoryRaw: transaction.expenseCategoryRaw,
                 note: transaction.note
             )
             newTransaction.exchangeRate = exchangeInfo.rate
@@ -891,5 +1054,127 @@ final class CashflowViewModel: ViewModelProtocol {
             // Корректировки баланса/долга не изменяют баланс повторно
             break
         }
+    }
+
+    private func migrateTransactions(
+        fromRaw sourceRaw: String,
+        toRaw targetRaw: String,
+        kind: CashflowCategoryKind,
+        nowDate: Date
+    ) {
+        let linkedTransactions = state.transactions.filter {
+            switch kind {
+            case .income: return $0.incomeCategoryRaw == sourceRaw
+            case .expense: return $0.expenseCategoryRaw == sourceRaw
+            }
+        }
+
+        for transaction in linkedTransactions {
+            switch kind {
+            case .income:
+                transaction.incomeCategoryRaw = targetRaw
+            case .expense:
+                transaction.expenseCategoryRaw = targetRaw
+            }
+            transaction.updatedAt = nowDate
+        }
+    }
+
+    @discardableResult
+    private func saveCategoriesAndTransactions() -> Bool {
+        do {
+            try modelContext.save()
+            loadCustomCategories()
+            loadTransactions()
+            return true
+        } catch {
+            AppLogger.log(.error, category: "Cashflow", "Failed to save custom categories: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    private static func customRawValue(from categoryID: String) -> String {
+        "\(CashflowTransaction.customCategoryPrefix)\(categoryID)"
+    }
+
+    private static func customCategoryID(from rawValue: String) -> String? {
+        guard rawValue.hasPrefix(CashflowTransaction.customCategoryPrefix) else { return nil }
+        return String(rawValue.dropFirst(CashflowTransaction.customCategoryPrefix.count))
+    }
+
+    private func defaultCategoryOption(for kind: CashflowCategoryKind) -> CashflowCategoryOption {
+        switch kind {
+        case .income:
+            return CashflowCategoryOption(
+                rawValue: IncomeCategory.other.rawValue,
+                displayName: IncomeCategory.other.displayName,
+                icon: IncomeCategory.other.icon,
+                isCustom: false
+            )
+        case .expense:
+            return CashflowCategoryOption(
+                rawValue: ExpenseCategory.other.rawValue,
+                displayName: ExpenseCategory.other.displayName,
+                icon: ExpenseCategory.other.icon,
+                isCustom: false
+            )
+        }
+    }
+
+    private func systemCategoryOption(for raw: String, kind: CashflowCategoryKind) -> CashflowCategoryOption? {
+        switch kind {
+        case .income:
+            guard let category = IncomeCategory(rawValue: raw) else { return nil }
+            return CashflowCategoryOption(
+                rawValue: raw,
+                displayName: category.displayName,
+                icon: category.icon,
+                isCustom: false
+            )
+        case .expense:
+            guard let category = ExpenseCategory(rawValue: raw) else { return nil }
+            return CashflowCategoryOption(
+                rawValue: raw,
+                displayName: category.displayName,
+                icon: category.icon,
+                isCustom: false
+            )
+        }
+    }
+
+    private func systemCategoryOptions(for kind: CashflowCategoryKind) -> [CashflowCategoryOption] {
+        switch kind {
+        case .income:
+            return IncomeCategory.allCases.map {
+                CashflowCategoryOption(
+                    rawValue: $0.rawValue,
+                    displayName: $0.displayName,
+                    icon: $0.icon,
+                    isCustom: false
+                )
+            }
+        case .expense:
+            return ExpenseCategory.allCases.map {
+                CashflowCategoryOption(
+                    rawValue: $0.rawValue,
+                    displayName: $0.displayName,
+                    icon: $0.icon,
+                    isCustom: false
+                )
+            }
+        }
+    }
+
+    private func customCategoryOptions(for kind: CashflowCategoryKind) -> [CashflowCategoryOption] {
+        state.customCategories
+            .filter { $0.kind == kind }
+            .map {
+                CashflowCategoryOption(
+                    rawValue: Self.customRawValue(from: $0.categoryID),
+                    displayName: $0.name,
+                    icon: $0.icon,
+                    isCustom: true
+                )
+            }
     }
 }
