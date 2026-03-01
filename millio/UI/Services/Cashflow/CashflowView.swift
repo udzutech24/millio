@@ -82,10 +82,19 @@ private struct CashflowContentView: View {
                     transaction: editingTransaction
                 )
             } else if let creatingType = viewModel.state.creatingTransactionType {
-                CashflowTransactionEditorView(
-                    viewModel: viewModel,
-                    transactionType: creatingType
-                )
+                switch creatingType {
+                case .income:
+                    CashflowIncomeTransactionSheet(viewModel: viewModel)
+                case .expense:
+                    CashflowExpenseTransactionSheet(viewModel: viewModel)
+                case .transfer:
+                    CashflowTransferTransactionSheet(viewModel: viewModel)
+                case .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
+                    CashflowTransactionEditorView(
+                        viewModel: viewModel,
+                        transactionType: creatingType
+                    )
+                }
             }
         }
         .sheet(isPresented: Binding(

@@ -515,6 +515,27 @@ final class CashflowViewModel: ViewModelProtocol {
         return selectedStart < currentStart
     }
 
+    func monthlyIncomeTotal(for month: Date, in currency: String? = nil) async -> Double {
+        let calendar = Calendar.current
+        let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: month)) ?? month
+        let monthEnd = calendar.date(byAdding: DateComponents(month: 1, second: -1), to: monthStart) ?? monthStart
+        let targetCurrency = currency ?? state.displayCurrency
+
+        let previousWarning = state.currencyConversionWarning
+        defer { state.currencyConversionWarning = previousWarning }
+
+        var total: Double = 0
+        for transaction in state.transactions {
+            guard transaction.transactionType == .income,
+                  transaction.transactionDate >= monthStart,
+                  transaction.transactionDate <= monthEnd else {
+                continue
+            }
+            total += await convertAmountForTransaction(transaction, to: targetCurrency)
+        }
+        return total
+    }
+
     // MARK: - Categories
 
     func categoryOptions(for kind: CashflowCategoryKind, matching query: String = "") -> [CashflowCategoryOption] {

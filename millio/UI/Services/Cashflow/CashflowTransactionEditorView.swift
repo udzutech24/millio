@@ -11,10 +11,16 @@ import SwiftData
 struct CashflowTransactionEditorView: View {
     @ObservedObject var viewModel: CashflowViewModel
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
 
     let transactionType: CashflowTransactionType?
     let editingTransaction: CashflowTransaction?
+    let showsTransactionTypeSection: Bool
+    let showsCategorySection: Bool
+    let wrapsInNavigationStack: Bool
+    let showsDismissButton: Bool
+    let customNavigationTitle: String?
+    let preselectedIncomeCategoryRaw: String?
+    let onSave: (() -> Void)?
 
     @State private var selectedTransactionType: CashflowTransactionType
     @State private var amountText: String = ""
@@ -35,10 +41,28 @@ struct CashflowTransactionEditorView: View {
     @State private var currencySearchText: String = ""
     @State private var showCategorySheet: Bool = false
 
-    init(viewModel: CashflowViewModel, transactionType: CashflowTransactionType? = nil, transaction: CashflowTransaction? = nil) {
+    init(
+        viewModel: CashflowViewModel,
+        transactionType: CashflowTransactionType? = nil,
+        transaction: CashflowTransaction? = nil,
+        showsTransactionTypeSection: Bool = true,
+        showsCategorySection: Bool = true,
+        wrapsInNavigationStack: Bool = true,
+        showsDismissButton: Bool = true,
+        customNavigationTitle: String? = nil,
+        preselectedIncomeCategoryRaw: String? = nil,
+        onSave: (() -> Void)? = nil
+    ) {
         self.viewModel = viewModel
         self.transactionType = transactionType
         self.editingTransaction = transaction
+        self.showsTransactionTypeSection = showsTransactionTypeSection
+        self.showsCategorySection = showsCategorySection
+        self.wrapsInNavigationStack = wrapsInNavigationStack
+        self.showsDismissButton = showsDismissButton
+        self.customNavigationTitle = customNavigationTitle
+        self.preselectedIncomeCategoryRaw = preselectedIncomeCategoryRaw
+        self.onSave = onSave
 
         if let transaction = transaction {
             _selectedTransactionType = State(initialValue: transaction.transactionType)
@@ -54,7 +78,7 @@ struct CashflowTransactionEditorView: View {
         } else if let type = transactionType {
             _selectedTransactionType = State(initialValue: type)
             if type == .income {
-                _selectedIncomeCategoryRaw = State(initialValue: IncomeCategory.salary.rawValue)
+                _selectedIncomeCategoryRaw = State(initialValue: preselectedIncomeCategoryRaw ?? IncomeCategory.salary.rawValue)
             } else if type == .expense {
                 _selectedExpenseCategoryRaw = State(initialValue: ExpenseCategory.groceries.rawValue)
             }
@@ -66,39 +90,49 @@ struct CashflowTransactionEditorView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                GradientBackground()
-
-                ScrollView {
-                    VStack(spacing: 24) {
-                        // Тип транзакции (только для новых)
-                        if editingTransaction == nil {
-                            transactionTypeSection
-                        }
-
-                        // Категория
-                        if selectedTransactionType == .income || selectedTransactionType == .expense {
-                            categorySection
-                        }
-
-                        mainInfoSection
-                        if selectedTransactionType == .income || selectedTransactionType == .expense {
-                            recurrenceSection
-                        }
-                        cardSection
-                        additionalSection
-                    }
-                    .padding(.top, 20)
-                    .padding(.bottom, 40)
-                    .padding(.horizontal, 16)
+        Group {
+            if wrapsInNavigationStack {
+                NavigationStack {
+                    editorContent
                 }
-                .scrollDismissesKeyboard(.immediately)
-                .dismissKeyboardOnTap()
+            } else {
+                editorContent
             }
-            .navigationTitle(editingTransaction == nil ? "Новая операция" : "Редактировать")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
+        }
+    }
+
+    private var editorContent: some View {
+        ZStack {
+            GradientBackground()
+
+            ScrollView {
+                VStack(spacing: 24) {
+                    if editingTransaction == nil && showsTransactionTypeSection {
+                        transactionTypeSection
+                    }
+
+                    if showsCategorySection && (selectedTransactionType == .income || selectedTransactionType == .expense) {
+                        categorySection
+                    }
+
+                    mainInfoSection
+                    if selectedTransactionType == .income || selectedTransactionType == .expense {
+                        recurrenceSection
+                    }
+                    cardSection
+                    additionalSection
+                }
+                .padding(.top, 20)
+                .padding(.bottom, 40)
+                .padding(.horizontal, 16)
+            }
+            .scrollDismissesKeyboard(.immediately)
+            .dismissKeyboardOnTap()
+        }
+        .navigationTitle(resolvedNavigationTitle)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if showsDismissButton {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
                         dismiss()
@@ -108,100 +142,107 @@ struct CashflowTransactionEditorView: View {
                     }
                     .foregroundStyle(AppColors.textPrimary)
                 }
+            }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        saveTransaction()
-                    } label: {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .semibold))
-                    }
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: getGradientColors(),
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    saveTransaction()
+                } label: {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: getGradientColors(),
+                        startPoint: .leading,
+                        endPoint: .trailing
                     )
-                    .disabled(!isValid)
-                }
-            }
-            .onAppear {
-                loadAvailableCurrencies()
-                if selectedCardID == nil && !viewModel.state.availableCards.isEmpty {
-                    selectedCardID = viewModel.state.availableCards.first?.cardUniqueID
-                }
-                if editingTransaction == nil,
-                   selectedTransactionType == .income,
-                   selectedIncomeCategoryRaw == nil {
-                    selectedIncomeCategoryRaw = IncomeCategory.salary.rawValue
-                }
-                if editingTransaction == nil,
-                   selectedTransactionType == .expense,
-                   selectedExpenseCategoryRaw == nil {
-                    selectedExpenseCategoryRaw = ExpenseCategory.groceries.rawValue
-                }
-                validateAvailableBalance()
-            }
-            .onChange(of: selectedCardID) { _, _ in
-                if selectedCardID == selectedToCardID {
-                    selectedToCardID = nil
-                }
-                validateAvailableBalance()
-            }
-            .onChange(of: selectedToCardID) { _, _ in
-                if selectedToCardID == selectedCardID {
-                    selectedToCardID = nil
-                }
-            }
-            .onChange(of: selectedCurrency) { _, _ in
-                validateAvailableBalance()
-            }
-            .onChange(of: amountText) { _, _ in
-                validateAvailableBalance()
-            }
-            .onChange(of: transactionDate) { _, _ in
-                validateAvailableBalance()
-            }
-            .onChange(of: selectedTransactionType) { _, _ in
-                validateAvailableBalance()
-            }
-            .sheet(isPresented: $showCategorySheet) {
-                CashflowCategorySelectionSheet(
-                    viewModel: viewModel,
-                    kind: selectedCategoryKind,
-                    selectedRaw: selectedCategoryRawBinding
                 )
-            }
-            .sheet(isPresented: $showCurrencyPicker) {
-                NavigationStack {
-                    CurrencyPickerView(
-                        allCodes: CurrencySelectionSupport.allCodes(includeCrypto: true),
-                        searchText: $currencySearchText,
-                        selectedCodes: [],
-                        favoriteCodes: [],
-                        currentSelection: selectedCurrency,
-                        onToggleFavorite: nil,
-                        onSelect: { currency in
-                            selectedCurrency = currency
-                            showCurrencyPicker = false
-                        }
-                    )
-                    .navigationTitle("Валюта операции")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Отмена") {
-                                showCurrencyPicker = false
-                            }
-                            .foregroundStyle(AppColors.textPrimary)
-                        }
-                    }
-                }
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .disabled(!isValid)
             }
         }
+        .onAppear {
+            loadAvailableCurrencies()
+            if selectedCardID == nil && !viewModel.state.availableCards.isEmpty {
+                selectedCardID = viewModel.state.availableCards.first?.cardUniqueID
+            }
+            if editingTransaction == nil,
+               selectedTransactionType == .income,
+               selectedIncomeCategoryRaw == nil {
+                selectedIncomeCategoryRaw = preselectedIncomeCategoryRaw ?? IncomeCategory.salary.rawValue
+            }
+            if editingTransaction == nil,
+               selectedTransactionType == .expense,
+               selectedExpenseCategoryRaw == nil {
+                selectedExpenseCategoryRaw = ExpenseCategory.groceries.rawValue
+            }
+            validateAvailableBalance()
+        }
+        .onChange(of: selectedCardID) { _, _ in
+            if selectedCardID == selectedToCardID {
+                selectedToCardID = nil
+            }
+            validateAvailableBalance()
+        }
+        .onChange(of: selectedToCardID) { _, _ in
+            if selectedToCardID == selectedCardID {
+                selectedToCardID = nil
+            }
+        }
+        .onChange(of: selectedCurrency) { _, _ in
+            validateAvailableBalance()
+        }
+        .onChange(of: amountText) { _, _ in
+            validateAvailableBalance()
+        }
+        .onChange(of: transactionDate) { _, _ in
+            validateAvailableBalance()
+        }
+        .onChange(of: selectedTransactionType) { _, _ in
+            validateAvailableBalance()
+        }
+        .sheet(isPresented: $showCategorySheet) {
+            CashflowCategorySelectionSheet(
+                viewModel: viewModel,
+                kind: selectedCategoryKind,
+                selectedRaw: selectedCategoryRawBinding
+            )
+        }
+        .sheet(isPresented: $showCurrencyPicker) {
+            NavigationStack {
+                CurrencyPickerView(
+                    allCodes: CurrencySelectionSupport.allCodes(includeCrypto: true),
+                    searchText: $currencySearchText,
+                    selectedCodes: [],
+                    favoriteCodes: [],
+                    currentSelection: selectedCurrency,
+                    onToggleFavorite: nil,
+                    onSelect: { currency in
+                        selectedCurrency = currency
+                        showCurrencyPicker = false
+                    }
+                )
+                .navigationTitle("Валюта операции")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Отмена") {
+                            showCurrencyPicker = false
+                        }
+                        .foregroundStyle(AppColors.textPrimary)
+                    }
+                }
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+    }
+
+    private var resolvedNavigationTitle: String {
+        if let customNavigationTitle {
+            return customNavigationTitle
+        }
+        return editingTransaction == nil ? "Новая операция" : "Редактировать"
     }
 
     // MARK: - Тип операции
@@ -669,7 +710,11 @@ struct CashflowTransactionEditorView: View {
         transaction.recurrenceSeriesID = resolvedRecurrenceSeriesID
 
         viewModel.handle(.updateTransaction(transaction))
-        dismiss()
+        if let onSave {
+            onSave()
+        } else {
+            dismiss()
+        }
     }
 
     // MARK: - Currency Loading
