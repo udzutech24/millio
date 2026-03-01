@@ -348,6 +348,87 @@ struct CashflowViewModelTests {
         }
     }
 
+    @Test("Ежемесячный автоповтор создаёт пропущенные операции и не дублирует месяцы")
+    func testMonthlyRecurringGeneratesMissingTransactions() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 20)) ?? Date()
+        let card = Card(
+            name: "Основная",
+            cardNumber: "1234",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 1_000
+        )
+        modelContext.insert(card)
+        let template = CashflowTransaction(
+            transactionType: .income,
+            amount: 100,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 1, day: 15)) ?? fixedNow,
+            cardID: card.cardUniqueID,
+            incomeCategory: .salary,
+            note: "Recurring salary",
+            recurrenceRule: .monthly,
+            recurrenceSeriesID: "series-monthly-salary"
+        )
+        modelContext.insert(template)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            viewModel.state.transactions.count == 3
+        }
+
+        let months = viewModel.state.transactions
+            .map { calendar.component(.month, from: $0.transactionDate) }
+            .sorted()
+        #expect(months == [1, 2, 3])
+        #expect(abs(card.balance - 1_200) < 0.01)
+
+        viewModel.handle(.loadTransactions)
+        try await Task.sleep(nanoseconds: 300_000_000)
+        #expect(viewModel.state.transactions.count == 3)
+    }
+
+    @Test("Ежемесячный автоповтор корректно клампит 31 число к концу месяца")
+    func testMonthlyRecurringClampsDayToMonthEnd() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 31)) ?? Date()
+        let template = CashflowTransaction(
+            transactionType: .income,
+            amount: 50,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 1, day: 31)) ?? fixedNow,
+            incomeCategory: .salary,
+            recurrenceRule: .monthly,
+            recurrenceSeriesID: "series-day-31"
+        )
+        modelContext.insert(template)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            viewModel.state.transactions.count == 3
+        }
+
+        let dayByMonth = viewModel.state.transactions
+            .map {
+                (
+                    month: calendar.component(.month, from: $0.transactionDate),
+                    day: calendar.component(.day, from: $0.transactionDate)
+                )
+            }
+            .sorted { $0.month < $1.month }
+
+        #expect(dayByMonth.map(\.month) == [1, 2, 3])
+        #expect(dayByMonth.map(\.day) == [31, 28, 31])
+    }
+
     private func waitUntil(
         timeoutNanoseconds: UInt64,
         intervalNanoseconds: UInt64 = 50_000_000,

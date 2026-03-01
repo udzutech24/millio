@@ -53,6 +53,9 @@ struct CashflowTransactionImporter: ModelImporter {
         let exchangeRate = dict["exchangeRate"] as? Double
         let exchangeRateDate = (dict["exchangeRateDate"] as? TimeInterval).map { Date(timeIntervalSince1970: $0) }
         let exchangeRateCurrency = dict["exchangeRateCurrency"] as? String
+        let recurrenceRuleRaw = dict["recurrenceRuleRaw"] as? String
+        let recurrenceRule = recurrenceRuleRaw.flatMap(CashflowRecurrenceRule.init(rawValue:)) ?? .none
+        let recurrenceSeriesID = dict["recurrenceSeriesID"] as? String
         
         // Создаем новую транзакцию
         let transaction = CashflowTransaction(
@@ -66,7 +69,9 @@ struct CashflowTransactionImporter: ModelImporter {
             investmentID: investmentID,
             incomeCategoryRaw: incomeCategoryRaw,
             expenseCategoryRaw: expenseCategoryRaw,
-            note: note
+            note: note,
+            recurrenceRule: recurrenceRule,
+            recurrenceSeriesID: recurrenceSeriesID
         )
         transaction.createdAt = createdAt
         transaction.updatedAt = updatedAt

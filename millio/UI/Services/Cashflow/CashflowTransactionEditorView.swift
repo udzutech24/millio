@@ -25,6 +25,7 @@ struct CashflowTransactionEditorView: View {
     @State private var selectedIncomeCategoryRaw: String? = nil
     @State private var selectedExpenseCategoryRaw: String? = nil
     @State private var note: String = ""
+    @State private var recurrenceRule: CashflowRecurrenceRule = .none
     @State private var availableCurrencies: [String] = []
     @State private var isLoadingCurrencies: Bool = false
     @State private var isAmountOverBalance: Bool = false
@@ -49,6 +50,7 @@ struct CashflowTransactionEditorView: View {
             _selectedIncomeCategoryRaw = State(initialValue: transaction.incomeCategoryRaw)
             _selectedExpenseCategoryRaw = State(initialValue: transaction.expenseCategoryRaw)
             _note = State(initialValue: transaction.note ?? "")
+            _recurrenceRule = State(initialValue: transaction.recurrenceRule)
         } else if let type = transactionType {
             _selectedTransactionType = State(initialValue: type)
             if type == .income {
@@ -56,8 +58,10 @@ struct CashflowTransactionEditorView: View {
             } else if type == .expense {
                 _selectedExpenseCategoryRaw = State(initialValue: ExpenseCategory.groceries.rawValue)
             }
+            _recurrenceRule = State(initialValue: .none)
         } else {
             _selectedTransactionType = State(initialValue: .expense)
+            _recurrenceRule = State(initialValue: .none)
         }
     }
 
@@ -79,6 +83,9 @@ struct CashflowTransactionEditorView: View {
                         }
 
                         mainInfoSection
+                        if selectedTransactionType == .income || selectedTransactionType == .expense {
+                            recurrenceSection
+                        }
                         cardSection
                         additionalSection
                     }
@@ -234,6 +241,7 @@ struct CashflowTransactionEditorView: View {
                 } else {
                     selectedIncomeCategoryRaw = nil
                     selectedExpenseCategoryRaw = nil
+                    recurrenceRule = .none
                 }
             }
         }
@@ -340,6 +348,27 @@ struct CashflowTransactionEditorView: View {
                     .padding(.vertical, 8)
                     .padding(.horizontal, 16)
                 }
+            }
+        }
+    }
+
+    private var recurrenceSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Повтор")
+            FinancesGlassCard {
+                HStack {
+                    Text("Частота")
+                        .foregroundStyle(AppColors.textPrimary)
+                    Spacer()
+                    Picker("Частота", selection: $recurrenceRule) {
+                        ForEach(CashflowRecurrenceRule.allCases, id: \.self) { rule in
+                            Text(rule.displayName).tag(rule)
+                        }
+                    }
+                    .tint(AppColors.textTertiary)
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 16)
             }
         }
     }
@@ -598,6 +627,15 @@ struct CashflowTransactionEditorView: View {
         let resolvedExpenseCategoryRaw: String? = selectedTransactionType == .expense
             ? (selectedExpenseCategoryRaw ?? ExpenseCategory.groceries.rawValue)
             : nil
+        let resolvedRecurrenceSeriesID: String? = {
+            if recurrenceRule == .none {
+                if editingTransaction?.isRecurringTemplate == true {
+                    return nil
+                }
+                return editingTransaction?.recurrenceSeriesID
+            }
+            return editingTransaction?.recurrenceSeriesID ?? UUID().uuidString
+        }()
 
         let transaction: CashflowTransaction
         if let editing = editingTransaction {
@@ -612,7 +650,9 @@ struct CashflowTransactionEditorView: View {
                 toCardID: selectedToCardID,
                 incomeCategoryRaw: resolvedIncomeCategoryRaw,
                 expenseCategoryRaw: resolvedExpenseCategoryRaw,
-                note: note.isEmpty ? nil : note
+                note: note.isEmpty ? nil : note,
+                recurrenceRule: recurrenceRule,
+                recurrenceSeriesID: resolvedRecurrenceSeriesID
             )
         }
 
@@ -625,6 +665,8 @@ struct CashflowTransactionEditorView: View {
         transaction.incomeCategoryRaw = resolvedIncomeCategoryRaw
         transaction.expenseCategoryRaw = resolvedExpenseCategoryRaw
         transaction.note = note.isEmpty ? nil : note
+        transaction.recurrenceRuleRaw = recurrenceRule.rawValue
+        transaction.recurrenceSeriesID = resolvedRecurrenceSeriesID
 
         viewModel.handle(.updateTransaction(transaction))
         dismiss()

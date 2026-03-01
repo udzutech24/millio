@@ -46,6 +46,20 @@ enum CashflowTransactionType: String, Codable, CaseIterable {
     }
 }
 
+// MARK: - Recurrence Rule
+
+enum CashflowRecurrenceRule: String, Codable, CaseIterable {
+    case none = "none"
+    case monthly = "monthly"
+
+    var displayName: String {
+        switch self {
+        case .none: return "Не повторять"
+        case .monthly: return "Ежемесячно"
+        }
+    }
+}
+
 // MARK: - Income Category
 
 enum IncomeCategory: String, Codable, CaseIterable {
@@ -270,6 +284,12 @@ final class CashflowTransaction: Persistable {
     
     /// Описание/комментарий
     var note: String?
+
+    /// Правило автоповтора (none/monthly)
+    var recurrenceRuleRaw: String = CashflowRecurrenceRule.none.rawValue
+
+    /// ID серии автоповтора (общий для всех операций серии)
+    var recurrenceSeriesID: String?
     
     /// Дата создания записи
     var createdAt: Date = Date()
@@ -297,6 +317,17 @@ final class CashflowTransaction: Persistable {
         }
         set { expenseCategoryRaw = newValue?.rawValue }
     }
+
+    var recurrenceRule: CashflowRecurrenceRule {
+        get { CashflowRecurrenceRule(rawValue: recurrenceRuleRaw) ?? .none }
+        set { recurrenceRuleRaw = newValue.rawValue }
+    }
+
+    var isRecurringTemplate: Bool {
+        recurrenceRule != .none
+        && (transactionType == .income || transactionType == .expense)
+        && recurrenceSeriesID != nil
+    }
     
     init(
         transactionType: CashflowTransactionType,
@@ -311,7 +342,9 @@ final class CashflowTransaction: Persistable {
         expenseCategory: ExpenseCategory? = nil,
         incomeCategoryRaw: String? = nil,
         expenseCategoryRaw: String? = nil,
-        note: String? = nil
+        note: String? = nil,
+        recurrenceRule: CashflowRecurrenceRule = .none,
+        recurrenceSeriesID: String? = nil
     ) {
         self.transactionTypeRaw = transactionType.rawValue
         self.amount = amount
@@ -324,6 +357,8 @@ final class CashflowTransaction: Persistable {
         self.incomeCategoryRaw = incomeCategoryRaw ?? incomeCategory?.rawValue
         self.expenseCategoryRaw = expenseCategoryRaw ?? expenseCategory?.rawValue
         self.note = note
+        self.recurrenceRuleRaw = recurrenceRule.rawValue
+        self.recurrenceSeriesID = recurrenceSeriesID
         self.createdAt = Date()
         self.updatedAt = Date()
     }
@@ -375,6 +410,12 @@ final class CashflowTransaction: Persistable {
         }
         if let exchangeRateCurrency = exchangeRateCurrency {
             dict["exchangeRateCurrency"] = exchangeRateCurrency
+        }
+        if recurrenceRule != .none {
+            dict["recurrenceRuleRaw"] = recurrenceRuleRaw
+        }
+        if let recurrenceSeriesID = recurrenceSeriesID {
+            dict["recurrenceSeriesID"] = recurrenceSeriesID
         }
         
         return try JSONSerialization.data(withJSONObject: dict)
