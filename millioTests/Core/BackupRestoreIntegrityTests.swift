@@ -15,6 +15,7 @@ struct BackupRestoreIntegrityTests {
             FinanceGroup.self,
             FinanceAccount.self,
             CashflowTransaction.self,
+            CashflowCustomCategory.self,
             HistoricalRate.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
@@ -23,6 +24,7 @@ struct BackupRestoreIntegrityTests {
     
     private func resetAll(in context: ModelContext) throws {
         try context.deleteAll(CashflowTransaction.self)
+        try context.deleteAll(CashflowCustomCategory.self)
         try context.deleteAll(HistoricalRate.self)
         try context.deleteAll(FinanceAccount.self)
         try context.deleteAll(FinanceGroup.self)

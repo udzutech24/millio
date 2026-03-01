@@ -86,18 +86,12 @@ struct MainAppView: View {
             }
             .sheet(isPresented: $showExpenseSheet) {
                 if let cashflowViewModel = cashflowViewModel {
-                    CashflowTransactionEditorView(
-                        viewModel: cashflowViewModel,
-                        transactionType: .expense
-                    )
+                    CashflowExpenseTransactionSheet(viewModel: cashflowViewModel)
                 }
             }
             .sheet(isPresented: $showIncomeSheet) {
                 if let cashflowViewModel = cashflowViewModel {
-                    CashflowTransactionEditorView(
-                        viewModel: cashflowViewModel,
-                        transactionType: .income
-                    )
+                    CashflowIncomeTransactionSheet(viewModel: cashflowViewModel)
                 }
             }
             .sheet(isPresented: $showCashflowHistory) {

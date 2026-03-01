@@ -17,6 +17,7 @@ struct CashflowViewModelTests {
         let schema = Schema([
             Card.self,
             CashflowTransaction.self,
+            CashflowCustomCategory.self,
             HistoricalRate.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
@@ -26,6 +27,7 @@ struct CashflowViewModelTests {
     private func createTestModelContext() throws -> ModelContext {
         let context = Self.sharedContainer.mainContext
         try context.deleteAll(CashflowTransaction.self)
+        try context.deleteAll(CashflowCustomCategory.self)
         try context.deleteAll(HistoricalRate.self)
         try context.deleteAll(Card.self)
         try context.save()
@@ -133,6 +135,110 @@ struct CashflowViewModelTests {
         viewModel.handle(.movePeriodForward)
         #expect(calendar.component(.month, from: viewModel.state.selectedMonth) == calendar.component(.month, from: initialMonth))
         #expect(calendar.component(.year, from: viewModel.state.selectedMonth) == calendar.component(.year, from: initialMonth))
+    }
+
+    @Test("Итог дохода за месяц учитывает только доходы выбранного месяца")
+    func testMonthlyIncomeTotalUsesOnlySelectedMonthIncome() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let februaryDate = calendar.date(from: DateComponents(year: 2026, month: 2, day: 10)) ?? Date()
+
+        let incomeJanuary = CashflowTransaction(
+            transactionType: .income,
+            amount: 100,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 1, day: 20)) ?? februaryDate,
+            cardID: nil
+        )
+        let incomeFebruaryA = CashflowTransaction(
+            transactionType: .income,
+            amount: 300,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 2, day: 1)) ?? februaryDate,
+            cardID: nil
+        )
+        let incomeFebruaryB = CashflowTransaction(
+            transactionType: .income,
+            amount: 200,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 2, day: 28)) ?? februaryDate,
+            cardID: nil
+        )
+        let expenseFebruary = CashflowTransaction(
+            transactionType: .expense,
+            amount: 900,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 2, day: 15)) ?? februaryDate,
+            cardID: nil
+        )
+
+        modelContext.insert(incomeJanuary)
+        modelContext.insert(incomeFebruaryA)
+        modelContext.insert(incomeFebruaryB)
+        modelContext.insert(expenseFebruary)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+        let februaryTotal = await viewModel.monthlyIncomeTotal(for: februaryDate, in: "RUB")
+        let januaryTotal = await viewModel.monthlyIncomeTotal(
+            for: calendar.date(from: DateComponents(year: 2026, month: 1, day: 1)) ?? februaryDate,
+            in: "RUB"
+        )
+
+        #expect(abs(februaryTotal - 500) < 0.01)
+        #expect(abs(januaryTotal - 100) < 0.01)
+    }
+
+    @Test("Итог расхода за месяц учитывает только расходы выбранного месяца")
+    func testMonthlyExpenseTotalUsesOnlySelectedMonthExpense() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let marchDate = calendar.date(from: DateComponents(year: 2026, month: 3, day: 10)) ?? Date()
+
+        let expenseMarchA = CashflowTransaction(
+            transactionType: .expense,
+            amount: 150,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 5)) ?? marchDate,
+            cardID: nil
+        )
+        let expenseMarchB = CashflowTransaction(
+            transactionType: .expense,
+            amount: 250,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 31)) ?? marchDate,
+            cardID: nil
+        )
+        let expenseFebruary = CashflowTransaction(
+            transactionType: .expense,
+            amount: 70,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 2, day: 20)) ?? marchDate,
+            cardID: nil
+        )
+        let incomeMarch = CashflowTransaction(
+            transactionType: .income,
+            amount: 500,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 15)) ?? marchDate,
+            cardID: nil
+        )
+
+        modelContext.insert(expenseMarchA)
+        modelContext.insert(expenseMarchB)
+        modelContext.insert(expenseFebruary)
+        modelContext.insert(incomeMarch)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+        let marchTotal = await viewModel.monthlyExpenseTotal(for: marchDate, in: "RUB")
+        let februaryTotal = await viewModel.monthlyExpenseTotal(
+            for: calendar.date(from: DateComponents(year: 2026, month: 2, day: 1)) ?? marchDate,
+            in: "RUB"
+        )
+
+        #expect(abs(marchTotal - 400) < 0.01)
+        #expect(abs(februaryTotal - 70) < 0.01)
     }
 
     @Test("Сводка активов считает изменение стоимости по формуле и использует снапшот из Финансов")
@@ -273,6 +379,316 @@ struct CashflowViewModelTests {
         #expect(expenseBreakdown.map { $0.convertedAmount } == [300, 200, 100])
         #expect(viewModel.state.incomeBreakdown.first?.title == "Зарплата")
         #expect(viewModel.state.incomeBreakdown.first?.convertedAmount == 400)
+    }
+
+    @Test("Кастомная категория расхода создается и попадает в опции")
+    func testCreateCustomExpenseCategory() throws {
+        let modelContext = try createTestModelContext()
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+
+        let created = viewModel.createCustomCategory(
+            kind: .expense,
+            name: "Книги",
+            icon: "book.fill"
+        )
+
+        #expect(created != nil)
+        #expect(created?.displayName == "Книги")
+        #expect(created?.isCustom == true)
+        #expect(viewModel.categoryOptions(for: .expense).contains { $0.displayName == "Книги" && $0.isCustom })
+    }
+
+    @Test("Удаление кастомной категории расхода мигрирует транзакции в Другое")
+    func testDeleteCustomExpenseCategoryMigratesTransactions() async throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 2, day: 13)) ?? Date()
+        let defaults = UserDefaults.standard
+        let previousDisplayCurrency = defaults.string(forKey: "cashflow_display_currency")
+        defaults.set("RUB", forKey: "cashflow_display_currency")
+        defer {
+            if let previousDisplayCurrency {
+                defaults.set(previousDisplayCurrency, forKey: "cashflow_display_currency")
+            } else {
+                defaults.removeObject(forKey: "cashflow_display_currency")
+            }
+        }
+
+        let viewModel = CashflowViewModel(
+            modelContext: modelContext,
+            now: { fixedNow },
+            assetsSnapshotProvider: { _, _, _ in
+                (start: 0, end: 0)
+            }
+        )
+
+        guard let custom = viewModel.createCustomCategory(kind: .expense, name: "Такси", icon: "car.fill") else {
+            #expect(Bool(false), "Custom category was not created")
+            return
+        }
+
+        let transaction = CashflowTransaction(
+            transactionType: .expense,
+            amount: 300,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: nil,
+            expenseCategoryRaw: custom.rawValue
+        )
+        modelContext.insert(transaction)
+        try modelContext.save()
+
+        viewModel.handle(.loadTransactions)
+        #expect(viewModel.expenseCategoryDisplayName(for: custom.rawValue) == "Такси")
+
+        let deleted = viewModel.deleteCustomCategory(rawValue: custom.rawValue, kind: .expense)
+        #expect(deleted)
+        #expect(transaction.expenseCategoryRaw == ExpenseCategory.other.rawValue)
+
+        viewModel.handle(.loadTransactions)
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            viewModel.state.expenseBreakdown.contains(where: {
+                $0.title == ExpenseCategory.other.displayName && abs($0.convertedAmount - 300) < 0.01
+            })
+        }
+    }
+
+    @Test("Редактирование кастомной категории обновляет имя и иконку")
+    func testRenameCustomCategoryUpdatesNameAndIcon() throws {
+        let modelContext = try createTestModelContext()
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+
+        guard let created = viewModel.createCustomCategory(
+            kind: .income,
+            name: "Подработка",
+            icon: "briefcase.fill"
+        ) else {
+            #expect(Bool(false), "Custom category was not created")
+            return
+        }
+
+        let renamed = viewModel.renameCustomCategory(
+            rawValue: created.rawValue,
+            kind: .income,
+            newName: "Фриланс проекты",
+            newIcon: "laptopcomputer"
+        )
+
+        #expect(renamed)
+        let resolved = viewModel.categoryOption(for: created.rawValue, kind: .income)
+        #expect(resolved.displayName == "Фриланс проекты")
+        #expect(resolved.icon == "laptopcomputer")
+        #expect(resolved.isCustom)
+    }
+
+    @Test("Ежемесячный автоповтор создаёт пропущенные операции и не дублирует месяцы")
+    func testMonthlyRecurringGeneratesMissingTransactions() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 20)) ?? Date()
+        let card = Card(
+            name: "Основная",
+            cardNumber: "1234",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 1_000
+        )
+        modelContext.insert(card)
+        let template = CashflowTransaction(
+            transactionType: .income,
+            amount: 100,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 1, day: 15)) ?? fixedNow,
+            cardID: card.cardUniqueID,
+            incomeCategory: .salary,
+            note: "Recurring salary",
+            recurrenceRule: .monthly,
+            recurrenceSeriesID: "series-monthly-salary"
+        )
+        modelContext.insert(template)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            viewModel.state.transactions.count == 3
+        }
+
+        let months = viewModel.state.transactions
+            .map { calendar.component(.month, from: $0.transactionDate) }
+            .sorted()
+        #expect(months == [1, 2, 3])
+        #expect(abs(card.balance - 1_200) < 0.01)
+
+        viewModel.handle(.loadTransactions)
+        try await Task.sleep(nanoseconds: 300_000_000)
+        #expect(viewModel.state.transactions.count == 3)
+    }
+
+    @Test("Ежемесячный автоповтор корректно клампит 31 число к концу месяца")
+    func testMonthlyRecurringClampsDayToMonthEnd() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 31)) ?? Date()
+        let template = CashflowTransaction(
+            transactionType: .income,
+            amount: 50,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 1, day: 31)) ?? fixedNow,
+            incomeCategory: .salary,
+            recurrenceRule: .monthly,
+            recurrenceSeriesID: "series-day-31"
+        )
+        modelContext.insert(template)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            viewModel.state.transactions.count == 3
+        }
+
+        let dayByMonth = viewModel.state.transactions
+            .map {
+                (
+                    month: calendar.component(.month, from: $0.transactionDate),
+                    day: calendar.component(.day, from: $0.transactionDate)
+                )
+            }
+            .sorted { $0.month < $1.month }
+
+        #expect(dayByMonth.map(\.month) == [1, 2, 3])
+        #expect(dayByMonth.map(\.day) == [31, 28, 31])
+    }
+
+    @Test("Регулярные шаблоны фильтруются по типу и сортируются по ближайшей дате")
+    func testRecurringTemplatesFilterAndSortByNextOccurrence() throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 10)) ?? Date()
+
+        let recurringDayFive = CashflowTransaction(
+            transactionType: .income,
+            amount: 100,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 1, day: 5)) ?? fixedNow,
+            incomeCategory: .salary,
+            recurrenceRule: .monthly,
+            recurrenceSeriesID: "series-income-5"
+        )
+        let recurringDayTwentyFive = CashflowTransaction(
+            transactionType: .income,
+            amount: 120,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 1, day: 25)) ?? fixedNow,
+            incomeCategory: .bonus,
+            recurrenceRule: .monthly,
+            recurrenceSeriesID: "series-income-25"
+        )
+        let recurringExpense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 200,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 1, day: 8)) ?? fixedNow,
+            expenseCategory: .bills,
+            recurrenceRule: .monthly,
+            recurrenceSeriesID: "series-expense-8"
+        )
+        let oneTimeIncome = CashflowTransaction(
+            transactionType: .income,
+            amount: 90,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 12)) ?? fixedNow,
+            incomeCategory: .gift,
+            recurrenceRule: .none
+        )
+
+        modelContext.insert(recurringDayFive)
+        modelContext.insert(recurringDayTwentyFive)
+        modelContext.insert(recurringExpense)
+        modelContext.insert(oneTimeIncome)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        let templates = viewModel.recurringTemplates(for: .income, relativeTo: fixedNow)
+
+        #expect(templates.count == 2)
+        #expect(templates.first?.recurrenceSeriesID == "series-income-25")
+        #expect(templates.last?.recurrenceSeriesID == "series-income-5")
+
+        let nextForDayFive = viewModel.nextOccurrenceDate(for: recurringDayFive, relativeTo: fixedNow)
+        let nextComponents = nextForDayFive.map { calendar.dateComponents([.year, .month, .day], from: $0) }
+        #expect(nextComponents?.year == 2026)
+        #expect(nextComponents?.month == 4)
+        #expect(nextComponents?.day == 5)
+    }
+
+    @Test("Запланированные одноразовые операции включают только будущие без автоповтора")
+    func testPlannedOneTimeTransactionsIncludeFutureNonRecurringOnly() throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 10)) ?? Date()
+
+        let plannedA = CashflowTransaction(
+            transactionType: .expense,
+            amount: 50,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 12)) ?? fixedNow,
+            expenseCategory: .transport
+        )
+        let plannedB = CashflowTransaction(
+            transactionType: .expense,
+            amount: 70,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 20)) ?? fixedNow,
+            expenseCategory: .shopping
+        )
+        let pastOneTime = CashflowTransaction(
+            transactionType: .expense,
+            amount: 30,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 9)) ?? fixedNow,
+            expenseCategory: .cafe
+        )
+        let todayOneTime = CashflowTransaction(
+            transactionType: .expense,
+            amount: 40,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            expenseCategory: .groceries
+        )
+        let recurringFuture = CashflowTransaction(
+            transactionType: .expense,
+            amount: 90,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 15)) ?? fixedNow,
+            expenseCategory: .bills,
+            recurrenceRule: .monthly,
+            recurrenceSeriesID: "series-expense-future"
+        )
+        let incomePlanned = CashflowTransaction(
+            transactionType: .income,
+            amount: 100,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 18)) ?? fixedNow,
+            incomeCategory: .salary
+        )
+
+        modelContext.insert(plannedA)
+        modelContext.insert(plannedB)
+        modelContext.insert(pastOneTime)
+        modelContext.insert(todayOneTime)
+        modelContext.insert(recurringFuture)
+        modelContext.insert(incomePlanned)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        let planned = viewModel.plannedOneTimeTransactions(for: .expense, relativeTo: fixedNow)
+
+        #expect(planned.count == 2)
+        #expect(planned.map(\.amount) == [50, 70])
+        #expect(planned.allSatisfy { $0.recurrenceRule == .none })
+        #expect(planned.allSatisfy { $0.transactionType == .expense })
     }
 
     private func waitUntil(

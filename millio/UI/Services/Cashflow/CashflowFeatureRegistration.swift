@@ -13,9 +13,11 @@ struct CashflowFeatureRegistration {
     static func register() {
         // Регистрируем модели
         ModelTypeRegistry.shared.register(CashflowTransaction.self, typeName: "CashflowTransaction")
+        ModelTypeRegistry.shared.register(CashflowCustomCategory.self, typeName: "CashflowCustomCategory")
         
         // Регистрируем импортеры
         ModelTypeRegistry.shared.registerImporter(CashflowTransactionImporter.self)
+        ModelTypeRegistry.shared.registerImporter(CashflowCustomCategoryImporter.self)
     }
 }
 
@@ -51,9 +53,9 @@ struct CashflowTransactionImporter: ModelImporter {
         let exchangeRate = dict["exchangeRate"] as? Double
         let exchangeRateDate = (dict["exchangeRateDate"] as? TimeInterval).map { Date(timeIntervalSince1970: $0) }
         let exchangeRateCurrency = dict["exchangeRateCurrency"] as? String
-        
-        let incomeCategory = incomeCategoryRaw.flatMap { IncomeCategory(rawValue: $0) }
-        let expenseCategory = expenseCategoryRaw.flatMap { ExpenseCategory(rawValue: $0) }
+        let recurrenceRuleRaw = dict["recurrenceRuleRaw"] as? String
+        let recurrenceRule = recurrenceRuleRaw.flatMap(CashflowRecurrenceRule.init(rawValue:)) ?? .none
+        let recurrenceSeriesID = dict["recurrenceSeriesID"] as? String
         
         // Создаем новую транзакцию
         let transaction = CashflowTransaction(
@@ -65,9 +67,11 @@ struct CashflowTransactionImporter: ModelImporter {
             toCardID: toCardID,
             creditID: creditID,
             investmentID: investmentID,
-            incomeCategory: incomeCategory,
-            expenseCategory: expenseCategory,
-            note: note
+            incomeCategoryRaw: incomeCategoryRaw,
+            expenseCategoryRaw: expenseCategoryRaw,
+            note: note,
+            recurrenceRule: recurrenceRule,
+            recurrenceSeriesID: recurrenceSeriesID
         )
         transaction.createdAt = createdAt
         transaction.updatedAt = updatedAt
@@ -76,5 +80,40 @@ struct CashflowTransactionImporter: ModelImporter {
         transaction.exchangeRateCurrency = exchangeRateCurrency
         
         context.insert(transaction)
+    }
+}
+
+struct CashflowCustomCategoryImporter: ModelImporter {
+    static func importType() -> String {
+        "CashflowCustomCategory"
+    }
+
+    static var importPriority: Int { 20 }
+
+    static func `import`(from data: [String : Any], context: ModelContext) throws {
+        guard let categoryID = data["categoryID"] as? String,
+              let kindRaw = data["kindRaw"] as? String,
+              let name = data["name"] as? String,
+              let createdAt = data["createdAt"] as? TimeInterval,
+              let updatedAt = data["updatedAt"] as? TimeInterval else {
+            throw AppError.backupCorrupted
+        }
+
+        let kind = CashflowCategoryKind(rawValue: kindRaw) ?? .expense
+        let normalizedName = (data["normalizedName"] as? String) ?? CashflowCustomCategory.normalize(name)
+        let icon = CashflowCustomCategory.normalizeIcon(
+            (data["icon"] as? String) ?? CashflowCustomCategory.defaultIcon
+        )
+
+        let category = CashflowCustomCategory(kind: kind, name: name)
+        category.categoryID = categoryID
+        category.kindRaw = kind.rawValue
+        category.name = name
+        category.normalizedName = normalizedName
+        category.icon = icon
+        category.createdAt = Date(timeIntervalSince1970: createdAt)
+        category.updatedAt = Date(timeIntervalSince1970: updatedAt)
+
+        context.insert(category)
     }
 }

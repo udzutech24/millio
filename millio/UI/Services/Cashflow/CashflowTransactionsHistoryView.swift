@@ -59,8 +59,10 @@ struct CashflowTransactionsHistoryView: View {
             let query = searchText.lowercased()
             result = result.filter { transaction in
                 if let note = transaction.note, note.lowercased().contains(query) { return true }
-                if let cat = transaction.incomeCategory?.displayName.lowercased(), cat.contains(query) { return true }
-                if let cat = transaction.expenseCategory?.displayName.lowercased(), cat.contains(query) { return true }
+                let incomeCategory = viewModel.incomeCategoryDisplayName(for: transaction.incomeCategoryRaw).lowercased()
+                if incomeCategory.contains(query) { return true }
+                let expenseCategory = viewModel.expenseCategoryDisplayName(for: transaction.expenseCategoryRaw).lowercased()
+                if expenseCategory.contains(query) { return true }
                 if transaction.transactionType.displayName.lowercased().contains(query) { return true }
                 let amountStr = String(format: "%.0f", transaction.amount)
                 if amountStr.contains(query) { return true }
@@ -377,16 +379,16 @@ private struct HistoryTransactionCard: View {
 
         switch transaction.transactionType {
         case .income:
-            if let category = transaction.incomeCategory {
-                parts.append(category.displayName)
+            if let categoryRaw = transaction.incomeCategoryRaw {
+                parts.append(viewModel.incomeCategoryDisplayName(for: categoryRaw))
             }
             if let cardName = cardName(for: transaction.cardID) {
                 parts.append("на \(cardName)")
             }
 
         case .expense:
-            if let category = transaction.expenseCategory {
-                parts.append(category.displayName)
+            if let categoryRaw = transaction.expenseCategoryRaw {
+                parts.append(viewModel.expenseCategoryDisplayName(for: categoryRaw))
             }
             if let cardName = cardName(for: transaction.cardID) {
                 parts.append("с \(cardName)")

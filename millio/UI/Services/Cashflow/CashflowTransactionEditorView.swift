@@ -11,10 +11,18 @@ import SwiftData
 struct CashflowTransactionEditorView: View {
     @ObservedObject var viewModel: CashflowViewModel
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
 
     let transactionType: CashflowTransactionType?
     let editingTransaction: CashflowTransaction?
+    let showsTransactionTypeSection: Bool
+    let showsCategorySection: Bool
+    let showsRecurrenceSection: Bool
+    let wrapsInNavigationStack: Bool
+    let showsDismissButton: Bool
+    let customNavigationTitle: String?
+    let preselectedIncomeCategoryRaw: String?
+    let preselectedExpenseCategoryRaw: String?
+    let onSave: (() -> Void)?
 
     @State private var selectedTransactionType: CashflowTransactionType
     @State private var amountText: String = ""
@@ -22,9 +30,10 @@ struct CashflowTransactionEditorView: View {
     @State private var transactionDate: Date = Date()
     @State private var selectedCardID: String? = nil
     @State private var selectedToCardID: String? = nil
-    @State private var selectedIncomeCategory: IncomeCategory? = nil
-    @State private var selectedExpenseCategory: ExpenseCategory? = nil
+    @State private var selectedIncomeCategoryRaw: String? = nil
+    @State private var selectedExpenseCategoryRaw: String? = nil
     @State private var note: String = ""
+    @State private var recurrenceRule: CashflowRecurrenceRule = .none
     @State private var availableCurrencies: [String] = []
     @State private var isLoadingCurrencies: Bool = false
     @State private var isAmountOverBalance: Bool = false
@@ -32,11 +41,35 @@ struct CashflowTransactionEditorView: View {
     
     @State private var showCurrencyPicker: Bool = false
     @State private var currencySearchText: String = ""
+    @State private var showCategorySheet: Bool = false
 
-    init(viewModel: CashflowViewModel, transactionType: CashflowTransactionType? = nil, transaction: CashflowTransaction? = nil) {
+    init(
+        viewModel: CashflowViewModel,
+        transactionType: CashflowTransactionType? = nil,
+        transaction: CashflowTransaction? = nil,
+        showsTransactionTypeSection: Bool = true,
+        showsCategorySection: Bool = true,
+        showsRecurrenceSection: Bool = true,
+        wrapsInNavigationStack: Bool = true,
+        showsDismissButton: Bool = true,
+        customNavigationTitle: String? = nil,
+        preselectedIncomeCategoryRaw: String? = nil,
+        preselectedExpenseCategoryRaw: String? = nil,
+        initialRecurrenceRule: CashflowRecurrenceRule? = nil,
+        onSave: (() -> Void)? = nil
+    ) {
         self.viewModel = viewModel
         self.transactionType = transactionType
         self.editingTransaction = transaction
+        self.showsTransactionTypeSection = showsTransactionTypeSection
+        self.showsCategorySection = showsCategorySection
+        self.showsRecurrenceSection = showsRecurrenceSection
+        self.wrapsInNavigationStack = wrapsInNavigationStack
+        self.showsDismissButton = showsDismissButton
+        self.customNavigationTitle = customNavigationTitle
+        self.preselectedIncomeCategoryRaw = preselectedIncomeCategoryRaw
+        self.preselectedExpenseCategoryRaw = preselectedExpenseCategoryRaw
+        self.onSave = onSave
 
         if let transaction = transaction {
             _selectedTransactionType = State(initialValue: transaction.transactionType)
@@ -45,52 +78,72 @@ struct CashflowTransactionEditorView: View {
             _transactionDate = State(initialValue: transaction.transactionDate)
             _selectedCardID = State(initialValue: transaction.cardID)
             _selectedToCardID = State(initialValue: transaction.toCardID)
-            _selectedIncomeCategory = State(initialValue: transaction.incomeCategory)
-            _selectedExpenseCategory = State(initialValue: transaction.expenseCategory)
+            _selectedIncomeCategoryRaw = State(initialValue: transaction.incomeCategoryRaw)
+            _selectedExpenseCategoryRaw = State(initialValue: transaction.expenseCategoryRaw)
             _note = State(initialValue: transaction.note ?? "")
+            _recurrenceRule = State(initialValue: transaction.recurrenceRule)
         } else if let type = transactionType {
             _selectedTransactionType = State(initialValue: type)
             if type == .income {
-                _selectedIncomeCategory = State(initialValue: .salary)
+                _selectedIncomeCategoryRaw = State(initialValue: preselectedIncomeCategoryRaw ?? IncomeCategory.salary.rawValue)
             } else if type == .expense {
-                _selectedExpenseCategory = State(initialValue: .groceries)
+                _selectedExpenseCategoryRaw = State(initialValue: preselectedExpenseCategoryRaw ?? ExpenseCategory.groceries.rawValue)
             }
+            _recurrenceRule = State(initialValue: initialRecurrenceRule ?? .none)
         } else {
             _selectedTransactionType = State(initialValue: .expense)
+            _recurrenceRule = State(initialValue: initialRecurrenceRule ?? .none)
         }
     }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                GradientBackground()
-
-                ScrollView {
-                    VStack(spacing: 24) {
-                        // Тип транзакции (только для новых)
-                        if editingTransaction == nil {
-                            transactionTypeSection
-                        }
-
-                        // Категория
-                        if selectedTransactionType == .income || selectedTransactionType == .expense {
-                            categorySection
-                        }
-
-                        mainInfoSection
-                        cardSection
-                        additionalSection
-                    }
-                    .padding(.top, 20)
-                    .padding(.bottom, 40)
-                    .padding(.horizontal, 16)
+        Group {
+            if wrapsInNavigationStack {
+                NavigationStack {
+                    editorContent
                 }
-                .scrollDismissesKeyboard(.immediately)
-                .dismissKeyboardOnTap()
+            } else {
+                editorContent
             }
-            .navigationTitle(editingTransaction == nil ? "Новая операция" : "Редактировать")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
+        }
+    }
+
+    private var editorContent: some View {
+        ZStack {
+            GradientBackground()
+
+            ScrollView {
+                VStack(spacing: 24) {
+                    if editingTransaction == nil && showsTransactionTypeSection {
+                        transactionTypeSection
+                    }
+
+                    if showsCategorySection && (selectedTransactionType == .income || selectedTransactionType == .expense) {
+                        categorySection
+                    }
+
+                    if shouldShowSelectedCategorySummary {
+                        selectedCategorySummarySection
+                    }
+
+                    mainInfoSection
+                    if showsRecurrenceSection && (selectedTransactionType == .income || selectedTransactionType == .expense) {
+                        recurrenceSection
+                    }
+                    cardSection
+                    additionalSection
+                }
+                .padding(.top, 20)
+                .padding(.bottom, 40)
+                .padding(.horizontal, 16)
+            }
+            .scrollDismissesKeyboard(.immediately)
+            .dismissKeyboardOnTap()
+        }
+        .navigationTitle(resolvedNavigationTitle)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if showsDismissButton {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
                         dismiss()
@@ -100,83 +153,107 @@ struct CashflowTransactionEditorView: View {
                     }
                     .foregroundStyle(AppColors.textPrimary)
                 }
+            }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        saveTransaction()
-                    } label: {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .semibold))
-                    }
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: getGradientColors(),
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    saveTransaction()
+                } label: {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: getGradientColors(),
+                        startPoint: .leading,
+                        endPoint: .trailing
                     )
-                    .disabled(!isValid)
-                }
-            }
-            .onAppear {
-                loadAvailableCurrencies()
-                if selectedCardID == nil && !viewModel.state.availableCards.isEmpty {
-                    selectedCardID = viewModel.state.availableCards.first?.cardUniqueID
-                }
-                validateAvailableBalance()
-            }
-            .onChange(of: selectedCardID) { _, _ in
-                if selectedCardID == selectedToCardID {
-                    selectedToCardID = nil
-                }
-                validateAvailableBalance()
-            }
-            .onChange(of: selectedToCardID) { _, _ in
-                if selectedToCardID == selectedCardID {
-                    selectedToCardID = nil
-                }
-            }
-            .onChange(of: selectedCurrency) { _, _ in
-                validateAvailableBalance()
-            }
-            .onChange(of: amountText) { _, _ in
-                validateAvailableBalance()
-            }
-            .onChange(of: transactionDate) { _, _ in
-                validateAvailableBalance()
-            }
-            .onChange(of: selectedTransactionType) { _, _ in
-                validateAvailableBalance()
-            }
-            .sheet(isPresented: $showCurrencyPicker) {
-                NavigationStack {
-                    CurrencyPickerView(
-                        allCodes: CurrencySelectionSupport.allCodes(includeCrypto: true),
-                        searchText: $currencySearchText,
-                        selectedCodes: [],
-                        favoriteCodes: [],
-                        currentSelection: selectedCurrency,
-                        onToggleFavorite: nil,
-                        onSelect: { currency in
-                            selectedCurrency = currency
-                            showCurrencyPicker = false
-                        }
-                    )
-                    .navigationTitle("Валюта операции")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Отмена") {
-                                showCurrencyPicker = false
-                            }
-                            .foregroundStyle(AppColors.textPrimary)
-                        }
-                    }
-                }
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                )
+                .disabled(!isValid)
             }
         }
+        .onAppear {
+            loadAvailableCurrencies()
+            if selectedCardID == nil && !viewModel.state.availableCards.isEmpty {
+                selectedCardID = viewModel.state.availableCards.first?.cardUniqueID
+            }
+            if editingTransaction == nil,
+               selectedTransactionType == .income,
+               selectedIncomeCategoryRaw == nil {
+                selectedIncomeCategoryRaw = preselectedIncomeCategoryRaw ?? IncomeCategory.salary.rawValue
+            }
+            if editingTransaction == nil,
+               selectedTransactionType == .expense,
+               selectedExpenseCategoryRaw == nil {
+                selectedExpenseCategoryRaw = preselectedExpenseCategoryRaw ?? ExpenseCategory.groceries.rawValue
+            }
+            validateAvailableBalance()
+        }
+        .onChange(of: selectedCardID) { _, _ in
+            if selectedCardID == selectedToCardID {
+                selectedToCardID = nil
+            }
+            validateAvailableBalance()
+        }
+        .onChange(of: selectedToCardID) { _, _ in
+            if selectedToCardID == selectedCardID {
+                selectedToCardID = nil
+            }
+        }
+        .onChange(of: selectedCurrency) { _, _ in
+            validateAvailableBalance()
+        }
+        .onChange(of: amountText) { _, _ in
+            validateAvailableBalance()
+        }
+        .onChange(of: transactionDate) { _, _ in
+            validateAvailableBalance()
+        }
+        .onChange(of: selectedTransactionType) { _, _ in
+            validateAvailableBalance()
+        }
+        .sheet(isPresented: $showCategorySheet) {
+            CashflowCategorySelectionSheet(
+                viewModel: viewModel,
+                kind: selectedCategoryKind,
+                selectedRaw: selectedCategoryRawBinding
+            )
+        }
+        .sheet(isPresented: $showCurrencyPicker) {
+            NavigationStack {
+                CurrencyPickerView(
+                    allCodes: CurrencySelectionSupport.allCodes(includeCrypto: true),
+                    searchText: $currencySearchText,
+                    selectedCodes: [],
+                    favoriteCodes: [],
+                    currentSelection: selectedCurrency,
+                    onToggleFavorite: nil,
+                    onSelect: { currency in
+                        selectedCurrency = currency
+                        showCurrencyPicker = false
+                    }
+                )
+                .navigationTitle("Валюта операции")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Отмена") {
+                            showCurrencyPicker = false
+                        }
+                        .foregroundStyle(AppColors.textPrimary)
+                    }
+                }
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+    }
+
+    private var resolvedNavigationTitle: String {
+        if let customNavigationTitle {
+            return customNavigationTitle
+        }
+        return editingTransaction == nil ? "Новая операция" : "Редактировать"
     }
 
     // MARK: - Тип операции
@@ -208,14 +285,15 @@ struct CashflowTransactionEditorView: View {
             }
             .onChange(of: selectedTransactionType) { oldValue, newValue in
                 if newValue == .income {
-                    selectedIncomeCategory = .salary
-                    selectedExpenseCategory = nil
+                    selectedIncomeCategoryRaw = selectedIncomeCategoryRaw ?? IncomeCategory.salary.rawValue
+                    selectedExpenseCategoryRaw = nil
                 } else if newValue == .expense {
-                    selectedExpenseCategory = .groceries
-                    selectedIncomeCategory = nil
+                    selectedExpenseCategoryRaw = selectedExpenseCategoryRaw ?? ExpenseCategory.groceries.rawValue
+                    selectedIncomeCategoryRaw = nil
                 } else {
-                    selectedIncomeCategory = nil
-                    selectedExpenseCategory = nil
+                    selectedIncomeCategoryRaw = nil
+                    selectedExpenseCategoryRaw = nil
+                    recurrenceRule = .none
                 }
             }
         }
@@ -227,53 +305,29 @@ struct CashflowTransactionEditorView: View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: "Категория")
             FinancesGlassCard {
-                VStack(spacing: 0) {
-                    if selectedTransactionType == .income {
-                        HStack {
-                            Text("Категория дохода")
+                Button {
+                    showCategorySheet = true
+                } label: {
+                    HStack {
+                        Text(selectedTransactionType == .income ? "Категория дохода" : "Категория расхода")
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        HStack(spacing: 8) {
+                            Image(systemName: selectedCategoryOption.icon)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(AppColors.textSecondary)
+                            Text(selectedCategoryOption.displayName)
                                 .foregroundStyle(AppColors.textPrimary)
-                            Spacer()
-                            Picker("Категория дохода", selection: Binding(
-                                get: { selectedIncomeCategory ?? .salary },
-                                set: { selectedIncomeCategory = $0 }
-                            )) {
-                                ForEach(IncomeCategory.allCases, id: \.self) { category in
-                                    HStack(spacing: 6) {
-                                        Image(systemName: category.icon)
-                                            .font(.system(size: 12))
-                                        Text(category.displayName)
-                                    }
-                                    .tag(category)
-                                }
-                            }
-                            .tint(AppColors.textTertiary)
+                                .lineLimit(1)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(AppColors.textTertiary)
                         }
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 16)
-                    } else if selectedTransactionType == .expense {
-                        HStack {
-                            Text("Категория расхода")
-                                .foregroundStyle(AppColors.textPrimary)
-                            Spacer()
-                            Picker("Категория расхода", selection: Binding(
-                                get: { selectedExpenseCategory ?? .groceries },
-                                set: { selectedExpenseCategory = $0 }
-                            )) {
-                                ForEach(ExpenseCategory.allCases, id: \.self) { category in
-                                    HStack(spacing: 6) {
-                                        Image(systemName: category.icon)
-                                            .font(.system(size: 12))
-                                        Text(category.displayName)
-                                    }
-                                    .tag(category)
-                                }
-                            }
-                            .tint(AppColors.textTertiary)
-                        }
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 16)
                     }
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 16)
                 }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -346,6 +400,46 @@ struct CashflowTransactionEditorView: View {
                     .padding(.vertical, 8)
                     .padding(.horizontal, 16)
                 }
+            }
+        }
+    }
+
+    private var selectedCategorySummarySection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: selectedTransactionType == .income ? "Выбранный доход" : "Выбранный расход")
+            FinancesGlassCard {
+                HStack(spacing: 10) {
+                    Image(systemName: selectedCategoryOption.icon)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .frame(width: 20)
+                    Text(selectedCategoryOption.displayName)
+                        .foregroundStyle(AppColors.textPrimary)
+                    Spacer()
+                }
+                .padding(.vertical, 10)
+                .padding(.horizontal, 16)
+            }
+        }
+    }
+
+    private var recurrenceSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Повтор")
+            FinancesGlassCard {
+                HStack {
+                    Text("Частота")
+                        .foregroundStyle(AppColors.textPrimary)
+                    Spacer()
+                    Picker("Частота", selection: $recurrenceRule) {
+                        ForEach(CashflowRecurrenceRule.allCases, id: \.self) { rule in
+                            Text(rule.displayName).tag(rule)
+                        }
+                    }
+                    .tint(AppColors.textTertiary)
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 16)
             }
         }
     }
@@ -520,6 +614,44 @@ struct CashflowTransactionEditorView: View {
 
     // MARK: - Validation
 
+    private var selectedCategoryKind: CashflowCategoryKind {
+        selectedTransactionType == .income ? .income : .expense
+    }
+
+    private var selectedCategoryRawBinding: Binding<String> {
+        Binding(
+            get: {
+                if selectedCategoryKind == .income {
+                    return selectedIncomeCategoryRaw ?? IncomeCategory.salary.rawValue
+                }
+                return selectedExpenseCategoryRaw ?? ExpenseCategory.groceries.rawValue
+            },
+            set: { newValue in
+                if selectedCategoryKind == .income {
+                    selectedIncomeCategoryRaw = newValue
+                } else {
+                    selectedExpenseCategoryRaw = newValue
+                }
+            }
+        )
+    }
+
+    private var shouldShowSelectedCategorySummary: Bool {
+        !showsCategorySection && (selectedTransactionType == .income || selectedTransactionType == .expense)
+    }
+
+    private var selectedCategoryOption: CashflowCategoryOption {
+        let kind = selectedCategoryKind
+        let fallbackRaw = kind == .income ? IncomeCategory.salary.rawValue : ExpenseCategory.groceries.rawValue
+        let raw: String
+        if kind == .income {
+            raw = selectedIncomeCategoryRaw ?? fallbackRaw
+        } else {
+            raw = selectedExpenseCategoryRaw ?? fallbackRaw
+        }
+        return viewModel.categoryOption(for: raw, kind: kind)
+    }
+
     private var isValid: Bool {
         guard !amountText.isEmpty,
               let amount = Double(amountText.replacingOccurrences(of: ",", with: ".")),
@@ -564,6 +696,23 @@ struct CashflowTransactionEditorView: View {
             return
         }
 
+        let resolvedIncomeCategoryRaw: String? = selectedTransactionType == .income
+            ? (selectedIncomeCategoryRaw ?? IncomeCategory.salary.rawValue)
+            : nil
+        let resolvedExpenseCategoryRaw: String? = selectedTransactionType == .expense
+            ? (selectedExpenseCategoryRaw ?? ExpenseCategory.groceries.rawValue)
+            : nil
+        let effectiveRecurrenceRule: CashflowRecurrenceRule = showsRecurrenceSection ? recurrenceRule : .none
+        let resolvedRecurrenceSeriesID: String? = {
+            if effectiveRecurrenceRule == .none {
+                if editingTransaction?.isRecurringTemplate == true {
+                    return nil
+                }
+                return editingTransaction?.recurrenceSeriesID
+            }
+            return editingTransaction?.recurrenceSeriesID ?? UUID().uuidString
+        }()
+
         let transaction: CashflowTransaction
         if let editing = editingTransaction {
             transaction = editing
@@ -575,9 +724,11 @@ struct CashflowTransactionEditorView: View {
                 transactionDate: transactionDate,
                 cardID: selectedCardID,
                 toCardID: selectedToCardID,
-                incomeCategory: selectedIncomeCategory,
-                expenseCategory: selectedExpenseCategory,
-                note: note.isEmpty ? nil : note
+                incomeCategoryRaw: resolvedIncomeCategoryRaw,
+                expenseCategoryRaw: resolvedExpenseCategoryRaw,
+                note: note.isEmpty ? nil : note,
+                recurrenceRule: effectiveRecurrenceRule,
+                recurrenceSeriesID: resolvedRecurrenceSeriesID
             )
         }
 
@@ -587,12 +738,18 @@ struct CashflowTransactionEditorView: View {
         transaction.transactionDate = transactionDate
         transaction.cardID = selectedCardID
         transaction.toCardID = selectedToCardID
-        transaction.incomeCategoryRaw = selectedIncomeCategory?.rawValue
-        transaction.expenseCategoryRaw = selectedExpenseCategory?.rawValue
+        transaction.incomeCategoryRaw = resolvedIncomeCategoryRaw
+        transaction.expenseCategoryRaw = resolvedExpenseCategoryRaw
         transaction.note = note.isEmpty ? nil : note
+        transaction.recurrenceRuleRaw = effectiveRecurrenceRule.rawValue
+        transaction.recurrenceSeriesID = resolvedRecurrenceSeriesID
 
         viewModel.handle(.updateTransaction(transaction))
-        dismiss()
+        if let onSave {
+            onSave()
+        } else {
+            dismiss()
+        }
     }
 
     // MARK: - Currency Loading
@@ -677,6 +834,316 @@ struct CashflowTransactionEditorView: View {
                 }
             }
             validationTask = nil
+        }
+    }
+}
+
+enum CashflowCategoryEditorMode {
+    case create
+    case edit(rawValue: String)
+}
+
+private struct CashflowCategorySelectionSheet: View {
+    @ObservedObject var viewModel: CashflowViewModel
+    let kind: CashflowCategoryKind
+    @Binding var selectedRaw: String
+
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var searchText: String = ""
+    @State private var showEditorSheet: Bool = false
+    @State private var showDeleteAlert: Bool = false
+    @State private var editorMode: CashflowCategoryEditorMode = .create
+    @State private var editorName: String = ""
+    @State private var editorIcon: String = CashflowCustomCategory.defaultIcon
+    @State private var pendingDeleteRaw: String?
+
+    private var title: String {
+        kind == .income ? "Категории доходов" : "Категории расходов"
+    }
+
+    private var createButtonTitle: String {
+        kind == .income ? "Создать категорию дохода" : "Создать категорию расхода"
+    }
+
+    private var options: [CashflowCategoryOption] {
+        viewModel.categoryOptions(for: kind, matching: searchText)
+    }
+
+    private var fallbackRaw: String {
+        kind == .income ? IncomeCategory.other.rawValue : ExpenseCategory.other.rawValue
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                GradientBackground()
+
+                ScrollView {
+                    VStack(spacing: 12) {
+                        HStack(spacing: 10) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(AppColors.textSecondary)
+                            TextField("Поиск категории", text: $searchText)
+                                .textInputAutocapitalization(.words)
+                                .foregroundStyle(AppColors.textPrimary)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.white.opacity(0.07))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                                )
+                        )
+
+                        FinancesGlassCard {
+                            VStack(spacing: 0) {
+                                ForEach(Array(options.enumerated()), id: \.element.id) { index, option in
+                                    Button {
+                                        selectedRaw = option.rawValue
+                                        dismiss()
+                                    } label: {
+                                        HStack(spacing: 10) {
+                                            Image(systemName: option.icon)
+                                                .font(.system(size: 14, weight: .semibold))
+                                                .foregroundStyle(AppColors.textSecondary)
+                                                .frame(width: 20)
+                                            Text(option.displayName)
+                                                .foregroundStyle(AppColors.textPrimary)
+                                            Spacer()
+                                            if option.rawValue == selectedRaw {
+                                                Image(systemName: "checkmark")
+                                                    .font(.system(size: 13, weight: .semibold))
+                                                    .foregroundStyle(AppColors.textPrimary)
+                                            }
+                                            if option.isCustom {
+                                                Menu {
+                                                    Button("Редактировать") {
+                                                        openEditSheet(for: option)
+                                                    }
+                                                    Button("Удалить", role: .destructive) {
+                                                        pendingDeleteRaw = option.rawValue
+                                                        showDeleteAlert = true
+                                                    }
+                                                } label: {
+                                                    Image(systemName: "ellipsis.circle")
+                                                        .font(.system(size: 16, weight: .semibold))
+                                                        .foregroundStyle(AppColors.textTertiary)
+                                                }
+                                                .buttonStyle(.plain)
+                                                .padding(.leading, 6)
+                                            }
+                                        }
+                                        .padding(.vertical, 10)
+                                        .padding(.horizontal, 14)
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    if index < options.count - 1 {
+                                        FinancesRowDivider()
+                                    }
+                                }
+                            }
+                        }
+
+                        Button {
+                            openCreateSheet()
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.system(size: 15, weight: .semibold))
+                                Text(createButtonTitle)
+                                    .font(.system(size: 15, weight: .semibold))
+                            }
+                            .foregroundStyle(AppColors.textPrimary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(Color.white.opacity(0.07))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                                    )
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                    .padding(.bottom, 24)
+                }
+                .scrollDismissesKeyboard(.immediately)
+                .dismissKeyboardOnTap()
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Закрыть") {
+                        dismiss()
+                    }
+                    .foregroundStyle(AppColors.textPrimary)
+                }
+            }
+            .alert("Удалить категорию?", isPresented: $showDeleteAlert) {
+                Button("Отмена", role: .cancel) {
+                    pendingDeleteRaw = nil
+                }
+                Button("Удалить", role: .destructive) {
+                    guard let raw = pendingDeleteRaw else { return }
+                    if viewModel.deleteCustomCategory(rawValue: raw, kind: kind), selectedRaw == raw {
+                        selectedRaw = fallbackRaw
+                    }
+                    pendingDeleteRaw = nil
+                }
+            } message: {
+                Text("Связанные операции будут перенесены в безопасную системную категорию.")
+            }
+            .fullScreenCover(isPresented: $showEditorSheet) {
+                CashflowCategoryEditorSheet(
+                    mode: editorMode,
+                    name: $editorName,
+                    icon: $editorIcon
+                ) { name, icon in
+                    handleSave(name: name, icon: icon)
+                }
+            }
+        }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func openCreateSheet() {
+        editorMode = .create
+        editorName = ""
+        editorIcon = CashflowCustomCategory.defaultIcon
+        showEditorSheet = true
+    }
+
+    private func openEditSheet(for option: CashflowCategoryOption) {
+        editorMode = .edit(rawValue: option.rawValue)
+        editorName = option.displayName
+        editorIcon = option.icon
+        showEditorSheet = true
+    }
+
+    private func handleSave(name: String, icon: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        switch editorMode {
+        case .create:
+            if let created = viewModel.createCustomCategory(kind: kind, name: trimmed, icon: icon) {
+                selectedRaw = created.rawValue
+            }
+
+        case .edit(let rawValue):
+            guard viewModel.renameCustomCategory(
+                rawValue: rawValue,
+                kind: kind,
+                newName: trimmed,
+                newIcon: icon
+            ) else { return }
+
+            if let resolved = viewModel.categoryOptions(for: kind).first(where: {
+                $0.displayName.caseInsensitiveCompare(trimmed) == .orderedSame
+            }) {
+                selectedRaw = resolved.rawValue
+            } else if selectedRaw == rawValue {
+                selectedRaw = fallbackRaw
+            }
+        }
+
+        showEditorSheet = false
+    }
+}
+
+struct CashflowCategoryEditorSheet: View {
+    let mode: CashflowCategoryEditorMode
+    @Binding var name: String
+    @Binding var icon: String
+    let onSave: (String, String) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @FocusState private var isNameFieldFocused: Bool
+
+    private var title: String {
+        switch mode {
+        case .create: return "Новая категория"
+        case .edit: return "Редактировать категорию"
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                GradientBackground()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        FinancesSectionHeader(title: "Название")
+                        FinancesGlassCard {
+                            TextField("Введите название", text: $name)
+                                .textInputAutocapitalization(.words)
+                                .foregroundStyle(AppColors.textPrimary)
+                                .focused($isNameFieldFocused)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 12)
+                        }
+
+                        FinancesSectionHeader(title: "Иконка")
+                        FinancesGlassCard {
+                            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 5), spacing: 10) {
+                                ForEach(CashflowCustomCategory.allowedIcons, id: \.self) { symbol in
+                                    Button {
+                                        icon = symbol
+                                    } label: {
+                                        Image(systemName: symbol)
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundStyle(icon == symbol ? AppColors.textPrimary : AppColors.textSecondary)
+                                            .frame(maxWidth: .infinity, minHeight: 40)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                                    .fill(icon == symbol ? Color.white.opacity(0.14) : Color.white.opacity(0.06))
+                                            )
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(12)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                }
+                .scrollDismissesKeyboard(.immediately)
+                .dismissKeyboardOnTap()
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Отмена") { dismiss() }
+                        .foregroundStyle(AppColors.textPrimary)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Сохранить") {
+                        onSave(name, icon)
+                    }
+                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .onAppear {
+                guard case .create = mode else { return }
+                DispatchQueue.main.async {
+                    isNameFieldFocused = true
+                }
+            }
         }
     }
 }
