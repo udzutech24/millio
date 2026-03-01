@@ -28,6 +28,8 @@
 - `marketCurrency: String?` — валюта котировки
 - `marketQuantity: Double?` — количество инструмента
 - `lastKnownUnitPrice: Double?` — последняя известная цена за единицу
+- `averagePurchaseUnitPrice: Double?` — средняя цена покупки за единицу (cost basis)
+- `totalPurchaseCost: Double?` — суммарная стоимость покупки текущей позиции
 - `lastKnownPriceUpdatedAt: Date?` — время последнего обновления цены
 - `marketProviderRaw: String?` — идентификатор источника цены (например, `twelvedata`)
 
@@ -39,6 +41,8 @@
 Правило расчета:
 
 - при наличии `quantity + unitPrice` итог позиции пересчитывается в `Investment.amount`;
+- при операции покупки средняя цена покупки пересчитывается как взвешенная средняя;
+- при продаже уменьшается `marketQuantity` и пропорционально уменьшается `totalPurchaseCost`;
 - `amount` остается базовым числом для текущих итогов, динамики и конвертации валют.
 
 Offline-first поведение:

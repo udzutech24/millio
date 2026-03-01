@@ -75,4 +75,54 @@ struct InvestmentMarketModelTests {
         #expect(imported.lastKnownUnitPrice == nil)
         #expect(imported.marketProviderRaw == nil)
     }
+
+    @Test("applyBuy/applySell корректно ведут среднюю цену покупки")
+    func testBuySellAveragePurchasePrice() throws {
+        let investment = Investment(
+            name: "AAPL",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 0,
+            currency: "USD"
+        )
+
+        #expect(investment.applyBuy(quantity: 10, unitPrice: 100))
+        #expect(investment.marketQuantity == 10)
+        #expect(abs((investment.averagePurchaseUnitPrice ?? 0) - 100) < 0.0001)
+        #expect(abs((investment.totalPurchaseCost ?? 0) - 1000) < 0.0001)
+
+        #expect(investment.applyBuy(quantity: 10, unitPrice: 200))
+        #expect(investment.marketQuantity == 20)
+        #expect(abs((investment.averagePurchaseUnitPrice ?? 0) - 150) < 0.0001)
+        #expect(abs((investment.totalPurchaseCost ?? 0) - 3000) < 0.0001)
+
+        #expect(investment.applySell(quantity: 5, unitPrice: 220))
+        #expect(abs((investment.marketQuantity ?? 0) - 15) < 0.0001)
+        #expect(abs((investment.averagePurchaseUnitPrice ?? 0) - 150) < 0.0001)
+        #expect(abs((investment.totalPurchaseCost ?? 0) - 2250) < 0.0001)
+
+        #expect(investment.applySell(quantity: 20, unitPrice: 220) == false)
+    }
+
+    @Test("positionGrowthAbsolute/positionGrowthPercent возвращают корректный прирост")
+    func testPositionGrowthMetrics() {
+        let investment = Investment(
+            name: "AAPL",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 0,
+            currency: "USD"
+        )
+
+        investment.marketQuantity = 10
+        investment.lastKnownUnitPrice = 150
+        investment.totalPurchaseCost = 1000
+
+        #expect(abs((investment.positionGrowthAbsolute ?? 0) - 500) < 0.0001)
+        #expect(abs((investment.positionGrowthPercent ?? 0) - 50) < 0.0001)
+
+        investment.totalPurchaseCost = 0
+        #expect(investment.positionGrowthAbsolute == nil)
+        #expect(investment.positionGrowthPercent == nil)
+    }
 }

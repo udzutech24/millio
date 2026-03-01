@@ -971,12 +971,14 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     @State private var marketCurrency: String?
     @State private var marketQuantityText: String = ""
     @State private var marketQuantityDisplayText: String = ""
+    @State private var purchaseUnitPriceText: String = ""
     @State private var lastKnownUnitPrice: Double?
     @State private var lastKnownPriceUpdatedAt: Date?
     @State private var marketProviderRaw: String?
     @State private var showMarketSearchSheet: Bool = false
     @State private var isRefreshingPrice: Bool = false
     @State private var marketErrorMessage: String?
+    @State private var didPrefillFromEditing: Bool = false
     
     private let marketDataClient: MarketDataClientProtocol
     
@@ -1039,6 +1041,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                 currency: marketCurrency ?? selectedCurrency,
                 quantity: quantity,
                 unitPrice: lastKnownUnitPrice,
+                purchaseUnitPrice: parseNumber(purchaseUnitPriceText),
                 priceUpdatedAt: lastKnownPriceUpdatedAt,
                 providerRaw: marketProviderRaw
             )
@@ -1089,6 +1092,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
             prioritySection
         }
         .onAppear {
+            prefillFromEditingIfNeeded()
             loadAvailableCurrencies()
             if amountDisplayText.isEmpty {
                 amountDisplayText = formatNumberForDisplay(amountText)
@@ -1137,6 +1141,9 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                 marketQuantityDisplayText = formatted
             }
             marketQuantityText = sanitized
+        }
+        .onChange(of: purchaseUnitPriceText) { _, _ in
+            onInvestmentDataChanged(getInvestmentData())
         }
         .sheet(isPresented: $showCurrencyPicker) {
             NavigationStack {
@@ -1284,6 +1291,27 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                     .padding(.vertical, 14)
                     .padding(.horizontal, 16)
                     
+                    FinancesRowDivider(leadingPadding: 16)
+
+                    HStack(spacing: 12) {
+                        Text("Цена покупки")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        TextField("0", text: Binding(
+                            get: { formatNumberForDisplay(purchaseUnitPriceText) },
+                            set: { newValue in
+                                purchaseUnitPriceText = AmountInputFormatter.sanitize(newValue)
+                            }
+                        ))
+                        .keyboardType(.decimalPad)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 160)
+                    }
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 16)
+
                     FinancesRowDivider(leadingPadding: 16)
                     
                     HStack(spacing: 12) {
@@ -1440,6 +1468,32 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
             availableCurrencies = currencies.sorted()
         }
     }
+
+    private func prefillFromEditingIfNeeded() {
+        guard !didPrefillFromEditing, let editing = viewModel.state.editingInvestment else {
+            return
+        }
+
+        selectedInvestmentType = editing.investmentType
+        selectedCategory = editing.category
+        amountText = String(editing.amount)
+        amountDisplayText = formatNumberForDisplay(amountText)
+        selectedCurrency = editing.currency
+        includeInTotal = editing.includeInTotal
+        selectedPriority = editing.priority
+        isFavorite = editing.isFavorite
+        marketSymbol = editing.marketSymbol ?? ""
+        marketExchange = editing.marketExchange
+        marketCurrency = editing.marketCurrency
+        marketQuantityText = editing.marketQuantity.map { "\($0)" } ?? ""
+        marketQuantityDisplayText = formatNumberForDisplay(marketQuantityText)
+        purchaseUnitPriceText = editing.averagePurchaseUnitPrice.map { "\($0)" } ?? ""
+        lastKnownUnitPrice = editing.lastKnownUnitPrice
+        lastKnownPriceUpdatedAt = editing.lastKnownPriceUpdatedAt
+        marketProviderRaw = editing.marketProviderRaw
+        didPrefillFromEditing = true
+        onInvestmentDataChanged(getInvestmentData())
+    }
     
     private func parseNumber(_ text: String) -> Double? {
         AmountInputFormatter.parse(text)
@@ -1472,6 +1526,9 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                     lastKnownUnitPrice = latestPrice
                     lastKnownPriceUpdatedAt = latestPrice == nil ? nil : Date()
                     marketProviderRaw = latestPrice == nil ? nil : "twelvedata"
+                    if let latestPrice, purchaseUnitPriceText.isEmpty {
+                        purchaseUnitPriceText = String(latestPrice)
+                    }
                     if let positionTotal {
                         amountText = String(positionTotal)
                     }
@@ -1504,6 +1561,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
         marketExchange = nil
         marketCurrency = nil
         marketQuantityText = ""
+        purchaseUnitPriceText = ""
         lastKnownUnitPrice = nil
         lastKnownPriceUpdatedAt = nil
         marketProviderRaw = nil

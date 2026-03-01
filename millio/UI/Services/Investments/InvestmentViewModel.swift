@@ -55,6 +55,7 @@ struct InvestmentMarketData: Equatable {
     var currency: String?
     var quantity: Double?
     var unitPrice: Double?
+    var purchaseUnitPrice: Double? = nil
     var priceUpdatedAt: Date?
     var providerRaw: String?
 }
@@ -399,6 +400,8 @@ final class InvestmentViewModel: ViewModelProtocol {
             investment.marketCurrency = nil
             investment.marketQuantity = nil
             investment.lastKnownUnitPrice = nil
+            investment.averagePurchaseUnitPrice = nil
+            investment.totalPurchaseCost = nil
             investment.lastKnownPriceUpdatedAt = nil
             investment.marketProviderRaw = nil
             return
@@ -409,6 +412,19 @@ final class InvestmentViewModel: ViewModelProtocol {
         investment.marketCurrency = marketData?.currency
         investment.marketQuantity = marketData?.quantity
         investment.lastKnownUnitPrice = marketData?.unitPrice
+        if let quantity = marketData?.quantity, quantity > 0 {
+            if let purchaseUnitPrice = marketData?.purchaseUnitPrice {
+                investment.averagePurchaseUnitPrice = purchaseUnitPrice
+                investment.totalPurchaseCost = purchaseUnitPrice * quantity
+            } else if investment.averagePurchaseUnitPrice == nil,
+                      let unitPrice = marketData?.unitPrice {
+                investment.averagePurchaseUnitPrice = unitPrice
+                investment.totalPurchaseCost = unitPrice * quantity
+            }
+        } else if marketData?.quantity == nil {
+            investment.averagePurchaseUnitPrice = nil
+            investment.totalPurchaseCost = nil
+        }
         investment.lastKnownPriceUpdatedAt = marketData?.priceUpdatedAt
         investment.marketProviderRaw = marketData?.providerRaw
     }

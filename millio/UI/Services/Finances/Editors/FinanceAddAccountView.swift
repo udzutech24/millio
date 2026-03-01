@@ -10,8 +10,14 @@ import SwiftData
 
 struct FinanceAddAccountView: View {
     @ObservedObject var viewModel: FinanceViewModel
+    let editingInvestment: Investment?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+
+    init(viewModel: FinanceViewModel, editingInvestment: Investment? = nil) {
+        self.viewModel = viewModel
+        self.editingInvestment = editingInvestment
+    }
     
     private enum AddAccountMode: String, CaseIterable, Identifiable {
         case create
@@ -62,7 +68,7 @@ struct FinanceAddAccountView: View {
     }
     
     private var navigationTitle: String {
-        "Новый продукт"
+        editingInvestment == nil ? "Новый продукт" : "Редактирование продукта"
     }
     
     private var resolvedGroup: FinanceGroup? {
@@ -449,13 +455,17 @@ struct FinanceAddAccountView: View {
         case .investment:
             if investmentViewModel == nil {
                 VStack(alignment: .leading, spacing: 10) {
-                    FinancesSectionHeader(title: "Создать актив")
+                    FinancesSectionHeader(title: editingInvestment == nil ? "Создать актив" : "Редактировать актив")
                     FinancesGlassCard(contentPadding: EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20)) {
                         ProgressView()
                             .tint(AppColors.textPrimary)
                             .task {
                                 let vm = InvestmentViewModel(modelContext: modelContext)
-                                vm.handle(.addInvestment)
+                                if let editingInvestment {
+                                    vm.handle(.editInvestment(editingInvestment))
+                                } else {
+                                    vm.handle(.addInvestment)
+                                }
                                 investmentViewModel = vm
                             }
                     }
@@ -666,7 +676,7 @@ struct FinanceAddAccountView: View {
                 }
             }
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button("Добавить") { addAccount() }
+                Button(editingInvestment == nil ? "Добавить" : "Сохранить") { addAccount() }
                     .foregroundStyle(
                         isValid
                         ? AnyShapeStyle(
@@ -683,8 +693,21 @@ struct FinanceAddAccountView: View {
         }
         .onAppear {
             areHintsHidden = UserDefaults.standard.bool(forKey: HintsPrefs.hiddenKey)
+            if let editingInvestment {
+                selectedAccountType = .investment
+                selectedInvestmentCategory = editingInvestment.category
+                selectedProductTypeTitle = editingInvestment.category.displayName
+                accountName = editingInvestment.name
+            }
             if let preselectedGroup = viewModel.state.selectedGroupForAccount {
                 selectedGroupID = preselectedGroup.groupUniqueID
+            } else if let editingInvestment {
+                let editingID = editingInvestment.investmentUniqueID
+                let descriptor = FetchDescriptor<FinanceAccount>()
+                let accountLink = (try? modelContext.fetch(descriptor))?.first(where: {
+                    $0.accountType == .investment && $0.accountID == editingID
+                })
+                selectedGroupID = accountLink?.group?.groupUniqueID
             } else {
                 selectedGroupID = nil
             }
@@ -836,7 +859,15 @@ struct FinanceAddAccountView: View {
             }
         case .investment:
             if let investmentViewModel = investmentViewModel {
-                createInvestmentAndAddToGroup(investmentViewModel: investmentViewModel, group: targetGroup)
+                if let editingInvestment {
+                    updateInvestmentAndGroup(
+                        investmentViewModel: investmentViewModel,
+                        investment: editingInvestment,
+                        group: targetGroup
+                    )
+                } else {
+                    createInvestmentAndAddToGroup(investmentViewModel: investmentViewModel, group: targetGroup)
+                }
                 return
             }
         }
@@ -925,6 +956,51 @@ struct FinanceAddAccountView: View {
             accountID: createdInvestmentID,
             group: group
         ))
+        dismiss()
+    }
+
+    private func updateInvestmentAndGroup(
+        investmentViewModel: InvestmentViewModel,
+        investment: Investment,
+        group: FinanceGroup?
+    ) {
+        guard let investmentData = investmentData else { return }
+
+        investmentViewModel.handle(.updateInvestment(
+            name: investmentData.name,
+            investmentType: investmentData.investmentType,
+            category: investmentData.category,
+            amount: investmentData.amount,
+            currency: investmentData.currency,
+            includeInTotal: investmentData.includeInTotal,
+            priority: investmentData.priority,
+            isFavorite: investmentData.isFavorite,
+            marketData: investmentData.marketData,
+            createCashflowTransaction: investmentData.createCashflowTransaction,
+            uniqueID: investment.investmentUniqueID
+        ))
+
+        let investmentID = investment.investmentUniqueID
+        let descriptor = FetchDescriptor<FinanceAccount>()
+        let existingAccount = (try? modelContext.fetch(descriptor))?.first(where: {
+            $0.accountType == .investment && $0.accountID == investmentID
+        })
+        if let existingAccount {
+            existingAccount.group = group
+        } else {
+            let link = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+            link.group = group
+            modelContext.insert(link)
+        }
+
+        do {
+            try modelContext.save()
+        } catch {
+            AppLogger.log(.error, category: "FinanceAddAccount", "Failed to update group link for investment: \(error.localizedDescription)")
+        }
+
+        viewModel.handle(.loadAccounts)
+        viewModel.handle(.loadGroups)
         dismiss()
     }
 }

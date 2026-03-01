@@ -429,8 +429,47 @@ struct FinanceViewModelTests {
 
         let subtitle = viewModel.getInvestmentPositionSubtitle(account: account)
         #expect(subtitle?.contains("шт.") == true)
-        #expect(subtitle?.contains("/шт.") == true)
+        #expect(subtitle?.contains("по") == true)
         #expect(subtitle?.contains("500") == true)
+    }
+
+    @Test("Для рыночной инвестиции показывается строка покупки и прироста")
+    func testInvestmentPurchaseGrowthSubtitle() throws {
+        let modelContext = try createTestModelContext()
+
+        let group = FinanceGroup(name: "Акции", colorHex: "#33AA44")
+        modelContext.insert(group)
+
+        let investment = Investment(
+            name: "GLD",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 1500,
+            currency: "USD"
+        )
+        investment.marketQuantity = 10
+        investment.lastKnownUnitPrice = 150
+        investment.averagePurchaseUnitPrice = 100
+        investment.totalPurchaseCost = 1000
+        investment.includeInTotal = true
+        modelContext.insert(investment)
+
+        let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+        account.group = group
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadAccounts)
+
+        let performance = viewModel.getInvestmentPurchaseGrowthSubtitle(account: account)
+        #expect(performance?.text.contains("Покупка 100") == true)
+        #expect(performance?.text.contains("+50%") == true)
+        #expect(performance?.isPositive == true)
     }
 
     @Test("Быстрое редактирование рыночной инвестиции меняет количество, а не сумму напрямую")
@@ -488,6 +527,69 @@ struct FinanceViewModelTests {
         #expect(transaction.exchangeRate == 1.0)
         #expect(transaction.exchangeRateCurrency == "USD")
         #expect(transaction.exchangeRateDate != nil)
+    }
+
+    @Test("Покупка и продажа рыночной инвестиции через executeInvestmentOrder обновляет cost basis и транзакции")
+    func testExecuteInvestmentOrderBuySell() throws {
+        let modelContext = try createTestModelContext()
+
+        let group = FinanceGroup(name: "Акции", colorHex: "#3366FF")
+        modelContext.insert(group)
+
+        let investment = Investment(
+            name: "AAPL",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 1000,
+            currency: "USD"
+        )
+        investment.marketQuantity = 10
+        investment.lastKnownUnitPrice = 100
+        investment.averagePurchaseUnitPrice = 100
+        investment.totalPurchaseCost = 1000
+        investment.includeInTotal = true
+        modelContext.insert(investment)
+
+        let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+        account.group = group
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadGroups)
+        viewModel.handle(.loadAccounts)
+
+        viewModel.handle(.executeInvestmentOrder(
+            account: account,
+            side: .buy,
+            quantity: 10,
+            unitPrice: 200
+        ))
+
+        #expect(abs((investment.marketQuantity ?? 0) - 20) < 0.0001)
+        #expect(abs((investment.averagePurchaseUnitPrice ?? 0) - 150) < 0.0001)
+        #expect(abs((investment.totalPurchaseCost ?? 0) - 3000) < 0.0001)
+        #expect(abs(investment.amount - 4000) < 0.01)
+
+        viewModel.handle(.executeInvestmentOrder(
+            account: account,
+            side: .sell,
+            quantity: 5,
+            unitPrice: 220
+        ))
+
+        #expect(abs((investment.marketQuantity ?? 0) - 15) < 0.0001)
+        #expect(abs((investment.averagePurchaseUnitPrice ?? 0) - 150) < 0.0001)
+        #expect(abs((investment.totalPurchaseCost ?? 0) - 2250) < 0.0001)
+        #expect(abs(investment.amount - 3300) < 0.01)
+
+        let descriptor = FetchDescriptor<CashflowTransaction>()
+        let transactions = try modelContext.fetch(descriptor)
+        #expect(transactions.count == 2)
     }
 
     @Test("Невалидные связи FinanceAccount очищаются при загрузке счетов")

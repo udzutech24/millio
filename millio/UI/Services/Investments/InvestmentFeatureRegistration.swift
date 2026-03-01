@@ -50,6 +50,8 @@ struct InvestmentImporter: ModelImporter {
         let marketCurrency = data["marketCurrency"] as? String
         let marketQuantity = data["marketQuantity"] as? Double
         let lastKnownUnitPrice = data["lastKnownUnitPrice"] as? Double
+        let averagePurchaseUnitPrice = data["averagePurchaseUnitPrice"] as? Double
+        let totalPurchaseCost = data["totalPurchaseCost"] as? Double
         let marketProviderRaw = data["marketProviderRaw"] as? String
         let lastKnownPriceUpdatedAt = (data["lastKnownPriceUpdatedAt"] as? TimeInterval).map {
             Date(timeIntervalSince1970: $0)
@@ -84,6 +86,8 @@ struct InvestmentImporter: ModelImporter {
             existingInvestment.marketCurrency = marketCurrency
             existingInvestment.marketQuantity = marketQuantity
             existingInvestment.lastKnownUnitPrice = lastKnownUnitPrice
+            existingInvestment.averagePurchaseUnitPrice = averagePurchaseUnitPrice
+            existingInvestment.totalPurchaseCost = totalPurchaseCost
             existingInvestment.lastKnownPriceUpdatedAt = lastKnownPriceUpdatedAt
             existingInvestment.marketProviderRaw = marketProviderRaw
             if let archivedAt = data["archivedAt"] as? TimeInterval {
@@ -127,6 +131,8 @@ struct InvestmentImporter: ModelImporter {
         investment.marketCurrency = marketCurrency
         investment.marketQuantity = marketQuantity
         investment.lastKnownUnitPrice = lastKnownUnitPrice
+        investment.averagePurchaseUnitPrice = averagePurchaseUnitPrice
+        investment.totalPurchaseCost = totalPurchaseCost
         investment.lastKnownPriceUpdatedAt = lastKnownPriceUpdatedAt
         investment.marketProviderRaw = marketProviderRaw
         investment.ensureUniqueID()
