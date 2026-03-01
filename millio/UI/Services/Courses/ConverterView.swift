@@ -283,6 +283,8 @@ struct ConverterView: View {
             }
             .interactiveDismissDisabled(false)
         }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
     }
     
     

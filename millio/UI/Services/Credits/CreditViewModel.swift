@@ -89,6 +89,12 @@ enum CreditAction {
         bank: Bank,
         creditType: CreditType,
         isFavorite: Bool,
+        paymentMode: CreditPaymentMode,
+        paymentDayOfMonth: Int?,
+        nextPaymentDate: Date?,
+        reminderEnabled: Bool,
+        reminderDaysBefore: Int?,
+        reminderTime: Date?,
         includeInTotal: Bool,
         uniqueID: String?
     )
@@ -146,7 +152,25 @@ final class CreditViewModel: ViewModelProtocol {
         case .toggleFavorite(let credit):
             toggleFavorite(credit)
             
-        case .updateCredit(let name, let amount, let monthlyPayment, let endDate, let remainingAmount, let currency, let bank, let creditType, let isFavorite, let includeInTotal, let uniqueID):
+        case .updateCredit(
+            let name,
+            let amount,
+            let monthlyPayment,
+            let endDate,
+            let remainingAmount,
+            let currency,
+            let bank,
+            let creditType,
+            let isFavorite,
+            let paymentMode,
+            let paymentDayOfMonth,
+            let nextPaymentDate,
+            let reminderEnabled,
+            let reminderDaysBefore,
+            let reminderTime,
+            let includeInTotal,
+            let uniqueID
+        ):
             updateCredit(
                 name: name,
                 amount: amount,
@@ -157,6 +181,12 @@ final class CreditViewModel: ViewModelProtocol {
                 bank: bank,
                 creditType: creditType,
                 isFavorite: isFavorite,
+                paymentMode: paymentMode,
+                paymentDayOfMonth: paymentDayOfMonth,
+                nextPaymentDate: nextPaymentDate,
+                reminderEnabled: reminderEnabled,
+                reminderDaysBefore: reminderDaysBefore,
+                reminderTime: reminderTime,
                 includeInTotal: includeInTotal,
                 uniqueID: uniqueID
             )
@@ -237,6 +267,7 @@ final class CreditViewModel: ViewModelProtocol {
             let activeCredits = credits.filter { $0.archivedAt == nil }
             // Обновляем остатки долга только для незакрытых кредитов
             for credit in activeCredits {
+                credit.includeInTotal = true
                 // Не пересчитываем остаток для закрытых кредитов (где остаток был установлен вручную = 0)
                 if !credit.isClosed {
                     credit.updateRemainingAmount()
@@ -371,9 +402,16 @@ final class CreditViewModel: ViewModelProtocol {
         bank: Bank,
         creditType: CreditType,
         isFavorite: Bool,
+        paymentMode: CreditPaymentMode,
+        paymentDayOfMonth: Int?,
+        nextPaymentDate: Date?,
+        reminderEnabled: Bool,
+        reminderDaysBefore: Int?,
+        reminderTime: Date?,
         includeInTotal: Bool,
         uniqueID: String?
     ) {
+        _ = includeInTotal
         // Вычисляем startDate и termMonths для внутреннего использования
         // Устанавливаем startDate примерно за год до endDate (или используем существующую дату)
         let calendar = Calendar.current
@@ -405,7 +443,17 @@ final class CreditViewModel: ViewModelProtocol {
             existing.bank = bank
             existing.creditType = creditType
             existing.isFavorite = isFavorite
-            existing.includeInTotal = includeInTotal
+            existing.includeInTotal = true
+            existing.applyPaymentSchedule(
+                mode: paymentMode,
+                dayOfMonth: paymentDayOfMonth,
+                nextDate: nextPaymentDate
+            )
+            existing.applyReminder(
+                enabled: reminderEnabled,
+                daysBefore: reminderDaysBefore,
+                reminderTime: reminderTime
+            )
             existing.termMonths = termMonths
             // Если остаток = 0, помечаем кредит как закрытый
             if remainingAmount <= 0 {
@@ -442,7 +490,7 @@ final class CreditViewModel: ViewModelProtocol {
                 currency: currency,
                 bank: bank,
                 creditType: creditType,
-                includeInTotal: includeInTotal
+                includeInTotal: true
         )
             if let uniqueID, !uniqueID.isEmpty {
                 newCredit.uniqueID = uniqueID
@@ -450,6 +498,16 @@ final class CreditViewModel: ViewModelProtocol {
         newCredit.endDate = endDate
         newCredit.applyManualRemainingAmount(remainingAmount)
         newCredit.isFavorite = isFavorite
+        newCredit.applyPaymentSchedule(
+            mode: paymentMode,
+            dayOfMonth: paymentDayOfMonth,
+            nextDate: nextPaymentDate
+        )
+        newCredit.applyReminder(
+            enabled: reminderEnabled,
+            daysBefore: reminderDaysBefore,
+            reminderTime: reminderTime
+        )
         // Если остаток = 0, помечаем кредит как закрытый
         if remainingAmount <= 0 {
             newCredit.isClosed = true

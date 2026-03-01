@@ -40,7 +40,7 @@ struct CashflowTransactionEditorView: View {
 
         if let transaction = transaction {
             _selectedTransactionType = State(initialValue: transaction.transactionType)
-            _amountText = State(initialValue: formatNumberForDisplay(transaction.amount))
+            _amountText = State(initialValue: AmountInputFormatter.plainString(from: transaction.amount))
             _selectedCurrency = State(initialValue: transaction.currency)
             _transactionDate = State(initialValue: transaction.transactionDate)
             _selectedCardID = State(initialValue: transaction.cardID)
@@ -85,6 +85,8 @@ struct CashflowTransactionEditorView: View {
                     .padding(.bottom, 40)
                     .padding(.horizontal, 16)
                 }
+                .scrollDismissesKeyboard(.immediately)
+                .dismissKeyboardOnTap()
             }
             .navigationTitle(editingTransaction == nil ? "Новая операция" : "Редактировать")
             .navigationBarTitleDisplayMode(.inline)
@@ -171,7 +173,7 @@ struct CashflowTransactionEditorView: View {
                         }
                     }
                 }
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
         }
@@ -288,11 +290,9 @@ struct CashflowTransactionEditorView: View {
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         TextField("0", text: Binding(
-                            get: { formatNumberForDisplay(amountText) },
+                            get: { AmountInputFormatter.display(amountText) },
                             set: { newValue in
-                                let normalized = newValue.replacingOccurrences(of: " ", with: "")
-                                    .replacingOccurrences(of: ",", with: ".")
-                                amountText = normalized
+                                amountText = AmountInputFormatter.sanitize(newValue)
                             }
                         ))
                         .keyboardType(.decimalPad)
@@ -616,25 +616,11 @@ struct CashflowTransactionEditorView: View {
     // MARK: - Number Formatting
 
     private func formatNumberForDisplay(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.groupingSeparator = " "
-        formatter.usesGroupingSeparator = true
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: value)) ?? String(value)
+        AmountInputFormatter.display(String(value))
     }
 
     private func formatNumberForDisplay(_ value: String) -> String {
-        guard !value.isEmpty else { return "" }
-        let normalized = value.replacingOccurrences(of: " ", with: "")
-            .replacingOccurrences(of: ",", with: ".")
-
-        if let doubleValue = Double(normalized) {
-            return formatNumberForDisplay(doubleValue)
-        }
-
-        return value
+        AmountInputFormatter.display(value)
     }
 
     // MARK: - Balance Validation
@@ -655,8 +641,7 @@ struct CashflowTransactionEditorView: View {
     }
 
     private func parseAmount() -> Double? {
-        let normalized = amountText.replacingOccurrences(of: ",", with: ".")
-        return Double(normalized)
+        AmountInputFormatter.parse(amountText)
     }
 
     private func validateAvailableBalance() {

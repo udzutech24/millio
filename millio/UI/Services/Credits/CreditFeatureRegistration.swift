@@ -73,6 +73,20 @@ struct CreditImporter: ModelImporter {
             existingCredit.isClosed = data["isClosed"] as? Bool ?? false
             existingCredit.isFavorite = data["isFavorite"] as? Bool ?? false
             existingCredit.includeInTotal = data["includeInTotal"] as? Bool ?? true
+            existingCredit.paymentModeRaw = data["paymentModeRaw"] as? String ?? CreditPaymentMode.dayOfMonth.rawValue
+            existingCredit.paymentDayOfMonth = data["paymentDayOfMonth"] as? Int
+            if let nextPaymentDate = data["nextPaymentDate"] as? TimeInterval {
+                existingCredit.nextPaymentDate = Date(timeIntervalSince1970: nextPaymentDate)
+            } else {
+                existingCredit.nextPaymentDate = nil
+            }
+            existingCredit.reminderEnabled = data["reminderEnabled"] as? Bool ?? false
+            existingCredit.reminderDaysBefore = data["reminderDaysBefore"] as? Int
+            if let reminderTime = data["reminderTime"] as? TimeInterval {
+                existingCredit.reminderTime = Date(timeIntervalSince1970: reminderTime)
+            } else {
+                existingCredit.reminderTime = nil
+            }
             existingCredit.updatedAt = Date(timeIntervalSince1970: updatedAt)
             if let archivedAt = data["archivedAt"] as? TimeInterval {
                 existingCredit.archivedAt = Date(timeIntervalSince1970: archivedAt)
@@ -111,6 +125,16 @@ struct CreditImporter: ModelImporter {
         credit.isClosed = data["isClosed"] as? Bool ?? false
         credit.isFavorite = data["isFavorite"] as? Bool ?? false
         credit.includeInTotal = data["includeInTotal"] as? Bool ?? true
+        credit.paymentModeRaw = data["paymentModeRaw"] as? String ?? CreditPaymentMode.dayOfMonth.rawValue
+        credit.paymentDayOfMonth = data["paymentDayOfMonth"] as? Int
+        if let nextPaymentDate = data["nextPaymentDate"] as? TimeInterval {
+            credit.nextPaymentDate = Date(timeIntervalSince1970: nextPaymentDate)
+        }
+        credit.reminderEnabled = data["reminderEnabled"] as? Bool ?? false
+        credit.reminderDaysBefore = data["reminderDaysBefore"] as? Int
+        if let reminderTime = data["reminderTime"] as? TimeInterval {
+            credit.reminderTime = Date(timeIntervalSince1970: reminderTime)
+        }
         credit.createdAt = Date(timeIntervalSince1970: createdAt)
         credit.updatedAt = Date(timeIntervalSince1970: updatedAt)
         if let archivedAt = data["archivedAt"] as? TimeInterval {

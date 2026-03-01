@@ -37,6 +37,21 @@ enum CreditType: String, Codable, CaseIterable {
     }
 }
 
+/// Режим выбора даты платежа по кредиту
+enum CreditPaymentMode: String, Codable, CaseIterable {
+    case dayOfMonth = "day_of_month"
+    case nextDate = "next_date"
+
+    var displayName: String {
+        switch self {
+        case .dayOfMonth:
+            return "День месяца"
+        case .nextDate:
+            return "Следующая дата"
+        }
+    }
+}
+
 /// Кредит
 @Model
 final class Credit: Persistable {
@@ -93,6 +108,24 @@ final class Credit: Persistable {
     
     /// Учитывать в общих финансах
     var includeInTotal: Bool = true
+
+    /// Режим выбора даты платежа
+    var paymentModeRaw: String = CreditPaymentMode.dayOfMonth.rawValue
+
+    /// День месяца для платежа (1...31), если выбран режим dayOfMonth
+    var paymentDayOfMonth: Int?
+
+    /// Следующая дата платежа, если выбран режим nextDate
+    var nextPaymentDate: Date?
+
+    /// Включено ли напоминание о платеже
+    var reminderEnabled: Bool = false
+
+    /// За сколько дней до платежа напомнить
+    var reminderDaysBefore: Int?
+
+    /// Время напоминания
+    var reminderTime: Date?
     
     /// Дата создания
     var createdAt: Date = Date()
@@ -114,6 +147,11 @@ final class Credit: Persistable {
     var creditType: CreditType {
         get { CreditType(rawValue: creditTypeRaw) ?? .consumer }
         set { creditTypeRaw = newValue.rawValue }
+    }
+
+    var paymentMode: CreditPaymentMode {
+        get { CreditPaymentMode(rawValue: paymentModeRaw) ?? .dayOfMonth }
+        set { paymentModeRaw = newValue.rawValue }
     }
     
     /// Количество прошедших месяцев с начала кредита
@@ -242,6 +280,7 @@ final class Credit: Persistable {
         self.createdAt = Date()
         self.updatedAt = Date()
         self.uniqueID = UUID().uuidString
+        self.paymentDayOfMonth = Calendar.current.component(.day, from: Date())
     }
     
     /// Обновить остаток долга на основе прошедших месяцев
@@ -352,6 +391,47 @@ final class Credit: Persistable {
         remainingAmountAdjustment = clampedAmount - scheduledRemaining
         remainingAmount = clampedAmount
     }
+
+    /// Обновить режим и дату платежа с очисткой взаимоисключающего поля
+    func applyPaymentSchedule(
+        mode: CreditPaymentMode,
+        dayOfMonth: Int?,
+        nextDate: Date?
+    ) {
+        paymentMode = mode
+        switch mode {
+        case .dayOfMonth:
+            if let dayOfMonth {
+                paymentDayOfMonth = min(31, max(1, dayOfMonth))
+            } else {
+                paymentDayOfMonth = nil
+            }
+            nextPaymentDate = nil
+        case .nextDate:
+            nextPaymentDate = nextDate
+            paymentDayOfMonth = nil
+        }
+    }
+
+    /// Обновить настройки напоминания
+    func applyReminder(
+        enabled: Bool,
+        daysBefore: Int?,
+        reminderTime: Date?
+    ) {
+        reminderEnabled = enabled
+        guard enabled else {
+            reminderDaysBefore = nil
+            self.reminderTime = nil
+            return
+        }
+        if let daysBefore {
+            reminderDaysBefore = max(0, daysBefore)
+        } else {
+            reminderDaysBefore = nil
+        }
+        self.reminderTime = reminderTime
+    }
     
     /// Применить досрочное погашение
     /// - Parameters:
@@ -429,10 +509,25 @@ final class Credit: Persistable {
             "isClosed": isClosed,
             "isFavorite": isFavorite,
             "includeInTotal": includeInTotal,
+            "paymentModeRaw": paymentModeRaw,
+            "reminderEnabled": reminderEnabled,
             "createdAt": createdAt.timeIntervalSince1970,
             "updatedAt": updatedAt.timeIntervalSince1970,
             "creditUniqueID": creditUniqueID
         ]
+
+        if let paymentDayOfMonth {
+            dict["paymentDayOfMonth"] = paymentDayOfMonth
+        }
+        if let nextPaymentDate {
+            dict["nextPaymentDate"] = nextPaymentDate.timeIntervalSince1970
+        }
+        if let reminderDaysBefore {
+            dict["reminderDaysBefore"] = reminderDaysBefore
+        }
+        if let reminderTime {
+            dict["reminderTime"] = reminderTime.timeIntervalSince1970
+        }
         
         if let archivedAt = archivedAt {
             dict["archivedAt"] = archivedAt.timeIntervalSince1970

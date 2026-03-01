@@ -431,7 +431,7 @@ private struct FinanceDynamicsContentView: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.large])
     }
 
     // MARK: - Period Selector
