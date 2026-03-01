@@ -70,7 +70,20 @@ struct FinanceQuickEditAccountView: View {
                                 .foregroundStyle(AppColors.textSecondary)
                             
                             HStack(spacing: 8) {
-                                TextField("", text: $amountText)
+                                TextField("", text: Binding(
+                                    get: {
+                                        AmountInputFormatter.display(
+                                            amountText,
+                                            maxFractionDigits: maxFractionDigitsForInput
+                                        )
+                                    },
+                                    set: { newValue in
+                                        amountText = AmountInputFormatter.sanitize(
+                                            newValue,
+                                            maxFractionDigits: maxFractionDigitsForInput
+                                        )
+                                    }
+                                ))
                                     .font(.system(size: 32, weight: .bold))
                                     .foregroundStyle(AppColors.textPrimary)
                                     .keyboardType(.decimalPad)
@@ -86,7 +99,7 @@ struct FinanceQuickEditAccountView: View {
                             .task {
                                 // Инициализируем значение при первом появлении
                                 if amountText.isEmpty {
-                                    amountText = formatAmountForInput(currentEditableValue(fallbackAmount: info.amount))
+                                    amountText = plainAmountForInput(currentEditableValue(fallbackAmount: info.amount))
                                 }
                                 // Автоматически устанавливаем фокус на поле ввода
                                 try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 секунды
@@ -154,37 +167,24 @@ struct FinanceQuickEditAccountView: View {
         }
         return amount >= 0
     }
-    
-    private func formatAmountForInput(_ amount: Double) -> String {
+
+    private var maxFractionDigitsForInput: Int {
+        isMarketInvestment ? 8 : 2
+    }
+
+    private func plainAmountForInput(_ amount: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
-        formatter.groupingSeparator = " "
-        formatter.usesGroupingSeparator = true
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.decimalSeparator = "."
+        formatter.usesGroupingSeparator = false
         formatter.minimumFractionDigits = 0
-        
-        // Динамически определяем количество знаков после запятой
-        let fractionalPart = abs(amount.truncatingRemainder(dividingBy: 1))
-        if fractionalPart < 0.0001 {
-            // Целое число - без десятичных знаков
-            formatter.maximumFractionDigits = 0
-        } else {
-            // Для количества монет/акций нужны дробные значения точнее, чем у обычных сумм
-            formatter.maximumFractionDigits = isMarketInvestment ? 8 : 2
-        }
-        
+        formatter.maximumFractionDigits = maxFractionDigitsForInput
         return formatter.string(from: NSNumber(value: amount)) ?? "0"
     }
-    
+
     private func parseAmount(_ text: String) -> Double? {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.locale = Locale.current
-        
-        let cleaned = text
-            .replacingOccurrences(of: " ", with: "")
-            .replacingOccurrences(of: "\u{00A0}", with: "")
-        
-        return formatter.number(from: cleaned)?.doubleValue
+        AmountInputFormatter.parse(text)
     }
     
     private func saveAmount() {

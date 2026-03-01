@@ -34,6 +34,7 @@ enum InvestmentCategory: String, Codable, CaseIterable {
     case house = "house" // Дом/Недвижимость
     case stocks = "stocks" // Акции
     case business = "business" // Бизнес
+    case debt = "debt" // Долг
     case crypto = "crypto" // Криптовалюта
     case bonds = "bonds" // Облигации
     case metals = "metals" // Драгоценные металлы
@@ -45,6 +46,7 @@ enum InvestmentCategory: String, Codable, CaseIterable {
         case .house: return "Недвижимость"
         case .stocks: return "Акции"
         case .business: return "Бизнес"
+        case .debt: return "Долг"
         case .crypto: return "Криптовалюта"
         case .bonds: return "Облигации"
         case .metals: return "Драгоценные металлы"
@@ -58,6 +60,7 @@ enum InvestmentCategory: String, Codable, CaseIterable {
         case .house: return "house.fill"
         case .stocks: return "chart.line.uptrend.xyaxis"
         case .business: return "building.2.fill"
+        case .debt: return "hand.raised.fill"
         case .crypto: return "bitcoinsign.circle.fill"
         case .bonds: return "doc.text.fill"
         case .metals: return "diamond.fill"

@@ -499,6 +499,7 @@ final class FinanceViewModel: ViewModelProtocol {
         let allCredits = (try? modelContext.fetch(creditDescriptor)) ?? []
         state.availableCredits = allCredits.filter { $0.archivedAt == nil }
         state.archivedCredits = allCredits.filter { $0.archivedAt != nil }
+        normalizeCreditsIncludeInTotal(state.availableCredits + state.archivedCredits)
         
         let investmentDescriptor = FetchDescriptor<Investment>()
         let allInvestments = (try? modelContext.fetch(investmentDescriptor)) ?? []
@@ -520,6 +521,22 @@ final class FinanceViewModel: ViewModelProtocol {
         
         // Вычисляем непривязанные элементы
         updateUnattachedItems()
+    }
+
+    private func normalizeCreditsIncludeInTotal(_ credits: [Credit]) {
+        var requiresSave = false
+        for credit in credits where !credit.includeInTotal {
+            credit.includeInTotal = true
+            credit.updatedAt = Date()
+            requiresSave = true
+        }
+        if requiresSave {
+            do {
+                try modelContext.save()
+            } catch {
+                AppLogger.log(.error, category: "Finance", "Failed to normalize credits includeInTotal: \(error.localizedDescription)")
+            }
+        }
     }
     
     /// Обновить списки непривязанных элементов
@@ -850,9 +867,6 @@ final class FinanceViewModel: ViewModelProtocol {
             
         case .credit:
             if let credit = creditByID[account.accountID] {
-                // Учитываем только если includeInTotal = true
-                guard credit.includeInTotal else { return (0.0, credit.currency) }
-                
                 // Для кредитов учитываем остаток долга как отрицательное значение
                 return (-credit.remainingAmount, credit.currency)
             }

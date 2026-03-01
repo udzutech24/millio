@@ -64,6 +64,12 @@ struct CreditViewModelTests {
             bank: credit.bank,
             creditType: credit.creditType,
             isFavorite: credit.isFavorite,
+            paymentMode: .dayOfMonth,
+            paymentDayOfMonth: 15,
+            nextPaymentDate: nil,
+            reminderEnabled: false,
+            reminderDaysBefore: nil,
+            reminderTime: nil,
             includeInTotal: credit.includeInTotal,
             uniqueID: nil
         ))
@@ -112,6 +118,12 @@ struct CreditViewModelTests {
             bank: credit.bank,
             creditType: credit.creditType,
             isFavorite: credit.isFavorite,
+            paymentMode: .dayOfMonth,
+            paymentDayOfMonth: 10,
+            nextPaymentDate: nil,
+            reminderEnabled: false,
+            reminderDaysBefore: nil,
+            reminderTime: nil,
             includeInTotal: credit.includeInTotal,
             uniqueID: nil
         ))
@@ -147,5 +159,145 @@ struct CreditViewModelTests {
 
         #expect(credit.remainingAmount == 0.0)
         #expect(credit.remainingAmountAdjustment <= 0.0)
+    }
+
+    @Test("paymentMode dayOfMonth сохраняет день и очищает nextDate")
+    func testPaymentModeDayOfMonthClearsNextDate() throws {
+        let modelContext = try createTestModelContext()
+        let viewModel = CreditViewModel(modelContext: modelContext)
+        let uniqueID = UUID().uuidString
+
+        viewModel.handle(.updateCredit(
+            name: "Кредит A",
+            amount: 200_000,
+            monthlyPayment: 10_000,
+            endDate: Date(),
+            remainingAmount: 150_000,
+            currency: "RUB",
+            bank: .other,
+            creditType: .consumer,
+            isFavorite: false,
+            paymentMode: .dayOfMonth,
+            paymentDayOfMonth: 17,
+            nextPaymentDate: Date().addingTimeInterval(86_400),
+            reminderEnabled: false,
+            reminderDaysBefore: nil,
+            reminderTime: nil,
+            includeInTotal: true,
+            uniqueID: uniqueID
+        ))
+
+        guard let created = viewModel.state.credits.first(where: { $0.creditUniqueID == uniqueID }) else {
+            Issue.record("Credit not created")
+            return
+        }
+
+        #expect(created.paymentMode == .dayOfMonth)
+        #expect(created.paymentDayOfMonth == 17)
+        #expect(created.nextPaymentDate == nil)
+    }
+
+    @Test("paymentMode nextDate сохраняет дату и очищает dayOfMonth")
+    func testPaymentModeNextDateClearsDayOfMonth() throws {
+        let modelContext = try createTestModelContext()
+        let viewModel = CreditViewModel(modelContext: modelContext)
+        let uniqueID = UUID().uuidString
+        let nextDate = Date().addingTimeInterval(172_800)
+
+        viewModel.handle(.updateCredit(
+            name: "Кредит B",
+            amount: 300_000,
+            monthlyPayment: 20_000,
+            endDate: Date(),
+            remainingAmount: 250_000,
+            currency: "RUB",
+            bank: .other,
+            creditType: .consumer,
+            isFavorite: false,
+            paymentMode: .nextDate,
+            paymentDayOfMonth: 25,
+            nextPaymentDate: nextDate,
+            reminderEnabled: false,
+            reminderDaysBefore: nil,
+            reminderTime: nil,
+            includeInTotal: true,
+            uniqueID: uniqueID
+        ))
+
+        guard let created = viewModel.state.credits.first(where: { $0.creditUniqueID == uniqueID }) else {
+            Issue.record("Credit not created")
+            return
+        }
+
+        #expect(created.paymentMode == .nextDate)
+        #expect(created.paymentDayOfMonth == nil)
+        #expect(created.nextPaymentDate != nil)
+    }
+
+    @Test("Напоминание при disable очищает связанные поля")
+    func testReminderDisableClearsFields() throws {
+        let modelContext = try createTestModelContext()
+        let viewModel = CreditViewModel(modelContext: modelContext)
+        let uniqueID = UUID().uuidString
+        let reminderTime = Date()
+
+        viewModel.handle(.updateCredit(
+            name: "Кредит C",
+            amount: 100_000,
+            monthlyPayment: 5_000,
+            endDate: Date(),
+            remainingAmount: 80_000,
+            currency: "RUB",
+            bank: .other,
+            creditType: .consumer,
+            isFavorite: false,
+            paymentMode: .dayOfMonth,
+            paymentDayOfMonth: 15,
+            nextPaymentDate: nil,
+            reminderEnabled: true,
+            reminderDaysBefore: 3,
+            reminderTime: reminderTime,
+            includeInTotal: true,
+            uniqueID: uniqueID
+        ))
+
+        guard let created = viewModel.state.credits.first(where: { $0.creditUniqueID == uniqueID }) else {
+            Issue.record("Credit not created")
+            return
+        }
+
+        #expect(created.reminderEnabled)
+        #expect(created.reminderDaysBefore == 3)
+        #expect(created.reminderTime != nil)
+
+        viewModel.handle(.editCredit(created))
+        viewModel.handle(.updateCredit(
+            name: created.name,
+            amount: created.amount,
+            monthlyPayment: created.monthlyPayment,
+            endDate: created.endDate ?? Date(),
+            remainingAmount: created.remainingAmount,
+            currency: created.currency,
+            bank: created.bank,
+            creditType: created.creditType,
+            isFavorite: created.isFavorite,
+            paymentMode: created.paymentMode,
+            paymentDayOfMonth: created.paymentDayOfMonth,
+            nextPaymentDate: created.nextPaymentDate,
+            reminderEnabled: false,
+            reminderDaysBefore: 7,
+            reminderTime: Date().addingTimeInterval(3_600),
+            includeInTotal: true,
+            uniqueID: nil
+        ))
+
+        guard let updated = viewModel.state.credits.first(where: { $0.creditUniqueID == uniqueID }) else {
+            Issue.record("Credit not updated")
+            return
+        }
+
+        #expect(updated.reminderEnabled == false)
+        #expect(updated.reminderDaysBefore == nil)
+        #expect(updated.reminderTime == nil)
     }
 }

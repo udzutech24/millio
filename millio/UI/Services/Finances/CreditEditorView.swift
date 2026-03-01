@@ -18,11 +18,16 @@ struct CreditEditorView: View {
     @State private var name: String = ""
     @State private var amountText: String = ""
     @State private var remainingAmountText: String = ""
+    @State private var monthlyPaymentText: String = ""
     @State private var selectedCurrency: String = "RUB"
-    @State private var selectedBank: Bank = .other
     @State private var selectedCreditType: CreditType = .consumer
     @State private var isFavorite: Bool = false
-    @State private var includeInTotal: Bool = true
+    @State private var paymentMode: CreditPaymentMode = .dayOfMonth
+    @State private var paymentDayOfMonth: Int = max(1, min(31, Calendar.current.component(.day, from: Date())))
+    @State private var nextPaymentDate: Date = Date()
+    @State private var reminderEnabled: Bool = false
+    @State private var reminderDaysBeforeText: String = ""
+    @State private var reminderTime: Date = Date()
     @State private var availableCurrencies: [String] = ["RUB", "USD", "EUR"]
     @State private var isLoadingCurrencies: Bool = false
 
@@ -41,6 +46,7 @@ struct CreditEditorView: View {
                     VStack(spacing: 24) {
                         mainInfoSection
                         creditParamsSection
+                        reminderSection
                         additionalSection
                     }
                     .padding(.top, 20)
@@ -89,13 +95,18 @@ struct CreditEditorView: View {
             .onAppear {
                 if let editing = viewModel.state.editingCredit {
                     name = editing.name
-                    amountText = String(format: "%.2f", editing.amount)
-                    remainingAmountText = String(format: "%.2f", editing.remainingAmount)
+                    amountText = AmountInputFormatter.plainString(from: editing.amount)
+                    remainingAmountText = AmountInputFormatter.plainString(from: editing.remainingAmount)
+                    monthlyPaymentText = AmountInputFormatter.plainString(from: editing.monthlyPayment)
                     selectedCurrency = editing.currency
-                    selectedBank = editing.bank
                     selectedCreditType = editing.creditType
                     isFavorite = editing.isFavorite
-                    includeInTotal = editing.includeInTotal
+                    paymentMode = editing.paymentMode
+                    paymentDayOfMonth = editing.paymentDayOfMonth ?? paymentDayOfMonth
+                    nextPaymentDate = editing.nextPaymentDate ?? Date()
+                    reminderEnabled = editing.reminderEnabled
+                    reminderDaysBeforeText = editing.reminderDaysBefore.map { String($0) } ?? ""
+                    reminderTime = editing.reminderTime ?? defaultReminderTime()
                 }
 
                 loadAvailableCurrencies()
@@ -161,6 +172,118 @@ struct CreditEditorView: View {
                     }
                     .padding(.vertical, 12)
                     .padding(.horizontal, 16)
+
+                    FinancesRowDivider()
+
+                    HStack {
+                        Text("Платёж в месяц")
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        TextField("0", text: Binding(
+                            get: { formatNumberForDisplay(monthlyPaymentText) },
+                            set: { newValue in
+                                let sanitized = AmountInputFormatter.sanitize(newValue)
+                                monthlyPaymentText = sanitized
+                            }
+                        ))
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .frame(maxWidth: 150)
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+
+                    FinancesRowDivider()
+
+                    HStack {
+                        Text("Режим даты платежа")
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        Picker("Режим даты платежа", selection: $paymentMode) {
+                            ForEach(CreditPaymentMode.allCases, id: \.self) { mode in
+                                Text(mode.displayName).tag(mode)
+                            }
+                        }
+                        .tint(AppColors.textTertiary)
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 16)
+
+                    FinancesRowDivider()
+
+                    if paymentMode == .dayOfMonth {
+                        HStack {
+                            Text("День месяца")
+                                .foregroundStyle(AppColors.textPrimary)
+                            Spacer()
+                            Menu {
+                                ForEach(1...31, id: \.self) { day in
+                                    Button("\(day)") {
+                                        paymentDayOfMonth = day
+                                    }
+                                }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Text("\(paymentDayOfMonth)")
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 12, weight: .semibold))
+                                }
+                                .foregroundStyle(AppColors.textTertiary)
+                            }
+                        }
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                    } else {
+                        DatePicker("Следующая дата", selection: $nextPaymentDate, displayedComponents: .date)
+                            .foregroundStyle(AppColors.textPrimary)
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 16)
+                    }
+                }
+            }
+        }
+    }
+
+    private var reminderSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Напоминание")
+            FinancesGlassCard {
+                VStack(spacing: 0) {
+                    Toggle("Напоминать о платеже", isOn: $reminderEnabled)
+                        .tint(AppColors.toggleOnGreen)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+
+                    if reminderEnabled {
+                        FinancesRowDivider()
+
+                        HStack {
+                            Text("За N дней")
+                                .foregroundStyle(AppColors.textPrimary)
+                            Spacer()
+                            TextField("0", text: Binding(
+                                get: { reminderDaysBeforeText },
+                                set: { newValue in
+                                    reminderDaysBeforeText = String(newValue.filter(\.isNumber))
+                                }
+                            ))
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .foregroundStyle(AppColors.textPrimary)
+                            .frame(maxWidth: 100)
+                        }
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+
+                        FinancesRowDivider()
+
+                        DatePicker("Время уведомления", selection: $reminderTime, displayedComponents: .hourAndMinute)
+                            .foregroundStyle(AppColors.textPrimary)
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 16)
+                    }
                 }
             }
         }
@@ -194,22 +317,6 @@ struct CreditEditorView: View {
                     FinancesRowDivider()
                     
                     HStack {
-                        Text("Банк")
-                            .foregroundStyle(AppColors.textPrimary)
-                        Spacer()
-                        Picker("Банк", selection: $selectedBank) {
-                            ForEach(Bank.allCases, id: \.self) { bank in
-                                Text(bank.displayName).tag(bank)
-                            }
-                        }
-                        .tint(AppColors.textTertiary)
-                    }
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 16)
-                    
-                    FinancesRowDivider()
-                    
-                    HStack {
                         Text("Тип кредита")
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
@@ -232,12 +339,17 @@ struct CreditEditorView: View {
                         .padding(.horizontal, 16)
                     
                     FinancesRowDivider()
-                    
-                    Toggle("Учитывать в общих", isOn: $includeInTotal)
-                        .tint(AppColors.toggleOnGreen)
-                        .foregroundStyle(AppColors.textPrimary)
-                        .padding(.vertical, 12)
-                        .padding(.horizontal, 16)
+
+                    HStack {
+                        Text("Влияние на «Итого»")
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        Text("Уменьшает")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(AppColors.error.opacity(0.9))
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
                 }
             }
         }
@@ -304,7 +416,8 @@ struct CreditEditorView: View {
             return
         }
         let endDate = resolvedEndDate()
-        let monthlyPayment = resolvedMonthlyPayment(for: amount)
+        let monthlyPayment = parseNumber(monthlyPaymentText) ?? resolvedMonthlyPayment(for: amount)
+        let reminderDaysBefore = parseReminderDays(reminderDaysBeforeText)
 
         viewModel.handle(.updateCredit(
             name: name,
@@ -313,10 +426,16 @@ struct CreditEditorView: View {
             endDate: endDate,
             remainingAmount: remainingAmount,
             currency: selectedCurrency,
-            bank: selectedBank,
+            bank: resolvedBank(),
             creditType: selectedCreditType,
             isFavorite: isFavorite,
-            includeInTotal: includeInTotal,
+            paymentMode: paymentMode,
+            paymentDayOfMonth: paymentMode == .dayOfMonth ? paymentDayOfMonth : nil,
+            nextPaymentDate: paymentMode == .nextDate ? nextPaymentDate : nil,
+            reminderEnabled: reminderEnabled,
+            reminderDaysBefore: reminderEnabled ? reminderDaysBefore : nil,
+            reminderTime: reminderEnabled ? reminderTime : nil,
+            includeInTotal: true,
             uniqueID: nil
         ))
 
@@ -339,5 +458,18 @@ struct CreditEditorView: View {
             return editing.monthlyPayment
         }
         return amount / 12.0
+    }
+
+    private func parseReminderDays(_ value: String) -> Int? {
+        guard !value.isEmpty, let parsed = Int(value) else { return nil }
+        return max(0, parsed)
+    }
+
+    private func defaultReminderTime() -> Date {
+        Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: Date()) ?? Date()
+    }
+
+    private func resolvedBank() -> Bank {
+        viewModel.state.editingCredit?.bank ?? .other
     }
 }

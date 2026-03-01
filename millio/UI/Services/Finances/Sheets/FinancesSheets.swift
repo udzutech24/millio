@@ -200,7 +200,12 @@ struct SavingsGoalSettingsView: View {
                             VStack(alignment: .leading, spacing: 10) {
                                 FinancesSectionHeader(title: "Сумма цели (\(viewModel.state.displayCurrency))")
                                 FinancesGlassCard {
-                                    TextField("Сумма цели", text: $goalAmount)
+                                    TextField("Сумма цели", text: Binding(
+                                        get: { AmountInputFormatter.display(goalAmount) },
+                                        set: { newValue in
+                                            goalAmount = AmountInputFormatter.sanitize(newValue)
+                                        }
+                                    ))
                                         .keyboardType(.decimalPad)
                                         .foregroundStyle(AppColors.textPrimary)
                                         .padding(.vertical, 14)
@@ -209,7 +214,7 @@ struct SavingsGoalSettingsView: View {
                             }
                             
                             // Прогресс
-                            if let amount = Double(goalAmount), amount > 0 {
+                            if let amount = AmountInputFormatter.parse(goalAmount), amount > 0 {
                                 let progress: Double = {
                                     guard amount > 0 else { return 0.0 }
                                     let calculated = viewModel.state.totalAmount / amount
@@ -286,7 +291,7 @@ struct SavingsGoalSettingsView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Сохранить") {
                         viewModel.handle(.setSavingsGoalEnabled(isEnabled))
-                        if let amount = Double(goalAmount) {
+                        if let amount = AmountInputFormatter.parse(goalAmount) {
                             viewModel.handle(.setSavingsGoalAmount(amount))
                         }
                         dismiss()
@@ -303,7 +308,7 @@ struct SavingsGoalSettingsView: View {
             .onAppear {
                 isEnabled = viewModel.state.isSavingsGoalEnabled
                 if viewModel.state.savingsGoalAmount > 0 {
-                    goalAmount = String(format: "%.2f", viewModel.state.savingsGoalAmount)
+                    goalAmount = AmountInputFormatter.plainString(from: viewModel.state.savingsGoalAmount)
                 }
             }
         }

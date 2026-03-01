@@ -846,4 +846,81 @@ struct FinanceViewModelTests {
         let newArchivedAt = try #require(reArchivedCard.archivedAt)
         #expect(newArchivedAt > oldArchivedAt)
     }
+
+    @Test("Кредит всегда уменьшает Итого даже при legacy includeInTotal = false")
+    func testCreditAlwaysDecreasesTotal() async throws {
+        let modelContext = try createTestModelContext()
+        let group = FinanceGroup(name: "Кредиты", colorHex: "#112233")
+        modelContext.insert(group)
+
+        let credit = Credit(
+            name: "Тестовый кредит",
+            amount: 1_000,
+            interestRate: 0,
+            monthlyPayment: 100,
+            startDate: Date(),
+            termMonths: 12,
+            currency: "RUB"
+        )
+        credit.remainingAmount = 700
+        credit.includeInTotal = false
+        modelContext.insert(credit)
+
+        let link = FinanceAccount(accountType: .credit, accountID: credit.creditUniqueID)
+        link.group = group
+        modelContext.insert(link)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadGroups)
+        viewModel.handle(.loadAccounts)
+
+        let total = await viewModel.calculateGroupTotal(group: group, in: "RUB")
+        #expect(abs(total + 700) < 0.01)
+
+        let credits = (try? modelContext.fetch(FetchDescriptor<Credit>())) ?? []
+        let normalized = try #require(credits.first(where: { $0.creditUniqueID == credit.creditUniqueID }))
+        #expect(normalized.includeInTotal)
+    }
+
+    @Test("В Итого для кредита используется остаток долга, а не исходная сумма")
+    func testCreditTotalUsesRemainingAmount() async throws {
+        let modelContext = try createTestModelContext()
+        let group = FinanceGroup(name: "Долги", colorHex: "#445566")
+        modelContext.insert(group)
+
+        let credit = Credit(
+            name: "Кредит остаток",
+            amount: 10_000,
+            interestRate: 0,
+            monthlyPayment: 500,
+            startDate: Date(),
+            termMonths: 24,
+            currency: "RUB"
+        )
+        credit.remainingAmount = 2_500
+        credit.includeInTotal = true
+        modelContext.insert(credit)
+
+        let link = FinanceAccount(accountType: .credit, accountID: credit.creditUniqueID)
+        link.group = group
+        modelContext.insert(link)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadGroups)
+        viewModel.handle(.loadAccounts)
+
+        let total = await viewModel.calculateGroupTotal(group: group, in: "RUB")
+        #expect(abs(total + 2_500) < 0.01)
+        #expect(abs(total + credit.amount) > 0.01)
+    }
 }

@@ -169,22 +169,6 @@ struct CardEditorView: View {
                     FinancesRowDivider()
 
                     HStack {
-                        Text("Банк")
-                            .foregroundStyle(AppColors.textPrimary)
-                        Spacer()
-                        Picker("Банк", selection: $card.bankRaw) {
-                            ForEach(Bank.allCases, id: \.rawValue) { bank in
-                                Text(bank.displayName).tag(bank.rawValue)
-                            }
-                        }
-                        .tint(AppColors.textTertiary)
-                    }
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 16)
-
-                    FinancesRowDivider()
-
-                    HStack {
                         Text("Тип карты")
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()

@@ -20,6 +20,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
     
     @State private var card: Card
     @State private var balanceText: String = ""
+    @State private var balanceDisplayText: String = ""
     @State private var creditLimitText: String = ""
     @State private var creditDebtText: String = ""
     @State private var availableCurrencies: [String] = ["RUB", "USD", "EUR"]
@@ -57,6 +58,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
             balance: 0.0
         ))
         _balanceText = State(initialValue: "")
+        _balanceDisplayText = State(initialValue: "")
     }
     
     var currentCard: Card {
@@ -87,17 +89,24 @@ struct InlineCardCreateForm<GroupSection: View>: View {
             calculationsSection
             prioritySection
         }
-        .onAppear { loadAvailableCurrencies() }
+        .onAppear {
+            loadAvailableCurrencies()
+            if balanceDisplayText.isEmpty {
+                balanceDisplayText = AmountInputFormatter.display(balanceText)
+            }
+        }
         .onChange(of: name) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: card.cardTypeRaw) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: card.currency) { _, _ in onCardDataChanged(currentCard) }
-        .onChange(of: balanceText) { _, newValue in
-            if let parsed = AmountInputFormatter.parse(newValue) {
-                card.balance = parsed
-            } else {
-                card.balance = 0
+        .onChange(of: balanceText) { _, _ in onCardDataChanged(currentCard) }
+        .onChange(of: balanceDisplayText) { _, newValue in
+            let sanitized = AmountInputFormatter.sanitize(newValue)
+            let formatted = AmountInputFormatter.display(sanitized)
+            if newValue != formatted {
+                balanceDisplayText = formatted
             }
-            onCardDataChanged(currentCard)
+            balanceText = sanitized
+            card.balance = AmountInputFormatter.parse(sanitized) ?? 0
         }
         .onChange(of: creditLimitText) { _, _ in onCardDataChanged(currentCard) }
         .onChange(of: creditDebtText) { _, _ in onCardDataChanged(currentCard) }
@@ -273,7 +282,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
     }
 
     private var visibleInvestmentCategories: [InvestmentCategory] {
-        [.house, .stocks, .business, .crypto, .other]
+        [.house, .stocks, .business, .debt, .crypto, .other]
     }
     
     private var balanceSection: some View {
@@ -350,13 +359,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(AppColors.textPrimary)
                             Spacer()
-                            TextField("0", text: Binding(
-                                get: { AmountInputFormatter.display(balanceText) },
-                                set: { newValue in
-                                    let sanitized = AmountInputFormatter.sanitize(newValue)
-                                    balanceText = sanitized
-                                }
-                            ))
+                            TextField("0", text: $balanceDisplayText)
                                 .keyboardType(.decimalPad)
                                 .foregroundStyle(AppColors.textPrimary)
                                 .multilineTextAlignment(.trailing)
@@ -482,15 +485,24 @@ struct InlineCardCreateForm<GroupSection: View>: View {
 struct InlineCreditCreateForm<GroupSection: View>: View {
     @ObservedObject var viewModel: CreditViewModel
     @Binding var name: String
-    let onCreditDataChanged: ((name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, includeInTotal: Bool)?) -> Void
+    let onCreditDataChanged: ((name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, paymentMode: CreditPaymentMode, paymentDayOfMonth: Int?, nextPaymentDate: Date?, reminderEnabled: Bool, reminderDaysBefore: Int?, reminderTime: Date?, includeInTotal: Bool)?) -> Void
     let groupSection: GroupSection
     
     @State private var amountText: String = ""
+    @State private var amountDisplayText: String = ""
     @State private var remainingAmountText: String = ""
+    @State private var remainingAmountDisplayText: String = ""
+    @State private var monthlyPaymentText: String = ""
+    @State private var monthlyPaymentDisplayText: String = ""
     @State private var selectedCurrency: String = "RUB"
-    @State private var selectedBank: Bank = .other
     @State private var isFavorite: Bool = false
-    @State private var includeInTotal: Bool = true
+    @State private var paymentMode: CreditPaymentMode = .dayOfMonth
+    @State private var paymentDayOfMonth: Int = max(1, min(31, Calendar.current.component(.day, from: Date())))
+    @State private var nextPaymentDate: Date = Date()
+    @State private var reminderEnabled: Bool = false
+    @State private var reminderDaysBeforeText: String = ""
+    @State private var reminderDaysBeforeDisplayText: String = ""
+    @State private var reminderTime: Date = InlineCreditCreateForm.defaultReminderTime()
     @State private var availableCurrencies: [String] = ["RUB", "USD", "EUR"]
     @State private var isLoadingCurrencies: Bool = false
     @State private var showCurrencyPicker: Bool = false
@@ -499,7 +511,7 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
     init(
         viewModel: CreditViewModel,
         name: Binding<String>,
-        onCreditDataChanged: @escaping ((name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, includeInTotal: Bool)?) -> Void,
+        onCreditDataChanged: @escaping ((name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, paymentMode: CreditPaymentMode, paymentDayOfMonth: Int?, nextPaymentDate: Date?, reminderEnabled: Bool, reminderDaysBefore: Int?, reminderTime: Date?, includeInTotal: Bool)?) -> Void,
         @ViewBuilder groupSection: () -> GroupSection
     ) {
         self.viewModel = viewModel
@@ -509,36 +521,99 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
     }
     
     var isValid: Bool {
-        !name.isEmpty &&
-        parseNumber(amountText) != nil && parseNumber(amountText)! > 0 &&
-        parseNumber(remainingAmountText) != nil && parseNumber(remainingAmountText)! >= 0
+        !name.isEmpty
     }
     
-    func getCreditData() -> (name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, includeInTotal: Bool)? {
-        guard let amount = parseNumber(amountText),
-              let remainingAmount = parseNumber(remainingAmountText) else { return nil }
+    func getCreditData() -> (name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, paymentMode: CreditPaymentMode, paymentDayOfMonth: Int?, nextPaymentDate: Date?, reminderEnabled: Bool, reminderDaysBefore: Int?, reminderTime: Date?, includeInTotal: Bool)? {
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        let amount = parseNumber(amountText) ?? 0
+        let remainingAmount = parseNumber(remainingAmountText) ?? 0
+        let monthlyPayment = parseNumber(monthlyPaymentText) ?? (amount / 12.0)
         // Дефолты для упрощенной формы: срок 12 месяцев от текущей даты
         let endDate = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
-        let monthlyPayment = amount / 12.0
-        return (name, amount, monthlyPayment, endDate, remainingAmount, selectedCurrency, selectedBank, .consumer, isFavorite, includeInTotal)
+        let dayOfMonth = paymentMode == .dayOfMonth ? paymentDayOfMonth : nil
+        let paymentDate = paymentMode == .nextDate ? nextPaymentDate : nil
+        let reminderDaysBefore = parseReminderDays(reminderDaysBeforeText)
+        return (
+            name,
+            amount,
+            monthlyPayment,
+            endDate,
+            remainingAmount,
+            selectedCurrency,
+            .other,
+            .consumer,
+            isFavorite,
+            paymentMode,
+            dayOfMonth,
+            paymentDate,
+            reminderEnabled,
+            reminderEnabled ? reminderDaysBefore : nil,
+            reminderEnabled ? reminderTime : nil,
+            true
+        )
     }
     
     var body: some View {
         VStack(spacing: 18) {
             balanceSection
-            organizationSection
+            paymentSection
+            reminderSection
             groupSection
             calculationsSection
             prioritySection
         }
-        .onAppear { loadAvailableCurrencies() }
-        .onChange(of: name) { _, _ in onCreditDataChanged(getCreditData()) }
-        .onChange(of: amountText) { _, _ in onCreditDataChanged(getCreditData()) }
-        .onChange(of: remainingAmountText) { _, _ in onCreditDataChanged(getCreditData()) }
-        .onChange(of: selectedCurrency) { _, _ in onCreditDataChanged(getCreditData()) }
-        .onChange(of: selectedBank) { _, _ in onCreditDataChanged(getCreditData()) }
-        .onChange(of: isFavorite) { _, _ in onCreditDataChanged(getCreditData()) }
-        .onChange(of: includeInTotal) { _, _ in onCreditDataChanged(getCreditData()) }
+        .onAppear {
+            loadAvailableCurrencies()
+            if amountDisplayText.isEmpty {
+                amountDisplayText = formatNumberForDisplay(amountText)
+            }
+            if remainingAmountDisplayText.isEmpty {
+                remainingAmountDisplayText = formatNumberForDisplay(remainingAmountText)
+            }
+            if monthlyPaymentDisplayText.isEmpty {
+                monthlyPaymentDisplayText = formatNumberForDisplay(monthlyPaymentText)
+            }
+        }
+        .onChange(of: name) { _, _ in emitCreditDataChange() }
+        .onChange(of: amountDisplayText) { _, newValue in
+            handleAmountDisplayChange(newValue)
+        }
+        .onChange(of: remainingAmountDisplayText) { _, newValue in
+            handleRemainingAmountDisplayChange(newValue)
+        }
+        .onChange(of: monthlyPaymentDisplayText) { _, newValue in
+            handleMonthlyPaymentDisplayChange(newValue)
+        }
+        .onChange(of: selectedCurrency) { _, _ in emitCreditDataChange() }
+        .onChange(of: isFavorite) { _, _ in emitCreditDataChange() }
+        .onChange(of: paymentMode) { _, newMode in
+            if newMode == .dayOfMonth {
+                nextPaymentDate = Date()
+            }
+            if newMode == .nextDate {
+                paymentDayOfMonth = max(1, min(31, paymentDayOfMonth))
+            }
+            emitCreditDataChange()
+        }
+        .onChange(of: paymentDayOfMonth) { _, _ in emitCreditDataChange() }
+        .onChange(of: nextPaymentDate) { _, _ in emitCreditDataChange() }
+        .onChange(of: reminderEnabled) { _, enabled in
+            if !enabled {
+                reminderDaysBeforeText = ""
+                reminderDaysBeforeDisplayText = ""
+            }
+            emitCreditDataChange()
+        }
+        .onChange(of: reminderDaysBeforeDisplayText) { _, newValue in
+            let digits = String(newValue.filter(\.isNumber))
+            if newValue != digits {
+                reminderDaysBeforeDisplayText = digits
+            }
+            reminderDaysBeforeText = digits
+            emitCreditDataChange()
+        }
+        .onChange(of: reminderTime) { _, _ in emitCreditDataChange() }
         .sheet(isPresented: $showCurrencyPicker) {
             NavigationStack {
                 CurrencyPickerView(
@@ -572,17 +647,11 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     HStack(spacing: 12) {
-                        Text("Сумма")
+                        Text("Сумма кредита")
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        TextField("0", text: Binding(
-                            get: { formatNumberForDisplay(amountText) },
-                            set: { newValue in
-                                let sanitized = AmountInputFormatter.sanitize(newValue)
-                                amountText = sanitized
-                            }
-                        ))
+                        TextField("0", text: $amountDisplayText)
                         .keyboardType(.decimalPad)
                         .foregroundStyle(AppColors.textPrimary)
                         .multilineTextAlignment(.trailing)
@@ -594,17 +663,11 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
                     FinancesRowDivider(leadingPadding: 16)
                     
                     HStack(spacing: 12) {
-                        Text("Остаток")
+                        Text("Остаток долга")
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        TextField("0", text: Binding(
-                            get: { formatNumberForDisplay(remainingAmountText) },
-                            set: { newValue in
-                                let sanitized = AmountInputFormatter.sanitize(newValue)
-                                remainingAmountText = sanitized
-                            }
-                        ))
+                        TextField("0", text: $remainingAmountDisplayText)
                         .keyboardType(.decimalPad)
                         .foregroundStyle(AppColors.textPrimary)
                         .multilineTextAlignment(.trailing)
@@ -644,32 +707,133 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
             }
         }
     }
-    
-    private var organizationSection: some View {
+
+    private var paymentSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Организация")
+            FinancesSectionHeader(title: "Платеж")
             FinancesGlassCard {
-                HStack(spacing: 12) {
-                    Text("Банк")
-                        .font(.system(size: 16, weight: .medium))
+                VStack(spacing: 0) {
+                    HStack(spacing: 12) {
+                        Text("Платёж в месяц")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        TextField("0", text: $monthlyPaymentDisplayText)
+                            .keyboardType(.decimalPad)
+                            .foregroundStyle(AppColors.textPrimary)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 160)
+                    }
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 16)
+
+                    FinancesRowDivider(leadingPadding: 16)
+
+                    HStack(spacing: 12) {
+                        Text("Режим даты платежа")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        Menu {
+                            ForEach(CreditPaymentMode.allCases, id: \.self) { mode in
+                                Button(mode.displayName) {
+                                    paymentMode = mode
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text(paymentMode.displayName)
+                                    .font(.system(size: 16, weight: .semibold))
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 12, weight: .semibold))
+                            }
+                            .foregroundStyle(AppColors.textTertiary)
+                        }
+                    }
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 16)
+
+                    FinancesRowDivider(leadingPadding: 16)
+
+                    if paymentMode == .dayOfMonth {
+                        HStack(spacing: 12) {
+                            Text("День месяца")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(AppColors.textPrimary)
+                            Spacer()
+                            Menu {
+                                ForEach(1...31, id: \.self) { day in
+                                    Button("\(day)") {
+                                        paymentDayOfMonth = day
+                                    }
+                                }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Text("\(paymentDayOfMonth)")
+                                        .font(.system(size: 16, weight: .semibold))
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 12, weight: .semibold))
+                                }
+                                .foregroundStyle(AppColors.textTertiary)
+                            }
+                        }
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 16)
+                    } else {
+                        DatePicker(
+                            "Следующая дата",
+                            selection: $nextPaymentDate,
+                            displayedComponents: .date
+                        )
                         .foregroundStyle(AppColors.textPrimary)
-                    Spacer()
-                    Menu {
-                        ForEach(Bank.allCases, id: \.self) { bank in
-                            Button(bank.displayName) { selectedBank = bank }
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(selectedBank.displayName)
-                                .font(.system(size: 16, weight: .semibold))
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 12, weight: .semibold))
-                        }
-                        .foregroundStyle(AppColors.textTertiary)
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 16)
                     }
                 }
-                .padding(.vertical, 14)
-                .padding(.horizontal, 16)
+            }
+        }
+    }
+
+    private var reminderSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Напоминание")
+            FinancesGlassCard {
+                VStack(spacing: 0) {
+                    Toggle("Напоминать о платеже", isOn: $reminderEnabled)
+                        .tint(AppColors.toggleOnGreen)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+
+                    if reminderEnabled {
+                        FinancesRowDivider(leadingPadding: 16)
+
+                        HStack(spacing: 12) {
+                            Text("За N дней")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(AppColors.textPrimary)
+                            Spacer()
+                            TextField("0", text: $reminderDaysBeforeDisplayText)
+                                .keyboardType(.numberPad)
+                                .foregroundStyle(AppColors.textPrimary)
+                                .multilineTextAlignment(.trailing)
+                                .frame(width: 90)
+                        }
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 16)
+
+                        FinancesRowDivider(leadingPadding: 16)
+
+                        DatePicker(
+                            "Время уведомления",
+                            selection: $reminderTime,
+                            displayedComponents: .hourAndMinute
+                        )
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 16)
+                    }
+                }
             }
         }
     }
@@ -679,13 +843,23 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
             FinancesSectionHeader(title: "Подсчёты")
             FinancesGlassCard(contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)) {
                 VStack(alignment: .leading, spacing: 14) {
-                    Toggle("Учитывать в «Итого»", isOn: $includeInTotal)
-                        .tint(AppColors.toggleOnGreen)
-                        .foregroundStyle(AppColors.textPrimary)
+                    HStack(spacing: 10) {
+                        Text("Влияние на «Итого»")
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        Text("Уменьшает")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(AppColors.error.opacity(0.9))
+                    }
                     
                     Text("Определяет, как изменение баланса влияет на общий итог по всем продуктам.")
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppColors.textPrimary.opacity(0.35))
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text("Для учета в «Итого» используется поле «Остаток долга».")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(AppColors.error.opacity(0.8))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -719,9 +893,58 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
     private func parseNumber(_ text: String) -> Double? {
         AmountInputFormatter.parse(text)
     }
+
+    private func parseReminderDays(_ text: String) -> Int? {
+        guard !text.isEmpty, let value = Int(text) else { return nil }
+        return max(0, value)
+    }
+
+    private func emitCreditDataChange() {
+        onCreditDataChanged(getCreditData())
+    }
+
+    private func handleAmountDisplayChange(_ newValue: String) {
+        let sanitized = AmountInputFormatter.sanitize(newValue)
+        let formatted = formatNumberForDisplay(sanitized)
+        if newValue != formatted {
+            amountDisplayText = formatted
+        }
+        amountText = sanitized
+        emitCreditDataChange()
+    }
+
+    private func handleRemainingAmountDisplayChange(_ newValue: String) {
+        let sanitized = AmountInputFormatter.sanitize(newValue)
+        let formatted = formatNumberForDisplay(sanitized)
+        if newValue != formatted {
+            remainingAmountDisplayText = formatted
+        }
+        remainingAmountText = sanitized
+        emitCreditDataChange()
+    }
+
+    private func handleMonthlyPaymentDisplayChange(_ newValue: String) {
+        let sanitized = AmountInputFormatter.sanitize(newValue)
+        let formatted = formatNumberForDisplay(sanitized)
+        if newValue != formatted {
+            monthlyPaymentDisplayText = formatted
+        }
+        monthlyPaymentText = sanitized
+        emitCreditDataChange()
+    }
     
     private func formatNumberForDisplay(_ text: String) -> String {
         AmountInputFormatter.display(text)
+    }
+
+    private static func defaultReminderTime() -> Date {
+        let calendar = Calendar.current
+        return calendar.date(
+            bySettingHour: 9,
+            minute: 0,
+            second: 0,
+            of: Date()
+        ) ?? Date()
     }
 }
 
@@ -734,6 +957,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     
     @State private var selectedInvestmentType: InvestmentType = .positive
     @State private var amountText: String = ""
+    @State private var amountDisplayText: String = ""
     @State private var selectedCurrency: String = "RUB"
     @State private var includeInTotal: Bool = true
     @State private var selectedPriority: InvestmentPriority = .normal
@@ -746,6 +970,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     @State private var marketExchange: String?
     @State private var marketCurrency: String?
     @State private var marketQuantityText: String = ""
+    @State private var marketQuantityDisplayText: String = ""
     @State private var lastKnownUnitPrice: Double?
     @State private var lastKnownPriceUpdatedAt: Date?
     @State private var marketProviderRaw: String?
@@ -796,11 +1021,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
             }
             return quantity > 0
         }
-        guard !name.isEmpty,
-              let amount = parseNumber(amountText) else {
-            return false
-        }
-        return amount > 0
+        return !name.isEmpty
     }
     
     func getInvestmentData() -> (name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)? {
@@ -836,9 +1057,10 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
             )
         }
         
-        guard let amount = parseNumber(amountText) else {
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return nil
         }
+        let amount = parseNumber(amountText) ?? 0
         
         return (
             name,
@@ -866,9 +1088,31 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
             calculationsSection
             prioritySection
         }
-        .onAppear { loadAvailableCurrencies() }
+        .onAppear {
+            loadAvailableCurrencies()
+            if amountDisplayText.isEmpty {
+                amountDisplayText = formatNumberForDisplay(amountText)
+            }
+            if marketQuantityDisplayText.isEmpty {
+                marketQuantityDisplayText = formatNumberForDisplay(marketQuantityText)
+            }
+        }
         .onChange(of: name) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
-        .onChange(of: amountText) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
+        .onChange(of: amountText) { _, newValue in
+            let formatted = formatNumberForDisplay(newValue)
+            if amountDisplayText != formatted {
+                amountDisplayText = formatted
+            }
+            onInvestmentDataChanged(getInvestmentData())
+        }
+        .onChange(of: amountDisplayText) { _, newValue in
+            let sanitized = AmountInputFormatter.sanitize(newValue)
+            let formatted = formatNumberForDisplay(sanitized)
+            if newValue != formatted {
+                amountDisplayText = formatted
+            }
+            amountText = sanitized
+        }
         .onChange(of: selectedCurrency) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
         .onChange(of: selectedCategory) { _, newValue in
             if !(newValue == .stocks || newValue == .crypto) {
@@ -885,6 +1129,14 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                 amountText = String(total)
             }
             onInvestmentDataChanged(getInvestmentData())
+        }
+        .onChange(of: marketQuantityDisplayText) { _, newValue in
+            let sanitized = AmountInputFormatter.sanitize(newValue)
+            let formatted = formatNumberForDisplay(sanitized)
+            if newValue != formatted {
+                marketQuantityDisplayText = formatted
+            }
+            marketQuantityText = sanitized
         }
         .sheet(isPresented: $showCurrencyPicker) {
             NavigationStack {
@@ -994,13 +1246,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        TextField("0", text: Binding(
-                            get: { formatNumberForDisplay(marketQuantityText) },
-                            set: { newValue in
-                                let sanitized = AmountInputFormatter.sanitize(newValue)
-                                marketQuantityText = sanitized
-                            }
-                        ))
+                        TextField("0", text: $marketQuantityDisplayText)
                         .keyboardType(.decimalPad)
                         .foregroundStyle(AppColors.textPrimary)
                         .multilineTextAlignment(.trailing)
@@ -1078,13 +1324,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        TextField("0", text: Binding(
-                            get: { formatNumberForDisplay(amountText) },
-                            set: { newValue in
-                                let sanitized = AmountInputFormatter.sanitize(newValue)
-                                amountText = sanitized
-                            }
-                        ))
+                        TextField("0", text: $amountDisplayText)
                         .keyboardType(.decimalPad)
                         .foregroundStyle(AppColors.textPrimary)
                         .multilineTextAlignment(.trailing)
@@ -1151,6 +1391,13 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppColors.textPrimary.opacity(0.35))
                         .fixedSize(horizontal: false, vertical: true)
+
+                    if selectedCategory == .debt {
+                        Text("Для долгов: если вам должны — выбирайте «Увеличивает», если вы должны — «Уменьшает».")
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(AppColors.textPrimary.opacity(0.6))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
         }
