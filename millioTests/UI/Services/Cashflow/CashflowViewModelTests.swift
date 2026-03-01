@@ -817,6 +817,44 @@ struct CashflowViewModelTests {
         #expect(planned.allSatisfy { $0.transactionType == .expense })
     }
 
+    @Test("Удаление операции исключает ее из регулярных и запланированных списков")
+    func testDeleteTransactionRemovesItFromScheduledCollections() throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 10)) ?? Date()
+
+        let recurringIncome = CashflowTransaction(
+            transactionType: .income,
+            amount: 1200,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 1, day: 15)) ?? fixedNow,
+            incomeCategory: .salary,
+            recurrenceRule: .monthly,
+            recurrenceSeriesID: "series-income-delete"
+        )
+        let plannedExpense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 300,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 18)) ?? fixedNow,
+            expenseCategory: .shopping
+        )
+
+        modelContext.insert(recurringIncome)
+        modelContext.insert(plannedExpense)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        #expect(viewModel.recurringTemplates(for: .income, relativeTo: fixedNow).count == 1)
+        #expect(viewModel.plannedOneTimeTransactions(for: .expense, relativeTo: fixedNow).count == 1)
+
+        viewModel.handle(.deleteTransaction(recurringIncome))
+        viewModel.handle(.deleteTransaction(plannedExpense))
+
+        #expect(viewModel.recurringTemplates(for: .income, relativeTo: fixedNow).isEmpty)
+        #expect(viewModel.plannedOneTimeTransactions(for: .expense, relativeTo: fixedNow).isEmpty)
+    }
+
     private func waitUntil(
         timeoutNanoseconds: UInt64,
         intervalNanoseconds: UInt64 = 50_000_000,
