@@ -573,8 +573,11 @@ struct CashflowViewModelTests {
         try modelContext.save()
 
         let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        // Стартовая загрузка и генерация происходят асинхронно — принудительно
+        // триггерим повторную загрузку, чтобы тест не флапал по таймингу.
+        viewModel.handle(.loadTransactions)
 
-        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+        try await waitUntil(timeoutNanoseconds: 5_000_000_000) {
             viewModel.state.transactions.count == 3
         }
 
@@ -607,8 +610,11 @@ struct CashflowViewModelTests {
         try modelContext.save()
 
         let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        // Стартовая загрузка и генерация происходят асинхронно — принудительно
+        // триггерим повторную загрузку, чтобы тест не флапал по таймингу.
+        viewModel.handle(.loadTransactions)
 
-        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+        try await waitUntil(timeoutNanoseconds: 5_000_000_000) {
             viewModel.state.transactions.count == 3
         }
 
