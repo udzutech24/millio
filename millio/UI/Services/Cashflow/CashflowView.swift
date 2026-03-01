@@ -7,6 +7,23 @@
 
 import SwiftUI
 import SwiftData
+import UIKit
+
+enum CashflowValueTone {
+    case positive
+    case negative
+    case neutral
+}
+
+func cashflowValueTone(for value: Double, epsilon: Double = 0.0000001) -> CashflowValueTone {
+    if value > epsilon {
+        return .positive
+    }
+    if value < -epsilon {
+        return .negative
+    }
+    return .neutral
+}
 
 struct CashflowView: View {
     @Environment(\.modelContext) private var modelContext
@@ -38,15 +55,34 @@ struct CashflowView: View {
 
 private struct CashflowContentView: View {
     @ObservedObject var viewModel: CashflowViewModel
+    @Environment(\.dismiss) private var dismiss
     @State private var draftStartDate: Date = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
     @State private var draftEndDate: Date = Date()
     @State private var showAssetChangeInfoSheet: Bool = false
     @State private var showIncomeBreakdown: Bool = false
     @State private var showExpenseBreakdown: Bool = false
+    @State private var selectedTopAction: TopToolbarAction = .currency
+    
+    private let neonCyan = Color(hex: "47D7FF")
+    private let neonViolet = Color(hex: "8A6BFF")
+    private let neonPositive = Color(hex: "6DFFC7")
+    private let neonNegative = Color(hex: "FF6666")
+    private let primarySecondaryText = Color.white.opacity(0.78)
+    private let panelFill = Color.white.opacity(0.035)
+    private let innerGlassFill = Color.white.opacity(0.018)
+    private let innerSeparator = Color.white.opacity(0.16)
+    private let panelCornerRadius: CGFloat = 22
+    private let rowCornerRadius: CGFloat = 16
+
+    private enum TopToolbarAction: CaseIterable {
+        case currency
+        case history
+    }
     
     var body: some View {
         ZStack {
-            GradientBackground()
+            Color.black
+                .ignoresSafeArea()
             
             ScrollView {
                 VStack(spacing: 16) {
@@ -59,19 +95,23 @@ private struct CashflowContentView: View {
                     if let warning = viewModel.state.currencyConversionWarning {
                         currencyWarningView(text: warning)
                     }
-                    
-                    // Кнопки действий
-                    actionButtonsSection
-                    
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, 12)
                 .padding(.top, 8)
-                .padding(.bottom, 24)
+                .padding(.bottom, 20)
             }
         }
         .navigationTitle("Кэшфлоу")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
         .toolbar { topToolbar }
+        .safeAreaInset(edge: .bottom) {
+            actionButtonsSection
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+                .padding(.bottom, 8)
+                .background(Color.black.opacity(0.92))
+        }
         .sheet(isPresented: Binding(
             get: { viewModel.state.showTransactionEditor },
             set: { if !$0 { viewModel.handle(.hideTransactionEditor) } }
@@ -123,31 +163,37 @@ private struct CashflowContentView: View {
     // MARK: - Action Buttons Section
     
     private var actionButtonsSection: some View {
-        HStack(spacing: 12) {
-            // Кнопка Доход
+        HStack(spacing: 10) {
             CashflowActionButton(
                 accessibilityLabel: "Доход",
+                title: "Доход",
                 icon: "plus",
-                gradientColors: AppColors.incomeGradient
+                gradientColors: AppColors.incomeGradient,
+                style: .primary
             ) {
+                fireLightImpact()
                 viewModel.handle(.addTransaction(.income))
             }
-            
-            // Кнопка Расход
+
             CashflowActionButton(
                 accessibilityLabel: "Расход",
+                title: "Расход",
                 icon: "minus",
-                gradientColors: AppColors.expenseGradient
+                gradientColors: AppColors.expenseGradient,
+                style: .secondary
             ) {
+                fireLightImpact()
                 viewModel.handle(.addTransaction(.expense))
             }
-            
-            // Кнопка Перевод
+
             CashflowActionButton(
                 accessibilityLabel: "Перевод",
+                title: "Перевод",
                 icon: "arrow.left.arrow.right",
-                gradientColors: AppColors.cashflowGradient
+                gradientColors: AppColors.cashflowGradient,
+                style: .secondary
             ) {
+                fireLightImpact()
                 viewModel.handle(.addTransaction(.transfer))
             }
         }
@@ -156,12 +202,13 @@ private struct CashflowContentView: View {
     // MARK: - Period Stats Section
     
     private var assetBreakdownSection: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 14) {
             statRow(
                 title: "Активы на начало периода",
                 value: formatMoney(viewModel.state.assetsAtPeriodStart),
                 valueColor: AppColors.textPrimary
             )
+            rowDivider
 
             expandableStatRow(
                 title: "Доходы",
@@ -177,31 +224,33 @@ private struct CashflowContentView: View {
                     valueColor: { positiveColor(for: $0) }
                 )
             }
+            rowDivider
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .center) {
                     HStack(spacing: 8) {
                         Text("Изменение стоимости активов")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(AppColors.textSecondary)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(primarySecondaryText)
                         Button {
                             showAssetChangeInfoSheet = true
                         } label: {
                             Image(systemName: "questionmark.circle")
                                 .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(AppColors.textSecondary)
+                                .foregroundStyle(primarySecondaryText)
                         }
                         .buttonStyle(.plain)
                     }
                     Spacer()
                     Text(formatSignedMoney(viewModel.state.assetValueChange))
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: 21, weight: .semibold))
                         .foregroundStyle(positiveColor(for: viewModel.state.assetValueChange))
+                        .contentTransition(.numericText())
                 }
 
             }
-            .padding(12)
-            .background(financeInnerBackground(cornerRadius: 16))
+            .padding(.horizontal, 4)
+            rowDivider
 
             expandableStatRow(
                 title: "Расходы внесенные",
@@ -217,6 +266,7 @@ private struct CashflowContentView: View {
                     valueColor: { negativeColor(for: -$0) }
                 )
             }
+            rowDivider
 
             VStack(spacing: 8) {
                 statRow(
@@ -226,40 +276,42 @@ private struct CashflowContentView: View {
                 )
 
                 Divider()
-                    .overlay(AppColors.textSecondary.opacity(0.3))
+                    .overlay(innerSeparator)
 
                 HStack {
                     Text("Итого")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 19, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                     Spacer()
                     Text(formatSignedMoney(viewModel.state.periodTotalChange))
-                        .font(.system(size: 19, weight: .semibold))
+                        .font(.system(size: 30, weight: .bold))
                         .foregroundStyle(positiveColor(for: viewModel.state.periodTotalChange))
+                        .contentTransition(.numericText())
                 }
-                .padding(.horizontal, 2)
+                .padding(.horizontal, 4)
                 .padding(.bottom, 2)
             }
-            .padding(12)
-            .background(financeInnerBackground(cornerRadius: 16))
+            .padding(.top, 4)
         }
-        .padding(12)
-        .background(financeCardBackground(cornerRadius: 20))
+        .padding(16)
+        .background(financeCardBackground(cornerRadius: panelCornerRadius))
+        .animation(.spring(response: 0.22, dampingFraction: 0.86), value: viewModel.state.periodTotalChange)
     }
 
     private func statRow(title: String, value: String, valueColor: Color) -> some View {
         HStack(alignment: .top) {
             Text(title)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(AppColors.textSecondary)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(primarySecondaryText)
             Spacer()
             Text(value)
-                .font(.system(size: 18, weight: .semibold))
+                .font(.system(size: 21, weight: .semibold))
                 .foregroundStyle(valueColor)
                 .lineLimit(1)
+                .contentTransition(.numericText())
         }
-        .padding(12)
-        .background(financeInnerBackground(cornerRadius: 16))
+        .padding(.horizontal, 4)
+        .padding(.vertical, 2)
     }
 
     private func expandableStatRow(
@@ -270,29 +322,31 @@ private struct CashflowContentView: View {
     ) -> some View {
         HStack(alignment: .top) {
             Text(title)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(AppColors.textSecondary)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(primarySecondaryText)
             Spacer()
             HStack(spacing: 8) {
                 Text(value)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 21, weight: .semibold))
                     .foregroundStyle(valueColor)
                     .lineLimit(1)
+                    .contentTransition(.numericText())
                 Button {
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
                         isExpanded.wrappedValue.toggle()
                     }
+                    fireLightImpact()
                 } label: {
                     Image(systemName: isExpanded.wrappedValue ? "minus.circle" : "plus.circle")
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(AppColors.textSecondary)
+                        .foregroundStyle(primarySecondaryText)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(isExpanded.wrappedValue ? "Скрыть детали" : "Показать детали")
             }
         }
-        .padding(12)
-        .background(financeInnerBackground(cornerRadius: 16))
+        .padding(.horizontal, 4)
+        .padding(.vertical, 2)
     }
 
     private func breakdownList(
@@ -304,13 +358,13 @@ private struct CashflowContentView: View {
             if entries.isEmpty {
                 Text("Нет операций")
                     .font(.system(size: 12, weight: .regular))
-                    .foregroundStyle(AppColors.textSecondary)
+                    .foregroundStyle(primarySecondaryText)
             } else {
                 ForEach(entries) { entry in
                     HStack(alignment: .firstTextBaseline) {
                         Text(entry.title)
                             .font(.system(size: 13, weight: .regular))
-                            .foregroundStyle(AppColors.textSecondary)
+                            .foregroundStyle(primarySecondaryText)
                             .lineLimit(2)
                         Spacer()
                         let value = signedAmount(entry.convertedAmount)
@@ -322,8 +376,8 @@ private struct CashflowContentView: View {
                 }
             }
         }
-        .padding(12)
-        .background(financeInnerBackground(cornerRadius: 16))
+        .padding(.horizontal, 4)
+        .padding(.vertical, 2)
     }
 
     private func currencyWarningView(text: String) -> some View {
@@ -334,17 +388,20 @@ private struct CashflowContentView: View {
 
             Text(text)
                 .font(.system(size: 12))
-                .foregroundStyle(AppColors.textSecondary)
+                .foregroundStyle(primarySecondaryText)
                 .lineLimit(3)
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppColors.warning.opacity(0.12))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(
+            RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                .fill(AppColors.warning.opacity(0.10))
+        )
+        .clipShape(RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(AppColors.warning.opacity(0.4), lineWidth: 1)
+            RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                .stroke(AppColors.warning.opacity(0.45), lineWidth: 1)
         }
         .accessibilityLabel(Text(text))
     }
@@ -352,38 +409,39 @@ private struct CashflowContentView: View {
     // MARK: - Period Selection Section
     
     private var periodSelectionSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
                 Button {
-                    viewModel.handle(.movePeriodBackward)
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        viewModel.handle(.movePeriodBackward)
+                    }
+                    fireLightImpact()
                 } label: {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                        .frame(width: 34, height: 34)
-                        .background(Circle().fill(Color.white.opacity(0.08)))
+                        .foregroundStyle(Color.white.opacity(0.95))
+                        .frame(width: 38, height: 38)
+                        .background(periodControlBackground)
                 }
                 .buttonStyle(.plain)
 
                 Spacer()
 
                 HStack(spacing: 8) {
-                    Text(viewModel.currentPeriodHeaderTitle())
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                        .lineLimit(1)
+                    periodHeaderTitleView
 
                     Button {
                         draftStartDate = viewModel.state.customStartDate
                         draftEndDate = viewModel.state.customEndDate
                         viewModel.handle(.showPeriodSelector)
+                        fireLightImpact()
                     } label: {
                         Image("calendar")
                             .resizable()
                             .scaledToFit()
-                            .frame(width: 20, height: 20)
-                            .padding(7)
-                            .background(Capsule().fill(Color.white.opacity(0.08)))
+                            .frame(width: 16, height: 16)
+                            .padding(8)
+                            .background(periodControlBackground)
                     }
                     .buttonStyle(.plain)
                 }
@@ -391,13 +449,16 @@ private struct CashflowContentView: View {
                 Spacer()
 
                 Button {
-                    viewModel.handle(.movePeriodForward)
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        viewModel.handle(.movePeriodForward)
+                    }
+                    fireLightImpact()
                 } label: {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(viewModel.canMovePeriodForward() ? AppColors.textPrimary : AppColors.textSecondary)
-                        .frame(width: 34, height: 34)
-                        .background(Circle().fill(Color.white.opacity(0.08)))
+                        .foregroundStyle(viewModel.canMovePeriodForward() ? Color.white.opacity(0.95) : Color.white.opacity(0.35))
+                        .frame(width: 38, height: 38)
+                        .background(periodControlBackground)
                 }
                 .buttonStyle(.plain)
                 .disabled(!viewModel.canMovePeriodForward())
@@ -405,49 +466,99 @@ private struct CashflowContentView: View {
 
             let range = viewModel.currentDateRange()
             Text("\(formatPeriod(range.0)) — \(formatPeriod(range.1))")
-                .font(.system(size: 11))
-                .foregroundStyle(AppColors.textSecondary)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(primarySecondaryText)
+                .contentTransition(.opacity)
         }
-        .padding(12)
-        .background(financeCardBackground(cornerRadius: 18))
+        .padding(16)
+        .background(financeCardBackground(cornerRadius: panelCornerRadius))
+        .animation(.easeInOut(duration: 0.2), value: viewModel.state.selectedMonth)
+    }
+
+    @ViewBuilder
+    private var periodHeaderTitleView: some View {
+        let title = viewModel.currentPeriodHeaderTitle()
+        if title.hasSuffix(" г.") {
+            let main = String(title.dropLast(3))
+            (
+                Text(main)
+                    .font(.system(size: 17, weight: .semibold))
+                + Text(" г.")
+                    .font(.system(size: 14, weight: .medium))
+            )
+            .foregroundStyle(AppColors.textPrimary)
+            .lineLimit(1)
+        } else {
+            Text(title)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(AppColors.textPrimary)
+                .lineLimit(1)
+        }
     }
     
     @ToolbarContentBuilder
     private var topToolbar: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.95))
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Назад")
+        }
+
         ToolbarItem(placement: .topBarTrailing) {
-            HStack(spacing: 12) {
+            HStack(spacing: 0) {
                 Button {
+                    selectedTopAction = .currency
                     viewModel.handle(.showCurrencySelector)
+                    fireLightImpact()
                 } label: {
-                    Image(systemName: "rublesign.circle.fill")
-                        .font(.title3.weight(.semibold))
-                        .frame(width: 36, height: 36)
+                    Image(systemName: "dollarsign.arrow.circlepath")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(selectedTopAction == .currency ? Color.white.opacity(0.96) : primarySecondaryText)
+                        .frame(width: 42, height: 38)
                 }
+                .buttonStyle(.plain)
                 .accessibilityLabel("Выбор валюты отображения")
-                
+
+                Divider()
+                    .frame(height: 18)
+                    .overlay(Color.white.opacity(0.2))
+
                 Button {
+                    selectedTopAction = .history
                     viewModel.handle(.showTransactionsHistory)
+                    fireLightImpact()
                 } label: {
-                    Image("operations")
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 28, height: 28)
-                        
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundStyle(selectedTopAction == .history ? Color.white.opacity(0.96) : primarySecondaryText)
+                        .frame(width: 42, height: 38)
                 }
+                .buttonStyle(.plain)
                 .accessibilityLabel("История операций")
             }
+            .background {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.white.opacity(0.06))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [neonCyan.opacity(0.45), neonViolet.opacity(0.45)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ),
+                                lineWidth: 1
+                            )
+                    )
+            }
         }
-    }
-    
-    private func formatAmount(_ amount: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.groupingSeparator = " "
-        formatter.usesGroupingSeparator = true
-        formatter.minimumFractionDigits = 2
-        formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: amount)) ?? "0.00"
     }
     
     private func formatPeriod(_ date: Date) -> String {
@@ -462,10 +573,9 @@ private struct CashflowContentView: View {
         formatter.groupingSeparator = " "
         formatter.usesGroupingSeparator = true
         formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 2
+        formatter.maximumFractionDigits = 0
         let value = formatter.string(from: NSNumber(value: amount)) ?? "0"
-        let symbol = MonetaCurrency(rawValue: viewModel.state.displayCurrency)?.symbol ?? viewModel.state.displayCurrency
-        return "\(value) \(symbol)"
+        return value
     }
 
     private func formatSignedMoney(_ amount: Double) -> String {
@@ -480,65 +590,78 @@ private struct CashflowContentView: View {
     }
 
     private func financeCardBackground(cornerRadius: CGFloat) -> some View {
-        let accentColor = AppColors.financesGradient.first ?? .cyan
-        let fillGradient = LinearGradient(
-            colors: [
-                Color(red: 0.03, green: 0.07, blue: 0.11),
-                Color(red: 0.02, green: 0.04, blue: 0.06),
-                Color.black
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        let glowGradient = LinearGradient(
-            colors: [
-                accentColor.opacity(0.16),
-                Color.clear
-            ],
+        let borderGradient = LinearGradient(
+            colors: [neonCyan.opacity(0.72), neonViolet.opacity(0.62)],
             startPoint: .leading,
             endPoint: .trailing
         )
 
         return RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(fillGradient)
+            .fill(panelFill)
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(glowGradient)
-                    .opacity(0.6)
+                    .stroke(borderGradient, lineWidth: 1)
+            )
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(.ultraThinMaterial.opacity(0.28))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(accentColor.opacity(0.55), lineWidth: 1)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 0.7)
             )
+            .shadow(color: neonCyan.opacity(0.08), radius: 8, x: 0, y: 0)
     }
 
     private func financeInnerBackground(cornerRadius: CGFloat) -> some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(Color.white.opacity(0.08))
+            .fill(innerGlassFill)
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(Color.white.opacity(0.10), lineWidth: 0.8)
+                    .stroke(Color.white.opacity(0.10), lineWidth: 0.6)
+            )
+    }
+
+    private var periodControlBackground: some View {
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .fill(Color.white.opacity(0.06))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.white.opacity(0.28), lineWidth: 1)
             )
     }
 
     private func positiveColor(for value: Double) -> Color {
-        if value > 0.0000001 {
-            return Color(.sRGB, red: 127.0 / 255.0, green: 1.0, blue: 189.0 / 255.0, opacity: 1.0)
+        switch cashflowValueTone(for: value) {
+        case .positive:
+            return neonPositive
+        case .negative:
+            return neonNegative
+        case .neutral:
+            return primarySecondaryText
         }
-        if value < -0.0000001 {
-            return Color(.sRGB, red: 1.0, green: 0.37, blue: 0.37, opacity: 1.0)
-        }
-        return AppColors.textSecondary
     }
 
     private func negativeColor(for value: Double) -> Color {
-        if value < -0.0000001 {
-            return Color(.sRGB, red: 1.0, green: 0.37, blue: 0.37, opacity: 1.0)
+        switch cashflowValueTone(for: value) {
+        case .negative:
+            return neonNegative
+        case .positive:
+            return neonPositive
+        case .neutral:
+            return primarySecondaryText
         }
-        if value > 0.0000001 {
-            return Color(.sRGB, red: 127.0 / 255.0, green: 1.0, blue: 189.0 / 255.0, opacity: 1.0)
-        }
-        return AppColors.textSecondary
+    }
+
+    private var rowDivider: some View {
+        Divider()
+            .overlay(innerSeparator)
+            .padding(.horizontal, 4)
+    }
+
+    private func fireLightImpact() {
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.impactOccurred(intensity: 0.9)
     }
 
     private var assetChangeInfoSheet: some View {
@@ -710,54 +833,79 @@ private struct CashflowContentView: View {
 // MARK: - Cashflow Action Button
 
 private struct CashflowActionButton: View {
+    enum Style {
+        case primary
+        case secondary
+    }
+
     let accessibilityLabel: String
+    let title: String
     let icon: String
     let gradientColors: [Color]
+    let style: Style
     let action: () -> Void
+    
+    private let cornerRadius: CGFloat = 28
     
     var body: some View {
         Button(action: action) {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: gradientColors.map { $0.opacity(0.2) },
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 56, height: 56)
-                
-                Image(systemName: icon)
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: gradientColors,
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+            HStack(spacing: 6) {
+                ZStack {
+                    Circle()
+                        .fill(Color.black.opacity(0.95))
+                    Circle()
+                        .stroke(gradientStroke.opacity(0.65), lineWidth: 1.1)
+                    Image(systemName: icon)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.92))
+                }
+                .frame(width: 38, height: 38)
+
+                Text(title)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.92))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.9)
             }
+            .padding(.horizontal, 10)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .padding(.horizontal, 12)
-            .background {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color.black.opacity(0.3))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .stroke(
-                                LinearGradient(
-                                    colors: gradientColors,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ),
-                                lineWidth: 2
-                            )
-                    }
-            }
+            .frame(height: 64)
+            .background(buttonBackground)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(accessibilityLabel))
+    }
+
+    private var buttonBackground: some View {
+        let fillColor: Color = style == .primary ? gradientAccent.opacity(0.22) : Color.black.opacity(0.20)
+        let strokeOpacity: Double = style == .primary ? 0.95 : 0.72
+        let strokeWidth: CGFloat = style == .primary ? 1.6 : 1.2
+        let materialOpacity: Double = style == .primary ? 0.35 : 0.22
+        let shadowOpacity: Double = style == .primary ? 0.22 : 0.08
+        let shadowRadius: CGFloat = style == .primary ? 10 : 6
+
+        return RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(fillColor)
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(gradientStroke.opacity(strokeOpacity), lineWidth: strokeWidth)
+            }
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(.ultraThinMaterial.opacity(materialOpacity))
+            )
+            .shadow(color: gradientAccent.opacity(shadowOpacity), radius: shadowRadius, x: 0, y: 0)
+    }
+
+    private var gradientAccent: Color {
+        gradientColors.first ?? AppColors.brandPrimary
+    }
+
+    private var gradientStroke: LinearGradient {
+        LinearGradient(
+            colors: gradientColors,
+            startPoint: .leading,
+            endPoint: .trailing
+        )
     }
 }
