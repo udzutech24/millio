@@ -39,6 +39,12 @@ private struct CashflowCategoryTransactionSheet: View {
     @State private var showCreateCategorySheet: Bool = false
     @State private var newCategoryName: String = ""
     @State private var newCategoryIcon: String = CashflowCustomCategory.defaultIcon
+    @State private var showCategoryEditorSheet: Bool = false
+    @State private var showDeleteCategoryAlert: Bool = false
+    @State private var categoryEditorMode: CashflowCategoryEditorMode = .create
+    @State private var categoryEditorName: String = ""
+    @State private var categoryEditorIcon: String = CashflowCustomCategory.defaultIcon
+    @State private var pendingDeleteCategoryRaw: String?
 
     private let categoryColumns: [GridItem] = Array(repeating: GridItem(.flexible(), spacing: 10), count: 3)
 
@@ -110,6 +116,30 @@ private struct CashflowCategoryTransactionSheet: View {
                     icon: $newCategoryIcon,
                     onSave: handleCreateCategory
                 )
+            }
+            .fullScreenCover(isPresented: $showCategoryEditorSheet) {
+                CashflowCategoryEditorSheet(
+                    mode: categoryEditorMode,
+                    name: $categoryEditorName,
+                    icon: $categoryEditorIcon
+                ) { name, icon in
+                    handleCategoryEditorSave(name: name, icon: icon)
+                }
+            }
+            .alert("Удалить категорию?", isPresented: $showDeleteCategoryAlert) {
+                Button("Отмена", role: .cancel) {
+                    pendingDeleteCategoryRaw = nil
+                }
+                Button("Удалить", role: .destructive) {
+                    guard let raw = pendingDeleteCategoryRaw else { return }
+                    if viewModel.deleteCustomCategory(rawValue: raw, kind: kind.categoryKind),
+                       selectedCategory?.rawValue == raw {
+                        selectedCategory = nil
+                    }
+                    pendingDeleteCategoryRaw = nil
+                }
+            } message: {
+                Text("Связанные операции будут перенесены в безопасную системную категорию.")
             }
             .onAppear {
                 reloadMonthlyTotal()
@@ -220,32 +250,52 @@ private struct CashflowCategoryTransactionSheet: View {
     private var categoriesSection: some View {
         LazyVGrid(columns: categoryColumns, spacing: 10) {
             ForEach(categories) { option in
-                Button {
-                    selectedCategory = option
-                } label: {
-                    VStack(spacing: 8) {
-                        Image(systemName: option.icon)
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary)
-                        Text(option.displayName)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(AppColors.textPrimary)
-                            .multilineTextAlignment(.center)
-                            .lineLimit(2)
-                            .frame(minHeight: 30)
+                ZStack(alignment: .topTrailing) {
+                    Button {
+                        selectedCategory = option
+                    } label: {
+                        VStack(spacing: 8) {
+                            Image(systemName: option.icon)
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(AppColors.textPrimary)
+                            Text(option.displayName)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(AppColors.textPrimary)
+                                .multilineTextAlignment(.center)
+                                .lineLimit(2)
+                                .frame(minHeight: 30)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 92)
+                        .padding(.horizontal, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(Color.white.opacity(0.08))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                                )
+                        )
                     }
-                    .frame(maxWidth: .infinity, minHeight: 92)
-                    .padding(.horizontal, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(Color.white.opacity(0.08))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                            )
-                    )
+                    .buttonStyle(.plain)
+
+                    if option.isCustom {
+                        Menu {
+                            Button("Редактировать") {
+                                openCategoryEditor(for: option)
+                            }
+                            Button("Удалить", role: .destructive) {
+                                pendingDeleteCategoryRaw = option.rawValue
+                                showDeleteCategoryAlert = true
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle.fill")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(AppColors.textSecondary)
+                                .padding(8)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
-                .buttonStyle(.plain)
             }
 
             Button {
@@ -323,6 +373,45 @@ private struct CashflowCategoryTransactionSheet: View {
         newCategoryName = ""
         newCategoryIcon = CashflowCustomCategory.defaultIcon
         showCreateCategorySheet = false
+    }
+
+    private func openCategoryEditor(for option: CashflowCategoryOption) {
+        categoryEditorMode = .edit(rawValue: option.rawValue)
+        categoryEditorName = option.displayName
+        categoryEditorIcon = option.icon
+        showCategoryEditorSheet = true
+    }
+
+    private func handleCategoryEditorSave(name: String, icon: String) {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+
+        switch categoryEditorMode {
+        case .create:
+            if let created = viewModel.createCustomCategory(kind: kind.categoryKind, name: trimmedName, icon: icon) {
+                selectedCategory = created
+                searchText = ""
+            }
+        case .edit(let rawValue):
+            guard viewModel.renameCustomCategory(
+                rawValue: rawValue,
+                kind: kind.categoryKind,
+                newName: trimmedName,
+                newIcon: icon
+            ) else { return }
+
+            if selectedCategory?.rawValue == rawValue {
+                if let resolved = viewModel.categoryOptions(for: kind.categoryKind).first(where: {
+                    $0.displayName.caseInsensitiveCompare(trimmedName) == .orderedSame
+                }) {
+                    selectedCategory = resolved
+                } else {
+                    selectedCategory = nil
+                }
+            }
+        }
+
+        showCategoryEditorSheet = false
     }
 
     private func formattedMonthlyTotal(_ value: Double) -> String {

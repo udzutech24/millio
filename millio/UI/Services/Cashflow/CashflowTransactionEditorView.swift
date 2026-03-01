@@ -118,6 +118,10 @@ struct CashflowTransactionEditorView: View {
                         categorySection
                     }
 
+                    if shouldShowSelectedCategorySummary {
+                        selectedCategorySummarySection
+                    }
+
                     mainInfoSection
                     if selectedTransactionType == .income || selectedTransactionType == .expense {
                         recurrenceSection
@@ -396,6 +400,25 @@ struct CashflowTransactionEditorView: View {
         }
     }
 
+    private var selectedCategorySummarySection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: selectedTransactionType == .income ? "Выбранный доход" : "Выбранный расход")
+            FinancesGlassCard {
+                HStack(spacing: 10) {
+                    Image(systemName: selectedCategoryOption.icon)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .frame(width: 20)
+                    Text(selectedCategoryOption.displayName)
+                        .foregroundStyle(AppColors.textPrimary)
+                    Spacer()
+                }
+                .padding(.vertical, 10)
+                .padding(.horizontal, 16)
+            }
+        }
+    }
+
     private var recurrenceSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: "Повтор")
@@ -609,6 +632,10 @@ struct CashflowTransactionEditorView: View {
         )
     }
 
+    private var shouldShowSelectedCategorySummary: Bool {
+        !showsCategorySection && (selectedTransactionType == .income || selectedTransactionType == .expense)
+    }
+
     private var selectedCategoryOption: CashflowCategoryOption {
         let kind = selectedCategoryKind
         let fallbackRaw = kind == .income ? IncomeCategory.salary.rawValue : ExpenseCategory.groceries.rawValue
@@ -806,7 +833,7 @@ struct CashflowTransactionEditorView: View {
     }
 }
 
-private enum CashflowCategoryEditorMode {
+enum CashflowCategoryEditorMode {
     case create
     case edit(rawValue: String)
 }
@@ -1031,7 +1058,7 @@ private struct CashflowCategorySelectionSheet: View {
     }
 }
 
-private struct CashflowCategoryEditorSheet: View {
+struct CashflowCategoryEditorSheet: View {
     let mode: CashflowCategoryEditorMode
     @Binding var name: String
     @Binding var icon: String

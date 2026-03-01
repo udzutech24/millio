@@ -452,6 +452,34 @@ struct CashflowViewModelTests {
         }
     }
 
+    @Test("Редактирование кастомной категории обновляет имя и иконку")
+    func testRenameCustomCategoryUpdatesNameAndIcon() throws {
+        let modelContext = try createTestModelContext()
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+
+        guard let created = viewModel.createCustomCategory(
+            kind: .income,
+            name: "Подработка",
+            icon: "briefcase.fill"
+        ) else {
+            #expect(Bool(false), "Custom category was not created")
+            return
+        }
+
+        let renamed = viewModel.renameCustomCategory(
+            rawValue: created.rawValue,
+            kind: .income,
+            newName: "Фриланс проекты",
+            newIcon: "laptopcomputer"
+        )
+
+        #expect(renamed)
+        let resolved = viewModel.categoryOption(for: created.rawValue, kind: .income)
+        #expect(resolved.displayName == "Фриланс проекты")
+        #expect(resolved.icon == "laptopcomputer")
+        #expect(resolved.isCustom)
+    }
+
     @Test("Ежемесячный автоповтор создаёт пропущенные операции и не дублирует месяцы")
     func testMonthlyRecurringGeneratesMissingTransactions() async throws {
         let modelContext = try createTestModelContext()
