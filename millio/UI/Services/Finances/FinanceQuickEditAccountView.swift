@@ -13,6 +13,8 @@ struct FinanceQuickEditAccountView: View {
     @Environment(\.dismiss) private var dismiss
     
     @State private var amountText: String = ""
+    @State private var creditLimitText: String = ""
+    @State private var creditDebtText: String = ""
     @State private var isLoading = false
     @FocusState private var isAmountFieldFocused: Bool
     
@@ -28,14 +30,14 @@ struct FinanceQuickEditAccountView: View {
     private var isMarketInvestment: Bool {
         marketInvestment != nil
     }
-    
-    var isCreditCard: Bool {
-        if account.accountType == .card,
-           let card = viewModel.state.availableCards.first(where: { $0.cardUniqueID == account.accountID }),
-           card.cardType == .credit {
-            return true
-        }
-        return false
+
+    private var currentCreditCard: Card? {
+        guard account.accountType == .card else { return nil }
+        return viewModel.state.availableCards.first(where: { $0.cardUniqueID == account.accountID && $0.cardType == .credit })
+    }
+
+    private var isCreditCard: Bool {
+        currentCreditCard != nil
     }
     
     var body: some View {
@@ -63,53 +65,57 @@ struct FinanceQuickEditAccountView: View {
                         }
                         .padding(.top, 40)
                         
-                        // Поле ввода суммы
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(fieldTitle)
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(AppColors.textSecondary)
-                            
-                            HStack(spacing: 8) {
-                                TextField("", text: Binding(
-                                    get: {
-                                        AmountInputFormatter.display(
-                                            amountText,
-                                            maxFractionDigits: maxFractionDigitsForInput
-                                        )
-                                    },
-                                    set: { newValue in
-                                        amountText = AmountInputFormatter.sanitize(
-                                            newValue,
-                                            maxFractionDigits: maxFractionDigitsForInput
-                                        )
+                        Group {
+                            if isCreditCard {
+                                creditCardQuickForm(currency: info.currency)
+                            } else {
+                                // Поле ввода суммы
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text(fieldTitle)
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundStyle(AppColors.textSecondary)
+
+                                    HStack(spacing: 8) {
+                                        TextField("", text: Binding(
+                                            get: {
+                                                AmountInputFormatter.display(
+                                                    amountText,
+                                                    maxFractionDigits: maxFractionDigitsForInput
+                                                )
+                                            },
+                                            set: { newValue in
+                                                amountText = AmountInputFormatter.sanitize(
+                                                    newValue,
+                                                    maxFractionDigits: maxFractionDigitsForInput
+                                                )
+                                            }
+                                        ))
+                                            .font(.system(size: 32, weight: .bold))
+                                            .foregroundStyle(AppColors.textPrimary)
+                                            .keyboardType(.decimalPad)
+                                            .multilineTextAlignment(.leading)
+                                            .focused($isAmountFieldFocused)
+                                            .autocorrectionDisabled()
+                                            .textInputAutocapitalization(.never)
+
+                                        Text(valueSuffix(for: info))
+                                            .font(.system(size: 20, weight: .semibold))
+                                            .foregroundStyle(AppColors.textSecondary)
                                     }
-                                ))
-                                    .font(.system(size: 32, weight: .bold))
-                                    .foregroundStyle(AppColors.textPrimary)
-                                    .keyboardType(.decimalPad)
-                                    .multilineTextAlignment(.leading)
-                                    .focused($isAmountFieldFocused)
-                                    .autocorrectionDisabled()
-                                    .textInputAutocapitalization(.never)
-                                
-                                Text(valueSuffix(for: info))
-                                    .font(.system(size: 20, weight: .semibold))
-                                    .foregroundStyle(AppColors.textSecondary)
-                            }
-                            .task {
-                                // Инициализируем значение при первом появлении
-                                if amountText.isEmpty {
-                                    amountText = plainAmountForInput(currentEditableValue(fallbackAmount: info.amount))
+                                    .task {
+                                        if amountText.isEmpty {
+                                            amountText = plainAmountForInput(currentEditableValue(fallbackAmount: info.amount))
+                                        }
+                                        try? await Task.sleep(nanoseconds: 100_000_000)
+                                        isAmountFieldFocused = true
+                                    }
+                                    .padding(20)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .fill(Color.black.opacity(0.3))
+                                    )
                                 }
-                                // Автоматически устанавливаем фокус на поле ввода
-                                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 секунды
-                                isAmountFieldFocused = true
                             }
-                            .padding(20)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .fill(Color.black.opacity(0.3))
-                            )
                         }
                         .padding(.horizontal, 24)
                         
@@ -117,9 +123,9 @@ struct FinanceQuickEditAccountView: View {
                         
                         // Кнопка сохранения
                         Button {
-                            saveAmount()
+                            save()
                         } label: {
-                            Text("Сохранить")
+                            Text("OK")
                                 .font(.system(size: 18, weight: .semibold))
                                 .foregroundStyle(AppColors.textPrimary)
                                 .frame(maxWidth: .infinity)
@@ -141,14 +147,14 @@ struct FinanceQuickEditAccountView: View {
                                 }
                         }
                         .buttonStyle(.plain)
-                        .disabled(isLoading || !isValidAmount)
-                        .opacity(isLoading || !isValidAmount ? 0.6 : 1.0)
+                        .disabled(isLoading || !isValidInput)
+                        .opacity(isLoading || !isValidInput ? 0.6 : 1.0)
                         .padding(.horizontal, 24)
                         .padding(.bottom, 40)
                     }
                 }
             }
-            .navigationTitle(isMarketInvestment ? "Редактирование количества" : "Редактирование суммы")
+            .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -159,13 +165,105 @@ struct FinanceQuickEditAccountView: View {
                 }
             }
         }
+        .onAppear {
+            setupInitialValues()
+        }
     }
-    
-    private var isValidAmount: Bool {
+
+    @ViewBuilder
+    private func creditCardQuickForm(currency: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            quickRow(
+                title: "Кредитный лимит",
+                text: Binding(
+                    get: { AmountInputFormatter.display(creditLimitText) },
+                    set: { creditLimitText = AmountInputFormatter.sanitize($0) }
+                ),
+                suffix: currency
+            )
+
+            quickRow(
+                title: "Общий долг",
+                text: Binding(
+                    get: { AmountInputFormatter.display(creditDebtText) },
+                    set: { creditDebtText = AmountInputFormatter.sanitize($0) }
+                ),
+                suffix: currency
+            )
+
+            HStack {
+                Text("Остаток лимита")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AppColors.textSecondary)
+                Spacer()
+                Text("\(formatAmount(creditRemainingLimit)) \(currency)")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.black.opacity(0.25))
+            )
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.black.opacity(0.3))
+        )
+    }
+
+    private func quickRow(title: String, text: Binding<String>, suffix: String) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(AppColors.textSecondary)
+            Spacer()
+            TextField("0", text: text)
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(AppColors.textPrimary)
+                .frame(maxWidth: 140)
+            Text(suffix)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(AppColors.textSecondary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.black.opacity(0.25))
+        )
+    }
+
+    private var isValidInput: Bool {
+        if isCreditCard {
+            guard let limit = parseAmount(creditLimitText),
+                  let debt = parseAmount(creditDebtText) else {
+                return false
+            }
+            return limit >= 0 && debt >= 0 && debt <= limit
+        }
         guard let amount = parseAmount(amountText) else {
             return false
         }
         return amount >= 0
+    }
+
+    private var navigationTitle: String {
+        if isCreditCard {
+            return "Редактирование карты"
+        }
+        return isMarketInvestment ? "Редактирование количества" : "Редактирование суммы"
+    }
+
+    private var creditRemainingLimit: Double {
+        let limit = parseAmount(creditLimitText) ?? 0
+        let debt = parseAmount(creditDebtText) ?? 0
+        return max(0, limit - debt)
     }
 
     private var maxFractionDigitsForInput: Int {
@@ -187,15 +285,53 @@ struct FinanceQuickEditAccountView: View {
         AmountInputFormatter.parse(text)
     }
     
-    private func saveAmount() {
+    private func save() {
+        if isCreditCard {
+            guard let limit = parseAmount(creditLimitText),
+                  let debt = parseAmount(creditDebtText),
+                  limit >= 0, debt >= 0, debt <= limit else {
+                return
+            }
+            isLoading = true
+            viewModel.handle(.updateCreditCardQuickFields(account: account, creditLimit: limit, debt: debt))
+            isLoading = false
+            dismiss()
+            return
+        }
         guard let amount = parseAmount(amountText), amount >= 0 else {
             return
         }
-        
         isLoading = true
         viewModel.handle(.updateAccountAmount(account, amount))
         isLoading = false
         dismiss()
+    }
+
+    private func setupInitialValues() {
+        guard let info = accountInfo else { return }
+        if isCreditCard, let card = currentCreditCard {
+            if creditLimitText.isEmpty {
+                creditLimitText = plainAmountForInput(card.creditLimit ?? 0)
+            }
+            if creditDebtText.isEmpty {
+                let debt = max(0, (card.creditLimit ?? 0) - card.balance)
+                creditDebtText = plainAmountForInput(debt)
+            }
+            return
+        }
+        if amountText.isEmpty {
+            amountText = plainAmountForInput(currentEditableValue(fallbackAmount: info.amount))
+        }
+    }
+
+    private func formatAmount(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.groupingSeparator = " "
+        formatter.usesGroupingSeparator = true
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: value)) ?? "0"
     }
 
     private var fieldTitle: String {

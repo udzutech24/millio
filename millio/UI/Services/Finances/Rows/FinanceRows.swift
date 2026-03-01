@@ -183,8 +183,8 @@ struct FinanceGroupRow: View {
 
                     if index != displayAccounts.count - 1 {
                         Divider()
-                            .background((AppColors.financesGradient.last ?? AppColors.textTertiary).opacity(0.35))
-                            .padding(.leading, 18)
+                            .background(Color.white.opacity(0.14))
+                            .padding(.leading, 64)
                             .padding(.trailing, 18)
                     }
                 }
@@ -384,71 +384,39 @@ private struct FinanceAccountRow: View {
 
     private var defaultRow: some View {
         HStack(spacing: 12) {
-            let iconGradientColors = (accountType == .credit || isCreditCardDebt) ? [AppColors.error, AppColors.error] : AppColors.financesGradient
+            iconBadge(
+                colors: isDebtHighlighted ? [AppColors.error, AppColors.error] : AppColors.financesGradient
+            )
             
-            ZStack {
-//                RoundedRectangle(cornerRadius: 10, style: .continuous)
-//                    .fill(Color.white.opacity(0.06))
-//                    .overlay {
-//                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-//                            .stroke(
-//                                LinearGradient(
-//                                    colors: iconGradientColors,
-//                                    startPoint: .topLeading,
-//                                    endPoint: .bottomTrailing
-//                                ),
-//                                lineWidth: 1
-//                            )
-//                    }
-//                
-                Image(systemName: icon)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: iconGradientColors,
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            }
-            .frame(width: 16, height: 16)
-            
-            // Название счета + детали позиции для рыночных активов
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(name)
-                    .font(.system(size: 12, weight: .regular))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
                     .lineLimit(1)
                     .truncationMode(.tail)
 
                 if let subtitle = viewModel.getInvestmentPositionSubtitle(account: account) {
                     Text(subtitle)
-                        .font(.system(size: 10, weight: .regular))
-                        .foregroundStyle(AppColors.textTertiary)
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundStyle(AppColors.textSecondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
+                }
+
+                if let limitSubtitle = creditLimitSubtitle {
+                    Text(limitSubtitle)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(AppColors.textTertiary.opacity(0.9))
+                        .lineLimit(1)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             
-            // Сумма (кликабельна для быстрого редактирования)
-            Button {
-                onQuickEditAmount()
-            } label: {
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(formatBalance(amount, isHidden: viewModel.state.isAmountHidden))
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(isCreditCardDebt ? AppColors.error : (amount >= 0 ? AppColors.textPrimary : AppColors.error))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                    
-                    Text(MonetaCurrency(rawValue: currency)?.symbol ?? currency)
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(AppColors.textSecondary)
-                        .lineLimit(1)
-                }
-            }
-            .buttonStyle(.plain)
+            trailingAmountSection(
+                amountFont: .system(size: 16, weight: .semibold),
+                currencyFont: .system(size: 16, weight: .semibold),
+                maximumFractionDigits: 0
+            )
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 12)
@@ -460,14 +428,7 @@ private struct FinanceAccountRow: View {
 
     private var marketInvestmentRow: some View {
         HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.white.opacity(0.07))
-                .overlay {
-                    Image(systemName: icon)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(AppColors.textSecondary)
-                }
-                .frame(width: 34, height: 34)
+            iconBadge(colors: AppColors.financesGradient)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(name)
@@ -494,23 +455,11 @@ private struct FinanceAccountRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            Button {
-                onQuickEditAmount()
-            } label: {
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(formatBalance(amount, isHidden: viewModel.state.isAmountHidden, maximumFractionDigits: 2))
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(isCreditCardDebt ? AppColors.error : (amount >= 0 ? AppColors.textPrimary : AppColors.error))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.78)
-
-                    Text(MonetaCurrency(rawValue: currency)?.symbol ?? currency)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                        .lineLimit(1)
-                }
-            }
-            .buttonStyle(.plain)
+            trailingAmountSection(
+                amountFont: .system(size: 17, weight: .semibold),
+                currencyFont: .system(size: 17, weight: .semibold),
+                maximumFractionDigits: 2
+            )
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 12)
@@ -518,6 +467,64 @@ private struct FinanceAccountRow: View {
         .onTapGesture {
             onEdit()
         }
+    }
+
+    private var isDebtHighlighted: Bool {
+        accountType == .credit || isCreditCardDebt
+    }
+
+    @ViewBuilder
+    private func iconBadge(colors: [Color]) -> some View {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(Color.white.opacity(0.07))
+            .overlay {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: colors,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+            .frame(width: 34, height: 34)
+    }
+
+    @ViewBuilder
+    private func trailingAmountSection(
+        amountFont: Font,
+        currencyFont: Font,
+        maximumFractionDigits: Int
+    ) -> some View {
+        Button {
+            onQuickEditAmount()
+        } label: {
+            VStack(alignment: .trailing, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(formatBalance(amount, isHidden: viewModel.state.isAmountHidden, maximumFractionDigits: maximumFractionDigits))
+                        .font(amountFont)
+                        .foregroundStyle(isDebtHighlighted ? AppColors.error : (amount >= 0 ? AppColors.textPrimary : AppColors.error))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+
+                    Text(MonetaCurrency(rawValue: currency)?.symbol ?? currency)
+                        .font(currencyFont)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var creditLimitSubtitle: String? {
+        guard let remaining = viewModel.getCreditCardLimitRemaining(account: account) else {
+            return nil
+        }
+        let amountText = formatBalance(remaining.amount, isHidden: viewModel.state.isAmountHidden)
+        let currencySymbol = MonetaCurrency(rawValue: remaining.currency)?.symbol ?? remaining.currency
+        return "Остаток лимита \(amountText) \(currencySymbol)"
     }
     
     private func formatBalance(_ balance: Double, isHidden: Bool = false, maximumFractionDigits: Int = 0) -> String {

@@ -45,4 +45,22 @@ struct ServiceItemTests {
         #expect(!ids.contains("cards"))
         #expect(!ids.contains("investments"))
     }
+
+    @Test("Порядок сервисов сохраняется и восстанавливается после перестановки")
+    func testOrderManagerPersistsCustomOrder() {
+        let defaults = UserDefaults.standard
+        let storageKey = "service_order"
+        defaults.removeObject(forKey: storageKey)
+        defer { defaults.removeObject(forKey: storageKey) }
+
+        let manager = ServiceOrderManager()
+        let customOrder = ["cashflow", "finances", "cashback", "courses"]
+
+        manager.saveOrder(customOrder)
+        let loadedOrder = manager.loadOrder()
+        let orderedServices = manager.getOrderedServices().map { $0.id }
+
+        #expect(loadedOrder == customOrder)
+        #expect(orderedServices == customOrder)
+    }
 }

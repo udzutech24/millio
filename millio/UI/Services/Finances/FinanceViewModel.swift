@@ -192,6 +192,7 @@ enum FinanceAction {
     case showQuickEditAccountSheet(FinanceAccount)
     case hideQuickEditAccountSheet
     case updateAccountAmount(FinanceAccount, Double)
+    case updateCreditCardQuickFields(account: FinanceAccount, creditLimit: Double, debt: Double)
     case executeInvestmentOrder(account: FinanceAccount, side: InvestmentOrderSide, quantity: Double, unitPrice: Double)
     case updateMarketInvestmentDetails(account: FinanceAccount, quantity: Double, unitPrice: Double, purchaseUnitPrice: Double?)
     case showGroupDynamics(FinanceGroup)
@@ -215,6 +216,8 @@ final class FinanceViewModel: ViewModelProtocol {
 
     /// Сервис курсов валют (внедряется для тестируемости)
     let currencyService: CurrencyRateServiceProtocol
+    /// Клиент рыночных данных (внедряется для тестируемости)
+    let marketDataClient: MarketDataClientProtocol
 
     private let defaults = UserDefaults.standard
     private let ungroupedGroupName = "Без группы"
@@ -256,9 +259,15 @@ final class FinanceViewModel: ViewModelProtocol {
         set { defaults.set(newValue, forKey: "finance_amount_hidden") }
     }
     
-    init(modelContext: ModelContext, currencyService: CurrencyRateServiceProtocol? = nil, skipInitialLoad: Bool = false) {
+    init(
+        modelContext: ModelContext,
+        currencyService: CurrencyRateServiceProtocol? = nil,
+        marketDataClient: MarketDataClientProtocol = TwelveDataClient.shared,
+        skipInitialLoad: Bool = false
+    ) {
         self.modelContext = modelContext
         self.currencyService = currencyService ?? CurrencyRateService.shared
+        self.marketDataClient = marketDataClient
         state.displayCurrency = storedDisplayCurrency
         state.secondaryDisplayCurrency = storedSecondaryDisplayCurrency
         if CurrencySelectionSupport.isCrypto(state.displayCurrency) {
@@ -414,6 +423,8 @@ final class FinanceViewModel: ViewModelProtocol {
             
         case .updateAccountAmount(let account, let newAmount):
             updateAccountAmount(account: account, newAmount: newAmount)
+        case .updateCreditCardQuickFields(let account, let creditLimit, let debt):
+            updateCreditCardQuickFields(account: account, creditLimit: creditLimit, debt: debt)
 
         case .executeInvestmentOrder(let account, let side, let quantity, let unitPrice):
             executeInvestmentOrder(
@@ -1007,6 +1018,20 @@ final class FinanceViewModel: ViewModelProtocol {
         return ("Покупка \(purchaseText) \(currencyLabel) • \(growthText)", isPositive)
     }
 
+    /// Для кредитных карт возвращает остаток лимита, чтобы показывать под суммой долга.
+    func getCreditCardLimitRemaining(account: FinanceAccount) -> (amount: Double, currency: String)? {
+        guard account.accountType == .card,
+              let card = cardByID[account.accountID],
+              card.cardType == .credit,
+              let limit = card.creditLimit,
+              limit > 0 else {
+            return nil
+        }
+
+        let remaining = max(0, min(limit, card.balance))
+        return (remaining, card.currency)
+    }
+
     func getMarketInvestment(account: FinanceAccount) -> Investment? {
         guard account.accountType == .investment else {
             return nil
@@ -1241,12 +1266,76 @@ final class FinanceViewModel: ViewModelProtocol {
         }
     }
     
-    func refreshRates() async {
+    func refreshCurrencyQuotes() async {
         state.isLoadingRates = true
         defer { state.isLoadingRates = false }
-        
-        _ = await currencyService.getRate(from: "USD", to: "RUB")
-        await calculateTotalAmountAsync()
+
+        await currencyService.forceRefreshRates()
+        await refreshGroupTotalsAndAmounts()
+    }
+
+    /// Обновляет рыночные цены только для акций, не создавая транзакций.
+    func refreshStockPrices() async {
+        state.isLoadingRates = true
+        defer { state.isLoadingRates = false }
+
+        let descriptor = FetchDescriptor<Investment>()
+        let activeStocks = ((try? modelContext.fetch(descriptor)) ?? []).filter {
+            $0.archivedAt == nil && $0.category == .stocks && $0.isMarketPriced
+        }
+
+        guard !activeStocks.isEmpty else {
+            await refreshGroupTotalsAndAmounts()
+            return
+        }
+
+        var didUpdateAnyPrice = false
+
+        for stock in activeStocks {
+            guard let symbol = stock.marketSymbol?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .uppercased(),
+                !symbol.isEmpty else {
+                continue
+            }
+
+            do {
+                guard let latestPrice = try await marketDataClient.latestPrice(
+                    symbol: symbol,
+                    forceRefresh: true
+                ), latestPrice > 0 else {
+                    continue
+                }
+
+                stock.lastKnownUnitPrice = latestPrice
+                stock.lastKnownPriceUpdatedAt = Date()
+                stock.recalculateAmountFromPosition()
+                stock.updatedAt = Date()
+                didUpdateAnyPrice = true
+            } catch {
+                AppLogger.log(
+                    .warning,
+                    category: "Finance",
+                    "Failed to refresh stock quote for \(symbol): \(error.localizedDescription)"
+                )
+            }
+        }
+
+        if didUpdateAnyPrice {
+            do {
+                try modelContext.save()
+            } catch {
+                AppLogger.log(.error, category: "Finance", "Failed to save refreshed stock quotes: \(error.localizedDescription)")
+            }
+        }
+
+        loadAccounts()
+        await refreshGroupTotalsAndAmounts()
+    }
+
+    /// Backward-compatible alias. Prefer `refreshCurrencyQuotes()`.
+    func refreshRates() async {
+        await refreshCurrencyQuotes()
     }
     
     private func deleteGroup(_ group: FinanceGroup) {
@@ -1786,6 +1875,67 @@ final class FinanceViewModel: ViewModelProtocol {
                     }
                 }
             }
+        }
+    }
+
+    private func updateCreditCardQuickFields(account: FinanceAccount, creditLimit: Double, debt: Double) {
+        guard account.accountType == .card,
+              let card = cardByID[account.accountID],
+              card.cardType == .credit else {
+            return
+        }
+
+        let accountGroup = state.groups.first { group in
+            group.accounts?.contains(where: { $0.accountUniqueID == account.accountUniqueID }) ?? false
+        }
+
+        let normalizedLimit = max(0, creditLimit)
+        let normalizedDebt = min(max(0, debt), normalizedLimit)
+
+        let oldDebt = max(0, (card.creditLimit ?? 0) - card.balance)
+        if !card.hasInitialBalance {
+            card.initialBalance = card.balance
+            card.hasInitialBalance = true
+        }
+
+        card.creditLimit = normalizedLimit
+        card.balance = max(0, normalizedLimit - normalizedDebt)
+        card.updatedAt = Date()
+
+        do {
+            var didCreateTransaction = false
+            let difference = normalizedDebt - oldDebt
+            if abs(difference) > 0.01 {
+                let transaction = CashflowTransaction(
+                    transactionType: .creditDebtAdjustment,
+                    amount: -difference,
+                    currency: card.currency,
+                    transactionDate: Date(),
+                    cardID: card.cardUniqueID,
+                    note: "Быстрое изменение параметров кредитной карты"
+                )
+                stampFrozenRate(on: transaction, targetCurrency: card.currency)
+                modelContext.insert(transaction)
+                didCreateTransaction = true
+            }
+
+            try modelContext.save()
+
+            loadAccounts()
+            calculateTotalAmount()
+
+            if let group = accountGroup {
+                Task {
+                    let currency = group.displayCurrency ?? state.displayCurrency
+                    let total = await calculateGroupTotal(group: group, in: currency)
+                    state.groupTotals[group.groupUniqueID] = total
+                }
+            }
+            if didCreateTransaction {
+                EventBus.shared.publish(FinanceEvent.transactionsUpdated)
+            }
+        } catch {
+            AppLogger.log(.error, category: "Finance", "Failed to update credit card quick fields: \(error.localizedDescription)")
         }
     }
 }

@@ -10,6 +10,7 @@ import SwiftUI
 struct InlineCardCreateForm<GroupSection: View>: View {
     @ObservedObject var viewModel: CardViewModel
     @Binding var name: String
+    let allowsTypeSwitching: Bool
     let selectedProductType: FinanceAccountType
     let selectedInvestmentCategory: InvestmentCategory
     let onProductTypeSelected: (FinanceAccountType) -> Void
@@ -27,10 +28,12 @@ struct InlineCardCreateForm<GroupSection: View>: View {
     @State private var isLoadingCurrencies: Bool = false
     @State private var showCurrencyPicker: Bool = false
     @State private var currencySearchText: String = ""
+    @State private var didPrefillFromEditing: Bool = false
     
     init(
         viewModel: CardViewModel,
         name: Binding<String>,
+        allowsTypeSwitching: Bool = true,
         selectedProductType: FinanceAccountType,
         selectedInvestmentCategory: InvestmentCategory,
         onProductTypeSelected: @escaping (FinanceAccountType) -> Void,
@@ -41,6 +44,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
     ) {
         self.viewModel = viewModel
         self._name = name
+        self.allowsTypeSwitching = allowsTypeSwitching
         self.selectedProductType = selectedProductType
         self.selectedInvestmentCategory = selectedInvestmentCategory
         self.onProductTypeSelected = onProductTypeSelected
@@ -91,6 +95,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
         }
         .onAppear {
             loadAvailableCurrencies()
+            populateCardFromEditingIfNeeded()
             if balanceDisplayText.isEmpty {
                 balanceDisplayText = AmountInputFormatter.display(balanceText)
             }
@@ -141,6 +146,48 @@ struct InlineCardCreateForm<GroupSection: View>: View {
     }
     
     private var accentColor: Color { AppColors.financesGradient.first ?? AppColors.brandPrimary }
+
+    private func populateCardFromEditingIfNeeded() {
+        guard !didPrefillFromEditing, let editingCard = viewModel.state.editingCard else {
+            return
+        }
+        didPrefillFromEditing = true
+
+        name = editingCard.name
+
+        let draft = Card(
+            name: editingCard.name,
+            cardNumber: editingCard.cardNumber,
+            bank: editingCard.bank,
+            cardType: editingCard.cardType,
+            priority: editingCard.priority,
+            currency: editingCard.currency,
+            balance: editingCard.balance,
+            creditLimit: editingCard.creditLimit,
+            expiryDate: editingCard.expiryDate,
+            cardholderName: editingCard.cardholderName,
+            cardColor: editingCard.cardColor,
+            isFavorite: editingCard.isFavorite,
+            includeInTotal: editingCard.includeInTotal
+        )
+        if !editingCard.uniqueID.isEmpty {
+            draft.uniqueID = editingCard.uniqueID
+        }
+        card = draft
+
+        if draft.cardType == .credit {
+            let limit = draft.creditLimit ?? 0
+            let debt = max(0, limit - draft.balance)
+            creditLimitText = AmountInputFormatter.display(AmountInputFormatter.sanitize(String(limit)))
+            creditDebtText = AmountInputFormatter.display(AmountInputFormatter.sanitize(String(debt)))
+        } else {
+            let sanitizedBalance = AmountInputFormatter.sanitize(String(draft.balance))
+            balanceText = sanitizedBalance
+            balanceDisplayText = AmountInputFormatter.display(sanitizedBalance)
+        }
+
+        onCardDataChanged(currentCard)
+    }
     
     private var typeSection: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -203,15 +250,18 @@ struct InlineCardCreateForm<GroupSection: View>: View {
                                             endPoint: .trailing
                                         )
                                     )
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundStyle(AppColors.textTertiary)
+                                if allowsTypeSwitching {
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(AppColors.textTertiary)
+                                }
                             }
                         }
                         .padding(.vertical, 14)
                         .padding(.horizontal, 16)
                         .contentShape(Rectangle())
                     }
+                    .disabled(!allowsTypeSwitching)
 
                     FinancesRowDivider(leadingPadding: 16)
 
@@ -507,6 +557,7 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
     @State private var isLoadingCurrencies: Bool = false
     @State private var showCurrencyPicker: Bool = false
     @State private var currencySearchText: String = ""
+    @State private var didPrefillFromEditing: Bool = false
     
     init(
         viewModel: CreditViewModel,
@@ -565,6 +616,7 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
         }
         .onAppear {
             loadAvailableCurrencies()
+            populateCreditFromEditingIfNeeded()
             if amountDisplayText.isEmpty {
                 amountDisplayText = formatNumberForDisplay(amountText)
             }
@@ -639,6 +691,40 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
+    }
+
+    private func populateCreditFromEditingIfNeeded() {
+        guard !didPrefillFromEditing, let editingCredit = viewModel.state.editingCredit else {
+            return
+        }
+        didPrefillFromEditing = true
+
+        name = editingCredit.name
+        amountText = AmountInputFormatter.sanitize(String(editingCredit.amount))
+        amountDisplayText = formatNumberForDisplay(amountText)
+        remainingAmountText = AmountInputFormatter.sanitize(String(editingCredit.remainingAmount))
+        remainingAmountDisplayText = formatNumberForDisplay(remainingAmountText)
+        monthlyPaymentText = AmountInputFormatter.sanitize(String(editingCredit.monthlyPayment))
+        monthlyPaymentDisplayText = formatNumberForDisplay(monthlyPaymentText)
+        selectedCurrency = editingCredit.currency
+        isFavorite = editingCredit.isFavorite
+        paymentMode = editingCredit.paymentMode
+        if let day = editingCredit.paymentDayOfMonth {
+            paymentDayOfMonth = max(1, min(31, day))
+        }
+        if let date = editingCredit.nextPaymentDate {
+            nextPaymentDate = date
+        }
+        reminderEnabled = editingCredit.reminderEnabled
+        if let daysBefore = editingCredit.reminderDaysBefore {
+            reminderDaysBeforeText = String(daysBefore)
+            reminderDaysBeforeDisplayText = String(daysBefore)
+        }
+        if let time = editingCredit.reminderTime {
+            reminderTime = time
+        }
+
+        emitCreditDataChange()
     }
     
     private var balanceSection: some View {

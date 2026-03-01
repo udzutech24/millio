@@ -32,7 +32,22 @@ struct FinancesView: View {
             }
         }
         .navigationTitle("Финансы")
+        .toolbar {
+            if let viewModel {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        viewModel.handle(.showSavingsGoalSheet)
+                    } label: {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                    }
+                    .accessibilityLabel("Настройки")
+                }
+            }
+        }
     }
+
 }
 
 // MARK: - Internal Content View
@@ -58,7 +73,7 @@ private struct FinancesContentViewInternal: View {
                 .tag(FinancesTab.dynamics)
         }
         .task {
-            await viewModel.refreshRates()
+            await viewModel.refreshCurrencyQuotes()
         }
     }
 }
@@ -190,15 +205,7 @@ private struct FinancesMainTabView: View {
                     }
                     .buttonStyle(.plain)
 
-                    Button {
-                        viewModel.handle(.showSavingsGoalSheet)
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(AppColors.textSecondary)
-                            .frame(width: 26, height: 26)
-                    }
-                    .buttonStyle(.plain)
+                    refreshMenu
                 }
             }
 
@@ -291,6 +298,45 @@ private struct FinancesMainTabView: View {
         
      
         
+    }
+
+    private var refreshMenu: some View {
+        Menu {
+            Button("Обновить котировки") {
+                Task {
+                    await viewModel.refreshCurrencyQuotes()
+                }
+            }
+            .disabled(viewModel.state.isLoadingRates)
+
+            Button("Обновить акции") {
+                Task {
+                    await viewModel.refreshStockPrices()
+                }
+            }
+            .disabled(viewModel.state.isLoadingRates)
+        } label: {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.white.opacity(0.06))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                    )
+                    .frame(width: 26, height: 26)
+
+                if viewModel.state.isLoadingRates {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(AppColors.textSecondary)
+                } else {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(AppColors.textSecondary)
+                }
+            }
+        }
+        .accessibilityLabel(viewModel.state.isLoadingRates ? "Обновляем..." : "Обновить")
     }
     
     // MARK: - Groups List Section
