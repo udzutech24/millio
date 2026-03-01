@@ -241,6 +241,70 @@ struct CashflowViewModelTests {
         #expect(abs(februaryTotal - 70) < 0.01)
     }
 
+    @Test("Разбивка по категориям за месяц учитывает только выбранный тип и месяц")
+    func testMonthlyCategoryTotalsByKindAndMonth() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let marchDate = calendar.date(from: DateComponents(year: 2026, month: 3, day: 10)) ?? Date()
+
+        let salaryA = CashflowTransaction(
+            transactionType: .income,
+            amount: 300,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 1)) ?? marchDate,
+            cardID: nil,
+            incomeCategoryRaw: IncomeCategory.salary.rawValue
+        )
+        let salaryB = CashflowTransaction(
+            transactionType: .income,
+            amount: 100,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 20)) ?? marchDate,
+            cardID: nil,
+            incomeCategoryRaw: IncomeCategory.salary.rawValue
+        )
+        let gift = CashflowTransaction(
+            transactionType: .income,
+            amount: 250,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 15)) ?? marchDate,
+            cardID: nil,
+            incomeCategoryRaw: IncomeCategory.gift.rawValue
+        )
+        let februaryIncome = CashflowTransaction(
+            transactionType: .income,
+            amount: 999,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 2, day: 15)) ?? marchDate,
+            cardID: nil,
+            incomeCategoryRaw: IncomeCategory.salary.rawValue
+        )
+        let marchExpense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 500,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 12)) ?? marchDate,
+            cardID: nil,
+            expenseCategoryRaw: ExpenseCategory.groceries.rawValue
+        )
+
+        modelContext.insert(salaryA)
+        modelContext.insert(salaryB)
+        modelContext.insert(gift)
+        modelContext.insert(februaryIncome)
+        modelContext.insert(marchExpense)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+        let incomeTotals = await viewModel.monthlyCategoryTotals(for: .income, month: marchDate, in: "RUB")
+        let expenseTotals = await viewModel.monthlyCategoryTotals(for: .expense, month: marchDate, in: "RUB")
+
+        #expect(abs((incomeTotals[IncomeCategory.salary.rawValue] ?? 0) - 400) < 0.01)
+        #expect(abs((incomeTotals[IncomeCategory.gift.rawValue] ?? 0) - 250) < 0.01)
+        #expect(incomeTotals[ExpenseCategory.groceries.rawValue] == nil)
+        #expect(abs((expenseTotals[ExpenseCategory.groceries.rawValue] ?? 0) - 500) < 0.01)
+    }
+
     @Test("Сводка активов считает изменение стоимости по формуле и использует снапшот из Финансов")
     func testAssetsBreakdownFormula() async throws {
         let modelContext = try createTestModelContext()

@@ -33,6 +33,7 @@ private struct CashflowCategoryTransactionSheet: View {
     @State private var selectedCategory: CashflowCategoryOption?
     @State private var searchText: String = ""
     @State private var monthlyTotal: Double = 0
+    @State private var categoryTotals: [String: Double] = [:]
     @State private var isLoadingMonthlyTotal: Bool = false
     @State private var monthTotalTask: Task<Void, Never>?
     @State private var showRecurringManagement: Bool = false
@@ -84,10 +85,12 @@ private struct CashflowCategoryTransactionSheet: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 16)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, 104)
                 }
                 .scrollDismissesKeyboard(.immediately)
                 .dismissKeyboardOnTap()
+
+                floatingAddCategoryButton
             }
             .navigationTitle(kind.navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
@@ -346,9 +349,15 @@ private struct CashflowCategoryTransactionSheet: View {
                                 .foregroundStyle(AppColors.textPrimary)
                                 .multilineTextAlignment(.center)
                                 .lineLimit(2)
-                                .frame(minHeight: 30)
+                                .frame(minHeight: 30, alignment: .center)
+
+                            Text(formattedCategoryTotal(for: option))
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(AppColors.textSecondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                         }
-                        .frame(maxWidth: .infinity, minHeight: 92)
+                        .frame(maxWidth: .infinity, minHeight: 108)
                         .padding(.horizontal, 8)
                         .background(
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -380,30 +389,45 @@ private struct CashflowCategoryTransactionSheet: View {
                     }
                 }
             }
+        }
+    }
 
-            Button {
-                showCreateCategorySheet = true
-            } label: {
-                VStack(spacing: 8) {
+    private var floatingAddCategoryButton: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                Button {
+                    showCreateCategorySheet = true
+                } label: {
+                    let accentColor = kind.gradientColors.first ?? .cyan
                     Image(systemName: "plus")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(AppColors.textPrimary)
-                    Text("Добавить")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(AppColors.textPrimary)
-                }
-                .frame(maxWidth: .infinity, minHeight: 92)
-                .padding(.horizontal, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color.white.opacity(0.05))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(Color.white.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 56, height: 56)
+                        .background(
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color(red: 0.03, green: 0.07, blue: 0.11),
+                                            Color(red: 0.02, green: 0.04, blue: 0.06),
+                                            .black
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .overlay(
+                                    Circle()
+                                        .stroke(accentColor.opacity(0.6), lineWidth: 1)
+                                )
                         )
-                )
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 20)
+                .padding(.bottom, 20)
             }
-            .buttonStyle(.plain)
         }
     }
 
@@ -435,13 +459,34 @@ private struct CashflowCategoryTransactionSheet: View {
             case .expense:
                 total = await viewModel.monthlyExpenseTotal(for: selectedMonth, in: viewModel.state.displayCurrency)
             }
+            let totalsByCategory = await viewModel.monthlyCategoryTotals(
+                for: kind.categoryKind,
+                month: selectedMonth,
+                in: viewModel.state.displayCurrency
+            )
 
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 monthlyTotal = total
+                categoryTotals = totalsByCategory
                 isLoadingMonthlyTotal = false
             }
         }
+    }
+
+    private func formattedCategoryTotal(for option: CashflowCategoryOption) -> String {
+        let value = categoryTotals[option.rawValue] ?? 0
+        return formattedAmount(value)
+    }
+
+    private func formattedAmount(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 2
+        formatter.minimumFractionDigits = 0
+        let amount = formatter.string(from: NSNumber(value: value)) ?? "0"
+        return "\(amount) \(viewModel.state.displayCurrency)"
     }
 
     private func handleCreateCategory(_ name: String, icon: String) {
@@ -498,13 +543,7 @@ private struct CashflowCategoryTransactionSheet: View {
     }
 
     private func formattedMonthlyTotal(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.locale = Locale(identifier: "ru_RU")
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 2
-        formatter.minimumFractionDigits = 0
-        let amount = formatter.string(from: NSNumber(value: value)) ?? "0"
-        return "\(amount) \(viewModel.state.displayCurrency)"
+        formattedAmount(value)
     }
 }
 

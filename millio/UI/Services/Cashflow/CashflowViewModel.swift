@@ -523,6 +523,37 @@ final class CashflowViewModel: ViewModelProtocol {
         await monthlyTotal(for: .expense, month: month, in: currency)
     }
 
+    /// Возвращает суммы по категориям за выбранный месяц для типа операции.
+    /// Ключ словаря — `rawValue` категории (`IncomeCategory` / `ExpenseCategory` / `custom:*`).
+    func monthlyCategoryTotals(
+        for kind: CashflowCategoryKind,
+        month: Date,
+        in currency: String? = nil
+    ) async -> [String: Double] {
+        let targetType: CashflowTransactionType = kind == .income ? .income : .expense
+        let targetCurrency = currency ?? state.displayCurrency
+        let filtered = monthlyTransactions(for: targetType, month: month)
+
+        let previousWarning = state.currencyConversionWarning
+        defer { state.currencyConversionWarning = previousWarning }
+
+        var totals: [String: Double] = [:]
+        for transaction in filtered {
+            let categoryRaw: String = {
+                switch kind {
+                case .income:
+                    return transaction.incomeCategoryRaw ?? IncomeCategory.other.rawValue
+                case .expense:
+                    return transaction.expenseCategoryRaw ?? ExpenseCategory.other.rawValue
+                }
+            }()
+            let convertedAmount = await convertAmountForTransaction(transaction, to: targetCurrency)
+            totals[categoryRaw, default: 0] += convertedAmount
+        }
+
+        return totals
+    }
+
     // MARK: - Scheduled Transactions
 
     func recurringTemplates(
@@ -607,24 +638,29 @@ final class CashflowViewModel: ViewModelProtocol {
         month: Date,
         in currency: String? = nil
     ) async -> Double {
-        let calendar = Calendar.current
-        let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: month)) ?? month
-        let monthEnd = calendar.date(byAdding: DateComponents(month: 1, second: -1), to: monthStart) ?? monthStart
         let targetCurrency = currency ?? state.displayCurrency
+        let filtered = monthlyTransactions(for: type, month: month)
 
         let previousWarning = state.currencyConversionWarning
         defer { state.currencyConversionWarning = previousWarning }
 
         var total: Double = 0
-        for transaction in state.transactions {
-            guard transaction.transactionType == type,
-                  transaction.transactionDate >= monthStart,
-                  transaction.transactionDate <= monthEnd else {
-                continue
-            }
+        for transaction in filtered {
             total += await convertAmountForTransaction(transaction, to: targetCurrency)
         }
         return total
+    }
+
+    private func monthlyTransactions(for type: CashflowTransactionType, month: Date) -> [CashflowTransaction] {
+        let calendar = Calendar.current
+        let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: month)) ?? month
+        let monthEnd = calendar.date(byAdding: DateComponents(month: 1, second: -1), to: monthStart) ?? monthStart
+
+        return state.transactions.filter { transaction in
+            transaction.transactionType == type
+            && transaction.transactionDate >= monthStart
+            && transaction.transactionDate <= monthEnd
+        }
     }
 
     // MARK: - Categories
