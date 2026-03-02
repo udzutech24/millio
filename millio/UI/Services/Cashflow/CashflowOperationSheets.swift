@@ -638,14 +638,14 @@ enum CashflowCategoryTransactionSheetKind {
     var recurringSubtitle: String {
         switch self {
         case .income: return "Ежемесячные доходы"
-        case .expense: return ""
+        case .expense: return "Ежемесячные расходы"
         }
     }
 
     var plannedSubtitle: String {
         switch self {
         case .income: return "Будущие поступления"
-        case .expense: return ""
+        case .expense: return "Будущие списания"
         }
     }
 

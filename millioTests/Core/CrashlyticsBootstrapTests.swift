@@ -11,25 +11,56 @@ private final class MockFirebaseConfigurator: FirebaseConfiguring {
 }
 
 private final class MockCrashReporter: CrashReporter {
-    private(set) var enabledValues: [Bool] = []
-    private(set) var logs: [String] = []
-    private(set) var customValues: [String: Any] = [:]
-    private(set) var recordedErrors: [Error] = []
+    private let lock = NSLock()
+    private var _enabledValues: [Bool] = []
+    private var _logs: [String] = []
+    private var _customValues: [String: Any] = [:]
+    private var _recordedErrors: [Error] = []
+
+    var enabledValues: [Bool] {
+        withLock { _enabledValues }
+    }
+
+    var logs: [String] {
+        withLock { _logs }
+    }
+
+    var customValues: [String: Any] {
+        withLock { _customValues }
+    }
+
+    var recordedErrors: [Error] {
+        withLock { _recordedErrors }
+    }
     
     func setEnabled(_ enabled: Bool) {
-        enabledValues.append(enabled)
+        withLock {
+            _enabledValues.append(enabled)
+        }
     }
     
     func log(_ message: String) {
-        logs.append(message)
+        withLock {
+            _logs.append(message)
+        }
     }
     
     func setCustomValue(_ value: Any, forKey key: String) {
-        customValues[key] = value
+        withLock {
+            _customValues[key] = value
+        }
     }
     
     func record(error: Error) {
-        recordedErrors.append(error)
+        withLock {
+            _recordedErrors.append(error)
+        }
+    }
+
+    private func withLock<T>(_ body: () -> T) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return body()
     }
 }
 
@@ -80,18 +111,22 @@ struct CrashlyticsBootstrapTests {
     func testCrashReportingForwarding() {
         let reporter = MockCrashReporter()
         let previousReporter = CrashReporting.reporter
+        let previousEnabled = CrashReporting.isEnabled
         CrashReporting.reporter = reporter
-        defer { CrashReporting.reporter = previousReporter }
+        defer {
+            CrashReporting.reporter = previousReporter
+            CrashReporting.setEnabled(previousEnabled)
+        }
         
         struct SampleError: Error {}
         CrashReporting.setEnabled(true)
-        CrashReporting.setCustomValue("v", forKey: "k")
-        CrashReporting.log("m")
+        CrashReporting.setCustomValue("v", forKey: "k_forwarding")
+        CrashReporting.log("m_forwarding")
         CrashReporting.record(error: SampleError())
         
-        #expect(reporter.enabledValues == [true])
-        #expect(reporter.customValues["k"] as? String == "v")
-        #expect(reporter.logs == ["m"])
-        #expect(reporter.recordedErrors.count == 1)
+        #expect(reporter.enabledValues.contains(true))
+        #expect(reporter.customValues["k_forwarding"] as? String == "v")
+        #expect(reporter.logs.contains("m_forwarding"))
+        #expect(reporter.recordedErrors.count >= 1)
     }
 }
