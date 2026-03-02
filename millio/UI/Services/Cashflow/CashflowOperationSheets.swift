@@ -53,9 +53,6 @@ private struct CashflowCategoryTransactionSheet: View {
     private let categoryColumns: [GridItem] = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
     private let outerCornerRadius: CGFloat = 22
     private let innerCornerRadius: CGFloat = 16
-    private let primarySecondaryText = Color.white.opacity(0.78)
-    private let panelFill = Color.white.opacity(0.035)
-    private let innerGlassFill = Color.white.opacity(0.022)
 
     private var currentMonthStart: Date {
         Calendar.current.startOfMonth(for: Date())
@@ -176,21 +173,20 @@ private struct CashflowCategoryTransactionSheet: View {
     }
 
     private var headerSection: some View {
-        HStack(spacing: 8) {
+        HStack {
             Button {
-                fireLightImpact()
                 dismiss()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary.opacity(0.92))
-                    .frame(width: 34, height: 34)
+                    .frame(width: 44, height: 44)
                     .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color.white.opacity(0.06))
+                        Circle()
+                            .fill(Color.white.opacity(0.08))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(Color.white.opacity(0.28), lineWidth: 1)
+                                Circle()
+                                    .stroke(Color.white.opacity(0.22), lineWidth: 1)
                             )
                     )
             }
@@ -198,23 +194,20 @@ private struct CashflowCategoryTransactionSheet: View {
 
             Spacer()
         }
-        .padding(.top, 2)
+        .padding(.top, 6)
     }
 
     private var monthSelectorSection: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 6) {
             HStack {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        shiftMonth(by: -1)
-                    }
-                    fireLightImpact()
+                    shiftMonth(by: -1)
                 } label: {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary.opacity(0.9))
-                        .frame(width: 38, height: 38)
-                        .background(periodControlBackground)
+                        .frame(width: 36, height: 36)
+                        .background(toolbarCircleBackground)
                 }
                 .buttonStyle(.plain)
 
@@ -227,65 +220,68 @@ private struct CashflowCategoryTransactionSheet: View {
                 Spacer()
 
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        shiftMonth(by: 1)
-                    }
-                    fireLightImpact()
+                    shiftMonth(by: 1)
                 } label: {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(canMoveForward ? AppColors.textPrimary.opacity(0.9) : primarySecondaryText.opacity(0.45))
-                        .frame(width: 38, height: 38)
-                        .background(periodControlBackground)
+                        .foregroundStyle(canMoveForward ? AppColors.textPrimary.opacity(0.9) : AppColors.textSecondary.opacity(0.45))
+                        .frame(width: 36, height: 36)
+                        .background(toolbarCircleBackground)
                 }
                 .buttonStyle(.plain)
                 .disabled(!canMoveForward)
             }
-            .padding(.horizontal, 4)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
 
             let period = monthRangeText(for: selectedMonth)
             Text(period)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(primarySecondaryText)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(AppColors.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 4)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(10)
         .background(outerPanelBackground)
-        .animation(.easeInOut(duration: 0.2), value: selectedMonth)
     }
 
     private var monthlyTotalSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(kind.monthlyTotalTitle)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(AppColors.textSecondary)
+                .padding(.horizontal, 2)
+
             HStack {
-                Spacer(minLength: 0)
+                Text("Итого")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary.opacity(0.92))
+                Spacer()
                 if isLoadingMonthlyTotal {
                     ProgressView()
                         .tint(AppColors.textPrimary)
                         .scaleEffect(0.9)
                 } else {
                     Text(formattedMonthlyTotal(monthlyTotal))
-                        .font(.system(size: 36, weight: .bold))
+                        .font(.system(size: 34, weight: .bold))
                         .foregroundStyle(kind.amountColor(for: monthlyTotal))
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
-                        .contentTransition(.numericText())
                 }
             }
-            .padding(.horizontal, 4)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 16)
+            .background(innerPanelBackground)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 14)
+        .padding(12)
         .background(outerPanelBackground)
-        .animation(.spring(response: 0.22, dampingFraction: 0.86), value: monthlyTotal)
     }
 
     private var searchSection: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(primarySecondaryText)
+                .foregroundStyle(AppColors.textSecondary)
             TextField("Поиск категории", text: $searchText)
                 .textInputAutocapitalization(.words)
                 .foregroundStyle(AppColors.textPrimary)
@@ -298,8 +294,8 @@ private struct CashflowCategoryTransactionSheet: View {
     private var managementSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Управление операциями")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(primarySecondaryText)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(AppColors.textSecondary)
                 .padding(.horizontal, 2)
 
             HStack(spacing: 10) {
@@ -333,10 +329,10 @@ private struct CashflowCategoryTransactionSheet: View {
                     .foregroundStyle(Color.white.opacity(0.92))
                     .frame(width: 34, height: 34)
                     .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color.white.opacity(0.06))
+                        Circle()
+                            .fill(Color.black.opacity(0.92))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                Circle()
                                     .stroke(kind.strokeGradient.opacity(0.7), lineWidth: 1)
                             )
                     )
@@ -350,7 +346,7 @@ private struct CashflowCategoryTransactionSheet: View {
                     if !subtitle.isEmpty {
                         Text(subtitle)
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(primarySecondaryText)
+                            .foregroundStyle(AppColors.textSecondary)
                             .lineLimit(2)
                     }
                 }
@@ -363,16 +359,12 @@ private struct CashflowCategoryTransactionSheet: View {
             .background(innerPanelBackground)
         }
         .buttonStyle(.plain)
-        .simultaneousGesture(TapGesture().onEnded {
-            fireLightImpact()
-        })
     }
 
     private var categoriesSection: some View {
         LazyVGrid(columns: categoryColumns, spacing: 10) {
             ForEach(categories) { option in
                 Button {
-                    fireLightImpact()
                     selectedCategory = option
                 } label: {
                     VStack(spacing: 8) {
@@ -388,7 +380,7 @@ private struct CashflowCategoryTransactionSheet: View {
 
                         Text(formattedCategoryTotal(for: option))
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(primarySecondaryText)
+                            .foregroundStyle(AppColors.textSecondary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                     }
@@ -396,14 +388,10 @@ private struct CashflowCategoryTransactionSheet: View {
                     .padding(.horizontal, 8)
                     .background(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(innerGlassFill)
+                            .fill(Color.black.opacity(0.28))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(Color.white.opacity(0.14), lineWidth: 0.9)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(kind.strokeGradient.opacity(0.28), lineWidth: 1)
+                                    .stroke(kind.strokeGradient.opacity(0.62), lineWidth: 1.1)
                             )
                     )
                 }
@@ -429,7 +417,6 @@ private struct CashflowCategoryTransactionSheet: View {
             HStack {
                 Spacer()
                 Button {
-                    fireLightImpact()
                     showCreateCategorySheet = true
                 } label: {
                     Image(systemName: "plus")
@@ -438,10 +425,10 @@ private struct CashflowCategoryTransactionSheet: View {
                         .frame(width: 64, height: 64)
                         .background(
                             Circle()
-                                .fill(kind.strokeGradient.opacity(0.20))
+                                .fill(Color.black.opacity(0.92))
                                 .overlay(
                                     Circle()
-                                        .stroke(kind.strokeGradient.opacity(0.90), lineWidth: 1.6)
+                                        .stroke(kind.strokeGradient.opacity(0.72), lineWidth: 1.4)
                                 )
                         )
                 }
@@ -454,36 +441,28 @@ private struct CashflowCategoryTransactionSheet: View {
 
     private var outerPanelBackground: some View {
         RoundedRectangle(cornerRadius: outerCornerRadius, style: .continuous)
-            .fill(panelFill)
+            .fill(Color.black.opacity(0.24))
             .overlay(
                 RoundedRectangle(cornerRadius: outerCornerRadius, style: .continuous)
                     .stroke(kind.strokeGradient.opacity(0.76), lineWidth: 1)
-            )
-            .background(
-                RoundedRectangle(cornerRadius: outerCornerRadius, style: .continuous)
-                    .fill(.ultraThinMaterial.opacity(0.28))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: outerCornerRadius, style: .continuous)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 0.7)
             )
     }
 
     private var innerPanelBackground: some View {
         RoundedRectangle(cornerRadius: innerCornerRadius, style: .continuous)
-            .fill(innerGlassFill)
+            .fill(Color.black.opacity(0.30))
             .overlay(
                 RoundedRectangle(cornerRadius: innerCornerRadius, style: .continuous)
-                    .stroke(Color.white.opacity(0.12), lineWidth: 0.8)
+                    .stroke(Color.white.opacity(0.16), lineWidth: 1)
             )
     }
 
-    private var periodControlBackground: some View {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .fill(Color.white.opacity(0.06))
+    private var toolbarCircleBackground: some View {
+        Circle()
+            .fill(Color.black.opacity(0.92))
             .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.white.opacity(0.28), lineWidth: 1)
+                Circle()
+                    .stroke(Color.white.opacity(0.78), lineWidth: 1.6)
             )
     }
 
@@ -528,11 +507,6 @@ private struct CashflowCategoryTransactionSheet: View {
                 isLoadingMonthlyTotal = false
             }
         }
-    }
-
-    private func fireLightImpact() {
-        let generator = UIImpactFeedbackGenerator(style: .light)
-        generator.impactOccurred(intensity: 0.9)
     }
 
     private func formattedCategoryTotal(for option: CashflowCategoryOption) -> String {
@@ -648,13 +622,6 @@ enum CashflowCategoryTransactionSheetKind {
         }
     }
 
-    var sheetTitle: String {
-        switch self {
-        case .income: return "Доходы"
-        case .expense: return "Затраты"
-        }
-    }
-
     var monthlyTotalTitle: String {
         switch self {
         case .income: return "Итого доход за месяц"
@@ -670,11 +637,17 @@ enum CashflowCategoryTransactionSheetKind {
     }
 
     var recurringSubtitle: String {
-        ""
+        switch self {
+        case .income: return "Ежемесячные доходы"
+        case .expense: return "Ежемесячные расходы"
+        }
     }
 
     var plannedSubtitle: String {
-        ""
+        switch self {
+        case .income: return "Будущие поступления"
+        case .expense: return "Будущие списания"
+        }
     }
 
     var strokeGradient: LinearGradient {
