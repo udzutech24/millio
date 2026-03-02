@@ -246,6 +246,46 @@ final class FinanceViewModel: ViewModelProtocol {
         get { defaults.bool(forKey: "finance_amount_hidden") }
         set { defaults.set(newValue, forKey: "finance_amount_hidden") }
     }
+
+    private var storedDisplayCurrency: String? {
+        get {
+            let value = defaults.string(forKey: "finance_display_currency")?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .uppercased()
+            guard let value, !value.isEmpty else { return nil }
+            return value
+        }
+        set {
+            guard let newValue else {
+                defaults.removeObject(forKey: "finance_display_currency")
+                return
+            }
+            defaults.set(
+                newValue.trimmingCharacters(in: .whitespacesAndNewlines).uppercased(),
+                forKey: "finance_display_currency"
+            )
+        }
+    }
+
+    private var storedSecondaryDisplayCurrency: String? {
+        get {
+            let value = defaults.string(forKey: "finance_secondary_display_currency")?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .uppercased()
+            guard let value, !value.isEmpty else { return nil }
+            return value
+        }
+        set {
+            guard let newValue else {
+                defaults.removeObject(forKey: "finance_secondary_display_currency")
+                return
+            }
+            defaults.set(
+                newValue.trimmingCharacters(in: .whitespacesAndNewlines).uppercased(),
+                forKey: "finance_secondary_display_currency"
+            )
+        }
+    }
     
     init(
         modelContext: ModelContext,
@@ -256,8 +296,8 @@ final class FinanceViewModel: ViewModelProtocol {
         self.modelContext = modelContext
         self.currencyService = currencyService ?? CurrencyRateService.shared
         self.marketDataClient = marketDataClient
-        state.displayCurrency = SettingsManager.shared.primaryCurrencyCode
-        state.secondaryDisplayCurrency = defaultSecondaryDisplayCurrency(primary: state.displayCurrency)
+        state.displayCurrency = storedDisplayCurrency ?? SettingsManager.shared.primaryCurrencyCode
+        state.secondaryDisplayCurrency = storedSecondaryDisplayCurrency ?? defaultSecondaryDisplayCurrency(primary: state.displayCurrency)
         state.isSavingsGoalEnabled = storedSavingsGoalEnabled
         state.savingsGoalAmount = storedSavingsGoalAmount
         state.isAmountHidden = storedAmountHidden
@@ -352,14 +392,18 @@ final class FinanceViewModel: ViewModelProtocol {
             state.showSecondaryDisplayCurrencySheet = false
             
         case .setDisplayCurrency(let currency):
-            state.displayCurrency = currency
+            state.displayCurrency = currency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            storedDisplayCurrency = state.displayCurrency
             Task {
                 await refreshRates()
                 await calculateTotalAmountAsync()
             }
             
         case .setSecondaryDisplayCurrency(let currency):
-            state.secondaryDisplayCurrency = currency
+            state.secondaryDisplayCurrency = currency?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .uppercased()
+            storedSecondaryDisplayCurrency = state.secondaryDisplayCurrency
             Task {
                 await refreshRates()
                 await calculateTotalAmountAsync()
@@ -607,9 +651,10 @@ final class FinanceViewModel: ViewModelProtocol {
     }
 
     private func handleCreditsUpdated() {
+        loadGroups()
         loadAccounts()
-        Task {
-            await refreshGroupTotalsAndAmounts()
+        Task { @MainActor in
+            await self.refreshGroupTotalsAndAmounts()
         }
     }
 

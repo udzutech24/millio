@@ -950,6 +950,7 @@ struct FinanceViewModelTests {
         )
         viewModel.handle(.loadGroups)
         viewModel.handle(.loadAccounts)
+        let trackedGroupID = try #require(viewModel.state.groups.first(where: { $0.name == group.name })?.groupUniqueID)
 
         credit.remainingAmount = 500.0
         credit.updatedAt = Date()
@@ -959,7 +960,7 @@ struct FinanceViewModelTests {
         
         var didUpdate = false
         for _ in 0..<100 {
-            let groupTotal = viewModel.state.groupTotals[group.groupUniqueID] ?? 0.0
+            let groupTotal = viewModel.state.groupTotals[trackedGroupID] ?? 0.0
             if abs(groupTotal + 500.0) < 0.01, abs(viewModel.state.totalAmount + 500.0) < 0.01 {
                 didUpdate = true
                 break

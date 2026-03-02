@@ -211,9 +211,30 @@ final class CashflowViewModel: ViewModelProtocol {
     private let historicalRateStore: HistoricalRateStore
     private let now: () -> Date
     private let assetsSnapshotProvider: ((Date, Date, String) async -> (start: Double, end: Double)?)?
+    private let defaults = UserDefaults.standard
     
     private var eventSubscriptionID: UUID?
     private var isRecurringGenerationInProgress: Bool = false
+
+    private var storedDisplayCurrency: String? {
+        get {
+            let value = defaults.string(forKey: "cashflow_display_currency")?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .uppercased()
+            guard let value, !value.isEmpty else { return nil }
+            return value
+        }
+        set {
+            guard let newValue else {
+                defaults.removeObject(forKey: "cashflow_display_currency")
+                return
+            }
+            defaults.set(
+                newValue.trimmingCharacters(in: .whitespacesAndNewlines).uppercased(),
+                forKey: "cashflow_display_currency"
+            )
+        }
+    }
     
     init(
         modelContext: ModelContext,
@@ -224,7 +245,7 @@ final class CashflowViewModel: ViewModelProtocol {
         self.historicalRateStore = HistoricalRateStore(modelContext: modelContext)
         self.now = now
         self.assetsSnapshotProvider = assetsSnapshotProvider
-        state.displayCurrency = SettingsManager.shared.primaryCurrencyCode
+        state.displayCurrency = storedDisplayCurrency ?? SettingsManager.shared.primaryCurrencyCode
         state.selectedMonth = now()
         state.selectedQuarter = now()
         state.selectedYear = now()
@@ -326,7 +347,8 @@ final class CashflowViewModel: ViewModelProtocol {
             state.showCurrencySelector = false
             
         case .setDisplayCurrency(let currency):
-            state.displayCurrency = currency
+            state.displayCurrency = currency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            storedDisplayCurrency = state.displayCurrency
             updateChartData()
             
         case .loadCards:

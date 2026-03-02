@@ -26,6 +26,9 @@ enum AmountInputFormatter {
             }
 
             if ch == ".", !hasSeparator {
+                if maxFractionDigits == 0 {
+                    break
+                }
                 hasSeparator = true
                 if result.isEmpty {
                     result = "0"
