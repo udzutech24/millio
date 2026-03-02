@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct CashflowIncomeTransactionSheet: View {
     @ObservedObject var viewModel: CashflowViewModel
@@ -658,18 +659,13 @@ enum CashflowCategoryTransactionSheetKind {
     }
 
     func amountColor(for value: Double) -> Color {
-        if abs(value) < 0.0000001 {
-            return AppColors.textSecondary
-        }
-        switch self {
-        case .income:
-            return value > 0
-                ? Color(.sRGB, red: 127.0 / 255.0, green: 1.0, blue: 189.0 / 255.0, opacity: 1.0)
-                : Color(.sRGB, red: 1.0, green: 0.37, blue: 0.37, opacity: 1.0)
-        case .expense:
-            return value > 0
-                ? Color(.sRGB, red: 1.0, green: 0.37, blue: 0.37, opacity: 1.0)
-                : Color(.sRGB, red: 127.0 / 255.0, green: 1.0, blue: 189.0 / 255.0, opacity: 1.0)
+        switch cashflowValueTone(for: value) {
+        case .neutral:
+            return Color.white.opacity(0.78)
+        case .positive:
+            return self == .income ? Color(hex: "6DFFC7") : Color(hex: "FF6666")
+        case .negative:
+            return self == .income ? Color(hex: "FF6666") : Color(hex: "6DFFC7")
         }
     }
 }

@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct CashflowTransactionEditorView: View {
     @ObservedObject var viewModel: CashflowViewModel
@@ -42,6 +43,10 @@ struct CashflowTransactionEditorView: View {
     @State private var showCurrencyPicker: Bool = false
     @State private var currencySearchText: String = ""
     @State private var showCategorySheet: Bool = false
+    @FocusState private var isAmountFieldFocused: Bool
+
+    private let primarySecondaryText = Color.white.opacity(0.78)
+    private let innerGlassFill = Color.white.opacity(0.022)
 
     init(
         viewModel: CashflowViewModel,
@@ -110,7 +115,8 @@ struct CashflowTransactionEditorView: View {
 
     private var editorContent: some View {
         ZStack {
-            GradientBackground()
+            Color.black
+                .ignoresSafeArea()
 
             ScrollView {
                 VStack(spacing: 24) {
@@ -132,7 +138,7 @@ struct CashflowTransactionEditorView: View {
                     }
                     additionalSection
                 }
-                .padding(.top, 20)
+                .padding(.top, 14)
                 .padding(.bottom, 40)
                 .padding(.horizontal, 16)
             }
@@ -145,30 +151,44 @@ struct CashflowTransactionEditorView: View {
             if showsDismissButton {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
+                        fireLightImpact()
                         dismiss()
                     } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: 15, weight: .semibold))
+                            .frame(width: 34, height: 34)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.white.opacity(0.06))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                            .stroke(Color.white.opacity(0.28), lineWidth: 1)
+                                    )
+                            )
                     }
                     .foregroundStyle(AppColors.textPrimary)
+                    .buttonStyle(.plain)
                 }
             }
 
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
+                    fireLightImpact()
                     saveTransaction()
                 } label: {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 14, weight: .semibold))
+                    ZStack {
+                        Circle()
+                            .fill(isValid ? Color(hex: "6DFFC7").opacity(0.14) : Color.white.opacity(0.06))
+                        Circle()
+                            .stroke(isValid ? Color(hex: "6DFFC7") : Color.white.opacity(0.28), lineWidth: 1.2)
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(isValid ? Color(hex: "6DFFC7") : AppColors.textSecondary.opacity(0.6))
+                    }
+                    .frame(width: 34, height: 34)
                 }
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: getGradientColors(),
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
                 .disabled(!isValid)
+                .buttonStyle(.plain)
             }
         }
         .onAppear {
@@ -187,6 +207,9 @@ struct CashflowTransactionEditorView: View {
                 selectedExpenseCategoryRaw = preselectedExpenseCategoryRaw ?? ExpenseCategory.groceries.rawValue
             }
             validateAvailableBalance()
+            DispatchQueue.main.async {
+                isAmountFieldFocused = true
+            }
         }
         .onChange(of: selectedCardID) { _, _ in
             if selectedCardID == selectedToCardID {
@@ -259,8 +282,8 @@ struct CashflowTransactionEditorView: View {
 
     private var transactionTypeSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Тип операции")
-            FinancesGlassCard {
+            sectionTitle("Тип операции")
+            editorCard {
                 VStack(spacing: 0) {
                     HStack {
                         Text("Тип операции")
@@ -302,9 +325,10 @@ struct CashflowTransactionEditorView: View {
 
     private var categorySection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Категория")
-            FinancesGlassCard {
+            sectionTitle("Категория")
+            editorCard {
                 Button {
+                    fireLightImpact()
                     showCategorySheet = true
                 } label: {
                     HStack {
@@ -335,26 +359,44 @@ struct CashflowTransactionEditorView: View {
 
     private var mainInfoSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Основная информация")
-            FinancesGlassCard {
+            sectionTitle("Основная информация")
+            editorCard {
                 VStack(spacing: 0) {
                     HStack {
                         Text("Сумма")
+                            .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         TextField("0", text: Binding(
-                            get: { AmountInputFormatter.display(amountText) },
+                            get: { AmountInputFormatter.display(amountText, maxFractionDigits: 0) },
                             set: { newValue in
-                                amountText = AmountInputFormatter.sanitize(newValue)
+                                amountText = AmountInputFormatter.sanitize(newValue, maxFractionDigits: 0)
                             }
                         ))
-                        .keyboardType(.decimalPad)
+                        .keyboardType(.numberPad)
                         .multilineTextAlignment(.trailing)
+                        .font(.system(size: 42, weight: .bold, design: .rounded))
                         .foregroundStyle(AppColors.textPrimary)
+                        .focused($isAmountFieldFocused)
                         .frame(maxWidth: 150)
                     }
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 14)
                     .padding(.horizontal, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color.white.opacity(0.03))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: getGradientColors(),
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        ).opacity(0.55),
+                                        lineWidth: 1
+                                    )
+                            )
+                    )
 
                     if shouldShowCardSelectionInMainInfo {
                         FinancesRowDivider()
@@ -411,8 +453,8 @@ struct CashflowTransactionEditorView: View {
 
     private var selectedCategorySummarySection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: selectedTransactionType == .income ? "Выбранный доход" : "Выбранный расход")
-            FinancesGlassCard {
+            sectionTitle(selectedTransactionType == .income ? "Выбранный доход" : "Выбранный расход")
+            editorCard {
                 HStack(spacing: 10) {
                     Image(systemName: selectedCategoryOption.icon)
                         .font(.system(size: 14, weight: .semibold))
@@ -430,8 +472,8 @@ struct CashflowTransactionEditorView: View {
 
     private var recurrenceSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Повтор")
-            FinancesGlassCard {
+            sectionTitle("Повтор")
+            editorCard {
                 HStack {
                     Text("Частота")
                         .foregroundStyle(AppColors.textPrimary)
@@ -591,8 +633,8 @@ struct CashflowTransactionEditorView: View {
 
     private var additionalSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Дополнительно")
-            FinancesGlassCard {
+            sectionTitle("Дополнительно")
+            editorCard {
                 VStack(spacing: 0) {
                     TextField("Комментарий", text: $note, axis: .vertical)
                         .lineLimit(3...6)
@@ -684,6 +726,52 @@ struct CashflowTransactionEditorView: View {
         }
     }
 
+    private func sectionTitle(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 15, weight: .medium))
+            .foregroundStyle(primarySecondaryText)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 4)
+    }
+
+    private func fireLightImpact() {
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.impactOccurred(intensity: 0.9)
+    }
+
+    private func fireSuccessHaptic() {
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
+    }
+
+    private func editorCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(innerGlassFill)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(
+                                LinearGradient(
+                                    colors: getGradientColors(),
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ).opacity(0.45),
+                                lineWidth: 1
+                            )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(Color.white.opacity(0.10), lineWidth: 0.7)
+                    )
+                    .background(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(.ultraThinMaterial.opacity(0.25))
+                    )
+                    .shadow(color: getGradientColors().first?.opacity(0.10) ?? .clear, radius: 6, x: 0, y: 0)
+            )
+    }
+
     // MARK: - Save
 
     private func saveTransaction() {
@@ -741,6 +829,7 @@ struct CashflowTransactionEditorView: View {
         transaction.recurrenceSeriesID = resolvedRecurrenceSeriesID
 
         viewModel.handle(.updateTransaction(transaction))
+        fireSuccessHaptic()
         if let onSave {
             onSave()
         } else {

@@ -942,10 +942,11 @@ private struct FinanceDynamicsContentView: View {
     private var chartHeader: some View {
         VStack(alignment: .leading, spacing: 6) {
             let isCreditCardAccount = initialAccount.map { inlineCreditCard(for: $0) != nil } ?? false
+            let isSingleAccountSummaryMode = viewModel.state.isSingleAccountMode && !isCreditCardAccount && !isInlineAccountEdit
             HStack(alignment: .center, spacing: 10) {
                 // Баланс с валютой
                 let symbol = MonetaCurrency(rawValue: viewModel.state.displayCurrency)?.symbol ?? viewModel.state.displayCurrency
-                if !isCreditCardAccount {
+                if !isCreditCardAccount && !isSingleAccountSummaryMode {
                     if isInlineAccountEdit,
                        let account = initialAccount,
                        inlineCreditCard(for: account) == nil {
@@ -982,7 +983,7 @@ private struct FinanceDynamicsContentView: View {
                 Spacer()
 
                 // Бейдж с дельтой
-                if viewModel.state.chartData.count >= 2 {
+                if viewModel.state.chartData.count >= 2 && !isSingleAccountSummaryMode {
                     let delta = viewModel.state.periodDelta
                     let positiveText = Color(.sRGB, red: 127.0 / 255.0, green: 1.0, blue: 189.0 / 255.0, opacity: 1.0)
                     let positiveBg = Color(.sRGB, red: 127.0 / 255.0, green: 1.0, blue: 189.0 / 255.0, opacity: 0.3)
@@ -1007,8 +1008,13 @@ private struct FinanceDynamicsContentView: View {
                 }
             }
 
+            if isSingleAccountSummaryMode {
+                singleAccountSummaryTable
+            }
+
             // Бейдж счета (если выбран один счет)
-            if case .singleAccount(let accountID) = viewModel.state.dynamicsMode,
+            if !isSingleAccountSummaryMode,
+               case .singleAccount(let accountID) = viewModel.state.dynamicsMode,
                let account = viewModel.getAccountsForSelectedGroups().first(where: { $0.accountUniqueID == accountID }),
                let accountInfo = viewModel.getAccountInfoForDynamics(account: account) {
                 HStack(spacing: 6) {
@@ -1051,6 +1057,82 @@ private struct FinanceDynamicsContentView: View {
                 .foregroundStyle(AppColors.textSecondary)
         }
         .padding(.horizontal, 0)
+    }
+
+    private var singleAccountSummaryTable: some View {
+        let symbol = MonetaCurrency(rawValue: viewModel.state.displayCurrency)?.symbol ?? viewModel.state.displayCurrency
+        let delta = viewModel.state.periodDelta
+        let growthTextColor: Color = delta.absolute > 0
+            ? Color(.sRGB, red: 127.0 / 255.0, green: 1.0, blue: 189.0 / 255.0, opacity: 1.0)
+            : (delta.absolute < 0
+               ? Color(.sRGB, red: 1.0, green: 0.37, blue: 0.37, opacity: 1.0)
+               : AppColors.textSecondary)
+
+        let accountName: String = {
+            guard case .singleAccount(let accountID) = viewModel.state.dynamicsMode,
+                  let account = viewModel.getAccountsForSelectedGroups().first(where: { $0.accountUniqueID == accountID }),
+                  let accountInfo = viewModel.getAccountInfoForDynamics(account: account) else {
+                return "Счет"
+            }
+            return accountInfo.name
+        }()
+
+        return HStack(spacing: 9) {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.08), Color.white.opacity(0.04)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay {
+                    VStack(spacing: 5) {
+                        Text("\(accountName), \(symbol)")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(AppColors.textSecondary)
+                            .lineLimit(1)
+
+                        Text("\(formatBalance(viewModel.state.currentBalance)) \(symbol)")
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.78)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 12)
+                }
+                .frame(maxWidth: .infinity)
+
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.07), Color.white.opacity(0.03)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.white.opacity(0.16), lineWidth: 0.8)
+                )
+                .overlay {
+                    VStack(spacing: 5) {
+                        Text("Рост")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(AppColors.textSecondary)
+                            .lineLimit(1)
+                        Text(formatPercent(delta.percent))
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(growthTextColor)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.9)
+                    }
+                    .padding(.horizontal, 8)
+                }
+                .frame(width: 118)
+        }
+        .frame(height: 88)
     }
 
     private var shouldShowSingleAccountActionBar: Bool {
@@ -1691,8 +1773,8 @@ private struct FinanceDynamicsContentView: View {
         let accentColor = AppColors.financesGradient.first ?? .cyan
         let fillGradient = LinearGradient(
             colors: [
-                Color(red: 0.03, green: 0.07, blue: 0.11),
-                Color(red: 0.02, green: 0.04, blue: 0.06),
+                Color(red: 0.04, green: 0.06, blue: 0.10),
+                Color(red: 0.02, green: 0.03, blue: 0.06),
                 Color.black
             ],
             startPoint: .topLeading,
@@ -1700,7 +1782,7 @@ private struct FinanceDynamicsContentView: View {
         )
         let glowGradient = LinearGradient(
             colors: [
-                accentColor.opacity(0.18),
+                accentColor.opacity(0.06),
                 Color.clear
             ],
             startPoint: .leading,
@@ -1712,17 +1794,25 @@ private struct FinanceDynamicsContentView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(glowGradient)
-                    .opacity(0.6)
+                    .opacity(0.45)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(Color.white.opacity(0.18), lineWidth: 0.9)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .stroke(
                         LinearGradient(
-                            colors: AppColors.financesGradient,
-                            startPoint: .leading,
-                            endPoint: .trailing
+                            colors: [
+                                Color.white.opacity(0.18),
+                                Color.white.opacity(0.04),
+                                Color.clear
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
                         ),
-                        lineWidth: 1
+                        lineWidth: 0.6
                     )
             )
     }
