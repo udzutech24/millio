@@ -58,7 +58,7 @@ struct CardEditorView: View {
                 bank: .other,
                 cardType: .debit,
                 priority: .normal,
-                currency: "RUB",
+                currency: SettingsManager.shared.primaryCurrencyCode,
                 balance: 0.0
             ))
             _balanceText = State(initialValue: "")

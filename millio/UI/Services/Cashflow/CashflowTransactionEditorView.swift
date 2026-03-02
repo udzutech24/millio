@@ -27,7 +27,7 @@ struct CashflowTransactionEditorView: View {
 
     @State private var selectedTransactionType: CashflowTransactionType
     @State private var amountText: String = ""
-    @State private var selectedCurrency: String = "RUB"
+    @State private var selectedCurrency: String = SettingsManager.shared.primaryCurrencyCode
     @State private var transactionDate: Date = Date()
     @State private var selectedCardID: String? = nil
     @State private var selectedToCardID: String? = nil
@@ -157,15 +157,7 @@ struct CashflowTransactionEditorView: View {
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 15, weight: .semibold))
-                            .frame(width: 34, height: 34)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color.clear)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                            .stroke(Color.white.opacity(0.28), lineWidth: 1)
-                                    )
-                            )
+                            .frame(width: 44, height: 44)
                     }
                     .foregroundStyle(AppColors.textPrimary)
                     .buttonStyle(.plain)
@@ -177,16 +169,10 @@ struct CashflowTransactionEditorView: View {
                     fireLightImpact()
                     saveTransaction()
                 } label: {
-                    ZStack {
-                        Circle()
-                            .fill(isValid ? Color(hex: "6DFFC7").opacity(0.24) : Color.clear)
-                        Circle()
-                            .stroke(isValid ? Color(hex: "6DFFC7") : Color.white.opacity(0.28), lineWidth: 1.2)
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(isValid ? Color(hex: "6DFFC7") : AppColors.textSecondary.opacity(0.6))
-                    }
-                    .frame(width: 34, height: 34)
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(isValid ? Color(hex: "6DFFC7") : AppColors.textSecondary.opacity(0.6))
+                        .frame(width: 44, height: 44)
                 }
                 .disabled(!isValid)
                 .buttonStyle(.plain)
@@ -244,11 +230,12 @@ struct CashflowTransactionEditorView: View {
         }
         .sheet(isPresented: $showCurrencyPicker) {
             NavigationStack {
+                let favoriteCodes = SettingsManager.shared.favoriteCurrencyCodes
                 CurrencyPickerView(
                     allCodes: CurrencySelectionSupport.allCodes(includeCrypto: true),
                     searchText: $currencySearchText,
-                    selectedCodes: [],
-                    favoriteCodes: [],
+                    selectedCodes: favoriteCodes,
+                    favoriteCodes: Set(favoriteCodes),
                     currentSelection: selectedCurrency,
                     onToggleFavorite: nil,
                     onSelect: { currency in

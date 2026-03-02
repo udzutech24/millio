@@ -18,6 +18,7 @@ struct millioApp: App {
     @State private var diContainer: DIContainer?
     @State private var lifecycleUseCase: AppLifecycleUseCase?
     @State private var isBiometricUnlockInProgress = false
+    private let appLockCoordinator = AppLockLifecycleCoordinator()
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "App")
     
     var sharedModelContainer: ModelContainer? = {
@@ -94,9 +95,7 @@ struct millioApp: App {
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
                     triggerBackgroundBackup()
-                    if appState.isAppLockEnabled {
-                        appState.isAppLocked = true
-                    }
+                    appLockCoordinator.handleWillResignActive(appState: appState)
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                     Task { @MainActor in
@@ -106,11 +105,10 @@ struct millioApp: App {
                         appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
                         appState.isTrialActive = SubscriptionManager.shared.isTrialActive
                         CurrencyWidgetSyncService.bootstrapFromStandardDefaults()
-
-                        if appState.isAppLockEnabled {
-                            appState.isAppLocked = true
-                            _ = await unlockWithBiometricsIfEnabled()
-                        }
+                        await appLockCoordinator.handleDidBecomeActive(
+                            appState: appState,
+                            unlockWithBiometrics: unlockWithBiometricsIfEnabled
+                        )
                     }
                 }
             } else {
@@ -133,13 +131,7 @@ struct millioApp: App {
     private func initializeApp(container: ModelContainer) async {
         let start = DispatchTime.now()
 
-        if appState.isAppLockEnabled && !AppLockPinStore.shared.hasPin() {
-            appState.isAppLockEnabled = false
-            appState.isBiometricUnlockEnabled = false
-            appState.isAppLocked = false
-        } else if appState.isAppLockEnabled {
-            appState.isAppLocked = true
-        }
+        appLockCoordinator.enforceLockStateOnLaunch(appState: appState, hasPin: AppLockPinStore.shared.hasPin())
 
         // Фичи уже зарегистрированы при создании ModelContainer
         
@@ -171,9 +163,10 @@ struct millioApp: App {
             appState.isTrialActive = SubscriptionManager.shared.isTrialActive
             CurrencyWidgetSyncService.bootstrapFromStandardDefaults()
 
-            if appState.isAppLockEnabled {
-                _ = await unlockWithBiometricsIfEnabled()
-            }
+            await appLockCoordinator.handleDidBecomeActive(
+                appState: appState,
+                unlockWithBiometrics: unlockWithBiometricsIfEnabled
+            )
         }
     }
     

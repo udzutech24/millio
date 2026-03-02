@@ -11,6 +11,7 @@ struct ConverterView: View {
     @State private var isRateSourceExpanded = false
     @State private var historyPreviewImage: UIImage? = nil
     @State private var showHistoryPreview: Bool = false
+    @State private var sharePreviewKeyboardHeight: CGFloat = 0
     
     private var decSep: String { Locale.current.decimalSeparator ?? "," }
     
@@ -692,49 +693,76 @@ struct ConverterView: View {
 
     private var sharePreviewSheet: some View {
         NavigationStack {
-            ZStack {
-                Color.black.ignoresSafeArea()
-                VStack(alignment: .leading, spacing: 10) {
-                    shareCardPreview
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(viewModel.state.shareDraftTitle)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Color.white.opacity(0.94))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
+            GeometryReader { geometry in
+                let keyboardOverlap = max(0, sharePreviewKeyboardHeight - geometry.safeAreaInsets.bottom)
+                let cardScale = SharePreviewLayout.cardScale(
+                    containerHeight: geometry.size.height,
+                    keyboardHeight: keyboardOverlap
+                )
+                let compactInput = cardScale < 0.95
+
+                ZStack {
+                    Color.black.ignoresSafeArea()
+                    VStack(alignment: .leading, spacing: compactInput ? 8 : 10) {
+                        shareCardPreview(scale: cardScale, containerHeight: geometry.size.height, keyboardHeight: keyboardOverlap)
+                        VStack(alignment: .leading, spacing: compactInput ? 8 : 10) {
+                            Text(viewModel.state.shareDraftTitle)
+                                .font(.system(size: compactInput ? 14 : 15, weight: .semibold))
+                                .foregroundStyle(Color.white.opacity(0.94))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.72)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(Color.white.opacity(0.08))
+                                )
+                            TextField(
+                                "Добавь подпись: что отправляешь и зачем",
+                                text: Binding(
+                                    get: { viewModel.state.shareDraftMessage },
+                                    set: { viewModel.handle(.updateShareDraftMessage($0)) }
+                                ),
+                                axis: .vertical
+                            )
+                            .lineLimit(compactInput ? 1...3 : 2...5)
+                            .textInputAutocapitalization(.sentences)
+                            .autocorrectionDisabled(false)
+                            .font(.system(size: compactInput ? 14 : 15, weight: .regular))
+                            .foregroundStyle(Color.white.opacity(0.92))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, compactInput ? 8 : 10)
                             .background(
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color.white.opacity(0.08))
+                                    .fill(.ultraThinMaterial)
                             )
-                        TextField(
-                            "Добавь подпись: что отправляешь и зачем",
-                            text: Binding(
-                                get: { viewModel.state.shareDraftMessage },
-                                set: { viewModel.handle(.updateShareDraftMessage($0)) }
-                            ),
-                            axis: .vertical
-                        )
-                        .lineLimit(2...5)
-                        .textInputAutocapitalization(.sentences)
-                        .autocorrectionDisabled(false)
-                        .font(.system(size: 15, weight: .regular))
-                        .foregroundStyle(Color.white.opacity(0.92))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(.ultraThinMaterial)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color.white.opacity(0.14), lineWidth: 1)
-                        )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                            )
+                        }
                     }
+                    .padding(14)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 }
-                .padding(14)
             }
             .navigationTitle("Preview отправки")
             .navigationBarTitleDisplayMode(.inline)
+#if os(iOS)
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    sharePreviewKeyboardHeight = keyboardOverlapHeight(from: note)
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    sharePreviewKeyboardHeight = 0
+                }
+            }
+#endif
+            .onDisappear {
+                sharePreviewKeyboardHeight = 0
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Отмена") {
@@ -1190,7 +1218,7 @@ struct ConverterView: View {
         return "\(trimmedTitle)\n\(trimmedMessage)"
     }
 
-    private var shareCardPreview: some View {
+    private func shareCardPreview(scale: CGFloat, containerHeight: CGFloat, keyboardHeight: CGFloat) -> some View {
         let shareData = viewModel.getShareData()
         return ShareCardView(
             dateString: shareData.dateString,
@@ -1199,11 +1227,28 @@ struct ConverterView: View {
             baseSummary: "База: \(viewModel.state.inputText) \(viewModel.state.activeCode)",
             appStoreURLText: "https://apps.apple.com"
         )
+        .scaleEffect(scale, anchor: .top)
         .frame(maxWidth: .infinity)
-        .frame(height: 540)
+        .frame(
+            height: SharePreviewLayout.cardFrameHeight(
+                containerHeight: containerHeight,
+                keyboardHeight: keyboardHeight
+            ),
+            alignment: .top
+        )
     }
 
 #if os(iOS)
+    private func keyboardOverlapHeight(from notification: Notification) -> CGFloat {
+        guard
+            let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect
+        else {
+            return 0
+        }
+        let screenHeight = UIScreen.main.bounds.height
+        return max(0, screenHeight - frame.minY)
+    }
+
     private func renderCurrentShareImage() -> UIImage? {
         let shareData = viewModel.getShareData()
         let screenBounds = UIScreen.main.bounds

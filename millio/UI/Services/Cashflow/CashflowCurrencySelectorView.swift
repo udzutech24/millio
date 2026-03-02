@@ -16,12 +16,13 @@ struct CashflowCurrencySelectorView: View {
     private let allCurrencies = CurrencySelectionSupport.allCodes(includeCrypto: true)
     
     var body: some View {
+        let favoriteCodes = SettingsManager.shared.favoriteCurrencyCodes
         NavigationStack {
             CurrencyPickerView(
                 allCodes: allCurrencies,
                 searchText: $searchText,
-                selectedCodes: [],
-                favoriteCodes: [],
+                selectedCodes: favoriteCodes,
+                favoriteCodes: Set(favoriteCodes),
                 currentSelection: viewModel.state.displayCurrency,
                 onToggleFavorite: nil,
                 onSelect: { currency in

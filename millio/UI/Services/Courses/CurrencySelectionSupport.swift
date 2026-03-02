@@ -263,24 +263,11 @@ public struct CurrencyPickerView: View {
     }
 
     private var q: String {
-        searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        CurrencySelectionSupport.normalizedSearchToken(searchText)
     }
 
     private func matches(_ code: String) -> Bool {
-        let c = code.uppercased()
-        guard !q.isEmpty else { return true }
-
-        let codeL = c.lowercased()
-        let ru = (CurrencySelectionSupport.nameRu(for: c) ?? "").lowercased()
-        let en = (CurrencySelectionSupport.nameEn(for: c) ?? "").lowercased()
-        let aliases = CurrencySelectionSupport.aliases[c]?.map { $0.lowercased() } ?? []
-
-        if codeL.contains(q) { return true }
-        if ru.contains(q) { return true }
-        if en.contains(q) { return true }
-        if aliases.contains(where: { $0.contains(q) }) { return true }
-
-        return false
+        CurrencySelectionSupport.matchesSearchQuery(code: code, query: q)
     }
 
     /// Все совпадения (кроме избранных, они будут отдельной секцией сверху)
@@ -417,7 +404,8 @@ public struct CurrencyPickerView: View {
         // Важно: это помогает вводить и тикеры (BTC), и англ. слова — без автозамены
         .textInputAutocapitalization(.never)
         .autocorrectionDisabled(true)
-        .keyboardType(.asciiCapable)
+        // Не ограничиваем клавиатуру ASCII: пользователь должен переключать язык (RU/EN/и т.д.).
+        .keyboardType(.default)
     }
 
     @ViewBuilder
@@ -498,5 +486,34 @@ public struct CurrencyPickerView: View {
                 }
             }
         )
+    }
+}
+
+// MARK: - Search matching helpers
+
+extension CurrencySelectionSupport {
+    static func normalizedSearchToken(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .lowercased()
+    }
+
+    static func matchesSearchQuery(code: String, query: String) -> Bool {
+        let normalizedQuery = normalizedSearchToken(query)
+        guard !normalizedQuery.isEmpty else { return true }
+
+        let normalizedCode = normalizedSearchToken(code)
+        if normalizedCode.contains(normalizedQuery) { return true }
+
+        let uppercasedCode = code.uppercased()
+        let ru = normalizedSearchToken(CurrencySelectionSupport.nameRu(for: uppercasedCode) ?? "")
+        if ru.contains(normalizedQuery) { return true }
+
+        let en = normalizedSearchToken(CurrencySelectionSupport.nameEn(for: uppercasedCode) ?? "")
+        if en.contains(normalizedQuery) { return true }
+
+        let aliases = CurrencySelectionSupport.aliases[uppercasedCode] ?? []
+        return aliases.contains { normalizedSearchToken($0).contains(normalizedQuery) }
     }
 }

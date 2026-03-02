@@ -10,17 +10,27 @@ import CryptoKit
 import Security
 import LocalAuthentication
 
+protocol AppLockAuthContext: AnyObject {
+    var biometryType: LABiometryType { get }
+    var localizedCancelTitle: String? { get set }
+    func canEvaluatePolicy(_ policy: LAPolicy, error: NSErrorPointer) -> Bool
+    func evaluatePolicy(_ policy: LAPolicy, localizedReason: String, reply: @escaping @Sendable (Bool, Error?) -> Void)
+}
+
+extension LAContext: AppLockAuthContext {}
+
 enum AppLockBiometricAuth {
+    static var contextFactory: () -> AppLockAuthContext = { LAContext() }
+
     static func availableBiometry() -> LABiometryType {
-        let context = LAContext()
+        let context = contextFactory()
         _ = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
         return context.biometryType
     }
 
     static func canUseBiometrics() -> Bool {
-        let context = LAContext()
-        var error: NSError?
-        return context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+        let context = contextFactory()
+        return preferredUnlockPolicy(for: context) != nil
     }
 
     static func buttonTitle() -> String {
@@ -57,15 +67,33 @@ enum AppLockBiometricAuth {
     }
 
     static func authenticate(reason: String) async -> Bool {
-        guard canUseBiometrics() else { return false }
+        let context = contextFactory()
+        guard let policy = preferredUnlockPolicy(for: context) else { return false }
 
         return await withCheckedContinuation { continuation in
-            let context = LAContext()
             context.localizedCancelTitle = "Отмена"
-            context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason) { success, _ in
+            context.evaluatePolicy(policy, localizedReason: reason) { success, _ in
                 continuation.resume(returning: success)
             }
         }
+    }
+
+    /// Разрешаем fallback на системный passcode только когда биометрия
+    /// временно заблокирована (`biometryLockout`), чтобы пользователь
+    /// мог восстановить Face ID/Touch ID без dead-end состояния.
+    static func preferredUnlockPolicy(for context: AppLockAuthContext) -> LAPolicy? {
+        var biometricError: NSError?
+        if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &biometricError) {
+            return .deviceOwnerAuthenticationWithBiometrics
+        }
+        guard let laError = biometricError as? LAError, laError.code == .biometryLockout else {
+            return nil
+        }
+        var deviceAuthError: NSError?
+        if context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &deviceAuthError) {
+            return .deviceOwnerAuthentication
+        }
+        return nil
     }
 }
 

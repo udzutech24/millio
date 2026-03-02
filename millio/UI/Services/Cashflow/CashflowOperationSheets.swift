@@ -585,7 +585,11 @@ private struct CashflowCategoryTransactionSheet: View {
     }
 
     private func formattedMonthlyTotal(_ value: Double) -> String {
-        formattedAmount(value)
+        let amount = formattedAmount(value)
+        let code = viewModel.state.displayCurrency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !code.isEmpty else { return amount }
+        let symbol = MonetaCurrency(rawValue: code)?.symbol ?? code
+        return "\(amount) \(symbol)"
     }
 }
 
