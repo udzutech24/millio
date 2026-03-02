@@ -11,6 +11,8 @@ struct PrimaryCurrencySelectionView: View {
     @Binding var primaryCurrencyCode: String
     @State private var searchText = ""
     @State private var favoriteCurrencyCodes: [String] = SettingsManager.shared.favoriteCurrencyCodes
+    @State private var pendingPrimaryCurrencyCode: String?
+    @State private var showPrimaryCurrencyConfirmation = false
 
     var body: some View {
         ZStack {
@@ -25,7 +27,7 @@ struct PrimaryCurrencySelectionView: View {
                 primaryPinnedCode: primaryCurrencyCode,
                 onToggleFavorite: toggleFavorite,
                 onSelect: { code in
-                    primaryCurrencyCode = code
+                    requestPrimaryCurrencyChange(code)
                 }
             )
         }
@@ -35,19 +37,54 @@ struct PrimaryCurrencySelectionView: View {
         .onAppear {
             favoriteCurrencyCodes = SettingsManager.shared.favoriteCurrencyCodes
         }
+        .onChange(of: primaryCurrencyCode) { _, _ in
+            favoriteCurrencyCodes = SettingsManager.shared.favoriteCurrencyCodes
+        }
+        .confirmationDialog(
+            "Сменить основную валюту?",
+            isPresented: $showPrimaryCurrencyConfirmation,
+            presenting: pendingPrimaryCurrencyCode
+        ) { pendingCode in
+            Button("Сменить на \(pendingCode)") {
+                primaryCurrencyCode = pendingCode
+                pendingPrimaryCurrencyCode = nil
+            }
+            Button("Отмена", role: .cancel) {
+                pendingPrimaryCurrencyCode = nil
+            }
+        } message: { _ in
+            Text("Это обновит основную валюту приложения и валюты отображения, которые следуют основной валюте.")
+        }
+    }
+
+    private func requestPrimaryCurrencyChange(_ code: String) {
+        let normalized = code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !normalized.isEmpty else { return }
+        guard normalized != primaryCurrencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() else {
+            return
+        }
+        pendingPrimaryCurrencyCode = normalized
+        showPrimaryCurrencyConfirmation = true
     }
 
     private func toggleFavorite(_ code: String) {
         let normalized = code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         guard !normalized.isEmpty else { return }
+        guard normalized != primaryCurrencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() else {
+            return
+        }
 
         if let idx = favoriteCurrencyCodes.firstIndex(where: { $0.uppercased() == normalized }) {
             favoriteCurrencyCodes.remove(at: idx)
         } else {
             favoriteCurrencyCodes.insert(normalized, at: 0)
+            // После добавления очищаем поиск, чтобы можно было сразу добрать следующую валюту.
+            searchText = ""
         }
-
-        favoriteCurrencyCodes = SettingsManager.normalizeCurrencyCodes(favoriteCurrencyCodes)
+        favoriteCurrencyCodes = SettingsManager.normalizeFavoriteCurrencyCodes(
+            favoriteCurrencyCodes,
+            primaryCode: primaryCurrencyCode
+        )
         SettingsManager.shared.favoriteCurrencyCodes = favoriteCurrencyCodes
     }
 }

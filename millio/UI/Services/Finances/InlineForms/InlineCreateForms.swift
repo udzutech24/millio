@@ -58,7 +58,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
             bank: .other,
             cardType: .debit,
             priority: .normal,
-            currency: "RUB",
+            currency: SettingsManager.shared.primaryCurrencyCode,
             balance: 0.0
         ))
         _balanceText = State(initialValue: "")
@@ -120,11 +120,12 @@ struct InlineCardCreateForm<GroupSection: View>: View {
         .onChange(of: card.includeInTotal) { _, _ in onCardDataChanged(currentCard) }
         .sheet(isPresented: $showCurrencyPicker) {
             NavigationStack {
+                let favoriteCodes = SettingsManager.shared.favoriteCurrencyCodes
                 CurrencyPickerView(
                     allCodes: availableCurrencies,
                     searchText: $currencySearchText,
-                    selectedCodes: [],
-                    favoriteCodes: [],
+                    selectedCodes: favoriteCodes,
+                    favoriteCodes: Set(favoriteCodes),
                     currentSelection: card.currency,
                     onToggleFavorite: nil,
                     onSelect: { currency in
@@ -544,7 +545,7 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
     @State private var remainingAmountDisplayText: String = ""
     @State private var monthlyPaymentText: String = ""
     @State private var monthlyPaymentDisplayText: String = ""
-    @State private var selectedCurrency: String = "RUB"
+    @State private var selectedCurrency: String = SettingsManager.shared.primaryCurrencyCode
     @State private var isFavorite: Bool = false
     @State private var paymentMode: CreditPaymentMode = .dayOfMonth
     @State private var paymentDayOfMonth: Int = max(1, min(31, Calendar.current.component(.day, from: Date())))
@@ -668,11 +669,12 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
         .onChange(of: reminderTime) { _, _ in emitCreditDataChange() }
         .sheet(isPresented: $showCurrencyPicker) {
             NavigationStack {
+                let favoriteCodes = SettingsManager.shared.favoriteCurrencyCodes
                 CurrencyPickerView(
                     allCodes: availableCurrencies,
                     searchText: $currencySearchText,
-                    selectedCodes: [],
-                    favoriteCodes: [],
+                    selectedCodes: favoriteCodes,
+                    favoriteCodes: Set(favoriteCodes),
                     currentSelection: selectedCurrency,
                     onToggleFavorite: nil,
                     onSelect: { currency in
@@ -1044,7 +1046,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     @State private var selectedInvestmentType: InvestmentType = .positive
     @State private var amountText: String = ""
     @State private var amountDisplayText: String = ""
-    @State private var selectedCurrency: String = "RUB"
+    @State private var selectedCurrency: String = SettingsManager.shared.primaryCurrencyCode
     @State private var includeInTotal: Bool = true
     @State private var selectedPriority: InvestmentPriority = .normal
     @State private var isFavorite: Bool = false
@@ -1233,11 +1235,12 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
         }
         .sheet(isPresented: $showCurrencyPicker) {
             NavigationStack {
+                let favoriteCodes = SettingsManager.shared.favoriteCurrencyCodes
                 CurrencyPickerView(
                     allCodes: availableCurrencies,
                     searchText: $currencySearchText,
-                    selectedCodes: [],
-                    favoriteCodes: [],
+                    selectedCodes: favoriteCodes,
+                    favoriteCodes: Set(favoriteCodes),
                     currentSelection: selectedCurrency,
                     onToggleFavorite: nil,
                     onSelect: { currency in

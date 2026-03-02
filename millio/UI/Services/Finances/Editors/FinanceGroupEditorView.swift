@@ -99,11 +99,12 @@ struct FinanceGroupEditorView: View {
             }
             .sheet(isPresented: $showCurrencyPicker) {
                 NavigationStack {
+                    let favoriteCodes = SettingsManager.shared.favoriteCurrencyCodes
                     CurrencyPickerView(
                         allCodes: availableCurrencies,
                         searchText: $currencySearchText,
-                        selectedCodes: [],
-                        favoriteCodes: [],
+                        selectedCodes: favoriteCodes,
+                        favoriteCodes: Set(favoriteCodes),
                         currentSelection: selectedCurrency,
                         onToggleFavorite: nil,
                         onSelect: { currency in

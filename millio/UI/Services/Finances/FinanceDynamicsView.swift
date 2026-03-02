@@ -1422,14 +1422,15 @@ private struct FinanceDynamicsContentView: View {
     }
 
     private var displayCurrencySheet: some View {
-        NavigationStack {
+        let favoriteCodes = SettingsManager.shared.favoriteCurrencyCodes
+        return NavigationStack {
             CurrencyPickerView(
                 allCodes: viewModel.state.availableCurrencies.isEmpty
                     ? CurrencySelectionSupport.allCurrencyCodesForPicker
                     : viewModel.state.availableCurrencies,
                 searchText: $displayCurrencySearchText,
-                selectedCodes: CurrencySelectionSupport.pinnedCurrencyCodes(for: viewModel.state.displayCurrency),
-                favoriteCodes: [],
+                selectedCodes: favoriteCodes,
+                favoriteCodes: Set(favoriteCodes),
                 currentSelection: viewModel.state.displayCurrency,
                 onToggleFavorite: nil,
                 onSelect: { code in

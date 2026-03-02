@@ -204,9 +204,9 @@ private struct CashflowCategoryTransactionSheet: View {
                     shiftMonth(by: -1)
                 } label: {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary.opacity(0.9))
-                        .frame(width: 36, height: 36)
+                        .frame(width: 32, height: 32)
                         .background(toolbarCircleBackground)
                 }
                 .buttonStyle(.plain)
@@ -214,7 +214,7 @@ private struct CashflowCategoryTransactionSheet: View {
                 Spacer()
 
                 Text(monthTitle)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary.opacity(0.92))
 
                 Spacer()
@@ -223,25 +223,26 @@ private struct CashflowCategoryTransactionSheet: View {
                     shiftMonth(by: 1)
                 } label: {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(canMoveForward ? AppColors.textPrimary.opacity(0.9) : AppColors.textSecondary.opacity(0.45))
-                        .frame(width: 36, height: 36)
+                        .frame(width: 32, height: 32)
                         .background(toolbarCircleBackground)
                 }
                 .buttonStyle(.plain)
                 .disabled(!canMoveForward)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
 
             let period = monthRangeText(for: selectedMonth)
             Text(period)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 4)
+                .padding(.horizontal, 2)
         }
-        .padding(10)
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(outerPanelBackground)
     }
 
@@ -301,14 +302,12 @@ private struct CashflowCategoryTransactionSheet: View {
             HStack(spacing: 10) {
                 managementButton(
                     title: "Регулярные",
-                    subtitle: kind.recurringSubtitle,
                     icon: "repeat",
                     action: { showRecurringManagement = true }
                 )
 
                 managementButton(
                     title: "Запланированные",
-                    subtitle: kind.plannedSubtitle,
                     icon: "calendar.badge.plus",
                     action: { showPlannedManagement = true }
                 )
@@ -318,7 +317,6 @@ private struct CashflowCategoryTransactionSheet: View {
 
     private func managementButton(
         title: String,
-        subtitle: String,
         icon: String,
         action: @escaping () -> Void
     ) -> some View {
@@ -343,12 +341,6 @@ private struct CashflowCategoryTransactionSheet: View {
                         .foregroundStyle(AppColors.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
-                    if !subtitle.isEmpty {
-                        Text(subtitle)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(AppColors.textSecondary)
-                            .lineLimit(2)
-                    }
                 }
 
                 Spacer(minLength: 0)
@@ -577,10 +569,6 @@ private struct CashflowCategoryTransactionSheet: View {
         showCategoryEditorSheet = false
     }
 
-    private func formattedMonthlyTotal(_ value: Double) -> String {
-        formattedAmount(value)
-    }
-
     private func monthRangeText(for month: Date) -> String {
         let calendar = Calendar.current
         let start = calendar.startOfMonth(for: month)
@@ -594,6 +582,14 @@ private struct CashflowCategoryTransactionSheet: View {
         formatter.locale = Locale(identifier: "ru_RU")
         formatter.dateFormat = "dd.MM.yyyy"
         return "\(formatter.string(from: start)) — \(formatter.string(from: end))"
+    }
+
+    private func formattedMonthlyTotal(_ value: Double) -> String {
+        let amount = formattedAmount(value)
+        let code = viewModel.state.displayCurrency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !code.isEmpty else { return amount }
+        let symbol = MonetaCurrency(rawValue: code)?.symbol ?? code
+        return "\(amount) \(symbol)"
     }
 }
 
@@ -636,20 +632,6 @@ enum CashflowCategoryTransactionSheetKind {
         }
     }
 
-    var recurringSubtitle: String {
-        switch self {
-        case .income: return "Ежемесячные доходы"
-        case .expense: return "Ежемесячные расходы"
-        }
-    }
-
-    var plannedSubtitle: String {
-        switch self {
-        case .income: return "Будущие поступления"
-        case .expense: return "Будущие списания"
-        }
-    }
-
     var strokeGradient: LinearGradient {
         LinearGradient(
             colors: gradientColors,
@@ -668,6 +650,7 @@ enum CashflowCategoryTransactionSheetKind {
             return self == .income ? Color(hex: "FF6666") : Color(hex: "6DFFC7")
         }
     }
+
 }
 
 struct CashflowTransferTransactionSheet: View {

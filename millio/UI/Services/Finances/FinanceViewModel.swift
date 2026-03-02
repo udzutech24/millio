@@ -232,18 +232,6 @@ final class FinanceViewModel: ViewModelProtocol {
     private var allCreditByID: [String: Credit] = [:]
     private var allInvestmentByID: [String: Investment] = [:]
     
-    private var storedDisplayCurrency: String {
-        get { defaults.string(forKey: "finance_display_currency") ?? SettingsManager.shared.primaryCurrencyCode }
-        set { defaults.set(newValue, forKey: "finance_display_currency") }
-    }
-    
-    private var storedSecondaryDisplayCurrency: String? {
-        get {
-            defaults.string(forKey: "finance_secondary_display_currency") ?? "USD"
-        }
-        set { defaults.set(newValue, forKey: "finance_secondary_display_currency") }
-    }
-    
     private var storedSavingsGoalEnabled: Bool {
         get { defaults.bool(forKey: "finance_savings_goal_enabled") }
         set { defaults.set(newValue, forKey: "finance_savings_goal_enabled") }
@@ -268,17 +256,8 @@ final class FinanceViewModel: ViewModelProtocol {
         self.modelContext = modelContext
         self.currencyService = currencyService ?? CurrencyRateService.shared
         self.marketDataClient = marketDataClient
-        state.displayCurrency = storedDisplayCurrency
-        state.secondaryDisplayCurrency = storedSecondaryDisplayCurrency
-        if CurrencySelectionSupport.isCrypto(state.displayCurrency) {
-            let fallbackCurrency = SettingsManager.shared.primaryCurrencyCode
-            state.displayCurrency = fallbackCurrency
-            storedDisplayCurrency = fallbackCurrency
-        }
-        if let secondary = state.secondaryDisplayCurrency, CurrencySelectionSupport.isCrypto(secondary) {
-            state.secondaryDisplayCurrency = "USD"
-            storedSecondaryDisplayCurrency = "USD"
-        }
+        state.displayCurrency = SettingsManager.shared.primaryCurrencyCode
+        state.secondaryDisplayCurrency = defaultSecondaryDisplayCurrency(primary: state.displayCurrency)
         state.isSavingsGoalEnabled = storedSavingsGoalEnabled
         state.savingsGoalAmount = storedSavingsGoalAmount
         state.isAmountHidden = storedAmountHidden
@@ -374,7 +353,6 @@ final class FinanceViewModel: ViewModelProtocol {
             
         case .setDisplayCurrency(let currency):
             state.displayCurrency = currency
-            storedDisplayCurrency = currency
             Task {
                 await refreshRates()
                 await calculateTotalAmountAsync()
@@ -382,7 +360,6 @@ final class FinanceViewModel: ViewModelProtocol {
             
         case .setSecondaryDisplayCurrency(let currency):
             state.secondaryDisplayCurrency = currency
-            storedSecondaryDisplayCurrency = currency
             Task {
                 await refreshRates()
                 await calculateTotalAmountAsync()
@@ -499,6 +476,12 @@ final class FinanceViewModel: ViewModelProtocol {
     }
     
     // MARK: - Private Methods
+
+    private func defaultSecondaryDisplayCurrency(primary: String) -> String {
+        let normalizedPrimary = primary.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let firstFavorite = SettingsManager.shared.favoriteCurrencyCodes.first(where: { $0 != normalizedPrimary })
+        return firstFavorite ?? "USD"
+    }
     
     private func loadGroups() {
         let descriptor = FetchDescriptor<FinanceGroup>()

@@ -26,6 +26,18 @@ struct AmountInputFormatterTests {
         #expect(displayed == "2 222 222")
     }
 
+    @Test("sanitize removes fraction when integer-only mode is used")
+    func sanitizeDropsFractionInIntegerMode() {
+        let sanitized = AmountInputFormatter.sanitize("12 345,67", maxFractionDigits: 0)
+        #expect(sanitized == "12345")
+    }
+
+    @Test("display ignores decimal part in integer-only mode")
+    func displayIntegerOnlyMode() {
+        let displayed = AmountInputFormatter.display("12 345,67", maxFractionDigits: 0)
+        #expect(displayed == "12 345")
+    }
+
     @Test("parse accepts both comma and dot decimal separators")
     func parseAcceptsCommaAndDot() {
         let parsedComma = AmountInputFormatter.parse("11 111,25")

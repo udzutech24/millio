@@ -19,7 +19,7 @@ struct InvestmentEditorView: View {
     @State private var selectedInvestmentType: InvestmentType = .positive
     @State private var selectedCategory: InvestmentCategory = .other
     @State private var amountText: String = ""
-    @State private var selectedCurrency: String = "RUB"
+    @State private var selectedCurrency: String = SettingsManager.shared.primaryCurrencyCode
     @State private var includeInTotal: Bool = true
     @State private var selectedPriority: InvestmentPriority = .normal
     @State private var isFavorite: Bool = false

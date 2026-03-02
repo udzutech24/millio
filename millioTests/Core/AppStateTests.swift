@@ -109,6 +109,53 @@ struct AppStateTests {
         #expect(appState.primaryCurrencyCode == "USD")
         #expect(SettingsManager.shared.primaryCurrencyCode == "USD")
     }
+
+    @Test("AppState при смене primaryCurrencyCode мигрирует display currency только если модуль следовал прошлой основной")
+    func testPrimaryCurrencyCodeMigratesFollowingDisplayCurrencies() {
+        let defaults = UserDefaults.standard
+        let primaryKey = "primaryCurrencyCode"
+        let keys = [
+            "cashflow_display_currency",
+            "finance_display_currency",
+            "card_display_currency",
+            "investment_display_currency",
+            "credit_display_currency"
+        ]
+        let originalPrimary = defaults.string(forKey: primaryKey)
+        let originalValues = keys.reduce(into: [String: String?]()) { partialResult, key in
+            partialResult[key] = defaults.string(forKey: key)
+        }
+        defer {
+            if let originalPrimary {
+                defaults.set(originalPrimary, forKey: primaryKey)
+            } else {
+                defaults.removeObject(forKey: primaryKey)
+            }
+            for key in keys {
+                if let value = originalValues[key] ?? nil {
+                    defaults.set(value, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            }
+        }
+
+        defaults.set("RUB", forKey: primaryKey)
+        defaults.set("RUB", forKey: "cashflow_display_currency")
+        defaults.set("USD", forKey: "finance_display_currency")
+        defaults.set("RUB", forKey: "card_display_currency")
+        defaults.set("EUR", forKey: "investment_display_currency")
+        defaults.set("RUB", forKey: "credit_display_currency")
+
+        let appState = AppState()
+        appState.primaryCurrencyCode = "USD"
+
+        #expect(defaults.string(forKey: "cashflow_display_currency") == "RUB")
+        #expect(defaults.string(forKey: "finance_display_currency") == "USD")
+        #expect(defaults.string(forKey: "card_display_currency") == "USD")
+        #expect(defaults.string(forKey: "investment_display_currency") == "EUR")
+        #expect(defaults.string(forKey: "credit_display_currency") == "USD")
+    }
     
     @Test("AppState.selectedLanguage сохраняет значение в UserDefaults")
     func testSelectedLanguagePersistsToUserDefaults() {

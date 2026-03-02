@@ -18,6 +18,9 @@ protocol SettingsManagerProtocol {
 
 final class SettingsManager: SettingsManagerProtocol {
     static let shared = SettingsManager()
+    static let defaultPrimaryCurrencyCode = "RUB"
+    static let maxFavoriteCurrencyCodes = 5
+    static let defaultFavoriteCurrencyCodes = ["USD", "EUR"]
     
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "SettingsManager")
     private let backupEnabledKey = "isBackupEnabled"
@@ -105,12 +108,21 @@ final class SettingsManager: SettingsManagerProtocol {
     /// Хранится в UserDefaults, чтобы быть доступной на уровне Core.
     var primaryCurrencyCode: String {
         get {
-            UserDefaults.standard.string(forKey: primaryCurrencyCodeKey) ?? "RUB"
+            UserDefaults.standard.string(forKey: primaryCurrencyCodeKey) ?? Self.defaultPrimaryCurrencyCode
         }
         set {
             let normalized = newValue.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
             guard !normalized.isEmpty else { return }
+            let previousPrimary = UserDefaults.standard.string(forKey: primaryCurrencyCodeKey) ?? Self.defaultPrimaryCurrencyCode
+            let normalizedPrevious = previousPrimary.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
             UserDefaults.standard.set(normalized, forKey: primaryCurrencyCodeKey)
+            var rawFavorites = UserDefaults.standard.array(forKey: favoriteCurrencyCodesKey) as? [String] ?? Self.defaultFavoriteCurrencyCodes
+            if !normalizedPrevious.isEmpty, normalizedPrevious != normalized {
+                // При смене основной валюты старая остается доступной в "Избранных".
+                rawFavorites.insert(normalizedPrevious, at: 0)
+            }
+            let sanitizedFavorites = Self.normalizeFavoriteCurrencyCodes(rawFavorites, primaryCode: normalized)
+            UserDefaults.standard.set(sanitizedFavorites, forKey: favoriteCurrencyCodesKey)
             logger.info("Primary currency code updated: \(normalized)")
         }
     }
@@ -119,14 +131,11 @@ final class SettingsManager: SettingsManagerProtocol {
     /// Хранятся в UserDefaults (строки ISO-кодов в верхнем регистре).
     var favoriteCurrencyCodes: [String] {
         get {
-            if UserDefaults.standard.object(forKey: favoriteCurrencyCodesKey) == nil {
-                return ["RUB", "USD", "EUR"]
-            }
-            let raw = UserDefaults.standard.array(forKey: favoriteCurrencyCodesKey) as? [String] ?? []
-            return Self.normalizeCurrencyCodes(raw)
+            let raw = UserDefaults.standard.array(forKey: favoriteCurrencyCodesKey) as? [String] ?? Self.defaultFavoriteCurrencyCodes
+            return Self.normalizeFavoriteCurrencyCodes(raw, primaryCode: primaryCurrencyCode)
         }
         set {
-            let normalized = Self.normalizeCurrencyCodes(newValue)
+            let normalized = Self.normalizeFavoriteCurrencyCodes(newValue, primaryCode: primaryCurrencyCode)
             UserDefaults.standard.set(normalized, forKey: favoriteCurrencyCodesKey)
             logger.info("Favorite currency codes updated: \(normalized.count)")
         }
@@ -145,6 +154,17 @@ final class SettingsManager: SettingsManagerProtocol {
         }
         
         return result
+    }
+
+    /// Нормализует избранные коды валют:
+    /// - удаляет дубликаты и пустые значения,
+    /// - исключает текущую основную валюту,
+    /// - ограничивает список до `maxFavoriteCurrencyCodes`.
+    static func normalizeFavoriteCurrencyCodes(_ codes: [String], primaryCode: String) -> [String] {
+        let normalizedPrimary = primaryCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let normalized = normalizeCurrencyCodes(codes)
+            .filter { $0 != normalizedPrimary }
+        return Array(normalized.prefix(maxFavoriteCurrencyCodes))
     }
     
     private init() {}

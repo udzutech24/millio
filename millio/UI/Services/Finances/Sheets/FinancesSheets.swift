@@ -138,12 +138,13 @@ struct DisplayCurrencySheet: View {
     private let allCurrencies = CurrencySelectionSupport.allCodes(includeCrypto: false)
     
     var body: some View {
+        let favoriteCodes = SettingsManager.shared.favoriteCurrencyCodes
         NavigationStack {
             CurrencyPickerView(
                 allCodes: allCurrencies,
                 searchText: $searchText,
-                selectedCodes: [], // Можно добавить закрепленные, если нужно
-                favoriteCodes: [], // Можно подключить избранное из настроек, если есть доступ
+                selectedCodes: favoriteCodes,
+                favoriteCodes: Set(favoriteCodes),
                 currentSelection: isSecondary ? viewModel.state.secondaryDisplayCurrency : viewModel.state.displayCurrency,
                 onToggleFavorite: nil,
                 onSelect: { currency in
@@ -201,9 +202,9 @@ struct SavingsGoalSettingsView: View {
                                 FinancesSectionHeader(title: "Сумма цели (\(viewModel.state.displayCurrency))")
                                 FinancesGlassCard {
                                     TextField("Сумма цели", text: Binding(
-                                        get: { AmountInputFormatter.display(goalAmount) },
+                                        get: { AmountInputFormatter.display(goalAmount, maxFractionDigits: 0) },
                                         set: { newValue in
-                                            goalAmount = AmountInputFormatter.sanitize(newValue)
+                                            goalAmount = AmountInputFormatter.sanitize(newValue, maxFractionDigits: 0)
                                         }
                                     ))
                                         .keyboardType(.decimalPad)
@@ -308,7 +309,10 @@ struct SavingsGoalSettingsView: View {
             .onAppear {
                 isEnabled = viewModel.state.isSavingsGoalEnabled
                 if viewModel.state.savingsGoalAmount > 0 {
-                    goalAmount = AmountInputFormatter.plainString(from: viewModel.state.savingsGoalAmount)
+                    goalAmount = AmountInputFormatter.sanitize(
+                        AmountInputFormatter.plainString(from: viewModel.state.savingsGoalAmount),
+                        maxFractionDigits: 0
+                    )
                 }
             }
         }
@@ -326,7 +330,7 @@ struct SavingsGoalSettingsView: View {
         formatter.groupingSeparator = " "
         formatter.usesGroupingSeparator = true
         formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 2
+        formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: amount)) ?? "0"
     }
 }

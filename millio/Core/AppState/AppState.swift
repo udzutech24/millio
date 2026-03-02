@@ -32,7 +32,9 @@ final class AppState {
                 primaryCurrencyCode = normalized
                 return
             }
+            let oldNormalized = oldValue.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
             SettingsManager.shared.primaryCurrencyCode = normalized
+            migrateDisplayCurrenciesIfFollowingPrimary(oldPrimary: oldNormalized, newPrimary: normalized)
         }
     }
     var isBackupEnabled: Bool = false
@@ -76,5 +78,24 @@ final class AppState {
         self.profileDisplayName = SettingsManager.shared.profileDisplayName
         self.profileAvatarPath = SettingsManager.shared.profileAvatarFilePath
         self.isAppLocked = self.isAppLockEnabled
+    }
+
+    /// Если модульная валюта отображения была равна прошлой основной,
+    /// считаем, что модуль "следует за основной", и обновляем ее.
+    private func migrateDisplayCurrenciesIfFollowingPrimary(oldPrimary: String, newPrimary: String) {
+        guard !oldPrimary.isEmpty, oldPrimary != newPrimary else { return }
+        let defaults = UserDefaults.standard
+        let displayCurrencyKeys = [
+            "card_display_currency",
+            "investment_display_currency",
+            "credit_display_currency"
+        ]
+        for key in displayCurrencyKeys {
+            guard let raw = defaults.string(forKey: key) else { continue }
+            let normalized = raw.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            if normalized == oldPrimary {
+                defaults.set(newPrimary, forKey: key)
+            }
+        }
     }
 }

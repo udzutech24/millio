@@ -19,7 +19,7 @@ struct CreditEditorView: View {
     @State private var amountText: String = ""
     @State private var remainingAmountText: String = ""
     @State private var monthlyPaymentText: String = ""
-    @State private var selectedCurrency: String = "RUB"
+    @State private var selectedCurrency: String = SettingsManager.shared.primaryCurrencyCode
     @State private var selectedCreditType: CreditType = .consumer
     @State private var isFavorite: Bool = false
     @State private var paymentMode: CreditPaymentMode = .dayOfMonth

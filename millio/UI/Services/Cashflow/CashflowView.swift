@@ -25,6 +25,32 @@ func cashflowValueTone(for value: Double, epsilon: Double = 0.0000001) -> Cashfl
     return .neutral
 }
 
+/// Единый форматтер чисел для экрана Cashflow: без суффикса валюты в строках статистики.
+func cashflowAmountText(_ amount: Double) -> String {
+    let formatter = NumberFormatter()
+    formatter.numberStyle = .decimal
+    formatter.groupingSeparator = " "
+    formatter.usesGroupingSeparator = true
+    formatter.minimumFractionDigits = 0
+    formatter.maximumFractionDigits = 0
+    return formatter.string(from: NSNumber(value: amount)) ?? "0"
+}
+
+func cashflowSignedAmountText(_ amount: Double) -> String {
+    let absolute = cashflowAmountText(abs(amount))
+    if amount > 0.0000001 {
+        return "+\(absolute)"
+    }
+    if amount < -0.0000001 {
+        return "-\(absolute)"
+    }
+    return absolute
+}
+
+func cashflowCurrencyCodeLabel(_ code: String) -> String {
+    code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+}
+
 struct CashflowActionButtonsLayout {
     static let buttonCount: CGFloat = 3
     static let buttonSpacing: CGFloat = 10
@@ -266,7 +292,7 @@ private struct CashflowContentView: View {
                     }
                     Spacer()
                     Text(formatSignedMoney(viewModel.state.assetValueChange))
-                        .font(.system(size: 21, weight: .semibold))
+                        .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(positiveColor(for: viewModel.state.assetValueChange))
                         .contentTransition(.numericText())
                 }
@@ -307,7 +333,7 @@ private struct CashflowContentView: View {
                         .foregroundStyle(AppColors.textPrimary)
                     Spacer()
                     Text(formatSignedMoney(viewModel.state.periodTotalChange))
-                        .font(.system(size: 30, weight: .bold))
+                        .font(.system(size: 24, weight: .bold))
                         .foregroundStyle(positiveColor(for: viewModel.state.periodTotalChange))
                         .contentTransition(.numericText())
                 }
@@ -328,7 +354,7 @@ private struct CashflowContentView: View {
                 .foregroundStyle(primarySecondaryText)
             Spacer()
             Text(value)
-                .font(.system(size: 21, weight: .semibold))
+                .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(valueColor)
                 .lineLimit(1)
                 .contentTransition(.numericText())
@@ -350,7 +376,7 @@ private struct CashflowContentView: View {
             Spacer()
             HStack(spacing: 8) {
                 Text(value)
-                    .font(.system(size: 21, weight: .semibold))
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(valueColor)
                     .lineLimit(1)
                     .contentTransition(.numericText())
@@ -500,23 +526,10 @@ private struct CashflowContentView: View {
 
     @ViewBuilder
     private var periodHeaderTitleView: some View {
-        let title = viewModel.currentPeriodHeaderTitle()
-        if title.hasSuffix(" г.") {
-            let main = String(title.dropLast(3))
-            (
-                Text(main)
-                    .font(.system(size: 17, weight: .semibold))
-                + Text(" г.")
-                    .font(.system(size: 14, weight: .medium))
-            )
+        Text(viewModel.currentPeriodHeaderTitle())
+            .font(.system(size: 17, weight: .semibold))
             .foregroundStyle(AppColors.textPrimary)
             .lineLimit(1)
-        } else {
-            Text(title)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(AppColors.textPrimary)
-                .lineLimit(1)
-        }
     }
     
     @ToolbarContentBuilder
@@ -535,52 +548,38 @@ private struct CashflowContentView: View {
         }
 
         ToolbarItem(placement: .topBarTrailing) {
-            HStack(spacing: 0) {
-                Button {
-                    selectedTopAction = .currency
-                    viewModel.handle(.showCurrencySelector)
-                    fireLightImpact()
-                } label: {
-                    Image(systemName: "dollarsign.arrow.circlepath")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(selectedTopAction == .currency ? Color.white.opacity(0.96) : primarySecondaryText)
-                        .frame(width: 42, height: 38)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Выбор валюты отображения")
-
-                Divider()
-                    .frame(height: 18)
-                    .overlay(Color.white.opacity(0.2))
-
-                Button {
-                    selectedTopAction = .history
-                    viewModel.handle(.showTransactionsHistory)
-                    fireLightImpact()
-                } label: {
-                    Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 18, weight: .regular))
-                        .foregroundStyle(selectedTopAction == .history ? Color.white.opacity(0.96) : primarySecondaryText)
-                        .frame(width: 42, height: 38)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("История операций")
+            Button {
+                selectedTopAction = .history
+                viewModel.handle(.showTransactionsHistory)
+                fireLightImpact()
+            } label: {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 18, weight: .regular))
+                    .foregroundStyle(selectedTopAction == .history ? Color.white.opacity(0.96) : primarySecondaryText)
+                    .frame(width: 42, height: 38)
             }
-            .background {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color.white.opacity(0.06))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [neonCyan.opacity(0.45), neonViolet.opacity(0.45)],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ),
-                                lineWidth: 1
-                            )
-                    )
+            .buttonStyle(.plain)
+            .accessibilityLabel("История операций")
+        }
+
+        ToolbarItem(placement: .topBarTrailing) {
+            Button {
+                selectedTopAction = .currency
+                viewModel.handle(.showCurrencySelector)
+                fireLightImpact()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90.circle")
+                        .font(.system(size: 16, weight: .semibold))
+                    Text(toolbarCurrencyLabel())
+                        .font(.system(size: 11, weight: .bold))
+                        .tracking(0.4)
+                }
+                .foregroundStyle(selectedTopAction == .currency ? Color.white.opacity(0.96) : primarySecondaryText)
+                .frame(height: 38)
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Выбор валюты отображения")
         }
     }
     
@@ -591,25 +590,25 @@ private struct CashflowContentView: View {
     }
 
     private func formatMoney(_ amount: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.groupingSeparator = " "
-        formatter.usesGroupingSeparator = true
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 0
-        let value = formatter.string(from: NSNumber(value: amount)) ?? "0"
-        return value
+        cashflowAmountText(amount)
     }
 
     private func formatSignedMoney(_ amount: Double) -> String {
-        let absolute = formatMoney(abs(amount))
-        if amount > 0.0000001 {
-            return "+\(absolute)"
+        cashflowSignedAmountText(amount)
+    }
+
+    private func displayCurrencyLabel() -> String {
+        let code = viewModel.state.displayCurrency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !code.isEmpty else { return "" }
+        return MonetaCurrency(rawValue: code)?.symbol ?? code
+    }
+
+    private func toolbarCurrencyLabel() -> String {
+        let code = cashflowCurrencyCodeLabel(viewModel.state.displayCurrency)
+        if !code.isEmpty {
+            return code
         }
-        if amount < -0.0000001 {
-            return "-\(absolute)"
-        }
-        return absolute
+        return displayCurrencyLabel()
     }
 
     private func financeCardBackground(cornerRadius: CGFloat) -> some View {

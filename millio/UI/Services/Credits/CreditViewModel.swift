@@ -125,11 +125,18 @@ final class CreditViewModel: ViewModelProtocol {
     @Published var state = CreditState()
     
     let modelContext: ModelContext
+    private let defaults = UserDefaults.standard
+
+    private var storedDisplayCurrency: String {
+        get { defaults.string(forKey: "credit_display_currency") ?? SettingsManager.shared.primaryCurrencyCode }
+        set { defaults.set(newValue, forKey: "credit_display_currency") }
+    }
     
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
         // Инициализируем CreditManager
         CreditManager.shared.setup(modelContext: modelContext)
+        state.displayCurrency = storedDisplayCurrency
         loadCredits()
     }
     
@@ -253,6 +260,7 @@ final class CreditViewModel: ViewModelProtocol {
             
         case .setDisplayCurrency(let currency):
             state.displayCurrency = currency
+            storedDisplayCurrency = currency
             calculateStats()
         }
     }
