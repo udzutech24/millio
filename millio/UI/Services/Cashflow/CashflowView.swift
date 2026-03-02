@@ -500,23 +500,10 @@ private struct CashflowContentView: View {
 
     @ViewBuilder
     private var periodHeaderTitleView: some View {
-        let title = viewModel.currentPeriodHeaderTitle()
-        if title.hasSuffix(" г.") {
-            let main = String(title.dropLast(3))
-            (
-                Text(main)
-                    .font(.system(size: 17, weight: .semibold))
-                + Text(" г.")
-                    .font(.system(size: 14, weight: .medium))
-            )
+        Text(viewModel.currentPeriodHeaderTitle())
+            .font(.system(size: 17, weight: .semibold))
             .foregroundStyle(AppColors.textPrimary)
             .lineLimit(1)
-        } else {
-            Text(title)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(AppColors.textPrimary)
-                .lineLimit(1)
-        }
     }
     
     @ToolbarContentBuilder
@@ -565,21 +552,6 @@ private struct CashflowContentView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("История операций")
-            }
-            .background {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color.white.opacity(0.06))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [neonCyan.opacity(0.45), neonViolet.opacity(0.45)],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ),
-                                lineWidth: 1
-                            )
-                    )
             }
         }
     }

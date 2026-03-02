@@ -147,6 +147,7 @@ struct CashflowTransactionEditorView: View {
         }
         .navigationTitle(resolvedNavigationTitle)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             if showsDismissButton {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -159,7 +160,7 @@ struct CashflowTransactionEditorView: View {
                             .frame(width: 34, height: 34)
                             .background(
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color.white.opacity(0.06))
+                                    .fill(Color.clear)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 12, style: .continuous)
                                             .stroke(Color.white.opacity(0.28), lineWidth: 1)
@@ -178,7 +179,7 @@ struct CashflowTransactionEditorView: View {
                 } label: {
                     ZStack {
                         Circle()
-                            .fill(isValid ? Color(hex: "6DFFC7").opacity(0.14) : Color.white.opacity(0.06))
+                            .fill(isValid ? Color(hex: "6DFFC7").opacity(0.24) : Color.clear)
                         Circle()
                             .stroke(isValid ? Color(hex: "6DFFC7") : Color.white.opacity(0.28), lineWidth: 1.2)
                         Image(systemName: "checkmark")

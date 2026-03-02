@@ -514,10 +514,13 @@ final class CashflowViewModel: ViewModelProtocol {
             return "\(formatter.string(from: start)) — \(formatter.string(from: end))"
         }
 
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ru_RU")
-        formatter.dateFormat = "LLLL yyyy 'г.'"
-        return formatter.string(from: state.selectedMonth).capitalized
+        let monthFormatter = DateFormatter()
+        monthFormatter.locale = Locale(identifier: "ru_RU")
+        let monthIndex = Calendar.current.component(.month, from: state.selectedMonth) - 1
+        let standaloneMonths = monthFormatter.standaloneMonthSymbols ?? monthFormatter.monthSymbols ?? []
+        let month = standaloneMonths.indices.contains(monthIndex) ? standaloneMonths[monthIndex].lowercased() : ""
+        let year = Calendar.current.component(.year, from: state.selectedMonth)
+        return "\(month) \(year)"
     }
 
     func canMovePeriodForward() -> Bool {
