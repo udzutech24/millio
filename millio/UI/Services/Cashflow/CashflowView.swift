@@ -25,6 +25,19 @@ func cashflowValueTone(for value: Double, epsilon: Double = 0.0000001) -> Cashfl
     return .neutral
 }
 
+struct CashflowActionButtonsLayout {
+    static let buttonCount: CGFloat = 3
+    static let buttonSpacing: CGFloat = 10
+    static let compactButtonWidthThreshold: CGFloat = 112
+
+    static func shouldUseCompactMetrics(containerWidth: CGFloat) -> Bool {
+        guard containerWidth > 0 else { return false }
+        let totalSpacing = buttonSpacing * (buttonCount - 1)
+        let buttonWidth = (containerWidth - totalSpacing) / buttonCount
+        return buttonWidth < compactButtonWidthThreshold
+    }
+}
+
 struct CashflowView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: CashflowViewModel?
@@ -163,40 +176,50 @@ private struct CashflowContentView: View {
     // MARK: - Action Buttons Section
     
     private var actionButtonsSection: some View {
-        HStack(spacing: 10) {
-            CashflowActionButton(
-                accessibilityLabel: "Доход",
-                title: "Доход",
-                icon: "plus",
-                gradientColors: AppColors.incomeGradient,
-                style: .primary
-            ) {
-                fireLightImpact()
-                viewModel.handle(.addTransaction(.income))
-            }
+        GeometryReader { proxy in
+            let useCompactMetrics = CashflowActionButtonsLayout.shouldUseCompactMetrics(
+                containerWidth: proxy.size.width
+            )
 
-            CashflowActionButton(
-                accessibilityLabel: "Расход",
-                title: "Расход",
-                icon: "minus",
-                gradientColors: AppColors.expenseGradient,
-                style: .secondary
-            ) {
-                fireLightImpact()
-                viewModel.handle(.addTransaction(.expense))
-            }
+            HStack(spacing: CashflowActionButtonsLayout.buttonSpacing) {
+                CashflowActionButton(
+                    accessibilityLabel: "Доход",
+                    title: "Доход",
+                    icon: "plus",
+                    gradientColors: AppColors.incomeGradient,
+                    style: .primary,
+                    compactMetrics: useCompactMetrics
+                ) {
+                    fireLightImpact()
+                    viewModel.handle(.addTransaction(.income))
+                }
 
-            CashflowActionButton(
-                accessibilityLabel: "Перевод",
-                title: "Перевод",
-                icon: "arrow.left.arrow.right",
-                gradientColors: AppColors.cashflowGradient,
-                style: .secondary
-            ) {
-                fireLightImpact()
-                viewModel.handle(.addTransaction(.transfer))
+                CashflowActionButton(
+                    accessibilityLabel: "Расход",
+                    title: "Расход",
+                    icon: "minus",
+                    gradientColors: AppColors.expenseGradient,
+                    style: .secondary,
+                    compactMetrics: useCompactMetrics
+                ) {
+                    fireLightImpact()
+                    viewModel.handle(.addTransaction(.expense))
+                }
+
+                CashflowActionButton(
+                    accessibilityLabel: "Перевод",
+                    title: "Перевод",
+                    icon: "arrow.left.arrow.right",
+                    gradientColors: AppColors.cashflowGradient,
+                    style: .secondary,
+                    compactMetrics: useCompactMetrics
+                ) {
+                    fireLightImpact()
+                    viewModel.handle(.addTransaction(.transfer))
+                }
             }
         }
+        .frame(height: 64)
     }
     
     // MARK: - Period Stats Section
@@ -843,6 +866,7 @@ private struct CashflowActionButton: View {
     let icon: String
     let gradientColors: [Color]
     let style: Style
+    let compactMetrics: Bool
     let action: () -> Void
     
     private let cornerRadius: CGFloat = 28
@@ -856,18 +880,20 @@ private struct CashflowActionButton: View {
                     Circle()
                         .stroke(gradientStroke.opacity(0.65), lineWidth: 1.1)
                     Image(systemName: icon)
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.system(size: compactMetrics ? 15 : 16, weight: .medium))
                         .foregroundStyle(Color.white.opacity(0.92))
                 }
-                .frame(width: 38, height: 38)
+                .frame(width: compactMetrics ? 34 : 38, height: compactMetrics ? 34 : 38)
 
                 Text(title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: compactMetrics ? 12 : 13, weight: .medium))
                     .foregroundStyle(Color.white.opacity(0.92))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.9)
+                    .minimumScaleFactor(compactMetrics ? 0.78 : 0.9)
+                    .allowsTightening(true)
+                    .layoutPriority(1)
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, compactMetrics ? 8 : 10)
             .frame(maxWidth: .infinity)
             .frame(height: 64)
             .background(buttonBackground)
@@ -877,11 +903,11 @@ private struct CashflowActionButton: View {
     }
 
     private var buttonBackground: some View {
-        let fillColor: Color = style == .primary ? gradientAccent.opacity(0.22) : Color.black.opacity(0.20)
+        let fillColor: Color = Color.black.opacity(style == .primary ? 0.24 : 0.20)
         let strokeOpacity: Double = style == .primary ? 0.95 : 0.72
         let strokeWidth: CGFloat = style == .primary ? 1.6 : 1.2
-        let materialOpacity: Double = style == .primary ? 0.35 : 0.22
-        let shadowOpacity: Double = style == .primary ? 0.22 : 0.08
+        let materialOpacity: Double = style == .primary ? 0.26 : 0.22
+        let shadowOpacity: Double = style == .primary ? 0.10 : 0.08
         let shadowRadius: CGFloat = style == .primary ? 10 : 6
 
         return RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)

@@ -1402,6 +1402,23 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     // Для дебетовых карт используем баланс
                     accountBalance = cardBalance
                 }
+
+                // Reconcile live state for card-based accounts.
+                // История по Cashflow может быть неполной (например, прямое редактирование баланса
+                // без создания balanceAdjustment), поэтому для дат не раньше последнего обновления
+                // счета синхронизируемся с фактическим текущим значением модели.
+                if date >= card.updatedAt {
+                    let actualCurrentValue: Double
+                    if card.cardType == .credit, let limit = card.creditLimit {
+                        actualCurrentValue = max(0, limit - card.balance)
+                    } else {
+                        actualCurrentValue = card.balance
+                    }
+                    let deltaToActual = actualCurrentValue - accountBalance
+                    if abs(deltaToActual) > 0.01 {
+                        accountBalance += deltaToActual
+                    }
+                }
                 
             case .credit:
                 // Используем кэш вместо first(where:) для O(1) поиска

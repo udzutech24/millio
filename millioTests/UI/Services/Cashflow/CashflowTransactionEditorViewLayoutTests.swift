@@ -30,18 +30,20 @@ struct CashflowTransactionEditorViewLayoutTests {
     @Test("Конфигурация cashflow-листа для дохода")
     func incomeSheetConfiguration() {
         let kind = CashflowCategoryTransactionSheetKind.income
+        #expect(kind.sheetTitle == "Доходы")
         #expect(kind.navigationTitle == "Новый доход")
         #expect(kind.monthlyTotalTitle == "Итого доход за месяц")
-        #expect(kind.recurringSubtitle == "Ежемесячные доходы")
-        #expect(kind.plannedSubtitle == "Будущие поступления")
+        #expect(kind.recurringSubtitle.isEmpty)
+        #expect(kind.plannedSubtitle.isEmpty)
     }
 
     @Test("Конфигурация cashflow-листа для расхода")
     func expenseSheetConfiguration() {
         let kind = CashflowCategoryTransactionSheetKind.expense
+        #expect(kind.sheetTitle == "Затраты")
         #expect(kind.navigationTitle == "Новый расход")
         #expect(kind.monthlyTotalTitle == "Итого расход за месяц")
-        #expect(kind.recurringSubtitle == "Ежемесячные расходы")
-        #expect(kind.plannedSubtitle == "Будущие списания")
+        #expect(kind.recurringSubtitle.isEmpty)
+        #expect(kind.plannedSubtitle.isEmpty)
     }
 }

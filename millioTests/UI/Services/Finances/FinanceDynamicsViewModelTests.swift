@@ -278,6 +278,57 @@ struct FinanceDynamicsViewModelTests {
         #expect(abs(balanceNow - 15000) < 0.01)
     }
 
+    @Test("Карта: актуальный баланс учитывается после обновления без транзакций")
+    func testCardUsesActualAmountAfterUpdateWithoutTransactions() async throws {
+        let modelContext = try createTestModelContext()
+
+        let createdAt = Date().addingTimeInterval(-7 * 86400)
+        let updatedAt = Date().addingTimeInterval(-1800)
+
+        let card = Card(name: "Live карта", cardNumber: "9876", bank: .other, cardType: .debit, currency: "RUB")
+        card.createdAt = createdAt
+        card.updatedAt = updatedAt
+        card.initialBalance = 10_000
+        card.hasInitialBalance = true
+        // История транзакций отсутствует, но текущее значение уже изменено вручную.
+        card.balance = 15_000
+        modelContext.insert(card)
+
+        let group = FinanceGroup(name: "Тест", colorHex: "#FFFFFF")
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+
+        let beforeUpdate = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: updatedAt.addingTimeInterval(-60),
+            accountCardIDs: [card.cardUniqueID]
+        )
+        #expect(abs(beforeUpdate - 10_000) < 0.01)
+
+        let afterUpdate = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: Date(),
+            accountCardIDs: [card.cardUniqueID]
+        )
+        #expect(abs(afterUpdate - 15_000) < 0.01)
+    }
+
     @Test("Процентное изменение: деление на ноль возвращает специальное значение")
     func testPercentChangeWithZeroDenominator() async throws {
         let modelContext = try createTestModelContext()
