@@ -171,100 +171,46 @@ actor BackupManager: BackupManagerProtocol {
                     }
                 }
             ) {
-            guard await self.isAvailable() else {
-                throw AppError.iCloudUnavailable
-            }
-            
-            guard let downloadedData = try await cloudStore.downloadLatestBackup() else {
+                guard await self.isAvailable() else {
+                    throw AppError.iCloudUnavailable
+                }
+
+                let backupRecordNames = try await cloudStore.listBackupRecordNamesForRestore()
+                guard !backupRecordNames.isEmpty else {
+                    throw AppError.restoreFailed("Backup не найден в iCloud")
+                }
+
+                var hasAnyCandidateData = false
+
+                for recordName in backupRecordNames {
+                    guard let downloadedData = try await cloudStore.downloadBackup(recordName: recordName) else {
+                        continue
+                    }
+                    hasAnyCandidateData = true
+
+                    do {
+                        try await self.restoreDownloadedBackup(
+                            downloadedData,
+                            passphrase: passphrase,
+                            encryption: encryption,
+                            dataRepository: dataRepository
+                        )
+                        return
+                    } catch let appError as AppError {
+                        if self.shouldTryOlderSnapshot(after: appError) {
+                            self.logger.warning("Skipping restore candidate '\(recordName, privacy: .public)' due to \(appError.localizedDescription, privacy: .public)")
+                            continue
+                        }
+                        throw appError
+                    }
+                }
+
+                if hasAnyCandidateData {
+                    throw AppError.restoreFailed("Не удалось восстановить данные: доступные backup повреждены или несовместимы")
+                }
+
                 throw AppError.restoreFailed("Backup не найден в iCloud")
             }
-            
-            var backupData: Data
-            
-            if BackupEnvelope.looksLikeEnvelope(downloadedData) {
-                let (header, payload): (BackupEnvelopeHeader, Data)
-                do {
-                    (header, payload) = try BackupEnvelope.unpack(downloadedData)
-                } catch {
-                    throw AppError.backupCorrupted
-                }
-                guard header.formatVersion == BackupEnvelopeHeader.currentFormatVersion else {
-                    throw AppError.incompatibleSchemaVersion
-                }
-                
-                backupData = payload
-                
-                if let encryptionInfo = header.encryption {
-                    switch encryptionInfo.algorithm {
-                    case "aesgcm-passphrase":
-                        guard let passphrase else {
-                            throw AppError.restoreFailed("Backup зашифрован парольной фразой. Введите парольную фразу и повторите.")
-                        }
-                        guard let kdf = encryptionInfo.kdf else {
-                            throw AppError.backupCorrupted
-                        }
-                        backupData = try PassphraseBackupEncryption.decrypt(backupData, passphrase: passphrase, kdf: kdf)
-                    case "aesgcm-keychain":
-                        let decryptor = encryption ?? KeychainBackupEncryption()
-                        do {
-                            backupData = try decryptor.decrypt(backupData)
-                        } catch {
-                            throw AppError.restoreFailed("Backup зашифрован и не может быть расшифрован на этом устройстве")
-                        }
-                    default:
-                        throw AppError.backupCorrupted
-                    }
-                }
-                
-                if let compression = header.compression {
-                    guard compression.algorithm == "lzfse" else {
-                        throw AppError.backupCorrupted
-                    }
-                    backupData = try self.decompressLZFSE(backupData)
-                    if backupData.count != compression.originalSize {
-                        throw AppError.backupCorrupted
-                    }
-                }
-            } else {
-                backupData = downloadedData
-                
-                if let encryption {
-                    do {
-                        backupData = try encryption.decrypt(backupData)
-                    } catch {
-                        throw AppError.restoreFailed("Не удалось расшифровать backup")
-                    }
-                }
-                
-                backupData = self.decompressLZFSEIfNeeded(backupData)
-            }
-            
-            let previousData = try await dataRepository.exportAllDataAsync()
-            let snapshotURL = FileManager.default.temporaryDirectory
-                .appendingPathComponent("millio-pre-restore-\(UUID().uuidString).json")
-            do {
-                try previousData.write(to: snapshotURL, options: .atomic)
-            } catch {
-                throw AppError.restoreFailed("Не удалось создать снимок данных перед восстановлением")
-            }
-            
-            do {
-                try await dataRepository.clearAllDataAsync()
-                try await dataRepository.importAllDataAsync(backupData)
-                try? FileManager.default.removeItem(at: snapshotURL)
-            } catch {
-                do {
-                    try await dataRepository.clearAllDataAsync()
-                    let snapshotData = try Data(contentsOf: snapshotURL)
-                    try await dataRepository.importAllDataAsync(snapshotData)
-                    try? FileManager.default.removeItem(at: snapshotURL)
-                } catch {
-                    throw AppError.restoreFailed("Не удалось восстановить данные после ошибки восстановления")
-                }
-                
-                throw error
-            }
-        }
         
             logger.info("Restore completed successfully")
             
@@ -278,6 +224,128 @@ actor BackupManager: BackupManagerProtocol {
             }
             CrashReporting.log("Restore failed: \(String(describing: error))")
             CrashReporting.record(error: error)
+            throw error
+        }
+    }
+
+    private func shouldTryOlderSnapshot(after error: AppError) -> Bool {
+        switch error {
+        case .backupCorrupted, .incompatibleSchemaVersion:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func restoreDownloadedBackup(
+        _ downloadedData: Data,
+        passphrase: String?,
+        encryption: BackupEncryptionProtocol?,
+        dataRepository: DataRepositoryProtocol
+    ) async throws {
+        let backupData = try decodeBackupPayload(
+            downloadedData,
+            passphrase: passphrase,
+            encryption: encryption
+        )
+        try await replaceRepositoryDataWithBackup(backupData, dataRepository: dataRepository)
+    }
+
+    private func decodeBackupPayload(
+        _ downloadedData: Data,
+        passphrase: String?,
+        encryption: BackupEncryptionProtocol?
+    ) throws -> Data {
+        var backupData: Data
+
+        if BackupEnvelope.looksLikeEnvelope(downloadedData) {
+            let (header, payload): (BackupEnvelopeHeader, Data)
+            do {
+                (header, payload) = try BackupEnvelope.unpack(downloadedData)
+            } catch {
+                throw AppError.backupCorrupted
+            }
+            guard header.formatVersion == BackupEnvelopeHeader.currentFormatVersion else {
+                throw AppError.incompatibleSchemaVersion
+            }
+
+            backupData = payload
+
+            if let encryptionInfo = header.encryption {
+                switch encryptionInfo.algorithm {
+                case "aesgcm-passphrase":
+                    guard let passphrase else {
+                        throw AppError.restoreFailed("Backup зашифрован парольной фразой. Введите парольную фразу и повторите.")
+                    }
+                    guard let kdf = encryptionInfo.kdf else {
+                        throw AppError.backupCorrupted
+                    }
+                    backupData = try PassphraseBackupEncryption.decrypt(backupData, passphrase: passphrase, kdf: kdf)
+                case "aesgcm-keychain":
+                    let decryptor = encryption ?? KeychainBackupEncryption()
+                    do {
+                        backupData = try decryptor.decrypt(backupData)
+                    } catch {
+                        throw AppError.restoreFailed("Backup зашифрован и не может быть расшифрован на этом устройстве")
+                    }
+                default:
+                    throw AppError.backupCorrupted
+                }
+            }
+
+            if let compression = header.compression {
+                guard compression.algorithm == "lzfse" else {
+                    throw AppError.backupCorrupted
+                }
+                backupData = try decompressLZFSE(backupData)
+                if backupData.count != compression.originalSize {
+                    throw AppError.backupCorrupted
+                }
+            }
+        } else {
+            backupData = downloadedData
+
+            if let encryption {
+                do {
+                    backupData = try encryption.decrypt(backupData)
+                } catch {
+                    throw AppError.restoreFailed("Не удалось расшифровать backup")
+                }
+            }
+
+            backupData = decompressLZFSEIfNeeded(backupData)
+        }
+
+        return backupData
+    }
+
+    private func replaceRepositoryDataWithBackup(
+        _ backupData: Data,
+        dataRepository: DataRepositoryProtocol
+    ) async throws {
+        let previousData = try await dataRepository.exportAllDataAsync()
+        let snapshotURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("millio-pre-restore-\(UUID().uuidString).json")
+        do {
+            try previousData.write(to: snapshotURL, options: .atomic)
+        } catch {
+            throw AppError.restoreFailed("Не удалось создать снимок данных перед восстановлением")
+        }
+
+        do {
+            try await dataRepository.clearAllDataAsync()
+            try await dataRepository.importAllDataAsync(backupData)
+            try? FileManager.default.removeItem(at: snapshotURL)
+        } catch {
+            do {
+                try await dataRepository.clearAllDataAsync()
+                let snapshotData = try Data(contentsOf: snapshotURL)
+                try await dataRepository.importAllDataAsync(snapshotData)
+                try? FileManager.default.removeItem(at: snapshotURL)
+            } catch {
+                throw AppError.restoreFailed("Не удалось восстановить данные после ошибки восстановления")
+            }
+
             throw error
         }
     }

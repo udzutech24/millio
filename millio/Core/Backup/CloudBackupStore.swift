@@ -60,6 +60,8 @@ protocol CloudBackupStoreProtocol {
     func isAvailable() async -> Bool
     func uploadBackup(_ data: Data) async throws
     func downloadLatestBackup() async throws -> Data?
+    func listBackupRecordNamesForRestore() async throws -> [String]
+    func downloadBackup(recordName: String) async throws -> Data?
     func getLatestBackupInfo() async throws -> BackupInfo?
 }
 
@@ -173,20 +175,51 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
     }
     
     func downloadLatestBackup() async throws -> Data? {
-        let privateDB = container.privateCloudDatabase
+        let candidates = try await listBackupRecordNamesForRestore()
 
-        if let data = try await downloadLatestFromIndex(using: privateDB) {
-            logger.info("Backup downloaded successfully from snapshot index, size: \(data.count) bytes")
-            return data
-        }
-
-        if let data = try await downloadLegacyLatest(using: privateDB) {
-            logger.info("Backup downloaded successfully from legacy latest, size: \(data.count) bytes")
-            return data
+        for recordName in candidates {
+            if let data = try await downloadBackup(recordName: recordName) {
+                logger.info("Backup downloaded successfully, recordName: \(recordName, privacy: .public), size: \(data.count) bytes")
+                return data
+            }
         }
 
         logger.info("No backup found in iCloud")
         return nil
+    }
+
+    func listBackupRecordNamesForRestore() async throws -> [String] {
+        let privateDB = container.privateCloudDatabase
+        let entries = try await loadIndexEntries(from: privateDB)
+
+        var orderedNames: [String] = []
+        var seen = Set<String>()
+
+        for entry in entries {
+            if seen.insert(entry.recordName).inserted {
+                orderedNames.append(entry.recordName)
+            }
+        }
+
+        let legacyName = legacyLatestRecordID.recordName
+        if seen.insert(legacyName).inserted {
+            orderedNames.append(legacyName)
+        }
+
+        return orderedNames
+    }
+
+    func downloadBackup(recordName: String) async throws -> Data? {
+        let privateDB = container.privateCloudDatabase
+        let recordID = CKRecord.ID(recordName: recordName)
+        do {
+            let record = try await privateDB.record(for: recordID)
+            return try await readBackupData(from: record)
+        } catch let error as CKError where error.code == .unknownItem {
+            return nil
+        } catch {
+            throw AppError.backupFailed(error.localizedDescription)
+        }
     }
     
     func getLatestBackupInfo() async throws -> BackupInfo? {
@@ -261,36 +294,6 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         indexRecord[indexEntriesField] = String(decoding: encoded, as: UTF8.self)
         indexRecord["updatedAt"] = now()
         _ = try await database.save(indexRecord)
-    }
-
-    private func downloadLatestFromIndex(using database: CloudBackupDatabaseProtocol) async throws -> Data? {
-        let entries = try await loadIndexEntries(from: database)
-        guard !entries.isEmpty else { return nil }
-
-        for entry in entries {
-            do {
-                let snapshotRecord = try await database.record(for: CKRecord.ID(recordName: entry.recordName))
-                if let data = try await readBackupData(from: snapshotRecord) {
-                    return data
-                }
-            } catch let error as CKError where error.code == .unknownItem {
-                continue
-            } catch {
-                throw AppError.backupFailed(error.localizedDescription)
-            }
-        }
-        return nil
-    }
-
-    private func downloadLegacyLatest(using database: CloudBackupDatabaseProtocol) async throws -> Data? {
-        do {
-            let record = try await database.record(for: legacyLatestRecordID)
-            return try await readBackupData(from: record)
-        } catch let error as CKError where error.code == .unknownItem {
-            return nil
-        } catch {
-            throw AppError.backupFailed(error.localizedDescription)
-        }
     }
 
     private func readBackupData(from record: CKRecord) async throws -> Data? {

@@ -219,11 +219,11 @@ Payload формируется так:
                      │
                      ▼
 ┌─────────────────────────────────────────────────────────┐
-│ 3. СКАЧИВАНИЕ BACKUP                                    │
-│    CloudBackupStore.downloadLatestBackup()              │
-│    • Сначала snapshot из "backup_index"                 │
-│    • Если индекс пуст/устарел — fallback "latest_backup"│
-│    • CKAsset с данными                                  │
+│ 3. ВЫБОР КАНДИДАТОВ BACKUP                              │
+│    CloudBackupStore.listBackupRecordNamesForRestore()   │
+│    • snapshot из "backup_index" (новые → старые)        │
+│    • затем "latest_backup" (legacy fallback)            │
+│    • BackupManager скачивает кандидаты по очереди       │
 └────────────────────┬────────────────────────────────────┘
                      │
                      ▼
@@ -233,6 +233,8 @@ Payload формируется так:
 │    • aesgcm-keychain → KeychainBackupEncryption.decrypt()│
 │    • aesgcm-passphrase → PassphraseBackupEncryption      │
 │      (нужна парольная фраза)                             │
+│    • Если backup поврежден/несовместим: пробуется        │
+│      следующий кандидат из истории snapshot              │
 └────────────────────┬────────────────────────────────────┘
                      │
                      ▼

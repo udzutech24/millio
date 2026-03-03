@@ -193,32 +193,131 @@ struct BackupManagerTests {
         }
     }
 
-    @Test("Restore latest treats corrupted envelope as backupCorrupted (no legacy fallback)")
-    func testRestoreLatestCorruptedEnvelope() async {
+    @Test("Restore latest falls back to older snapshot when newest snapshot is corrupted")
+    func testRestoreLatestFallsBackToOlderSnapshotOnCorruptedLatest() async throws {
         let mockCloudStore = MockCloudBackupStore()
         mockCloudStore.isAvailableResult = true
-        
-        var data = Data()
+        mockCloudStore.backupRecordNamesForRestore = ["snapshot-new", "snapshot-old"]
+
+        var corruptedData = Data()
         var headerLength = UInt32(2).bigEndian
-        withUnsafeBytes(of: &headerLength) { data.append(contentsOf: $0) }
-        data.append(Data("{x".utf8))
-        data.append(Data("payload".utf8))
-        mockCloudStore.downloadData = data
-        
+        withUnsafeBytes(of: &headerLength) { corruptedData.append(contentsOf: $0) }
+        corruptedData.append(Data("{x".utf8))
+        corruptedData.append(Data("payload".utf8))
+
+        let expectedData = Data("restored-from-older-snapshot".utf8)
+        mockCloudStore.downloadDataByRecordName = [
+            "snapshot-new": corruptedData,
+            "snapshot-old": expectedData
+        ]
+
+        let mockDataRepository = MockDataRepository()
+        mockDataRepository.exportData = Data("existing data".utf8)
+        let backupManager = BackupManager(
+            cloudStore: mockCloudStore,
+            dataRepository: mockDataRepository
+        )
+
+        try await backupManager.restoreLatest()
+
+        #expect(mockCloudStore.requestedRecordNames == ["snapshot-new", "snapshot-old"])
+        #expect(mockDataRepository.importCalled == true)
+        #expect(mockDataRepository.importedData == expectedData)
+    }
+
+    @Test("Restore latest fails with restoreFailed when all snapshot candidates are corrupted or incompatible")
+    func testRestoreLatestFailsWhenAllCandidatesAreInvalid() async {
+        let mockCloudStore = MockCloudBackupStore()
+        mockCloudStore.isAvailableResult = true
+        mockCloudStore.backupRecordNamesForRestore = ["snapshot-corrupted", "snapshot-incompatible"]
+
+        var corruptedData = Data()
+        var corruptedHeaderLength = UInt32(2).bigEndian
+        withUnsafeBytes(of: &corruptedHeaderLength) { corruptedData.append(contentsOf: $0) }
+        corruptedData.append(Data("{x".utf8))
+        corruptedData.append(Data("payload".utf8))
+
+        let incompatibleHeader = BackupEnvelopeHeader(
+            formatVersion: BackupEnvelopeHeader.currentFormatVersion + 1,
+            metadata: BackupMetadata(version: .current, timestamp: Date(), schemaVersion: "2.0", modelCount: 0),
+            compression: nil,
+            encryption: nil
+        )
+        let incompatibleData = try? BackupEnvelope.pack(header: incompatibleHeader, payload: Data("payload".utf8))
+
+        if let incompatibleData {
+            mockCloudStore.downloadDataByRecordName = [
+                "snapshot-corrupted": corruptedData,
+                "snapshot-incompatible": incompatibleData
+            ]
+        }
+
         let mockDataRepository = MockDataRepository()
         let backupManager = BackupManager(
             cloudStore: mockCloudStore,
             dataRepository: mockDataRepository
         )
-        
+
         do {
             try await backupManager.restoreLatest()
             #expect(Bool(false))
         } catch let error as AppError {
-            #expect(error == .backupCorrupted)
+            switch error {
+            case .restoreFailed:
+                #expect(true)
+            default:
+                #expect(Bool(false))
+            }
         } catch {
             #expect(Bool(false))
         }
+
+        #expect(mockCloudStore.requestedRecordNames == ["snapshot-corrupted", "snapshot-incompatible"])
+        #expect(mockDataRepository.importCalled == false)
+    }
+
+    @Test("Restore latest does not fallback to older snapshots when passphrase is required")
+    func testRestoreLatestStopsOnPassphraseRequiredError() async throws {
+        let passphrase = "test-passphrase"
+        let mockCloudStore = MockCloudBackupStore()
+        mockCloudStore.isAvailableResult = true
+        mockCloudStore.backupRecordNamesForRestore = ["snapshot-passphrase", "snapshot-plain"]
+
+        let plaintext = Data("secret backup payload".utf8)
+        let encrypted = try PassphraseBackupEncryption.encrypt(plaintext, passphrase: passphrase)
+        let passphraseHeader = BackupEnvelopeHeader(
+            formatVersion: BackupEnvelopeHeader.currentFormatVersion,
+            metadata: BackupMetadata(version: .current, timestamp: Date(), schemaVersion: "2.0", modelCount: 0),
+            compression: nil,
+            encryption: BackupEncryptionInfo(algorithm: "aesgcm-passphrase", kdf: encrypted.kdf)
+        )
+        let passphraseProtectedData = try BackupEnvelope.pack(header: passphraseHeader, payload: encrypted.encrypted)
+
+        mockCloudStore.downloadDataByRecordName = [
+            "snapshot-passphrase": passphraseProtectedData,
+            "snapshot-plain": Data("plain-fallback".utf8)
+        ]
+
+        let mockDataRepository = MockDataRepository()
+        let backupManager = BackupManager(
+            cloudStore: mockCloudStore,
+            dataRepository: mockDataRepository
+        )
+
+        do {
+            try await backupManager.restoreLatest(passphrase: nil)
+            #expect(Bool(false))
+        } catch let error as AppError {
+            switch error {
+            case .restoreFailed(let message):
+                #expect(message.contains("парольной фразой"))
+            default:
+                #expect(Bool(false))
+            }
+        }
+
+        #expect(mockCloudStore.requestedRecordNames == ["snapshot-passphrase"])
+        #expect(mockDataRepository.importCalled == false)
     }
     
     @Test("Last backup info returns correct information")
@@ -255,6 +354,10 @@ final class MockCloudBackupStore: CloudBackupStoreProtocol {
     var uploadCalled = false
     var downloadCalled = false
     var downloadData: Data?
+    var backupRecordNamesForRestore: [String] = ["latest_backup"]
+    var requestedRecordNames: [String] = []
+    var downloadDataByRecordName: [String: Data] = [:]
+    var downloadErrorsByRecordName: [String: Error] = [:]
     var backupInfo: BackupInfo?
     var uploadedData: Data?
     
@@ -270,6 +373,25 @@ final class MockCloudBackupStore: CloudBackupStoreProtocol {
     func downloadLatestBackup() async throws -> Data? {
         downloadCalled = true
         return downloadData
+    }
+
+    func listBackupRecordNamesForRestore() async throws -> [String] {
+        backupRecordNamesForRestore
+    }
+
+    func downloadBackup(recordName: String) async throws -> Data? {
+        downloadCalled = true
+        requestedRecordNames.append(recordName)
+        if let error = downloadErrorsByRecordName[recordName] {
+            throw error
+        }
+        if let data = downloadDataByRecordName[recordName] {
+            return data
+        }
+        if recordName == "latest_backup" {
+            return downloadData
+        }
+        return nil
     }
     
     func getLatestBackupInfo() async throws -> BackupInfo? {
