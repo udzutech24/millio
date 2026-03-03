@@ -211,7 +211,7 @@ private struct CashflowContentView: View {
                 CashflowActionButton(
                     accessibilityLabel: "Доход",
                     title: "Доход",
-                    icon: "plus",
+                    icon: QuickActionIcons.income,
                     gradientColors: AppColors.incomeGradient,
                     style: .primary,
                     compactMetrics: useCompactMetrics
@@ -223,7 +223,7 @@ private struct CashflowContentView: View {
                 CashflowActionButton(
                     accessibilityLabel: "Расход",
                     title: "Расход",
-                    icon: "minus",
+                    icon: QuickActionIcons.expense,
                     gradientColors: AppColors.expenseGradient,
                     style: .secondary,
                     compactMetrics: useCompactMetrics
@@ -235,7 +235,7 @@ private struct CashflowContentView: View {
                 CashflowActionButton(
                     accessibilityLabel: "Перевод",
                     title: "Перевод",
-                    icon: "arrow.left.arrow.right",
+                    icon: QuickActionIcons.transfer,
                     gradientColors: AppColors.cashflowGradient,
                     style: .secondary,
                     compactMetrics: useCompactMetrics
