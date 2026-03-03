@@ -125,9 +125,10 @@ try await backupManager.backupNow()
 ┌─────────────────────────────────────────────────────────┐
 │ 7. ЗАГРУЗКА В CLOUDKIT                                  │
 │    CloudBackupStore.uploadBackup()                      │
-│    • Record Type: "AppBackup"                           │
-│    • Record ID: "latest_backup"                         │
-│    • Заменяет предыдущий backup                         │
+│    • Создается immutable snapshot: "snapshot_*"         │
+│    • Обновляется индекс: "backup_index"                 │
+│    • Retention: хранятся последние 3 snapshot           │
+│    • "latest_backup" поддерживается как legacy fallback │
 └────────────────────┬────────────────────────────────────┘
                      │
                      ▼
@@ -173,7 +174,7 @@ Payload формируется так:
 Экспорт содержит **metadata** и массив моделей:
 
 - `BackupMetadata`:
-  - `version` (`BackupVersion`, сейчас `1.0.0`)
+  - `version` (`BackupVersion`, сейчас `2.0.0`)
   - `timestamp`
   - `schemaVersion` (строка, сейчас `"2.0"`)
   - `modelCount`
@@ -195,6 +196,7 @@ Payload формируется так:
 
 - Restore **не запускается автоматически** при старте приложения
 - Экран восстановления **открывается вручную** из «Профиль → Восстановить данные»
+- Restore доступен **даже если backup-toggle выключен** (toggle влияет только на автосоздание backup)
 - Состояние `.restoring` существует, но сейчас не устанавливается автоматически
 
 #### Технически возможно
@@ -219,7 +221,8 @@ Payload формируется так:
 ┌─────────────────────────────────────────────────────────┐
 │ 3. СКАЧИВАНИЕ BACKUP                                    │
 │    CloudBackupStore.downloadLatestBackup()              │
-│    • CKRecord "latest_backup"                           │
+│    • Сначала snapshot из "backup_index"                 │
+│    • Если индекс пуст/устарел — fallback "latest_backup"│
 │    • CKAsset с данными                                  │
 └────────────────────┬────────────────────────────────────┘
                      │
@@ -316,16 +319,18 @@ launching
 1. Включить резервное копирование в профиле
 2. Создать тестовые данные (карты/группы)
 3. Перевести приложение в фон
-4. Проверить запись в CloudKit Console (Record Type `AppBackup`, record `latest_backup`)
+4. Проверить запись в CloudKit Console:
+   - `AppBackupIndex` / `backup_index`
+   - `AppBackup` / `snapshot_*` (последние 3)
+   - `AppBackup` / `latest_backup` (legacy fallback)
 
 ### 5.3. Тест-кейс 2: Restore после переустановки
 
 1. Создать backup (как в тест-кейсе 1)
 2. Удалить и переустановить приложение
 3. Пройти онбординг
-4. Включить backup в профиле (чтобы загрузить `lastBackupDate`)
-5. Перейти «Профиль → Восстановить данные»
-6. Нажать «Восстановить» и проверить, что данные восстановились
+4. Перейти «Профиль → Восстановить данные»
+5. Нажать «Восстановить» и проверить, что данные восстановились
 
 ### 5.4. Тест-кейс 3: Restore поверх локальных данных
 
@@ -344,7 +349,7 @@ launching
 
 - **iCloud недоступен:** отключить iCloud, попробовать backup
 - **Сеть недоступна:** включить авиарежим, проверить retry
-- **Backup не найден:** удалить запись `latest_backup` в CloudKit Console
+- **Backup не найден:** удалить `backup_index` и `latest_backup` в CloudKit Console
 
 ---
 
@@ -362,11 +367,9 @@ launching
 
 ## 7. Известные ограничения и TODO
 
-1. **Нет UI для ручного backup**
-2. **Нет UI для включения шифрования** (есть только флаг в `SettingsManager`)
-3. **Нет индикатора прогресса backup** (есть `BackupMonitor`, но он не подключен к UI)
-4. **Нет истории backup** (хранится только один `latest_backup`)
-5. **`checkRestoreNeeded()` не используется** — auto-restore пока отключен
+1. **Нет индикатора прогресса фонового backup** (`BackupMonitor` не подключен к ключевым пользовательским сценариям)
+2. **История ограничена retention=3** (без UI выбора конкретного snapshot для restore)
+3. **`checkRestoreNeeded()` не используется** — auto-restore пока отключен
 
 ---
 

@@ -12,8 +12,8 @@ final class SwitchingBackupManager: BackupManagerProtocol {
     }
     
     func isAvailable() async -> Bool {
-        let enabled = await MainActor.run { appState.isBackupEnabled }
-        return await (enabled ? enabledManager.isAvailable() : disabledManager.isAvailable())
+        // Доступность iCloud/backup должна проверяться всегда, даже если автобэкап выключен.
+        await enabledManager.isAvailable()
     }
     
     func backupNow() async throws {
@@ -35,26 +35,17 @@ final class SwitchingBackupManager: BackupManagerProtocol {
     }
     
     func restoreLatest() async throws {
-        let enabled = await MainActor.run { appState.isBackupEnabled }
-        if enabled {
-            try await enabledManager.restoreLatest()
-        } else {
-            try await disabledManager.restoreLatest()
-        }
+        // Восстановление не зависит от тумблера автосоздания backup.
+        try await enabledManager.restoreLatest()
     }
     
     func restoreLatest(passphrase: String?) async throws {
-        let enabled = await MainActor.run { appState.isBackupEnabled }
-        if enabled {
-            try await enabledManager.restoreLatest(passphrase: passphrase)
-        } else {
-            try await disabledManager.restoreLatest(passphrase: passphrase)
-        }
+        // Восстановление не зависит от тумблера автосоздания backup.
+        try await enabledManager.restoreLatest(passphrase: passphrase)
     }
     
     func lastBackupInfo() async -> BackupInfo? {
-        let enabled = await MainActor.run { appState.isBackupEnabled }
-        return await (enabled ? enabledManager.lastBackupInfo() : disabledManager.lastBackupInfo())
+        // Информация о backup нужна и при выключенном автобэкапе (экран восстановления).
+        await enabledManager.lastBackupInfo()
     }
 }
-

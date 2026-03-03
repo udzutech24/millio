@@ -17,6 +17,7 @@ protocol CloudBackupContainerProtocol {
 protocol CloudBackupDatabaseProtocol {
     func record(for recordID: CKRecord.ID) async throws -> CKRecord
     func save(_ record: CKRecord) async throws -> CKRecord
+    func deleteRecord(withID recordID: CKRecord.ID) async throws
 }
 
 struct CKContainerAdapter: CloudBackupContainerProtocol {
@@ -49,6 +50,10 @@ struct CKDatabaseAdapter: CloudBackupDatabaseProtocol {
     func save(_ record: CKRecord) async throws -> CKRecord {
         try await database.save(record)
     }
+
+    func deleteRecord(withID recordID: CKRecord.ID) async throws {
+        _ = try await database.deleteRecord(withID: recordID)
+    }
 }
 
 protocol CloudBackupStoreProtocol {
@@ -61,15 +66,39 @@ protocol CloudBackupStoreProtocol {
 final class CloudBackupStore: CloudBackupStoreProtocol {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "CloudBackupStore")
     private let container: CloudBackupContainerProtocol
-    private let recordType = "AppBackup"
-    private let recordID = CKRecord.ID(recordName: "latest_backup")
-    
-    init(container: CKContainer = .default()) {
-        self.container = CKContainerAdapter(container: container)
+    private let snapshotRecordType = "AppBackup"
+    private let legacyLatestRecordID = CKRecord.ID(recordName: "latest_backup")
+    private let indexRecordType = "AppBackupIndex"
+    private let indexRecordID = CKRecord.ID(recordName: "backup_index")
+    private let indexEntriesField = "entriesJSON"
+    private let maxSnapshots: Int
+    private let now: () -> Date
+
+    private struct BackupIndexEntry: Codable {
+        let recordName: String
+        let date: Date
+        let size: Int64
+        let version: String
     }
     
-    init(container: CloudBackupContainerProtocol) {
+    init(
+        container: CKContainer = .default(),
+        maxSnapshots: Int = 3,
+        now: @escaping () -> Date = Date.init
+    ) {
+        self.container = CKContainerAdapter(container: container)
+        self.maxSnapshots = max(1, maxSnapshots)
+        self.now = now
+    }
+    
+    init(
+        container: CloudBackupContainerProtocol,
+        maxSnapshots: Int = 3,
+        now: @escaping () -> Date = Date.init
+    ) {
         self.container = container
+        self.maxSnapshots = max(1, maxSnapshots)
+        self.now = now
     }
     
     func isAvailable() async -> Bool {
@@ -84,6 +113,8 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
     
     func uploadBackup(_ data: Data) async throws {
         let privateDB = container.privateCloudDatabase
+        let backupDate = now()
+        let backupVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         
         // Создаём временный файл для CKAsset
         let tempURL = FileManager.default.temporaryDirectory
@@ -93,77 +124,227 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         try data.write(to: tempURL)
         defer { try? FileManager.default.removeItem(at: tempURL) }
         
-        let asset = CKAsset(fileURL: tempURL)
-        let record: CKRecord
-        do {
-            record = try await privateDB.record(for: recordID)
-        } catch let error as CKError where error.code == .unknownItem {
-            record = CKRecord(recordType: recordType, recordID: recordID)
-        } catch {
-            throw AppError.backupFailed(error.localizedDescription)
+        let snapshotRecordID = CKRecord.ID(recordName: makeSnapshotRecordName(on: backupDate))
+        let snapshotRecord = CKRecord(recordType: snapshotRecordType, recordID: snapshotRecordID)
+        snapshotRecord["backupData"] = CKAsset(fileURL: tempURL)
+        snapshotRecord["backupDate"] = backupDate
+        snapshotRecord["backupVersion"] = backupVersion
+        snapshotRecord["backupSize"] = Int64(data.count)
+        _ = try await privateDB.save(snapshotRecord)
+
+        var entries = try await loadIndexEntries(from: privateDB)
+        entries.removeAll { $0.recordName == snapshotRecordID.recordName }
+        entries.insert(
+            BackupIndexEntry(
+                recordName: snapshotRecordID.recordName,
+                date: backupDate,
+                size: Int64(data.count),
+                version: backupVersion
+            ),
+            at: 0
+        )
+
+        let staleEntries = Array(entries.dropFirst(maxSnapshots))
+        entries = Array(entries.prefix(maxSnapshots))
+        try await saveIndexEntries(entries, to: privateDB)
+
+        for stale in staleEntries {
+            do {
+                try await privateDB.deleteRecord(withID: CKRecord.ID(recordName: stale.recordName))
+            } catch {
+                logger.warning("Failed to delete stale snapshot '\(stale.recordName, privacy: .public)': \(error.localizedDescription)")
+            }
         }
-        record["backupData"] = asset
-        record["backupDate"] = Date()
-        record["backupVersion"] = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-        record["backupSize"] = Int64(data.count)
+
+        do {
+            try await saveLegacyLatestRecord(
+                dataSize: Int64(data.count),
+                backupDate: backupDate,
+                backupVersion: backupVersion,
+                assetURL: tempURL,
+                database: privateDB
+            )
+        } catch {
+            // Legacy latest используется только как fallback/совместимость.
+            logger.warning("Failed to update legacy latest backup record: \(error.localizedDescription)")
+        }
         
-        try await privateDB.save(record)
         logger.info("Backup uploaded successfully")
     }
     
     func downloadLatestBackup() async throws -> Data? {
         let privateDB = container.privateCloudDatabase
-        
-        do {
-            let record = try await privateDB.record(for: recordID)
-            
-            guard let asset = record["backupData"] as? CKAsset else {
-                logger.warning("No backup asset found in record")
-                return nil
-            }
-            
-            guard let fileURL = asset.fileURL else {
-                throw AppError.backupCorrupted
-            }
-            
-            let data = try await Task.detached(priority: .utility) {
-                try Data(contentsOf: fileURL)
-            }.value
-            logger.info("Backup downloaded successfully, size: \(data.count) bytes")
+
+        if let data = try await downloadLatestFromIndex(using: privateDB) {
+            logger.info("Backup downloaded successfully from snapshot index, size: \(data.count) bytes")
             return data
-            
-        } catch let error as CKError {
-            if error.code == .unknownItem {
-                logger.info("No backup found in iCloud")
-                return nil
-            }
-            throw AppError.backupFailed(error.localizedDescription)
-        } catch {
-            throw AppError.backupFailed(error.localizedDescription)
         }
+
+        if let data = try await downloadLegacyLatest(using: privateDB) {
+            logger.info("Backup downloaded successfully from legacy latest, size: \(data.count) bytes")
+            return data
+        }
+
+        logger.info("No backup found in iCloud")
+        return nil
     }
     
     func getLatestBackupInfo() async throws -> BackupInfo? {
         let privateDB = container.privateCloudDatabase
-        
+
+        if let info = try await latestInfoFromIndex(using: privateDB) {
+            return info
+        }
+
+        if let info = try await legacyLatestInfo(using: privateDB) {
+            return info
+        }
+
+        return nil
+    }
+
+    private func makeSnapshotRecordName(on date: Date) -> String {
+        "snapshot_\(Int(date.timeIntervalSince1970 * 1000))_\(UUID().uuidString)"
+    }
+
+    private func saveLegacyLatestRecord(
+        dataSize: Int64,
+        backupDate: Date,
+        backupVersion: String,
+        assetURL: URL,
+        database: CloudBackupDatabaseProtocol
+    ) async throws {
+        let legacyRecord: CKRecord
         do {
-            let record = try await privateDB.record(for: recordID)
-            
-            guard let date = record["backupDate"] as? Date,
-                  let size = record["backupSize"] as? Int64,
-                  let version = record["backupVersion"] as? String else {
-                return nil
-            }
-            
-            return BackupInfo(date: date, size: size, version: version)
-            
-        } catch let error as CKError {
-            if error.code == .unknownItem {
-                return nil
-            }
-            throw AppError.backupFailed(error.localizedDescription)
+            legacyRecord = try await database.record(for: legacyLatestRecordID)
+        } catch let error as CKError where error.code == .unknownItem {
+            legacyRecord = CKRecord(recordType: snapshotRecordType, recordID: legacyLatestRecordID)
         } catch {
             throw AppError.backupFailed(error.localizedDescription)
         }
+
+        legacyRecord["backupData"] = CKAsset(fileURL: assetURL)
+        legacyRecord["backupDate"] = backupDate
+        legacyRecord["backupVersion"] = backupVersion
+        legacyRecord["backupSize"] = dataSize
+        _ = try await database.save(legacyRecord)
+    }
+
+    private func loadIndexEntries(from database: CloudBackupDatabaseProtocol) async throws -> [BackupIndexEntry] {
+        do {
+            let indexRecord = try await database.record(for: indexRecordID)
+            guard let raw = indexRecord[indexEntriesField] as? String else {
+                return []
+            }
+            guard let data = raw.data(using: .utf8) else {
+                return []
+            }
+            return (try? JSONDecoder().decode([BackupIndexEntry].self, from: data)) ?? []
+        } catch let error as CKError where error.code == .unknownItem {
+            return []
+        } catch {
+            throw AppError.backupFailed(error.localizedDescription)
+        }
+    }
+
+    private func saveIndexEntries(_ entries: [BackupIndexEntry], to database: CloudBackupDatabaseProtocol) async throws {
+        let indexRecord: CKRecord
+        do {
+            indexRecord = try await database.record(for: indexRecordID)
+        } catch let error as CKError where error.code == .unknownItem {
+            indexRecord = CKRecord(recordType: indexRecordType, recordID: indexRecordID)
+        } catch {
+            throw AppError.backupFailed(error.localizedDescription)
+        }
+
+        let encoded = try JSONEncoder().encode(entries)
+        indexRecord[indexEntriesField] = String(decoding: encoded, as: UTF8.self)
+        indexRecord["updatedAt"] = now()
+        _ = try await database.save(indexRecord)
+    }
+
+    private func downloadLatestFromIndex(using database: CloudBackupDatabaseProtocol) async throws -> Data? {
+        let entries = try await loadIndexEntries(from: database)
+        guard !entries.isEmpty else { return nil }
+
+        for entry in entries {
+            do {
+                let snapshotRecord = try await database.record(for: CKRecord.ID(recordName: entry.recordName))
+                if let data = try await readBackupData(from: snapshotRecord) {
+                    return data
+                }
+            } catch let error as CKError where error.code == .unknownItem {
+                continue
+            } catch {
+                throw AppError.backupFailed(error.localizedDescription)
+            }
+        }
+        return nil
+    }
+
+    private func downloadLegacyLatest(using database: CloudBackupDatabaseProtocol) async throws -> Data? {
+        do {
+            let record = try await database.record(for: legacyLatestRecordID)
+            return try await readBackupData(from: record)
+        } catch let error as CKError where error.code == .unknownItem {
+            return nil
+        } catch {
+            throw AppError.backupFailed(error.localizedDescription)
+        }
+    }
+
+    private func readBackupData(from record: CKRecord) async throws -> Data? {
+        guard let asset = record["backupData"] as? CKAsset else {
+            return nil
+        }
+
+        guard let fileURL = asset.fileURL else {
+            return nil
+        }
+
+        return try await Task.detached(priority: .utility) {
+            try Data(contentsOf: fileURL)
+        }.value
+    }
+
+    private func latestInfoFromIndex(using database: CloudBackupDatabaseProtocol) async throws -> BackupInfo? {
+        let entries = try await loadIndexEntries(from: database)
+        guard !entries.isEmpty else { return nil }
+
+        for entry in entries {
+            do {
+                let snapshotRecord = try await database.record(for: CKRecord.ID(recordName: entry.recordName))
+                if let info = backupInfo(from: snapshotRecord) {
+                    return info
+                }
+                return BackupInfo(date: entry.date, size: entry.size, version: entry.version)
+            } catch let error as CKError where error.code == .unknownItem {
+                continue
+            } catch {
+                throw AppError.backupFailed(error.localizedDescription)
+            }
+        }
+
+        return nil
+    }
+
+    private func legacyLatestInfo(using database: CloudBackupDatabaseProtocol) async throws -> BackupInfo? {
+        do {
+            let record = try await database.record(for: legacyLatestRecordID)
+            return backupInfo(from: record)
+        } catch let error as CKError where error.code == .unknownItem {
+            return nil
+        } catch {
+            throw AppError.backupFailed(error.localizedDescription)
+        }
+    }
+
+    private func backupInfo(from record: CKRecord) -> BackupInfo? {
+        guard let date = record["backupDate"] as? Date,
+              let size = record["backupSize"] as? Int64,
+              let version = record["backupVersion"] as? String else {
+            return nil
+        }
+        return BackupInfo(date: date, size: size, version: version)
     }
 }

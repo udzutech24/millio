@@ -42,30 +42,57 @@ actor SpyBackupManager: BackupManagerProtocol {
 }
 
 struct SwitchingBackupManagerTests {
-    @Test("SwitchingBackupManager routes calls based on appState.isBackupEnabled")
-    func testSwitchingBackupManagerRoutesCalls() async throws {
+    @Test("SwitchingBackupManager routes only backup creation by appState.isBackupEnabled")
+    func testSwitchingBackupManagerRoutesBackupCreationByToggle() async throws {
         let appState = await MainActor.run { AppState() }
         let enabledSpy = SpyBackupManager(available: true)
         let disabledSpy = SpyBackupManager(available: false)
         let manager = SwitchingBackupManager(appState: appState, enabled: enabledSpy, disabled: disabledSpy)
         
         await MainActor.run { appState.isBackupEnabled = false }
-        _ = await manager.isAvailable()
         try await manager.backupNow()
         
         await MainActor.run { appState.isBackupEnabled = true }
-        _ = await manager.isAvailable()
         try await manager.backupNow()
         
-        let enabledAvailableCalls = await enabledSpy.isAvailableCalls
-        let disabledAvailableCalls = await disabledSpy.isAvailableCalls
         let enabledBackupCalls = await enabledSpy.backupCalls
         let disabledBackupCalls = await disabledSpy.backupCalls
         
-        #expect(disabledAvailableCalls == 1)
-        #expect(enabledAvailableCalls == 1)
         #expect(disabledBackupCalls == 1)
         #expect(enabledBackupCalls == 1)
     }
-}
 
+    @Test("SwitchingBackupManager always uses enabled manager for restore and backup status")
+    func testSwitchingBackupManagerAlwaysUsesEnabledForRestoreAndStatus() async throws {
+        let appState = await MainActor.run { AppState() }
+        let enabledSpy = SpyBackupManager(available: true)
+        let disabledSpy = SpyBackupManager(available: false)
+        let manager = SwitchingBackupManager(appState: appState, enabled: enabledSpy, disabled: disabledSpy)
+
+        await MainActor.run { appState.isBackupEnabled = false }
+        _ = await manager.isAvailable()
+        _ = await manager.lastBackupInfo()
+        try await manager.restoreLatest()
+        try await manager.restoreLatest(passphrase: "secret")
+
+        await MainActor.run { appState.isBackupEnabled = true }
+        _ = await manager.isAvailable()
+        _ = await manager.lastBackupInfo()
+        try await manager.restoreLatest()
+        try await manager.restoreLatest(passphrase: nil)
+
+        let enabledAvailableCalls = await enabledSpy.isAvailableCalls
+        let disabledAvailableCalls = await disabledSpy.isAvailableCalls
+        let enabledRestoreCalls = await enabledSpy.restoreCalls
+        let disabledRestoreCalls = await disabledSpy.restoreCalls
+        let enabledInfoCalls = await enabledSpy.infoCalls
+        let disabledInfoCalls = await disabledSpy.infoCalls
+
+        #expect(enabledAvailableCalls == 2)
+        #expect(disabledAvailableCalls == 0)
+        #expect(enabledInfoCalls == 2)
+        #expect(disabledInfoCalls == 0)
+        #expect(enabledRestoreCalls == 4)
+        #expect(disabledRestoreCalls == 0)
+    }
+}

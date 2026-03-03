@@ -33,6 +33,7 @@ final class SettingsManager: SettingsManagerProtocol {
     private let primaryCurrencyCodeKey = "primaryCurrencyCode"
     private let favoriteCurrencyCodesKey = "favoriteCurrencyCodes"
     private static let legacyDefaultProfileDisplayNames: Set<String> = ["Гость", "Guest"]
+    private let defaults: UserDefaults
 
     static var defaultProfileDisplayName: String {
         String(
@@ -48,57 +49,57 @@ final class SettingsManager: SettingsManagerProtocol {
     var isBackupEnabled: Bool {
         get {
             // По умолчанию backup отключен
-            UserDefaults.standard.object(forKey: backupEnabledKey) as? Bool ?? false
+            defaults.object(forKey: backupEnabledKey) as? Bool ?? false
         }
         set {
-            UserDefaults.standard.set(newValue, forKey: backupEnabledKey)
+            defaults.set(newValue, forKey: backupEnabledKey)
             logger.info("Backup enabled: \(newValue)")
         }
     }
     
     var isEncryptionEnabled: Bool {
         get {
-            UserDefaults.standard.object(forKey: encryptionEnabledKey) as? Bool ?? false
+            defaults.object(forKey: encryptionEnabledKey) as? Bool ?? false
         }
         set {
-            UserDefaults.standard.set(newValue, forKey: encryptionEnabledKey)
+            defaults.set(newValue, forKey: encryptionEnabledKey)
             logger.info("Backup encryption enabled: \(newValue)")
         }
     }
     
     var isDailyReminderEnabled: Bool {
         get {
-            UserDefaults.standard.object(forKey: dailyReminderEnabledKey) as? Bool ?? false
+            defaults.object(forKey: dailyReminderEnabledKey) as? Bool ?? false
         }
         set {
-            UserDefaults.standard.set(newValue, forKey: dailyReminderEnabledKey)
+            defaults.set(newValue, forKey: dailyReminderEnabledKey)
             logger.info("Daily reminder enabled: \(newValue)")
         }
     }
 
     var isAppLockEnabled: Bool {
         get {
-            UserDefaults.standard.object(forKey: appLockEnabledKey) as? Bool ?? false
+            defaults.object(forKey: appLockEnabledKey) as? Bool ?? false
         }
         set {
-            UserDefaults.standard.set(newValue, forKey: appLockEnabledKey)
+            defaults.set(newValue, forKey: appLockEnabledKey)
             logger.info("App lock enabled: \(newValue)")
         }
     }
 
     var isBiometricUnlockEnabled: Bool {
         get {
-            UserDefaults.standard.object(forKey: biometricUnlockEnabledKey) as? Bool ?? false
+            defaults.object(forKey: biometricUnlockEnabledKey) as? Bool ?? false
         }
         set {
-            UserDefaults.standard.set(newValue, forKey: biometricUnlockEnabledKey)
+            defaults.set(newValue, forKey: biometricUnlockEnabledKey)
             logger.info("Biometric unlock enabled: \(newValue)")
         }
     }
     
     var profileDisplayName: String {
         get {
-            guard let stored = UserDefaults.standard.string(forKey: profileDisplayNameKey) else {
+            guard let stored = defaults.string(forKey: profileDisplayNameKey) else {
                 return Self.defaultProfileDisplayName
             }
 
@@ -114,17 +115,17 @@ final class SettingsManager: SettingsManagerProtocol {
             return stored
         }
         set {
-            UserDefaults.standard.set(newValue, forKey: profileDisplayNameKey)
+            defaults.set(newValue, forKey: profileDisplayNameKey)
             logger.info("Profile display name updated")
         }
     }
     
     var profileAvatarFilePath: String? {
         get {
-            UserDefaults.standard.string(forKey: profileAvatarFilePathKey)
+            defaults.string(forKey: profileAvatarFilePathKey)
         }
         set {
-            UserDefaults.standard.set(newValue, forKey: profileAvatarFilePathKey)
+            defaults.set(newValue, forKey: profileAvatarFilePathKey)
             logger.info("Profile avatar path updated")
         }
     }
@@ -133,21 +134,21 @@ final class SettingsManager: SettingsManagerProtocol {
     /// Хранится в UserDefaults, чтобы быть доступной на уровне Core.
     var primaryCurrencyCode: String {
         get {
-            UserDefaults.standard.string(forKey: primaryCurrencyCodeKey) ?? Self.defaultPrimaryCurrencyCode
+            defaults.string(forKey: primaryCurrencyCodeKey) ?? Self.defaultPrimaryCurrencyCode
         }
         set {
             let normalized = newValue.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
             guard !normalized.isEmpty else { return }
-            let previousPrimary = UserDefaults.standard.string(forKey: primaryCurrencyCodeKey) ?? Self.defaultPrimaryCurrencyCode
+            let previousPrimary = defaults.string(forKey: primaryCurrencyCodeKey) ?? Self.defaultPrimaryCurrencyCode
             let normalizedPrevious = previousPrimary.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-            UserDefaults.standard.set(normalized, forKey: primaryCurrencyCodeKey)
-            var rawFavorites = UserDefaults.standard.array(forKey: favoriteCurrencyCodesKey) as? [String] ?? Self.defaultFavoriteCurrencyCodes
+            defaults.set(normalized, forKey: primaryCurrencyCodeKey)
+            var rawFavorites = defaults.array(forKey: favoriteCurrencyCodesKey) as? [String] ?? Self.defaultFavoriteCurrencyCodes
             if !normalizedPrevious.isEmpty, normalizedPrevious != normalized {
                 // При смене основной валюты старая остается доступной в "Избранных".
                 rawFavorites.insert(normalizedPrevious, at: 0)
             }
             let sanitizedFavorites = Self.normalizeFavoriteCurrencyCodes(rawFavorites, primaryCode: normalized)
-            UserDefaults.standard.set(sanitizedFavorites, forKey: favoriteCurrencyCodesKey)
+            defaults.set(sanitizedFavorites, forKey: favoriteCurrencyCodesKey)
             logger.info("Primary currency code updated: \(normalized)")
         }
     }
@@ -156,12 +157,12 @@ final class SettingsManager: SettingsManagerProtocol {
     /// Хранятся в UserDefaults (строки ISO-кодов в верхнем регистре).
     var favoriteCurrencyCodes: [String] {
         get {
-            let raw = UserDefaults.standard.array(forKey: favoriteCurrencyCodesKey) as? [String] ?? Self.defaultFavoriteCurrencyCodes
+            let raw = defaults.array(forKey: favoriteCurrencyCodesKey) as? [String] ?? Self.defaultFavoriteCurrencyCodes
             return Self.normalizeFavoriteCurrencyCodes(raw, primaryCode: primaryCurrencyCode)
         }
         set {
             let normalized = Self.normalizeFavoriteCurrencyCodes(newValue, primaryCode: primaryCurrencyCode)
-            UserDefaults.standard.set(normalized, forKey: favoriteCurrencyCodesKey)
+            defaults.set(normalized, forKey: favoriteCurrencyCodesKey)
             logger.info("Favorite currency codes updated: \(normalized.count)")
         }
     }
@@ -192,5 +193,7 @@ final class SettingsManager: SettingsManagerProtocol {
         return Array(normalized.prefix(maxFavoriteCurrencyCodes))
     }
     
-    private init() {}
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
 }

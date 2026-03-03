@@ -473,6 +473,66 @@ struct CloudBackupStoreTests {
         #expect(info?.size == Int64(999))
         #expect(info?.version == "2.0.0")
     }
+
+    @Test("uploadBackup хранит историю snapshot и удаляет устаревшие записи по retention")
+    func testUploadBackupKeepsSnapshotHistoryWithRetention() async throws {
+        let db = FakeCloudBackupDatabase()
+        let store = CloudBackupStore(
+            container: FakeCloudBackupContainer(accountStatusResult: .available, database: db),
+            maxSnapshots: 3
+        )
+
+        for index in 1...4 {
+            try await store.uploadBackup(Data("payload-\(index)".utf8))
+        }
+
+        let indexRecord = db.recordsByName["backup_index"]
+        let entriesJSON = indexRecord?["entriesJSON"] as? String
+        let entriesData = try #require(entriesJSON?.data(using: .utf8))
+        let entries = try #require(try JSONSerialization.jsonObject(with: entriesData) as? [[String: Any]])
+
+        #expect(entries.count == 3)
+        #expect(db.deletedRecordNames.count == 1)
+        #expect(db.deletedRecordNames.first?.hasPrefix("snapshot_") == true)
+
+        let latest = try await store.downloadLatestBackup()
+        #expect(latest == Data("payload-4".utf8))
+    }
+
+    @Test("downloadLatestBackup fallback к legacy latest, если index указывает на отсутствующие snapshots")
+    func testDownloadLatestBackupFallsBackToLegacyWhenIndexIsStale() async throws {
+        let db = FakeCloudBackupDatabase()
+
+        let staleEntries: [[String: Any]] = [[
+            "recordName": "snapshot_missing_1",
+            "date": Date().timeIntervalSince1970,
+            "size": Int64(10),
+            "version": "2.0.0"
+        ]]
+        let staleEntriesData = try JSONSerialization.data(withJSONObject: staleEntries)
+        let indexRecord = CKRecord(recordType: "AppBackupIndex", recordID: CKRecord.ID(recordName: "backup_index"))
+        indexRecord["entriesJSON"] = String(decoding: staleEntriesData, as: UTF8.self)
+        db.recordsByName["backup_index"] = indexRecord
+
+        let payload = Data("legacy-fallback".utf8)
+        let payloadURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("backup")
+        try payload.write(to: payloadURL)
+        defer { try? FileManager.default.removeItem(at: payloadURL) }
+
+        let legacyRecord = CKRecord(recordType: "AppBackup", recordID: CKRecord.ID(recordName: "latest_backup"))
+        legacyRecord["backupData"] = CKAsset(fileURL: payloadURL)
+        legacyRecord["backupDate"] = Date()
+        legacyRecord["backupSize"] = Int64(payload.count)
+        legacyRecord["backupVersion"] = "2.0.0"
+        db.recordsByName["latest_backup"] = legacyRecord
+
+        let store = CloudBackupStore(container: FakeCloudBackupContainer(accountStatusResult: .available, database: db))
+        let downloaded = try await store.downloadLatestBackup()
+
+        #expect(downloaded == payload)
+    }
 }
 
 final class FakeCloudBackupContainer: CloudBackupContainerProtocol {
@@ -502,15 +562,58 @@ final class FakeCloudBackupDatabase: CloudBackupDatabaseProtocol {
     var errorOnFetch: Error?
     var recordToReturn: CKRecord?
     var lastSavedRecord: CKRecord?
+    var recordsByName: [String: CKRecord] = [:]
+    var savedRecords: [CKRecord] = []
+    var deletedRecordNames: [String] = []
+    private var persistedAssetURLs: [URL] = []
     
     func record(for recordID: CKRecord.ID) async throws -> CKRecord {
         if let errorOnFetch { throw errorOnFetch }
+        if let stored = recordsByName[recordID.recordName] { return stored }
         if let recordToReturn { return recordToReturn }
         return CKRecord(recordType: "AppBackup", recordID: recordID)
     }
     
     func save(_ record: CKRecord) async throws -> CKRecord {
-        lastSavedRecord = record
-        return record
+        let persisted = try materializeRecord(record)
+        lastSavedRecord = persisted
+        savedRecords.append(persisted)
+        recordsByName[persisted.recordID.recordName] = persisted
+        return persisted
+    }
+
+    func deleteRecord(withID recordID: CKRecord.ID) async throws {
+        deletedRecordNames.append(recordID.recordName)
+        recordsByName.removeValue(forKey: recordID.recordName)
+    }
+
+    deinit {
+        for url in persistedAssetURLs {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    private func materializeRecord(_ record: CKRecord) throws -> CKRecord {
+        let copy = CKRecord(recordType: record.recordType, recordID: record.recordID)
+
+        for key in record.allKeys() {
+            if let asset = record[key] as? CKAsset,
+               let sourceURL = asset.fileURL {
+                let persistedURL = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(UUID().uuidString)
+                    .appendingPathExtension("backup")
+                let data = try Data(contentsOf: sourceURL)
+                try data.write(to: persistedURL, options: .atomic)
+                persistedAssetURLs.append(persistedURL)
+                copy[key] = CKAsset(fileURL: persistedURL)
+                continue
+            }
+
+            if let value = record[key] {
+                copy[key] = value
+            }
+        }
+
+        return copy
     }
 }

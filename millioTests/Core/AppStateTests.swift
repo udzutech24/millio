@@ -95,8 +95,27 @@ struct AppStateTests {
     
     @Test("AppState сохраняет primaryCurrencyCode нормализованным и не принимает пустое значение")
     func testPrimaryCurrencyCodeNormalizationAndEmptyGuard() {
-        UserDefaults.standard.removeObject(forKey: "primaryCurrencyCode")
-        UserDefaults.standard.synchronize()
+        let defaults = UserDefaults.standard
+        let primaryKey = "primaryCurrencyCode"
+        let favoritesKey = "favoriteCurrencyCodes"
+        let originalPrimary = defaults.string(forKey: primaryKey)
+        let originalFavorites = defaults.array(forKey: favoritesKey) as? [String]
+        defer {
+            if let originalPrimary {
+                defaults.set(originalPrimary, forKey: primaryKey)
+            } else {
+                defaults.removeObject(forKey: primaryKey)
+            }
+            if let originalFavorites {
+                defaults.set(originalFavorites, forKey: favoritesKey)
+            } else {
+                defaults.removeObject(forKey: favoritesKey)
+            }
+        }
+
+        defaults.removeObject(forKey: primaryKey)
+        defaults.removeObject(forKey: favoritesKey)
+        defaults.synchronize()
         
         let appState = AppState()
         #expect(appState.primaryCurrencyCode == "RUB")
@@ -114,6 +133,7 @@ struct AppStateTests {
     func testPrimaryCurrencyCodeMigratesFollowingDisplayCurrencies() {
         let defaults = UserDefaults.standard
         let primaryKey = "primaryCurrencyCode"
+        let favoritesKey = "favoriteCurrencyCodes"
         let keys = [
             "cashflow_display_currency",
             "finance_display_currency",
@@ -122,6 +142,7 @@ struct AppStateTests {
             "credit_display_currency"
         ]
         let originalPrimary = defaults.string(forKey: primaryKey)
+        let originalFavorites = defaults.array(forKey: favoritesKey) as? [String]
         let originalValues = keys.reduce(into: [String: String?]()) { partialResult, key in
             partialResult[key] = defaults.string(forKey: key)
         }
@@ -130,6 +151,11 @@ struct AppStateTests {
                 defaults.set(originalPrimary, forKey: primaryKey)
             } else {
                 defaults.removeObject(forKey: primaryKey)
+            }
+            if let originalFavorites {
+                defaults.set(originalFavorites, forKey: favoritesKey)
+            } else {
+                defaults.removeObject(forKey: favoritesKey)
             }
             for key in keys {
                 if let value = originalValues[key] ?? nil {
@@ -141,6 +167,7 @@ struct AppStateTests {
         }
 
         defaults.set("RUB", forKey: primaryKey)
+        defaults.removeObject(forKey: favoritesKey)
         defaults.set("RUB", forKey: "cashflow_display_currency")
         defaults.set("USD", forKey: "finance_display_currency")
         defaults.set("RUB", forKey: "card_display_currency")

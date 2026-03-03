@@ -4,220 +4,133 @@ import Testing
 
 @Suite(.serialized)
 struct SettingsAndCurrencyDefaultsTests {
+    private func makeIsolatedSettingsManager() -> (manager: SettingsManager, defaults: UserDefaults, cleanup: () -> Void) {
+        let suiteName = "SettingsAndCurrencyDefaultsTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let manager = SettingsManager(defaults: defaults)
+        let cleanup = {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+        return (manager, defaults, cleanup)
+    }
+
     @Test("SettingsManager isBackupEnabled defaults to false")
     func testBackupEnabledDefaultFalse() {
-        let key = "isBackupEnabled"
-        let original = UserDefaults.standard.object(forKey: key)
-        defer {
-            if let original {
-                UserDefaults.standard.set(original, forKey: key)
-            } else {
-                UserDefaults.standard.removeObject(forKey: key)
-            }
-        }
-        
-        UserDefaults.standard.removeObject(forKey: key)
-        #expect(SettingsManager.shared.isBackupEnabled == false)
+        let isolated = makeIsolatedSettingsManager()
+        defer { isolated.cleanup() }
+
+        isolated.defaults.removeObject(forKey: "isBackupEnabled")
+        #expect(isolated.manager.isBackupEnabled == false)
     }
     
     @Test("SettingsManager isEncryptionEnabled defaults to false")
     func testEncryptionEnabledDefaultFalse() {
-        let key = "isEncryptionEnabled"
-        let original = UserDefaults.standard.object(forKey: key)
-        defer {
-            if let original {
-                UserDefaults.standard.set(original, forKey: key)
-            } else {
-                UserDefaults.standard.removeObject(forKey: key)
-            }
-        }
-        
-        UserDefaults.standard.removeObject(forKey: key)
-        #expect(SettingsManager.shared.isEncryptionEnabled == false)
+        let isolated = makeIsolatedSettingsManager()
+        defer { isolated.cleanup() }
+
+        isolated.defaults.removeObject(forKey: "isEncryptionEnabled")
+        #expect(isolated.manager.isEncryptionEnabled == false)
     }
 
     @Test("SettingsManager isAppLockEnabled defaults to false")
     func testAppLockEnabledDefaultFalse() {
-        let key = "isAppLockEnabled"
-        let original = UserDefaults.standard.object(forKey: key)
-        defer {
-            if let original {
-                UserDefaults.standard.set(original, forKey: key)
-            } else {
-                UserDefaults.standard.removeObject(forKey: key)
-            }
-        }
+        let isolated = makeIsolatedSettingsManager()
+        defer { isolated.cleanup() }
 
-        UserDefaults.standard.removeObject(forKey: key)
-        #expect(SettingsManager.shared.isAppLockEnabled == false)
+        isolated.defaults.removeObject(forKey: "isAppLockEnabled")
+        #expect(isolated.manager.isAppLockEnabled == false)
     }
 
     @Test("SettingsManager isBiometricUnlockEnabled defaults to false")
     func testBiometricUnlockEnabledDefaultFalse() {
-        let key = "isBiometricUnlockEnabled"
-        let original = UserDefaults.standard.object(forKey: key)
-        defer {
-            if let original {
-                UserDefaults.standard.set(original, forKey: key)
-            } else {
-                UserDefaults.standard.removeObject(forKey: key)
-            }
-        }
+        let isolated = makeIsolatedSettingsManager()
+        defer { isolated.cleanup() }
 
-        UserDefaults.standard.removeObject(forKey: key)
-        #expect(SettingsManager.shared.isBiometricUnlockEnabled == false)
+        isolated.defaults.removeObject(forKey: "isBiometricUnlockEnabled")
+        #expect(isolated.manager.isBiometricUnlockEnabled == false)
     }
 
     @Test("SettingsManager primaryCurrencyCode defaults to RUB")
     func testPrimaryCurrencyDefault() {
-        let key = "primaryCurrencyCode"
-        let original = UserDefaults.standard.string(forKey: key)
-        defer {
-            if let original {
-                UserDefaults.standard.set(original, forKey: key)
-            } else {
-                UserDefaults.standard.removeObject(forKey: key)
-            }
-        }
-        
-        UserDefaults.standard.removeObject(forKey: key)
-        #expect(SettingsManager.shared.primaryCurrencyCode == "RUB")
+        let isolated = makeIsolatedSettingsManager()
+        defer { isolated.cleanup() }
+
+        isolated.defaults.removeObject(forKey: "primaryCurrencyCode")
+        #expect(isolated.manager.primaryCurrencyCode == "RUB")
     }
     
     @Test("SettingsManager primaryCurrencyCode persists and normalizes")
     func testPrimaryCurrencyPersistsAndNormalizes() {
-        let key = "primaryCurrencyCode"
-        let original = UserDefaults.standard.string(forKey: key) ?? "RUB"
-        defer { UserDefaults.standard.set(original, forKey: key) }
+        let isolated = makeIsolatedSettingsManager()
+        defer { isolated.cleanup() }
 
-        SettingsManager.shared.primaryCurrencyCode = " rub "
-        #expect(SettingsManager.shared.primaryCurrencyCode == "RUB")
+        isolated.defaults.set("RUB", forKey: "primaryCurrencyCode")
+        isolated.manager.primaryCurrencyCode = " rub "
+        #expect(isolated.manager.primaryCurrencyCode == "RUB")
     }
     
     @Test("SettingsManager favoriteCurrencyCodes defaults to currencies excluding primary")
     func testFavoriteCurrencyDefaults() {
-        let primaryKey = "primaryCurrencyCode"
-        let key = "favoriteCurrencyCodes"
-        let originalPrimary = UserDefaults.standard.string(forKey: primaryKey)
-        let original = UserDefaults.standard.array(forKey: key) as? [String]
-        defer {
-            if let originalPrimary {
-                UserDefaults.standard.set(originalPrimary, forKey: primaryKey)
-            } else {
-                UserDefaults.standard.removeObject(forKey: primaryKey)
-            }
-            if let original {
-                UserDefaults.standard.set(original, forKey: key)
-            } else {
-                UserDefaults.standard.removeObject(forKey: key)
-            }
-        }
-        
-        UserDefaults.standard.set("RUB", forKey: primaryKey)
-        UserDefaults.standard.removeObject(forKey: key)
-        #expect(SettingsManager.shared.favoriteCurrencyCodes == ["USD", "EUR"])
+        let isolated = makeIsolatedSettingsManager()
+        defer { isolated.cleanup() }
+
+        isolated.defaults.set("RUB", forKey: "primaryCurrencyCode")
+        isolated.defaults.removeObject(forKey: "favoriteCurrencyCodes")
+        #expect(isolated.manager.favoriteCurrencyCodes == ["USD", "EUR"])
     }
     
     @Test("SettingsManager favoriteCurrencyCodes persists, normalizes, excludes primary and limits to 5")
     func testFavoriteCurrencyPersistsAndNormalizes() {
-        let primaryKey = "primaryCurrencyCode"
-        let key = "favoriteCurrencyCodes"
-        let originalPrimary = UserDefaults.standard.string(forKey: primaryKey)
-        let original = UserDefaults.standard.array(forKey: key) as? [String]
-        defer {
-            if let originalPrimary {
-                UserDefaults.standard.set(originalPrimary, forKey: primaryKey)
-            } else {
-                UserDefaults.standard.removeObject(forKey: primaryKey)
-            }
-            if let original {
-                UserDefaults.standard.set(original, forKey: key)
-            } else {
-                UserDefaults.standard.removeObject(forKey: key)
-            }
-        }
-        
-        SettingsManager.shared.primaryCurrencyCode = "RUB"
-        SettingsManager.shared.favoriteCurrencyCodes = [
+        let isolated = makeIsolatedSettingsManager()
+        defer { isolated.cleanup() }
+
+        isolated.manager.primaryCurrencyCode = "RUB"
+        isolated.manager.favoriteCurrencyCodes = [
             " rub ", "usd", "RUB", "", " eur ", "kzt", "gbp", "try", "chf"
         ]
-        #expect(SettingsManager.shared.favoriteCurrencyCodes == ["USD", "EUR", "KZT", "GBP", "TRY"])
+        #expect(isolated.manager.favoriteCurrencyCodes == ["USD", "EUR", "KZT", "GBP", "TRY"])
     }
 
     @Test("SettingsManager primaryCurrencyCode update keeps previous primary in favorites and excludes new primary")
     func testPrimaryCurrencyUpdateKeepsPreviousPrimaryInFavorites() {
-        let primaryKey = "primaryCurrencyCode"
-        let favoritesKey = "favoriteCurrencyCodes"
-        let originalPrimary = UserDefaults.standard.string(forKey: primaryKey)
-        let originalFavorites = UserDefaults.standard.array(forKey: favoritesKey) as? [String]
-        defer {
-            if let originalPrimary {
-                UserDefaults.standard.set(originalPrimary, forKey: primaryKey)
-            } else {
-                UserDefaults.standard.removeObject(forKey: primaryKey)
-            }
-            if let originalFavorites {
-                UserDefaults.standard.set(originalFavorites, forKey: favoritesKey)
-            } else {
-                UserDefaults.standard.removeObject(forKey: favoritesKey)
-            }
-        }
+        let isolated = makeIsolatedSettingsManager()
+        defer { isolated.cleanup() }
 
-        SettingsManager.shared.primaryCurrencyCode = "RUB"
-        SettingsManager.shared.favoriteCurrencyCodes = ["USD", "EUR", "RUB", "KZT"]
-        SettingsManager.shared.primaryCurrencyCode = "USD"
+        isolated.manager.primaryCurrencyCode = "RUB"
+        isolated.manager.favoriteCurrencyCodes = ["USD", "EUR", "RUB", "KZT"]
+        isolated.manager.primaryCurrencyCode = "USD"
 
-        #expect(SettingsManager.shared.favoriteCurrencyCodes == ["RUB", "EUR", "KZT"])
+        #expect(isolated.manager.favoriteCurrencyCodes == ["RUB", "EUR", "KZT"])
     }
 
     @Test("SettingsManager profileAvatarFilePath persists")
     func testProfileAvatarPathPersists() {
-        let key = "profileAvatarFilePath"
-        let original = UserDefaults.standard.string(forKey: key)
-        defer {
-            if let original {
-                UserDefaults.standard.set(original, forKey: key)
-            } else {
-                UserDefaults.standard.removeObject(forKey: key)
-            }
-        }
+        let isolated = makeIsolatedSettingsManager()
+        defer { isolated.cleanup() }
 
         let expectedPath = "/tmp/millio-tests/avatar.jpg"
-        SettingsManager.shared.profileAvatarFilePath = expectedPath
-        #expect(SettingsManager.shared.profileAvatarFilePath == expectedPath)
+        isolated.manager.profileAvatarFilePath = expectedPath
+        #expect(isolated.manager.profileAvatarFilePath == expectedPath)
     }
 
     @Test("SettingsManager profileDisplayName defaults to localized guest")
     func testProfileDisplayNameDefaultIsLocalizedGuest() {
-        let key = "profileDisplayName"
-        let original = UserDefaults.standard.string(forKey: key)
-        defer {
-            if let original {
-                UserDefaults.standard.set(original, forKey: key)
-            } else {
-                UserDefaults.standard.removeObject(forKey: key)
-            }
-        }
+        let isolated = makeIsolatedSettingsManager()
+        defer { isolated.cleanup() }
 
-        UserDefaults.standard.removeObject(forKey: key)
-        #expect(SettingsManager.shared.profileDisplayName == SettingsManager.defaultProfileDisplayName)
+        isolated.defaults.removeObject(forKey: "profileDisplayName")
+        #expect(isolated.manager.profileDisplayName == SettingsManager.defaultProfileDisplayName)
     }
 
     @Test("SettingsManager normalizes legacy guest display names")
     func testProfileDisplayNameNormalizesLegacyGuestValues() {
-        let key = "profileDisplayName"
-        let original = UserDefaults.standard.string(forKey: key)
-        defer {
-            if let original {
-                UserDefaults.standard.set(original, forKey: key)
-            } else {
-                UserDefaults.standard.removeObject(forKey: key)
-            }
-        }
+        let isolated = makeIsolatedSettingsManager()
+        defer { isolated.cleanup() }
 
         for legacyValue in ["Гость", "Guest"] {
-            UserDefaults.standard.set(legacyValue, forKey: key)
-            #expect(SettingsManager.shared.profileDisplayName == SettingsManager.defaultProfileDisplayName)
+            isolated.defaults.set(legacyValue, forKey: "profileDisplayName")
+            #expect(isolated.manager.profileDisplayName == SettingsManager.defaultProfileDisplayName)
         }
     }
 

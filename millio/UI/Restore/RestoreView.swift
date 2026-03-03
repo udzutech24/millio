@@ -48,9 +48,7 @@ struct RestoreView: View {
                     .padding(.top, 60)
                     
                     // Content
-                    if !appState.isBackupEnabled {
-                        backupDisabledView
-                    } else if isRestoring {
+                    if isRestoring {
                         restoringView
                     } else {
                         if let backupDate = appState.lastBackupDate {
@@ -89,38 +87,6 @@ struct RestoreView: View {
         .task {
             await refreshBackupStatusIfNeeded()
         }
-    }
-    
-    // MARK: - Backup Disabled View
-    
-    private var backupDisabledView: some View {
-        VStack(spacing: 24) {
-            FinancesGlassCard {
-                VStack(spacing: 12) {
-                    Text("Резервное копирование отключено")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                        .multilineTextAlignment(.center)
-                    
-                    Text("Включите резервное копирование в настройках для восстановления данных")
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundStyle(AppColors.textSecondary)
-                        .multilineTextAlignment(.center)
-                }
-                .padding(24)
-                .frame(maxWidth: .infinity)
-            }
-            
-            ActionButton(
-                title: "Продолжить",
-                icon: .system("arrow.right"),
-                gradientColors: AppColors.incomeGradient
-            ) {
-                appState.lifecycle = .ready
-                dismiss()
-            }
-        }
-        .padding(.horizontal, 24)
     }
     
     // MARK: - Restoring View
@@ -296,7 +262,7 @@ struct RestoreView: View {
     
     @MainActor
     private func refreshBackupStatusIfNeeded() async {
-        guard appState.isBackupEnabled, !isRestoring else { return }
+        guard !isRestoring else { return }
         
         let available = await withTimeout(seconds: 3) {
             await CloudBackupStore().isAvailable()
