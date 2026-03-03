@@ -276,6 +276,16 @@ final class CashbackViewModel: ViewModelProtocol {
         ) ?? now()
     }
 
+    var minSelectableMonth: Date {
+        let months = state.cashbacks.compactMap { Cashback.startOfMonth(for: $0.monthKey) }
+        if let earliestCashbackMonth = months.min() {
+            return earliestCashbackMonth
+        }
+
+        let fallback = Calendar.current.date(byAdding: .month, value: -24, to: maxSelectableMonth)
+        return fallback ?? maxSelectableMonth
+    }
+
     func canMoveMonthForward() -> Bool {
         let calendar = Calendar.current
         let selected = calendar.date(
@@ -283,6 +293,15 @@ final class CashbackViewModel: ViewModelProtocol {
         ) ?? state.selectedMonth
         let current = maxSelectableMonth
         return selected < current
+    }
+
+    func canMoveMonthBackward() -> Bool {
+        let calendar = Calendar.current
+        let selected = calendar.date(
+            from: calendar.dateComponents([.year, .month], from: state.selectedMonth)
+        ) ?? state.selectedMonth
+        let minMonth = minSelectableMonth
+        return selected > minMonth
     }
 
     @discardableResult
@@ -337,6 +356,7 @@ final class CashbackViewModel: ViewModelProtocol {
         if let system = systemCategoryOptions.first(where: {
             $0.displayName.caseInsensitiveCompare(trimmed) == .orderedSame
         }) {
+            migrateCategoryPreferences(from: rawValue, to: system.rawValue)
             for cashback in linkedCashbacks {
                 cashback.categoryRaw = system.rawValue
                 cashback.name = system.displayName
@@ -350,6 +370,7 @@ final class CashbackViewModel: ViewModelProtocol {
             $0.normalizedName == normalized && $0.categoryID != sourceCustomID
         }) {
             let duplicateRaw = Self.customRawValue(from: duplicate.categoryID)
+            migrateCategoryPreferences(from: rawValue, to: duplicateRaw)
             for cashback in linkedCashbacks {
                 cashback.categoryRaw = duplicateRaw
                 cashback.name = duplicate.name
@@ -410,6 +431,11 @@ final class CashbackViewModel: ViewModelProtocol {
             cashback.updatedAt = now
         }
 
+        if safeTarget.rawValue == rawValue {
+            removeCategoryPreferences(rawValue: rawValue)
+        } else {
+            migrateCategoryPreferences(from: rawValue, to: safeTarget.rawValue)
+        }
         modelContext.delete(sourceCategory)
         return saveCategoriesAndCashbacks()
     }
@@ -419,9 +445,10 @@ final class CashbackViewModel: ViewModelProtocol {
         let selected = calendar.date(
             from: calendar.dateComponents([.year, .month], from: state.selectedMonth)
         ) ?? state.selectedMonth
-        let current = maxSelectableMonth
+        let minMonth = minSelectableMonth
+        let maxMonth = maxSelectableMonth
         let candidate = calendar.date(byAdding: .month, value: delta, to: selected) ?? selected
-        state.selectedMonth = min(candidate, current)
+        state.selectedMonth = min(max(candidate, minMonth), maxMonth)
         applyFilters()
     }
     
@@ -444,6 +471,7 @@ final class CashbackViewModel: ViewModelProtocol {
         )
         if let categories = try? modelContext.fetch(descriptor) {
             state.customCategories = categories
+            sanitizeStoredCategoryPreferences()
         }
     }
 
@@ -758,5 +786,46 @@ final class CashbackViewModel: ViewModelProtocol {
 
     private func savePinnedCategoryRaws() {
         defaults.set(Array(state.pinnedCategoryRaws).sorted(), forKey: Self.pinnedCategoryRawsKey)
+    }
+
+    private func migrateCategoryPreferences(from sourceRaw: String, to targetRaw: String) {
+        guard sourceRaw != targetRaw else { return }
+        let hadFavorite = state.favoriteCategoryRaws.remove(sourceRaw) != nil
+        let hadPinned = state.pinnedCategoryRaws.remove(sourceRaw) != nil
+
+        if hadFavorite {
+            state.favoriteCategoryRaws.insert(targetRaw)
+            state.pinnedCategoryRaws.remove(targetRaw)
+        } else if hadPinned, !state.favoriteCategoryRaws.contains(targetRaw) {
+            state.pinnedCategoryRaws.insert(targetRaw)
+        }
+
+        saveFavoriteCategoryRaws()
+        savePinnedCategoryRaws()
+    }
+
+    private func removeCategoryPreferences(rawValue: String) {
+        let hadFavorite = state.favoriteCategoryRaws.remove(rawValue) != nil
+        let hadPinned = state.pinnedCategoryRaws.remove(rawValue) != nil
+        guard hadFavorite || hadPinned else { return }
+        saveFavoriteCategoryRaws()
+        savePinnedCategoryRaws()
+    }
+
+    private func sanitizeStoredCategoryPreferences() {
+        let allowedRaws = Set(systemCategoryOptions.map(\.rawValue) + customCategoryOptions.map(\.rawValue))
+        let sanitizedFavorites = Set(state.favoriteCategoryRaws.filter { allowedRaws.contains($0) })
+        let sanitizedPinned = Set(
+            state.pinnedCategoryRaws.filter { allowedRaws.contains($0) && !sanitizedFavorites.contains($0) }
+        )
+
+        let favoritesChanged = sanitizedFavorites != state.favoriteCategoryRaws
+        let pinnedChanged = sanitizedPinned != state.pinnedCategoryRaws
+        guard favoritesChanged || pinnedChanged else { return }
+
+        state.favoriteCategoryRaws = sanitizedFavorites
+        state.pinnedCategoryRaws = sanitizedPinned
+        saveFavoriteCategoryRaws()
+        savePinnedCategoryRaws()
     }
 }

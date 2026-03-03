@@ -13,8 +13,18 @@ enum FinancesTab: String {
     case dynamics = "dynamics"
 }
 
+@MainActor
+enum FinancesDeepLinkHandler {
+    static func openAddCardIfRequested(appState: AppState, viewModel: FinanceViewModel?) {
+        guard appState.pendingOpenFinanceAddCard, let viewModel else { return }
+        appState.pendingOpenFinanceAddCard = false
+        viewModel.handle(.showAddAccountSheet(nil))
+    }
+}
+
 struct FinancesView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(AppState.self) private var appState
     @State private var viewModel: FinanceViewModel?
     
     var body: some View {
@@ -28,8 +38,21 @@ struct FinancesView: View {
         }
         .onAppear {
             if viewModel == nil {
-                viewModel = FinanceViewModel(modelContext: modelContext)
+                let createdViewModel = FinanceViewModel(modelContext: modelContext)
+                viewModel = createdViewModel
+                FinancesDeepLinkHandler.openAddCardIfRequested(
+                    appState: appState,
+                    viewModel: createdViewModel
+                )
+            } else {
+                FinancesDeepLinkHandler.openAddCardIfRequested(
+                    appState: appState,
+                    viewModel: viewModel
+                )
             }
+        }
+        .onChange(of: appState.pendingOpenFinanceAddCard) { _, _ in
+            FinancesDeepLinkHandler.openAddCardIfRequested(appState: appState, viewModel: viewModel)
         }
         .navigationTitle("Финансы")
         .toolbar {
@@ -47,7 +70,6 @@ struct FinancesView: View {
             }
         }
     }
-
 }
 
 // MARK: - Internal Content View

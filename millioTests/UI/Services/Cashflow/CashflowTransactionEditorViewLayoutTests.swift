@@ -9,6 +9,50 @@ import Testing
 @testable import millio
 
 struct CashflowTransactionEditorViewLayoutTests {
+    @Test("Для дохода показываются только карты в выбранной валюте")
+    func incomeFiltersCardsByCurrency() {
+        let rubCard = Card(name: "RUB", cardNumber: "1111", bank: .sberbank, cardType: .debit, currency: "RUB")
+        let usdCard = Card(name: "USD", cardNumber: "2222", bank: .tinkoff, cardType: .debit, currency: "USD")
+
+        let cards = CashflowTransactionEditorView.cardsForCurrency(
+            [rubCard, usdCard],
+            transactionType: .income,
+            currency: "usd"
+        )
+
+        #expect(cards.count == 1)
+        #expect(cards.first?.currency == "USD")
+    }
+
+    @Test("Для расхода показываются только карты в выбранной валюте")
+    func expenseFiltersCardsByCurrency() {
+        let eurCard = Card(name: "EUR", cardNumber: "1111", bank: .sberbank, cardType: .debit, currency: "EUR")
+        let usdCard = Card(name: "USD", cardNumber: "2222", bank: .tinkoff, cardType: .debit, currency: "USD")
+
+        let cards = CashflowTransactionEditorView.cardsForCurrency(
+            [eurCard, usdCard],
+            transactionType: .expense,
+            currency: "eur"
+        )
+
+        #expect(cards.count == 1)
+        #expect(cards.first?.currency == "EUR")
+    }
+
+    @Test("Для перевода фильтрации по валюте нет")
+    func transferDoesNotFilterCardsByCurrency() {
+        let rubCard = Card(name: "RUB", cardNumber: "1111", bank: .sberbank, cardType: .debit, currency: "RUB")
+        let usdCard = Card(name: "USD", cardNumber: "2222", bank: .tinkoff, cardType: .debit, currency: "USD")
+
+        let cards = CashflowTransactionEditorView.cardsForCurrency(
+            [rubCard, usdCard],
+            transactionType: .transfer,
+            currency: "RUB"
+        )
+
+        #expect(cards.count == 2)
+    }
+
     @Test("Основная информация для дохода: карта между суммой и валютой")
     func incomeMainInfoRows() {
         let rows = CashflowTransactionEditorView.mainInfoRows(for: .income)

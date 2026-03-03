@@ -16,6 +16,7 @@ import SwiftData
 final class MockCurrencyRateService: CurrencyRateServiceProtocol {
     /// Курсы: [fromCurrency: [toCurrency: rate]]
     var rates: [String: [String: Double]] = [:]
+    private(set) var forceRefreshCallCount: Int = 0
 
     func setRate(from: String, to: String, rate: Double) {
         if rates[from] == nil { rates[from] = [:] }
@@ -39,7 +40,7 @@ final class MockCurrencyRateService: CurrencyRateServiceProtocol {
     }
 
     func forceRefreshRates() async {
-        // Ничего не делаем в тестах
+        forceRefreshCallCount += 1
     }
 }
 
@@ -184,8 +185,8 @@ struct FinanceViewModelTests {
         #expect(abs(total - expected) < 0.01, "Сумма должна соответствовать ожидаемому значению с учетом курсов")
     }
 
-    @Test("Предзагрузка курсов для всех валют группы работает корректно")
-    func testPreloadRatesForAllCurrencies() async throws {
+    @Test("Расчет суммы группы с разными валютами работает без потери конвертаций")
+    func testCalculateGroupTotalWithMultipleCurrenciesAndCredit() async throws {
         let modelContext = try createTestModelContext()
 
         // Создаем группу
@@ -271,6 +272,47 @@ struct FinanceViewModelTests {
 
         let usdOnlyAmount = -5000.0
         #expect(abs(total - usdOnlyAmount) > 0.01, "Сумма должна отличаться от суммы только в USD")
+    }
+
+    @Test("Пересчет общей суммы не делает принудительный refresh курсов")
+    func testCalculateTotalAmountDoesNotForceRefreshRates() async throws {
+        let modelContext = try createTestModelContext()
+
+        let group = FinanceGroup(name: "Мультивалюта", colorHex: "#00AAFF")
+        group.displayCurrency = "RUB"
+        modelContext.insert(group)
+
+        let cardUSD = Card(
+            name: "USD карта",
+            cardNumber: "1001",
+            bank: .tinkoff,
+            cardType: .debit,
+            currency: "USD",
+            balance: 10.0
+        )
+        cardUSD.includeInTotal = true
+        modelContext.insert(cardUSD)
+
+        let accountUSD = FinanceAccount(accountType: .card, accountID: cardUSD.cardUniqueID)
+        accountUSD.group = group
+        modelContext.insert(accountUSD)
+        try modelContext.save()
+
+        let mockRateService = MockCurrencyRateService()
+        mockRateService.setRate(from: "USD", to: "RUB", rate: 100.0)
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: mockRateService,
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadGroups)
+        viewModel.handle(.loadAccounts)
+
+        await viewModel.calculateTotalAmountAsync()
+
+        #expect(mockRateService.forceRefreshCallCount == 0)
+        #expect(abs(viewModel.state.totalAmount - 1000.0) < 0.01)
     }
 
     @Test("Суммы в валютах без курса конвертации пропускаются корректно")

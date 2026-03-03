@@ -32,6 +32,18 @@ final class SettingsManager: SettingsManagerProtocol {
     private let profileAvatarFilePathKey = "profileAvatarFilePath"
     private let primaryCurrencyCodeKey = "primaryCurrencyCode"
     private let favoriteCurrencyCodesKey = "favoriteCurrencyCodes"
+    private static let legacyDefaultProfileDisplayNames: Set<String> = ["Гость", "Guest"]
+
+    static var defaultProfileDisplayName: String {
+        String(
+            localized: "profile.default_guest",
+            locale: LanguageManager.shared.currentLanguage.locale ?? Locale.current
+        )
+    }
+
+    static func isDefaultProfileDisplayName(_ value: String) -> Bool {
+        legacyDefaultProfileDisplayNames.contains(value.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
     
     var isBackupEnabled: Bool {
         get {
@@ -86,7 +98,20 @@ final class SettingsManager: SettingsManagerProtocol {
     
     var profileDisplayName: String {
         get {
-            UserDefaults.standard.string(forKey: profileDisplayNameKey) ?? "Гость"
+            guard let stored = UserDefaults.standard.string(forKey: profileDisplayNameKey) else {
+                return Self.defaultProfileDisplayName
+            }
+
+            let trimmed = stored.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else {
+                return Self.defaultProfileDisplayName
+            }
+
+            if Self.isDefaultProfileDisplayName(trimmed) {
+                return Self.defaultProfileDisplayName
+            }
+
+            return stored
         }
         set {
             UserDefaults.standard.set(newValue, forKey: profileDisplayNameKey)

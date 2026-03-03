@@ -166,7 +166,7 @@ struct CashbackScreenshotParser {
     }
 
     private static func parseInlineCashbackLine(_ line: String) -> (Double, String)? {
-        let pattern = #"^(?:\S\s*)?(?:до\s*)?(\d{1,3}(?:[.,]\d{1,2})?)\s*%\s+(.+)$"#
+        let pattern = #"^(?:[^\d]{0,8}\s*)?(?:до\s*)?(\d{1,3}(?:[.,]\d{1,2})?)\s*(?:%|％|°/o|°/о|o/o|о/о)\s*(.+)$"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
             return nil
         }
@@ -189,7 +189,7 @@ struct CashbackScreenshotParser {
     }
 
     private static func parseTrailingCashbackLine(_ line: String) -> (Double, String)? {
-        let pattern = #"^(.+?)\s+(?:\S\s*)?(\d{1,3}(?:[.,]\d{1,2})?)\s*%$"#
+        let pattern = #"^(.+?)\s+(?:[^\d]{0,8}\s*)?(\d{1,3}(?:[.,]\d{1,2})?)\s*(?:%|％|°/o|°/о|o/o|о/о)$"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
             return nil
         }
@@ -212,7 +212,7 @@ struct CashbackScreenshotParser {
     }
 
     private static func parsePercentageOnlyLine(_ line: String) -> Double? {
-        let pattern = #"^(?:\S\s*)?(?:до\s*)?(\d{1,3}(?:[.,]\d{1,2})?)\s*%$"#
+        let pattern = #"^(?:[^\d]{0,8}\s*)?(?:до\s*)?(\d{1,3}(?:[.,]\d{1,2})?)\s*(?:%|％|°/o|°/о|o/o|о/о)$"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
             return nil
         }
@@ -231,6 +231,13 @@ struct CashbackScreenshotParser {
     private static func normalizeLine(_ value: String) -> String {
         value
             .replacingOccurrences(of: "\u{00A0}", with: " ")
+            .replacingOccurrences(of: "％", with: "%")
+            .replacingOccurrences(of: "°/o", with: "%")
+            .replacingOccurrences(of: "°/о", with: "%")
+            .replacingOccurrences(of: "o/o", with: "%")
+            .replacingOccurrences(of: "о/о", with: "%")
+            .replacingOccurrences(of: "O/O", with: "%")
+            .replacingOccurrences(of: "О/О", with: "%")
             .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }

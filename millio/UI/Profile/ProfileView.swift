@@ -14,6 +14,10 @@ struct ProfileView: View {
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var showNameEditSheet = false
     @State private var editedName = ""
+
+    private var legalLinks: ProfileLegalLinks {
+        ProfileLegalLinks.make(for: appState.selectedLanguage)
+    }
     
     private var appVersion: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -37,7 +41,7 @@ struct ProfileView: View {
                     profileHeaderBlock
                         .padding(.top, 16)
                     
-                    sectionHeader("Основные")
+                    sectionHeader("profile.section.general")
                     card {
                         VStack(spacing: 16) {
                             NavigationLink {
@@ -46,7 +50,7 @@ struct ProfileView: View {
                                     set: { appState.selectedLanguage = $0 }
                                 ))
                             } label: {
-                                settingsRow(iconSystemName: "globe", title: "Язык") {
+                                settingsRow(iconSystemName: "globe", title: "profile.language") {
                                     Text(appState.selectedLanguage.displayName)
                                         .foregroundStyle(AppColors.profileValueAccent)
                                     chevron
@@ -61,7 +65,7 @@ struct ProfileView: View {
                                     set: { appState.primaryCurrencyCode = $0 }
                                 ))
                             } label: {
-                                settingsRow(iconSystemName: "dollarsign", title: "Валюта") {
+                                settingsRow(iconSystemName: "dollarsign", title: "profile.currency") {
                                     Text(appState.primaryCurrencyCode)
                                         .foregroundStyle(AppColors.profileValueAccent)
                                     chevron
@@ -77,13 +81,13 @@ struct ProfileView: View {
 
                     // Settings section
                     VStack(spacing: 20) {
-                        sectionHeader("Настройки")
+                        sectionHeader("profile.section.settings")
                         card {
                             VStack(spacing: 16) {
                                 NavigationLink {
                                     BackupManagementView(router: router)
                                 } label: {
-                                    settingsRow(iconSystemName: "arrow.clockwise.icloud", title: "Резервное копирование") {
+                                    settingsRow(iconSystemName: "arrow.clockwise.icloud", title: "profile.backup") {
                                         Text(backupStatusText)
                                             .foregroundStyle(AppColors.textTertiary)
                                         chevron
@@ -95,7 +99,7 @@ struct ProfileView: View {
                                 NavigationLink {
                                     AppSecuritySettingsView()
                                 } label: {
-                                    settingsRow(iconSystemName: "lock.shield", title: "Защита приложения") {
+                                    settingsRow(iconSystemName: "lock.shield", title: "profile.security") {
                                         Text(appLockStatusText)
                                             .foregroundStyle(AppColors.textTertiary)
                                         chevron
@@ -115,23 +119,41 @@ struct ProfileView: View {
                                         }
                                     }
                                 )) {
-                                    settingsRow(iconSystemName: "bell", title: "Ежедневные напоминания") { EmptyView() }
+                                    settingsRow(iconSystemName: "bell", title: "profile.daily_reminders") { EmptyView() }
                                 }
                                 .tint(AppColors.toggleOnGreen)
                                 .accessibilityIdentifier("profile.dailyReminderToggle")
                             }
                         }
                         
-                        sectionHeader("О приложении")
+                        sectionHeader("profile.section.about")
                         card {
-                            settingsRow(iconSystemName: "info.circle", title: "Версия") {
-                                Text(appVersion)
-                                    .foregroundStyle(AppColors.textTertiary)
+                            VStack(spacing: 16) {
+                                settingsRow(iconSystemName: "info.circle", title: "profile.version") {
+                                    Text(appVersion)
+                                        .foregroundStyle(AppColors.textTertiary)
+                                }
+                                .accessibilityIdentifier("profile.versionRow")
+
+                                Link(destination: legalLinks.privacyURL) {
+                                    legalSettingsRow(iconSystemName: "hand.raised", title: legalLinks.privacyTitle) {
+                                        chevron
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("profile.privacyPolicyLink")
+
+                                Link(destination: legalLinks.termsURL) {
+                                    legalSettingsRow(iconSystemName: "doc.text", title: legalLinks.termsTitle) {
+                                        chevron
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("profile.termsOfUseLink")
                             }
-                            .accessibilityIdentifier("profile.versionRow")
                         }
                         
-                        sectionHeader("Отладка")
+                        sectionHeader("profile.section.debug")
                         card {
                             VStack(spacing: 16) {
                                 Toggle(isOn: Binding(
@@ -147,7 +169,7 @@ struct ProfileView: View {
                                         appState.isTrialActive = SubscriptionManager.shared.isTrialActive
                                     }
                                 )) {
-                                    settingsRow(iconSystemName: "crown", title: "Премиум доступ") { EmptyView() }
+                                    settingsRow(iconSystemName: "crown", title: "profile.premium_access") { EmptyView() }
                                 }
                                 .tint(AppColors.toggleOnGreen)
                                 .accessibilityIdentifier("profile.debugPremiumToggle")
@@ -156,7 +178,7 @@ struct ProfileView: View {
                                     UserDefaults.standard.set(false, forKey: "hasCompletedOnboarding")
                                     appState.lifecycle = .onboarding
                                 } label: {
-                                    settingsRow(iconSystemName: "sparkles", title: "Показать онбординг") {
+                                    settingsRow(iconSystemName: "sparkles", title: "profile.show_onboarding") {
                                         chevron
                                     }
                                 }
@@ -169,7 +191,7 @@ struct ProfileView: View {
                 .padding(.bottom, 40)
             }
         }
-        .navigationTitle("Профиль")
+        .navigationTitle("profile.title")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .sheet(isPresented: $showNameEditSheet) {
@@ -210,7 +232,7 @@ struct ProfileView: View {
                 showNameEditSheet = true
             } label: {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Привет,")
+                    Text("profile.greeting")
                         .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(AppColors.textTertiary)
                     Text(appState.profileDisplayName)
@@ -265,7 +287,7 @@ struct ProfileView: View {
                 GradientBackground()
                 VStack(spacing: 20) {
                     FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16)) {
-                        TextField("Имя", text: $editedName)
+                        TextField("profile.name", text: $editedName)
                             .font(.system(size: 17, weight: .regular))
                             .foregroundStyle(AppColors.textPrimary)
                     }
@@ -275,13 +297,13 @@ struct ProfileView: View {
                 }
                 .padding(.top, 24)
             }
-            .navigationTitle("Имя")
+            .navigationTitle("profile.name")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Готово") {
+                    Button("profile.done") {
                         let name = editedName.trimmingCharacters(in: .whitespacesAndNewlines)
-                        let value = name.isEmpty ? "Гость" : name
+                        let value = name.isEmpty ? SettingsManager.defaultProfileDisplayName : name
                         SettingsManager.shared.profileDisplayName = value
                         appState.profileDisplayName = value
                         showNameEditSheet = false
@@ -298,28 +320,32 @@ struct ProfileView: View {
             router.push(.subscription)
         } label: {
             HStack(spacing: 0) {
-                Spacer()
-
-                // Текст справа
+                // Фиксируем позицию текста, чтобы она не "плавала" от длины локализации.
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Premium")
+                    Text("profile.premium.title")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
 
-                    Text("Расширенные функции и поддержка")
+                    Text("profile.premium.subtitle")
                         .font(.system(size: 12))
                         .foregroundStyle(AppColors.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                        .allowsTightening(true)
 
                     HStack(spacing: 4) {
-                        Text("Подробнее")
+                        Text("profile.premium.details")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(AppColors.brandPrimary)
+                            .lineLimit(1)
                         Image(systemName: "chevron.right")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(AppColors.brandPrimary)
                     }
                     .padding(.top, 4)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, 96)
                 .padding(.trailing, 24)
             }
             .frame(height: 90)
@@ -374,16 +400,19 @@ struct ProfileView: View {
             if let backupDate = appState.lastBackupDate {
                 return backupDate.formatted(date: .abbreviated, time: .shortened)
             }
-            return "Включено"
+            return String(localized: "profile.status.enabled", locale: appState.selectedLanguage.locale ?? Locale.current)
         }
-        return "Выключено"
+        return String(localized: "profile.status.disabled", locale: appState.selectedLanguage.locale ?? Locale.current)
     }
 
     private var appLockStatusText: String {
-        appState.isAppLockEnabled ? "Включено" : "Выключено"
+        let locale = appState.selectedLanguage.locale ?? Locale.current
+        return appState.isAppLockEnabled
+            ? String(localized: "profile.status.enabled", locale: locale)
+            : String(localized: "profile.status.disabled", locale: locale)
     }
     
-    private func sectionHeader(_ title: String) -> some View {
+    private func sectionHeader(_ title: LocalizedStringKey) -> some View {
         Text(title)
             .font(.system(size: 12, weight: .regular))
             .foregroundStyle(AppColors.textPrimary.opacity(0.35))
@@ -422,7 +451,7 @@ struct ProfileView: View {
     
     private func settingsRow<Trailing: View>(
         iconSystemName: String,
-        title: String,
+        title: LocalizedStringKey,
         @ViewBuilder trailing: () -> Trailing
     ) -> some View {
         HStack(spacing: 12) {
@@ -437,6 +466,31 @@ struct ProfileView: View {
             
             Spacer()
             
+            HStack(spacing: 6) {
+                trailing()
+            }
+        }
+        .frame(minHeight: 28)
+        .contentShape(Rectangle())
+    }
+
+    private func legalSettingsRow<Trailing: View>(
+        iconSystemName: String,
+        title: String,
+        @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: iconSystemName)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(AppColors.textSecondary)
+                .frame(width: 22, alignment: .leading)
+
+            Text(title)
+                .font(.system(size: 16, weight: .regular))
+                .foregroundStyle(AppColors.textPrimary)
+
+            Spacer()
+
             HStack(spacing: 6) {
                 trailing()
             }

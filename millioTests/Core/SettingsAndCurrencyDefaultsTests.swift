@@ -187,6 +187,40 @@ struct SettingsAndCurrencyDefaultsTests {
         #expect(SettingsManager.shared.profileAvatarFilePath == expectedPath)
     }
 
+    @Test("SettingsManager profileDisplayName defaults to localized guest")
+    func testProfileDisplayNameDefaultIsLocalizedGuest() {
+        let key = "profileDisplayName"
+        let original = UserDefaults.standard.string(forKey: key)
+        defer {
+            if let original {
+                UserDefaults.standard.set(original, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+
+        UserDefaults.standard.removeObject(forKey: key)
+        #expect(SettingsManager.shared.profileDisplayName == SettingsManager.defaultProfileDisplayName)
+    }
+
+    @Test("SettingsManager normalizes legacy guest display names")
+    func testProfileDisplayNameNormalizesLegacyGuestValues() {
+        let key = "profileDisplayName"
+        let original = UserDefaults.standard.string(forKey: key)
+        defer {
+            if let original {
+                UserDefaults.standard.set(original, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+
+        for legacyValue in ["Гость", "Guest"] {
+            UserDefaults.standard.set(legacyValue, forKey: key)
+            #expect(SettingsManager.shared.profileDisplayName == SettingsManager.defaultProfileDisplayName)
+        }
+    }
+
     @Test("AppState loads profile avatar path from SettingsManager on init")
     @MainActor
     func testAppStateLoadsProfileAvatarPathFromSettings() {

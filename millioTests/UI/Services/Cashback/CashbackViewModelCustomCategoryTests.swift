@@ -74,6 +74,43 @@ struct CashbackViewModelCustomCategoryTests {
         #expect(viewModel.state.customCategories.count == 1)
     }
 
+    @Test("Создание пользовательской категории поддерживает emoji-иконку")
+    func testCreateCustomCategoryStoresEmojiIcon() throws {
+        let context = try createModelContext()
+        let viewModel = CashbackViewModel(modelContext: context)
+
+        let option = viewModel.createCustomCategory("Путешествия", icon: "✈️")
+
+        #expect(option != nil)
+        #expect(option?.icon == "✈️")
+        #expect(viewModel.state.customCategories.count == 1)
+        #expect(viewModel.state.customCategories.first?.icon == "✈️")
+    }
+
+    @Test("Недопустимая иконка нормализуется к defaultIcon")
+    func testCreateCustomCategoryNormalizesUnsupportedIcon() throws {
+        let context = try createModelContext()
+        let viewModel = CashbackViewModel(modelContext: context)
+
+        let option = viewModel.createCustomCategory("Неизвестная", icon: "no-such-icon")
+
+        #expect(option != nil)
+        #expect(option?.icon == CashbackCustomCategory.defaultIcon)
+        #expect(viewModel.state.customCategories.first?.icon == CashbackCustomCategory.defaultIcon)
+    }
+
+    @Test("Системные категории кэшбэка используют emoji по умолчанию")
+    func testSystemCashbackCategoryIconsAreEmoji() {
+        #expect(CashbackCategory.gasStation.icon == "⛽️")
+        #expect(CashbackCategory.supermarket.icon == "🛒")
+        #expect(CashbackCategory.restaurant.icon == "🍽️")
+        #expect(CashbackCategory.pharmacy.icon == "💊")
+        #expect(CashbackCategory.transport.icon == "🚕")
+        #expect(CashbackCategory.entertainment.icon == "🎮")
+        #expect(CashbackCategory.online.icon == "🌐")
+        #expect(CashbackCategory.other.icon == "🧩")
+    }
+
     @Test("updateCashbacksForCard сохраняет кастомную категорию в кэшбэке")
     func testUpdateCashbacksForCardWithCustomCategory() throws {
         let context = try createModelContext()
@@ -238,6 +275,118 @@ struct CashbackViewModelCustomCategoryTests {
         #expect(viewModel.maxSelectableMonth == expected)
     }
 
+    @Test("minSelectableMonth берется из самого раннего месяца кешбэка")
+    func testMinSelectableMonthUsesEarliestCashbackMonth() throws {
+        let context = try createModelContext()
+        let january = monthDate(year: 2025, month: 1)
+        let february = monthDate(year: 2026, month: 2)
+
+        context.insert(Cashback(
+            name: "Январь",
+            category: .pharmacy,
+            percentage: 3,
+            cardIDs: [],
+            monthKey: Cashback.monthKey(for: january)
+        ))
+        context.insert(Cashback(
+            name: "Февраль",
+            category: .transport,
+            percentage: 5,
+            cardIDs: [],
+            monthKey: Cashback.monthKey(for: february)
+        ))
+        try context.save()
+
+        let viewModel = CashbackViewModel(
+            modelContext: context,
+            now: { february },
+            defaults: makeDefaults()
+        )
+
+        #expect(viewModel.minSelectableMonth == january)
+    }
+
+    @Test("minSelectableMonth без кешбэков откатывается на 24 месяца назад")
+    func testMinSelectableMonthFallsBackToTwoYearsBackWhenNoData() throws {
+        let context = try createModelContext()
+        let now = monthDate(year: 2026, month: 2)
+        let expected = monthDate(year: 2024, month: 2)
+
+        let viewModel = CashbackViewModel(
+            modelContext: context,
+            now: { now },
+            defaults: makeDefaults()
+        )
+
+        #expect(viewModel.minSelectableMonth == expected)
+    }
+
+    @Test("Переход вперед по месяцу не может выйти за maxSelectableMonth")
+    func testMoveMonthForwardStopsAtCurrentMonth() throws {
+        let context = try createModelContext()
+        let january = monthDate(year: 2026, month: 1)
+        let february = monthDate(year: 2026, month: 2)
+
+        let viewModel = CashbackViewModel(
+            modelContext: context,
+            now: { february },
+            defaults: makeDefaults()
+        )
+
+        viewModel.handle(.setSelectedMonth(january))
+        viewModel.handle(.moveMonthForward)
+        #expect(viewModel.selectedMonthTitle == "Февраль 2026")
+
+        viewModel.handle(.moveMonthForward)
+        #expect(viewModel.selectedMonthTitle == "Февраль 2026")
+    }
+
+    @Test("Переход назад по месяцу сдвигает selectedMonth на один месяц")
+    func testMoveMonthBackwardShiftsSelectedMonth() throws {
+        let context = try createModelContext()
+        let march = monthDate(year: 2026, month: 3)
+
+        let viewModel = CashbackViewModel(
+            modelContext: context,
+            now: { march },
+            defaults: makeDefaults()
+        )
+
+        #expect(viewModel.selectedMonthTitle == "Март 2026")
+        viewModel.handle(.moveMonthBackward)
+        #expect(viewModel.selectedMonthTitle == "Февраль 2026")
+    }
+
+    @Test("Переход назад по месяцу не выходит за minSelectableMonth")
+    func testMoveMonthBackwardStopsAtMinSelectableMonth() throws {
+        let context = try createModelContext()
+        let may = monthDate(year: 2026, month: 5)
+        let april = monthDate(year: 2026, month: 4)
+
+        context.insert(Cashback(
+            name: "Транспорт",
+            category: .transport,
+            percentage: 5,
+            cardIDs: [],
+            monthKey: Cashback.monthKey(for: april)
+        ))
+        try context.save()
+
+        let viewModel = CashbackViewModel(
+            modelContext: context,
+            now: { may },
+            defaults: makeDefaults()
+        )
+
+        #expect(viewModel.selectedMonthTitle == "Май 2026")
+        viewModel.handle(.moveMonthBackward)
+        #expect(viewModel.selectedMonthTitle == "Апрель 2026")
+        #expect(viewModel.canMoveMonthBackward() == false)
+
+        viewModel.handle(.moveMonthBackward)
+        #expect(viewModel.selectedMonthTitle == "Апрель 2026")
+    }
+
     @Test("Избранные категории сортируются выше остальных")
     func testFavoriteCategoriesAreSortedFirst() throws {
         let context = try createModelContext()
@@ -370,6 +519,51 @@ struct CashbackViewModelCustomCategoryTests {
             defaults: defaults
         )
         #expect(second.isFavoriteCategory(rawValue: CashbackCategory.restaurant.rawValue))
+    }
+
+    @Test("Переименование кастомной категории в системную переносит избранное")
+    func testRenameCustomCategoryToSystemMigratesFavorite() throws {
+        let context = try createModelContext()
+        let defaults = makeDefaults()
+        let viewModel = CashbackViewModel(modelContext: context, defaults: defaults)
+
+        let custom = viewModel.createCustomCategory("Кофе")
+        #expect(custom != nil)
+        guard let custom else { return }
+
+        viewModel.handle(.toggleFavoriteCategory(rawValue: custom.rawValue))
+        #expect(viewModel.isFavoriteCategory(rawValue: custom.rawValue))
+
+        let renamed = viewModel.renameCustomCategory(
+            rawValue: custom.rawValue,
+            newName: CashbackCategory.pharmacy.displayName
+        )
+
+        #expect(renamed)
+        #expect(!viewModel.isFavoriteCategory(rawValue: custom.rawValue))
+        #expect(viewModel.isFavoriteCategory(rawValue: CashbackCategory.pharmacy.rawValue))
+    }
+
+    @Test("Удаление кастомной категории очищает избранное и закрепленное состояние")
+    func testDeleteCustomCategoryClearsFavoriteAndPinned() throws {
+        let context = try createModelContext()
+        let defaults = makeDefaults()
+        let viewModel = CashbackViewModel(modelContext: context, defaults: defaults)
+
+        let custom = viewModel.createCustomCategory("Парковки")
+        #expect(custom != nil)
+        guard let custom else { return }
+
+        viewModel.handle(.toggleFavoriteCategory(rawValue: custom.rawValue))
+        viewModel.handle(.toggleFavoriteCategory(rawValue: custom.rawValue))
+        viewModel.handle(.togglePinnedCategory(rawValue: custom.rawValue))
+        #expect(viewModel.isPinnedCategory(rawValue: custom.rawValue))
+
+        let deleted = viewModel.deleteCustomCategory(rawValue: custom.rawValue)
+
+        #expect(deleted)
+        #expect(!viewModel.isFavoriteCategory(rawValue: custom.rawValue))
+        #expect(!viewModel.isPinnedCategory(rawValue: custom.rawValue))
     }
 
     @Test("Одинаковая категория и карта создаются раздельно для разных месяцев")

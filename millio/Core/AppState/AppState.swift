@@ -65,8 +65,10 @@ final class AppState {
     }
     
     // Профиль: имя и путь к аватарке
-    var profileDisplayName: String = "Гость"
+    var profileDisplayName: String = SettingsManager.defaultProfileDisplayName
     var profileAvatarPath: String?
+    /// One-shot deep-link trigger: open Finance add-product sheet (card by default).
+    var pendingOpenFinanceAddCard: Bool = false
     
     init() {
         self.isBackupEnabled = SettingsManager.shared.isBackupEnabled
