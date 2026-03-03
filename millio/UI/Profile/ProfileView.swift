@@ -345,7 +345,7 @@ struct ProfileView: View {
                     .padding(.top, 4)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, 96)
+                .padding(.leading, 72)
                 .padding(.trailing, 24)
             }
             .frame(height: 90)
