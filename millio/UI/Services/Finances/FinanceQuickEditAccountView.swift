@@ -106,7 +106,6 @@ struct FinanceQuickEditAccountView: View {
                                         if amountText.isEmpty {
                                             amountText = plainAmountForInput(currentEditableValue(fallbackAmount: info.amount))
                                         }
-                                        try? await Task.sleep(nanoseconds: 100_000_000)
                                         isAmountFieldFocused = true
                                     }
                                     .padding(20)

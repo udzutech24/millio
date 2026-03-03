@@ -180,9 +180,7 @@ struct CashflowTransactionEditorView: View {
         }
         .onAppear {
             loadAvailableCurrencies()
-            if selectedCardID == nil && !viewModel.state.availableCards.isEmpty {
-                selectedCardID = viewModel.state.availableCards.first?.cardUniqueID
-            }
+            synchronizeSelectedCards()
             if editingTransaction == nil,
                selectedTransactionType == .income,
                selectedIncomeCategoryRaw == nil {
@@ -210,6 +208,7 @@ struct CashflowTransactionEditorView: View {
             }
         }
         .onChange(of: selectedCurrency) { _, _ in
+            synchronizeSelectedCards()
             validateAvailableBalance()
         }
         .onChange(of: amountText) { _, _ in
@@ -219,6 +218,11 @@ struct CashflowTransactionEditorView: View {
             validateAvailableBalance()
         }
         .onChange(of: selectedTransactionType) { _, _ in
+            synchronizeSelectedCards()
+            validateAvailableBalance()
+        }
+        .onChange(of: viewModel.state.availableCards.map(\.cardUniqueID)) { _, _ in
+            synchronizeSelectedCards()
             validateAvailableBalance()
         }
         .sheet(isPresented: $showCategorySheet) {
@@ -490,8 +494,8 @@ struct CashflowTransactionEditorView: View {
 
     @ViewBuilder
     private var incomeExpenseCardContent: some View {
-        if viewModel.state.availableCards.isEmpty {
-            Text("Нет доступных карт")
+        if cardsForCurrentSelection.isEmpty {
+            Text("Нет карт в выбранной валюте")
                 .font(.system(size: 14))
                 .foregroundStyle(AppColors.textTertiary)
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -508,7 +512,7 @@ struct CashflowTransactionEditorView: View {
                     set: { selectedCardID = $0.isEmpty ? nil : $0 }
                 )) {
                     Text("Выберите карту").tag("")
-                    ForEach(viewModel.state.availableCards) { card in
+                    ForEach(cardsForCurrentSelection) { card in
                         Text(card.name).tag(card.cardUniqueID)
                     }
                 }
@@ -664,6 +668,14 @@ struct CashflowTransactionEditorView: View {
 
     private var shouldShowCardSelectionInMainInfo: Bool {
         Self.mainInfoRows(for: selectedTransactionType).contains(.fromCard)
+    }
+
+    private var cardsForCurrentSelection: [Card] {
+        Self.cardsForCurrency(
+            viewModel.state.availableCards,
+            transactionType: selectedTransactionType,
+            currency: selectedCurrency
+        )
     }
 
     private var selectedCategoryOption: CashflowCategoryOption {
@@ -909,6 +921,30 @@ struct CashflowTransactionEditorView: View {
             validationTask = nil
         }
     }
+
+    private func synchronizeSelectedCards() {
+        let selectableCards = cardsForCurrentSelection
+        let selectableIDs = Set(selectableCards.map(\.cardUniqueID))
+
+        if let selectedCardID, !selectableIDs.contains(selectedCardID) {
+            self.selectedCardID = nil
+        }
+
+        if selectedTransactionType == .transfer {
+            if selectedCardID == nil && !selectableCards.isEmpty {
+                selectedCardID = selectableCards.first?.cardUniqueID
+            }
+            if selectedToCardID == selectedCardID {
+                selectedToCardID = nil
+            }
+            return
+        }
+
+        if selectedCardID == nil {
+            selectedCardID = selectableCards.first?.cardUniqueID
+        }
+        selectedToCardID = nil
+    }
 }
 
 enum CashflowEditorMainInfoRow: Equatable {
@@ -928,6 +964,25 @@ extension CashflowTransactionEditorView {
             return [.amount, .fromCard, .toCard, .currency, .date]
         case .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
             return [.amount, .currency, .date]
+        }
+    }
+
+    static func cardsForCurrency(
+        _ cards: [Card],
+        transactionType: CashflowTransactionType,
+        currency: String
+    ) -> [Card] {
+        guard transactionType == .income || transactionType == .expense else {
+            return cards
+        }
+
+        let normalizedCurrency = currency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !normalizedCurrency.isEmpty else {
+            return cards
+        }
+
+        return cards.filter {
+            $0.currency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == normalizedCurrency
         }
     }
 }

@@ -730,10 +730,8 @@ final class FinanceViewModel: ViewModelProtocol {
             allCurrenciesNeeded.insert(secondaryCurrency)
         }
         
-        // Если есть несколько валют, обновляем курсы один раз
-        if allCurrenciesNeeded.count > 1 {
-            await currencyService.forceRefreshRates()
-        }
+        // Не форсим сетевое обновление здесь: быстрые локальные правки (сумма/группа)
+        // должны пересчитываться мгновенно на кэше курсов.
         
         // Для каждого group вычисляем сумму в его валюте (или в state.displayCurrency, если не задана)
         for group in state.groups {
@@ -802,22 +800,6 @@ final class FinanceViewModel: ViewModelProtocol {
         let targetCurrency = normalizedConversionCurrency(currency)
         
         guard let accounts = group.accounts else { return 0.0 }
-        
-        // Собираем все уникальные валюты из счетов группы
-        let currencies = await collectCurrenciesFromGroup(group: group)
-        
-        // Собираем все валюты, для которых нужны курсы (включая целевую)
-        var allCurrenciesNeeded = Set(currencies)
-        allCurrenciesNeeded.insert(targetCurrency)
-        
-        // Предзагружаем курсы для всех необходимых валют через USD
-        // Курсы уже обновлены на верхнем уровне, здесь только предзагрузка
-        for neededCurrency in allCurrenciesNeeded {
-            if neededCurrency != "USD" {
-                // Запрашиваем курс, что автоматически загрузит его из API, если нужно
-                _ = await currencyService.getRate(from: "USD", to: neededCurrency)
-            }
-        }
         
         for account in accounts {
             let amount = await getAccountAmount(account: account)

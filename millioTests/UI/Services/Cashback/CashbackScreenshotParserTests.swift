@@ -96,4 +96,25 @@ struct CashbackScreenshotParserTests {
         #expect(parsed.contains { $0.categoryName == "Все покупки" && $0.percentage == 2 })
         #expect(parsed.contains { $0.categoryName == "Кафе" && $0.percentage == 7 })
     }
+
+    @Test("Парсер выдерживает OCR-шум с фото экрана банка")
+    func testParseRecognizedLinesSupportsPhotoLikeOcrNoise() {
+        let lines = [
+            "Ваши категории на март",
+            "🛍️ 10°/o Маркетплейсы",
+            "💄 10 % Красота",
+            "👗 10%Одежда и обувь i",
+            "📶 10％ Связь, интернет и ТВ",
+            "🌷 10% Цветы"
+        ]
+
+        let parsed = CashbackScreenshotParser.parseRecognizedLines(lines)
+
+        #expect(parsed.count == 5)
+        #expect(parsed.contains { $0.categoryName == "Маркетплейсы" && $0.percentage == 10 })
+        #expect(parsed.contains { $0.categoryName == "Красота" && $0.percentage == 10 })
+        #expect(parsed.contains { $0.categoryName == "Одежда и обувь" && $0.percentage == 10 })
+        #expect(parsed.contains { $0.categoryName == "Связь, интернет и ТВ" && $0.percentage == 10 })
+        #expect(parsed.contains { $0.categoryName == "Цветы" && $0.percentage == 10 })
+    }
 }

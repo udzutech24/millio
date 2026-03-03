@@ -34,14 +34,14 @@ enum CashbackCategory: String, Codable, CaseIterable {
     
     var icon: String {
         switch self {
-        case .gasStation: return "fuelpump.fill"
-        case .supermarket: return "cart.fill"
-        case .restaurant: return "fork.knife"
-        case .pharmacy: return "cross.case.fill"
-        case .transport: return "car.fill"
-        case .entertainment: return "gamecontroller.fill"
-        case .online: return "globe"
-        case .other: return "tag.fill"
+        case .gasStation: return "⛽️"
+        case .supermarket: return "🛒"
+        case .restaurant: return "🍽️"
+        case .pharmacy: return "💊"
+        case .transport: return "🚕"
+        case .entertainment: return "🎮"
+        case .online: return "🌐"
+        case .other: return "🧩"
         }
     }
 }
@@ -49,8 +49,8 @@ enum CashbackCategory: String, Codable, CaseIterable {
 /// Пользовательская категория кешбэка
 @Model
 final class CashbackCustomCategory: Persistable {
-    static let defaultIcon = "tag.fill"
-    static let allowedIcons: [String] = [
+    static let defaultIcon = "🛒"
+    static let allowedSFSymbolIcons: [String] = [
         "tag.fill",
         "cart.fill",
         "fuelpump.fill",
@@ -66,8 +66,127 @@ final class CashbackCustomCategory: Persistable {
         "airplane",
         "iphone",
         "bolt.fill",
-        "heart.fill"
+        "heart.fill",
+        "basket.fill",
+        "takeoutbag.and.cup.and.straw.fill",
+        "wineglass.fill",
+        "fork.knife.circle.fill",
+        "birthday.cake.fill",
+        "popcorn.fill",
+        "ticket.fill",
+        "film.fill",
+        "tv.fill",
+        "music.note",
+        "music.mic",
+        "headphones",
+        "book.fill",
+        "graduationcap.fill",
+        "gamecontroller",
+        "soccerball",
+        "dumbbell.fill",
+        "figure.run",
+        "tent.fill",
+        "beach.umbrella.fill",
+        "mountain.2.fill",
+        "camera.fill",
+        "photo.fill",
+        "paintpalette.fill",
+        "theatermasks.fill",
+        "stethoscope",
+        "pills.fill",
+        "bandage.fill",
+        "cross.vial.fill",
+        "pawprint.fill",
+        "dog.fill",
+        "cat.fill",
+        "leaf.fill",
+        "tree.fill",
+        "car.2.fill",
+        "bus.fill",
+        "tram.fill",
+        "ferry.fill",
+        "bicycle",
+        "scooter",
+        "airplane.departure",
+        "bed.double.fill",
+        "shippingbox.fill",
+        "cube.box.fill",
+        "bag.fill",
+        "creditcard.fill",
+        "banknote.fill",
+        "building.columns.fill",
+        "dollarsign.circle.fill",
+        "eurosign.circle.fill",
+        "rublesign.circle.fill",
+        "chart.line.uptrend.xyaxis",
+        "briefcase.fill",
+        "building.2.fill",
+        "desktopcomputer",
+        "laptopcomputer",
+        "display",
+        "keyboard.fill",
+        "printer.fill",
+        "wifi",
+        "antenna.radiowaves.left.and.right",
+        "phone.fill",
+        "message.fill",
+        "envelope.fill",
+        "doc.text.fill",
+        "newspaper.fill",
+        "calendar",
+        "clock.fill",
+        "sparkles",
+        "sun.max.fill",
+        "moon.fill",
+        "cloud.fill",
+        "umbrella.fill",
+        "snowflake",
+        "flame.fill",
+        "drop.fill",
+        "bolt.circle.fill",
+        "shield.fill",
+        "lock.fill",
+        "person.fill",
+        "person.2.fill",
+        "person.3.fill",
+        "child.fill",
+        "figure.2.and.child.holdinghands",
+        "house.lodge.fill",
+        "key.fill",
+        "hammer.fill",
+        "wrench.and.screwdriver.fill",
+        "scissors",
+        "sewingneedle",
+        "basketball.fill",
+        "volleyball.fill",
+        "baseball.fill",
+        "trophy.fill",
+        "medal.fill",
+        "flag.checkered",
+        "location.fill",
+        "map.fill",
+        "signpost.right.fill",
+        "carrot.fill",
+        "fish.fill",
+        "takeoutbag.and.cup.and.straw",
+        "cup.and.heat.waves.fill",
+        "lanyardcard.fill",
+        "comb.fill",
+        "facemask.fill"
     ]
+    static let allowedEmojiIcons: [String] = [
+        "🛒", "🛍️", "🏪", "🏬", "🧺", "🍽️", "🍔", "🍕", "🍣", "🍜",
+        "☕️", "🍰", "🍩", "🍿", "🎬", "🎮", "🎯", "🎟️", "🎨", "🎵",
+        "🎧", "📚", "🧠", "💊", "🩺", "🏥", "🚕", "🚗", "🚌", "🚇",
+        "🚲", "🛴", "⛽️", "✈️", "🏨", "🧳", "💼", "🖥️", "💻", "📱",
+        "⌚️", "📞", "📶", "🌐", "🛜", "🔌", "💡", "🏠", "🔑", "🛠️",
+        "🧰", "🧹", "🧴", "👕", "👟", "💄", "💇", "💆", "🧸",
+        "🍼", "🐶", "🐱", "🐾", "🌿", "🌸", "🌳", "🔥", "💧", "☀️",
+        "🌙", "🌧️", "❄️", "⚡️", "🧾", "📰", "📦", "🚚", "💳", "💰",
+        "🪙", "🏦", "📈", "📊", "🧯", "🛡️", "🔒", "❤️", "🧡", "💜",
+        "⭐️", "✨", "🎁", "🏆", "🏅", "⚽️", "🏀", "🏋️", "🧘", "🧑‍💻"
+    ]
+    static let allowedIcons: [String] = allowedSFSymbolIcons + allowedEmojiIcons
 
     /// Уникальный идентификатор категории
     var categoryID: String = UUID().uuidString
@@ -78,7 +197,7 @@ final class CashbackCustomCategory: Persistable {
     /// Нормализованное имя для дедупликации
     var normalizedName: String = ""
 
-    /// Иконка категории (SF Symbol)
+    /// Иконка категории (SF Symbol или emoji)
     var icon: String = defaultIcon
 
     /// Дата создания
@@ -102,7 +221,12 @@ final class CashbackCustomCategory: Persistable {
     }
 
     static func normalizeIcon(_ icon: String) -> String {
-        allowedIcons.contains(icon) ? icon : defaultIcon
+        let trimmed = icon.trimmingCharacters(in: .whitespacesAndNewlines)
+        return allowedIcons.contains(trimmed) ? trimmed : defaultIcon
+    }
+
+    static func isSFSymbolIcon(_ icon: String) -> Bool {
+        allowedSFSymbolIcons.contains(icon)
     }
 
     func export() throws -> Data {
@@ -187,9 +311,9 @@ final class Cashback: Persistable {
         return CashbackCategory.other.displayName
     }
 
-    /// Отображаемая иконка категории (для пользовательской используем общий тег)
+    /// Отображаемая иконка категории (для неизвестной категории используем fallback "Другое")
     var displayCategoryIcon: String {
-        CashbackCategory(rawValue: categoryRaw)?.icon ?? "tag.fill"
+        CashbackCategory(rawValue: categoryRaw)?.icon ?? CashbackCategory.other.icon
     }
     
     /// Форматированный процент для отображения
