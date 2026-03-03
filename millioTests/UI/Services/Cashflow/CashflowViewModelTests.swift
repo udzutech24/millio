@@ -23,6 +23,10 @@ struct CashflowViewModelTests {
     private static var retainedContainers: [ModelContainer] = []
 
     private func createTestModelContext() throws -> ModelContext {
+        let defaults = UserDefaults.standard
+        // Тесты не должны зависеть от пользовательского displayCurrency.
+        defaults.set("RUB", forKey: "cashflow_display_currency")
+
         // Вьюмодель запускает фоновые Task при инициализации.
         // Отдельный контейнер на тест исключает утечки данных между кейсами.
         let config = ModelConfiguration(isStoredInMemoryOnly: true)

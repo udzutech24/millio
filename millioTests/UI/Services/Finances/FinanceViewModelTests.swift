@@ -83,6 +83,11 @@ struct FinanceViewModelTests {
 
     /// Получить чистый контекст (очищаем данные от предыдущих тестов)
     private func createTestModelContext() throws -> ModelContext {
+        let defaults = UserDefaults.standard
+        // Тесты должны быть изолированы от пользовательских валютных настроек.
+        defaults.set("RUB", forKey: "finance_display_currency")
+        defaults.removeObject(forKey: "finance_secondary_display_currency")
+
         let context = Self.sharedContainer.mainContext
         // Очищаем все данные от предыдущих тестов
         try context.deleteAll(FinanceAccount.self)
