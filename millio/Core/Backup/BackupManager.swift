@@ -188,7 +188,7 @@ actor BackupManager: BackupManagerProtocol {
 
                 let backupRecordNames = try await cloudStore.listBackupRecordNamesForRestore()
                 guard !backupRecordNames.isEmpty else {
-                    throw AppError.restoreFailed("Backup не найден в iCloud")
+                    throw self.restoreFailure(.backupNotFound)
                 }
 
                 var hasAnyCandidateData = false
@@ -304,10 +304,10 @@ actor BackupManager: BackupManagerProtocol {
                 }
 
                 if hasAnyCandidateData {
-                    throw AppError.restoreFailed("Не удалось восстановить данные: доступные backup повреждены или несовместимы")
+                    throw self.restoreFailure(.allCandidatesInvalid)
                 }
 
-                throw AppError.restoreFailed("Backup не найден в iCloud")
+                throw self.restoreFailure(.backupNotFound)
             }
         
             logger.info("Restore completed successfully")
@@ -335,13 +335,14 @@ actor BackupManager: BackupManagerProtocol {
         }
     }
 
-    private func taggedRestoreFailure(
-        _ message: String,
-        reason: RestoreCandidateReason
-    ) -> TaggedRestoreFailure {
+    private func restoreFailure(_ code: RestoreFailureCode) -> AppError {
+        code.appError
+    }
+
+    private func taggedRestoreFailure(_ code: RestoreFailureCode) -> TaggedRestoreFailure {
         TaggedRestoreFailure(
-            appError: .restoreFailed(message),
-            reason: reason
+            appError: code.appError,
+            reason: code.reason
         )
     }
 
@@ -367,8 +368,8 @@ actor BackupManager: BackupManagerProtocol {
             case "aesgcm-passphrase":
                 guard passphrase != nil else {
                     return .block(
-                        error: .restoreFailed("Backup зашифрован парольной фразой. Введите парольную фразу и повторите."),
-                        reason: .passphraseRequired
+                        error: restoreFailure(.passphraseRequired),
+                        reason: RestoreFailureCode.passphraseRequired.reason
                     )
                 }
                 guard encryptionInfo.kdf != nil else {
@@ -459,24 +460,22 @@ actor BackupManager: BackupManagerProtocol {
                 switch encryptionInfo.algorithm {
                 case "aesgcm-passphrase":
                     guard let passphrase else {
-                        throw taggedRestoreFailure(
-                            "Backup зашифрован парольной фразой. Введите парольную фразу и повторите.",
-                            reason: .passphraseRequired
-                        )
+                        throw taggedRestoreFailure(.passphraseRequired)
                     }
                     guard let kdf = encryptionInfo.kdf else {
                         throw AppError.backupCorrupted
                     }
-                    backupData = try PassphraseBackupEncryption.decrypt(backupData, passphrase: passphrase, kdf: kdf)
+                    do {
+                        backupData = try PassphraseBackupEncryption.decrypt(backupData, passphrase: passphrase, kdf: kdf)
+                    } catch {
+                        throw taggedRestoreFailure(.decryptFailed)
+                    }
                 case "aesgcm-keychain":
                     let decryptor = encryption ?? KeychainBackupEncryption()
                     do {
                         backupData = try decryptor.decrypt(backupData)
                     } catch {
-                        throw taggedRestoreFailure(
-                            "Backup зашифрован и не может быть расшифрован на этом устройстве",
-                            reason: .keychainUnavailable
-                        )
+                        throw taggedRestoreFailure(.keychainUnavailable)
                     }
                 default:
                     throw AppError.backupCorrupted
@@ -499,10 +498,7 @@ actor BackupManager: BackupManagerProtocol {
                 do {
                     backupData = try encryption.decrypt(backupData)
                 } catch {
-                    throw taggedRestoreFailure(
-                        "Не удалось расшифровать backup",
-                        reason: .restoreFailed
-                    )
+                    throw taggedRestoreFailure(.decryptFailed)
                 }
             }
 
@@ -522,10 +518,7 @@ actor BackupManager: BackupManagerProtocol {
         do {
             try previousData.write(to: snapshotURL, options: .atomic)
         } catch {
-            throw taggedRestoreFailure(
-                "Не удалось создать снимок данных перед восстановлением",
-                reason: .restoreFailed
-            )
+            throw taggedRestoreFailure(.preRestoreSnapshotFailed)
         }
 
         do {
@@ -539,10 +532,7 @@ actor BackupManager: BackupManagerProtocol {
                 try await dataRepository.importAllDataAsync(snapshotData)
                 try? FileManager.default.removeItem(at: snapshotURL)
             } catch {
-                throw taggedRestoreFailure(
-                    "Не удалось восстановить данные после ошибки восстановления",
-                    reason: .restoreFailed
-                )
+                throw taggedRestoreFailure(.rollbackFailed)
             }
 
             throw error

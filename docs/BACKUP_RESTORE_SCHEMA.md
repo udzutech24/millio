@@ -408,6 +408,7 @@ restore_candidate stage=<...> outcome=<...> reason=<...> detail=<...> ...
 - `backup_corrupted`
 
 Коды причин больше не вычисляются через `message.contains(...)` для `restoreFailed`; критичные причины маркируются типизированно в restore-пайплайне.
+Пользовательские тексты ошибок restore централизованы в `RestoreFailureCode` и используются как единый source of truth.
 
 **Ошибки:**
 ```
