@@ -52,19 +52,45 @@ struct FinanceGroupEditorView: View {
                 .scrollDismissesKeyboard(.immediately)
                 .dismissKeyboardOnTap()
             }
-            .navigationTitle(viewModel.state.editingGroup == nil ? "Новая группа" : "Редактировать")
+            .navigationTitle(viewModel.state.editingGroup == nil ? "Новая группа" : "Группа")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Отмена") {
+                    Button {
                         dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .frame(width: 28, height: 28)
+                            .background(
+                                Circle()
+                                    .fill(Color.white.opacity(0.08))
+                            )
                     }
-                    .foregroundStyle(AppColors.textPrimary)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Отмена")
+                }
+                
+                if viewModel.state.editingGroup != nil {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button(role: .destructive) {
+                            deleteGroup()
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.system(size: 15, weight: .semibold))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Удалить")
+                    }
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Сохранить") {
+                    Button {
                         saveGroup()
+                    } label: {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 16, weight: .semibold))
                     }
                     .foregroundStyle(
                         LinearGradient(
@@ -74,6 +100,7 @@ struct FinanceGroupEditorView: View {
                         )
                     )
                     .disabled(!isValid)
+                    .accessibilityLabel("Сохранить")
                 }
             }
             .onAppear {
@@ -313,6 +340,12 @@ struct FinanceGroupEditorView: View {
     private func saveGroup() {
         let colorHex = selectedColor.toHex()
         viewModel.handle(.updateGroup(name: name, colorHex: colorHex, displayCurrency: selectedCurrency, isFavorite: isFavorite, priority: selectedPriority))
+        dismiss()
+    }
+
+    private func deleteGroup() {
+        guard let editingGroup = viewModel.state.editingGroup else { return }
+        viewModel.handle(.deleteGroup(editingGroup))
         dismiss()
     }
     

@@ -38,6 +38,15 @@ struct AmountInputFormatterTests {
         #expect(displayed == "12 345")
     }
 
+    @Test("integer input keeps raw value and shows grouping while typing")
+    func integerTypingShowsGrouping() {
+        let sanitized = AmountInputFormatter.sanitize("33333", maxFractionDigits: 0)
+        let displayed = AmountInputFormatter.display(sanitized, maxFractionDigits: 0)
+
+        #expect(sanitized == "33333")
+        #expect(displayed == "33 333")
+    }
+
     @Test("parse accepts both comma and dot decimal separators")
     func parseAcceptsCommaAndDot() {
         let parsedComma = AmountInputFormatter.parse("11 111,25")

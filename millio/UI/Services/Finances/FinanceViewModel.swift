@@ -178,6 +178,7 @@ enum FinanceAction {
     case showDisplayCurrencySheet
     case hideDisplayCurrencySheet
     case setDisplayCurrency(String)
+    case syncPrimaryCurrencyChange(old: String, new: String)
     case showSecondaryDisplayCurrencySheet
     case hideSecondaryDisplayCurrencySheet
     case setSecondaryDisplayCurrency(String?)
@@ -241,52 +242,24 @@ final class FinanceViewModel: ViewModelProtocol {
         get { defaults.double(forKey: "finance_savings_goal_amount") }
         set { defaults.set(newValue, forKey: "finance_savings_goal_amount") }
     }
+
+    private var storedSavingsGoalCurrency: String {
+        get {
+            let value = defaults.string(forKey: "finance_savings_goal_currency")
+            let normalized = normalizedCurrencyCode(value ?? state.displayCurrency)
+            return normalized.isEmpty ? "USD" : normalized
+        }
+        set {
+            let normalized = normalizedCurrencyCode(newValue)
+            defaults.set(normalized.isEmpty ? "USD" : normalized, forKey: "finance_savings_goal_currency")
+        }
+    }
     
     private var storedAmountHidden: Bool {
         get { defaults.bool(forKey: "finance_amount_hidden") }
         set { defaults.set(newValue, forKey: "finance_amount_hidden") }
     }
 
-    private var storedDisplayCurrency: String? {
-        get {
-            let value = defaults.string(forKey: "finance_display_currency")?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .uppercased()
-            guard let value, !value.isEmpty else { return nil }
-            return value
-        }
-        set {
-            guard let newValue else {
-                defaults.removeObject(forKey: "finance_display_currency")
-                return
-            }
-            defaults.set(
-                newValue.trimmingCharacters(in: .whitespacesAndNewlines).uppercased(),
-                forKey: "finance_display_currency"
-            )
-        }
-    }
-
-    private var storedSecondaryDisplayCurrency: String? {
-        get {
-            let value = defaults.string(forKey: "finance_secondary_display_currency")?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .uppercased()
-            guard let value, !value.isEmpty else { return nil }
-            return value
-        }
-        set {
-            guard let newValue else {
-                defaults.removeObject(forKey: "finance_secondary_display_currency")
-                return
-            }
-            defaults.set(
-                newValue.trimmingCharacters(in: .whitespacesAndNewlines).uppercased(),
-                forKey: "finance_secondary_display_currency"
-            )
-        }
-    }
-    
     init(
         modelContext: ModelContext,
         currencyService: CurrencyRateServiceProtocol? = nil,
@@ -296,15 +269,19 @@ final class FinanceViewModel: ViewModelProtocol {
         self.modelContext = modelContext
         self.currencyService = currencyService ?? CurrencyRateService.shared
         self.marketDataClient = marketDataClient
-        state.displayCurrency = storedDisplayCurrency ?? SettingsManager.shared.primaryCurrencyCode
-        state.secondaryDisplayCurrency = storedSecondaryDisplayCurrency ?? defaultSecondaryDisplayCurrency(primary: state.displayCurrency)
+        state.displayCurrency = SettingsManager.shared.primaryCurrencyCode
+        state.secondaryDisplayCurrency = defaultSecondaryDisplayCurrency(primary: state.displayCurrency)
         state.isSavingsGoalEnabled = storedSavingsGoalEnabled
         state.savingsGoalAmount = storedSavingsGoalAmount
+        let storedGoalCurrency = storedSavingsGoalCurrency
         state.isAmountHidden = storedAmountHidden
         subscribeToFinanceEvents()
         if !skipInitialLoad {
             loadGroups()
             loadAccounts()
+        }
+        Task {
+            await convertSavingsGoalAmountIfNeeded(from: storedGoalCurrency, to: state.displayCurrency)
         }
     }
 
@@ -392,9 +369,24 @@ final class FinanceViewModel: ViewModelProtocol {
             state.showSecondaryDisplayCurrencySheet = false
             
         case .setDisplayCurrency(let currency):
-            state.displayCurrency = currency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-            storedDisplayCurrency = state.displayCurrency
+            let oldDisplayCurrency = normalizedCurrencyCode(state.displayCurrency)
+            let newDisplayCurrency = normalizedCurrencyCode(currency)
+            guard !newDisplayCurrency.isEmpty else { return }
+            state.displayCurrency = newDisplayCurrency
             Task {
+                await convertSavingsGoalAmountIfNeeded(from: oldDisplayCurrency, to: newDisplayCurrency)
+                await refreshRates()
+                await calculateTotalAmountAsync()
+            }
+
+        case .syncPrimaryCurrencyChange(let old, let new):
+            let oldNormalized = normalizedCurrencyCode(old)
+            let newNormalized = normalizedCurrencyCode(new)
+            guard !oldNormalized.isEmpty, !newNormalized.isEmpty else { return }
+            guard normalizedCurrencyCode(state.displayCurrency) == oldNormalized else { return }
+            state.displayCurrency = newNormalized
+            Task {
+                await convertSavingsGoalAmountIfNeeded(from: oldNormalized, to: newNormalized)
                 await refreshRates()
                 await calculateTotalAmountAsync()
             }
@@ -403,7 +395,6 @@ final class FinanceViewModel: ViewModelProtocol {
             state.secondaryDisplayCurrency = currency?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .uppercased()
-            storedSecondaryDisplayCurrency = state.secondaryDisplayCurrency
             Task {
                 await refreshRates()
                 await calculateTotalAmountAsync()
@@ -512,6 +503,7 @@ final class FinanceViewModel: ViewModelProtocol {
         case .setSavingsGoalAmount(let amount):
             state.savingsGoalAmount = amount
             storedSavingsGoalAmount = amount
+            storedSavingsGoalCurrency = state.displayCurrency
             
         case .toggleAmountVisibility:
             state.isAmountHidden.toggle()
@@ -522,9 +514,47 @@ final class FinanceViewModel: ViewModelProtocol {
     // MARK: - Private Methods
 
     private func defaultSecondaryDisplayCurrency(primary: String) -> String {
-        let normalizedPrimary = primary.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let normalizedPrimary = normalizedCurrencyCode(primary)
         let firstFavorite = SettingsManager.shared.favoriteCurrencyCodes.first(where: { $0 != normalizedPrimary })
         return firstFavorite ?? "USD"
+    }
+
+    private func normalizedCurrencyCode(_ currency: String) -> String {
+        currency
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+    }
+
+    private func convertSavingsGoalAmountIfNeeded(from sourceCurrency: String, to targetCurrency: String) async {
+        let source = normalizedConversionCurrency(sourceCurrency)
+        let target = normalizedConversionCurrency(targetCurrency)
+
+        guard !source.isEmpty, !target.isEmpty else { return }
+        guard state.savingsGoalAmount > 0 else {
+            storedSavingsGoalCurrency = targetCurrency
+            return
+        }
+        guard source != target else {
+            storedSavingsGoalCurrency = targetCurrency
+            return
+        }
+
+        guard let rate = await currencyService.getRate(from: source, to: target), rate > 0 else {
+            AppLogger.log(
+                .warning,
+                category: "Finance",
+                "Failed to convert savings goal amount from \(sourceCurrency) to \(targetCurrency): rate unavailable"
+            )
+            return
+        }
+
+        let convertedAmount = state.savingsGoalAmount * rate
+        guard convertedAmount.isFinite, convertedAmount > 0 else { return }
+
+        let roundedAmount = max(1.0, convertedAmount.rounded())
+        state.savingsGoalAmount = roundedAmount
+        storedSavingsGoalAmount = roundedAmount
+        storedSavingsGoalCurrency = targetCurrency
     }
     
     private func loadGroups() {

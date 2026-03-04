@@ -14,7 +14,8 @@ struct ServiceItem: Identifiable, Equatable {
 
     let id: String
     let route: AppRoute
-    let title: String
+    /// Localization key for the service title on the main screen.
+    let titleKey: String
     let icon: String
     let gradientColors: [Color]
     
@@ -23,28 +24,28 @@ struct ServiceItem: Identifiable, Equatable {
             ServiceItem(
                 id: "finances",
                 route: .finances,
-                title: "Финансы",
+                titleKey: MainLocalization.serviceFinances,
                 icon: "finance",
                 gradientColors: AppColors.financesGradient
             ),
             ServiceItem(
                 id: "courses",
                 route: .courses,
-                title: "Курсы",
+                titleKey: MainLocalization.serviceCourses,
                 icon: "courses",
                 gradientColors: AppColors.coursesGradient
             ),
             ServiceItem(
                 id: "cashback",
                 route: .cashback,
-                title: "Кешбэк",
+                titleKey: MainLocalization.serviceCashback,
                 icon: cashbackIconAssetName,
                 gradientColors: AppColors.cashbackGradient
             ),
             ServiceItem(
                 id: "cashflow",
                 route: .cashflow,
-                title: "Кэшфлоу",
+                titleKey: MainLocalization.serviceCashflow,
                 icon: "loans",
                 gradientColors: AppColors.cashflowGradient
             )

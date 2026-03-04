@@ -16,8 +16,13 @@ struct CurrencyFlagsTests {
         #expect(CurrencyFlags.assetName(for: "BTC") == nil)
     }
 
-    @Test("assetName использует fallback xx если флаг валюты не найден")
-    func assetNameFallsBackToXX() {
-        #expect(CurrencyFlags.assetName(for: "ZZZ") == "xx")
+    @Test("assetName возвращает nil если иконка флага отсутствует")
+    func assetNameReturnsNilForUnknownCurrency() {
+        #expect(CurrencyFlags.assetName(for: "ZZZ") == nil)
+    }
+
+    @Test("flag для CNY строится корректно даже без ассета")
+    func cnyEmojiFallback() {
+        #expect(CurrencyFlags.flag(for: "CNY") == "🇨🇳")
     }
 }

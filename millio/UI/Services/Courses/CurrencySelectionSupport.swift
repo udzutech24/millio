@@ -247,7 +247,7 @@ public struct CurrencyPickerView: View {
         favoriteCodes: Set<String> = [],
         currentSelection: String? = nil,
         primaryPinnedCode: String? = nil,
-        primaryPinnedTitle: String = "Основная валюта",
+        primaryPinnedTitle: String? = nil,
         onToggleFavorite: ((String) -> Void)? = nil,
         onSelect: @escaping (String) -> Void
     ) {
@@ -257,7 +257,7 @@ public struct CurrencyPickerView: View {
         self.favoriteCodes = Set(favoriteCodes.map { $0.uppercased() })
         self.currentSelection = currentSelection?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         self.primaryPinnedCode = primaryPinnedCode?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        self.primaryPinnedTitle = primaryPinnedTitle
+        self.primaryPinnedTitle = primaryPinnedTitle ?? ConverterL10n.primaryCurrencySection
         self.onToggleFavorite = onToggleFavorite
         self.onSelect = onSelect
     }
@@ -310,7 +310,7 @@ public struct CurrencyPickerView: View {
             GradientBackground()
             
             VStack(spacing: 0) {
-                InlineSearchBar(text: $searchText, placeholder: "Код или название (RU/EN)")
+                InlineSearchBar(text: $searchText, placeholder: ConverterL10n.currencySearchPlaceholder)
                     .padding(.horizontal, 16)
                     .padding(.top, 16)
                     .padding(.bottom, 8)
@@ -340,7 +340,7 @@ public struct CurrencyPickerView: View {
 
                         if !pinnedFavorites.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("Избранные")
+                                Text(ConverterL10n.favoritesSection)
                                     .font(.system(size: 16, weight: .regular))
                                     .foregroundStyle(AppColors.textSecondary)
                                     .padding(.horizontal, 20)
@@ -375,7 +375,7 @@ public struct CurrencyPickerView: View {
                                 // Если избранных нет, то список просто идет.
                                 // Оставим заголовок, чтобы разделять.
                                 
-                                Text("Все валюты")
+                                Text(ConverterL10n.allCurrenciesSection)
                                     .font(.system(size: 16, weight: .regular))
                                     .foregroundStyle(AppColors.textSecondary)
                                     .padding(.horizontal, 20)
@@ -434,11 +434,17 @@ public struct CurrencyPickerView: View {
                     .frame(width: iconSize, height: iconSize)
                     .clipShape(Circle())
             } else {
-                Image("flag")
-                    .resizable()
-                    .renderingMode(.template)
-                    .foregroundStyle(AppColors.textPrimary)
-                    .frame(width: iconSize, height: iconSize)
+                let fallbackEmoji = CurrencyFlags.flag(for: c)
+                if fallbackEmoji != "🏳️" {
+                    Text(fallbackEmoji)
+                        .frame(width: iconSize, height: iconSize)
+                } else {
+                    Image("flag")
+                        .resizable()
+                        .renderingMode(.template)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .frame(width: iconSize, height: iconSize)
+                }
             }
         }
     }

@@ -174,9 +174,12 @@ struct CashflowScheduledTransactionsView: View {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
-                        Image(systemName: icon(for: transaction))
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(AppColors.textSecondary)
+                        CashflowCategoryIconView(
+                            icon: icon(for: transaction),
+                            fontSize: 13,
+                            fontWeight: .semibold,
+                            tint: AnyShapeStyle(AppColors.textSecondary)
+                        )
                         Text(title(for: transaction))
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)

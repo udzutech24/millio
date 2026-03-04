@@ -4,7 +4,8 @@ struct SharePreviewLayout {
     static let baseCardHeight: CGFloat = 540
 
     private static let minCardScale: CGFloat = 0.62
-    private static let reservedControlsHeight: CGFloat = 210
+    // Includes title chip, multiline note field, nav bar and bottom spacing.
+    private static let reservedControlsHeight: CGFloat = 270
 
     static func cardScale(containerHeight: CGFloat, keyboardHeight: CGFloat) -> CGFloat {
         let safeContainerHeight = max(0, containerHeight)

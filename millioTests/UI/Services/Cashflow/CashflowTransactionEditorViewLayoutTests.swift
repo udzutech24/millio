@@ -88,4 +88,11 @@ struct CashflowTransactionEditorViewLayoutTests {
         #expect(kind.categoryKind == .expense)
         #expect(kind.transactionType == .expense)
     }
+
+    @Test("Селектор валюты операции закрепляет основную валюту профиля")
+    func operationCurrencyPrimaryPinnedCodeNormalization() {
+        #expect(CashflowTransactionEditorView.operationCurrencyPrimaryPinnedCode(from: " rub ") == "RUB")
+        #expect(CashflowTransactionEditorView.operationCurrencyPrimaryPinnedCode(from: "") == nil)
+        #expect(CashflowTransactionEditorView.operationCurrencyPrimaryPinnedCode(from: nil) == nil)
+    }
 }

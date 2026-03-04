@@ -11,14 +11,15 @@
 
 ## Runtime Behavior
 
+- Primary currency can be changed only from Profile (`primaryCurrencyCode`).
 - In `Cashflow` and `Finances`, display currency selection is session-only (preview mode):
-  - changes are used only for current screen session;
-  - after leaving and reopening the module, display currency is reset from profile settings.
-- When `primaryCurrencyCode` changes, stored module display currencies are migrated only if they were equal to the previous primary currency:
+  - it affects only visualization;
+  - accounting source data and calculations remain based on saved amounts;
+  - after leaving the module, display currency resets from Profile primary currency.
+- Stored display currencies are migrated only for account-specific modules that keep persisted display settings:
   - `card_display_currency`
   - `investment_display_currency`
   - `credit_display_currency`
-- This keeps modules that followed primary in sync, while preserving explicit custom choices.
 
 ## Converter Scope
 

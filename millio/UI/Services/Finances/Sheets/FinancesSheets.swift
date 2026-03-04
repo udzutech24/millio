@@ -131,8 +131,11 @@ struct SheetsModifier: ViewModifier {
 struct DisplayCurrencySheet: View {
     @ObservedObject var viewModel: FinanceViewModel
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("finance_display_currency_hint_seen") private var hasSeenDisplayCurrencyHint: Bool = false
     var isSecondary: Bool = false
     @State private var searchText: String = ""
+    @State private var showInfoBanner: Bool = false
+    @State private var showInfoAlert: Bool = false
     
     // Используем полный список валют из CurrencySelectionSupport
     private let allCurrencies = CurrencySelectionSupport.allCodes(includeCrypto: false)
@@ -146,6 +149,7 @@ struct DisplayCurrencySheet: View {
                 selectedCodes: favoriteCodes,
                 favoriteCodes: Set(favoriteCodes),
                 currentSelection: isSecondary ? viewModel.state.secondaryDisplayCurrency : viewModel.state.displayCurrency,
+                primaryPinnedCode: SettingsManager.shared.primaryCurrencyCode,
                 onToggleFavorite: nil,
                 onSelect: { currency in
                     if isSecondary {
@@ -156,6 +160,13 @@ struct DisplayCurrencySheet: View {
                     dismiss()
                 }
             )
+            .safeAreaInset(edge: .top) {
+                if showInfoBanner {
+                    infoBanner(message: infoMessage)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 6)
+                }
+            }
             .navigationTitle(isSecondary ? "Дополнительная валюта" : "Валюта отображения")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -163,10 +174,70 @@ struct DisplayCurrencySheet: View {
                     Button("Отмена") { dismiss() }
                         .foregroundStyle(AppColors.textPrimary)
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showInfoAlert = true
+                    } label: {
+                        Image(systemName: "questionmark.circle")
+                            .foregroundStyle(AppColors.textPrimary)
+                    }
+                    .accessibilityLabel("Подсказка о валюте отображения")
+                }
+            }
+            .onAppear {
+                if !hasSeenDisplayCurrencyHint {
+                    showInfoBanner = true
+                    hasSeenDisplayCurrencyHint = true
+                }
+            }
+            .alert("Подсказка", isPresented: $showInfoAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(infoMessage)
             }
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+    }
+
+    private var infoMessage: String {
+        "Основная валюта меняется только в Профиле. Здесь валюта влияет только на просмотр и сбрасывается после выхода из Финансов."
+    }
+
+    private func infoBanner(message: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "info.circle.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AppColors.textSecondary)
+                .padding(.top, 1)
+
+            Text(message)
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(AppColors.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .multilineTextAlignment(.leading)
+
+            Button {
+                showInfoBanner = false
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(AppColors.textSecondary)
+                    .frame(width: 18, height: 18)
+                    .background(Color.white.opacity(0.08))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Скрыть уведомление")
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .background(Color.white.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+        }
     }
 }
 
@@ -178,133 +249,149 @@ struct SavingsGoalSettingsView: View {
     
     @State private var isEnabled: Bool = false
     @State private var goalAmount: String = ""
+    @State private var goalAmountDisplayText: String = ""
     
     var body: some View {
         NavigationStack {
             ZStack {
                 GradientBackground()
-                
-                ScrollView {
-                    VStack(spacing: 24) {
-                        // Настройки цели
+
+                VStack(spacing: 20) {
+                    // Настройки цели
+                    VStack(alignment: .leading, spacing: 10) {
+                        FinancesSectionHeader(title: "Настройки цели")
+                        FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16)) {
+                            Toggle("Включить цель накопления", isOn: $isEnabled)
+                                .tint(AppColors.toggleOnGreen)
+                                .foregroundStyle(AppColors.textPrimary)
+                        }
+                    }
+
+                    if isEnabled {
+                        // Сумма цели
                         VStack(alignment: .leading, spacing: 10) {
-                            FinancesSectionHeader(title: "Настройки цели")
-                            FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16)) {
-                                Toggle("Включить цель накопления", isOn: $isEnabled)
-                                    .tint(AppColors.toggleOnGreen)
+                            FinancesSectionHeader(title: "Сумма цели (\(viewModel.state.displayCurrency))")
+                            FinancesGlassCard {
+                                TextField("Сумма цели", text: $goalAmountDisplayText)
+                                    .keyboardType(.decimalPad)
                                     .foregroundStyle(AppColors.textPrimary)
+                                    .padding(.vertical, 14)
+                                    .padding(.horizontal, 16)
                             }
                         }
-                        
-                        if isEnabled {
-                            // Сумма цели
+
+                        // Прогресс
+                        if let amount = AmountInputFormatter.parse(goalAmount), amount > 0 {
+                            let progress: Double = {
+                                guard amount > 0 else { return 0.0 }
+                                let calculated = viewModel.state.totalAmount / amount
+                                guard calculated.isFinite else { return 0.0 }
+                                return max(0.0, min(1.0, calculated))
+                            }()
+                            let remaining = max(0, amount - viewModel.state.totalAmount)
+
                             VStack(alignment: .leading, spacing: 10) {
-                                FinancesSectionHeader(title: "Сумма цели (\(viewModel.state.displayCurrency))")
-                                FinancesGlassCard {
-                                    TextField("Сумма цели", text: Binding(
-                                        get: { AmountInputFormatter.display(goalAmount, maxFractionDigits: 0) },
-                                        set: { newValue in
-                                            goalAmount = AmountInputFormatter.sanitize(newValue, maxFractionDigits: 0)
+                                FinancesSectionHeader(title: "Прогресс")
+                                FinancesGlassCard(contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)) {
+                                    VStack(alignment: .leading, spacing: 16) {
+                                        VStack(spacing: 8) {
+                                            HStack {
+                                                Text("Текущая сумма")
+                                                    .font(.system(size: 14, weight: .medium))
+                                                    .foregroundStyle(AppColors.textSecondary)
+                                                Spacer()
+                                                Text("\(formatAmount(viewModel.state.totalAmount, isHidden: viewModel.state.isAmountHidden)) \(viewModel.state.displayCurrency)")
+                                                    .font(.system(size: 14, weight: .semibold))
+                                                    .foregroundStyle(AppColors.textPrimary)
+                                            }
+
+                                            HStack {
+                                                Text("Осталось накопить")
+                                                    .font(.system(size: 14, weight: .medium))
+                                                    .foregroundStyle(AppColors.textSecondary)
+                                                Spacer()
+                                                Text("\(formatAmount(remaining, isHidden: viewModel.state.isAmountHidden)) \(viewModel.state.displayCurrency)")
+                                                    .font(.system(size: 14, weight: .semibold))
+                                                    .foregroundStyle(AppColors.textPrimary)
+                                            }
                                         }
-                                    ))
-                                        .keyboardType(.decimalPad)
-                                        .foregroundStyle(AppColors.textPrimary)
-                                        .padding(.vertical, 14)
-                                        .padding(.horizontal, 16)
-                                }
-                            }
-                            
-                            // Прогресс
-                            if let amount = AmountInputFormatter.parse(goalAmount), amount > 0 {
-                                let progress: Double = {
-                                    guard amount > 0 else { return 0.0 }
-                                    let calculated = viewModel.state.totalAmount / amount
-                                    guard calculated.isFinite else { return 0.0 }
-                                    return max(0.0, min(1.0, calculated))
-                                }()
-                                let remaining = max(0, amount - viewModel.state.totalAmount)
-                                
-                                VStack(alignment: .leading, spacing: 10) {
-                                    FinancesSectionHeader(title: "Прогресс")
-                                    FinancesGlassCard(contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)) {
-                                        VStack(alignment: .leading, spacing: 16) {
-                                            VStack(spacing: 8) {
-                                                HStack {
-                                                    Text("Текущая сумма")
-                                                        .font(.system(size: 14, weight: .medium))
-                                                        .foregroundStyle(AppColors.textSecondary)
-                                                    Spacer()
-                                                    Text("\(formatAmount(viewModel.state.totalAmount, isHidden: viewModel.state.isAmountHidden)) \(viewModel.state.displayCurrency)")
-                                                        .font(.system(size: 14, weight: .semibold))
-                                                        .foregroundStyle(AppColors.textPrimary)
-                                                }
-                                                
-                                                HStack {
-                                                    Text("Осталось накопить")
-                                                        .font(.system(size: 14, weight: .medium))
-                                                        .foregroundStyle(AppColors.textSecondary)
-                                                    Spacer()
-                                                    Text("\(formatAmount(remaining, isHidden: viewModel.state.isAmountHidden)) \(viewModel.state.displayCurrency)")
-                                                        .font(.system(size: 14, weight: .semibold))
-                                                        .foregroundStyle(AppColors.textPrimary)
+
+                                        // Кастомный прогресс бар
+                                        VStack(spacing: 8) {
+                                            GeometryReader { proxy in
+                                                ZStack(alignment: .leading) {
+                                                    Capsule()
+                                                        .fill(Color.white.opacity(0.1))
+                                                        .frame(height: 8)
+
+                                                    Capsule()
+                                                        .fill(LinearGradient(colors: AppColors.financesGradient, startPoint: .leading, endPoint: .trailing))
+                                                        .frame(width: max(0, min(proxy.size.width, proxy.size.width * progress)), height: 8)
                                                 }
                                             }
-                                            
-                                            // Кастомный прогресс бар
-                                            VStack(spacing: 8) {
-                                                GeometryReader { proxy in
-                                                    ZStack(alignment: .leading) {
-                                                        Capsule()
-                                                            .fill(Color.white.opacity(0.1))
-                                                            .frame(height: 8)
-                                                        
-                                                        Capsule()
-                                                            .fill(LinearGradient(colors: AppColors.financesGradient, startPoint: .leading, endPoint: .trailing))
-                                                            .frame(width: max(0, min(proxy.size.width, proxy.size.width * progress)), height: 8)
-                                                    }
-                                                }
-                                                .frame(height: 8)
-                                                
-                                                Text("Выполнено: \(Int(progress * 100))%")
-                                                    .font(.system(size: 12, weight: .regular))
-                                                    .foregroundStyle(AppColors.textTertiary)
-                                                    .frame(maxWidth: .infinity, alignment: .center)
-                                            }
+                                            .frame(height: 8)
+
+                                            Text("Выполнено: \(Int(progress * 100))%")
+                                                .font(.system(size: 12, weight: .regular))
+                                                .foregroundStyle(AppColors.textTertiary)
+                                                .frame(maxWidth: .infinity, alignment: .center)
                                         }
                                     }
                                 }
                             }
                         }
                     }
-                    .padding(.top, 20)
-                    .padding(.bottom, 40)
-                    .padding(.horizontal, 16)
+
+                    Spacer(minLength: 0)
                 }
+                .padding(.top, 16)
+                .padding(.horizontal, 16)
             }
             .navigationTitle("Цель накопления")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Отмена") { dismiss() }
-                        .foregroundStyle(AppColors.textPrimary)
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Сохранить") {
-                        viewModel.handle(.setSavingsGoalEnabled(isEnabled))
-                        if let amount = AmountInputFormatter.parse(goalAmount) {
-                            viewModel.handle(.setSavingsGoalAmount(amount))
-                        }
-                        dismiss()
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .frame(width: 28, height: 28)
+                            .background(
+                                Circle()
+                                    .fill(Color.white.opacity(0.08))
+                            )
                     }
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: AppColors.financesGradient,
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .buttonStyle(.plain)
                 }
+            }
+            .safeAreaInset(edge: .bottom) {
+                VStack(spacing: 0) {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.06))
+                        .frame(height: 1)
+                        .opacity(0.45)
+
+                    Button(action: saveGoalSettings) {
+                        Text("Сохранить")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(
+                                Capsule()
+                                    .fill(LinearGradient(
+                                        colors: AppColors.financesGradient,
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    ))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 10)
+                }
+                .background(.ultraThinMaterial)
             }
             .onAppear {
                 isEnabled = viewModel.state.isSavingsGoalEnabled
@@ -313,9 +400,30 @@ struct SavingsGoalSettingsView: View {
                         AmountInputFormatter.plainString(from: viewModel.state.savingsGoalAmount),
                         maxFractionDigits: 0
                     )
+                    goalAmountDisplayText = AmountInputFormatter.display(goalAmount, maxFractionDigits: 0)
                 }
             }
+            .onChange(of: goalAmountDisplayText) { _, newValue in
+                handleGoalAmountDisplayChange(newValue)
+            }
         }
+    }
+
+    private func handleGoalAmountDisplayChange(_ newValue: String) {
+        let sanitized = AmountInputFormatter.sanitize(newValue, maxFractionDigits: 0)
+        let formatted = AmountInputFormatter.display(sanitized, maxFractionDigits: 0)
+        if newValue != formatted {
+            goalAmountDisplayText = formatted
+        }
+        goalAmount = sanitized
+    }
+
+    private func saveGoalSettings() {
+        viewModel.handle(.setSavingsGoalEnabled(isEnabled))
+        if let amount = AmountInputFormatter.parse(goalAmount) {
+            viewModel.handle(.setSavingsGoalAmount(amount))
+        }
+        dismiss()
     }
     
     private func formatAmount(_ amount: Double, isHidden: Bool = false) -> String {

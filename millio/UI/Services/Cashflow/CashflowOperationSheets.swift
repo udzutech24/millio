@@ -39,6 +39,7 @@ private struct CashflowCategoryTransactionSheet: View {
     @State private var monthTotalTask: Task<Void, Never>?
     @State private var showRecurringManagement: Bool = false
     @State private var showPlannedManagement: Bool = false
+    @State private var showHelpSheet: Bool = false
 
     @State private var showCreateCategorySheet: Bool = false
     @State private var newCategoryName: String = ""
@@ -133,6 +134,9 @@ private struct CashflowCategoryTransactionSheet: View {
                     onSave: handleCreateCategory
                 )
             }
+            .sheet(isPresented: $showHelpSheet) {
+                CashflowCategoryHelpSheet(kind: kind)
+            }
             .fullScreenCover(isPresented: $showCategoryEditorSheet) {
                 CashflowCategoryEditorSheet(
                     mode: categoryEditorMode,
@@ -193,6 +197,25 @@ private struct CashflowCategoryTransactionSheet: View {
             .buttonStyle(.plain)
 
             Spacer()
+
+            Button {
+                showHelpSheet = true
+            } label: {
+                Image(systemName: "questionmark.circle")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary.opacity(0.92))
+                    .frame(width: 44, height: 44)
+                    .background(
+                        Circle()
+                            .fill(Color.white.opacity(0.08))
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.white.opacity(0.22), lineWidth: 1)
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Подсказка по экрану \(kind.navigationTitle.lowercased())")
         }
         .padding(.top, 6)
     }
@@ -360,9 +383,12 @@ private struct CashflowCategoryTransactionSheet: View {
                     selectedCategory = option
                 } label: {
                     VStack(spacing: 8) {
-                        Image(systemName: option.icon)
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary)
+                        CashflowCategoryIconView(
+                            icon: option.icon,
+                            fontSize: 18,
+                            fontWeight: .semibold,
+                            tint: AnyShapeStyle(AppColors.textPrimary)
+                        )
                         Text(option.displayName)
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
@@ -520,8 +546,7 @@ private struct CashflowCategoryTransactionSheet: View {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
 
-        if let created = viewModel.createCustomCategory(kind: kind.categoryKind, name: trimmedName, icon: icon) {
-            selectedCategory = created
+        if viewModel.createCustomCategory(kind: kind.categoryKind, name: trimmedName, icon: icon) != nil {
             searchText = ""
         }
 
@@ -543,8 +568,7 @@ private struct CashflowCategoryTransactionSheet: View {
 
         switch categoryEditorMode {
         case .create:
-            if let created = viewModel.createCustomCategory(kind: kind.categoryKind, name: trimmedName, icon: icon) {
-                selectedCategory = created
+            if viewModel.createCustomCategory(kind: kind.categoryKind, name: trimmedName, icon: icon) != nil {
                 searchText = ""
             }
         case .edit(let rawValue):
@@ -590,6 +614,98 @@ private struct CashflowCategoryTransactionSheet: View {
         guard !code.isEmpty else { return amount }
         let symbol = MonetaCurrency(rawValue: code)?.symbol ?? code
         return "\(amount) \(symbol)"
+    }
+}
+
+/// Тестируемый источник кратких подсказок для экранов "Новый доход/расход".
+struct CashflowCategoryHelpContent {
+    let title: String
+    let lines: [String]
+
+    static func make(for kind: CashflowCategoryTransactionSheetKind) -> CashflowCategoryHelpContent {
+        let intro = switch kind {
+        case .income:
+            "Экран «Доход» показывает категории доходов за выбранный месяц."
+        case .expense:
+            "Экран «Расход» показывает категории расходов за выбранный месяц."
+        }
+
+        let totalHint = switch kind {
+        case .income:
+            "Сверху видно итог доходов за месяц в валюте отображения."
+        case .expense:
+            "Сверху видно итог расходов за месяц в валюте отображения."
+        }
+
+        return CashflowCategoryHelpContent(
+            title: "Как это работает",
+            lines: [
+                intro,
+                totalHint,
+                "Нажмите на категорию, чтобы добавить операцию в выбранной категории.",
+                "Нажмите «+», чтобы добавить свою категорию (название и иконка).",
+                "Удерживайте категорию, чтобы открыть меню: редактировать или удалить.",
+                "При удалении категории связанные операции автоматически переносятся в безопасную системную категорию."
+            ]
+        )
+    }
+}
+
+private struct CashflowCategoryHelpSheet: View {
+    let kind: CashflowCategoryTransactionSheetKind
+    @Environment(\.dismiss) private var dismiss
+
+    private var content: CashflowCategoryHelpContent {
+        CashflowCategoryHelpContent.make(for: kind)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(Array(content.lines.enumerated()), id: \.offset) { index, line in
+                            HStack(alignment: .top, spacing: 10) {
+                                Text("\(index + 1).")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(AppColors.textSecondary)
+                                    .padding(.top, 1)
+                                Text(line)
+                                    .font(.system(size: 15, weight: .regular))
+                                    .foregroundStyle(AppColors.textPrimary)
+                                    .multilineTextAlignment(.leading)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(Color.white.opacity(0.06))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .stroke(Color.white.opacity(0.16), lineWidth: 1)
+                            )
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 24)
+                }
+            }
+            .navigationTitle(content.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Закрыть") {
+                        dismiss()
+                    }
+                    .foregroundStyle(AppColors.textPrimary)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 }
 
@@ -667,12 +783,36 @@ struct CashflowTransferTransactionSheet: View {
 }
 
 private struct CashflowCategoryQuickCreateSheet: View {
+    private enum IconPickerTab: String, CaseIterable, Identifiable {
+        case emoji = "Эмодзи"
+        case symbols = "Иконки"
+
+        var id: String { rawValue }
+    }
+
     @Binding var name: String
     @Binding var icon: String
     let onSave: (String, String) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @FocusState private var isNameFieldFocused: Bool
+    @State private var selectedTab: IconPickerTab = .emoji
+    @State private var iconSearchText: String = ""
+
+    private var filteredSymbolIcons: [String] {
+        let query = iconSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return CashflowCustomCategory.allowedSFSymbolIcons }
+        return CashflowCustomCategory.allowedSFSymbolIcons.filter { $0.lowercased().contains(query) }
+    }
+
+    private var visibleIcons: [String] {
+        switch selectedTab {
+        case .emoji:
+            return CashflowCustomCategory.allowedEmojiIcons
+        case .symbols:
+            return filteredSymbolIcons
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -693,22 +833,55 @@ private struct CashflowCategoryQuickCreateSheet: View {
 
                         FinancesSectionHeader(title: "Иконка")
                         FinancesGlassCard {
-                            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 5), spacing: 10) {
-                                ForEach(CashflowCustomCategory.allowedIcons, id: \.self) { symbol in
+                            VStack(spacing: 12) {
+                                Picker("Тип иконки", selection: $selectedTab) {
+                                    ForEach(IconPickerTab.allCases) { tab in
+                                        Text(tab.rawValue).tag(tab)
+                                    }
+                                }
+                                .pickerStyle(.segmented)
+
+                                if selectedTab == .symbols {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "magnifyingglass")
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundStyle(AppColors.textTertiary)
+                                        TextField("Поиск иконки (например: car, cart, heart)", text: $iconSearchText)
+                                            .font(.system(size: 14, weight: .regular))
+                                            .foregroundStyle(AppColors.textPrimary)
+                                    }
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .fill(Color.white.opacity(0.08))
+                                    )
+                                }
+
+                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 58), spacing: 10)], spacing: 10) {
+                                    ForEach(visibleIcons, id: \.self) { symbol in
                                     Button {
                                         icon = symbol
                                     } label: {
-                                        Image(systemName: symbol)
-                                            .font(.system(size: 16, weight: .semibold))
-                                            .foregroundStyle(icon == symbol ? AppColors.textPrimary : AppColors.textSecondary)
-                                            .frame(maxWidth: .infinity, minHeight: 40)
+                                        CashflowCategoryIconView(
+                                            icon: symbol,
+                                            fontSize: 22,
+                                            fontWeight: .semibold,
+                                            tint: AnyShapeStyle(icon == symbol ? AppColors.textPrimary : AppColors.textSecondary)
+                                        )
+                                            .frame(width: 54, height: 54)
                                             .background(
-                                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                                RoundedRectangle(cornerRadius: 14, style: .continuous)
                                                     .fill(icon == symbol ? Color.white.opacity(0.14) : Color.white.opacity(0.06))
+                                                    .overlay(
+                                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                                            .stroke(Color.white.opacity(icon == symbol ? 0.24 : 0.10), lineWidth: 1)
+                                                    )
                                             )
                                     }
                                     .buttonStyle(.plain)
                                 }
+                            }
                             }
                             .padding(12)
                         }
@@ -739,6 +912,8 @@ private struct CashflowCategoryQuickCreateSheet: View {
                 DispatchQueue.main.async {
                     isNameFieldFocused = true
                 }
+                selectedTab = CashflowCustomCategory.isSFSymbolIcon(icon) ? .symbols : .emoji
+                iconSearchText = ""
             }
         }
         .presentationDetents([.large])

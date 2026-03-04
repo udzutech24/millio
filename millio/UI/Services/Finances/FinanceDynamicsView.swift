@@ -12,6 +12,24 @@ import SwiftUI
 import SwiftData
 import Charts
 
+struct FinanceDynamicsEstimatedRateWarningPrefs {
+    static let hiddenKey = "finance_dynamics_estimated_rate_warning_hidden"
+
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    func isHidden() -> Bool {
+        defaults.bool(forKey: Self.hiddenKey)
+    }
+
+    func setHidden(_ hidden: Bool) {
+        defaults.set(hidden, forKey: Self.hiddenKey)
+    }
+}
+
 // MARK: - Finance Dynamics View
 
 struct FinanceDynamicsView: View {
@@ -104,6 +122,7 @@ private struct FinanceDynamicsContentView: View {
     @Bindable var appState: AppState
     @Binding var showSubscriptionSheet: Bool
     @ObservedObject var financeViewModel: FinanceViewModel
+    @AppStorage("finance_display_currency_hint_seen") private var hasSeenDisplayCurrencyHint: Bool = false
     var initialAccountID: String? = nil
     var initialAccount: FinanceAccount? = nil
 
@@ -119,6 +138,8 @@ private struct FinanceDynamicsContentView: View {
     @State private var showCustomPeriodSheet: Bool = false
     @State private var draftStartDate: Date = Date()
     @State private var draftEndDate: Date = Date()
+    @State private var showDisplayCurrencyInfoBanner: Bool = false
+    @State private var showDisplayCurrencyInfoAlert: Bool = false
     @State private var showDisplayCurrencySheet: Bool = false
     @State private var displayCurrencySearchText: String = ""
     @State private var showTradeSheet: Bool = false
@@ -138,6 +159,7 @@ private struct FinanceDynamicsContentView: View {
     @State private var inlineAmountText: String = ""
     @State private var inlineCreditLimitText: String = ""
     @State private var inlineCreditDebtText: String = ""
+    @State private var isEstimatedRateWarningHidden: Bool = FinanceDynamicsEstimatedRateWarningPrefs().isHidden()
 
     // Кэшированные значения для графика
     @State private var cachedSelectedPoint: (date: Date, value: Double)? = nil
@@ -172,8 +194,11 @@ private struct FinanceDynamicsContentView: View {
                         // Карточка графика
                         chartCard
 
-                        if let warning = viewModel.state.currencyConversionWarning {
-                            currencyWarningView(text: warning)
+                        if let warning = viewModel.state.currencyConversionWarning, !isEstimatedRateWarningHidden {
+                            currencyWarningView(text: warning) {
+                                isEstimatedRateWarningHidden = true
+                                FinanceDynamicsEstimatedRateWarningPrefs().setHidden(true)
+                            }
                         }
 
                         // Список динамики
@@ -1432,6 +1457,7 @@ private struct FinanceDynamicsContentView: View {
                 selectedCodes: favoriteCodes,
                 favoriteCodes: Set(favoriteCodes),
                 currentSelection: viewModel.state.displayCurrency,
+                primaryPinnedCode: SettingsManager.shared.primaryCurrencyCode,
                 onToggleFavorite: nil,
                 onSelect: { code in
                     viewModel.handle(.setDisplayCurrency(code))
@@ -1439,9 +1465,23 @@ private struct FinanceDynamicsContentView: View {
                     showDisplayCurrencySheet = false
                 }
             )
+            .safeAreaInset(edge: .top) {
+                if showDisplayCurrencyInfoBanner {
+                    displayCurrencyInfoBanner(message: displayCurrencyInfoMessage)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 6)
+                }
+            }
             .navigationTitle("Валюта")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showDisplayCurrencyInfoAlert = true
+                    } label: {
+                        Image(systemName: "questionmark.circle")
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Закрыть") {
                         displayCurrencySearchText = ""
@@ -1449,8 +1489,59 @@ private struct FinanceDynamicsContentView: View {
                     }
                 }
             }
+            .onAppear {
+                if !hasSeenDisplayCurrencyHint {
+                    showDisplayCurrencyInfoBanner = true
+                    hasSeenDisplayCurrencyHint = true
+                }
+            }
+            .alert("Подсказка", isPresented: $showDisplayCurrencyInfoAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(displayCurrencyInfoMessage)
+            }
         }
         .presentationDetents([.large])
+    }
+
+    private var displayCurrencyInfoMessage: String {
+        "Основная валюта меняется только в Профиле. Здесь валюта влияет только на просмотр и сбрасывается после выхода из Финансов."
+    }
+
+    private func displayCurrencyInfoBanner(message: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "info.circle.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AppColors.textSecondary)
+                .padding(.top, 1)
+
+            Text(message)
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(AppColors.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .multilineTextAlignment(.leading)
+
+            Button {
+                showDisplayCurrencyInfoBanner = false
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(AppColors.textSecondary)
+                    .frame(width: 18, height: 18)
+                    .background(Color.white.opacity(0.08))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Скрыть уведомление")
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .background(Color.white.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+        }
     }
 
     // MARK: - Period Selector
@@ -2082,7 +2173,7 @@ private struct FinanceDynamicsContentView: View {
         }
     }
 
-    private func currencyWarningView(text: String) -> some View {
+    private func currencyWarningView(text: String, onClose: @escaping () -> Void) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 14))
@@ -2090,7 +2181,18 @@ private struct FinanceDynamicsContentView: View {
             Text(text)
                 .font(.system(size: 13))
                 .foregroundStyle(AppColors.textSecondary)
-            Spacer()
+                .multilineTextAlignment(.leading)
+            Spacer(minLength: 0)
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(AppColors.textSecondary)
+                    .frame(width: 18, height: 18)
+                    .background(Color.white.opacity(0.08))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Скрыть уведомление")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)

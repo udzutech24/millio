@@ -172,6 +172,52 @@ enum ChartPeriod: String, CaseIterable {
     }
 }
 
+// MARK: - History Query
+
+enum CashflowHistoryTypeFilter: CaseIterable {
+    case all
+    case income
+    case expense
+    case transfer
+    case assetBalanceChange
+    case accountBalanceCorrection
+
+    var title: String {
+        switch self {
+        case .all: return String(localized: "cashflow.history.filter.all")
+        case .income: return String(localized: "cashflow.history.filter.income")
+        case .expense: return String(localized: "cashflow.history.filter.expense")
+        case .transfer: return String(localized: "cashflow.history.filter.transfer")
+        case .assetBalanceChange: return String(localized: "cashflow.history.filter.asset_change")
+        case .accountBalanceCorrection: return String(localized: "cashflow.history.filter.account_correction")
+        }
+    }
+
+    func matches(_ type: CashflowTransactionType) -> Bool {
+        switch self {
+        case .all:
+            return true
+        case .income:
+            return type == .income
+        case .expense:
+            return type == .expense
+        case .transfer:
+            return type == .transfer
+        case .assetBalanceChange:
+            return type == .balanceAdjustment
+        case .accountBalanceCorrection:
+            return type == .cardBalanceAdjustment || type == .creditDebtAdjustment
+        }
+    }
+}
+
+struct CashflowHistoryQuery {
+    var typeFilter: CashflowHistoryTypeFilter = .all
+    var searchText: String = ""
+    var startDate: Date?
+    var endDate: Date?
+}
+
 // MARK: - Cashflow Actions
 
 enum CashflowAction {
@@ -195,6 +241,7 @@ enum CashflowAction {
     case showCurrencySelector
     case hideCurrencySelector
     case setDisplayCurrency(String)
+    case syncPrimaryCurrencyChange(old: String, new: String)
     case loadCards
 }
 
@@ -211,30 +258,9 @@ final class CashflowViewModel: ViewModelProtocol {
     private let historicalRateStore: HistoricalRateStore
     private let now: () -> Date
     private let assetsSnapshotProvider: ((Date, Date, String) async -> (start: Double, end: Double)?)?
-    private let defaults = UserDefaults.standard
     
     private var eventSubscriptionID: UUID?
     private var isRecurringGenerationInProgress: Bool = false
-
-    private var storedDisplayCurrency: String? {
-        get {
-            let value = defaults.string(forKey: "cashflow_display_currency")?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .uppercased()
-            guard let value, !value.isEmpty else { return nil }
-            return value
-        }
-        set {
-            guard let newValue else {
-                defaults.removeObject(forKey: "cashflow_display_currency")
-                return
-            }
-            defaults.set(
-                newValue.trimmingCharacters(in: .whitespacesAndNewlines).uppercased(),
-                forKey: "cashflow_display_currency"
-            )
-        }
-    }
     
     init(
         modelContext: ModelContext,
@@ -245,7 +271,7 @@ final class CashflowViewModel: ViewModelProtocol {
         self.historicalRateStore = HistoricalRateStore(modelContext: modelContext)
         self.now = now
         self.assetsSnapshotProvider = assetsSnapshotProvider
-        state.displayCurrency = storedDisplayCurrency ?? SettingsManager.shared.primaryCurrencyCode
+        state.displayCurrency = SettingsManager.shared.primaryCurrencyCode
         state.selectedMonth = now()
         state.selectedQuarter = now()
         state.selectedYear = now()
@@ -348,7 +374,13 @@ final class CashflowViewModel: ViewModelProtocol {
             
         case .setDisplayCurrency(let currency):
             state.displayCurrency = currency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-            storedDisplayCurrency = state.displayCurrency
+            updateChartData()
+
+        case .syncPrimaryCurrencyChange(let old, let new):
+            let oldNormalized = old.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            let newNormalized = new.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            guard !oldNormalized.isEmpty, !newNormalized.isEmpty else { return }
+            state.displayCurrency = newNormalized
             updateChartData()
             
         case .loadCards:
@@ -452,6 +484,97 @@ final class CashflowViewModel: ViewModelProtocol {
     
     private func applyFilters() {
         state.filteredTransactions = state.transactions
+    }
+
+    // MARK: - History
+
+    func historyTransactions(matching query: CashflowHistoryQuery) -> [CashflowTransaction] {
+        let normalizedQuery = query.searchText
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let cardsByID = Dictionary(uniqueKeysWithValues: state.allCards.map { ($0.cardUniqueID, $0.name.lowercased()) })
+        let dateRange = normalizedHistoryDateRange(start: query.startDate, end: query.endDate)
+
+        return state.filteredTransactions.filter { transaction in
+            guard query.typeFilter.matches(transaction.transactionType) else {
+                return false
+            }
+
+            if let dateRange {
+                let transactionDate = Calendar.current.startOfDay(for: transaction.transactionDate)
+                guard transactionDate >= dateRange.start && transactionDate <= dateRange.end else {
+                    return false
+                }
+            }
+
+            guard !normalizedQuery.isEmpty else {
+                return true
+            }
+            return historyTransactionMatchesSearch(
+                transaction,
+                query: normalizedQuery,
+                cardsByID: cardsByID
+            )
+        }
+    }
+
+    private func normalizedHistoryDateRange(start: Date?, end: Date?) -> (start: Date, end: Date)? {
+        let calendar = Calendar.current
+        switch (start, end) {
+        case let (startDate?, endDate?):
+            let normalizedStart = calendar.startOfDay(for: min(startDate, endDate))
+            let normalizedEnd = calendar.startOfDay(for: max(startDate, endDate))
+            return (start: normalizedStart, end: normalizedEnd)
+        case let (startDate?, nil):
+            let normalized = calendar.startOfDay(for: startDate)
+            return (start: normalized, end: normalized)
+        case let (nil, endDate?):
+            let normalized = calendar.startOfDay(for: endDate)
+            return (start: normalized, end: normalized)
+        case (nil, nil):
+            return nil
+        }
+    }
+
+    private func historyTransactionMatchesSearch(
+        _ transaction: CashflowTransaction,
+        query: String,
+        cardsByID: [String: String]
+    ) -> Bool {
+        if let note = transaction.note?.lowercased(), note.contains(query) {
+            return true
+        }
+
+        let incomeCategory = incomeCategoryDisplayName(for: transaction.incomeCategoryRaw).lowercased()
+        if incomeCategory.contains(query) {
+            return true
+        }
+
+        let expenseCategory = expenseCategoryDisplayName(for: transaction.expenseCategoryRaw).lowercased()
+        if expenseCategory.contains(query) {
+            return true
+        }
+
+        if transaction.transactionType.displayName.lowercased().contains(query) {
+            return true
+        }
+
+        let amountWithoutFraction = String(format: "%.0f", transaction.amount)
+        if amountWithoutFraction.contains(query) {
+            return true
+        }
+
+        let fromCardName = cardsByID[transaction.cardID ?? ""]
+        if let fromCardName, fromCardName.contains(query) {
+            return true
+        }
+
+        let toCardName = cardsByID[transaction.toCardID ?? ""]
+        if let toCardName, toCardName.contains(query) {
+            return true
+        }
+
+        return false
     }
     
     private func updateChartData() {

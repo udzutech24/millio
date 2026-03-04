@@ -29,6 +29,15 @@ struct ServiceItemTests {
         #expect(cashback?.icon == ServiceItem.cashbackIconAssetName)
     }
 
+    @Test("Сервисы на главном экране используют ключи локализации main.service.*")
+    func testMainServicesUseLocalizationKeys() {
+        let services = ServiceItem.allServices()
+        let keys = services.map(\.titleKey)
+
+        #expect(keys.count == Set(keys).count)
+        #expect(keys.allSatisfy { $0.hasPrefix("main.service.") })
+    }
+
     @Test("Порядок сервисов игнорирует удаленные разделы")
     func testOrderManagerSkipsRemovedServices() {
         let defaults = UserDefaults.standard

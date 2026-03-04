@@ -24,8 +24,11 @@ enum FinancesDeepLinkHandler {
 
 struct FinancesView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
+    @Environment(AppRouter.self) private var router
     @State private var viewModel: FinanceViewModel?
+    private let currentRoute: AppRoute = .finances
     
     var body: some View {
         Group {
@@ -54,8 +57,47 @@ struct FinancesView: View {
         .onChange(of: appState.pendingOpenFinanceAddCard) { _, _ in
             FinancesDeepLinkHandler.openAddCardIfRequested(appState: appState, viewModel: viewModel)
         }
+        .onChange(of: appState.primaryCurrencyCode) { oldValue, newValue in
+            viewModel?.handle(.syncPrimaryCurrencyChange(old: oldValue, new: newValue))
+        }
+        .onDisappear {
+            viewModel?.handle(.setDisplayCurrency(appState.primaryCurrencyCode))
+        }
         .navigationTitle("Финансы")
+        .navigationBarBackButtonHidden(true)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                HStack(spacing: 6) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary.opacity(0.96))
+                            .frame(width: 28, height: 28)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Назад")
+
+                    Menu {
+                        ForEach(MiniAppNavigation.destinations(excluding: currentRoute)) { destination in
+                            Button {
+                                MiniAppNavigation.navigate(to: destination.route, from: currentRoute, router: router)
+                            } label: {
+                                Label(destination.title, systemImage: destination.systemImage)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "square.grid.2x2")
+                            .font(.system(size: 16, weight: .regular))
+                            .foregroundStyle(AppColors.textPrimary.opacity(0.90))
+                            .frame(width: 28, height: 28)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Быстрая навигация по мини-приложениям")
+                }
+            }
+
             if let viewModel {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -386,7 +428,7 @@ private struct FinancesMainTabView: View {
             }
         }
     }
-    
+
     private var groupsListView: some View {
         VStack(spacing: 12) {
             ForEach(0..<viewModel.state.groups.count, id: \.self) { index in

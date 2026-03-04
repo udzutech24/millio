@@ -129,7 +129,7 @@ struct AppStateTests {
         #expect(SettingsManager.shared.primaryCurrencyCode == "USD")
     }
 
-    @Test("AppState при смене primaryCurrencyCode мигрирует display currency только если модуль следовал прошлой основной")
+    @Test("AppState при смене primaryCurrencyCode мигрирует только persisted display currency модулей счетов")
     func testPrimaryCurrencyCodeMigratesFollowingDisplayCurrencies() {
         let defaults = UserDefaults.standard
         let primaryKey = "primaryCurrencyCode"
@@ -168,7 +168,7 @@ struct AppStateTests {
 
         defaults.set("RUB", forKey: primaryKey)
         defaults.removeObject(forKey: favoritesKey)
-        defaults.set("RUB", forKey: "cashflow_display_currency")
+        defaults.set("AMD", forKey: "cashflow_display_currency")
         defaults.set("USD", forKey: "finance_display_currency")
         defaults.set("RUB", forKey: "card_display_currency")
         defaults.set("EUR", forKey: "investment_display_currency")
@@ -177,7 +177,7 @@ struct AppStateTests {
         let appState = AppState()
         appState.primaryCurrencyCode = "USD"
 
-        #expect(defaults.string(forKey: "cashflow_display_currency") == "RUB")
+        #expect(defaults.string(forKey: "cashflow_display_currency") == "AMD")
         #expect(defaults.string(forKey: "finance_display_currency") == "USD")
         #expect(defaults.string(forKey: "card_display_currency") == "USD")
         #expect(defaults.string(forKey: "investment_display_currency") == "EUR")
