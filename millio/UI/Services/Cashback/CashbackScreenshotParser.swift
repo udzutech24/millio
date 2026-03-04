@@ -260,7 +260,13 @@ struct CashbackScreenshotParser {
 
     private static func normalizeCategoryName(_ value: String) -> String {
         var normalized = normalizeLine(value)
-        normalized = normalized.replacingOccurrences(of: #"[\u{2197}\u{2198}\u{21AA}\u{21A9}]+"#, with: "", options: .regularExpression)
+        normalized = normalized
+            .replacingOccurrences(of: "↗", with: "")
+            .replacingOccurrences(of: "↘", with: "")
+            .replacingOccurrences(of: "↪", with: "")
+            .replacingOccurrences(of: "↩", with: "")
+        normalized = normalized.replacingOccurrences(of: #"[\p{M}\p{Cf}]+"#, with: "", options: .regularExpression)
+        normalized = normalized.replacingOccurrences(of: #"[\u{200B}-\u{200D}]+"#, with: "", options: .regularExpression)
         normalized = normalized.replacingOccurrences(of: #"^[\-•·:;,.!?]+"#, with: "", options: .regularExpression)
         normalized = normalized.replacingOccurrences(of: #"[;:,.!?]+$"#, with: "", options: .regularExpression)
         normalized = normalized.replacingOccurrences(of: #"\s+i$"#, with: "", options: [.regularExpression, .caseInsensitive])

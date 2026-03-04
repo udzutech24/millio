@@ -630,9 +630,14 @@ struct FinanceViewModelTests {
         viewModel.handle(.loadAccounts)
 
         let subtitle = viewModel.getInvestmentPositionSubtitle(account: account)
-        #expect(subtitle?.contains("шт.") == true)
-        #expect(subtitle?.contains("по") == true)
-        #expect(subtitle?.contains("500") == true)
+        let expectedSubtitle = FinancesL10n.format(
+            "finances.investment.position_subtitle",
+            "2",
+            String(localized: "finances.investment.unit.shares_short"),
+            "500",
+            "$"
+        )
+        #expect(subtitle == expectedSubtitle)
     }
 
     @Test("Для рыночной инвестиции показывается строка покупки и прироста")
@@ -669,7 +674,13 @@ struct FinanceViewModelTests {
         viewModel.handle(.loadAccounts)
 
         let performance = viewModel.getInvestmentPurchaseGrowthSubtitle(account: account)
-        #expect(performance?.text.contains("Покупка 100") == true)
+        let expectedPerformanceText = FinancesL10n.format(
+            "finances.investment.purchase_growth_subtitle",
+            "100",
+            "$",
+            "+50%"
+        )
+        #expect(performance?.text == expectedPerformanceText)
         #expect(performance?.text.contains("+50%") == true)
         #expect(performance?.isPositive == true)
     }

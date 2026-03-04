@@ -11,6 +11,12 @@ import Testing
 struct CashbackImportCategoryResolverTests {
     private let resolver = CashbackImportCategoryResolver()
 
+    @Test("Точное совпадение с системной категорией маппится в системный raw")
+    func testResolveSystemCategoryRawMapsExactSystemNames() {
+        #expect(resolver.resolveSystemCategoryRaw(for: "Авиабилеты") == CashbackCategory.airlines.rawValue)
+        #expect(resolver.resolveSystemCategoryRaw(for: "Красота") == CashbackCategory.beauty.rawValue)
+    }
+
     @Test("Резолвер маппит очевидные банковские категории в системные")
     func testResolveSystemCategoryRawMapsObviousNames() {
         #expect(resolver.resolveSystemCategoryRaw(for: "Супермаркеты") == CashbackCategory.supermarket.rawValue)
@@ -21,9 +27,9 @@ struct CashbackImportCategoryResolverTests {
 
     @Test("Неочевидные категории остаются без маппинга")
     func testResolveSystemCategoryRawKeepsUnknownAsNil() {
-        #expect(resolver.resolveSystemCategoryRaw(for: "Авиабилеты") == nil)
         #expect(resolver.resolveSystemCategoryRaw(for: "Медицинские клиники") == nil)
-        #expect(resolver.resolveSystemCategoryRaw(for: "Красота") == nil)
+        #expect(resolver.resolveSystemCategoryRaw(for: "Яндекс Лавка") == nil)
+        #expect(resolver.resolveSystemCategoryRaw(for: "Полис ОСАГО") == nil)
     }
 
     @Test("Тарифы такси не схлопываются в системный транспорт")

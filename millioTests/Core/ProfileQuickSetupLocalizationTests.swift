@@ -4,18 +4,24 @@ import Testing
 
 @Suite("Profile quick setup localization")
 struct ProfileQuickSetupLocalizationTests {
+    private func localizedString(_ key: String, languageCode: String) -> String {
+        guard let path = Bundle.main.path(forResource: languageCode, ofType: "lproj"),
+              let bundle = Bundle(path: path) else {
+            Issue.record("Missing \(languageCode).lproj in app bundle")
+            return key
+        }
+        return bundle.localizedString(forKey: key, value: nil, table: nil)
+    }
+
     @Test("Quick setup strings are localized for English and Russian locales")
     func testQuickSetupLocalization() {
-        let enLocale = Locale(identifier: "en")
-        let ruLocale = Locale(identifier: "ru")
+        #expect(localizedString("profile.quick_setup", languageCode: "en") == "Quick setup")
+        #expect(localizedString("profile.quick_setup", languageCode: "ru") == "Быстрая настройка")
 
-        #expect(String(localized: "profile.quick_setup", locale: enLocale) == "Quick setup")
-        #expect(String(localized: "profile.quick_setup", locale: ruLocale) == "Быстрая настройка")
+        #expect(localizedString("profile.status.completed", languageCode: "en") == "Completed")
+        #expect(localizedString("profile.status.completed", languageCode: "ru") == "Завершена")
 
-        #expect(String(localized: "profile.status.completed", locale: enLocale) == "Completed")
-        #expect(String(localized: "profile.status.completed", locale: ruLocale) == "Завершена")
-
-        #expect(String(localized: "profile.status.not_completed", locale: enLocale) == "Not completed")
-        #expect(String(localized: "profile.status.not_completed", locale: ruLocale) == "Не завершена")
+        #expect(localizedString("profile.status.not_completed", languageCode: "en") == "Not completed")
+        #expect(localizedString("profile.status.not_completed", languageCode: "ru") == "Не завершена")
     }
 }

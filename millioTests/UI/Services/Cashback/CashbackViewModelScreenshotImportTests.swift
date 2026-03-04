@@ -48,13 +48,13 @@ struct CashbackViewModelScreenshotImportTests {
         let context = try createModelContext()
         let viewModel = CashbackViewModel(modelContext: context)
 
-        let first = viewModel.categoryOptionForImportedName("Авиабилеты")
-        let second = viewModel.categoryOptionForImportedName("  авиабилеты  ")
+        let first = viewModel.categoryOptionForImportedName("Комфорт+")
+        let second = viewModel.categoryOptionForImportedName("  комфорт+  ")
 
         #expect(first.isCustom)
         #expect(second.isCustom)
         #expect(first.rawValue == second.rawValue)
         #expect(viewModel.state.customCategories.count == 1)
-        #expect(viewModel.state.customCategories.first?.name == "Авиабилеты")
+        #expect(viewModel.state.customCategories.first?.name == "Комфорт+")
     }
 }
