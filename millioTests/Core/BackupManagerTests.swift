@@ -225,6 +225,43 @@ struct BackupManagerTests {
         #expect(mockDataRepository.importedData == expectedData)
     }
 
+    @Test("Restore latest preflight skips unsupported compression and restores older snapshot")
+    func testRestoreLatestPreflightSkipsUnsupportedCompression() async throws {
+        let mockCloudStore = MockCloudBackupStore()
+        mockCloudStore.isAvailableResult = true
+        mockCloudStore.backupRecordNamesForRestore = ["snapshot-new", "snapshot-old"]
+
+        let unsupportedCompressionHeader = BackupEnvelopeHeader(
+            formatVersion: BackupEnvelopeHeader.currentFormatVersion,
+            metadata: BackupMetadata(version: .current, timestamp: Date(), schemaVersion: "2.0", modelCount: 0),
+            compression: BackupCompressionInfo(algorithm: "gzip", originalSize: 128),
+            encryption: nil
+        )
+        let unsupportedCompressedCandidate = try BackupEnvelope.pack(
+            header: unsupportedCompressionHeader,
+            payload: Data("compressed-payload".utf8)
+        )
+
+        let expectedData = Data("fallback-restored-data".utf8)
+        mockCloudStore.downloadDataByRecordName = [
+            "snapshot-new": unsupportedCompressedCandidate,
+            "snapshot-old": expectedData
+        ]
+
+        let mockDataRepository = MockDataRepository()
+        mockDataRepository.exportData = Data("existing data".utf8)
+        let backupManager = BackupManager(
+            cloudStore: mockCloudStore,
+            dataRepository: mockDataRepository
+        )
+
+        try await backupManager.restoreLatest()
+
+        #expect(mockCloudStore.requestedRecordNames == ["snapshot-new", "snapshot-old"])
+        #expect(mockDataRepository.importCalled == true)
+        #expect(mockDataRepository.importedData == expectedData)
+    }
+
     @Test("Restore latest fails with restoreFailed when all snapshot candidates are corrupted or incompatible")
     func testRestoreLatestFailsWhenAllCandidatesAreInvalid() async {
         let mockCloudStore = MockCloudBackupStore()

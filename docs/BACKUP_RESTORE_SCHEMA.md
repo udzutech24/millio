@@ -224,6 +224,7 @@ Payload формируется так:
 │    • snapshot из "backup_index" (новые → старые)        │
 │    • затем "latest_backup" (legacy fallback)            │
 │    • BackupManager скачивает кандидаты по очереди       │
+│    • Preflight sanity-scoring (header/schema/encryption)│
 └────────────────────┬────────────────────────────────────┘
                      │
                      ▼
@@ -396,6 +397,7 @@ No backup found in iCloud
 ```
 Starting restore...
 Restore completed successfully
+restore_candidate stage=<...> outcome=<...> reason=<...> ...
 ```
 
 **Ошибки:**

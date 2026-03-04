@@ -25,6 +25,12 @@ actor BackupManager: BackupManagerProtocol {
     private let staticEncryption: BackupEncryptionProtocol?
     private let usesSettingsEncryption: Bool
     private var backupTask: Task<Void, Never>?
+
+    private enum RestoreCandidateDecision {
+        case ready(score: Int, profile: String)
+        case skip(reason: String)
+        case block(error: AppError, reason: String)
+    }
     
     init(
         cloudStore: CloudBackupStoreProtocol,
@@ -182,11 +188,51 @@ actor BackupManager: BackupManagerProtocol {
 
                 var hasAnyCandidateData = false
 
-                for recordName in backupRecordNames {
+                for (candidateIndex, recordName) in backupRecordNames.enumerated() {
                     guard let downloadedData = try await cloudStore.downloadBackup(recordName: recordName) else {
+                        self.recordRestoreCandidateMetric(
+                            stage: "download",
+                            outcome: "skip",
+                            reason: "missing_record_or_asset",
+                            recordName: recordName,
+                            candidateIndex: candidateIndex,
+                            score: 0
+                        )
                         continue
                     }
                     hasAnyCandidateData = true
+
+                    switch self.preflightCandidate(downloadedData, passphrase: passphrase) {
+                    case .ready(let score, let profile):
+                        self.recordRestoreCandidateMetric(
+                            stage: "preflight",
+                            outcome: "ready",
+                            reason: profile,
+                            recordName: recordName,
+                            candidateIndex: candidateIndex,
+                            score: score
+                        )
+                    case .skip(let reason):
+                        self.recordRestoreCandidateMetric(
+                            stage: "preflight",
+                            outcome: "skip",
+                            reason: reason,
+                            recordName: recordName,
+                            candidateIndex: candidateIndex,
+                            score: 0
+                        )
+                        continue
+                    case .block(let error, let reason):
+                        self.recordRestoreCandidateMetric(
+                            stage: "preflight",
+                            outcome: "block",
+                            reason: reason,
+                            recordName: recordName,
+                            candidateIndex: candidateIndex,
+                            score: 0
+                        )
+                        throw error
+                    }
 
                     do {
                         try await self.restoreDownloadedBackup(
@@ -195,12 +241,36 @@ actor BackupManager: BackupManagerProtocol {
                             encryption: encryption,
                             dataRepository: dataRepository
                         )
+                        self.recordRestoreCandidateMetric(
+                            stage: "restore",
+                            outcome: "success",
+                            reason: "restored",
+                            recordName: recordName,
+                            candidateIndex: candidateIndex,
+                            score: 100
+                        )
                         return
                     } catch let appError as AppError {
                         if self.shouldTryOlderSnapshot(after: appError) {
+                            self.recordRestoreCandidateMetric(
+                                stage: "restore",
+                                outcome: "skip",
+                                reason: self.restoreSkipReason(for: appError),
+                                recordName: recordName,
+                                candidateIndex: candidateIndex,
+                                score: 0
+                            )
                             self.logger.warning("Skipping restore candidate '\(recordName, privacy: .public)' due to \(appError.localizedDescription, privacy: .public)")
                             continue
                         }
+                        self.recordRestoreCandidateMetric(
+                            stage: "restore",
+                            outcome: "block",
+                            reason: self.restoreBlockReason(for: appError),
+                            recordName: recordName,
+                            candidateIndex: candidateIndex,
+                            score: 0
+                        )
                         throw appError
                     }
                 }
@@ -234,6 +304,111 @@ actor BackupManager: BackupManagerProtocol {
             return true
         default:
             return false
+        }
+    }
+
+    private func preflightCandidate(_ downloadedData: Data, passphrase: String?) -> RestoreCandidateDecision {
+        guard BackupEnvelope.looksLikeEnvelope(downloadedData) else {
+            // Legacy payload path: valid but с меньшей уверенностью в целостности схемы.
+            return .ready(score: 50, profile: "legacy_payload")
+        }
+
+        let header: BackupEnvelopeHeader
+        do {
+            (header, _) = try BackupEnvelope.unpack(downloadedData)
+        } catch {
+            return .skip(reason: "corrupted_envelope")
+        }
+
+        guard header.formatVersion == BackupEnvelopeHeader.currentFormatVersion else {
+            return .skip(reason: "incompatible_envelope_version")
+        }
+
+        if let encryptionInfo = header.encryption {
+            switch encryptionInfo.algorithm {
+            case "aesgcm-passphrase":
+                guard passphrase != nil else {
+                    return .block(
+                        error: .restoreFailed("Backup зашифрован парольной фразой. Введите парольную фразу и повторите."),
+                        reason: "passphrase_required"
+                    )
+                }
+                guard encryptionInfo.kdf != nil else {
+                    return .skip(reason: "missing_kdf")
+                }
+            case "aesgcm-keychain":
+                break
+            default:
+                return .skip(reason: "unsupported_encryption")
+            }
+        }
+
+        if let compression = header.compression, compression.algorithm != "lzfse" {
+            return .skip(reason: "unsupported_compression")
+        }
+
+        var score = 100
+        if header.encryption != nil {
+            score -= 5
+        }
+        if header.compression != nil {
+            score -= 5
+        }
+        return .ready(score: score, profile: "envelope_v\(header.formatVersion)")
+    }
+
+    private func recordRestoreCandidateMetric(
+        stage: String,
+        outcome: String,
+        reason: String,
+        recordName: String,
+        candidateIndex: Int,
+        score: Int
+    ) {
+        let safeRecordName = recordName.hasPrefix("snapshot_") ? "snapshot" : recordName
+        CrashReporting.setCustomValue(stage, forKey: "restore_candidate_stage")
+        CrashReporting.setCustomValue(outcome, forKey: "restore_candidate_outcome")
+        CrashReporting.setCustomValue(reason, forKey: "restore_candidate_reason")
+        CrashReporting.setCustomValue(candidateIndex, forKey: "restore_candidate_index")
+        CrashReporting.setCustomValue(score, forKey: "restore_candidate_score")
+        CrashReporting.log(
+            "restore_candidate stage=\(stage) outcome=\(outcome) reason=\(reason) index=\(candidateIndex) score=\(score) record=\(safeRecordName)"
+        )
+    }
+
+    private func restoreSkipReason(for error: AppError) -> String {
+        switch error {
+        case .backupCorrupted:
+            return "backup_corrupted"
+        case .incompatibleSchemaVersion:
+            return "incompatible_schema"
+        default:
+            return "runtime_skip"
+        }
+    }
+
+    private func restoreBlockReason(for error: AppError) -> String {
+        switch error {
+        case .iCloudUnavailable:
+            return "icloud_unavailable"
+        case .restoreFailed(let message):
+            if message.contains("парольной фразой") {
+                return "passphrase_required"
+            }
+            if message.contains("не может быть расшифрован") {
+                return "keychain_unavailable"
+            }
+            return "restore_failed"
+        case .backupFailed:
+            return "backup_transport_failed"
+        case .unknown:
+            return "unknown_error"
+        case .backupCorrupted:
+            return "backup_corrupted"
+        case .incompatibleSchemaVersion:
+            return "incompatible_schema"
+        case .networkUnavailable:
+            return "network_unavailable"
         }
     }
 
