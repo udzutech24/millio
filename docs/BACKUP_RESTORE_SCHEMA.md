@@ -409,6 +409,9 @@ restore_candidate stage=<...> outcome=<...> reason=<...> detail=<...> ...
 
 Коды причин больше не вычисляются через `message.contains(...)` для `restoreFailed`; критичные причины маркируются типизированно в restore-пайплайне.
 Пользовательские тексты ошибок restore централизованы в `RestoreFailureCode` и используются как единый source of truth.
+Модули `BackupManager`, `PassphraseBackupEncryption` и `KeychainBackupEncryption` используют этот каталог вместо локальных строк.
+Пользовательские тексты ошибок backup централизованы в `BackupFailureCode` и также используются как единый source of truth.
+Модули `BackupManager`, `BackupEnvelope`, `CloudBackupStore`, `PassphraseBackupEncryption` и `KeychainBackupEncryption` используют этот каталог вместо локальных строк.
 
 **Ошибки:**
 ```

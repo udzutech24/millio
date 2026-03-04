@@ -30,7 +30,7 @@ enum BackupEnvelope {
         let headerData = try JSONEncoder().encode(header)
         
         guard headerData.count <= Int(UInt32.max) else {
-            throw AppError.backupFailed("Слишком большой заголовок backup")
+            throw BackupFailureCode.envelopeHeaderTooLarge.appError
         }
         
         var result = Data()

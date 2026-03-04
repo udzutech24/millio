@@ -19,7 +19,7 @@ struct PassphraseBackupEncryption {
     static func encrypt(_ data: Data, passphrase: String, iterations: Int = defaultIterations) throws -> (encrypted: Data, kdf: BackupKDFInfo) {
         let normalizedPassphrase = passphrase.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedPassphrase.isEmpty else {
-            throw AppError.backupFailed("Парольная фраза пустая")
+            throw BackupFailureCode.passphraseEmpty.appError
         }
         
         let salt = try Data.randomBytes(count: 16)
@@ -44,7 +44,7 @@ struct PassphraseBackupEncryption {
     static func decrypt(_ data: Data, passphrase: String, kdf: BackupKDFInfo) throws -> Data {
         let normalizedPassphrase = passphrase.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedPassphrase.isEmpty else {
-            throw AppError.restoreFailed("Нужна парольная фраза для расшифровки backup")
+            throw RestoreFailureCode.passphraseNeededForDecrypt.appError
         }
         
         guard kdf.algorithm == "pbkdf2-hmac-sha256",
@@ -70,7 +70,7 @@ struct PassphraseBackupEncryption {
         do {
             return try AES.GCM.open(sealedBox, using: key)
         } catch {
-            throw AppError.restoreFailed("Не удалось расшифровать backup (неверная парольная фраза или поврежденные данные)")
+            throw RestoreFailureCode.passphraseDecryptFailed.appError
         }
     }
     
@@ -98,7 +98,7 @@ struct PassphraseBackupEncryption {
         }
         
         guard status == kCCSuccess else {
-            throw AppError.backupFailed("Не удалось получить ключ шифрования из парольной фразы")
+            throw BackupFailureCode.passphraseKeyDerivationFailed.appError
         }
         
         return SymmetricKey(data: derivedKey)
@@ -114,7 +114,7 @@ extension Data {
             return SecRandomCopyBytes(kSecRandomDefault, count, baseAddress)
         }
         guard status == errSecSuccess else {
-            throw AppError.backupFailed("Не удалось сгенерировать случайные байты для backup")
+            throw BackupFailureCode.randomBytesGenerationFailed.appError
         }
         return data
     }

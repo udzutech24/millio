@@ -72,7 +72,7 @@ struct KeychainBackupEncryption: BackupEncryptionProtocol {
     
     private func getKey() throws -> SymmetricKey {
         guard let keyData = keychain[data: keyTag] else {
-            throw AppError.restoreFailed("Ключ шифрования backup не найден на этом устройстве")
+            throw RestoreFailureCode.keychainKeyMissingOnDevice.appError
         }
         return SymmetricKey(data: keyData)
     }
@@ -120,7 +120,7 @@ private struct Keychain {
         if SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess {
             let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
             guard status == errSecSuccess else {
-                throw AppError.backupFailed("Не удалось обновить ключ шифрования backup")
+                throw BackupFailureCode.keychainKeyUpdateFailed.appError
             }
         } else {
             var newQuery = query
@@ -128,7 +128,7 @@ private struct Keychain {
             newQuery[kSecAttrAccessible as String] = accessible
             let status = SecItemAdd(newQuery as CFDictionary, nil)
             guard status == errSecSuccess else {
-                throw AppError.backupFailed("Не удалось сохранить ключ шифрования backup")
+                throw BackupFailureCode.keychainKeySaveFailed.appError
             }
         }
     }
@@ -141,7 +141,7 @@ private struct Keychain {
         ]
         let status = SecItemDelete(query as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
-            throw AppError.backupFailed("Не удалось удалить ключ шифрования backup")
+            throw BackupFailureCode.keychainKeyDeleteFailed.appError
         }
     }
 }

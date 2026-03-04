@@ -579,7 +579,7 @@ actor BackupManager: BackupManagerProtocol {
         )
         let status = compression_stream_init(&stream, operation, COMPRESSION_LZFSE)
         guard status != COMPRESSION_STATUS_ERROR else {
-            throw AppError.backupFailed("Ошибка инициализации сжатия")
+            throw BackupFailureCode.compressionInitializationFailed.appError
         }
         defer { compression_stream_destroy(&stream) }
         
@@ -621,7 +621,7 @@ actor BackupManager: BackupManagerProtocol {
                     return output
                 default:
                     if operation == COMPRESSION_STREAM_ENCODE {
-                        throw AppError.backupFailed("Не удалось сжать backup")
+                        throw BackupFailureCode.compressionEncodeFailed.appError
                     } else {
                         throw AppError.backupCorrupted
                     }

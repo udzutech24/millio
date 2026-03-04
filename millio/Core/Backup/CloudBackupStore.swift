@@ -218,7 +218,7 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         } catch let error as CKError where error.code == .unknownItem {
             return nil
         } catch {
-            throw AppError.backupFailed(error.localizedDescription)
+            throw BackupFailureCode.cloudKitOperationFailed(error.localizedDescription).appError
         }
     }
     
@@ -253,7 +253,7 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         } catch let error as CKError where error.code == .unknownItem {
             legacyRecord = CKRecord(recordType: snapshotRecordType, recordID: legacyLatestRecordID)
         } catch {
-            throw AppError.backupFailed(error.localizedDescription)
+            throw BackupFailureCode.cloudKitOperationFailed(error.localizedDescription).appError
         }
 
         legacyRecord["backupData"] = CKAsset(fileURL: assetURL)
@@ -276,7 +276,7 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         } catch let error as CKError where error.code == .unknownItem {
             return []
         } catch {
-            throw AppError.backupFailed(error.localizedDescription)
+            throw BackupFailureCode.cloudKitOperationFailed(error.localizedDescription).appError
         }
     }
 
@@ -287,7 +287,7 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         } catch let error as CKError where error.code == .unknownItem {
             indexRecord = CKRecord(recordType: indexRecordType, recordID: indexRecordID)
         } catch {
-            throw AppError.backupFailed(error.localizedDescription)
+            throw BackupFailureCode.cloudKitOperationFailed(error.localizedDescription).appError
         }
 
         let encoded = try JSONEncoder().encode(entries)
@@ -324,7 +324,7 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
             } catch let error as CKError where error.code == .unknownItem {
                 continue
             } catch {
-                throw AppError.backupFailed(error.localizedDescription)
+                throw BackupFailureCode.cloudKitOperationFailed(error.localizedDescription).appError
             }
         }
 
@@ -338,7 +338,7 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         } catch let error as CKError where error.code == .unknownItem {
             return nil
         } catch {
-            throw AppError.backupFailed(error.localizedDescription)
+            throw BackupFailureCode.cloudKitOperationFailed(error.localizedDescription).appError
         }
     }
 
