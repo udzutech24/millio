@@ -728,16 +728,28 @@ final class CashbackViewModel: ViewModelProtocol {
         cardID: String,
         cashbacks: [(categoryRaw: String, categoryName: String, percentage: Double)]
     ) {
-        // Фильтруем только валидные кэшбеки (с процентом > 0)
         let validCashbacks = cashbacks.filter { $0.percentage > 0 }
-        
-        guard !validCashbacks.isEmpty else { return }
-        
+
         // Проверяем, что карта существует
         guard let card = getCard(byID: cardID) else { return }
         let validCardID = card.cardUniqueID
         let selectedMonthKey = Cashback.monthKey(for: state.selectedMonth)
-        
+
+        let validCategoryRaws = Set(validCashbacks.map(\.categoryRaw))
+
+        // Синхронизируем удаленные в редакторе категории: убираем карту из старых связей.
+        let existingForCard = state.cashbacks.filter { cashback in
+            cashback.monthKey == selectedMonthKey && cashback.cardIDs.contains(validCardID)
+        }
+        for cashback in existingForCard where !validCategoryRaws.contains(cashback.categoryRaw) {
+            cashback.cardIDs.removeAll { $0 == validCardID }
+            if cashback.cardIDs.isEmpty {
+                modelContext.delete(cashback)
+            } else {
+                cashback.updatedAt = Date()
+            }
+        }
+
         // Создаем кэшбеки для выбранной карты
         for (categoryRaw, categoryName, percentage) in validCashbacks {
             // Проверяем, не существует ли уже такой кэшбек для этой карты

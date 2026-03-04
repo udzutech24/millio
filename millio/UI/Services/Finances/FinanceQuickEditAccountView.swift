@@ -124,7 +124,7 @@ struct FinanceQuickEditAccountView: View {
                         Button {
                             save()
                         } label: {
-                            Text("OK")
+                            Text(String(localized: "finances.common.save"))
                                 .font(.system(size: 18, weight: .semibold))
                                 .foregroundStyle(AppColors.textPrimary)
                                 .frame(maxWidth: .infinity)
@@ -157,7 +157,7 @@ struct FinanceQuickEditAccountView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Отмена") {
+                    Button(String(localized: "finances.common.cancel")) {
                         dismiss()
                     }
                     .foregroundStyle(AppColors.textPrimary)
@@ -173,7 +173,7 @@ struct FinanceQuickEditAccountView: View {
     private func creditCardQuickForm(currency: String) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             quickRow(
-                title: "Кредитный лимит",
+                title: String(localized: "finances.add_account.card.credit_limit"),
                 text: Binding(
                     get: { AmountInputFormatter.display(creditLimitText) },
                     set: { creditLimitText = AmountInputFormatter.sanitize($0) }
@@ -182,7 +182,7 @@ struct FinanceQuickEditAccountView: View {
             )
 
             quickRow(
-                title: "Общий долг",
+                title: String(localized: "finances.add_account.card.total_debt"),
                 text: Binding(
                     get: { AmountInputFormatter.display(creditDebtText) },
                     set: { creditDebtText = AmountInputFormatter.sanitize($0) }
@@ -191,7 +191,7 @@ struct FinanceQuickEditAccountView: View {
             )
 
             HStack {
-                Text("Остаток лимита")
+                Text(String(localized: "finances.add_account.card.remaining_limit"))
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(AppColors.textSecondary)
                 Spacer()
@@ -254,9 +254,11 @@ struct FinanceQuickEditAccountView: View {
 
     private var navigationTitle: String {
         if isCreditCard {
-            return "Редактирование карты"
+            return String(localized: "finances.quick_edit.title.card")
         }
-        return isMarketInvestment ? "Редактирование количества" : "Редактирование суммы"
+        return isMarketInvestment
+            ? String(localized: "finances.quick_edit.title.quantity")
+            : String(localized: "finances.quick_edit.title.amount")
     }
 
     private var creditRemainingLimit: Double {
@@ -335,14 +337,20 @@ struct FinanceQuickEditAccountView: View {
 
     private var fieldTitle: String {
         if isMarketInvestment {
-            return marketInvestment?.category == .crypto ? "Количество монет" : "Количество"
+            return marketInvestment?.category == .crypto
+                ? String(localized: "finances.market.field_quantity_coins")
+                : String(localized: "finances.market.field_quantity")
         }
-        return isCreditCard ? "Задолженность" : "Сумма"
+        return isCreditCard
+            ? String(localized: "finances.quick_edit.field.debt")
+            : String(localized: "finances.add_account.field.amount")
     }
 
     private func valueSuffix(for info: (name: String, amount: Double, currency: String, icon: String, isCreditCardDebt: Bool)) -> String {
         if isMarketInvestment {
-            return marketInvestment?.category == .crypto ? "мон." : "шт."
+            return marketInvestment?.category == .crypto
+                ? String(localized: "finances.quick_edit.unit.coins_short")
+                : String(localized: "finances.investment.unit.shares_short")
         }
         return info.currency
     }

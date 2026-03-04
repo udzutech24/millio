@@ -39,6 +39,7 @@ private struct CashflowCategoryTransactionSheet: View {
     @State private var monthTotalTask: Task<Void, Never>?
     @State private var showRecurringManagement: Bool = false
     @State private var showPlannedManagement: Bool = false
+    @State private var showTransactionsHistory: Bool = false
     @State private var showHelpSheet: Bool = false
 
     @State private var showCreateCategorySheet: Bool = false
@@ -127,6 +128,13 @@ private struct CashflowCategoryTransactionSheet: View {
                     mode: .plannedOneTime
                 )
             }
+            .navigationDestination(isPresented: $showTransactionsHistory) {
+                CashflowTransactionsHistoryView(
+                    viewModel: viewModel,
+                    showsDismissButton: false,
+                    initialFilter: kind.historyFilter
+                )
+            }
             .sheet(isPresented: $showCreateCategorySheet) {
                 CashflowCategoryQuickCreateSheet(
                     name: $newCategoryName,
@@ -197,6 +205,25 @@ private struct CashflowCategoryTransactionSheet: View {
             .buttonStyle(.plain)
 
             Spacer()
+
+            Button {
+                showTransactionsHistory = true
+            } label: {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary.opacity(0.92))
+                    .frame(width: 44, height: 44)
+                    .background(
+                        Circle()
+                            .fill(Color.white.opacity(0.08))
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.white.opacity(0.22), lineWidth: 1)
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("История операций")
 
             Button {
                 showHelpSheet = true
@@ -738,6 +765,14 @@ enum CashflowCategoryTransactionSheetKind {
         switch self {
         case .income: return "Итого доход за месяц"
         case .expense: return "Итого расход за месяц"
+        }
+    }
+
+    /// Фильтр истории, соответствующий текущему типу листа.
+    var historyFilter: CashflowHistoryTypeFilter {
+        switch self {
+        case .income: return .income
+        case .expense: return .expense
         }
     }
 

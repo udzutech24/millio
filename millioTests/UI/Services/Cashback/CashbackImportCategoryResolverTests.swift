@@ -25,4 +25,12 @@ struct CashbackImportCategoryResolverTests {
         #expect(resolver.resolveSystemCategoryRaw(for: "Медицинские клиники") == nil)
         #expect(resolver.resolveSystemCategoryRaw(for: "Красота") == nil)
     }
+
+    @Test("Тарифы такси не схлопываются в системный транспорт")
+    func testResolveSystemCategoryRawKeepsTaxiTariffsAsCustom() {
+        #expect(resolver.resolveSystemCategoryRaw(for: "Комфорт") == nil)
+        #expect(resolver.resolveSystemCategoryRaw(for: "Комфорт+") == nil)
+        #expect(resolver.resolveSystemCategoryRaw(for: "Ultima") == nil)
+        #expect(resolver.resolveSystemCategoryRaw(for: "Яндекс Такси Комфорт") == nil)
+    }
 }

@@ -482,7 +482,7 @@ final class CreditViewModel: ViewModelProtocol {
                     currency: existing.currency,
                     transactionDate: Date(),
                     creditID: existing.creditUniqueID,
-                    note: "Редактирование остатка долга"
+                    note: String(localized: "finances.transaction.note.credit_remaining_edit")
                 )
                 modelContext.insert(transaction)
             }

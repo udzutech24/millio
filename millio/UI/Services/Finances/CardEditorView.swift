@@ -86,11 +86,15 @@ struct CardEditorView: View {
                 .scrollDismissesKeyboard(.immediately)
                 .dismissKeyboardOnTap()
             }
-            .navigationTitle(isNewCard ? "Новая карта" : "Редактирование")
+            .navigationTitle(
+                isNewCard
+                    ? String(localized: "finances.editor.card.new_title")
+                    : String(localized: "finances.editor.card.edit_title")
+            )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Отмена") {
+                    Button(String(localized: "finances.common.cancel")) {
                         if let onClose {
                             onClose()
                         } else {
@@ -101,7 +105,7 @@ struct CardEditorView: View {
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Сохранить") {
+                    Button(String(localized: "finances.common.save")) {
                         viewModel.handle(.updateCard(card))
                         if let onClose {
                             onClose()
@@ -121,7 +125,7 @@ struct CardEditorView: View {
 
                 if onDelete != nil, !isNewCard {
                     ToolbarItem(placement: .navigationBarTrailing) {
-                        Button("Удалить", role: .destructive) {
+                        Button(String(localized: "finances.common.delete"), role: .destructive) {
                             onDelete?()
                         }
                     }
@@ -142,17 +146,17 @@ struct CardEditorView: View {
     
     private var mainInfoSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Основная информация")
+            FinancesSectionHeader(title: String(localized: "finances.editor.section.main_info"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
-                    TextField("Название карты", text: $card.name)
+                    TextField(String(localized: "finances.editor.card.name_placeholder"), text: $card.name)
                         .foregroundStyle(AppColors.textPrimary)
                         .padding(.vertical, 12)
                         .padding(.horizontal, 16)
 
                     FinancesRowDivider()
 
-                    TextField("Номер карты (последние 4 цифры)", text: Binding(
+                    TextField(String(localized: "finances.editor.card.number_placeholder"), text: Binding(
                         get: { card.cardNumber },
                         set: { newValue in
                             let filtered = newValue.filter { $0.isNumber }
@@ -169,10 +173,10 @@ struct CardEditorView: View {
                     FinancesRowDivider()
 
                     HStack {
-                        Text("Тип карты")
+                        Text(String(localized: "finances.add_account.card.type"))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        Picker("Тип карты", selection: $card.cardTypeRaw) {
+                        Picker(String(localized: "finances.add_account.card.type"), selection: $card.cardTypeRaw) {
                             ForEach(CardType.allCases, id: \.rawValue) { type in
                                 Text(type.displayName).tag(type.rawValue)
                             }
@@ -203,11 +207,11 @@ struct CardEditorView: View {
     
     private var financeSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Финансы")
+            FinancesSectionHeader(title: String(localized: "finances.editor.section.finances"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     HStack {
-                        Text("Валюта")
+                        Text(String(localized: "finances.add_account.field.currency"))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         if isLoadingCurrencies {
@@ -215,7 +219,7 @@ struct CardEditorView: View {
                                 .scaleEffect(0.8)
                                 .tint(AppColors.textTertiary)
                         } else {
-                            Picker("Валюта", selection: $card.currency) {
+                            Picker(String(localized: "finances.add_account.field.currency"), selection: $card.currency) {
                                 ForEach(availableCurrencies, id: \.self) { currency in
                                     Text(currency).tag(currency)
                                 }
@@ -230,7 +234,7 @@ struct CardEditorView: View {
 
                     if card.cardType == .credit {
                         HStack {
-                            Text("Кредитный лимит")
+                            Text(String(localized: "finances.add_account.card.credit_limit"))
                                 .foregroundStyle(AppColors.textPrimary)
                             Spacer()
                             TextField("0", text: Binding(
@@ -255,7 +259,7 @@ struct CardEditorView: View {
                         FinancesRowDivider()
 
                         HStack {
-                            Text("Общий долг")
+                            Text(String(localized: "finances.add_account.card.total_debt"))
                                 .foregroundStyle(AppColors.textPrimary)
                             Spacer()
                             TextField("0", text: Binding(
@@ -279,7 +283,7 @@ struct CardEditorView: View {
                         FinancesRowDivider()
 
                         HStack {
-                            Text("Остаток лимита")
+                            Text(String(localized: "finances.add_account.card.remaining_limit"))
                                 .foregroundStyle(AppColors.textPrimary)
                             Spacer()
                             Text(AmountInputFormatter.display(String(creditRemainingLimit)))
@@ -291,7 +295,7 @@ struct CardEditorView: View {
                         .padding(.horizontal, 16)
                     } else {
                         HStack {
-                            Text("Баланс")
+                            Text(String(localized: "finances.add_account.field.amount"))
                                 .foregroundStyle(AppColors.textPrimary)
                             Spacer()
                             TextField("0", text: Binding(
@@ -317,14 +321,14 @@ struct CardEditorView: View {
     
     private var additionalSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Дополнительно")
+            FinancesSectionHeader(title: String(localized: "finances.editor.section.additional"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     HStack {
-                        Text("Приоритет")
+                        Text(String(localized: "finances.add_account.section.priority"))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        Picker("Приоритет", selection: Binding(
+                        Picker(String(localized: "finances.add_account.section.priority"), selection: Binding(
                             get: { card.priority },
                             set: { card.priority = $0 }
                         )) {
@@ -339,7 +343,7 @@ struct CardEditorView: View {
 
                     FinancesRowDivider()
 
-                    Toggle("Избранная", isOn: $card.isFavorite)
+                    Toggle(String(localized: "finances.add_account.favorite.single"), isOn: $card.isFavorite)
                         .tint(AppColors.toggleOnGreen)
                         .foregroundStyle(AppColors.textPrimary)
                         .padding(.vertical, 12)
@@ -349,17 +353,17 @@ struct CardEditorView: View {
 
                     if card.cardType == .credit {
                         HStack {
-                            Text("Влияние на «Итого»")
+                            Text(String(localized: "finances.add_account.total_impact.title"))
                                 .foregroundStyle(AppColors.textPrimary)
                             Spacer()
-                            Text("Уменьшает")
+                            Text(String(localized: "finances.add_account.total_impact.decreases"))
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(AppColors.error.opacity(0.9))
                         }
                         .padding(.vertical, 12)
                         .padding(.horizontal, 16)
                     } else {
-                        Toggle("Учитывать в общих", isOn: $card.includeInTotal)
+                        Toggle(String(localized: "finances.add_account.total_impact.include"), isOn: $card.includeInTotal)
                             .tint(AppColors.toggleOnGreen)
                             .foregroundStyle(AppColors.textPrimary)
                             .padding(.vertical, 12)

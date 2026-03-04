@@ -37,9 +37,9 @@ struct FinanceAddAccountView: View {
         var title: String {
             switch self {
             case .create:
-                "Создать"
+                String(localized: "finances.add_account.mode.create")
             case .archived:
-                "Из архива"
+                String(localized: "finances.add_account.mode.archived")
             }
         }
     }
@@ -49,6 +49,7 @@ struct FinanceAddAccountView: View {
     @State private var selectedGroupID: String? = nil
     @State private var selectedInvestmentCategory: InvestmentCategory = .other
     @State private var selectedProductTypeTitle: String = FinanceAccountType.card.displayName
+    @State private var selectedInvestmentPreset: FinanceAddAccountInvestmentPreset = .asset
     @State private var showCreateGroup = false
     @State private var cardViewModel: CardViewModel?
     @State private var creditViewModel: CreditViewModel?
@@ -78,8 +79,8 @@ struct FinanceAddAccountView: View {
     
     private var navigationTitle: String {
         (editingCard == nil && editingCredit == nil && editingInvestment == nil)
-            ? "Новый продукт"
-            : "Редактирование продукта"
+            ? String(localized: "finances.add_account.nav.new")
+            : String(localized: "finances.add_account.nav.edit")
     }
     
     private var resolvedGroup: FinanceGroup? {
@@ -98,7 +99,7 @@ struct FinanceAddAccountView: View {
     
     private var nameSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Название")
+            FinancesSectionHeader(title: String(localized: "finances.add_account.section.name"))
             FinancesGlassCard {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 12) {
@@ -117,7 +118,7 @@ struct FinanceAddAccountView: View {
                     }
                     
                     if isTickerDrivenName {
-                        Text("Название подставится автоматически после выбора тикера/пары")
+                        Text(String(localized: "finances.add_account.name.autofill_hint"))
                             .font(.system(size: 12, weight: .regular))
                             .foregroundStyle(AppColors.textPrimary.opacity(0.35))
                             .padding(.leading, 34)
@@ -140,35 +141,35 @@ struct FinanceAddAccountView: View {
     private var placeholderForSelectedType: String {
         switch selectedAccountType {
         case .card:
-            return "Например, Основная карта"
+            return String(localized: "finances.add_account.placeholder.card")
         case .credit:
-            return "Например, Потребительский кредит"
+            return String(localized: "finances.add_account.placeholder.credit")
         case .investment:
             if isTickerDrivenName {
-                return "Название из тикера/пары"
+                return String(localized: "finances.add_account.placeholder.market")
             }
-            if selectedProductTypeTitle == "Счет" {
-                return "Например, Резервный счет"
+            if selectedInvestmentCategory == .other, selectedInvestmentPreset == .account {
+                return String(localized: "finances.add_account.placeholder.account")
             }
             switch selectedInvestmentCategory {
             case .house:
-                return "Например, Квартира для аренды"
+                return String(localized: "finances.add_account.placeholder.investment.house")
             case .stocks:
-                return "Например, Портфель ETF"
+                return String(localized: "finances.add_account.placeholder.investment.stocks")
             case .business:
-                return "Например, Доля в бизнесе"
+                return String(localized: "finances.add_account.placeholder.investment.business")
             case .debt:
-                return "Например, Займ знакомому"
+                return String(localized: "finances.add_account.placeholder.investment.debt")
             case .crypto:
-                return "Например, Портфель криптовалют"
+                return String(localized: "finances.add_account.placeholder.investment.crypto")
             case .car:
-                return "Например, Семейный автомобиль"
+                return String(localized: "finances.add_account.placeholder.investment.car")
             case .bonds:
-                return "Например, Портфель облигаций"
+                return String(localized: "finances.add_account.placeholder.investment.bonds")
             case .metals:
-                return "Например, Инвестиции в золото"
+                return String(localized: "finances.add_account.placeholder.investment.metals")
             case .other:
-                return "Например, Наличные"
+                return String(localized: "finances.add_account.placeholder.investment.other")
             }
         }
     }
@@ -179,26 +180,27 @@ struct FinanceAddAccountView: View {
     
     private var accountTypeSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Тип")
+            FinancesSectionHeader(title: String(localized: "finances.add_account.section.type"))
             FinancesGlassCard {
                 Menu {
                     Button {
                         selectedAccountType = .card
-                        selectedProductTypeTitle = "Карта"
+                        selectedProductTypeTitle = FinanceAccountType.card.displayName
                     } label: {
                         Label(FinanceAccountType.card.displayName, systemImage: FinanceAccountType.card.icon)
                     }
                     Button {
                         selectedAccountType = .investment
                         selectedInvestmentCategory = .other
-                        selectedProductTypeTitle = "Счет"
+                        selectedInvestmentPreset = .account
+                        selectedProductTypeTitle = String(localized: "finances.add_account.product.account")
                     } label: {
-                        Label("Счет", systemImage: "building.columns.fill")
+                        Label(String(localized: "finances.add_account.product.account"), systemImage: "building.columns.fill")
                     }
 
                     Button {
                         selectedAccountType = .credit
-                        selectedProductTypeTitle = "Кредит"
+                        selectedProductTypeTitle = FinanceAccountType.credit.displayName
                     } label: {
                         Label(FinanceAccountType.credit.displayName, systemImage: FinanceAccountType.credit.icon)
                     }
@@ -207,15 +209,17 @@ struct FinanceAddAccountView: View {
                         Button {
                             selectedAccountType = .investment
                             selectedInvestmentCategory = .other
-                            selectedProductTypeTitle = "Актив"
+                            selectedInvestmentPreset = .asset
+                            selectedProductTypeTitle = String(localized: "finances.account.type.investment")
                         } label: {
-                            Label("Актив", systemImage: FinanceAccountType.investment.icon)
+                            Label(String(localized: "finances.account.type.investment"), systemImage: FinanceAccountType.investment.icon)
                         }
 
                         ForEach(visibleInvestmentCategories, id: \.self) { category in
                             Button {
                                 selectedAccountType = .investment
                                 selectedInvestmentCategory = category
+                                selectedInvestmentPreset = .category
                                 selectedProductTypeTitle = category.displayName
                             } label: {
                                 Label(category.displayName, systemImage: category.icon)
@@ -224,7 +228,7 @@ struct FinanceAddAccountView: View {
                     }
                 } label: {
                     HStack(spacing: 12) {
-                        Text("Тип продукта")
+                        Text(String(localized: "finances.add_account.product.type"))
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         
@@ -255,12 +259,12 @@ struct FinanceAddAccountView: View {
     
     private var groupSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Группа")
+            FinancesSectionHeader(title: String(localized: "finances.add_account.section.group"))
             
             if viewModel.state.groups.isEmpty {
                 FinancesGlassCard(contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)) {
                     VStack(spacing: 12) {
-                        Text("Продукт будет добавлен в «Без группы»")
+                        Text(String(localized: "finances.add_account.group.default_hint"))
                             .font(.system(size: 14, weight: .regular))
                             .foregroundStyle(AppColors.textTertiary)
                             .frame(maxWidth: .infinity, alignment: .center)
@@ -270,7 +274,7 @@ struct FinanceAddAccountView: View {
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: "folder.badge.plus")
-                                Text("Создать группу")
+                                Text(String(localized: "finances.add_account.group.create"))
                                     .font(.system(size: 15, weight: .semibold))
                             }
                             .foregroundStyle(
@@ -285,8 +289,8 @@ struct FinanceAddAccountView: View {
                 }
             } else {
                 let currentGroupID = resolvedGroup?.groupUniqueID
-                let currentGroupName = resolvedGroup?.name ?? "Без группы"
-                let selectableGroups = viewModel.state.groups.filter { $0.name != "Без группы" }
+                let currentGroupName = resolvedGroup?.name ?? String(localized: "finances.group.ungrouped")
+                let selectableGroups = viewModel.state.groups.filter { $0.name != String(localized: "finances.group.ungrouped") }
                 
                 FinancesGlassCard {
                     Menu {
@@ -298,7 +302,7 @@ struct FinanceAddAccountView: View {
                                     .foregroundStyle(AppColors.textTertiary)
                                     .frame(width: 12, height: 12)
 
-                                Text("Без группы")
+                                Text(String(localized: "finances.group.ungrouped"))
                                     .font(.system(size: 16, weight: .medium))
                                     .foregroundStyle(AppColors.textPrimary)
 
@@ -351,7 +355,7 @@ struct FinanceAddAccountView: View {
                         }
                     } label: {
                         HStack(spacing: 12) {
-                            Text("Группа")
+                            Text(String(localized: "finances.add_account.section.group"))
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(AppColors.textPrimary)
                             
@@ -381,7 +385,7 @@ struct FinanceAddAccountView: View {
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "folder.badge.plus")
-                        Text("Создать новую группу")
+                        Text(String(localized: "finances.add_account.group.create_new"))
                             .font(.system(size: 15, weight: .semibold))
                     }
                     .foregroundStyle(
@@ -411,7 +415,7 @@ struct FinanceAddAccountView: View {
         case .card:
             if cardViewModel == nil {
                 VStack(alignment: .leading, spacing: 10) {
-                    FinancesSectionHeader(title: editingCard == nil ? "Создать карту" : "Редактировать карту")
+                    FinancesSectionHeader(title: editingCard == nil ? String(localized: "finances.add_account.card.create") : String(localized: "finances.add_account.card.edit"))
                     FinancesGlassCard(contentPadding: EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20)) {
                         ProgressView()
                             .tint(AppColors.textPrimary)
@@ -436,6 +440,7 @@ struct FinanceAddAccountView: View {
                     selectedInvestmentCategory: selectedInvestmentCategory,
                     onProductTypeSelected: { selectedAccountType = $0 },
                     onProductTitleSelected: { selectedProductTypeTitle = $0 },
+                    onInvestmentPresetSelected: { selectedInvestmentPreset = $0 },
                     onInvestmentCategorySelected: { category in
                         selectedInvestmentCategory = category
                     },
@@ -449,7 +454,7 @@ struct FinanceAddAccountView: View {
         case .credit:
             if creditViewModel == nil {
                 VStack(alignment: .leading, spacing: 10) {
-                    FinancesSectionHeader(title: editingCredit == nil ? "Создать кредит" : "Редактировать кредит")
+                    FinancesSectionHeader(title: editingCredit == nil ? String(localized: "finances.add_account.credit.create") : String(localized: "finances.add_account.credit.edit"))
                     FinancesGlassCard(contentPadding: EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20)) {
                         ProgressView()
                             .tint(AppColors.textPrimary)
@@ -479,7 +484,7 @@ struct FinanceAddAccountView: View {
         case .investment:
             if investmentViewModel == nil {
                 VStack(alignment: .leading, spacing: 10) {
-                    FinancesSectionHeader(title: editingInvestment == nil ? "Создать актив" : "Редактировать актив")
+                    FinancesSectionHeader(title: editingInvestment == nil ? String(localized: "finances.add_account.investment.create") : String(localized: "finances.add_account.investment.edit"))
                     FinancesGlassCard(contentPadding: EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20)) {
                         ProgressView()
                             .tint(AppColors.textPrimary)
@@ -515,7 +520,7 @@ struct FinanceAddAccountView: View {
         if addAccountMode == .create, !validationHints.isEmpty, !areHintsHidden {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
-                    FinancesSectionHeader(title: "Подсказки")
+                    FinancesSectionHeader(title: String(localized: "finances.add_account.section.hints"))
                     Spacer()
                     Button {
                         areHintsHidden = true
@@ -531,7 +536,7 @@ struct FinanceAddAccountView: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Скрыть подсказки")
+                    .accessibilityLabel(String(localized: "finances.add_account.hints.hide"))
                 }
                 FinancesGlassCard(accentColor: warningAccentColor, contentPadding: EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12)) {
                     VStack(alignment: .leading, spacing: 8) {
@@ -568,13 +573,13 @@ struct FinanceAddAccountView: View {
     @ViewBuilder
     private var archivedSelectionSections: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Выбрать из архива")
+            FinancesSectionHeader(title: String(localized: "finances.add_account.section.archived"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     switch selectedAccountType {
                     case .card:
                         if viewModel.state.archivedCards.isEmpty {
-                            Text("Нет архивных карт")
+                            Text(String(localized: "finances.add_account.archived.cards.empty"))
                                 .font(.system(size: 14, weight: .regular))
                                 .foregroundStyle(AppColors.textTertiary)
                                 .frame(maxWidth: .infinity, alignment: .center)
@@ -595,7 +600,7 @@ struct FinanceAddAccountView: View {
                         
                     case .credit:
                         if viewModel.state.archivedCredits.isEmpty {
-                            Text("Нет архивных кредитов")
+                            Text(String(localized: "finances.add_account.archived.credits.empty"))
                                 .font(.system(size: 14, weight: .regular))
                                 .foregroundStyle(AppColors.textTertiary)
                                 .frame(maxWidth: .infinity, alignment: .center)
@@ -616,7 +621,7 @@ struct FinanceAddAccountView: View {
                         
                     case .investment:
                         if viewModel.state.archivedInvestments.isEmpty {
-                            Text("Нет архивных активов")
+                            Text(String(localized: "finances.add_account.archived.investments.empty"))
                                 .font(.system(size: 14, weight: .regular))
                                 .foregroundStyle(AppColors.textTertiary)
                                 .frame(maxWidth: .infinity, alignment: .center)
@@ -683,7 +688,7 @@ struct FinanceAddAccountView: View {
         }
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                Button("Отмена") { dismiss() }
+                Button(String(localized: "finances.common.cancel")) { dismiss() }
                     .foregroundStyle(AppColors.textPrimary)
             }
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -696,11 +701,11 @@ struct FinanceAddAccountView: View {
                             .font(.system(size: 15, weight: .semibold))
                     }
                     .foregroundStyle(AppColors.textTertiary)
-                    .accessibilityLabel("Показать подсказки")
+                    .accessibilityLabel(String(localized: "finances.add_account.hints.show"))
                 }
             }
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button(isEditingMode ? "Сохранить" : "Добавить") { addAccount() }
+                Button(isEditingMode ? String(localized: "finances.common.save") : String(localized: "finances.common.add")) { addAccount() }
                     .foregroundStyle(
                         isValid
                         ? AnyShapeStyle(
@@ -719,15 +724,16 @@ struct FinanceAddAccountView: View {
             areHintsHidden = UserDefaults.standard.bool(forKey: HintsPrefs.hiddenKey)
             if let editingCard {
                 selectedAccountType = .card
-                selectedProductTypeTitle = "Карта"
+                selectedProductTypeTitle = FinanceAccountType.card.displayName
                 accountName = editingCard.name
             } else if let editingCredit {
                 selectedAccountType = .credit
-                selectedProductTypeTitle = "Кредит"
+                selectedProductTypeTitle = FinanceAccountType.credit.displayName
                 accountName = editingCredit.name
             } else if let editingInvestment {
                 selectedAccountType = .investment
                 selectedInvestmentCategory = editingInvestment.category
+                selectedInvestmentPreset = .category
                 selectedProductTypeTitle = editingInvestment.category.displayName
                 accountName = editingInvestment.name
             }
@@ -833,15 +839,15 @@ struct FinanceAddAccountView: View {
         var hints: [ValidationHint] = []
 
         if isTickerDrivenName {
-            let selectedSymbol = investmentData?.marketData?.symbol?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            if selectedSymbol.isEmpty {
-                let tickerHint = selectedInvestmentCategory == .crypto
-                    ? "Выберите монету или пару"
-                    : "Выберите тикер"
-                hints.append(ValidationHint(text: tickerHint, kind: .required))
-            }
-        } else if trimmedAccountName.isEmpty {
-            hints.append(ValidationHint(text: "Заполните название продукта", kind: .required))
+                let selectedSymbol = investmentData?.marketData?.symbol?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                if selectedSymbol.isEmpty {
+                    let tickerHint = selectedInvestmentCategory == .crypto
+                    ? String(localized: "finances.add_account.hint.select_coin_or_pair")
+                    : String(localized: "finances.add_account.hint.select_ticker")
+                    hints.append(ValidationHint(text: tickerHint, kind: .required))
+                }
+            } else if trimmedAccountName.isEmpty {
+            hints.append(ValidationHint(text: String(localized: "finances.add_account.hint.fill_name"), kind: .required))
         }
 
         return hints
@@ -855,21 +861,21 @@ struct FinanceAddAccountView: View {
             switch selectedAccountType {
             case .card:
                 amountHint = cardData?.cardType == .credit
-                ? "Рекомендуется ввести кредитный лимит (можно 0)"
-                : "Рекомендуется ввести сумму (можно 0)"
+                ? String(localized: "finances.add_account.hint.recommended_credit_limit")
+                : String(localized: "finances.add_account.hint.recommended_amount")
             case .credit:
-                amountHint = "Рекомендуется ввести сумму кредита (можно 0)"
+                amountHint = String(localized: "finances.add_account.hint.recommended_credit_amount")
             case .investment:
                 if selectedInvestmentCategory == .stocks || selectedInvestmentCategory == .crypto {
-                    amountHint = "Рекомендуется ввести количество (можно 0)"
+                    amountHint = String(localized: "finances.add_account.hint.recommended_quantity")
                 } else {
-                    amountHint = "Рекомендуется ввести сумму (можно 0)"
+                    amountHint = String(localized: "finances.add_account.hint.recommended_amount")
                 }
             }
             hints.append(ValidationHint(text: amountHint, kind: .recommended))
         }
         if targetGroup == nil {
-            hints.append(ValidationHint(text: "Рекомендуется выбрать группу для удобной фильтрации", kind: .recommended))
+            hints.append(ValidationHint(text: String(localized: "finances.add_account.hint.recommended_group"), kind: .recommended))
         }
         return hints
     }

@@ -1408,4 +1408,27 @@ struct FinanceViewModelTests {
         #expect(abs(total + 2_500) < 0.01)
         #expect(abs(total + credit.amount) > 0.01)
     }
+
+    @Test("Пустая группа 'Без группы' скрывается из списка групп")
+    func testLoadGroupsHidesEmptyUngroupedGroup() throws {
+        let modelContext = try createTestModelContext()
+
+        let ungroupedName = String(localized: "finances.group.ungrouped")
+        let ungroupedGroup = FinanceGroup(name: ungroupedName, colorHex: "#3C4B5E")
+        let regularGroup = FinanceGroup(name: "Основная", colorHex: "#112233")
+        modelContext.insert(ungroupedGroup)
+        modelContext.insert(regularGroup)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+
+        viewModel.handle(.loadGroups)
+
+        #expect(viewModel.state.groups.contains(where: { $0.name == "Основная" }))
+        #expect(!viewModel.state.groups.contains(where: { $0.name == ungroupedName }))
+    }
 }

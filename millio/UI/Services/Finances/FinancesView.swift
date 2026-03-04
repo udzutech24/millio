@@ -63,7 +63,7 @@ struct FinancesView: View {
         .onDisappear {
             viewModel?.handle(.setDisplayCurrency(appState.primaryCurrencyCode))
         }
-        .navigationTitle("Финансы")
+        .navigationTitle(String(localized: "finances.main.title"))
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -77,7 +77,7 @@ struct FinancesView: View {
                             .frame(width: 28, height: 28)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Назад")
+                    .accessibilityLabel(String(localized: "finances.common.back"))
 
                     Menu {
                         ForEach(MiniAppNavigation.destinations(excluding: currentRoute)) { destination in
@@ -94,7 +94,7 @@ struct FinancesView: View {
                             .frame(width: 28, height: 28)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Быстрая навигация по мини-приложениям")
+                    .accessibilityLabel(String(localized: "finances.common.quick_navigation"))
                 }
             }
 
@@ -107,7 +107,7 @@ struct FinancesView: View {
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
                     }
-                    .accessibilityLabel("Настройки")
+                    .accessibilityLabel(String(localized: "finances.common.settings"))
                 }
             }
         }
@@ -125,19 +125,16 @@ private struct FinancesContentViewInternal: View {
             // Вкладка 1: Основной экран
             FinancesMainTabView(viewModel: viewModel)
                 .tabItem {
-                    Label("Финансы", systemImage: "creditcard")
+                    Label("finances.main.title", systemImage: "creditcard")
                 }
                 .tag(FinancesTab.main)
             
             // Вкладка 2: Динамика
             FinanceDynamicsTabView(financeViewModel: viewModel)
                 .tabItem {
-                    Label("Динамика", systemImage: "chart.line.uptrend.xyaxis")
+                    Label("finances.dynamics.title", systemImage: "chart.line.uptrend.xyaxis")
                 }
                 .tag(FinancesTab.dynamics)
-        }
-        .task {
-            await viewModel.refreshCurrencyQuotes()
         }
     }
 }
@@ -296,7 +293,7 @@ private struct FinancesMainTabView: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(AppColors.warning)
 
-                    Text("Выбранная API не поддерживает часть валют, поэтому итоговые суммы могут быть неполными.")
+                    Text("finances.main.warning.currency_api_partial")
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppColors.textSecondary)
                         .lineLimit(3)
@@ -330,7 +327,7 @@ private struct FinancesMainTabView: View {
                     goalProgressBar(progress: progress)
                     
                     HStack {
-                        Text("\(totalText) \(displayCurrency) из \(goalText) \(displayCurrency)")
+                        Text(FinancesL10n.format("finances.main.savings.progress", totalText, displayCurrency, goalText, displayCurrency))
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(AppColors.financesGradient.first ?? AppColors.brandPrimary)
                             .lineLimit(1)
@@ -366,14 +363,14 @@ private struct FinancesMainTabView: View {
 
     private var refreshMenu: some View {
         Menu {
-            Button("Обновить котировки") {
+            Button("finances.main.refresh_quotes") {
                 Task {
                     await viewModel.refreshCurrencyQuotes()
                 }
             }
             .disabled(viewModel.state.isLoadingRates)
 
-            Button("Обновить акции") {
+            Button("finances.main.refresh_stocks") {
                 Task {
                     await viewModel.refreshStockPrices()
                 }
@@ -400,7 +397,9 @@ private struct FinancesMainTabView: View {
                 }
             }
         }
-        .accessibilityLabel(viewModel.state.isLoadingRates ? "Обновляем..." : "Обновить")
+        .accessibilityLabel(viewModel.state.isLoadingRates
+            ? String(localized: "finances.common.refreshing")
+            : String(localized: "finances.common.refresh"))
     }
     
     // MARK: - Groups List Section
@@ -413,11 +412,11 @@ private struct FinancesMainTabView: View {
                         .font(.system(size: 64))
                         .foregroundStyle(AppColors.textTertiary)
                     
-                    Text("Нет групп")
+                    Text("finances.main.empty_groups.title")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                     
-                    Text("Создайте первую группу")
+                    Text("finances.main.empty_groups.subtitle")
                         .font(.system(size: 14, weight: .regular))
                         .foregroundStyle(AppColors.textSecondary)
                 }

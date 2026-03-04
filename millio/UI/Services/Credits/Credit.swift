@@ -18,11 +18,11 @@ enum CreditType: String, Codable, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .consumer: return "Потребительский"
-        case .mortgage: return "Ипотека"
-        case .auto: return "Автокредит"
-        case .refinancing: return "Рефинансирование"
-        case .other: return "Другое"
+        case .consumer: return String(localized: "finances.credit.type.consumer")
+        case .mortgage: return String(localized: "finances.credit.type.mortgage")
+        case .auto: return String(localized: "finances.credit.type.auto")
+        case .refinancing: return String(localized: "finances.credit.type.refinancing")
+        case .other: return String(localized: "finances.credit.type.other")
         }
     }
     
@@ -45,9 +45,9 @@ enum CreditPaymentMode: String, Codable, CaseIterable {
     var displayName: String {
         switch self {
         case .dayOfMonth:
-            return "День месяца"
+            return String(localized: "finances.credit.payment_mode.day_of_month")
         case .nextDate:
-            return "Следующая дата"
+            return String(localized: "finances.credit.payment_mode.next_date")
         }
     }
 }

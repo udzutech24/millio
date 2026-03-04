@@ -10,6 +10,8 @@ import SwiftData
 import UIKit
 
 struct CashflowTransactionEditorView: View {
+    static let amountMaxFractionDigits = 2
+
     @ObservedObject var viewModel: CashflowViewModel
     @Environment(\.dismiss) private var dismiss
 
@@ -194,7 +196,7 @@ struct CashflowTransactionEditorView: View {
             }
             validateAvailableBalance()
             if amountDisplayText.isEmpty {
-                amountDisplayText = AmountInputFormatter.display(amountText, maxFractionDigits: 0)
+                amountDisplayText = Self.formattedAmountDisplayText(from: amountText)
             }
             DispatchQueue.main.async {
                 isAmountFieldFocused = true
@@ -219,8 +221,8 @@ struct CashflowTransactionEditorView: View {
             validateAvailableBalance()
         }
         .onChange(of: amountDisplayText) { _, newValue in
-            let sanitized = AmountInputFormatter.sanitize(newValue, maxFractionDigits: 0)
-            let formatted = AmountInputFormatter.display(sanitized, maxFractionDigits: 0)
+            let sanitized = Self.sanitizedAmountText(from: newValue)
+            let formatted = Self.formattedAmountDisplayText(from: sanitized)
             if newValue != formatted {
                 amountDisplayText = formatted
             }
@@ -383,7 +385,7 @@ struct CashflowTransactionEditorView: View {
                             get: { amountDisplayText },
                             set: { amountDisplayText = $0 }
                         ))
-                        .keyboardType(.numberPad)
+                        .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .font(.system(size: 42, weight: .bold, design: .rounded))
                         .foregroundStyle(AppColors.textPrimary)
@@ -713,7 +715,7 @@ struct CashflowTransactionEditorView: View {
 
     private var isValid: Bool {
         guard !amountText.isEmpty,
-              let amount = Double(amountText.replacingOccurrences(of: ",", with: ".")),
+              let amount = AmountInputFormatter.parse(amountText),
               amount > 0 else {
             return false
         }
@@ -796,7 +798,7 @@ struct CashflowTransactionEditorView: View {
     // MARK: - Save
 
     private func saveTransaction() {
-        guard let amount = Double(amountText.replacingOccurrences(of: ",", with: ".")),
+        guard let amount = AmountInputFormatter.parse(amountText),
               amount > 0 else {
             return
         }
@@ -977,6 +979,14 @@ enum CashflowEditorMainInfoRow: Equatable {
 }
 
 extension CashflowTransactionEditorView {
+    static func sanitizedAmountText(from value: String) -> String {
+        AmountInputFormatter.sanitize(value, maxFractionDigits: amountMaxFractionDigits)
+    }
+
+    static func formattedAmountDisplayText(from value: String) -> String {
+        AmountInputFormatter.display(value, maxFractionDigits: amountMaxFractionDigits)
+    }
+
     static func operationCurrencyPrimaryPinnedCode(from primaryCurrencyCode: String?) -> String? {
         guard let primaryCurrencyCode else { return nil }
         let normalized = primaryCurrencyCode

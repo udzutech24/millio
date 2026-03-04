@@ -33,9 +33,9 @@ struct FinanceGroupRow: View {
     
     private var priorityDisplayName: String {
         switch group.priority {
-        case .high: return "Высокий"
-        case .normal: return "Обычный"
-        case .low: return "Низкий"
+        case .high: return String(localized: "finances.priority.high")
+        case .normal: return String(localized: "finances.priority.normal")
+        case .low: return String(localized: "finances.priority.low")
         }
     }
     
@@ -156,7 +156,7 @@ struct FinanceGroupRow: View {
             }
 
             if displayAccounts.isEmpty {
-                Text("Нет продуктов")
+                Text("finances.main.empty_products.title")
                     .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(AppColors.textTertiary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -233,7 +233,7 @@ struct FinanceGroupRow: View {
         Button {
             viewModel.handle(.showGroupDynamics(group))
         } label: {
-            Label("Открыть группу", systemImage: "chart.line.uptrend.xyaxis")
+            Label("finances.group.menu.open", systemImage: "chart.line.uptrend.xyaxis")
         }
         
         // Избранное
@@ -241,7 +241,7 @@ struct FinanceGroupRow: View {
             viewModel.handle(.toggleGroupFavorite(group))
         } label: {
             Label(
-                group.isFavorite ? "Убрать из избранного" : "В избранное",
+                group.isFavorite ? String(localized: "finances.group.menu.unfavorite") : String(localized: "finances.group.menu.favorite"),
                 systemImage: group.isFavorite ? "star.fill" : "star"
             )
         }
@@ -251,7 +251,7 @@ struct FinanceGroupRow: View {
             viewModel.handle(.setGroupPriority(group, nextPriority))
         } label: {
             Label(
-                "Приоритет: \(priorityDisplayName)",
+                FinancesL10n.format("finances.group.menu.priority", priorityDisplayName),
                 systemImage: priorityIcon
             )
         }
@@ -260,14 +260,14 @@ struct FinanceGroupRow: View {
         Button {
             viewModel.handle(.editGroup(group))
         } label: {
-            Label("Редактировать", systemImage: "pencil")
+            Label("finances.common.edit", systemImage: "pencil")
         }
         
         // Удаление
         Button(role: .destructive) {
             viewModel.handle(.deleteGroup(group))
         } label: {
-            Label("Удалить", systemImage: "trash")
+            Label("finances.common.delete", systemImage: "trash")
         }
     }
     
@@ -524,7 +524,7 @@ private struct FinanceAccountRow: View {
         }
         let amountText = formatBalance(remaining.amount, isHidden: viewModel.state.isAmountHidden)
         let currencySymbol = MonetaCurrency(rawValue: remaining.currency)?.symbol ?? remaining.currency
-        return "Остаток лимита \(amountText) \(currencySymbol)"
+        return FinancesL10n.format("finances.account.credit_limit_remaining", amountText, currencySymbol)
     }
     
     private func formatBalance(_ balance: Double, isHidden: Bool = false, maximumFractionDigits: Int = 0) -> String {

@@ -78,6 +78,7 @@ struct CashflowTransactionEditorViewLayoutTests {
         #expect(kind.monthlyTotalTitle == "Итого доход за месяц")
         #expect(kind.categoryKind == .income)
         #expect(kind.transactionType == .income)
+        #expect(kind.historyFilter == .income)
     }
 
     @Test("Конфигурация cashflow-листа для расхода")
@@ -87,6 +88,7 @@ struct CashflowTransactionEditorViewLayoutTests {
         #expect(kind.monthlyTotalTitle == "Итого расход за месяц")
         #expect(kind.categoryKind == .expense)
         #expect(kind.transactionType == .expense)
+        #expect(kind.historyFilter == .expense)
     }
 
     @Test("Селектор валюты операции закрепляет основную валюту профиля")
@@ -94,5 +96,21 @@ struct CashflowTransactionEditorViewLayoutTests {
         #expect(CashflowTransactionEditorView.operationCurrencyPrimaryPinnedCode(from: " rub ") == "RUB")
         #expect(CashflowTransactionEditorView.operationCurrencyPrimaryPinnedCode(from: "") == nil)
         #expect(CashflowTransactionEditorView.operationCurrencyPrimaryPinnedCode(from: nil) == nil)
+    }
+
+    @Test("Сумма в cashflow принимает запятую и копейки")
+    func cashflowAmountSupportsCommaAndCents() {
+        let sanitized = CashflowTransactionEditorView.sanitizedAmountText(from: "1 234,56")
+        let displayed = CashflowTransactionEditorView.formattedAmountDisplayText(from: sanitized)
+
+        #expect(sanitized == "1234.56")
+        #expect(displayed == "1 234.56")
+    }
+
+    @Test("Сумма в cashflow ограничена двумя знаками после запятой")
+    func cashflowAmountTrimsExtraFractionDigits() {
+        let sanitized = CashflowTransactionEditorView.sanitizedAmountText(from: "99,9999")
+
+        #expect(sanitized == "99.99")
     }
 }

@@ -167,11 +167,15 @@ struct DisplayCurrencySheet: View {
                         .padding(.top, 6)
                 }
             }
-            .navigationTitle(isSecondary ? "Дополнительная валюта" : "Валюта отображения")
+            .navigationTitle(
+                isSecondary
+                    ? String(localized: "finances.display_currency.title.secondary")
+                    : String(localized: "finances.display_currency.title.primary")
+            )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Отмена") { dismiss() }
+                    Button(String(localized: "finances.common.cancel")) { dismiss() }
                         .foregroundStyle(AppColors.textPrimary)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -181,7 +185,7 @@ struct DisplayCurrencySheet: View {
                         Image(systemName: "questionmark.circle")
                             .foregroundStyle(AppColors.textPrimary)
                     }
-                    .accessibilityLabel("Подсказка о валюте отображения")
+                    .accessibilityLabel(String(localized: "finances.display_currency.hint.accessibility"))
                 }
             }
             .onAppear {
@@ -190,7 +194,7 @@ struct DisplayCurrencySheet: View {
                     hasSeenDisplayCurrencyHint = true
                 }
             }
-            .alert("Подсказка", isPresented: $showInfoAlert) {
+            .alert(String(localized: "finances.display_currency.hint.title"), isPresented: $showInfoAlert) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(infoMessage)
@@ -201,7 +205,7 @@ struct DisplayCurrencySheet: View {
     }
 
     private var infoMessage: String {
-        "Основная валюта меняется только в Профиле. Здесь валюта влияет только на просмотр и сбрасывается после выхода из Финансов."
+        String(localized: "finances.display_currency.hint.message")
     }
 
     private func infoBanner(message: String) -> some View {
@@ -228,7 +232,7 @@ struct DisplayCurrencySheet: View {
                     .clipShape(Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Скрыть уведомление")
+            .accessibilityLabel(String(localized: "finances.display_currency.hint.dismiss_accessibility"))
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 10)
@@ -259,9 +263,9 @@ struct SavingsGoalSettingsView: View {
                 VStack(spacing: 20) {
                     // Настройки цели
                     VStack(alignment: .leading, spacing: 10) {
-                        FinancesSectionHeader(title: "Настройки цели")
+                        FinancesSectionHeader(title: String(localized: "finances.savings_goal.settings_section"))
                         FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16)) {
-                            Toggle("Включить цель накопления", isOn: $isEnabled)
+                            Toggle(String(localized: "finances.savings_goal.enabled"), isOn: $isEnabled)
                                 .tint(AppColors.toggleOnGreen)
                                 .foregroundStyle(AppColors.textPrimary)
                         }
@@ -270,9 +274,9 @@ struct SavingsGoalSettingsView: View {
                     if isEnabled {
                         // Сумма цели
                         VStack(alignment: .leading, spacing: 10) {
-                            FinancesSectionHeader(title: "Сумма цели (\(viewModel.state.displayCurrency))")
+                            FinancesSectionHeader(title: FinancesL10n.format("finances.savings_goal.amount_section", viewModel.state.displayCurrency))
                             FinancesGlassCard {
-                                TextField("Сумма цели", text: $goalAmountDisplayText)
+                                TextField(String(localized: "finances.savings_goal.amount_placeholder"), text: $goalAmountDisplayText)
                                     .keyboardType(.decimalPad)
                                     .foregroundStyle(AppColors.textPrimary)
                                     .padding(.vertical, 14)
@@ -291,12 +295,12 @@ struct SavingsGoalSettingsView: View {
                             let remaining = max(0, amount - viewModel.state.totalAmount)
 
                             VStack(alignment: .leading, spacing: 10) {
-                                FinancesSectionHeader(title: "Прогресс")
+                                FinancesSectionHeader(title: String(localized: "finances.savings_goal.progress_section"))
                                 FinancesGlassCard(contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)) {
                                     VStack(alignment: .leading, spacing: 16) {
                                         VStack(spacing: 8) {
                                             HStack {
-                                                Text("Текущая сумма")
+                                                Text(String(localized: "finances.savings_goal.current_amount"))
                                                     .font(.system(size: 14, weight: .medium))
                                                     .foregroundStyle(AppColors.textSecondary)
                                                 Spacer()
@@ -306,7 +310,7 @@ struct SavingsGoalSettingsView: View {
                                             }
 
                                             HStack {
-                                                Text("Осталось накопить")
+                                                Text(String(localized: "finances.savings_goal.remaining"))
                                                     .font(.system(size: 14, weight: .medium))
                                                     .foregroundStyle(AppColors.textSecondary)
                                                 Spacer()
@@ -331,7 +335,7 @@ struct SavingsGoalSettingsView: View {
                                             }
                                             .frame(height: 8)
 
-                                            Text("Выполнено: \(Int(progress * 100))%")
+                                            Text(FinancesL10n.format("finances.savings_goal.completed_percent", Int(progress * 100)))
                                                 .font(.system(size: 12, weight: .regular))
                                                 .foregroundStyle(AppColors.textTertiary)
                                                 .frame(maxWidth: .infinity, alignment: .center)
@@ -347,7 +351,7 @@ struct SavingsGoalSettingsView: View {
                 .padding(.top, 16)
                 .padding(.horizontal, 16)
             }
-            .navigationTitle("Цель накопления")
+            .navigationTitle(String(localized: "finances.savings_goal.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -372,7 +376,7 @@ struct SavingsGoalSettingsView: View {
                         .opacity(0.45)
 
                     Button(action: saveGoalSettings) {
-                        Text("Сохранить")
+                        Text(String(localized: "finances.common.save"))
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
                             .frame(maxWidth: .infinity)

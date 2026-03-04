@@ -220,7 +220,7 @@ private struct FinanceDynamicsContentView: View {
                 }
             }
         }
-        .navigationTitle(viewModel.state.isSingleAccountMode ? "" : "Динамика")
+        .navigationTitle(viewModel.state.isSingleAccountMode ? "" : String(localized: "finances.dynamics.title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(marketInvestment != nil ? .hidden : .visible, for: .navigationBar)
         .toolbar {
@@ -332,7 +332,12 @@ private struct FinanceDynamicsContentView: View {
                                 )
                                 .overlay {
                                     VStack(spacing: compactLayout ? 3 : 5) {
-                                        Text("Позиция всего, \(resolvedInvestmentCurrency(investment))")
+                                        Text(
+                                            FinancesL10n.format(
+                                                "finances.dynamics.market.position_total_with_currency",
+                                                resolvedInvestmentCurrency(investment)
+                                            )
+                                        )
                                             .font(.system(size: compactLayout ? 11 : 12, weight: .medium))
                                             .foregroundStyle(AppColors.textSecondary)
                                             .lineLimit(1)
@@ -355,7 +360,7 @@ private struct FinanceDynamicsContentView: View {
                         Divider()
                             .overlay(Color.white.opacity(0.09))
 
-                        Text("Информация об инструменте")
+                        Text(String(localized: "finances.dynamics.market.instrument_info"))
                             .font(.system(size: compactLayout ? 18 : 20, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
                             .lineLimit(1)
@@ -372,7 +377,10 @@ private struct FinanceDynamicsContentView: View {
                                 compactLayout: compactLayout
                             )
                             statCell(
-                                "Цена за единицу, \(resolvedInvestmentCurrency(investment))",
+                                FinancesL10n.format(
+                                    "finances.dynamics.trade.price_with_currency",
+                                    resolvedInvestmentCurrency(investment)
+                                ),
                                 money(investment.lastKnownUnitPrice ?? 0, currency: resolvedInvestmentCurrency(investment)),
                                 isEditable: true,
                                 isEditing: isInlineMarketEdit,
@@ -381,7 +389,7 @@ private struct FinanceDynamicsContentView: View {
                                 compactLayout: compactLayout
                             )
                             statCell(
-                                "Цена покупки",
+                                String(localized: "finances.add_account.investment.purchase_price"),
                                 money(investment.averagePurchaseUnitPrice ?? 0, currency: resolvedInvestmentCurrency(investment)),
                                 isEditable: true,
                                 isEditing: isInlineMarketEdit,
@@ -390,7 +398,7 @@ private struct FinanceDynamicsContentView: View {
                                 compactLayout: compactLayout
                             )
                             statCell(
-                                "Сумма покупки",
+                                String(localized: "finances.dynamics.market.purchase_total"),
                                 money(investment.totalPurchaseCost ?? 0, currency: resolvedInvestmentCurrency(investment)),
                                 compactLayout: compactLayout
                             )
@@ -400,7 +408,7 @@ private struct FinanceDynamicsContentView: View {
                 }
 
                 VStack(alignment: .leading, spacing: compactLayout ? 6 : 8) {
-                    Text("Действия")
+                    Text(String(localized: "finances.dynamics.market.actions"))
                         .font(.system(size: compactLayout ? 18 : 20, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -410,12 +418,12 @@ private struct FinanceDynamicsContentView: View {
                         contentPadding: EdgeInsets(top: compactLayout ? 10 : 12, leading: 12, bottom: compactLayout ? 10 : 12, trailing: 12)
                     ) {
                         HStack(spacing: compactLayout ? 8 : 10) {
-                            actionButton(title: "Купить", icon: "cart.badge.plus", color: Color.green.opacity(0.88), compactLayout: compactLayout) {
+                            actionButton(title: String(localized: "finances.dynamics.market.action.buy"), icon: "cart.badge.plus", color: Color.green.opacity(0.88), compactLayout: compactLayout) {
                                 tradeMode = .buy
                                 prepareTradeDraft(for: investment)
                                 showTradeSheet = true
                             }
-                            actionButton(title: "Продать", icon: "cart.badge.minus", color: Color.red.opacity(0.9), compactLayout: compactLayout) {
+                            actionButton(title: String(localized: "finances.dynamics.market.action.sell"), icon: "cart.badge.minus", color: Color.red.opacity(0.9), compactLayout: compactLayout) {
                                 tradeMode = .sell
                                 prepareTradeDraft(for: investment)
                                 showTradeSheet = true
@@ -601,7 +609,7 @@ private struct FinanceDynamicsContentView: View {
             )
             .overlay {
                 VStack(spacing: compactLayout ? 3 : 5) {
-                    Text("Рост")
+                    Text(String(localized: "finances.dynamics.growth"))
                         .font(.system(size: compactLayout ? 13 : 14, weight: .medium))
                         .foregroundStyle(AppColors.textSecondary)
                         .lineLimit(1)
@@ -649,22 +657,25 @@ private struct FinanceDynamicsContentView: View {
 
                 ScrollView {
                     VStack(spacing: 16) {
-                        Picker("Режим сделки", selection: $tradeMode) {
-                            Text("Купить").tag(InvestmentOrderSide.buy)
-                            Text("Продать").tag(InvestmentOrderSide.sell)
+                        Picker(String(localized: "finances.dynamics.trade.mode"), selection: $tradeMode) {
+                            Text(String(localized: "finances.dynamics.market.action.buy")).tag(InvestmentOrderSide.buy)
+                            Text(String(localized: "finances.dynamics.market.action.sell")).tag(InvestmentOrderSide.sell)
                         }
                         .pickerStyle(.segmented)
 
                         FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 14, bottom: 14, trailing: 14)) {
                             VStack(spacing: 12) {
-                                Picker("Режим цены", selection: $tradePriceMode) {
-                                    Text("Рыночная").tag(TradePriceMode.market)
-                                    Text("Своя").tag(TradePriceMode.custom)
+                                Picker(String(localized: "finances.dynamics.trade.price_mode"), selection: $tradePriceMode) {
+                                    Text(String(localized: "finances.dynamics.trade.price_mode.market")).tag(TradePriceMode.market)
+                                    Text(String(localized: "finances.dynamics.trade.price_mode.custom")).tag(TradePriceMode.custom)
                                 }
                                 .pickerStyle(.segmented)
 
                                 tradeRow(
-                                    title: "Цена, \(resolvedInvestmentCurrency(investment))",
+                                    title: FinancesL10n.format(
+                                        "finances.dynamics.trade.price_with_currency",
+                                        resolvedInvestmentCurrency(investment)
+                                    ),
                                     valueText: Binding(
                                         get: { tradePriceMode == .market ? money(investment.lastKnownUnitPrice ?? 0, currency: resolvedInvestmentCurrency(investment)) : AmountInputFormatter.display(tradePriceText) },
                                         set: { newValue in tradePriceText = AmountInputFormatter.sanitize(newValue) }
@@ -683,7 +694,10 @@ private struct FinanceDynamicsContentView: View {
                                 let qty = AmountInputFormatter.parse(tradeQuantityText) ?? 0
                                 let price = currentTradeUnitPrice(for: investment)
                                 tradeRow(
-                                    title: "Итого, \(resolvedInvestmentCurrency(investment))",
+                                    title: FinancesL10n.format(
+                                        "finances.dynamics.trade.total_with_currency",
+                                        resolvedInvestmentCurrency(investment)
+                                    ),
                                     valueText: .constant(money(qty * price, currency: resolvedInvestmentCurrency(investment))),
                                     editable: false
                                 )
@@ -699,7 +713,9 @@ private struct FinanceDynamicsContentView: View {
                         }
 
                         SwipeConfirmButton(
-                            title: tradeMode == .buy ? "Проведите вправо, чтобы купить" : "Проведите вправо, чтобы продать",
+                            title: tradeMode == .buy
+                                ? String(localized: "finances.dynamics.trade.swipe.buy")
+                                : String(localized: "finances.dynamics.trade.swipe.sell"),
                             accentColor: tradeMode == .buy ? Color.green : Color.red,
                             isEnabled: canSubmitTrade(for: investment),
                             onConfirmed: {
@@ -712,7 +728,7 @@ private struct FinanceDynamicsContentView: View {
                     .padding(.bottom, 32)
                 }
             }
-            .navigationTitle("Сделка")
+            .navigationTitle(String(localized: "finances.dynamics.trade.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -789,12 +805,12 @@ private struct FinanceDynamicsContentView: View {
         let quantity = AmountInputFormatter.parse(tradeQuantityText) ?? 0
         let unitPrice = currentTradeUnitPrice(for: investment)
         guard quantity > 0, unitPrice > 0 else {
-            tradeErrorText = "Проверьте количество и цену."
+            tradeErrorText = String(localized: "finances.dynamics.trade.error.invalid_inputs")
             return
         }
 
         if tradeMode == .sell, quantity > (investment.marketQuantity ?? 0) {
-            tradeErrorText = "Недостаточно количества для продажи."
+            tradeErrorText = String(localized: "finances.dynamics.trade.error.insufficient_quantity")
             return
         }
 
@@ -830,11 +846,15 @@ private struct FinanceDynamicsContentView: View {
     }
 
     private func marketQuantityTitle(for investment: Investment) -> String {
-        investment.category == .crypto ? "Количество монет" : "Количество"
+        investment.category == .crypto
+            ? String(localized: "finances.market.field_quantity_coins")
+            : String(localized: "finances.market.field_quantity")
     }
 
     private func marketQuantityUnit(for investment: Investment) -> String {
-        investment.category == .crypto ? "мон." : "шт"
+        investment.category == .crypto
+            ? String(localized: "finances.quick_edit.unit.coins_short")
+            : String(localized: "finances.investment.unit.shares_short")
     }
 
     private func marketNumber(_ value: Double, digits: Int) -> String {
@@ -1077,7 +1097,13 @@ private struct FinanceDynamicsContentView: View {
             let sameYear = Calendar.current.component(.year, from: startDate) == Calendar.current.component(.year, from: endDate)
             let startFormat: Date.FormatStyle = sameYear ? .dateTime.day().month(.abbreviated) : .dateTime.day().month(.abbreviated).year()
             let endFormat: Date.FormatStyle = .dateTime.day().month(.abbreviated).year()
-            Text("\(startDate.formatted(startFormat)) — \(endDate.formatted(endFormat))")
+            Text(
+                FinancesL10n.format(
+                    "finances.dynamics.period.range",
+                    startDate.formatted(startFormat),
+                    endDate.formatted(endFormat)
+                )
+            )
                 .font(.caption2)
                 .foregroundStyle(AppColors.textSecondary)
         }
@@ -1097,7 +1123,7 @@ private struct FinanceDynamicsContentView: View {
             guard case .singleAccount(let accountID) = viewModel.state.dynamicsMode,
                   let account = viewModel.getAccountsForSelectedGroups().first(where: { $0.accountUniqueID == accountID }),
                   let accountInfo = viewModel.getAccountInfoForDynamics(account: account) else {
-                return "Счет"
+                return String(localized: "finances.dynamics.chart.account_fallback")
             }
             return accountInfo.name
         }()
@@ -1143,7 +1169,7 @@ private struct FinanceDynamicsContentView: View {
                 )
                 .overlay {
                     VStack(spacing: 5) {
-                        Text("Рост")
+                        Text(String(localized: "finances.dynamics.growth"))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(AppColors.textSecondary)
                             .lineLimit(1)
@@ -1292,7 +1318,7 @@ private struct FinanceDynamicsContentView: View {
 
             VStack(spacing: 8) {
                 creditFieldRow(
-                    title: "Кредитный лимит",
+                    title: String(localized: "finances.add_account.card.credit_limit"),
                     value: limit,
                     currency: info.currency,
                     isEditing: isInlineAccountEdit,
@@ -1302,7 +1328,7 @@ private struct FinanceDynamicsContentView: View {
                     )
                 )
                 creditFieldRow(
-                    title: "Общий долг",
+                    title: String(localized: "finances.add_account.card.total_debt"),
                     value: debt,
                     currency: info.currency,
                     isEditing: isInlineAccountEdit,
@@ -1312,7 +1338,7 @@ private struct FinanceDynamicsContentView: View {
                     )
                 )
                 creditFieldRow(
-                    title: "Остаток лимита",
+                    title: String(localized: "finances.add_account.card.remaining_limit"),
                     value: remaining,
                     currency: info.currency,
                     isEditing: false,
@@ -1472,7 +1498,7 @@ private struct FinanceDynamicsContentView: View {
                         .padding(.top, 6)
                 }
             }
-            .navigationTitle("Валюта")
+            .navigationTitle(String(localized: "finances.dynamics.currency.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -1483,7 +1509,7 @@ private struct FinanceDynamicsContentView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Закрыть") {
+                    Button(String(localized: "finances.common.cancel")) {
                         displayCurrencySearchText = ""
                         showDisplayCurrencySheet = false
                     }
@@ -1495,7 +1521,7 @@ private struct FinanceDynamicsContentView: View {
                     hasSeenDisplayCurrencyHint = true
                 }
             }
-            .alert("Подсказка", isPresented: $showDisplayCurrencyInfoAlert) {
+            .alert(String(localized: "finances.dynamics.currency.hint.title"), isPresented: $showDisplayCurrencyInfoAlert) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(displayCurrencyInfoMessage)
@@ -1505,7 +1531,7 @@ private struct FinanceDynamicsContentView: View {
     }
 
     private var displayCurrencyInfoMessage: String {
-        "Основная валюта меняется только в Профиле. Здесь валюта влияет только на просмотр и сбрасывается после выхода из Финансов."
+        String(localized: "finances.display_currency.hint.message")
     }
 
     private func displayCurrencyInfoBanner(message: String) -> some View {
@@ -1532,7 +1558,7 @@ private struct FinanceDynamicsContentView: View {
                     .clipShape(Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Скрыть уведомление")
+            .accessibilityLabel(String(localized: "finances.dynamics.currency.hint.dismiss_accessibility"))
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 10)
@@ -1625,10 +1651,16 @@ private struct FinanceDynamicsContentView: View {
                         let sameYear = Calendar.current.component(.year, from: draftStartDate) == Calendar.current.component(.year, from: draftEndDate)
                         let startFormat: Date.FormatStyle = sameYear ? .dateTime.day().month(.abbreviated) : .dateTime.day().month(.abbreviated).year()
                         let endFormat: Date.FormatStyle = .dateTime.day().month(.abbreviated).year()
-                        Text("Период: \(min(draftStartDate, draftEndDate).formatted(startFormat)) — \(max(draftStartDate, draftEndDate).formatted(endFormat))")
+                        Text(
+                            FinancesL10n.format(
+                                "finances.dynamics.custom_period.title",
+                                min(draftStartDate, draftEndDate).formatted(startFormat),
+                                max(draftStartDate, draftEndDate).formatted(endFormat)
+                            )
+                        )
                             .font(.headline)
                             .foregroundStyle(AppColors.textPrimary)
-                        Text("Выберите начало и конец периода на календаре")
+                        Text(String(localized: "finances.dynamics.custom_period.subtitle"))
                             .font(.callout)
                             .foregroundStyle(AppColors.textSecondary)
                     }
@@ -1673,7 +1705,7 @@ private struct FinanceDynamicsContentView: View {
                         cachedSelectedPoint = nil
                         showCustomPeriodSheet = false
                     } label: {
-                        Text("Сбросить")
+                        Text(String(localized: "finances.common.reset"))
                             .font(.system(size: 16, weight: .semibold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
@@ -1697,7 +1729,7 @@ private struct FinanceDynamicsContentView: View {
                         cachedSelectedPoint = nil
                         showCustomPeriodSheet = false
                     } label: {
-                        Text("Показать")
+                        Text(String(localized: "finances.dynamics.custom_period.show"))
                             .font(.system(size: 16, weight: .semibold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
@@ -1801,11 +1833,19 @@ private struct FinanceDynamicsContentView: View {
                 .foregroundStyle(AppColors.textSecondary.opacity(0.5))
             
             VStack(spacing: 6) {
-                Text(viewModel.state.viewMode == .groups ? "Нет групп" : "Нет продуктов")
+                Text(
+                    viewModel.state.viewMode == .groups
+                        ? String(localized: "finances.dynamics.empty.groups.title")
+                        : String(localized: "finances.dynamics.empty.products.title")
+                )
                     .font(.title3.weight(.bold))
                     .foregroundStyle(AppColors.textPrimary)
                 
-                Text(viewModel.state.viewMode == .groups ? "Создайте первую группу" : "Создайте первый продукт")
+                Text(
+                    viewModel.state.viewMode == .groups
+                        ? String(localized: "finances.main.empty_groups.subtitle")
+                        : String(localized: "finances.dynamics.empty.products.subtitle")
+                )
                     .font(.subheadline)
                     .foregroundStyle(AppColors.textSecondary)
             }
@@ -1820,10 +1860,10 @@ private struct FinanceDynamicsContentView: View {
                 Text("")
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Spacer(minLength: 12)
-                Text("Начало")
+                Text(String(localized: "finances.dynamics.table.start"))
                     .font(.caption2).foregroundStyle(AppColors.textSecondary)
                     .frame(width: 92, alignment: .trailing)
-                Text("Конец")
+                Text(String(localized: "finances.dynamics.table.end"))
                     .font(.caption2).foregroundStyle(AppColors.textSecondary)
                     .frame(width: 92, alignment: .trailing)
             }
@@ -1837,9 +1877,9 @@ private struct FinanceDynamicsContentView: View {
     }
 
     private var dynamicsSegmentedControl: some View {
-        return Picker("Режим динамики", selection: dynamicsViewModeSelection) {
-            Text("Группы").tag(0)
-            Text("Счета").tag(1)
+        return Picker(String(localized: "finances.dynamics.view_mode.title"), selection: dynamicsViewModeSelection) {
+            Text(String(localized: "finances.dynamics.view_mode.groups")).tag(0)
+            Text(String(localized: "finances.dynamics.view_mode.accounts")).tag(1)
         }
         .pickerStyle(.segmented)
         .padding(4)
@@ -1934,7 +1974,7 @@ private struct FinanceDynamicsContentView: View {
                     .foregroundStyle(AppColors.textPrimary)
                 
                 if item.isArchived {
-                    Text("архив")
+                    Text(String(localized: "finances.dynamics.archived_badge"))
                         .font(.caption2.weight(.semibold))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -2020,7 +2060,7 @@ private struct FinanceDynamicsContentView: View {
         let percent: Double = abs(startSum) > 0.01 ? (delta / abs(startSum)) * 100 : 0
         return DynamicsBreakdownItem(
             id: "total",
-            name: "Итого",
+            name: String(localized: "finances.dynamics.chart.total_label"),
             startValue: startSum,
             endValue: endSum,
             delta: delta,
@@ -2040,11 +2080,11 @@ private struct FinanceDynamicsContentView: View {
                 .font(.system(size: 48))
                 .foregroundStyle(AppColors.textTertiary)
 
-            Text("График доступен в PRO версии")
+            Text(String(localized: "finances.dynamics.pro.title"))
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(AppColors.textPrimary)
 
-            Text("Оформите подписку для доступа к расширенной аналитике")
+            Text(String(localized: "finances.dynamics.pro.subtitle"))
                 .font(.system(size: 14))
                 .foregroundStyle(AppColors.textSecondary)
                 .multilineTextAlignment(.center)
@@ -2055,7 +2095,7 @@ private struct FinanceDynamicsContentView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "star.fill")
                         .font(.system(size: 14))
-                    Text("Оформить PRO")
+                    Text(String(localized: "finances.dynamics.pro.cta"))
                         .font(.system(size: 16, weight: .semibold))
                 }
                 .foregroundStyle(AppColors.textPrimary)
@@ -2089,7 +2129,7 @@ private struct FinanceDynamicsContentView: View {
                 .font(.system(size: 48))
                 .foregroundStyle(AppColors.textTertiary)
 
-            Text("Нет данных для отображения")
+            Text(String(localized: "finances.dynamics.empty.chart"))
                 .font(.system(size: 16))
                 .foregroundStyle(AppColors.textSecondary)
         }
@@ -2192,7 +2232,7 @@ private struct FinanceDynamicsContentView: View {
                     .clipShape(Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Скрыть уведомление")
+            .accessibilityLabel(String(localized: "finances.dynamics.currency.hint.dismiss_accessibility"))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -2307,7 +2347,7 @@ private struct FinanceDynamicsFilterSheet: View {
             .safeAreaInset(edge: .bottom) {
                 filterApplyButton
             }
-            .navigationTitle("Фильтры")
+            .navigationTitle(String(localized: "finances.dynamics.filter.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { }
         }
@@ -2318,12 +2358,12 @@ private struct FinanceDynamicsFilterSheet: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary)
-            TextField("Поиск", text: $filterSearchText)
+            TextField(String(localized: "finances.dynamics.filter.search_placeholder"), text: $filterSearchText)
                 .foregroundStyle(AppColors.textPrimary)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
             Spacer()
-            Button("Отменить") {
+            Button(String(localized: "finances.common.cancel")) {
                 filterSearchText = ""
             }
             .foregroundStyle(Color(red: 0.46, green: 0.67, blue: 1.0))
@@ -2349,7 +2389,7 @@ private struct FinanceDynamicsFilterSheet: View {
         return Button {
             dismiss()
         } label: {
-            Text("Принять фильтр")
+            Text(String(localized: "finances.dynamics.filter.apply"))
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Color.white)
                 .frame(maxWidth: .infinity)
@@ -2378,12 +2418,12 @@ private struct FinanceDynamicsFilterSheet: View {
     private var groupsFilterSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 10) {
-                filterPrimaryButton(title: "Показать все") {
+                filterPrimaryButton(title: String(localized: "finances.dynamics.filter.show_all")) {
                     viewModel.handle(.selectAllGroups)
                 }
                 .frame(maxWidth: .infinity)
 
-                filterSecondaryButton(title: "Снять выбор") {
+                filterSecondaryButton(title: String(localized: "finances.dynamics.filter.clear_selection")) {
                     viewModel.handle(.deselectAllGroups)
                 }
                 .frame(maxWidth: .infinity)
@@ -2396,7 +2436,7 @@ private struct FinanceDynamicsFilterSheet: View {
             }
 
             if filteredGroups.isEmpty {
-                Text("Нет групп")
+                Text(String(localized: "finances.dynamics.empty.groups.title"))
                     .font(.system(size: 14))
                     .foregroundStyle(AppColors.textTertiary)
             } else {
@@ -2475,11 +2515,11 @@ private struct FinanceDynamicsFilterSheet: View {
 
     private var archivedToggleSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Архив")
+            Text(String(localized: "finances.dynamics.filter.archive_section"))
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(AppColors.textPrimary)
             
-            Toggle("Показывать архивные счета", isOn: Binding(
+            Toggle(String(localized: "finances.dynamics.filter.show_archived_accounts"), isOn: Binding(
                 get: { viewModel.state.showArchivedAccounts },
                 set: { viewModel.handle(.setShowArchivedAccounts($0)) }
             ))

@@ -1,0 +1,40 @@
+# Quick Setup Flow
+
+## Goal
+`QuickSetup` replaces promo-only onboarding with a real setup flow that configures language, currencies, expense categories, and initial finance products.
+
+## Steps
+1. `localeAndCurrencies`
+- Select app language.
+- Select primary currency.
+- Select up to 4 favorite currencies.
+
+2. `expenseCategories`
+- Choose expense categories to keep visible in Cashflow.
+- Non-selected system categories are hidden via `CashflowSystemCategoryOverride`.
+
+3. `products`
+- Add one or many products in a row:
+  - account (`Card`)
+  - asset (`Investment.other`)
+  - stock (`Investment.stocks`)
+  - crypto (`Investment.crypto`)
+- Every added product is attached to the ungrouped finance group.
+
+4. `summary`
+- Review and apply all settings.
+
+## Entry Points
+- First launch: `OnboardingView` opens `QuickSetupView` in onboarding mode.
+- Main screen: a dismissible `Quick setup` banner is shown until setup is completed.
+- Profile: dedicated row in `Settings` (under `App security`) to re-open `Quick setup` anytime.
+
+## Persistence
+`SettingsManager` keys:
+- `quickSetupCompleted`
+- `quickSetupBannerHidden`
+- `quickSetupExpenseCategoryIDs`
+
+## Notes
+- Onboarding can be skipped; app still proceeds to `ready` state.
+- Completing quick setup sets `quickSetupCompleted = true`.

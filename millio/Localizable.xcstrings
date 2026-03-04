@@ -23,22 +23,22 @@
         }
       }
     },
+    "%@ · %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
     "%@ %@" : {
       "localizations" : {
         "ru" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@ %2$@"
-          }
-        }
-      }
-    },
-    "%@ %@ из %@ %@" : {
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ %2$@ из %3$@ %4$@"
           }
         }
       }
@@ -1257,6 +1257,3678 @@
         }
       }
     },
+    "finances.account.credit_limit_remaining" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limit remaining %@ %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Остаток лимита %@ %@"
+          }
+        }
+      }
+    },
+    "finances.account.type.card" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Card"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Карта"
+          }
+        }
+      }
+    },
+    "finances.account.type.credit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Credit"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Кредит"
+          }
+        }
+      }
+    },
+    "finances.account.type.investment" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Asset"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Актив"
+          }
+        }
+      }
+    },
+    "finances.add_account.archived.cards.empty" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No archived cards"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет архивных карт"
+          }
+        }
+      }
+    },
+    "finances.add_account.archived.credits.empty" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No archived credits"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет архивных кредитов"
+          }
+        }
+      }
+    },
+    "finances.add_account.archived.investments.empty" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No archived assets"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет архивных активов"
+          }
+        }
+      }
+    },
+    "finances.add_account.card.create" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create card"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Создать карту"
+          }
+        }
+      }
+    },
+    "finances.add_account.card.credit_limit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Credit limit"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Кредитный лимит"
+          }
+        }
+      }
+    },
+    "finances.add_account.card.edit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit card"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Редактировать карту"
+          }
+        }
+      }
+    },
+    "finances.add_account.card.remaining_limit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remaining limit"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Остаток лимита"
+          }
+        }
+      }
+    },
+    "finances.add_account.card.total_debt" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Total debt"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Общий долг"
+          }
+        }
+      }
+    },
+    "finances.add_account.card.type" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Card type"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тип карты"
+          }
+        }
+      }
+    },
+    "finances.add_account.credit.amount" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Credit amount"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сумма кредита"
+          }
+        }
+      }
+    },
+    "finances.add_account.credit.create" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create credit"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Создать кредит"
+          }
+        }
+      }
+    },
+    "finances.add_account.credit.edit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit credit"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Редактировать кредит"
+          }
+        }
+      }
+    },
+    "finances.add_account.credit.monthly_payment" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monthly payment"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Платеж в месяц"
+          }
+        }
+      }
+    },
+    "finances.add_account.credit.next_payment_date" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next date"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Следующая дата"
+          }
+        }
+      }
+    },
+    "finances.add_account.credit.payment_day" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Day of month"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "День месяца"
+          }
+        }
+      }
+    },
+    "finances.add_account.credit.payment_mode" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Payment date mode"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Режим даты платежа"
+          }
+        }
+      }
+    },
+    "finances.add_account.credit.payment.section" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Payment"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Платеж"
+          }
+        }
+      }
+    },
+    "finances.add_account.credit.remaining_debt" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remaining debt"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Остаток долга"
+          }
+        }
+      }
+    },
+    "finances.add_account.credit.reminder.days_before" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "N days before"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "За N дней"
+          }
+        }
+      }
+    },
+    "finances.add_account.credit.reminder.section" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reminder"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Напоминание"
+          }
+        }
+      }
+    },
+    "finances.add_account.credit.reminder.time" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notification time"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Время уведомления"
+          }
+        }
+      }
+    },
+    "finances.add_account.credit.reminder.toggle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remind about payment"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Напоминать о платеже"
+          }
+        }
+      }
+    },
+    "finances.add_account.currency_picker.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Currency selection"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выбор валюты"
+          }
+        }
+      }
+    },
+    "finances.add_account.favorite" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Favorite"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В избранном"
+          }
+        }
+      }
+    },
+    "finances.add_account.favorite.single" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Favorite"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Избранная"
+          }
+        }
+      }
+    },
+    "finances.add_account.field.amount" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Amount"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сумма"
+          }
+        }
+      }
+    },
+    "finances.add_account.field.currency" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Currency"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Валюта"
+          }
+        }
+      }
+    },
+    "finances.add_account.group.create" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create group"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Создать группу"
+          }
+        }
+      }
+    },
+    "finances.add_account.group.create_new" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create new group"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Создать новую группу"
+          }
+        }
+      }
+    },
+    "finances.add_account.group.default_hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Account will be added to Ungrouped"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Продукт будет добавлен в «Без группы»"
+          }
+        }
+      }
+    },
+    "finances.add_account.hint.fill_name" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter an account name"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Заполните название продукта"
+          }
+        }
+      }
+    },
+    "finances.add_account.hint.recommended_amount" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recommended: set amount (0 is allowed)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Рекомендуется ввести сумму (можно 0)"
+          }
+        }
+      }
+    },
+    "finances.add_account.hint.recommended_credit_amount" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recommended: set credit amount (0 is allowed)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Рекомендуется ввести сумму кредита (можно 0)"
+          }
+        }
+      }
+    },
+    "finances.add_account.hint.recommended_credit_limit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recommended: set credit limit (0 is allowed)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Рекомендуется ввести кредитный лимит (можно 0)"
+          }
+        }
+      }
+    },
+    "finances.add_account.hint.recommended_group" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recommended: choose a group for easier filtering"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Рекомендуется выбрать группу для удобной фильтрации"
+          }
+        }
+      }
+    },
+    "finances.add_account.hint.recommended_quantity" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recommended: set quantity (0 is allowed)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Рекомендуется ввести количество (можно 0)"
+          }
+        }
+      }
+    },
+    "finances.add_account.hint.select_coin_or_pair" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select coin or pair"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выберите монету или пару"
+          }
+        }
+      }
+    },
+    "finances.add_account.hint.select_ticker" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select ticker"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выберите тикер"
+          }
+        }
+      }
+    },
+    "finances.add_account.hints.hide" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide hints"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скрыть подсказки"
+          }
+        }
+      }
+    },
+    "finances.add_account.hints.show" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show hints"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показать подсказки"
+          }
+        }
+      }
+    },
+    "finances.add_account.investment.create" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create asset"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Создать актив"
+          }
+        }
+      }
+    },
+    "finances.add_account.investment.edit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit asset"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Редактировать актив"
+          }
+        }
+      }
+    },
+    "finances.add_account.investment.purchase_price" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Purchase price"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цена покупки"
+          }
+        }
+      }
+    },
+    "finances.add_account.mode.archived" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "From archive"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Из архива"
+          }
+        }
+      }
+    },
+    "finances.add_account.mode.create" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Создать"
+          }
+        }
+      }
+    },
+    "finances.add_account.name.autofill_hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name auto-fills after you choose a ticker or pair"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Название подставится автоматически после выбора тикера/пары"
+          }
+        }
+      }
+    },
+    "finances.add_account.nav.edit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit account"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Редактирование продукта"
+          }
+        }
+      }
+    },
+    "finances.add_account.nav.new" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New account"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Новый продукт"
+          }
+        }
+      }
+    },
+    "finances.add_account.placeholder.account" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "e.g. Emergency fund account"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Например, Резервный счет"
+          }
+        }
+      }
+    },
+    "finances.add_account.placeholder.card" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "e.g. Primary card"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Например, Основная карта"
+          }
+        }
+      }
+    },
+    "finances.add_account.placeholder.credit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "e.g. Personal loan"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Например, Потребительский кредит"
+          }
+        }
+      }
+    },
+    "finances.add_account.placeholder.investment.bonds" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "e.g. Bond portfolio"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Например, Портфель облигаций"
+          }
+        }
+      }
+    },
+    "finances.add_account.placeholder.investment.business" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "e.g. Business equity"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Например, Доля в бизнесе"
+          }
+        }
+      }
+    },
+    "finances.add_account.placeholder.investment.car" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "e.g. Family car"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Например, Семейный автомобиль"
+          }
+        }
+      }
+    },
+    "finances.add_account.placeholder.investment.crypto" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "e.g. Crypto portfolio"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Например, Портфель криптовалют"
+          }
+        }
+      }
+    },
+    "finances.add_account.placeholder.investment.debt" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "e.g. Loan receivable"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Например, Займ знакомому"
+          }
+        }
+      }
+    },
+    "finances.add_account.placeholder.investment.house" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "e.g. Rental property"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Например, Квартира для аренды"
+          }
+        }
+      }
+    },
+    "finances.add_account.placeholder.investment.metals" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "e.g. Gold holdings"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Например, Инвестиции в золото"
+          }
+        }
+      }
+    },
+    "finances.add_account.placeholder.investment.other" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "e.g. Cash"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Например, Наличные"
+          }
+        }
+      }
+    },
+    "finances.add_account.placeholder.investment.stocks" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "e.g. ETF portfolio"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Например, Портфель ETF"
+          }
+        }
+      }
+    },
+    "finances.add_account.placeholder.market" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name from ticker/pair"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Название из тикера/пары"
+          }
+        }
+      }
+    },
+    "finances.add_account.priority.hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Higher priority appears higher in lists."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Высокий приоритет — выше в списках."
+          }
+        }
+      }
+    },
+    "finances.add_account.product.account" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Account"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Счет"
+          }
+        }
+      }
+    },
+    "finances.add_account.product.type" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Product type"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тип продукта"
+          }
+        }
+      }
+    },
+    "finances.add_account.section.archived" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select from archive"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выбрать из архива"
+          }
+        }
+      }
+    },
+    "finances.add_account.section.balance" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Balance"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Баланс"
+          }
+        }
+      }
+    },
+    "finances.add_account.section.calculations" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calculations"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подсчеты"
+          }
+        }
+      }
+    },
+    "finances.add_account.section.group" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Group"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Группа"
+          }
+        }
+      }
+    },
+    "finances.add_account.section.hints" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hints"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подсказки"
+          }
+        }
+      }
+    },
+    "finances.add_account.section.name" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Название"
+          }
+        }
+      }
+    },
+    "finances.add_account.section.priority" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Priority"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Приоритет"
+          }
+        }
+      }
+    },
+    "finances.add_account.section.type" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тип"
+          }
+        }
+      }
+    },
+    "finances.add_account.total_impact.credit_note" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For Total, the Total debt field is used."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Для учета в «Итого» используется поле «Общий долг»."
+          }
+        }
+      }
+    },
+    "finances.add_account.total_impact.credit_remaining_note" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For Total, the Remaining debt field is used."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Для учета в «Итого» используется поле «Остаток долга»."
+          }
+        }
+      }
+    },
+    "finances.add_account.total_impact.debt_note" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For debts: if others owe you, choose Increases; if you owe, choose Decreases."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Для долгов: если вам должны — выбирайте «Увеличивает», если вы должны — «Уменьшает»."
+          }
+        }
+      }
+    },
+    "finances.add_account.total_impact.decreases" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Decreases"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Уменьшает"
+          }
+        }
+      }
+    },
+    "finances.add_account.total_impact.description" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Defines how balance changes affect the overall total across all products."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Определяет, как изменение баланса влияет на общий итог по всем продуктам."
+          }
+        }
+      }
+    },
+    "finances.add_account.total_impact.include" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Include in total"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Учитывать в «Итого»"
+          }
+        }
+      }
+    },
+    "finances.add_account.total_impact.increases" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Increases"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Увеличивает"
+          }
+        }
+      }
+    },
+    "finances.add_account.total_impact.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impact on total"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Влияние на «Итого»"
+          }
+        }
+      }
+    },
+    "finances.card.type.credit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Credit"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Кредитная"
+          }
+        }
+      }
+    },
+    "finances.card.type.debit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Debit"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Дебетовая"
+          }
+        }
+      }
+    },
+    "finances.common.add" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавить"
+          }
+        }
+      }
+    },
+    "finances.common.apply" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apply"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Применить"
+          }
+        }
+      }
+    },
+    "finances.common.back" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Назад"
+          }
+        }
+      }
+    },
+    "finances.common.cancel" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отмена"
+          }
+        }
+      }
+    },
+    "finances.common.delete" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить"
+          }
+        }
+      }
+    },
+    "finances.common.edit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Редактировать"
+          }
+        }
+      }
+    },
+    "finances.common.quick_navigation" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quick mini-app navigation"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Быстрая навигация по мини-приложениям"
+          }
+        }
+      }
+    },
+    "finances.common.refresh" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refresh"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обновить"
+          }
+        }
+      }
+    },
+    "finances.common.refreshing" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refreshing..."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обновляем..."
+          }
+        }
+      }
+    },
+    "finances.common.reset" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reset"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сбросить"
+          }
+        }
+      }
+    },
+    "finances.common.save" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сохранить"
+          }
+        }
+      }
+    },
+    "finances.common.settings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Настройки"
+          }
+        }
+      }
+    },
+    "finances.credit.payment_mode.day_of_month" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Day of month"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "День месяца"
+          }
+        }
+      }
+    },
+    "finances.credit.payment_mode.next_date" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next date"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Следующая дата"
+          }
+        }
+      }
+    },
+    "finances.credit.type.auto" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auto loan"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Автокредит"
+          }
+        }
+      }
+    },
+    "finances.credit.type.consumer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Consumer"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Потребительский"
+          }
+        }
+      }
+    },
+    "finances.credit.type.mortgage" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mortgage"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ипотека"
+          }
+        }
+      }
+    },
+    "finances.credit.type.other" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Other"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Другое"
+          }
+        }
+      }
+    },
+    "finances.credit.type.refinancing" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refinancing"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Рефинансирование"
+          }
+        }
+      }
+    },
+    "finances.display_currency.hint.accessibility" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Display currency hint"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подсказка о валюте отображения"
+          }
+        }
+      }
+    },
+    "finances.display_currency.hint.dismiss_accessibility" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide notice"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скрыть уведомление"
+          }
+        }
+      }
+    },
+    "finances.display_currency.hint.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Primary currency can only be changed in Profile. Here, currency only affects viewing and resets after leaving Finances."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Основная валюта меняется только в Профиле. Здесь валюта влияет только на просмотр и сбрасывается после выхода из Финансов."
+          }
+        }
+      }
+    },
+    "finances.display_currency.hint.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hint"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подсказка"
+          }
+        }
+      }
+    },
+    "finances.display_currency.title.primary" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Display Currency"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Валюта отображения"
+          }
+        }
+      }
+    },
+    "finances.display_currency.title.secondary" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Secondary Currency"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Дополнительная валюта"
+          }
+        }
+      }
+    },
+    "finances.dynamics.archived_badge" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "archived"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "архив"
+          }
+        }
+      }
+    },
+    "finances.dynamics.chart.account_fallback" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Account"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Счет"
+          }
+        }
+      }
+    },
+    "finances.dynamics.chart.total_label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Total amount"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Общая сумма"
+          }
+        }
+      }
+    },
+    "finances.dynamics.currency.hint.dismiss_accessibility" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide notice"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скрыть уведомление"
+          }
+        }
+      }
+    },
+    "finances.dynamics.currency.hint.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hint"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подсказка"
+          }
+        }
+      }
+    },
+    "finances.dynamics.currency.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Currency"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Валюта"
+          }
+        }
+      }
+    },
+    "finances.dynamics.custom_period.show" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показать"
+          }
+        }
+      }
+    },
+    "finances.dynamics.custom_period.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose start and end dates on the calendar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выберите начало и конец периода на календаре"
+          }
+        }
+      }
+    },
+    "finances.dynamics.custom_period.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Period: %1$@ — %2$@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Период: %1$@ — %2$@"
+          }
+        }
+      }
+    },
+    "finances.dynamics.empty.chart" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No data to display"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет данных для отображения"
+          }
+        }
+      }
+    },
+    "finances.dynamics.empty.groups.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No groups"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет групп"
+          }
+        }
+      }
+    },
+    "finances.dynamics.empty.products.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create your first product"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Создайте первый продукт"
+          }
+        }
+      }
+    },
+    "finances.dynamics.empty.products.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No products"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет продуктов"
+          }
+        }
+      }
+    },
+    "finances.dynamics.filter.apply" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apply Filter"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Принять фильтр"
+          }
+        }
+      }
+    },
+    "finances.dynamics.filter.archive_section" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archive"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Архив"
+          }
+        }
+      }
+    },
+    "finances.dynamics.filter.clear_selection" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear selection"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Снять выбор"
+          }
+        }
+      }
+    },
+    "finances.dynamics.filter.search_placeholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поиск"
+          }
+        }
+      }
+    },
+    "finances.dynamics.filter.show_all" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show all"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показать все"
+          }
+        }
+      }
+    },
+    "finances.dynamics.filter.show_archived_accounts" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show archived accounts"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показывать архивные счета"
+          }
+        }
+      }
+    },
+    "finances.dynamics.filter.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filters"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Фильтры"
+          }
+        }
+      }
+    },
+    "finances.dynamics.growth" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Growth"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Рост"
+          }
+        }
+      }
+    },
+    "finances.dynamics.market.action.buy" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buy"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Купить"
+          }
+        }
+      }
+    },
+    "finances.dynamics.market.action.sell" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sell"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Продать"
+          }
+        }
+      }
+    },
+    "finances.dynamics.market.actions" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actions"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Действия"
+          }
+        }
+      }
+    },
+    "finances.dynamics.market.instrument_info" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Instrument Info"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Информация об инструменте"
+          }
+        }
+      }
+    },
+    "finances.dynamics.market.position_total_with_currency" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Total position, %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Позиция всего, %@"
+          }
+        }
+      }
+    },
+    "finances.dynamics.market.purchase_total" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Purchase Total"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сумма покупки"
+          }
+        }
+      }
+    },
+    "finances.dynamics.period.choose_end" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select an end date"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выберите конечную дату"
+          }
+        }
+      }
+    },
+    "finances.dynamics.period.choose_start" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select a start date"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выберите начальную дату"
+          }
+        }
+      }
+    },
+    "finances.dynamics.period.end" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Period end"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Конец периода"
+          }
+        }
+      }
+    },
+    "finances.dynamics.period.range" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ — %2$@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ — %2$@"
+          }
+        }
+      }
+    },
+    "finances.dynamics.period.start" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Period start"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Начало периода"
+          }
+        }
+      }
+    },
+    "finances.dynamics.period.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Period selection"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выбор периода"
+          }
+        }
+      }
+    },
+    "finances.dynamics.pro.cta" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Get PRO"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Оформить PRO"
+          }
+        }
+      }
+    },
+    "finances.dynamics.pro.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Upgrade to access advanced analytics"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Оформите подписку для доступа к расширенной аналитике"
+          }
+        }
+      }
+    },
+    "finances.dynamics.pro.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chart is available in PRO"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "График доступен в PRO версии"
+          }
+        }
+      }
+    },
+    "finances.dynamics.table.end" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "End"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Конец"
+          }
+        }
+      }
+    },
+    "finances.dynamics.table.start" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Начало"
+          }
+        }
+      }
+    },
+    "finances.dynamics.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dynamics"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Динамика"
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.error.insufficient_quantity" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not enough quantity to sell."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Недостаточно количества для продажи."
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.error.invalid_inputs" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check quantity and price."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проверьте количество и цену."
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.mode" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trade Mode"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Режим сделки"
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.price_mode" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Price Mode"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Режим цены"
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.price_mode.custom" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Custom"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Своя"
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.price_mode.market" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Market"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Рыночная"
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.price_with_currency" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Price, %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цена, %@"
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.swipe.buy" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Swipe right to buy"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проведите вправо, чтобы купить"
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.swipe.sell" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Swipe right to sell"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проведите вправо, чтобы продать"
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trade"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сделка"
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.total_with_currency" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Total, %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Итого, %@"
+          }
+        }
+      }
+    },
+    "finances.dynamics.view_mode.accounts" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accounts"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Счета"
+          }
+        }
+      }
+    },
+    "finances.dynamics.view_mode.groups" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Groups"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Группы"
+          }
+        }
+      }
+    },
+    "finances.dynamics.view_mode.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dynamics Mode"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Режим динамики"
+          }
+        }
+      }
+    },
+    "finances.dynamics.warning.estimated_rate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some values were calculated using an estimated rate."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Часть значений рассчитана по оценочному курсу."
+          }
+        }
+      }
+    },
+    "finances.editor.card.edit_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Редактирование"
+          }
+        }
+      }
+    },
+    "finances.editor.card.name_placeholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Card Name"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Название карты"
+          }
+        }
+      }
+    },
+    "finances.editor.card.new_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Card"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Новая карта"
+          }
+        }
+      }
+    },
+    "finances.editor.card.number_placeholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Card Number (last 4 digits)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Номер карты (последние 4 цифры)"
+          }
+        }
+      }
+    },
+    "finances.editor.credit.edit_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Редактировать"
+          }
+        }
+      }
+    },
+    "finances.editor.credit.name_placeholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Credit Name"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Название кредита"
+          }
+        }
+      }
+    },
+    "finances.editor.credit.new_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Credit"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Новый кредит"
+          }
+        }
+      }
+    },
+    "finances.editor.credit.params_section" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Credit Parameters"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Параметры кредита"
+          }
+        }
+      }
+    },
+    "finances.editor.credit.type_label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Credit Type"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тип кредита"
+          }
+        }
+      }
+    },
+    "finances.editor.investment.category_label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Category"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Категория"
+          }
+        }
+      }
+    },
+    "finances.editor.investment.edit_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Редактировать"
+          }
+        }
+      }
+    },
+    "finances.editor.investment.name_placeholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Asset Name"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Название актива"
+          }
+        }
+      }
+    },
+    "finances.editor.investment.new_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Asset"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Новый актив"
+          }
+        }
+      }
+    },
+    "finances.editor.investment.params_section" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Asset Parameters"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Параметры актива"
+          }
+        }
+      }
+    },
+    "finances.editor.investment.type_label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Asset Type"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тип актива"
+          }
+        }
+      }
+    },
+    "finances.editor.section.additional" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Additional"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Дополнительно"
+          }
+        }
+      }
+    },
+    "finances.editor.section.finances" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finances"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Финансы"
+          }
+        }
+      }
+    },
+    "finances.editor.section.main_info" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Main Info"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Основная информация"
+          }
+        }
+      }
+    },
+    "finances.group_editor.nav.edit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Group"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Группа"
+          }
+        }
+      }
+    },
+    "finances.group_editor.nav.new" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Group"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Новая группа"
+          }
+        }
+      }
+    },
+    "finances.group_editor.section.accounts" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Group Accounts"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Счета группы"
+          }
+        }
+      }
+    },
+    "finances.group_editor.section.color" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Group Color"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цвет группы"
+          }
+        }
+      }
+    },
+    "finances.group_editor.section.name" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Group Name"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Название группы"
+          }
+        }
+      }
+    },
+    "finances.group.menu.favorite" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add to favorites"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В избранное"
+          }
+        }
+      }
+    },
+    "finances.group.menu.open" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open group"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Открыть группу"
+          }
+        }
+      }
+    },
+    "finances.group.menu.priority" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Priority: %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Приоритет: %@"
+          }
+        }
+      }
+    },
+    "finances.group.menu.unfavorite" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove from favorites"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Убрать из избранного"
+          }
+        }
+      }
+    },
+    "finances.group.ungrouped" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ungrouped"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Без группы"
+          }
+        }
+      }
+    },
+    "finances.investment.category.bonds" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bonds"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Облигации"
+          }
+        }
+      }
+    },
+    "finances.investment.category.business" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Business"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Бизнес"
+          }
+        }
+      }
+    },
+    "finances.investment.category.car" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Car"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Машина"
+          }
+        }
+      }
+    },
+    "finances.investment.category.crypto" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cryptocurrency"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Криптовалюта"
+          }
+        }
+      }
+    },
+    "finances.investment.category.debt" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Debt"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Долг"
+          }
+        }
+      }
+    },
+    "finances.investment.category.house" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Real estate"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Недвижимость"
+          }
+        }
+      }
+    },
+    "finances.investment.category.metals" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Precious metals"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Драгоценные металлы"
+          }
+        }
+      }
+    },
+    "finances.investment.category.other" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Other"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Другое"
+          }
+        }
+      }
+    },
+    "finances.investment.category.stocks" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stocks"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Акции"
+          }
+        }
+      }
+    },
+    "finances.investment.position_subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ %2$@ at %3$@ %4$@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ %2$@ по %3$@ %4$@"
+          }
+        }
+      }
+    },
+    "finances.investment.purchase_growth_subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buy %1$@ %2$@ • %3$@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Покупка %1$@ %2$@ • %3$@"
+          }
+        }
+      }
+    },
+    "finances.investment.type.negative" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Decreases"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Уменьшает"
+          }
+        }
+      }
+    },
+    "finances.investment.type.positive" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Increases"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Увеличивает"
+          }
+        }
+      }
+    },
+    "finances.investment.unit.coins" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "coins"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "мон."
+          }
+        }
+      }
+    },
+    "finances.investment.unit.shares_short" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "shares"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "шт."
+          }
+        }
+      }
+    },
+    "finances.main.empty_groups.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create your first group"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Создайте первую группу"
+          }
+        }
+      }
+    },
+    "finances.main.empty_groups.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No groups"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет групп"
+          }
+        }
+      }
+    },
+    "finances.main.empty_products.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No products"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет продуктов"
+          }
+        }
+      }
+    },
+    "finances.main.refresh_quotes" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refresh quotes"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обновить котировки"
+          }
+        }
+      }
+    },
+    "finances.main.refresh_stocks" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refresh stocks"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обновить акции"
+          }
+        }
+      }
+    },
+    "finances.main.savings.progress" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ %2$@ of %3$@ %4$@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ %2$@ из %3$@ %4$@"
+          }
+        }
+      }
+    },
+    "finances.main.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finances"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Финансы"
+          }
+        }
+      }
+    },
+    "finances.main.warning.currency_api_partial" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The selected API does not support some currencies, so totals may be incomplete."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выбранная API не поддерживает часть валют, поэтому итоговые суммы могут быть неполными."
+          }
+        }
+      }
+    },
     "finances.market.error_generic" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1614,6 +5286,482 @@
         }
       }
     },
+    "finances.priority.high" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "High"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Высокий"
+          }
+        }
+      }
+    },
+    "finances.priority.low" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Low"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Низкий"
+          }
+        }
+      }
+    },
+    "finances.priority.normal" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Normal"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обычный"
+          }
+        }
+      }
+    },
+    "finances.quick_edit.field.debt" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Debt"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Задолженность"
+          }
+        }
+      }
+    },
+    "finances.quick_edit.title.amount" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit Amount"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Редактирование суммы"
+          }
+        }
+      }
+    },
+    "finances.quick_edit.title.card" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit Card"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Редактирование карты"
+          }
+        }
+      }
+    },
+    "finances.quick_edit.title.quantity" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit Quantity"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Редактирование количества"
+          }
+        }
+      }
+    },
+    "finances.quick_edit.unit.coins_short" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "coins"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "мон."
+          }
+        }
+      }
+    },
+    "finances.savings_goal.amount_placeholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal Amount"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сумма цели"
+          }
+        }
+      }
+    },
+    "finances.savings_goal.amount_section" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal Amount (%@)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сумма цели (%@)"
+          }
+        }
+      }
+    },
+    "finances.savings_goal.completed_percent" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Completed: %d%%"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выполнено: %d%%"
+          }
+        }
+      }
+    },
+    "finances.savings_goal.current_amount" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current Amount"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Текущая сумма"
+          }
+        }
+      }
+    },
+    "finances.savings_goal.enabled" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enable savings goal"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Включить цель накопления"
+          }
+        }
+      }
+    },
+    "finances.savings_goal.progress_section" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Progress"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Прогресс"
+          }
+        }
+      }
+    },
+    "finances.savings_goal.remaining" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remaining"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Осталось накопить"
+          }
+        }
+      }
+    },
+    "finances.savings_goal.settings_section" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal Settings"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Настройки цели"
+          }
+        }
+      }
+    },
+    "finances.savings_goal.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Savings Goal"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цель накопления"
+          }
+        }
+      }
+    },
+    "finances.transaction.note.credit_remaining_edit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remaining debt edit"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Редактирование остатка долга"
+          }
+        }
+      }
+    },
+    "finances.transaction.note.investment_buy" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Asset purchase"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Покупка актива"
+          }
+        }
+      }
+    },
+    "finances.transaction.note.investment_sell" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Asset sale"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Продажа актива"
+          }
+        }
+      }
+    },
+    "finances.transaction.note.manual_investment_amount_change" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manual investment amount change"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ручное изменение стоимости актива"
+          }
+        }
+      }
+    },
+    "finances.transaction.note.manual_investment_quantity_change" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manual investment quantity change"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ручное изменение количества актива"
+          }
+        }
+      }
+    },
+    "finances.transaction.note.market_position_edit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Market position details edit"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Редактирование параметров рыночной позиции"
+          }
+        }
+      }
+    },
+    "finances.transaction.note.quick_balance_change" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quick balance change"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Быстрое изменение баланса"
+          }
+        }
+      }
+    },
+    "finances.transaction.note.quick_credit_card_fields_change" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quick credit card fields change"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Быстрое изменение параметров кредитной карты"
+          }
+        }
+      }
+    },
+    "finances.transaction.note.quick_debt_change" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quick debt change"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Быстрое изменение задолженности"
+          }
+        }
+      }
+    },
+    "finances.transaction.note.quick_remaining_debt_change" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quick remaining debt change"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Быстрое изменение остатка долга"
+          }
+        }
+      }
+    },
+    "finances.warning.rate_unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conversion rate %@ → %@ is unavailable. Some amounts are not included because the selected API does not support these currencies."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Курс конвертации %@ → %@ недоступен. Некоторые суммы не учтены, потому что выбранная API не поддерживает эти валюты."
+          }
+        }
+      }
+    },
     "iCloud" : {
       "comment" : "A label displayed within the status card, indicating the availability of iCloud.",
       "isCommentAutoGenerated" : true
@@ -1804,10 +5952,6 @@
           }
         }
       }
-    },
-    "millio" : {
-      "comment" : "The name of the app.",
-      "isCommentAutoGenerated" : true
     },
     "millıo" : {
 
@@ -2075,6 +6219,23 @@
         }
       }
     },
+    "profile.quick_setup" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quick setup"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Быстрая настройка"
+          }
+        }
+      }
+    },
     "profile.section.about" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2177,6 +6338,23 @@
         }
       }
     },
+    "profile.status.completed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Completed"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Завершена"
+          }
+        }
+      }
+    },
     "profile.status.disabled" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2207,6 +6385,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Включено"
+          }
+        }
+      }
+    },
+    "profile.status.not_completed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not completed"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не завершена"
           }
         }
       }
@@ -2823,30 +7018,10 @@
         }
       }
     },
-    "Актив" : {
-
-    },
-    "архив" : {
-
-    },
-    "Архив" : {
-      "comment" : "A section header in the finance dynamics filter sheet.",
-      "isCommentAutoGenerated" : true
-    },
-    "Баланс" : {
-      "comment" : "A label for the balance field in the card editor.",
-      "isCommentAutoGenerated" : true
-    },
-    "Без группы" : {
-
-    },
     "Быстрая навигация по мини-приложениям" : {
 
     },
-    "В избранное" : {
-
-    },
-    "В избранном" : {
+    "Быстрая настройка" : {
 
     },
     "Валюта" : {
@@ -2885,13 +7060,6 @@
       "comment" : "A toggle switch label that enables or disables the backup feature.",
       "isCommentAutoGenerated" : true
     },
-    "Включить цель накопления" : {
-      "comment" : "A toggle switch label.",
-      "isCommentAutoGenerated" : true
-    },
-    "Влияние на «Итого»" : {
-
-    },
     "Восстановить данные" : {
 
     },
@@ -2925,9 +7093,6 @@
         }
       }
     },
-    "Время уведомления" : {
-
-    },
     "Все связанные кешбэки этой категории будут безопасно перенесены в категорию \"Другое\"." : {
 
     },
@@ -2948,12 +7113,12 @@
     "Выберите карту" : {
 
     },
+    "Выберите категории трат" : {
+
+    },
     "Выберите квартал" : {
       "comment" : "A label displayed above a picker for selecting a quarter.",
       "isCommentAutoGenerated" : true
-    },
-    "Выберите конечную дату" : {
-
     },
     "Выберите месяц" : {
       "comment" : "A label displayed above the date picker for selecting a month.",
@@ -2963,19 +7128,12 @@
       "comment" : "A description below the calendar that instructs the user to select the start and end dates.",
       "isCommentAutoGenerated" : true
     },
-    "Выберите начальную дату" : {
-
-    },
     "Выберите период" : {
       "comment" : "A title for the view that allows users to select a financial period.",
       "isCommentAutoGenerated" : true
     },
     "Выберите хотя бы одну категорию" : {
       "comment" : "A message displayed when a user hasn't selected any categories for cashback.",
-      "isCommentAutoGenerated" : true
-    },
-    "Выбор валюты" : {
-      "comment" : "A title of the screen that allows the user to select a currency.",
       "isCommentAutoGenerated" : true
     },
     "Выбор валюты отображения" : {
@@ -2990,7 +7148,7 @@
       "comment" : "A title for a view that allows users to select a financial period.",
       "isCommentAutoGenerated" : true
     },
-    "Выбранная API не поддерживает часть валют, поэтому итоговые суммы могут быть неполными." : {
+    "Выбрано: %lld" : {
 
     },
     "Выбрать карту" : {
@@ -2998,14 +7156,6 @@
     },
     "выключен" : {
       "comment" : "A label for a backup management view indicating that backup is disabled.",
-      "isCommentAutoGenerated" : true
-    },
-    "Выполнено: %lld%%" : {
-      "comment" : "A text displaying the percentage of the goal that",
-      "isCommentAutoGenerated" : true
-    },
-    "Высокий приоритет — выше в списках." : {
-      "comment" : "A description of the priority levels.",
       "isCommentAutoGenerated" : true
     },
     "Где добавить новую карту" : {
@@ -3031,42 +7181,11 @@
       "comment" : "A button that closes a settings sheet.",
       "isCommentAutoGenerated" : true
     },
-    "График доступен в PRO версии" : {
-
-    },
-    "Группа" : {
-      "comment" : "A label displayed next to the name of the selected group.",
-      "isCommentAutoGenerated" : true
-    },
-    "Группы" : {
-      "comment" : "A segment in the \"Finance Dynamics\" view that lists financial groups.",
-      "isCommentAutoGenerated" : true
-    },
     "Дата" : {
       "comment" : "Custom axis labels for the chart.",
       "isCommentAutoGenerated" : true
     },
-    "Дебетовая" : {
-      "comment" : "A label for a debit card.",
-      "isCommentAutoGenerated" : true
-    },
-    "Действия" : {
-
-    },
-    "День месяца" : {
-
-    },
-    "Динамика" : {
-      "comment" : "A title of a view that displays financial dynamics.",
-      "isCommentAutoGenerated" : true
-    },
-    "Для долгов: если вам должны — выбирайте «Увеличивает», если вы должны — «Уменьшает»." : {
-
-    },
-    "Для учета в «Итого» используется поле «Общий долг»." : {
-
-    },
-    "Для учета в «Итого» используется поле «Остаток долга»." : {
+    "До 4 валют для быстрого выбора в операциях" : {
 
     },
     "Добавить" : {
@@ -3082,6 +7201,9 @@
     "Добавить новую карту можно в «Финансы» -> «+» -> «Новый продукт» -> «Карта»." : {
 
     },
+    "Добавлено: %lld" : {
+
+    },
     "Добавьте карту в сервисе \"Карты\"" : {
 
     },
@@ -3089,9 +7211,8 @@
       "comment" : "A description text displayed below the title text in the empty state of the cashback view. It instructs the user to add cashback categories to start using the feature.",
       "isCommentAutoGenerated" : true
     },
-    "Дополнительная валюта" : {
-      "comment" : "A title for a sheet that allows the user to set an additional currency for display.",
-      "isCommentAutoGenerated" : true
+    "Добавьте продукты" : {
+
     },
     "доступен" : {
       "comment" : "A text that indicates that iCloud is available.",
@@ -3104,9 +7225,6 @@
     "Ежемесячно" : {
       "comment" : "A label indicating that a transaction is recurring.",
       "isCommentAutoGenerated" : true
-    },
-    "За N дней" : {
-
     },
     "Закрепить категорию" : {
 
@@ -3122,9 +7240,8 @@
       "comment" : "A toggle switch label that indicates whether a card is marked as favorite.",
       "isCommentAutoGenerated" : true
     },
-    "Избранные" : {
-      "comment" : "A section header indicating that the list contains pinned favorites.",
-      "isCommentAutoGenerated" : true
+    "Избранные валюты" : {
+
     },
     "Избранные категории" : {
       "comment" : "A button that shows a sheet with the user's favorite cashback categories.",
@@ -3156,9 +7273,6 @@
         }
       }
     },
-    "Информация об инструменте" : {
-
-    },
     "История операций" : {
       "comment" : "A header for the section that lists a user's transaction history.",
       "isCommentAutoGenerated" : true
@@ -3184,9 +7298,8 @@
     "Категории кешбэка" : {
 
     },
-    "Категория" : {
-      "comment" : "A label for the category field in the cashback editor.",
-      "isCommentAutoGenerated" : true
+    "Категории можно изменить и добавить позже в процессе работы." : {
+
     },
     "Категория дохода" : {
 
@@ -3201,25 +7314,6 @@
     "Комментарий" : {
 
     },
-    "Конец" : {
-      "comment" : "A label for the end date in the finance",
-      "isCommentAutoGenerated" : true
-    },
-    "Конец периода" : {
-      "comment" : "A label for the end of the period in the \"Выбор периода\" view.",
-      "isCommentAutoGenerated" : true
-    },
-    "Кредитная" : {
-      "comment" : "A menu item for a credit card.",
-      "isCommentAutoGenerated" : true
-    },
-    "Кредитный лимит" : {
-      "comment" : "A label for the credit limit field in the card editor.",
-      "isCommentAutoGenerated" : true
-    },
-    "Купить" : {
-
-    },
     "Курсы" : {
       "comment" : "The main title of the view.",
       "isCommentAutoGenerated" : true
@@ -3232,6 +7326,15 @@
       "comment" : "An option in the picker view that allows the user to select a month as the period type.",
       "isCommentAutoGenerated" : true
     },
+    "Можно выбрать до %lld валют" : {
+
+    },
+    "Можно добавить позже" : {
+
+    },
+    "Можно изменить позже в профиле" : {
+
+    },
     "На карту" : {
 
     },
@@ -3241,21 +7344,6 @@
     "Название" : {
       "comment" : "A label for the name field in the finance group editor.",
       "isCommentAutoGenerated" : true
-    },
-    "Название актива" : {
-      "comment" : "A label for the name field in the investment editor.",
-      "isCommentAutoGenerated" : true
-    },
-    "Название карты" : {
-      "comment" : "A label for the name field in the card editor.",
-      "isCommentAutoGenerated" : true
-    },
-    "Название кредита" : {
-      "comment" : "A label for the credit's name text field.",
-      "isCommentAutoGenerated" : true
-    },
-    "Название подставится автоматически после выбора тикера/пары" : {
-
     },
     "Найдена резервная копия" : {
       "localizations" : {
@@ -3267,19 +7355,13 @@
         }
       }
     },
-    "Напоминать о платеже" : {
-
-    },
     "Например: Кофейни" : {
       "comment" : "A placeholder text for a text field in the cashback category editor sheet, suggesting a coffee shop.",
       "isCommentAutoGenerated" : true
     },
-    "Настроить валюты" : {
-      "comment" : "A button label that translates to",
-      "isCommentAutoGenerated" : true
-    },
     "Настройки" : {
       "comment" : "A section header in the settings menu.",
+      "extractionState" : "stale",
       "isCommentAutoGenerated" : true,
       "localizations" : {
         "en" : {
@@ -3290,21 +7372,12 @@
         }
       }
     },
-    "Начало" : {
-      "comment" : "A column header in the finance dynamics view,",
-      "isCommentAutoGenerated" : true
-    },
-    "Начало периода" : {
-      "comment" : "A label for the start date in a custom period selection view.",
-      "isCommentAutoGenerated" : true
-    },
-    "Начать" : {
-      "comment" : "A button label that says \"Start\".",
-      "isCommentAutoGenerated" : true
-    },
     "Не сходится" : {
       "comment" : "A text that indicates whether the asset value change is correct.",
       "isCommentAutoGenerated" : true
+    },
+    "Не удалось применить настройку" : {
+
     },
     "Недостаточно средств" : {
 
@@ -3315,26 +7388,6 @@
     },
     "нет" : {
       "comment" : "A label displayed when there is no backup available.",
-      "isCommentAutoGenerated" : true
-    },
-    "Нет архивных активов" : {
-      "comment" : "A message displayed when there are no archived investments to choose from.",
-      "isCommentAutoGenerated" : true
-    },
-    "Нет архивных карт" : {
-      "comment" : "A message displayed when a user has no archived credit cards.",
-      "isCommentAutoGenerated" : true
-    },
-    "Нет архивных кредитов" : {
-      "comment" : "A message displayed when there are no archived credit accounts to choose from.",
-      "isCommentAutoGenerated" : true
-    },
-    "Нет групп" : {
-      "comment" : "A message displayed when a user has no finance groups.",
-      "isCommentAutoGenerated" : true
-    },
-    "Нет данных для отображения" : {
-      "comment" : "A message displayed when there is no data to display in the chart section of the view.",
       "isCommentAutoGenerated" : true
     },
     "Нет доступных карт" : {
@@ -3351,74 +7404,31 @@
       "comment" : "A message displayed when a user has no transactions.",
       "isCommentAutoGenerated" : true
     },
-    "Нет продуктов" : {
-      "comment" : "A description text displayed when there are no products in the view.",
-      "isCommentAutoGenerated" : true
-    },
     "Низ" : {
 
     },
-    "Новая группа" : {
-      "comment" : "A title for a view that creates a new finance group.",
-      "isCommentAutoGenerated" : true
-    },
-    "Новая карта" : {
-      "comment" : "A title for a view that creates a new bank card.",
-      "isCommentAutoGenerated" : true
-    },
     "Новая категория" : {
       "comment" : "A title for a sheet used to create a new cashflow category.",
-      "isCommentAutoGenerated" : true
-    },
-    "Новый актив" : {
-      "comment" : "A title for a view where a user can create a new investment.",
       "isCommentAutoGenerated" : true
     },
     "Новый кешбэк" : {
       "comment" : "A title for the new cashback screen.",
       "isCommentAutoGenerated" : true
     },
-    "Новый кредит" : {
-      "comment" : "A title for a view that allows creating a new credit.",
-      "isCommentAutoGenerated" : true
-    },
-    "Номер карты (последние 4 цифры)" : {
-      "comment" : "A placeholder text for the last four digits of a card number field.",
-      "isCommentAutoGenerated" : true
-    },
-    "Обновить" : {
-
-    },
-    "Обновить акции" : {
-
-    },
-    "Обновить котировки" : {
-
-    },
     "Обновить статус" : {
       "comment" : "A button label that refreshes the backup management view's status.",
       "isCommentAutoGenerated" : true
     },
-    "Обновляем..." : {
-
-    },
-    "Общий долг" : {
+    "Ок" : {
 
     },
     "Операция будет удалена без возможности восстановления." : {
       "comment" : "A message displayed in an alert when a user attempts to delete a scheduled transaction. It informs the user that the transaction will be permanently deleted and cannot be restored.",
       "isCommentAutoGenerated" : true
     },
-    "Определяет, как изменение баланса влияет на общий итог по всем продуктам." : {
-      "comment" : "A description of the toggle that allows the user to include a product in the total balance.",
-      "isCommentAutoGenerated" : true
-    },
     "Основная валюта" : {
       "comment" : "A section header in the Onboarding view",
       "isCommentAutoGenerated" : true
-    },
-    "Осталось накопить" : {
-
     },
     "Осталось накопить: %@ %@" : {
       "comment" : "A text field displaying the remaining amount needed to reach the savings goal. The value is formatted to two decimal places.",
@@ -3458,33 +7468,20 @@
         }
       }
     },
-    "Остаток долга" : {
-      "comment" : "A label for the remaining balance on a credit.",
-      "isCommentAutoGenerated" : true
-    },
-    "Остаток лимита" : {
+    "От них зависит, что вы увидите при добавлении расхода" : {
 
     },
     "Открепить категорию" : {
 
     },
-    "Открыть группу" : {
-      "comment" : "A menu item that opens a group of expenses.",
-      "isCommentAutoGenerated" : true
+    "Открыть" : {
+
+    },
+    "Отлично! Настройка почти готова" : {
+
     },
     "Отмена" : {
       "comment" : "A button that cancels the selection of the number of decimal places.",
-      "isCommentAutoGenerated" : true
-    },
-    "Отменить" : {
-      "comment" : "A button that cancels the current filter settings.",
-      "isCommentAutoGenerated" : true
-    },
-    "Оформите подписку для доступа к расширенной аналитике" : {
-
-    },
-    "Оформить PRO" : {
-      "comment" : "A button label that allows users to purchase the PRO version of the app.",
       "isCommentAutoGenerated" : true
     },
     "Парольная фраза" : {
@@ -3509,9 +7506,6 @@
           }
         }
       }
-    },
-    "Платёж в месяц" : {
-
     },
     "Подсказка" : {
 
@@ -3540,13 +7534,6 @@
         }
       }
     },
-    "Позиция всего, %@" : {
-
-    },
-    "Поиск" : {
-      "comment" : "A placeholder text for a search bar.",
-      "isCommentAutoGenerated" : true
-    },
     "Поиск иконки (например: car, cart, heart)" : {
 
     },
@@ -3574,12 +7561,6 @@
       "comment" : "A button label that expands the list of cashback categories.",
       "isCommentAutoGenerated" : true
     },
-    "Показать подсказки" : {
-
-    },
-    "Показывать архивные счета" : {
-
-    },
     "Последний backup" : {
       "comment" : "A label that appears below the date of the last backup.",
       "isCommentAutoGenerated" : true
@@ -3604,22 +7585,11 @@
       "comment" : "A button that applies the selected period when pressed.",
       "isCommentAutoGenerated" : true
     },
-    "Принять фильтр" : {
-      "comment" : "A button label that confirms the user's selected filter criteria.",
-      "isCommentAutoGenerated" : true
-    },
-    "Приоритет" : {
-      "comment" : "A label for the priority setting in the card editor.",
-      "isCommentAutoGenerated" : true
-    },
-    "Приоритет: %@" : {
-
-    },
     "Проверка баланса:" : {
       "comment" : "A label displayed below the calculated balance check.",
       "isCommentAutoGenerated" : true
     },
-    "Продать" : {
+    "Проверьте настройки" : {
 
     },
     "Продолжите работу с приложением" : {
@@ -3636,9 +7606,6 @@
           }
         }
       }
-    },
-    "Продукт будет добавлен в «Без группы»" : {
-
     },
     "Пропустить" : {
       "localizations" : {
@@ -3690,10 +7657,6 @@
       "comment" : "A label for the text that describes the change in the value of assets.",
       "isCommentAutoGenerated" : true
     },
-    "Редактирование" : {
-      "comment" : "A navigation title for the card editor view when editing an existing card.",
-      "isCommentAutoGenerated" : true
-    },
     "Редактировать" : {
       "comment" : "A button that navigates to a view for editing an existing credit.",
       "isCommentAutoGenerated" : true
@@ -3705,19 +7668,6 @@
       "comment" : "A button label that translates to \"Edit cashback\".",
       "isCommentAutoGenerated" : true
     },
-    "Режим даты платежа" : {
-
-    },
-    "Режим динамики" : {
-      "comment" : "A segmented control label.",
-      "isCommentAutoGenerated" : true
-    },
-    "Режим сделки" : {
-
-    },
-    "Режим цены" : {
-
-    },
     "Резервная копия не найдена" : {
       "comment" : "A message displayed when no backup is found.",
       "isCommentAutoGenerated" : true
@@ -3725,12 +7675,6 @@
     "Резервное копирование" : {
       "comment" : "A toggle switch for enabling or disabling backup.",
       "isCommentAutoGenerated" : true
-    },
-    "Рост" : {
-
-    },
-    "Рыночная" : {
-
     },
     "С карты" : {
 
@@ -3746,19 +7690,11 @@
     "Свой период" : {
 
     },
-    "Своя" : {
-      "comment" : "A label for a price mode that allows the user to input their own price.",
-      "isCommentAutoGenerated" : true
-    },
     "Связанные кешбэки этой категории будут перенесены в «Другое»." : {
 
     },
     "Связанные операции будут перенесены в безопасную системную категорию." : {
       "comment" : "An alert message that appears when a user deletes a category, explaining that all transactions in that category will be moved to a safer system category.",
-      "isCommentAutoGenerated" : true
-    },
-    "Сделка" : {
-      "comment" : "A navigation title for the trading sheet.",
       "isCommentAutoGenerated" : true
     },
     "Скрыть" : {
@@ -3768,16 +7704,10 @@
       "comment" : "A button label that hides details.",
       "isCommentAutoGenerated" : true
     },
-    "Скрыть подсказки" : {
-
-    },
     "Скрыть рекомендацию" : {
 
     },
     "Скрыть уведомление" : {
-
-    },
-    "Следующая дата" : {
 
     },
     "Смена PIN" : {
@@ -3794,14 +7724,6 @@
     "Сменить основную валюту?" : {
 
     },
-    "Создайте первую группу" : {
-      "comment" : "A description text displayed when a user has no finance groups and taps the \"Create Group\" button.",
-      "isCommentAutoGenerated" : true
-    },
-    "Создайте первый продукт" : {
-      "comment" : "A description of an action to create a product.",
-      "isCommentAutoGenerated" : true
-    },
     "Создание backup..." : {
       "comment" : "A label indicating that a backup is being created.",
       "isCommentAutoGenerated" : true
@@ -3810,16 +7732,8 @@
       "comment" : "A button label that says \"Create backup now\".",
       "isCommentAutoGenerated" : true
     },
-    "Создать группу" : {
-      "comment" : "A menu item label that creates a new financial group.",
-      "isCommentAutoGenerated" : true
-    },
     "Создать категорию" : {
       "comment" : "A button label that allows users to create new cashback categories.",
-      "isCommentAutoGenerated" : true
-    },
-    "Создать новую группу" : {
-      "comment" : "A button label that allows users to create a new group.",
       "isCommentAutoGenerated" : true
     },
     "Сохранить" : {
@@ -3830,27 +7744,12 @@
       "comment" : "A label for the amount field in the debt editor.",
       "isCommentAutoGenerated" : true
     },
-    "Сумма кредита" : {
-      "comment" : "A label for the credit amount field.",
-      "isCommentAutoGenerated" : true
-    },
-    "Сумма цели" : {
-      "comment" : "A label for the amount of the savings goal.",
-      "isCommentAutoGenerated" : true
+    "Сумма в %@" : {
+
     },
     "Сходится" : {
       "comment" : "A text that indicates that the balance is correct.",
       "isCommentAutoGenerated" : true
-    },
-    "Счет" : {
-
-    },
-    "Счета" : {
-      "comment" : "A label for the tab that shows the user's bank accounts.",
-      "isCommentAutoGenerated" : true
-    },
-    "Текущая сумма" : {
-
     },
     "Текущая сумма: %@ %@" : {
       "comment" : "A label showing the current accumulated amount towards the savings goal, along with the currency symbol",
@@ -3871,20 +7770,14 @@
         }
       }
     },
-    "Тип актива" : {
-      "comment" : "A label describing the type of investment.",
-      "isCommentAutoGenerated" : true
+    "Тикер (AAPL)" : {
+
+    },
+    "Тикер (BTC)" : {
+
     },
     "Тип иконки" : {
 
-    },
-    "Тип карты" : {
-      "comment" : "A label describing the type of card.",
-      "isCommentAutoGenerated" : true
-    },
-    "Тип кредита" : {
-      "comment" : "A title for the sheet that filters credit types.",
-      "isCommentAutoGenerated" : true
     },
     "Тип операции" : {
 
@@ -3893,10 +7786,10 @@
       "comment" : "A picker allowing the user to select the type of period for which they want to view their cash flow.",
       "isCommentAutoGenerated" : true
     },
-    "Тип продукта" : {
+    "Убрать из избранного" : {
 
     },
-    "Убрать из избранного" : {
+    "Убрать категорию" : {
 
     },
     "Удалить" : {
@@ -3909,43 +7802,26 @@
       "comment" : "A confirmation alert title.",
       "isCommentAutoGenerated" : true
     },
-    "Уменьшает" : {
-
-    },
     "Управление операциями" : {
 
-    },
-    "Учитывать в «Итого»" : {
-      "comment" : "A toggle that lets the user decide whether to include a card's balance in the total.",
-      "isCommentAutoGenerated" : true
-    },
-    "Учитывать в общих" : {
-      "comment" : "A toggle that lets the user specify whether the card should be included in total expenses.",
-      "isCommentAutoGenerated" : true
-    },
-    "Фильтры" : {
-      "comment" : "A button label that toggles the visibility of the filters.",
-      "isCommentAutoGenerated" : true
-    },
-    "Финансы" : {
-      "comment" : "A title displayed in the center of the view.",
-      "isCommentAutoGenerated" : true
     },
     "Формула:\nИзменение = (Итого на конец – Итого на начало) – Доходы + Расходы." : {
       "comment" : "A formula that describes how to calculate the change in the value of assets.",
       "isCommentAutoGenerated" : true
     },
-    "Цель накопления" : {
-      "comment" : "The title of a view that allows users to set and manage their saving goals.",
-      "isCommentAutoGenerated" : true
-    },
-    "Цена покупки" : {
-      "comment" : "A label for the purchase price field in the \"Create Investment\" form.",
-      "isCommentAutoGenerated" : true
-    },
     "Частота" : {
       "comment" : "A label displayed alongside a picker for selecting the frequency of a transaction.",
       "isCommentAutoGenerated" : true
+    },
+    "Шаг %lld из %lld: %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Шаг %1$lld из %2$lld: %3$@"
+          }
+        }
+      }
     },
     "Шифрование" : {
       "comment" : "A label displayed above the encryption mode setting.",
@@ -3966,6 +7842,9 @@
           }
         }
       }
+    },
+    "Язык, валюты, категории и продукты за 1 минуту" : {
+
     }
   },
   "version" : "1.1"

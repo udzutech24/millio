@@ -162,6 +162,18 @@ private func loadAccounts() {
 }
 ```
 
+### Стартовый warmup финансовых API-данных
+
+Чтобы экран финансов и динамика открывались без ожидания первого запроса, при запуске приложения
+используется `FinanceStartupWarmupUseCase`:
+
+- use case запускает `FinanceViewModel.warmupRemoteDataForStartup()`;
+- прогрев подтягивает валютные курсы и рыночные цены акций в мягком режиме (без `force`);
+- частота ограничена cooldown `FinanceStartupWarmupUseCase.minimumWarmupInterval` (сейчас 3 часа);
+- timestamp последнего прогона хранится в `UserDefaults` по ключу `finance.startup_warmup.last_run_at`.
+
+Ручное обновление из UI (`refresh_quotes`/`refresh_stocks`) остается принудительным (`force`).
+
 ### Кэшфлоу и список доступных карт
 
 - `CashflowViewModel` использует `state.availableCards` для формы создания транзакций и истории операций.

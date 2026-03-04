@@ -221,7 +221,7 @@ final class FinanceViewModel: ViewModelProtocol {
     let marketDataClient: MarketDataClientProtocol
 
     private let defaults = UserDefaults.standard
-    private let ungroupedGroupName = "Без группы"
+    private let ungroupedGroupName = String(localized: "finances.group.ungrouped")
     private let ungroupedGroupColorHex = "#3C4B5E"
     private var financeEventsSubscriptionID: UUID?
 
@@ -573,6 +573,11 @@ final class FinanceViewModel: ViewModelProtocol {
                 // Потом по дате создания
                 return group1.createdAt < group2.createdAt
             }
+            // Пустая системная группа "Без группы" не должна отображаться в списке.
+            .filter { group in
+                guard group.name == ungroupedGroupName else { return true }
+                return !(group.accounts?.isEmpty ?? true)
+            }
             // Обновляем списки непривязанных элементов после загрузки групп
             updateUnattachedItems()
             calculateTotalAmount()
@@ -823,11 +828,11 @@ final class FinanceViewModel: ViewModelProtocol {
                     total += groupTotalInGroupCurrency * rate
                 } else {
                     // Если курс недоступен, просто пропускаем сумму этой группы и добавляем предупреждение
-                    warnings.append("Курс конвертации \(groupCurrency) → \(displayCurrency) недоступен. Некоторые суммы не учтены, потому что выбранная API не поддерживает эти валюты.")
+                    warnings.append(FinancesL10n.format("finances.warning.rate_unavailable", groupCurrency, displayCurrency))
                     AppLogger.log(
                         .warning,
                         category: "Finance",
-                        "[Конвертация] Не удалось конвертировать сумму группы \"\(group.name)\" из \(groupCurrency) в \(displayCurrency). Сумма проигнорирована."
+                        "[Conversion] Failed to convert group amount \"\(group.name)\" from \(groupCurrency) to \(displayCurrency). Amount ignored."
                     )
                 }
             }
@@ -850,11 +855,11 @@ final class FinanceViewModel: ViewModelProtocol {
                     if let rate = await currencyService.getRate(from: normalizedGroupCurrency, to: normalizedSecondaryCurrency), rate > 0 {
                         secondaryTotal += groupTotalInGroupCurrency * rate
                     } else {
-                        warnings.append("Курс конвертации \(groupCurrency) → \(secondaryCurrency) недоступен. Некоторые суммы не учтены, потому что выбранная API не поддерживает эти валюты.")
+                        warnings.append(FinancesL10n.format("finances.warning.rate_unavailable", groupCurrency, secondaryCurrency))
                         AppLogger.log(
                             .warning,
                             category: "Finance",
-                            "[Конвертация] Не удалось конвертировать сумму группы \"\(group.name)\" из \(groupCurrency) в \(secondaryCurrency). Сумма проигнорирована."
+                            "[Conversion] Failed to convert group amount \"\(group.name)\" from \(groupCurrency) to \(secondaryCurrency). Amount ignored."
                         )
                     }
                 }
@@ -1034,9 +1039,11 @@ final class FinanceViewModel: ViewModelProtocol {
         let unitPriceText = formatMarketNumber(unitPrice, maximumFractionDigits: 2)
         let currencyCode = resolvedInvestmentCurrency(investment)
         let currencyLabel = MonetaCurrency(rawValue: currencyCode)?.symbol ?? currencyCode
-        let quantityUnit = investment.category == .crypto ? "мон." : "шт."
+        let quantityUnit = investment.category == .crypto
+            ? String(localized: "finances.investment.unit.coins")
+            : String(localized: "finances.investment.unit.shares_short")
 
-        return "\(quantityText) \(quantityUnit) по \(unitPriceText) \(currencyLabel)"
+        return FinancesL10n.format("finances.investment.position_subtitle", quantityText, quantityUnit, unitPriceText, currencyLabel)
     }
 
     func getInvestmentPurchaseGrowthSubtitle(account: FinanceAccount) -> (text: String, isPositive: Bool)? {
@@ -1055,7 +1062,7 @@ final class FinanceViewModel: ViewModelProtocol {
         let growthText = formatSignedPercent(growthPercent)
         let isPositive = growthPercent >= 0
 
-        return ("Покупка \(purchaseText) \(currencyLabel) • \(growthText)", isPositive)
+        return (FinancesL10n.format("finances.investment.purchase_growth_subtitle", purchaseText, currencyLabel, growthText), isPositive)
     }
 
     /// Для кредитных карт возвращает остаток лимита, чтобы показывать под суммой долга.
@@ -1196,7 +1203,9 @@ final class FinanceViewModel: ViewModelProtocol {
             var didCreateTransaction = false
             let difference = investment.amount - oldAmount
             if abs(difference) > 0.01 {
-                let note = side == .buy ? "Покупка актива" : "Продажа актива"
+                let note = side == .buy
+                    ? String(localized: "finances.transaction.note.investment_buy")
+                    : String(localized: "finances.transaction.note.investment_sell")
                 let transaction = CashflowTransaction(
                     transactionType: .balanceAdjustment,
                     amount: difference,
@@ -1277,7 +1286,7 @@ final class FinanceViewModel: ViewModelProtocol {
                     currency: investment.currency,
                     transactionDate: Date(),
                     investmentID: investment.investmentUniqueID,
-                    note: "Редактирование параметров рыночной позиции"
+                    note: String(localized: "finances.transaction.note.market_position_edit")
                 )
                 stampFrozenRate(on: transaction, targetCurrency: resolvedInvestmentCurrency(investment))
                 modelContext.insert(transaction)
@@ -1306,11 +1315,26 @@ final class FinanceViewModel: ViewModelProtocol {
         }
     }
     
+    /// Прогрев котировок на старте приложения без принудительного запроса в сеть.
+    /// Обновление будет использовано из локального кэша, а сеть подключится только при реальной необходимости.
+    func warmupRemoteDataForStartup() async {
+        await refreshCurrencyQuotes(forceRefresh: false)
+        await refreshStockPrices(forceRefresh: false)
+    }
+
     func refreshCurrencyQuotes() async {
         state.isLoadingRates = true
         defer { state.isLoadingRates = false }
+        await refreshCurrencyQuotes(forceRefresh: true)
+    }
 
-        await currencyService.forceRefreshRates()
+    private func refreshCurrencyQuotes(forceRefresh: Bool) async {
+        if forceRefresh {
+            await currencyService.forceRefreshRates()
+        } else {
+            // getRate сам решит, нужен ли сетевой refresh по внутреннему TTL.
+            _ = await currencyService.getRate(from: "USD", to: "RUB")
+        }
         await refreshGroupTotalsAndAmounts()
     }
 
@@ -1318,7 +1342,10 @@ final class FinanceViewModel: ViewModelProtocol {
     func refreshStockPrices() async {
         state.isLoadingRates = true
         defer { state.isLoadingRates = false }
+        await refreshStockPrices(forceRefresh: true)
+    }
 
+    private func refreshStockPrices(forceRefresh: Bool) async {
         let descriptor = FetchDescriptor<Investment>()
         let activeStocks = ((try? modelContext.fetch(descriptor)) ?? []).filter {
             $0.archivedAt == nil && $0.category == .stocks && $0.isMarketPriced
@@ -1342,7 +1369,7 @@ final class FinanceViewModel: ViewModelProtocol {
             do {
                 guard let latestPrice = try await marketDataClient.latestPrice(
                     symbol: symbol,
-                    forceRefresh: true
+                    forceRefresh: forceRefresh
                 ), latestPrice > 0 else {
                     continue
                 }
@@ -1712,11 +1739,11 @@ final class FinanceViewModel: ViewModelProtocol {
 
                         if card.cardType == .credit {
                             transactionAmount = -difference
-                            transactionNote = "Быстрое изменение задолженности"
+                            transactionNote = String(localized: "finances.transaction.note.quick_debt_change")
                             transactionType = .creditDebtAdjustment
                         } else {
                             transactionAmount = difference
-                            transactionNote = "Быстрое изменение баланса"
+                            transactionNote = String(localized: "finances.transaction.note.quick_balance_change")
                             transactionType = .cardBalanceAdjustment
                         }
 
@@ -1785,7 +1812,7 @@ final class FinanceViewModel: ViewModelProtocol {
                             currency: credit.currency,
                             transactionDate: Date(),
                             creditID: credit.creditUniqueID,
-                            note: "Быстрое изменение остатка долга"
+                            note: String(localized: "finances.transaction.note.quick_remaining_debt_change")
                         )
                         stampFrozenRate(on: transaction, targetCurrency: credit.currency)
                         modelContext.insert(transaction)
@@ -1846,7 +1873,7 @@ final class FinanceViewModel: ViewModelProtocol {
                                 currency: investment.currency,
                                 transactionDate: Date(),
                                 investmentID: investment.investmentUniqueID,
-                                note: "Ручное изменение количества актива"
+                                note: String(localized: "finances.transaction.note.manual_investment_quantity_change")
                             )
                             stampFrozenRate(on: transaction, targetCurrency: resolvedInvestmentCurrency(investment))
                             modelContext.insert(transaction)
@@ -1886,7 +1913,7 @@ final class FinanceViewModel: ViewModelProtocol {
                                 currency: investment.currency,
                                 transactionDate: Date(),
                                 investmentID: investment.investmentUniqueID,
-                                note: "Ручное изменение стоимости актива"
+                                note: String(localized: "finances.transaction.note.manual_investment_amount_change")
                             )
                             stampFrozenRate(on: transaction, targetCurrency: resolvedInvestmentCurrency(investment))
                             modelContext.insert(transaction)
@@ -1952,7 +1979,7 @@ final class FinanceViewModel: ViewModelProtocol {
                     currency: card.currency,
                     transactionDate: Date(),
                     cardID: card.cardUniqueID,
-                    note: "Быстрое изменение параметров кредитной карты"
+                    note: String(localized: "finances.transaction.note.quick_credit_card_fields_change")
                 )
                 stampFrozenRate(on: transaction, targetCurrency: card.currency)
                 modelContext.insert(transaction)

@@ -52,7 +52,11 @@ struct FinanceGroupEditorView: View {
                 .scrollDismissesKeyboard(.immediately)
                 .dismissKeyboardOnTap()
             }
-            .navigationTitle(viewModel.state.editingGroup == nil ? "Новая группа" : "Группа")
+            .navigationTitle(
+                viewModel.state.editingGroup == nil
+                    ? String(localized: "finances.group_editor.nav.new")
+                    : String(localized: "finances.group_editor.nav.edit")
+            )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -69,7 +73,7 @@ struct FinanceGroupEditorView: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Отмена")
+                    .accessibilityLabel(String(localized: "finances.common.cancel"))
                 }
                 
                 if viewModel.state.editingGroup != nil {
@@ -81,7 +85,7 @@ struct FinanceGroupEditorView: View {
                                 .font(.system(size: 15, weight: .semibold))
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Удалить")
+                        .accessibilityLabel(String(localized: "finances.common.delete"))
                     }
                 }
                 
@@ -100,7 +104,7 @@ struct FinanceGroupEditorView: View {
                         )
                     )
                     .disabled(!isValid)
-                    .accessibilityLabel("Сохранить")
+                    .accessibilityLabel(String(localized: "finances.common.save"))
                 }
             }
             .onAppear {
@@ -139,11 +143,11 @@ struct FinanceGroupEditorView: View {
                             showCurrencyPicker = false
                         }
                     )
-                    .navigationTitle("Выбор валюты")
+                    .navigationTitle(String(localized: "finances.add_account.currency_picker.title"))
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
-                            Button("Отмена") { showCurrencyPicker = false }
+                            Button(String(localized: "finances.common.cancel")) { showCurrencyPicker = false }
                         }
                     }
                 }
@@ -155,9 +159,9 @@ struct FinanceGroupEditorView: View {
     
     private var nameSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Название группы")
+            FinancesSectionHeader(title: String(localized: "finances.group_editor.section.name"))
             FinancesGlassCard {
-                TextField("Название", text: $name)
+                TextField(String(localized: "finances.add_account.section.name"), text: $name)
                     .foregroundStyle(AppColors.textPrimary)
                     .padding(.vertical, 14)
                     .padding(.horizontal, 16)
@@ -167,7 +171,7 @@ struct FinanceGroupEditorView: View {
     
     private var colorSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Цвет группы")
+            FinancesSectionHeader(title: String(localized: "finances.group_editor.section.color"))
             FinancesGlassCard(contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)) {
                 LazyVGrid(columns: [
                     GridItem(.flexible()),
@@ -198,11 +202,11 @@ struct FinanceGroupEditorView: View {
     
     private var currencySection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Валюта отображения")
+            FinancesSectionHeader(title: String(localized: "finances.display_currency.title.primary"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     HStack(spacing: 12) {
-                        Text("Валюта")
+                        Text(String(localized: "finances.add_account.field.currency"))
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                         
@@ -248,22 +252,22 @@ struct FinanceGroupEditorView: View {
     
     private var prioritySection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Приоритет")
+            FinancesSectionHeader(title: String(localized: "finances.add_account.section.priority"))
             FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 12, bottom: 14, trailing: 12)) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Toggle("В избранном", isOn: $isFavorite)
+                    Toggle(String(localized: "finances.add_account.favorite"), isOn: $isFavorite)
                         .tint(AppColors.toggleOnGreen)
                         .foregroundStyle(AppColors.textPrimary)
                     
                     FinancesRowDivider(leadingPadding: 0)
                     
                     HStack(spacing: 12) {
-                        FinancesRadioOption(title: "низкий", isSelected: selectedPriority == .low) { selectedPriority = .low }
-                        FinancesRadioOption(title: "обычный", isSelected: selectedPriority == .normal) { selectedPriority = .normal }
-                        FinancesRadioOption(title: "высокий", isSelected: selectedPriority == .high) { selectedPriority = .high }
+                        FinancesRadioOption(title: String(localized: "finances.priority.low"), isSelected: selectedPriority == .low) { selectedPriority = .low }
+                        FinancesRadioOption(title: String(localized: "finances.priority.normal"), isSelected: selectedPriority == .normal) { selectedPriority = .normal }
+                        FinancesRadioOption(title: String(localized: "finances.priority.high"), isSelected: selectedPriority == .high) { selectedPriority = .high }
                     }
                     
-                    Text("Высокий приоритет — выше в списках.")
+                    Text(String(localized: "finances.add_account.priority.hint"))
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppColors.textPrimary.opacity(0.35))
                 }
@@ -273,7 +277,7 @@ struct FinanceGroupEditorView: View {
     
     private func accountsSection(_ accounts: [FinanceAccount]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Счета группы")
+            FinancesSectionHeader(title: String(localized: "finances.group_editor.section.accounts"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     ForEach(accounts) { account in

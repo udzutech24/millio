@@ -159,6 +159,22 @@ struct CashbackScreenshotParser {
                 }
             }
 
+            if isLikelyCategoryOnlyLine(currentLine),
+               index + 1 < lines.count,
+               let percentage = parsePercentageOnlyLine(normalizeLine(lines[index + 1])) {
+                let categoryName = normalizeCategoryName(currentLine)
+                if !categoryName.isEmpty {
+                    parsedItems.append(
+                        CashbackScreenshotImportItem(
+                            categoryName: categoryName,
+                            percentage: percentage
+                        )
+                    )
+                    index += 2
+                    continue
+                }
+            }
+
             index += 1
         }
 
@@ -244,11 +260,42 @@ struct CashbackScreenshotParser {
 
     private static func normalizeCategoryName(_ value: String) -> String {
         var normalized = normalizeLine(value)
+        normalized = normalized.replacingOccurrences(of: #"[\u{2197}\u{2198}\u{21AA}\u{21A9}]+"#, with: "", options: .regularExpression)
         normalized = normalized.replacingOccurrences(of: #"^[\-•·:;,.!?]+"#, with: "", options: .regularExpression)
         normalized = normalized.replacingOccurrences(of: #"[;:,.!?]+$"#, with: "", options: .regularExpression)
         normalized = normalized.replacingOccurrences(of: #"\s+i$"#, with: "", options: [.regularExpression, .caseInsensitive])
         normalized = normalizeLine(normalized)
         return normalized
+    }
+
+    private static func isLikelyCategoryOnlyLine(_ line: String) -> Bool {
+        guard !line.isEmpty else { return false }
+        guard line.contains("%") == false else { return false }
+
+        let hasLetter = line.range(of: #"[a-zа-яё]"#, options: [.regularExpression, .caseInsensitive]) != nil
+        guard hasLetter else { return false }
+
+        let hasDigit = line.range(of: #"\d"#, options: .regularExpression) != nil
+        guard !hasDigit else { return false }
+
+        let lowered = line.lowercased()
+        let blockedPrefixes = [
+            "кешбэк",
+            "кэшбэк",
+            "условия",
+            "подробные условия",
+            "больше кешбэка",
+            "больше кэшбэка",
+            "ваши категории",
+            "категории в",
+            "выгода",
+            "история"
+        ]
+        if blockedPrefixes.contains(where: { lowered.hasPrefix($0) }) {
+            return false
+        }
+
+        return true
     }
 
     private static func deduplicateKeepingMaxPercentage(

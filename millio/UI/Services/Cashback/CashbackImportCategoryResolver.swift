@@ -20,7 +20,7 @@ struct CashbackImportCategoryResolver {
         Rule(category: .supermarket, keywords: ["супермаркет", "продукт"]),
         Rule(category: .restaurant, keywords: ["ресторан", "еда", "общепит"]),
         Rule(category: .pharmacy, keywords: ["аптек"]),
-        Rule(category: .transport, keywords: ["транспорт", "такси", "каршеринг"]),
+        Rule(category: .transport, keywords: ["транспорт", "каршеринг"]),
         Rule(category: .entertainment, keywords: ["развлеч", "кино", "театр"]),
         Rule(category: .online, keywords: ["онлайн", "интернет", "маркетплейс"])
     ]

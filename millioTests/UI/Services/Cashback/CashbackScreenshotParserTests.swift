@@ -117,4 +117,57 @@ struct CashbackScreenshotParserTests {
         #expect(parsed.contains { $0.categoryName == "Связь, интернет и ТВ" && $0.percentage == 10 })
         #expect(parsed.contains { $0.categoryName == "Цветы" && $0.percentage == 10 })
     }
+
+    @Test("Парсер поддерживает формат категории слева и процента справа")
+    func testParseRecognizedLinesSupportsCategoryThenPercentForYandexPayLikeLayout() {
+        let lines = [
+            "Кешбэк при оплате онлайн и на кассе",
+            "Все покупки",
+            "+2%",
+            "Цветы",
+            "+10%",
+            "Супермаркеты",
+            "+5%",
+            "Кешбэк в Яндекс Такси",
+            "Комфорт",
+            "+5%",
+            "Комфорт+",
+            "+5%",
+            "Ultima",
+            "+5%",
+            "Кешбэк по категориям",
+            "Яндекс Лавка ↗",
+            "+5%",
+            "Полис ОСАГО ↗",
+            "+15%",
+            "с Яндекс Заботой",
+            "Больше кешбэка от партнёров"
+        ]
+
+        let parsed = CashbackScreenshotParser.parseRecognizedLines(lines)
+
+        #expect(parsed.count == 8)
+        #expect(parsed.contains { $0.categoryName == "Все покупки" && $0.percentage == 2 })
+        #expect(parsed.contains { $0.categoryName == "Цветы" && $0.percentage == 10 })
+        #expect(parsed.contains { $0.categoryName == "Супермаркеты" && $0.percentage == 5 })
+        #expect(parsed.contains { $0.categoryName == "Комфорт" && $0.percentage == 5 })
+        #expect(parsed.contains { $0.categoryName == "Комфорт+" && $0.percentage == 5 })
+        #expect(parsed.contains { $0.categoryName == "Ultima" && $0.percentage == 5 })
+        #expect(parsed.contains { $0.categoryName == "Яндекс Лавка" && $0.percentage == 5 })
+        #expect(parsed.contains { $0.categoryName == "Полис ОСАГО" && $0.percentage == 15 })
+    }
+
+    @Test("Парсер поддерживает карточку с единичной категорией")
+    func testParseRecognizedLinesSupportsSinglePromoCard() {
+        let lines = [
+            "7%",
+            "Активный отдых",
+            "Отдыхайте с выгодой!"
+        ]
+
+        let parsed = CashbackScreenshotParser.parseRecognizedLines(lines)
+
+        #expect(parsed.count == 1)
+        #expect(parsed.first == CashbackScreenshotImportItem(categoryName: "Активный отдых", percentage: 7))
+    }
 }

@@ -105,11 +105,15 @@ struct InvestmentEditorView: View {
                 .scrollDismissesKeyboard(.immediately)
                 .dismissKeyboardOnTap()
             }
-            .navigationTitle(viewModel.state.editingInvestment == nil ? "Новый актив" : "Редактировать")
+            .navigationTitle(
+                viewModel.state.editingInvestment == nil
+                    ? String(localized: "finances.editor.investment.new_title")
+                    : String(localized: "finances.editor.investment.edit_title")
+            )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Отмена") {
+                    Button(String(localized: "finances.common.cancel")) {
                         if let onClose {
                             onClose()
                         } else {
@@ -120,7 +124,7 @@ struct InvestmentEditorView: View {
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Сохранить") {
+                    Button(String(localized: "finances.common.save")) {
                         saveInvestment()
                     }
                     .foregroundStyle(
@@ -135,7 +139,7 @@ struct InvestmentEditorView: View {
 
                 if onDelete != nil, viewModel.state.editingInvestment != nil {
                     ToolbarItem(placement: .navigationBarTrailing) {
-                        Button("Удалить", role: .destructive) {
+                        Button(String(localized: "finances.common.delete"), role: .destructive) {
                             onDelete?()
                         }
                     }
@@ -186,10 +190,10 @@ struct InvestmentEditorView: View {
     
     private var mainInfoSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Основная информация")
+            FinancesSectionHeader(title: String(localized: "finances.editor.section.main_info"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
-                    TextField("Название актива", text: $name)
+                    TextField(String(localized: "finances.editor.investment.name_placeholder"), text: $name)
                         .foregroundStyle(AppColors.textPrimary)
                         .padding(.vertical, 12)
                         .padding(.horizontal, 16)
@@ -200,14 +204,14 @@ struct InvestmentEditorView: View {
     
     private var investmentParamsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Параметры актива")
+            FinancesSectionHeader(title: String(localized: "finances.editor.investment.params_section"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     HStack {
-                        Text("Тип актива")
+                        Text(String(localized: "finances.editor.investment.type_label"))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        Picker("Тип актива", selection: $selectedInvestmentType) {
+                        Picker(String(localized: "finances.editor.investment.type_label"), selection: $selectedInvestmentType) {
                             ForEach(InvestmentType.allCases, id: \.self) { type in
                                 Text(type.displayName).tag(type)
                             }
@@ -220,14 +224,14 @@ struct InvestmentEditorView: View {
                     FinancesRowDivider()
 
                     HStack {
-                        Text("Категория")
+                        Text(String(localized: "finances.editor.investment.category_label"))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         if isEditingMarketAssetWithLockedIdentity {
                             Text(selectedCategory.displayName)
                                 .foregroundStyle(AppColors.textTertiary)
                         } else {
-                            Picker("Категория", selection: $selectedCategory) {
+                            Picker(String(localized: "finances.editor.investment.category_label"), selection: $selectedCategory) {
                                 ForEach(InvestmentCategory.allCases, id: \.self) { category in
                                     Text(category.displayName).tag(category)
                                 }
@@ -347,7 +351,7 @@ struct InvestmentEditorView: View {
             FinancesRowDivider()
 
             HStack {
-                Text("Цена покупки")
+                Text(String(localized: "finances.add_account.investment.purchase_price"))
                     .foregroundStyle(AppColors.textPrimary)
                 Spacer()
                 TextField("0", text: Binding(
@@ -393,7 +397,7 @@ struct InvestmentEditorView: View {
     private var regularAmountRows: some View {
         Group {
             HStack {
-                Text("Сумма")
+                Text(String(localized: "finances.add_account.field.amount"))
                     .foregroundStyle(AppColors.textPrimary)
                 Spacer()
                 TextField("0", text: Binding(
@@ -414,7 +418,7 @@ struct InvestmentEditorView: View {
             FinancesRowDivider()
 
             HStack {
-                Text("Валюта")
+                Text(String(localized: "finances.add_account.field.currency"))
                     .foregroundStyle(AppColors.textPrimary)
                 Spacer()
                 if isLoadingCurrencies {
@@ -422,7 +426,7 @@ struct InvestmentEditorView: View {
                         .scaleEffect(0.8)
                         .tint(AppColors.textTertiary)
                 } else {
-                    Picker("Валюта", selection: $selectedCurrency) {
+                    Picker(String(localized: "finances.add_account.field.currency"), selection: $selectedCurrency) {
                         ForEach(availableCurrencies, id: \.self) { currency in
                             Text(currency).tag(currency)
                         }
@@ -453,14 +457,14 @@ struct InvestmentEditorView: View {
     
     private var additionalSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Дополнительно")
+            FinancesSectionHeader(title: String(localized: "finances.editor.section.additional"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     HStack {
-                        Text("Приоритет")
+                        Text(String(localized: "finances.add_account.section.priority"))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        Picker("Приоритет", selection: $selectedPriority) {
+                        Picker(String(localized: "finances.add_account.section.priority"), selection: $selectedPriority) {
                             ForEach(InvestmentPriority.allCases, id: \.self) { priority in
                                 Text(priority.displayName).tag(priority)
                             }
@@ -472,7 +476,7 @@ struct InvestmentEditorView: View {
                     
                     FinancesRowDivider()
                     
-                    Toggle("В избранном", isOn: $isFavorite)
+                    Toggle(String(localized: "finances.add_account.favorite"), isOn: $isFavorite)
                         .tint(AppColors.toggleOnGreen)
                         .foregroundStyle(AppColors.textPrimary)
                         .padding(.vertical, 12)
@@ -480,7 +484,7 @@ struct InvestmentEditorView: View {
                     
                     FinancesRowDivider()
                     
-                    Toggle("Учитывать в общих", isOn: $includeInTotal)
+                    Toggle(String(localized: "finances.add_account.total_impact.include"), isOn: $includeInTotal)
                         .tint(AppColors.toggleOnGreen)
                         .foregroundStyle(AppColors.textPrimary)
                         .padding(.vertical, 12)

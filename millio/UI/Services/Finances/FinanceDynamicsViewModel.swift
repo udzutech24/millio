@@ -976,7 +976,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 accounts: accounts,
                 startDate: getPeriodDates().start,
                 endDate: getPeriodDates().end,
-                label: "Общая сумма",
+                label: String(localized: "finances.dynamics.chart.total_label"),
                 debtAsNegative: useNetTotals
             )
             
@@ -988,7 +988,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     accounts: [account],
                     startDate: getPeriodDates().start,
                     endDate: getPeriodDates().end,
-                    label: getAccountInfoForDynamics(account: account)?.name ?? "Счет",
+                    label: getAccountInfoForDynamics(account: account)?.name ?? String(localized: "finances.dynamics.chart.account_fallback"),
                     debtAsNegative: false
                 )
                 allDataPoints.append(contentsOf: accountData)
@@ -1002,7 +1002,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     accounts: [account],
                     startDate: getPeriodDates().start,
                     endDate: getPeriodDates().end,
-                    label: getAccountInfoForDynamics(account: account)?.name ?? "Счет",
+                    label: getAccountInfoForDynamics(account: account)?.name ?? String(localized: "finances.dynamics.chart.account_fallback"),
                     debtAsNegative: false
                 )
             } else {
@@ -1716,7 +1716,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             let result = await historicalRateStore.getRate(on: date, from: normalizedFrom, to: normalizedTo)
             if result.resolution != .exact {
                 if state.currencyConversionWarning == nil {
-                    state.currencyConversionWarning = "Часть значений рассчитана по оценочному курсу."
+                    state.currencyConversionWarning = String(localized: "finances.dynamics.warning.estimated_rate")
                 }
             }
             if let rate = result.rate {
@@ -1730,7 +1730,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             to: normalizedTo
         ) {
             if state.currencyConversionWarning == nil {
-                state.currencyConversionWarning = "Часть значений рассчитана по оценочному курсу."
+                state.currencyConversionWarning = String(localized: "finances.dynamics.warning.estimated_rate")
             }
             return converted
         }

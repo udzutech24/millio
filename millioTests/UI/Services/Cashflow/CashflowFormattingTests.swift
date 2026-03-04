@@ -25,4 +25,16 @@ struct CashflowFormattingTests {
     func toolbarCurrencyCodeUsesUppercasedCode() {
         #expect(cashflowCurrencyCodeLabel(" rub ") == "RUB")
     }
+
+    @Test("Сумма в истории использует разделители тысяч")
+    func historyAmountHasGroupingSeparators() {
+        #expect(cashflowHistoryAmountText(2_323_323) == "2 323 323")
+        #expect(cashflowHistoryAmountText(-2_413_371) == "-2 413 371")
+    }
+
+    @Test("Сумма в истории использует запятую только для дробной части")
+    func historyAmountUsesCommaOnlyForFraction() {
+        #expect(cashflowHistoryAmountText(1232) == "1 232")
+        #expect(cashflowHistoryAmountText(1232.32) == "1 232,32")
+    }
 }

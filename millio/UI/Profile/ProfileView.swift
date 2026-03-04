@@ -14,6 +14,7 @@ struct ProfileView: View {
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var showNameEditSheet = false
     @State private var editedName = ""
+    @State private var showQuickSetupSheet = false
 
     private var legalLinks: ProfileLegalLinks {
         ProfileLegalLinks.make(for: appState.selectedLanguage)
@@ -73,6 +74,7 @@ struct ProfileView: View {
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("profile.primaryCurrencyLink")
+
                         }
                     }
                     
@@ -107,6 +109,18 @@ struct ProfileView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityIdentifier("profile.appSecurityLink")
+
+                                Button {
+                                    showQuickSetupSheet = true
+                                } label: {
+                                    settingsRow(iconSystemName: "sparkles.rectangle.stack", title: "profile.quick_setup") {
+                                        Text(quickSetupStatusText)
+                                            .foregroundStyle(AppColors.profileValueAccent)
+                                        chevron
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("profile.quickSetupLink")
                                 
                                 Toggle(isOn: Binding(
                                     get: { appState.isDailyReminderEnabled },
@@ -196,6 +210,12 @@ struct ProfileView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .sheet(isPresented: $showNameEditSheet) {
             nameEditSheet
+        }
+        .sheet(isPresented: $showQuickSetupSheet) {
+            QuickSetupView(
+                appState: appState,
+                mode: .settings
+            )
         }
         .onChange(of: selectedPhotoItem) { _, newItem in
             Task {
@@ -410,6 +430,13 @@ struct ProfileView: View {
         return appState.isAppLockEnabled
             ? String(localized: "profile.status.enabled", locale: locale)
             : String(localized: "profile.status.disabled", locale: locale)
+    }
+
+    private var quickSetupStatusText: String {
+        let locale = appState.selectedLanguage.locale ?? Locale.current
+        return SettingsManager.shared.isQuickSetupCompleted
+            ? String(localized: "profile.status.completed", locale: locale)
+            : String(localized: "profile.status.not_completed", locale: locale)
     }
     
     private func sectionHeader(_ title: LocalizedStringKey) -> some View {

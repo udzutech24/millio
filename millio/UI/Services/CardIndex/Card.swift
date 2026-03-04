@@ -15,8 +15,8 @@ enum CardType: String, Codable, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .debit: return "Дебетовая"
-        case .credit: return "Кредитная"
+        case .debit: return String(localized: "finances.card.type.debit")
+        case .credit: return String(localized: "finances.card.type.credit")
         }
     }
     
@@ -36,9 +36,9 @@ enum CardPriority: String, Codable, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .low: return "Низкий"
-        case .normal: return "Обычный"
-        case .high: return "Высокий"
+        case .low: return String(localized: "finances.priority.low")
+        case .normal: return String(localized: "finances.priority.normal")
+        case .high: return String(localized: "finances.priority.high")
         }
     }
     

@@ -26,7 +26,7 @@ struct FinanceDynamicsPeriodSelectorView: View {
                         VStack(spacing: 12) {
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("Начало периода")
+                                    Text("finances.dynamics.period.start")
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundStyle(AppColors.textSecondary)
                                     
@@ -59,7 +59,7 @@ struct FinanceDynamicsPeriodSelectorView: View {
                                 }
                                 
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("Конец периода")
+                                    Text("finances.dynamics.period.end")
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundStyle(AppColors.textSecondary)
                                     
@@ -106,18 +106,18 @@ struct FinanceDynamicsPeriodSelectorView: View {
                     .padding(.bottom, 32)
                 }
             }
-            .navigationTitle("Выбор периода")
+            .navigationTitle("finances.dynamics.period.title")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Отмена") {
+                    Button("finances.common.cancel") {
                         dismiss()
                     }
                     .foregroundStyle(AppColors.textPrimary)
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Применить") {
+                    Button("finances.common.apply") {
                         applyPeriod()
                     }
                     .foregroundStyle(
@@ -148,7 +148,9 @@ struct FinanceDynamicsPeriodSelectorView: View {
     
     private var datePickerSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(selectingStart ? "Выберите начальную дату" : "Выберите конечную дату")
+            Text(selectingStart
+                 ? String(localized: "finances.dynamics.period.choose_start")
+                 : String(localized: "finances.dynamics.period.choose_end"))
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary)
                 .padding(.horizontal, 20)

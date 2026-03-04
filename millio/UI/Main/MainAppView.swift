@@ -20,6 +20,8 @@ struct MainAppView: View {
     @State private var showExpenseSheet = false
     @State private var showIncomeSheet = false
     @State private var showCashflowHistory = false
+    @State private var showQuickSetupSheet = false
+    @State private var showQuickSetupBanner = false
     private let serviceOrderManager = ServiceOrderManager()
     
     init(router: AppRouter) {
@@ -63,9 +65,15 @@ struct MainAppView: View {
                     .padding(.top, 16)
                     
                     // Service buttons grid
+                    if showQuickSetupBanner {
+                        quickSetupBanner
+                            .padding(.horizontal, 24)
+                            .padding(.top, 20)
+                    }
+
                     servicesGrid
                         .padding(.horizontal, 24)
-                        .padding(.top, 34)
+                        .padding(.top, showQuickSetupBanner ? 20 : 34)
                     
                     Spacer()
                     
@@ -109,8 +117,19 @@ struct MainAppView: View {
                     CashflowTransactionsHistoryView(viewModel: cashflowViewModel)
                 }
             }
+            .sheet(isPresented: $showQuickSetupSheet) {
+                QuickSetupView(
+                    appState: appState,
+                    mode: .settings,
+                    onCompleted: {
+                        showQuickSetupBanner = false
+                    }
+                )
+            }
             .onAppear {
                 loadServices()
+                showQuickSetupBanner = !SettingsManager.shared.isQuickSetupCompleted
+                    && !SettingsManager.shared.isQuickSetupBannerHidden
                 if cashflowViewModel == nil {
                     cashflowViewModel = CashflowViewModel(modelContext: modelContext)
                 }
@@ -143,6 +162,52 @@ struct MainAppView: View {
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
+    }
+
+    private var quickSetupBanner: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Быстрая настройка")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(AppColors.textPrimary)
+                Text("Язык, валюты, категории и продукты за 1 минуту")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(AppColors.textSecondary)
+                    .lineLimit(2)
+
+                Button {
+                    showQuickSetupSheet = true
+                } label: {
+                    Text("Открыть")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule()
+                                .fill(AppColors.textPrimary.opacity(0.16))
+                        )
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 2)
+            }
+
+            Spacer()
+
+            Button {
+                showQuickSetupBanner = false
+                SettingsManager.shared.isQuickSetupBannerHidden = true
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppColors.textSecondary)
+                    .frame(width: 24, height: 24)
+                    .background(Circle().fill(AppColors.textPrimary.opacity(0.1)))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(14)
+        .background(GlassBackground(gradient: AppColors.financesGradient))
     }
     
     // MARK: - Services Grid

@@ -1221,6 +1221,16 @@ private struct CashbackEditorView: View {
                                     .foregroundStyle(AppColors.textPrimary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
 
+                                Button {
+                                    toggleCategorySelection(for: category.rawValue, isSelected: true)
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundStyle(AppColors.textSecondary)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Убрать категорию")
+
                                 HStack(spacing: 14) {
                                     Button {
                                         adjustPercentage(for: category.rawValue, delta: -1)
@@ -1330,7 +1340,7 @@ private struct CashbackEditorView: View {
     // MARK: - Validation
     var isValid: Bool {
         guard selectedCardID != nil else { return false }
-        return selectedCategoryRaws.contains { raw in
+        return selectedCategoryRaws.allSatisfy { raw in
             guard let percentage = percentageValue(for: raw) else { return false }
             return percentage > 0 && percentage <= 100
         }
@@ -1349,8 +1359,6 @@ private struct CashbackEditorView: View {
             let option = viewModel.categoryOption(for: raw)
             return (categoryRaw: raw, categoryName: option.displayName, percentage: percentage)
         }
-
-        guard !validCashbacks.isEmpty else { return }
 
         viewModel.handle(.updateCashbacksForCard(
             cardID: cardID,

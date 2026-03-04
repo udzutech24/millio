@@ -32,6 +32,9 @@ final class SettingsManager: SettingsManagerProtocol {
     private let profileAvatarFilePathKey = "profileAvatarFilePath"
     private let primaryCurrencyCodeKey = "primaryCurrencyCode"
     private let favoriteCurrencyCodesKey = "favoriteCurrencyCodes"
+    private let quickSetupCompletedKey = "quickSetupCompleted"
+    private let quickSetupBannerHiddenKey = "quickSetupBannerHidden"
+    private let quickSetupExpenseCategoryIDsKey = "quickSetupExpenseCategoryIDs"
     private static let legacyDefaultProfileDisplayNames: Set<String> = ["Гость", "Guest"]
     private let defaults: UserDefaults
 
@@ -166,6 +169,39 @@ final class SettingsManager: SettingsManagerProtocol {
             logger.info("Favorite currency codes updated: \(normalized.count)")
         }
     }
+
+    /// Завершена ли «Быстрая настройка».
+    var isQuickSetupCompleted: Bool {
+        get {
+            defaults.object(forKey: quickSetupCompletedKey) as? Bool ?? false
+        }
+        set {
+            defaults.set(newValue, forKey: quickSetupCompletedKey)
+            logger.info("Quick setup completed: \(newValue)")
+        }
+    }
+
+    /// Скрыта ли карточка «Быстрая настройка» на главной.
+    var isQuickSetupBannerHidden: Bool {
+        get {
+            defaults.object(forKey: quickSetupBannerHiddenKey) as? Bool ?? false
+        }
+        set {
+            defaults.set(newValue, forKey: quickSetupBannerHiddenKey)
+            logger.info("Quick setup banner hidden: \(newValue)")
+        }
+    }
+
+    /// Выбранные категории расходов в быстрой настройке.
+    var quickSetupExpenseCategoryIDs: [String] {
+        get {
+            normalizeCategoryIDs(defaults.array(forKey: quickSetupExpenseCategoryIDsKey) as? [String] ?? [])
+        }
+        set {
+            defaults.set(normalizeCategoryIDs(newValue), forKey: quickSetupExpenseCategoryIDsKey)
+            logger.info("Quick setup expense categories updated: \(newValue.count)")
+        }
+    }
     
     static func normalizeCurrencyCodes(_ codes: [String]) -> [String] {
         var seen = Set<String>()
@@ -191,6 +227,18 @@ final class SettingsManager: SettingsManagerProtocol {
         let normalized = normalizeCurrencyCodes(codes)
             .filter { $0 != normalizedPrimary }
         return Array(normalized.prefix(maxFavoriteCurrencyCodes))
+    }
+
+    private func normalizeCategoryIDs(_ raws: [String]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for raw in raws {
+            let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !value.isEmpty, !seen.contains(value) else { continue }
+            seen.insert(value)
+            result.append(value)
+        }
+        return result
     }
     
     init(defaults: UserDefaults = .standard) {

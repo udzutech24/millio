@@ -118,12 +118,20 @@ struct CashbackViewModelCustomCategoryTests {
 
     @Test("Системные категории кэшбэка используют emoji по умолчанию")
     func testSystemCashbackCategoryIconsAreEmoji() {
+        #expect((35...40).contains(CashbackCategory.allCases.count))
         #expect(CashbackCategory.gasStation.icon == "⛽️")
         #expect(CashbackCategory.supermarket.icon == "🛒")
         #expect(CashbackCategory.restaurant.icon == "🍽️")
+        #expect(CashbackCategory.fastFood.icon == "🍔")
+        #expect(CashbackCategory.coffeeShop.icon == "☕️")
         #expect(CashbackCategory.pharmacy.icon == "💊")
+        #expect(CashbackCategory.healthcare.icon == "🩺")
         #expect(CashbackCategory.transport.icon == "🚕")
+        #expect(CashbackCategory.taxi.icon == "🚖")
+        #expect(CashbackCategory.carSharing.icon == "🚗")
         #expect(CashbackCategory.entertainment.icon == "🎮")
+        #expect(CashbackCategory.travel.icon == "🧳")
+        #expect(CashbackCategory.marketplaces.icon == "📦")
         #expect(CashbackCategory.online.icon == "🌐")
         #expect(CashbackCategory.other.icon == "🧩")
     }
@@ -213,19 +221,19 @@ struct CashbackViewModelCustomCategoryTests {
         let context = try createModelContext()
         let viewModel = CashbackViewModel(modelContext: context)
 
-        let custom = viewModel.createCustomCategory("Кофейни", icon: "cup.and.saucer.fill")
+        let custom = viewModel.createCustomCategory("Кофе навынос", icon: "cup.and.saucer.fill")
         #expect(custom != nil)
         guard let custom else { return }
 
         let updated = viewModel.renameCustomCategory(
             rawValue: custom.rawValue,
-            newName: "Кофейни",
+            newName: "Кофе навынос",
             newIcon: "☕️"
         )
 
         #expect(updated)
         #expect(viewModel.state.customCategories.count == 1)
-        #expect(viewModel.state.customCategories.first?.name == "Кофейни")
+        #expect(viewModel.state.customCategories.first?.name == "Кофе навынос")
         #expect(viewModel.state.customCategories.first?.icon == "☕️")
         #expect(viewModel.categoryOption(for: custom.rawValue).icon == "☕️")
     }
@@ -680,6 +688,92 @@ struct CashbackViewModelCustomCategoryTests {
 
         #expect(janCashback?.percentage == 5)
         #expect(febCashback?.percentage == 10)
+    }
+
+    @Test("updateCashbacksForCard удаляет снятые категории для выбранной карты")
+    func testUpdateCashbacksForCardRemovesDeselectedCategories() throws {
+        let context = try createModelContext()
+
+        let card = Card(
+            name: "Тест карта",
+            cardNumber: "1111 2222 3333 4444",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 1_000
+        )
+        context.insert(card)
+        try context.save()
+
+        let viewModel = CashbackViewModel(modelContext: context)
+        let supermarket = viewModel.categoryOption(for: CashbackCategory.supermarket.rawValue)
+        let pharmacy = viewModel.categoryOption(for: CashbackCategory.pharmacy.rawValue)
+
+        viewModel.handle(.updateCashbacksForCard(
+            cardID: card.cardUniqueID,
+            cashbacks: [
+                (
+                    categoryRaw: supermarket.rawValue,
+                    categoryName: supermarket.displayName,
+                    percentage: 5
+                ),
+                (
+                    categoryRaw: pharmacy.rawValue,
+                    categoryName: pharmacy.displayName,
+                    percentage: 10
+                )
+            ]
+        ))
+        #expect(viewModel.state.cashbacks.count == 2)
+
+        viewModel.handle(.updateCashbacksForCard(
+            cardID: card.cardUniqueID,
+            cashbacks: [(
+                categoryRaw: supermarket.rawValue,
+                categoryName: supermarket.displayName,
+                percentage: 7
+            )]
+        ))
+
+        #expect(viewModel.state.cashbacks.count == 1)
+        #expect(viewModel.state.cashbacks.first?.categoryRaw == supermarket.rawValue)
+        #expect(viewModel.state.cashbacks.first?.percentage == 7)
+    }
+
+    @Test("updateCashbacksForCard позволяет очистить все категории карты")
+    func testUpdateCashbacksForCardCanClearAllCategoriesForCard() throws {
+        let context = try createModelContext()
+
+        let card = Card(
+            name: "Тест карта",
+            cardNumber: "5555 6666 7777 8888",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 1_000
+        )
+        context.insert(card)
+        try context.save()
+
+        let viewModel = CashbackViewModel(modelContext: context)
+        let transport = viewModel.categoryOption(for: CashbackCategory.transport.rawValue)
+
+        viewModel.handle(.updateCashbacksForCard(
+            cardID: card.cardUniqueID,
+            cashbacks: [(
+                categoryRaw: transport.rawValue,
+                categoryName: transport.displayName,
+                percentage: 5
+            )]
+        ))
+        #expect(viewModel.state.cashbacks.count == 1)
+
+        viewModel.handle(.updateCashbacksForCard(
+            cardID: card.cardUniqueID,
+            cashbacks: []
+        ))
+
+        #expect(viewModel.state.cashbacks.isEmpty)
     }
 
     @Test("Невалидная иконка пользовательской категории заменяется на дефолтную")

@@ -17,6 +17,7 @@ struct millioApp: App {
     @State private var appState = AppState()
     @State private var diContainer: DIContainer?
     @State private var lifecycleUseCase: AppLifecycleUseCase?
+    @State private var financeStartupWarmupUseCase: FinanceStartupWarmupUseCase?
     @State private var isBiometricUnlockInProgress = false
     private let appLockCoordinator = AppLockLifecycleCoordinator()
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "App")
@@ -109,6 +110,8 @@ struct millioApp: App {
                             appState: appState,
                             unlockWithBiometrics: unlockWithBiometricsIfEnabled
                         )
+
+                        await financeStartupWarmupUseCase?.warmupIfNeeded()
                     }
                 }
             } else {
@@ -142,6 +145,9 @@ struct millioApp: App {
             modelContainer: container
         )
         self.diContainer = container
+        self.financeStartupWarmupUseCase = FinanceStartupWarmupUseCase(
+            modelContext: container.modelContainer.mainContext
+        )
         logger.info("DIContainer.create finished in \(Double(DispatchTime.now().uptimeNanoseconds - diStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
         
         // Создаем UseCase через DI Container
@@ -167,6 +173,8 @@ struct millioApp: App {
                 appState: appState,
                 unlockWithBiometrics: unlockWithBiometricsIfEnabled
             )
+
+            await financeStartupWarmupUseCase?.warmupIfNeeded()
         }
     }
     

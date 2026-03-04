@@ -2,20 +2,36 @@ import SwiftUI
 
 struct MiniAppDestination: Equatable, Identifiable {
     let route: AppRoute
-    let title: String
+    /// Localization key for destination title.
+    let titleKey: String
     let systemImage: String
 
+    var title: String {
+        MainLocalization.text(titleKey)
+    }
+
     var id: String {
-        title
+        switch route {
+        case .finances:
+            return "finances"
+        case .courses:
+            return "courses"
+        case .cashback:
+            return "cashback"
+        case .cashflow:
+            return "cashflow"
+        default:
+            return systemImage
+        }
     }
 }
 
 enum MiniAppNavigation {
     private static let allDestinations: [MiniAppDestination] = [
-        MiniAppDestination(route: .finances, title: "Финансы", systemImage: "chart.pie"),
-        MiniAppDestination(route: .courses, title: "Курсы", systemImage: "dollarsign.arrow.circlepath"),
-        MiniAppDestination(route: .cashback, title: "Кешбэк", systemImage: "percent"),
-        MiniAppDestination(route: .cashflow, title: "Кэшфлоу", systemImage: "chart.line.uptrend.xyaxis")
+        MiniAppDestination(route: .finances, titleKey: MainLocalization.serviceFinances, systemImage: "chart.pie"),
+        MiniAppDestination(route: .courses, titleKey: MainLocalization.serviceCourses, systemImage: "dollarsign.arrow.circlepath"),
+        MiniAppDestination(route: .cashback, titleKey: MainLocalization.serviceCashback, systemImage: "percent"),
+        MiniAppDestination(route: .cashflow, titleKey: MainLocalization.serviceCashflow, systemImage: "chart.line.uptrend.xyaxis")
     ]
 
     static func destinations(excluding route: AppRoute) -> [MiniAppDestination] {

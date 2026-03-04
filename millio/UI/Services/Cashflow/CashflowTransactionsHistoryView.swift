@@ -7,12 +7,27 @@
 
 import SwiftUI
 
+func cashflowHistoryAmountText(_ amount: Double) -> String {
+    let formatter = NumberFormatter()
+    formatter.numberStyle = .decimal
+    formatter.locale = Locale(identifier: "ru_RU")
+    formatter.decimalSeparator = ","
+    formatter.groupingSeparator = " "
+    formatter.usesGroupingSeparator = true
+    formatter.groupingSize = 3
+    formatter.secondaryGroupingSize = 3
+    formatter.minimumFractionDigits = 0
+    formatter.maximumFractionDigits = 2
+    return formatter.string(from: NSNumber(value: amount)) ?? "0"
+}
+
 // MARK: - History View
 
 struct CashflowTransactionsHistoryView: View {
     @ObservedObject var viewModel: CashflowViewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedFilter: CashflowHistoryTypeFilter = .all
+    private let showsDismissButton: Bool
+    @State private var selectedFilter: CashflowHistoryTypeFilter
     @State private var isSearchActive = false
     @State private var searchText = ""
     @State private var selectedStartDate: Date? = nil
@@ -21,6 +36,16 @@ struct CashflowTransactionsHistoryView: View {
     @State private var displayedTransactionsLimit = Self.pageSize
     @FocusState private var isSearchFocused: Bool
     private static let pageSize = 20
+
+    init(
+        viewModel: CashflowViewModel,
+        showsDismissButton: Bool = true,
+        initialFilter: CashflowHistoryTypeFilter = .all
+    ) {
+        self.viewModel = viewModel
+        self.showsDismissButton = showsDismissButton
+        _selectedFilter = State(initialValue: initialFilter)
+    }
 
     /// Транзакции с учетом типа, даты и поиска.
     private var filteredTransactions: [CashflowTransaction] {
@@ -74,13 +99,15 @@ struct CashflowTransactionsHistoryView: View {
             .navigationTitle(String(localized: "cashflow.history.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary)
+                if showsDismissButton {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button {
+                            dismiss()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(AppColors.textPrimary)
+                        }
                     }
                 }
 
@@ -530,14 +557,7 @@ private struct HistoryTransactionCard: View {
     // MARK: - Форматирование суммы
 
     private var formattedAmount: String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.groupingSeparator = " "
-        formatter.usesGroupingSeparator = true
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 0
-
-        let amountStr = formatter.string(from: NSNumber(value: transaction.amount)) ?? "0"
+        let amountStr = cashflowHistoryAmountText(transaction.amount)
         let symbol = MonetaCurrency(rawValue: resolvedCurrencyCode)?.symbol ?? resolvedCurrencyCode
 
         switch transaction.transactionType {

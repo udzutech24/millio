@@ -16,9 +16,9 @@ enum FinanceAccountType: String, Codable, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .card: return "Карта"
-        case .credit: return "Кредит"
-        case .investment: return "Актив"
+        case .card: return String(localized: "finances.account.type.card")
+        case .credit: return String(localized: "finances.account.type.credit")
+        case .investment: return String(localized: "finances.account.type.investment")
         }
     }
     

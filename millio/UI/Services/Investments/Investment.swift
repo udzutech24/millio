@@ -15,8 +15,8 @@ enum InvestmentType: String, Codable, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .positive: return "Плюсовая"
-        case .negative: return "Минусовая"
+        case .positive: return String(localized: "finances.investment.type.positive")
+        case .negative: return String(localized: "finances.investment.type.negative")
         }
     }
     
@@ -42,15 +42,15 @@ enum InvestmentCategory: String, Codable, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .car: return "Машина"
-        case .house: return "Недвижимость"
-        case .stocks: return "Акции"
-        case .business: return "Бизнес"
-        case .debt: return "Долг"
-        case .crypto: return "Криптовалюта"
-        case .bonds: return "Облигации"
-        case .metals: return "Драгоценные металлы"
-        case .other: return "Другое"
+        case .car: return String(localized: "finances.investment.category.car")
+        case .house: return String(localized: "finances.investment.category.house")
+        case .stocks: return String(localized: "finances.investment.category.stocks")
+        case .business: return String(localized: "finances.investment.category.business")
+        case .debt: return String(localized: "finances.investment.category.debt")
+        case .crypto: return String(localized: "finances.investment.category.crypto")
+        case .bonds: return String(localized: "finances.investment.category.bonds")
+        case .metals: return String(localized: "finances.investment.category.metals")
+        case .other: return String(localized: "finances.investment.category.other")
         }
     }
     
@@ -77,9 +77,9 @@ enum InvestmentPriority: String, Codable, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .low: return "Низкий"
-        case .normal: return "Обычный"
-        case .high: return "Высокий"
+        case .low: return String(localized: "finances.priority.low")
+        case .normal: return String(localized: "finances.priority.normal")
+        case .high: return String(localized: "finances.priority.high")
         }
     }
     
