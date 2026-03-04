@@ -57,7 +57,7 @@ struct MainAppView: View {
                                         .stroke(Color.white.opacity(0.95), lineWidth: 1.3)
                                 )
                         }
-                        .accessibilityLabel("История операций")
+                        .accessibilityLabel(MainLocalization.text(MainLocalization.historyAccessibility))
                     }
                     .padding(.horizontal, 24)
                     .padding(.top, 16)
@@ -72,7 +72,7 @@ struct MainAppView: View {
                     // Bottom action buttons
                     HStack(spacing: 16) {
                         ActionButton(
-                            title: "Расход",
+                            title: MainLocalization.text(MainLocalization.quickActionExpense),
                             icon: .system(QuickActionIcons.expense),
                             gradientColors: AppColors.expenseGradient
                         ) {
@@ -80,7 +80,7 @@ struct MainAppView: View {
                         }
                         
                         ActionButton(
-                            title: "Доход",
+                            title: MainLocalization.text(MainLocalization.quickActionIncome),
                             icon: .system(QuickActionIcons.income),
                             gradientColors: AppColors.incomeGradient
                         ) {
@@ -151,7 +151,7 @@ struct MainAppView: View {
         VStack(spacing: 8) {
             ForEach(services) { service in
                 ServiceButton(
-                    title: service.title,
+                    title: MainLocalization.text(service.titleKey),
                     icon: service.icon,
                     gradientColors: service.gradientColors
                 ) {

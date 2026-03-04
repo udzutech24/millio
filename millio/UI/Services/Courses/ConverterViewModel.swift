@@ -765,18 +765,18 @@ final class ConverterViewModel: ViewModelProtocol {
             if let urlError = error as? URLError {
                 switch urlError.code {
                 case .notConnectedToInternet, .networkConnectionLost:
-                    errorMessage = "Нет подключения к интернету"
+                    errorMessage = ConverterL10n.noInternetError
                 case .timedOut:
-                    errorMessage = "Превышено время ожидания"
+                    errorMessage = ConverterL10n.timeoutError
                 case .badServerResponse:
-                    errorMessage = "Ошибка сервера \(state.rateSource.title)"
+                    errorMessage = ConverterL10n.serverError(source: state.rateSource.title)
                 case .cannotParseResponse:
-                    errorMessage = "Не удалось обработать ответ от \(state.rateSource.title)"
+                    errorMessage = ConverterL10n.parseError(source: state.rateSource.title)
                 default:
-                    errorMessage = "Ошибка при обновлении курсов"
+                    errorMessage = ConverterL10n.genericUpdateError
                 }
             } else {
-                errorMessage = "Ошибка при обновлении курсов"
+                errorMessage = ConverterL10n.genericUpdateError
             }
             
             state.toastMessage = errorMessage
@@ -883,7 +883,7 @@ final class ConverterViewModel: ViewModelProtocol {
     }
 
     private func nextShareDraftTitle() -> String {
-        "Отправка #\(storedShareSequence + 1)"
+        ConverterL10n.shareTitle(index: storedShareSequence + 1)
     }
     
     

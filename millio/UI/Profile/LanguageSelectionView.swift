@@ -9,8 +9,13 @@ import SwiftUI
 
 struct LanguageSelectionView: View {
     @Binding var selectedLanguage: Language
+    @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
+
+    private var currentLocale: Locale {
+        appState.selectedLanguage.locale ?? Locale.current
+    }
     
     private var filteredLanguages: [Language] {
         let all = Language.allCases
@@ -18,7 +23,7 @@ struct LanguageSelectionView: View {
             return all
         }
         return all.filter {
-            $0.displayName.localizedCaseInsensitiveContains(searchText)
+            $0.displayName(for: currentLocale).localizedCaseInsensitiveContains(searchText)
         }
     }
     
@@ -27,14 +32,14 @@ struct LanguageSelectionView: View {
             GradientBackground()
             
             VStack(spacing: 0) {
-                InlineSearchBar(text: $searchText, placeholder: "Поиск языка")
+                InlineSearchBar(text: $searchText, placeholder: String(localized: "profile.language.search_placeholder"))
                     .padding(.horizontal, 16)
                     .padding(.top, 16)
                     .padding(.bottom, 8)
                 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Все языки")
+                        Text("profile.language.all_languages")
                             .font(.system(size: 16, weight: .regular))
                             .foregroundStyle(AppColors.textSecondary)
                             .padding(.horizontal, 20)
@@ -43,7 +48,7 @@ struct LanguageSelectionView: View {
                         SelectionSectionCard {
                             ForEach(Array(filteredLanguages.enumerated()), id: \.element) { index, language in
                                 SelectionItemRow(
-                                    title: language.displayName,
+                                    title: language.displayName(for: currentLocale),
                                     subtitle: nil,
                                     isSelected: selectedLanguage == language,
                                     dividerColor: AppColors.textPrimary.opacity(0.08),
@@ -67,7 +72,7 @@ struct LanguageSelectionView: View {
                 }
             }
         }
-        .navigationTitle("Язык")
+        .navigationTitle("profile.language.navigation_title")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
     }
@@ -107,5 +112,6 @@ struct LanguageSelectionView: View {
 #Preview {
     NavigationStack {
         LanguageSelectionView(selectedLanguage: .constant(.russian))
+            .environment(AppState())
     }
 }

@@ -24,7 +24,7 @@ struct SubscriptionView: View {
                 VStack(spacing: 0) {
                     // Заголовок
                     VStack(spacing: 12) {
-                        Text("millio PRO")
+                        Text("subscription.hero.title")
                             .font(.system(size: 42, weight: .bold))
                             .foregroundStyle(
                                 LinearGradient(
@@ -34,7 +34,7 @@ struct SubscriptionView: View {
                                 )
                             )
                         
-                        Text("Расширенные возможности")
+                        Text("subscription.hero.subtitle")
                             .font(.system(size: 18, weight: .regular))
                             .foregroundStyle(AppColors.textSecondary)
                     }
@@ -65,7 +65,7 @@ struct SubscriptionView: View {
                     
                     // Преимущества
                     VStack(alignment: .leading, spacing: 16) {
-                        Text("Что включено")
+                        Text("subscription.features.title")
                             .font(.system(size: 24, weight: .bold))
                             .foregroundStyle(AppColors.textPrimary)
                             .padding(.horizontal, 24)
@@ -73,13 +73,13 @@ struct SubscriptionView: View {
                         VStack(spacing: 12) {
                             FeatureRow(
                                 icon: "sparkles",
-                                text: "Все 10 сервисов без ограничений",
+                                textKey: "subscription.features.unlimited_services",
                                 gradient: AppColors.financesGradient
                             )
                             
                             FeatureRow(
                                 icon: "chart.line.uptrend.xyaxis",
-                                text: "Расширенная аналитика",
+                                textKey: "subscription.features.advanced_analytics",
                                 gradient: AppColors.coursesGradient
                             )
                         }
@@ -108,7 +108,7 @@ struct SubscriptionView: View {
                         }
                     } label: {
                         HStack(spacing: 12) {
-                            Text("Оформить подписку")
+                            Text("subscription.button.subscribe")
                                 .font(.system(size: 18, weight: .semibold))
                                 .foregroundStyle(AppColors.textPrimary)
                             
@@ -132,7 +132,7 @@ struct SubscriptionView: View {
                             await restorePurchases()
                         }
                     } label: {
-                        Text("Восстановить покупки")
+                        Text("subscription.button.restore")
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(AppColors.textSecondary)
                     }
@@ -141,12 +141,12 @@ struct SubscriptionView: View {
                 }
             }
         }
-        .navigationTitle("Подписка")
+        .navigationTitle("subscription.navigation.title")
         .navigationBarTitleDisplayMode(.inline)
-        .alert("Ошибка", isPresented: $showError) {
+        .alert("subscription.alert.error.title", isPresented: $showError) {
             Button("OK", role: .cancel) { }
         } message: {
-            Text(errorMessage ?? "Неизвестная ошибка")
+            Text(errorMessage ?? String(localized: "subscription.error.unknown"))
         }
         .task {
             await loadProducts()
@@ -170,7 +170,7 @@ struct SubscriptionView: View {
                         )
                     )
                 
-                Text(appState.isTrialActive ? "Активен пробный период" : "Активна подписка PRO")
+                Text(appState.isTrialActive ? "subscription.status.trial_active" : "subscription.status.subscribed_active")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
                 
@@ -179,7 +179,7 @@ struct SubscriptionView: View {
             
             if let expirationDate = appState.subscriptionExpirationDate {
                 HStack {
-                    Text("Действует до:")
+                    Text("subscription.status.expires_at")
                         .font(.system(size: 14))
                         .foregroundStyle(AppColors.textSecondary)
                     
@@ -209,7 +209,7 @@ struct SubscriptionView: View {
                 Image(systemName: "gift.fill")
                     .font(.system(size: 16, weight: .semibold))
                 
-                Text("Начать пробный период (7 дней)")
+                Text("subscription.button.start_trial")
                     .font(.system(size: 16, weight: .semibold))
             }
             .foregroundStyle(AppColors.textPrimary)
@@ -234,7 +234,7 @@ struct SubscriptionView: View {
             ]
             products = try await Product.products(for: productIds)
         } catch {
-            errorMessage = "Не удалось загрузить продукты"
+            errorMessage = String(localized: "subscription.error.load_products")
             showError = true
         }
     }
@@ -278,7 +278,7 @@ struct SubscriptionView: View {
             appState.isTrialActive = SubscriptionManager.shared.isTrialActive
             
         } catch {
-            errorMessage = "Не удалось восстановить покупки"
+            errorMessage = String(localized: "subscription.error.restore_purchases")
             showError = true
         }
     }
@@ -295,7 +295,7 @@ struct SubscriptionView: View {
             appState.isTrialActive = SubscriptionManager.shared.isTrialActive
             
         } catch {
-            errorMessage = (error as? SubscriptionError)?.localizedDescription ?? "Не удалось начать пробный период"
+            errorMessage = (error as? SubscriptionError)?.localizedDescription ?? String(localized: "subscription.error.start_trial")
             showError = true
         }
     }
@@ -304,7 +304,7 @@ struct SubscriptionView: View {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
-        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.locale = appState.selectedLanguage.locale ?? Locale.current
         return formatter.string(from: date)
     }
 }
@@ -317,8 +317,8 @@ private enum SubscriptionPlan {
     
     var title: String {
         switch self {
-        case .monthly: return "Месяц"
-        case .yearly: return "Год"
+        case .monthly: return String(localized: "subscription.plan.monthly.title")
+        case .yearly: return String(localized: "subscription.plan.yearly.title")
         }
     }
     
@@ -331,15 +331,15 @@ private enum SubscriptionPlan {
     
     var period: String {
         switch self {
-        case .monthly: return "в месяц"
-        case .yearly: return "в год"
+        case .monthly: return String(localized: "subscription.plan.monthly.period")
+        case .yearly: return String(localized: "subscription.plan.yearly.period")
         }
     }
     
     var savings: String? {
         switch self {
         case .monthly: return nil
-        case .yearly: return "Экономия 30%"
+        case .yearly: return String(localized: "subscription.plan.yearly.savings")
         }
     }
 }
@@ -375,7 +375,7 @@ private struct SubscriptionPlanCard: View {
                         HStack(spacing: 4) {
                             Image(systemName: "star.fill")
                                 .font(.system(size: 12, weight: .semibold))
-                            Text("Популярно")
+                            Text("subscription.plan.popular")
                                 .font(.system(size: 12, weight: .semibold))
                         }
                         .foregroundStyle(
@@ -449,7 +449,7 @@ private struct SubscriptionPlanCard: View {
 
 private struct FeatureRow: View {
     let icon: String
-    let text: String
+    let textKey: LocalizedStringKey
     let gradient: [Color]
     
     var body: some View {
@@ -469,7 +469,7 @@ private struct FeatureRow: View {
                     )
             }
             
-            Text(text)
+            Text(textKey)
                 .font(.system(size: 16, weight: .regular))
                 .foregroundStyle(AppColors.textPrimary)
             

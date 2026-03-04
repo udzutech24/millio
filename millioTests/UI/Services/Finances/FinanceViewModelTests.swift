@@ -84,9 +84,10 @@ struct FinanceViewModelTests {
     /// Получить чистый контекст (очищаем данные от предыдущих тестов)
     private func createTestModelContext() throws -> ModelContext {
         let defaults = UserDefaults.standard
-        // Тесты должны быть изолированы от пользовательских валютных настроек.
-        defaults.set("RUB", forKey: "finance_display_currency")
-        defaults.removeObject(forKey: "finance_secondary_display_currency")
+        defaults.set("RUB", forKey: "primaryCurrencyCode")
+        defaults.set(false, forKey: "finance_savings_goal_enabled")
+        defaults.set(0, forKey: "finance_savings_goal_amount")
+        defaults.removeObject(forKey: "finance_savings_goal_currency")
 
         let context = Self.sharedContainer.mainContext
         // Очищаем все данные от предыдущих тестов
@@ -98,6 +99,143 @@ struct FinanceViewModelTests {
         try context.deleteAll(CashflowTransaction.self)
         try context.save()
         return context
+    }
+
+    private func waitForAsyncStatePropagation(
+        until condition: @escaping @MainActor () -> Bool = { true }
+    ) async -> Bool {
+        // В ViewModel используются fire-and-forget Task, поэтому ждем до таймаута.
+        for _ in 0..<100 {
+            await Task.yield()
+            if condition() {
+                return true
+            }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        return condition()
+    }
+
+    @Test("FinanceViewModel синхронизирует display валюту при смене основной если модуль следовал прошлой основной")
+    func testSyncPrimaryCurrencyChangeUpdatesFollowingDisplayCurrency() throws {
+        let modelContext = try createTestModelContext()
+
+        let viewModel = FinanceViewModel(modelContext: modelContext, skipInitialLoad: true)
+        #expect(viewModel.state.displayCurrency == "RUB")
+
+        viewModel.handle(.syncPrimaryCurrencyChange(old: "RUB", new: "USD"))
+
+        #expect(viewModel.state.displayCurrency == "USD")
+    }
+
+    @Test("FinanceViewModel смена display валюты не меняет primary валюту профиля")
+    func testSetDisplayCurrencyDoesNotChangePrimaryCurrency() throws {
+        let modelContext = try createTestModelContext()
+        let defaults = UserDefaults.standard
+        let primaryKey = "primaryCurrencyCode"
+        let originalPrimary = defaults.string(forKey: primaryKey)
+        defer {
+            if let originalPrimary {
+                defaults.set(originalPrimary, forKey: primaryKey)
+            } else {
+                defaults.removeObject(forKey: primaryKey)
+            }
+        }
+        defaults.set("USD", forKey: primaryKey)
+
+        let viewModel = FinanceViewModel(modelContext: modelContext, skipInitialLoad: true)
+        viewModel.handle(.setDisplayCurrency("AMD"))
+
+        #expect(viewModel.state.displayCurrency == "AMD")
+        #expect(SettingsManager.shared.primaryCurrencyCode == "USD")
+    }
+
+    @Test("FinanceViewModel пересчитывает сумму цели накопления при смене display валюты")
+    func testSetDisplayCurrencyConvertsSavingsGoalAmount() async throws {
+        let modelContext = try createTestModelContext()
+        let mockRateService = MockCurrencyRateService()
+        mockRateService.setRate(from: "RUB", to: "USD", rate: 0.01)
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: mockRateService,
+            skipInitialLoad: true
+        )
+
+        viewModel.handle(.setDisplayCurrency("RUB"))
+        _ = await waitForAsyncStatePropagation { viewModel.state.displayCurrency == "RUB" }
+        viewModel.handle(.setSavingsGoalAmount(100_000))
+        viewModel.handle(.setDisplayCurrency("USD"))
+        let didReachExpectedState = await waitForAsyncStatePropagation {
+            viewModel.state.displayCurrency == "USD" && abs(viewModel.state.savingsGoalAmount - 1_000) < 0.01
+        }
+
+        #expect(didReachExpectedState)
+        #expect(viewModel.state.displayCurrency == "USD")
+        #expect(abs(viewModel.state.savingsGoalAmount - 1_000) < 0.01)
+    }
+
+    @Test("FinanceViewModel не перезаписывает кастомную display валюту при смене основной")
+    func testSyncPrimaryCurrencyChangeKeepsCustomDisplayCurrency() throws {
+        let modelContext = try createTestModelContext()
+
+        let viewModel = FinanceViewModel(modelContext: modelContext, skipInitialLoad: true)
+        #expect(viewModel.state.displayCurrency == "RUB")
+        viewModel.handle(.setDisplayCurrency("EUR"))
+        #expect(viewModel.state.displayCurrency == "EUR")
+
+        viewModel.handle(.syncPrimaryCurrencyChange(old: "RUB", new: "USD"))
+
+        #expect(viewModel.state.displayCurrency == "EUR")
+    }
+
+    @Test("FinanceViewModel пересчитывает сумму цели при sync primary currency")
+    func testSyncPrimaryCurrencyChangeConvertsSavingsGoalAmount() async throws {
+        let modelContext = try createTestModelContext()
+        let mockRateService = MockCurrencyRateService()
+        mockRateService.setRate(from: "RUB", to: "USD", rate: 0.01)
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: mockRateService,
+            skipInitialLoad: true
+        )
+
+        viewModel.handle(.setDisplayCurrency("RUB"))
+        _ = await waitForAsyncStatePropagation { viewModel.state.displayCurrency == "RUB" }
+        viewModel.handle(.setSavingsGoalAmount(50_000))
+        viewModel.handle(.syncPrimaryCurrencyChange(old: "RUB", new: "USD"))
+        let didReachExpectedState = await waitForAsyncStatePropagation {
+            viewModel.state.displayCurrency == "USD" && abs(viewModel.state.savingsGoalAmount - 500) < 0.01
+        }
+
+        #expect(didReachExpectedState)
+        #expect(viewModel.state.displayCurrency == "USD")
+        #expect(abs(viewModel.state.savingsGoalAmount - 500) < 0.01)
+    }
+
+    @Test("FinanceViewModel пересчитывает сохраненную цель при новом входе после смены основной валюты")
+    func testInitConvertsSavedGoalFromStoredCurrencyToPrimaryCurrency() async throws {
+        let modelContext = try createTestModelContext()
+        let defaults = UserDefaults.standard
+        defaults.set("RUB", forKey: "primaryCurrencyCode")
+        defaults.set(1_000_000, forKey: "finance_savings_goal_amount")
+        defaults.set("USD", forKey: "finance_savings_goal_currency")
+
+        let mockRateService = MockCurrencyRateService()
+        mockRateService.setRate(from: "USD", to: "RUB", rate: 100)
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: mockRateService,
+            skipInitialLoad: true
+        )
+        let didReachExpectedState = await waitForAsyncStatePropagation {
+            viewModel.state.displayCurrency == "RUB" && abs(viewModel.state.savingsGoalAmount - 100_000_000) < 0.01
+        }
+
+        #expect(didReachExpectedState)
+        #expect(viewModel.state.displayCurrency == "RUB")
+        #expect(abs(viewModel.state.savingsGoalAmount - 100_000_000) < 0.01)
     }
 
     @Test("Расчет суммы группы с разными валютами работает корректно")

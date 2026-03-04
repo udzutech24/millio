@@ -99,6 +99,23 @@ struct CashbackViewModelCustomCategoryTests {
         #expect(viewModel.state.customCategories.first?.icon == CashbackCustomCategory.defaultIcon)
     }
 
+    @Test("Системное имя с другой иконкой создает кастомную категорию")
+    func testCreateCustomCategoryWithSystemNameAndCustomIconCreatesCustom() throws {
+        let context = try createModelContext()
+        let viewModel = CashbackViewModel(modelContext: context)
+
+        let option = viewModel.createCustomCategory("Аптеки", icon: "🍩")
+
+        #expect(option != nil)
+        #expect(option?.isCustom == true)
+        #expect(option?.displayName == "Аптеки")
+        #expect(option?.icon == "🍩")
+        #expect(option?.rawValue.hasPrefix(Cashback.customCategoryPrefix) == true)
+        #expect(viewModel.state.customCategories.count == 1)
+        #expect(viewModel.state.customCategories.first?.name == "Аптеки")
+        #expect(viewModel.state.customCategories.first?.icon == "🍩")
+    }
+
     @Test("Системные категории кэшбэка используют emoji по умолчанию")
     func testSystemCashbackCategoryIconsAreEmoji() {
         #expect(CashbackCategory.gasStation.icon == "⛽️")
@@ -191,6 +208,28 @@ struct CashbackViewModelCustomCategoryTests {
         #expect(viewModel.categoryOption(for: custom.rawValue).icon == "gift.fill")
     }
 
+    @Test("renameCustomCategory позволяет поменять только иконку без смены названия")
+    func testRenameCustomCategoryUpdatesOnlyIcon() throws {
+        let context = try createModelContext()
+        let viewModel = CashbackViewModel(modelContext: context)
+
+        let custom = viewModel.createCustomCategory("Кофейни", icon: "cup.and.saucer.fill")
+        #expect(custom != nil)
+        guard let custom else { return }
+
+        let updated = viewModel.renameCustomCategory(
+            rawValue: custom.rawValue,
+            newName: "Кофейни",
+            newIcon: "☕️"
+        )
+
+        #expect(updated)
+        #expect(viewModel.state.customCategories.count == 1)
+        #expect(viewModel.state.customCategories.first?.name == "Кофейни")
+        #expect(viewModel.state.customCategories.first?.icon == "☕️")
+        #expect(viewModel.categoryOption(for: custom.rawValue).icon == "☕️")
+    }
+
     @Test("deleteCustomCategory переносит связанные Cashback в Другое и удаляет категорию")
     func testDeleteCustomCategoryMigratesToOther() throws {
         let context = try createModelContext()
@@ -226,6 +265,30 @@ struct CashbackViewModelCustomCategoryTests {
         #expect(viewModel.state.cashbacks.count == 1)
         #expect(viewModel.state.cashbacks[0].categoryRaw == CashbackCategory.other.rawValue)
         #expect(viewModel.state.cashbacks[0].name == CashbackCategory.other.displayName)
+    }
+
+    @Test("deleteCategory для системной категории мигрирует кешбэки в Другое и скрывает категорию")
+    func testDeleteSystemCategoryMigratesAndHidesIt() throws {
+        let context = try createModelContext()
+
+        context.insert(Cashback(
+            name: CashbackCategory.pharmacy.displayName,
+            category: .pharmacy,
+            percentage: 6,
+            cardIDs: [],
+            monthKey: Cashback.monthKey(for: Date())
+        ))
+        try context.save()
+
+        let viewModel = CashbackViewModel(modelContext: context)
+
+        let deleted = viewModel.deleteCategory(rawValue: CashbackCategory.pharmacy.rawValue)
+        #expect(deleted)
+
+        #expect(viewModel.state.cashbacks.count == 1)
+        #expect(viewModel.state.cashbacks[0].categoryRaw == CashbackCategory.other.rawValue)
+        #expect(viewModel.state.cashbacks[0].name == CashbackCategory.other.displayName)
+        #expect(viewModel.categoryOptions().contains { $0.rawValue == CashbackCategory.pharmacy.rawValue } == false)
     }
 
     @Test("Список кэшбэков фильтруется по выбранному месяцу")

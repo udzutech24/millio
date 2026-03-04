@@ -13,7 +13,7 @@ final class ImageItem: NSObject, UIActivityItemSource {
     private let jpegData: Data
     private let subject: String
 
-    init(image: UIImage, compressionQuality: CGFloat = 0.92, subject: String = "millio — курсы валют") {
+    init(image: UIImage, compressionQuality: CGFloat = 0.92, subject: String = ConverterL10n.shareSheetDefaultSubject) {
         self.image = image
         self.jpegData = image.jpegData(compressionQuality: compressionQuality) ?? Data()
         self.subject = subject
@@ -114,20 +114,35 @@ struct ShareRow: View {
                         .stroke(Color.white.opacity(0.08), lineWidth: 1)
                 )
         } else {
-            Image("flag")
-                .resizable()
-                .renderingMode(.template)
-                .foregroundStyle(Color.white)
-                .frame(width: 24, height: 24)
-                .frame(width: 76, height: 76)
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color(hex: "141A25"))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                )
+            let fallbackEmoji = CurrencyFlags.flag(for: code)
+            if fallbackEmoji != "🏳️" {
+                Text(fallbackEmoji)
+                    .font(.system(size: 28))
+                    .frame(width: 76, height: 76)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(Color(hex: "141A25"))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
+            } else {
+                Image("flag")
+                    .resizable()
+                    .renderingMode(.template)
+                    .foregroundStyle(Color.white)
+                    .frame(width: 24, height: 24)
+                    .frame(width: 76, height: 76)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(Color(hex: "141A25"))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
+            }
         }
     }
 
@@ -164,19 +179,80 @@ struct ShareCardView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            VStack(spacing: 12) {
-                ForEach(rows) { row in
-                    ShareRow(
-                        flag: row.flag,
-                        code: row.code,
-                        value: row.value,
-                        highlighted: row.code.uppercased() == highlightedCode.uppercased()
-                    )
+            VStack(spacing: 0) {
+                VStack(spacing: 12) {
+                    ForEach(rows) { row in
+                        ShareRow(
+                            flag: row.flag,
+                            code: row.code,
+                            value: row.value,
+                            highlighted: row.code.uppercased() == highlightedCode.uppercased()
+                        )
+                    }
                 }
+                .padding(.bottom, 16)
+
+                footerBranding
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 4)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
         }
+    }
+
+    private var footerBranding: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(ConverterL10n.sharePromoTitle)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.96))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Text(ConverterL10n.sharePromoSubtitle)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(Color.white.opacity(0.7))
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 8)
+
+            Text(ConverterL10n.sharePromoBrand)
+                .font(.system(size: 20, weight: .black, design: .rounded))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [Color(hex: "47D7FF"), Color(hex: "8A6BFF")],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color.white.opacity(0.08))
+                )
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                )
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [Color(hex: "141A25").opacity(0.98), Color(hex: "11161F").opacity(0.98)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+        )
     }
 }
 
@@ -269,7 +345,7 @@ struct ActivityView: UIViewControllerRepresentable {
         dateString: formatter.string(from: date),
         rows: rows,
         highlightedCode: "USD",
-        baseSummary: "База: 1 USD",
+        baseSummary: ConverterL10n.baseSummary(input: "1", code: "USD"),
         appStoreURLText: "https://apps.apple.com"
     )
 

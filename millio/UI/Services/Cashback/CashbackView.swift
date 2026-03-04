@@ -28,6 +28,21 @@ private struct CashbackCategoryIconView: View {
     }
 }
 
+private struct CashbackCategoryEditButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "pencil.circle.fill")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(CashbackScreenStyle.accent)
+                .frame(width: 24, height: 24)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Редактировать категорию")
+    }
+}
+
 struct CashbackView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: CashbackViewModel?
@@ -54,8 +69,10 @@ struct CashbackView: View {
 private struct CashbackContentViewInternal: View {
     @ObservedObject var viewModel: CashbackViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppRouter.self) private var router
     @State private var showFavoriteCategoriesSheet: Bool = false
     @State private var activeSwipeCashbackID: PersistentIdentifier?
+    private let currentRoute: AppRoute = .cashback
 
     var body: some View {
         ZStack {
@@ -221,16 +238,35 @@ private struct CashbackContentViewInternal: View {
         let iconSize: CGFloat = 18
 
         ToolbarItem(placement: .topBarLeading) {
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: iconSize, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.96))
-                    .frame(width: itemSize, height: itemSize)
+            HStack(spacing: 6) {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: iconSize, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.96))
+                        .frame(width: itemSize, height: itemSize)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Назад")
+
+                Menu {
+                    ForEach(MiniAppNavigation.destinations(excluding: currentRoute)) { destination in
+                        Button {
+                            MiniAppNavigation.navigate(to: destination.route, from: currentRoute, router: router)
+                        } label: {
+                            Label(destination.title, systemImage: destination.systemImage)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "square.grid.2x2")
+                        .font(.system(size: iconSize - 2, weight: .regular))
+                        .foregroundStyle(Color.white.opacity(0.90))
+                        .frame(width: itemSize, height: itemSize)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Быстрая навигация по мини-приложениям")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Назад")
         }
 
         ToolbarItem(placement: .principal) {
@@ -324,6 +360,7 @@ private struct CashbackFavoriteCategoriesSheet: View {
     @State private var categoryEditorName: String = ""
     @State private var categoryEditorIcon: String = CashbackCustomCategory.defaultIcon
     @State private var pendingCategoryRawAction: String?
+    @State private var categoryEditorSourceRaw: String?
 
     private var categoryOptions: [CashbackCategoryOption] {
         let options = viewModel.categoryOptions(matching: searchText)
@@ -358,23 +395,31 @@ private struct CashbackFavoriteCategoriesSheet: View {
                         VStack(spacing: 0) {
                             ForEach(Array(categoryOptions.enumerated()), id: \.element.rawValue) { index, category in
                                 let isFavorite = viewModel.isFavoriteCategory(rawValue: category.rawValue)
-                                Button {
-                                    viewModel.handle(.toggleFavoriteCategory(rawValue: category.rawValue))
-                                } label: {
-                                    HStack(spacing: 12) {
-                                        CashbackCategoryIconView(
-                                            icon: category.icon,
-                                            fontSize: 17,
-                                            fontWeight: .semibold,
-                                            tint: AnyShapeStyle(AppColors.textPrimary)
-                                        )
-                                        .frame(width: 28, height: 28)
+                                HStack(spacing: 12) {
+                                    Button {
+                                        openCategoryEditor(for: category)
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            CashbackCategoryIconView(
+                                                icon: category.icon,
+                                                fontSize: 17,
+                                                fontWeight: .semibold,
+                                                tint: AnyShapeStyle(AppColors.textPrimary)
+                                            )
+                                            .frame(width: 28, height: 28)
 
-                                        Text(category.displayName)
-                                            .font(.system(size: 16, weight: .medium))
-                                            .foregroundStyle(AppColors.textPrimary)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            Text(category.displayName)
+                                                .font(.system(size: 16, weight: .medium))
+                                                .foregroundStyle(AppColors.textPrimary)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                        }
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
 
+                                    Button {
+                                        viewModel.handle(.toggleFavoriteCategory(rawValue: category.rawValue))
+                                    } label: {
                                         Image(systemName: isFavorite ? "star.fill" : "star")
                                             .font(.system(size: 16, weight: .semibold))
                                             .foregroundStyle(
@@ -389,14 +434,15 @@ private struct CashbackFavoriteCategoriesSheet: View {
                                                     : AnyShapeStyle(AppColors.textTertiary)
                                             )
                                     }
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 14)
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel(isFavorite ? "Убрать из избранного" : "Добавить в избранное")
                                 }
-                                .buttonStyle(.plain)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
                                 .contextMenu {
                                     if category.isCustom {
                                         Button("Редактировать") {
-                                            openEditCategorySheet(for: category)
+                                            openCategoryEditor(for: category)
                                         }
 
                                         Button("Удалить", role: .destructive) {
@@ -451,6 +497,8 @@ private struct CashbackFavoriteCategoriesSheet: View {
                     selectedIcon: categoryEditorIcon
                 ) { name, icon in
                     handleCategoryEditorSave(name: name, icon: icon)
+                } onDelete: {
+                    handleCategoryEditorDelete()
                 }
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
@@ -461,7 +509,7 @@ private struct CashbackFavoriteCategoriesSheet: View {
                 }
                 Button("Удалить", role: .destructive) {
                     guard let raw = pendingCategoryRawAction else { return }
-                    _ = viewModel.deleteCustomCategory(rawValue: raw)
+                    _ = viewModel.deleteCategory(rawValue: raw)
                     pendingCategoryRawAction = nil
                 }
             } message: {
@@ -471,11 +519,15 @@ private struct CashbackFavoriteCategoriesSheet: View {
     }
 
     private func openEditCategorySheet(for category: CashbackCategoryOption) {
-        guard category.isCustom else { return }
         categoryEditorMode = .edit(rawValue: category.rawValue)
         categoryEditorName = category.displayName
         categoryEditorIcon = category.icon
+        categoryEditorSourceRaw = category.rawValue
         showCategoryEditorSheet = true
+    }
+
+    private func openCategoryEditor(for category: CashbackCategoryOption) {
+        openEditCategorySheet(for: category)
     }
 
     private func handleCategoryEditorSave(name: String, icon: String) {
@@ -484,11 +536,37 @@ private struct CashbackFavoriteCategoriesSheet: View {
 
         switch categoryEditorMode {
         case .create:
-            break
+            if let option = viewModel.createCustomCategory(trimmedName, icon: icon) {
+                if let sourceRaw = categoryEditorSourceRaw,
+                   sourceRaw != option.rawValue,
+                   viewModel.isFavoriteCategory(rawValue: sourceRaw) {
+                    viewModel.handle(.toggleFavoriteCategory(rawValue: sourceRaw))
+                    if !viewModel.isFavoriteCategory(rawValue: option.rawValue) {
+                        viewModel.handle(.toggleFavoriteCategory(rawValue: option.rawValue))
+                    }
+                }
+            }
         case .edit(let oldRaw):
-            _ = viewModel.renameCustomCategory(rawValue: oldRaw, newName: trimmedName, newIcon: icon)
+            if !viewModel.renameCustomCategory(rawValue: oldRaw, newName: trimmedName, newIcon: icon) {
+                if let option = viewModel.createCustomCategory(trimmedName, icon: icon),
+                   oldRaw != option.rawValue,
+                   viewModel.isFavoriteCategory(rawValue: oldRaw) {
+                    viewModel.handle(.toggleFavoriteCategory(rawValue: oldRaw))
+                    if !viewModel.isFavoriteCategory(rawValue: option.rawValue) {
+                        viewModel.handle(.toggleFavoriteCategory(rawValue: option.rawValue))
+                    }
+                }
+            }
         }
 
+        categoryEditorSourceRaw = nil
+        showCategoryEditorSheet = false
+    }
+
+    private func handleCategoryEditorDelete() {
+        guard case .edit(let raw) = categoryEditorMode else { return }
+        _ = viewModel.deleteCategory(rawValue: raw)
+        categoryEditorSourceRaw = nil
         showCategoryEditorSheet = false
     }
 }
@@ -720,6 +798,21 @@ private enum CashbackCategoryEditorMode {
     case edit(rawValue: String)
 }
 
+enum CashbackEditorCardSelectionResolver {
+    static func resolve(
+        existingCategoryRaws: [String],
+        existingCardCashbacks: [String: String],
+        currentCategoryRaws: Set<String>,
+        currentCardCashbacks: [String: String],
+        preserveCurrentIfExistingIsEmpty: Bool
+    ) -> (selectedCategoryRaws: Set<String>, cardCashbacks: [String: String]) {
+        if preserveCurrentIfExistingIsEmpty && existingCategoryRaws.isEmpty {
+            return (currentCategoryRaws, currentCardCashbacks)
+        }
+        return (Set(existingCategoryRaws), existingCardCashbacks)
+    }
+}
+
 private struct CashbackEditorView: View {
     @ObservedObject var viewModel: CashbackViewModel
     @Environment(\.dismiss) private var dismiss
@@ -825,6 +918,8 @@ private struct CashbackEditorView: View {
                     selectedIcon: categoryEditorIcon
                 ) { name, icon in
                     handleCategoryEditorSave(name: name, icon: icon)
+                } onDelete: {
+                    handleCategoryEditorDelete()
                 }
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
@@ -846,7 +941,11 @@ private struct CashbackEditorView: View {
                     cardCashbacks.removeAll()
                     return
                 }
-                preloadCategories(for: cardID)
+                let shouldPreserveCurrentDraft = !selectedCategoryRaws.isEmpty
+                preloadCategories(
+                    for: cardID,
+                    preserveCurrentIfStoredCashbackMissing: shouldPreserveCurrentDraft
+                )
             }
             .onChange(of: screenshotPhotoItem) { _, newValue in
                 guard let item = newValue else { return }
@@ -979,53 +1078,37 @@ private struct CashbackEditorView: View {
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                         ForEach(visibleCategories, id: \.self) { category in
                             let isSelected = selectedCategoryRaws.contains(category.rawValue)
-                            Button {
-                                if isSelected {
-                                    selectedCategoryRaws.remove(category.rawValue)
-                                    cardCashbacks.removeValue(forKey: category.rawValue)
-                                } else {
-                                    selectedCategoryRaws.insert(category.rawValue)
-                                    if cardCashbacks[category.rawValue] == nil {
-                                        cardCashbacks[category.rawValue] = "5"
+                            HStack(spacing: 6) {
+                                Button {
+                                    toggleCategorySelection(for: category.rawValue, isSelected: isSelected)
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        CashbackCategoryIconView(
+                                            icon: category.icon,
+                                            fontSize: 14,
+                                            fontWeight: .semibold,
+                                            tint: AnyShapeStyle(AppColors.textPrimary)
+                                        )
+                                        Text(category.displayName)
+                                            .font(.system(size: 13, weight: .medium))
+                                            .lineLimit(1)
+                                    }
+                                    .foregroundStyle(AppColors.textPrimary)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 10)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background {
+                                        Capsule()
+                                            .fill(isSelected ? Color.white.opacity(0.30) : CashbackScreenStyle.subduedCircleFill)
                                     }
                                 }
-
-                                if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                    searchText = ""
-                                    isShowingAllCategories = false
-                                }
-                                dismissKeyboard()
-                            } label: {
-                                HStack(spacing: 8) {
-                                    CashbackCategoryIconView(
-                                        icon: category.icon,
-                                        fontSize: 14,
-                                        fontWeight: .semibold,
-                                        tint: AnyShapeStyle(AppColors.textPrimary)
-                                    )
-                                    Text(category.displayName)
-                                        .font(.system(size: 13, weight: .medium))
-                                        .lineLimit(1)
-                                }
-                                .foregroundStyle(AppColors.textPrimary)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background {
-                                    Capsule()
-                                        .fill(isSelected ? Color.white.opacity(0.30) : CashbackScreenStyle.subduedCircleFill)
-                                }
-                            }
-                            .buttonStyle(.plain)
-                            .contextMenu {
-                                if category.isCustom {
-                                    Button("Редактировать") {
-                                        openEditCategorySheet(for: category)
-                                    }
-
-                                    Button("Удалить", role: .destructive) {
-                                        pendingCategoryRawAction = category.rawValue
-                                        showDeleteCategoryAlert = true
+                                .buttonStyle(.plain)
+                                .contextMenu {
+                                    if category.isCustom {
+                                        Button("Удалить", role: .destructive) {
+                                            pendingCategoryRawAction = category.rawValue
+                                            showDeleteCategoryAlert = true
+                                        }
                                     }
                                 }
                             }
@@ -1090,7 +1173,7 @@ private struct CashbackEditorView: View {
                 }
                 Button("Удалить", role: .destructive) {
                     guard let raw = pendingCategoryRawAction else { return }
-                    if viewModel.deleteCustomCategory(rawValue: raw) {
+                    if viewModel.deleteCategory(rawValue: raw) {
                         selectedCategoryRaws.remove(raw)
                         cardCashbacks.removeValue(forKey: raw)
                     }
@@ -1180,10 +1263,6 @@ private struct CashbackEditorView: View {
                             .padding(.vertical, 14)
                             .contextMenu {
                                 if category.isCustom {
-                                    Button("Редактировать") {
-                                        openEditCategorySheet(for: category)
-                                    }
-
                                     Button("Удалить", role: .destructive) {
                                         pendingCategoryRawAction = category.rawValue
                                         showDeleteCategoryAlert = true
@@ -1386,16 +1465,34 @@ private struct CashbackEditorView: View {
         showCategoryEditorSheet = false
     }
 
-    private func preloadCategories(for cardID: String) {
+    private func handleCategoryEditorDelete() {
+        guard case .edit(let raw) = categoryEditorMode else { return }
+        if viewModel.deleteCategory(rawValue: raw) {
+            selectedCategoryRaws.remove(raw)
+            cardCashbacks.removeValue(forKey: raw)
+        }
+        showCategoryEditorSheet = false
+    }
+
+    private func preloadCategories(for cardID: String, preserveCurrentIfStoredCashbackMissing: Bool = false) {
         let selectedMonthKey = Cashback.monthKey(for: viewModel.state.selectedMonth)
         let existingForCard = viewModel.state.cashbacks.filter { cashback in
             cashback.cardIDs.contains(cardID) && cashback.monthKey == selectedMonthKey
         }
 
-        selectedCategoryRaws = Set(existingForCard.map(\.categoryRaw))
-        cardCashbacks = Dictionary(
+        let existingCategoryRaws = existingForCard.map(\.categoryRaw)
+        let existingCardCashbacks = Dictionary(
             uniqueKeysWithValues: existingForCard.map { ($0.categoryRaw, percentageText(for: $0.percentage)) }
         )
+        let resolved = CashbackEditorCardSelectionResolver.resolve(
+            existingCategoryRaws: existingCategoryRaws,
+            existingCardCashbacks: existingCardCashbacks,
+            currentCategoryRaws: selectedCategoryRaws,
+            currentCardCashbacks: cardCashbacks,
+            preserveCurrentIfExistingIsEmpty: preserveCurrentIfStoredCashbackMissing
+        )
+        selectedCategoryRaws = resolved.selectedCategoryRaws
+        cardCashbacks = resolved.cardCashbacks
     }
 
     private func percentageValue(for categoryRaw: String) -> Double? {
@@ -1431,6 +1528,24 @@ private struct CashbackEditorView: View {
         }
     }
 
+    private func toggleCategorySelection(for categoryRaw: String, isSelected: Bool) {
+        if isSelected {
+            selectedCategoryRaws.remove(categoryRaw)
+            cardCashbacks.removeValue(forKey: categoryRaw)
+        } else {
+            selectedCategoryRaws.insert(categoryRaw)
+            if cardCashbacks[categoryRaw] == nil {
+                cardCashbacks[categoryRaw] = "5"
+            }
+        }
+
+        if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            searchText = ""
+            isShowingAllCategories = false
+        }
+        dismissKeyboard()
+    }
+
     private func dismissKeyboard() {
         #if canImport(UIKit)
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
@@ -1447,21 +1562,41 @@ private struct CashbackCategoryEditorSheet: View {
     }
 
     let mode: CashbackCategoryEditorMode
-    @State var name: String
-    @State var selectedIcon: String
+    let initialName: String
+    let initialSelectedIcon: String
+    @State private var name: String
+    @State private var selectedIcon: String
     let onSave: (_ name: String, _ icon: String) -> Void
+    let onDelete: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @FocusState private var isNameFieldFocused: Bool
     @State private var selectedTab: IconPickerTab = .emoji
     @State private var iconSearchText: String = ""
+    @State private var showDeleteConfirmation: Bool = false
+
+    init(
+        mode: CashbackCategoryEditorMode,
+        name: String,
+        selectedIcon: String,
+        onSave: @escaping (_ name: String, _ icon: String) -> Void,
+        onDelete: (() -> Void)? = nil
+    ) {
+        self.mode = mode
+        self.initialName = name
+        self.initialSelectedIcon = selectedIcon
+        self.onSave = onSave
+        self.onDelete = onDelete
+        _name = State(initialValue: name)
+        _selectedIcon = State(initialValue: selectedIcon)
+    }
 
     private var title: String {
         switch mode {
         case .create:
             return "Новая категория"
         case .edit:
-            return "Редактировать категорию"
+            return "Категория"
         }
     }
 
@@ -1570,16 +1705,42 @@ private struct CashbackCategoryEditorSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Отмена") {
+                    Button {
                         dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .frame(width: 28, height: 28)
+                            .background(
+                                Circle()
+                                    .fill(Color.white.opacity(0.08))
+                            )
                     }
-                    .foregroundStyle(AppColors.textPrimary)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Отмена")
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Сохранить") {
+                    if case .edit = mode {
+                        Button(role: .destructive) {
+                            showDeleteConfirmation = true
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.system(size: 15, weight: .semibold))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Удалить")
+                    }
+                }
+
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
                         onSave(name, selectedIcon)
                         dismiss()
+                    } label: {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 16, weight: .semibold))
                     }
                     .foregroundStyle(
                         LinearGradient(
@@ -1589,12 +1750,15 @@ private struct CashbackCategoryEditorSheet: View {
                         )
                     )
                     .disabled(!isValid)
+                    .accessibilityLabel("Сохранить")
                 }
             }
             .onAppear {
                 DispatchQueue.main.async {
                     isNameFieldFocused = true
                 }
+                name = initialName
+                selectedIcon = initialSelectedIcon
                 switch mode {
                 case .create:
                     selectedTab = .emoji
@@ -1602,6 +1766,15 @@ private struct CashbackCategoryEditorSheet: View {
                     selectedTab = CashbackCustomCategory.isSFSymbolIcon(selectedIcon) ? .symbols : .emoji
                 }
                 iconSearchText = ""
+            }
+            .alert("Удалить категорию?", isPresented: $showDeleteConfirmation) {
+                Button("Отмена", role: .cancel) {}
+                Button("Удалить", role: .destructive) {
+                    onDelete?()
+                    dismiss()
+                }
+            } message: {
+                Text("Связанные кешбэки этой категории будут перенесены в «Другое».")
             }
         }
     }

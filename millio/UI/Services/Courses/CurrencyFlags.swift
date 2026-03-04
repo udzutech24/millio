@@ -171,7 +171,7 @@ enum CurrencyFlags {
 
     /// Возвращает имя ассета флага из Assets.xcassets/Icons/Flags.
     /// Для большинства валют берется регион, связанный с кодом валюты.
-    /// Если ассет не найден, возвращается fallback-иконка "xx".
+    /// Если ассет не найден, возвращает nil — UI должен показать emoji-флаг или нейтральную иконку.
     static func assetName(for currencyCode: String) -> String? {
         let code = currencyCode.uppercased()
         guard !CurrencySelectionSupport.isCrypto(code) else { return nil }
@@ -190,10 +190,6 @@ enum CurrencyFlags {
         let fallbackByCurrencyCode = code.lowercased()
         if hasAsset(named: fallbackByCurrencyCode) {
             return fallbackByCurrencyCode
-        }
-
-        if hasAsset(named: "xx") {
-            return "xx"
         }
 
         return nil

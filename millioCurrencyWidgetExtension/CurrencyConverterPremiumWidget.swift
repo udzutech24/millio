@@ -220,10 +220,6 @@ private struct CurrencyConverterPremiumWidgetEntryView: View {
             return fallbackByCode
         }
 
-        if widgetHasAsset(named: "xx") {
-            return "xx"
-        }
-
         return nil
     }
 

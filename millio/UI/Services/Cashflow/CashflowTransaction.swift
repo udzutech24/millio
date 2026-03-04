@@ -83,12 +83,12 @@ enum IncomeCategory: String, Codable, CaseIterable {
     
     var icon: String {
         switch self {
-        case .salary: return "briefcase.fill"
-        case .freelance: return "laptopcomputer"
-        case .investment: return "chart.line.uptrend.xyaxis"
-        case .gift: return "gift.fill"
-        case .bonus: return "star.fill"
-        case .other: return "ellipsis.circle.fill"
+        case .salary: return "💼"
+        case .freelance: return "🧑‍💻"
+        case .investment: return "📈"
+        case .gift: return "🎁"
+        case .bonus: return "⭐️"
+        case .other: return "🧩"
         }
     }
 }
@@ -122,15 +122,15 @@ enum ExpenseCategory: String, Codable, CaseIterable {
     
     var icon: String {
         switch self {
-        case .groceries: return "cart.fill"
-        case .cafe: return "cup.and.saucer.fill"
-        case .transport: return "car.fill"
-        case .shopping: return "bag.fill"
-        case .entertainment: return "tv.fill"
-        case .bills: return "doc.text.fill"
-        case .health: return "cross.case.fill"
-        case .education: return "book.fill"
-        case .other: return "ellipsis.circle.fill"
+        case .groceries: return "🛒"
+        case .cafe: return "☕️"
+        case .transport: return "🚕"
+        case .shopping: return "🛍️"
+        case .entertainment: return "🎮"
+        case .bills: return "🧾"
+        case .health: return "💊"
+        case .education: return "📚"
+        case .other: return "🧩"
         }
     }
 }
@@ -211,27 +211,157 @@ final class CashflowSystemCategoryOverride: Persistable {
 
 @Model
 final class CashflowCustomCategory: Persistable {
-    static let defaultIcon = "tag.fill"
-    static let allowedIcons: [String] = [
+    static let defaultIcon = "🧩"
+    static let allowedSFSymbolIcons: [String] = [
         "tag.fill",
-        "briefcase.fill",
-        "laptopcomputer",
-        "chart.line.uptrend.xyaxis",
-        "gift.fill",
-        "star.fill",
         "cart.fill",
         "cup.and.saucer.fill",
-        "car.fill",
-        "bag.fill",
-        "tv.fill",
-        "doc.text.fill",
+        "fuelpump.fill",
+        "fork.knife",
         "cross.case.fill",
-        "book.fill",
+        "car.fill",
+        "gamecontroller.fill",
+        "globe",
         "house.fill",
-        "airplane",
         "figure.walk",
-        "bolt.fill"
+        "gift.fill",
+        "airplane",
+        "iphone",
+        "bolt.fill",
+        "heart.fill",
+        "basket.fill",
+        "takeoutbag.and.cup.and.straw.fill",
+        "wineglass.fill",
+        "fork.knife.circle.fill",
+        "birthday.cake.fill",
+        "popcorn.fill",
+        "ticket.fill",
+        "film.fill",
+        "tv.fill",
+        "music.note",
+        "music.mic",
+        "headphones",
+        "book.fill",
+        "graduationcap.fill",
+        "gamecontroller",
+        "soccerball",
+        "dumbbell.fill",
+        "figure.run",
+        "tent.fill",
+        "beach.umbrella.fill",
+        "mountain.2.fill",
+        "camera.fill",
+        "photo.fill",
+        "paintpalette.fill",
+        "theatermasks.fill",
+        "stethoscope",
+        "pills.fill",
+        "bandage.fill",
+        "cross.vial.fill",
+        "pawprint.fill",
+        "dog.fill",
+        "cat.fill",
+        "leaf.fill",
+        "tree.fill",
+        "car.2.fill",
+        "bus.fill",
+        "tram.fill",
+        "ferry.fill",
+        "bicycle",
+        "scooter",
+        "airplane.departure",
+        "bed.double.fill",
+        "shippingbox.fill",
+        "cube.box.fill",
+        "bag.fill",
+        "creditcard.fill",
+        "banknote.fill",
+        "building.columns.fill",
+        "dollarsign.circle.fill",
+        "eurosign.circle.fill",
+        "rublesign.circle.fill",
+        "chart.line.uptrend.xyaxis",
+        "briefcase.fill",
+        "building.2.fill",
+        "desktopcomputer",
+        "laptopcomputer",
+        "display",
+        "keyboard.fill",
+        "printer.fill",
+        "wifi",
+        "antenna.radiowaves.left.and.right",
+        "phone.fill",
+        "message.fill",
+        "envelope.fill",
+        "doc.text.fill",
+        "newspaper.fill",
+        "calendar",
+        "clock.fill",
+        "sparkles",
+        "sun.max.fill",
+        "moon.fill",
+        "cloud.fill",
+        "umbrella.fill",
+        "snowflake",
+        "flame.fill",
+        "drop.fill",
+        "bolt.circle.fill",
+        "shield.fill",
+        "lock.fill",
+        "person.fill",
+        "person.2.fill",
+        "person.3.fill",
+        "child.fill",
+        "figure.2.and.child.holdinghands",
+        "house.lodge.fill",
+        "key.fill",
+        "hammer.fill",
+        "wrench.and.screwdriver.fill",
+        "scissors",
+        "sewingneedle",
+        "basketball.fill",
+        "volleyball.fill",
+        "baseball.fill",
+        "trophy.fill",
+        "medal.fill",
+        "flag.checkered",
+        "location.fill",
+        "map.fill",
+        "signpost.right.fill",
+        "carrot.fill",
+        "fish.fill",
+        "takeoutbag.and.cup.and.straw",
+        "cup.and.heat.waves.fill",
+        "lanyardcard.fill",
+        "comb.fill",
+        "facemask.fill"
     ]
+    static let allowedEmojiIcons: [String] = [
+        "🛒", "🛍️", "🏪", "🏬", "🧺", "🍽️", "🍔", "🍕", "🍣", "🍜",
+        "☕️", "🍰", "🍩", "🍿", "🎬", "🎮", "🎯", "🎟️", "🎨", "🎵",
+        "🎧", "📚", "🧠", "💊", "🩺", "🏥", "🚕", "🚗", "🚌", "🚇",
+        "🚲", "🛴", "⛽️", "✈️", "🏨", "🧳", "💼", "🖥️", "💻", "📱",
+        "⌚️", "📞", "📶", "🌐", "🛜", "🔌", "💡", "🏠", "🔑", "🛠️",
+        "🧰", "🧹", "🧴", "👕", "👟", "💄", "💇", "💆", "🧸",
+        "🍼", "🐶", "🐱", "🐾", "🌿", "🌸", "🌳", "🔥", "💧", "☀️",
+        "🌙", "🌧️", "❄️", "⚡️", "🧾", "📰", "📦", "🚚", "💳", "💰",
+        "🪙", "🏦", "📈", "📊", "🧯", "🛡️", "🔒", "❤️", "🧡", "💜",
+        "⭐️", "✨", "🎁", "🏆", "🏅", "⚽️", "🏀", "🏋️", "🧘", "🧑‍💻"
+    ]
+    static let allowedIcons: [String] = allowedSFSymbolIcons + allowedEmojiIcons
+
+    static func isSFSymbolIcon(_ icon: String) -> Bool {
+        allowedSFSymbolIcons.contains(icon)
+    }
+
+    static func normalizeIcon(_ icon: String) -> String {
+        let trimmed = icon.trimmingCharacters(in: .whitespacesAndNewlines)
+        return allowedIcons.contains(trimmed) ? trimmed : defaultIcon
+    }
+
+    static func normalize(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
 
     var categoryID: String = UUID().uuidString
     var kindRaw: String = CashflowCategoryKind.expense.rawValue
@@ -259,14 +389,6 @@ final class CashflowCustomCategory: Persistable {
         self.icon = Self.normalizeIcon(icon)
         self.createdAt = Date()
         self.updatedAt = Date()
-    }
-
-    static func normalize(_ value: String) -> String {
-        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-    }
-
-    static func normalizeIcon(_ icon: String) -> String {
-        allowedIcons.contains(icon) ? icon : defaultIcon
     }
 
     func export() throws -> Data {

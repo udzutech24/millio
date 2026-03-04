@@ -13,13 +13,17 @@ enum Language: String, Codable, CaseIterable, Hashable {
     case russian = "ru"
     
     var displayName: String {
+        displayName(for: locale ?? Locale.current)
+    }
+
+    func displayName(for locale: Locale) -> String {
         switch self {
         case .system:
-            return "Системный"
+            return String(localized: "language.option.system", locale: locale)
         case .english:
-            return "English"
+            return String(localized: "language.option.english", locale: locale)
         case .russian:
-            return "Русский"
+            return String(localized: "language.option.russian", locale: locale)
         }
     }
     

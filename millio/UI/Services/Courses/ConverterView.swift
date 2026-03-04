@@ -17,12 +17,14 @@ struct ConverterView: View {
     
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var hSize
+    @Environment(AppRouter.self) private var router
 
     private let rowStrokeColor = Color.white.opacity(0.16)
     private let rowInactiveStrokeColor = Color.white.opacity(0.07)
     private let rowCornerRadius: CGFloat = 18
     private let neonCyan = Color(hex: "47D7FF")
     private let neonViolet = Color(hex: "8A6BFF")
+    private let currentRoute: AppRoute = .courses
     
     
     // MARK: - Sounds
@@ -149,7 +151,7 @@ struct ConverterView: View {
         )) {
             settingsSheet
         }
-        .confirmationDialog("Знаки после запятой", isPresented: Binding(
+        .confirmationDialog(ConverterL10n.fractionDigits, isPresented: Binding(
             get: { viewModel.state.showFractionDialog },
             set: { if !$0 { viewModel.handle(.hideFractionDialog) } }
         ), titleVisibility: .visible) {
@@ -158,7 +160,7 @@ struct ConverterView: View {
                     viewModel.handle(.setFractionDigits(n))
                 }
             }
-            Button("Отмена", role: .cancel) {}
+            Button(ConverterL10n.cancel, role: .cancel) {}
         }
         .sheet(isPresented: Binding(
             get: { viewModel.state.showSharePreviewSheet },
@@ -180,7 +182,7 @@ struct ConverterView: View {
         )) {
 #if os(iOS)
             if let img = viewModel.state.shareImage {
-                let shareSubject = viewModel.state.shareDraftTitle.isEmpty ? "millio — курсы валют" : viewModel.state.shareDraftTitle
+                let shareSubject = viewModel.state.shareDraftTitle.isEmpty ? ConverterL10n.shareSheetDefaultSubject : viewModel.state.shareDraftTitle
                 let shareText = preparedShareText(
                     title: viewModel.state.shareDraftTitle,
                     message: viewModel.state.shareDraftMessage
@@ -273,11 +275,11 @@ struct ConverterView: View {
                     viewModel.handle(.applyPickerSelection(code))
                 }
             )
-            .navigationTitle(viewModel.state.replaceIndex == nil ? "Добавить валюту" : "Заменить валюту")
+            .navigationTitle(viewModel.state.replaceIndex == nil ? ConverterL10n.addCurrencyTitle : ConverterL10n.replaceCurrencyTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Отмена") {
+                    Button(ConverterL10n.cancel) {
                         viewModel.handle(.hidePicker)
                     }
                 }
@@ -296,7 +298,7 @@ struct ConverterView: View {
                 ScrollView {
                     VStack(spacing: 22) {
                         VStack(alignment: .leading, spacing: 10) {
-                            FinancesSectionHeader(title: "Курс")
+                            FinancesSectionHeader(title: ConverterL10n.sectionRate)
                             FinancesGlassCard(accentColor: AppColors.financesGradient.first ?? AppColors.brandPrimary) {
                                 VStack(spacing: 0) {
                                     Button {
@@ -305,7 +307,7 @@ struct ConverterView: View {
                                         }
                                     } label: {
                                         HStack(spacing: 12) {
-                                            Text("Источник курса")
+                                            Text(ConverterL10n.rateSource)
                                                 .font(.system(size: 16, weight: .medium))
                                                 .foregroundStyle(AppColors.textPrimary)
                                             Spacer()
@@ -369,7 +371,7 @@ struct ConverterView: View {
                                     FinancesRowDivider(leadingPadding: 16)
 
                                     HStack(spacing: 12) {
-                                        Text("Последнее обновление")
+                                        Text(ConverterL10n.lastUpdate)
                                             .font(.system(size: 16, weight: .medium))
                                             .foregroundStyle(AppColors.textPrimary)
                                         Spacer()
@@ -392,7 +394,7 @@ struct ConverterView: View {
                                     } label: {
                                         HStack(spacing: 10) {
                                             Image(systemName: "arrow.clockwise")
-                                            Text(viewModel.state.isFetchingRates ? "Обновляем..." : "Обновить курсы")
+                                            Text(viewModel.state.isFetchingRates ? ConverterL10n.refreshingRates : ConverterL10n.refreshRates)
                                         }
                                         .font(.system(size: 16, weight: .semibold))
                                         .foregroundStyle(
@@ -414,13 +416,13 @@ struct ConverterView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 10) {
-                            FinancesSectionHeader(title: "Точность")
+                            FinancesSectionHeader(title: ConverterL10n.sectionPrecision)
                             FinancesGlassCard(accentColor: AppColors.financesGradient.first ?? AppColors.brandPrimary, contentPadding: EdgeInsets(top: 14, leading: 16, bottom: 16, trailing: 16)) {
                                 VStack(alignment: .leading, spacing: 12) {
-                                    Text("Знаков после запятой")
+                                    Text(ConverterL10n.fractionDigits)
                                         .font(.system(size: 16, weight: .medium))
                                         .foregroundStyle(AppColors.textPrimary)
-                                    Picker("Знаков после запятой", selection: Binding(
+                                    Picker(ConverterL10n.fractionDigits, selection: Binding(
                                         get: { viewModel.state.fractionDigits },
                                         set: { viewModel.handle(.setFractionDigits($0)) }
                                     )) {
@@ -434,9 +436,9 @@ struct ConverterView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 10) {
-                            FinancesSectionHeader(title: "Ощущения")
+                            FinancesSectionHeader(title: ConverterL10n.sectionFeel)
                             FinancesGlassCard(accentColor: AppColors.financesGradient.first ?? AppColors.brandPrimary, contentPadding: EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16)) {
-                                Toggle("Тактильный отклик", isOn: Binding(
+                                Toggle(ConverterL10n.haptics, isOn: Binding(
                                     get: { viewModel.state.hapticsEnabled },
                                     set: { viewModel.handle(.setHapticsEnabled($0)) }
                                 ))
@@ -450,11 +452,11 @@ struct ConverterView: View {
                     .padding(.bottom, 32)
                 }
             }
-            .navigationTitle("Конвертор")
+            .navigationTitle(ConverterL10n.settingsTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Готово") {
+                    Button(ConverterL10n.settingsDone) {
                         viewModel.handle(.hideSettingsSheet)
                     }
                     .foregroundStyle(AppColors.textPrimary)
@@ -486,7 +488,15 @@ struct ConverterView: View {
                 }
                 .buttonStyle(.plain)
 
-                Button {} label: {
+                Menu {
+                    ForEach(MiniAppNavigation.destinations(excluding: currentRoute)) { destination in
+                        Button {
+                            switchToMiniApp(destination.route)
+                        } label: {
+                            Label(destination.title, systemImage: destination.systemImage)
+                        }
+                    }
+                } label: {
                     Image(systemName: "square.grid.2x2")
                         .font(.system(size: iconSize, weight: .regular))
                         .symbolRenderingMode(.hierarchical)
@@ -494,6 +504,7 @@ struct ConverterView: View {
                         .frame(width: itemSize, height: itemSize)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Быстрая навигация по мини-приложениям")
             }
             .padding(.horizontal, 10)
             .frame(height: 40)
@@ -511,7 +522,7 @@ struct ConverterView: View {
                         .frame(width: itemSize, height: itemSize)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("История отправленных скриншотов")
+                .accessibilityLabel(ConverterL10n.shareHistoryAccessibility)
 
                 Button {
                     guard viewModel.canRemoveCurrency else { return }
@@ -525,7 +536,7 @@ struct ConverterView: View {
                 }
                 .disabled(!viewModel.canRemoveCurrency)
                 .buttonStyle(.plain)
-                .accessibilityLabel("Убрать валюту")
+                .accessibilityLabel(ConverterL10n.removeCurrencyAccessibility)
 
                 if viewModel.canAddCurrency {
                     Button {
@@ -538,7 +549,7 @@ struct ConverterView: View {
                             .frame(width: itemSize, height: itemSize)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Добавить валюту")
+                    .accessibilityLabel(ConverterL10n.addCurrencyAccessibility)
                 }
 
                 Button {
@@ -551,7 +562,7 @@ struct ConverterView: View {
                         .frame(width: itemSize, height: itemSize)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Поделиться")
+                .accessibilityLabel(ConverterL10n.shareAccessibility)
 
                 Button {
                     viewModel.handle(.showSettingsSheet)
@@ -563,7 +574,7 @@ struct ConverterView: View {
                         .frame(width: itemSize, height: itemSize)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Настройки точности")
+                .accessibilityLabel(ConverterL10n.settingsAccessibility)
             }
             .padding(.horizontal, 10)
             .frame(height: 40)
@@ -575,7 +586,7 @@ struct ConverterView: View {
             ZStack {
                 Color.black.ignoresSafeArea()
                 if viewModel.state.shareHistory.isEmpty {
-                    Text("История пока пустая")
+                    Text(ConverterL10n.historyEmpty)
                         .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(AppColors.textTertiary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -592,7 +603,7 @@ struct ConverterView: View {
                                     Button(role: .destructive) {
                                         viewModel.handle(.deleteShareHistoryItem(item.id))
                                     } label: {
-                                        Label("Удалить", systemImage: "trash")
+                                        Label(ConverterL10n.delete, systemImage: "trash")
                                     }
                                 }
                         }
@@ -602,11 +613,11 @@ struct ConverterView: View {
                     .background(Color.clear)
                 }
             }
-            .navigationTitle("История скринов")
+            .navigationTitle(ConverterL10n.historyTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Закрыть") {
+                    Button(ConverterL10n.close) {
                         viewModel.handle(.hideShareHistory)
                     }
                 }
@@ -654,7 +665,7 @@ struct ConverterView: View {
 #endif
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text(item.shareTitle ?? "Отправка")
+                        Text(item.shareTitle ?? ConverterL10n.shareFallbackTitle)
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
@@ -669,7 +680,7 @@ struct ConverterView: View {
                         .font(.system(size: 14, weight: .regular))
                         .foregroundStyle(AppColors.textTertiary)
                     if let note = item.note, !note.isEmpty {
-                        Text("За что: \(note)")
+                        Text(ConverterL10n.shareNote(note))
                             .font(.system(size: 14, weight: .regular))
                             .foregroundStyle(Color.white.opacity(0.82))
                             .lineLimit(2)
@@ -718,7 +729,7 @@ struct ConverterView: View {
                                         .fill(Color.white.opacity(0.08))
                                 )
                             TextField(
-                                "Добавь подпись: что отправляешь и зачем",
+                                ConverterL10n.shareMessagePlaceholder,
                                 text: Binding(
                                     get: { viewModel.state.shareDraftMessage },
                                     set: { viewModel.handle(.updateShareDraftMessage($0)) }
@@ -746,7 +757,7 @@ struct ConverterView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 }
             }
-            .navigationTitle("Preview отправки")
+            .navigationTitle(ConverterL10n.sharePreviewTitle)
             .navigationBarTitleDisplayMode(.inline)
 #if os(iOS)
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
@@ -765,12 +776,12 @@ struct ConverterView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Отмена") {
+                    Button(ConverterL10n.cancel) {
                         viewModel.handle(.hideSharePreview)
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Отправить") {
+                    Button(ConverterL10n.sendButton) {
                         #if os(iOS)
                         if let image = renderCurrentShareImage() {
                             viewModel.setShareImage(image)
@@ -871,11 +882,17 @@ struct ConverterView: View {
                     .scaledToFit()
                     .frame(width: size * 0.40, height: size * 0.40)
             } else {
-                Image("flag")
-                    .resizable()
-                    .renderingMode(.template)
-                    .foregroundStyle(AppColors.textPrimary)
-                    .frame(width: size * 0.32, height: size * 0.32)
+                let fallbackEmoji = CurrencyFlags.flag(for: code)
+                if fallbackEmoji != "🏳️" {
+                    Text(fallbackEmoji)
+                        .font(.system(size: size * 0.24))
+                } else {
+                    Image("flag")
+                        .resizable()
+                        .renderingMode(.template)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .frame(width: size * 0.32, height: size * 0.32)
+                }
             }
         }
         .frame(width: size, height: size)
@@ -976,16 +993,16 @@ struct ConverterView: View {
 #if os(iOS)
                     UIPasteboard.general.string = viewModel.displayValue(for: code) + " " + code
 #endif
-                } label: { Label("Копировать значение", systemImage: "doc.on.doc") }
+                } label: { Label(ConverterL10n.copyValue, systemImage: "doc.on.doc") }
                 Button(role: .destructive) {
                     viewModel.handle(.removeCurrency(index))
-                } label: { Label("Удалить", systemImage: "trash") }
+                } label: { Label(ConverterL10n.delete, systemImage: "trash") }
             }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {
                 viewModel.handle(.removeCurrency(index))
-            } label: { Label("Удалить", systemImage: "trash") }
+            } label: { Label(ConverterL10n.delete, systemImage: "trash") }
         }
     }
     
@@ -1009,7 +1026,7 @@ struct ConverterView: View {
                 )
             HStack {
                 Spacer()
-                Text("Добавить валюту")
+                Text(ConverterL10n.addCurrencyPlaceholder)
                     .font(.system(size: 15, weight: .regular))
                     .foregroundStyle(Color.white.opacity(0.55))
             }
@@ -1199,6 +1216,10 @@ struct ConverterView: View {
     
     // MARK: - Share
     
+    private func switchToMiniApp(_ route: AppRoute) {
+        MiniAppNavigation.navigate(to: route, from: currentRoute, router: router)
+    }
+
     private func handleShareTap() {
         viewModel.handle(.prepareShare)
     }
@@ -1207,7 +1228,7 @@ struct ConverterView: View {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmedTitle.isEmpty && trimmedMessage.isEmpty {
-            return "Курсы валют из millio"
+            return ConverterL10n.shareFallbackMessage
         }
         if trimmedMessage.isEmpty {
             return trimmedTitle
@@ -1220,22 +1241,21 @@ struct ConverterView: View {
 
     private func shareCardPreview(scale: CGFloat, containerHeight: CGFloat, keyboardHeight: CGFloat) -> some View {
         let shareData = viewModel.getShareData()
+        let cardHeight = SharePreviewLayout.cardFrameHeight(
+            containerHeight: containerHeight,
+            keyboardHeight: keyboardHeight
+        )
         return ShareCardView(
             dateString: shareData.dateString,
             rows: shareData.rows,
             highlightedCode: shareData.highlightedCode,
-            baseSummary: "База: \(viewModel.state.inputText) \(viewModel.state.activeCode)",
+            baseSummary: ConverterL10n.baseSummary(input: viewModel.state.inputText, code: viewModel.state.activeCode),
             appStoreURLText: "https://apps.apple.com"
         )
         .scaleEffect(scale, anchor: .top)
         .frame(maxWidth: .infinity)
-        .frame(
-            height: SharePreviewLayout.cardFrameHeight(
-                containerHeight: containerHeight,
-                keyboardHeight: keyboardHeight
-            ),
-            alignment: .top
-        )
+        .frame(height: cardHeight, alignment: .top)
+        .clipped()
     }
 
 #if os(iOS)
@@ -1266,7 +1286,7 @@ struct ConverterView: View {
             dateString: shareData.dateString,
             rows: shareData.rows,
             highlightedCode: shareData.highlightedCode,
-            baseSummary: "База: \(viewModel.state.inputText) \(viewModel.state.activeCode)",
+            baseSummary: ConverterL10n.baseSummary(input: viewModel.state.inputText, code: viewModel.state.activeCode),
             appStoreURLText: "https://apps.apple.com"
         )
         .frame(width: size.width, height: size.height)

@@ -44,6 +44,9 @@ struct CashbackState {
 
     /// Закрепленные категории кешбэка (raw keys)
     var pinnedCategoryRaws: Set<String> = []
+
+    /// Скрытые категории кешбэка (raw keys)
+    var hiddenCategoryRaws: Set<String> = []
 }
 
 // MARK: - Cashback Actions
@@ -86,6 +89,7 @@ final class CashbackViewModel: ViewModelProtocol {
     private let defaults: UserDefaults
     private static let favoriteCategoryRawsKey = "cashback.favorite_category_raws"
     private static let pinnedCategoryRawsKey = "cashback.pinned_category_raws"
+    private static let hiddenCategoryRawsKey = "cashback.hidden_category_raws"
     
     init(
         modelContext: ModelContext,
@@ -102,6 +106,7 @@ final class CashbackViewModel: ViewModelProtocol {
         ) ?? now()
         self.state.favoriteCategoryRaws = loadFavoriteCategoryRaws()
         self.state.pinnedCategoryRaws = loadPinnedCategoryRaws()
+        self.state.hiddenCategoryRaws = loadHiddenCategoryRaws()
         // Инициализируем CardManager
         CardManager.shared.setup(modelContext: modelContext)
         // Сначала загружаем карты, потом кешбэки, чтобы правильно проверить связи
@@ -200,7 +205,8 @@ final class CashbackViewModel: ViewModelProtocol {
 
     func categoryOptions(matching query: String = "") -> [CashbackCategoryOption] {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let allOptions = systemCategoryOptions + customCategoryOptions
+        let allOptions = (systemCategoryOptions + customCategoryOptions)
+            .filter { !state.hiddenCategoryRaws.contains($0.rawValue) }
 
         guard !trimmedQuery.isEmpty else { return allOptions }
 
@@ -312,7 +318,7 @@ final class CashbackViewModel: ViewModelProtocol {
 
         if let systemMatch = systemCategoryOptions.first(where: {
             $0.displayName.caseInsensitiveCompare(trimmed) == .orderedSame
-        }) {
+        }), systemMatch.icon == normalizedIcon {
             return systemMatch
         }
 
@@ -402,6 +408,35 @@ final class CashbackViewModel: ViewModelProtocol {
             isCustom: false
         )
         return deleteCustomCategory(rawValue: rawValue, migrateTo: fallback)
+    }
+
+    @discardableResult
+    func deleteCategory(rawValue: String) -> Bool {
+        if Self.customCategoryID(from: rawValue) != nil {
+            return deleteCustomCategory(rawValue: rawValue)
+        }
+
+        guard CashbackCategory(rawValue: rawValue) != nil else { return false }
+
+        let fallbackRaw = CashbackCategory.other.rawValue
+        let fallbackName = CashbackCategory.other.displayName
+        let now = Date()
+
+        if rawValue != fallbackRaw {
+            let linkedCashbacks = state.cashbacks.filter { $0.categoryRaw == rawValue }
+            for cashback in linkedCashbacks {
+                cashback.categoryRaw = fallbackRaw
+                cashback.name = fallbackName
+                cashback.updatedAt = now
+            }
+            migrateCategoryPreferences(from: rawValue, to: fallbackRaw)
+        } else {
+            removeCategoryPreferences(rawValue: rawValue)
+        }
+
+        state.hiddenCategoryRaws.insert(rawValue)
+        saveHiddenCategoryRaws()
+        return saveCategoriesAndCashbacks()
     }
 
     @discardableResult
@@ -788,6 +823,15 @@ final class CashbackViewModel: ViewModelProtocol {
         defaults.set(Array(state.pinnedCategoryRaws).sorted(), forKey: Self.pinnedCategoryRawsKey)
     }
 
+    private func loadHiddenCategoryRaws() -> Set<String> {
+        let stored = defaults.array(forKey: Self.hiddenCategoryRawsKey) as? [String] ?? []
+        return Set(stored.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })
+    }
+
+    private func saveHiddenCategoryRaws() {
+        defaults.set(Array(state.hiddenCategoryRaws).sorted(), forKey: Self.hiddenCategoryRawsKey)
+    }
+
     private func migrateCategoryPreferences(from sourceRaw: String, to targetRaw: String) {
         guard sourceRaw != targetRaw else { return }
         let hadFavorite = state.favoriteCategoryRaws.remove(sourceRaw) != nil
@@ -814,17 +858,21 @@ final class CashbackViewModel: ViewModelProtocol {
 
     private func sanitizeStoredCategoryPreferences() {
         let allowedRaws = Set(systemCategoryOptions.map(\.rawValue) + customCategoryOptions.map(\.rawValue))
+        let sanitizedHidden = Set(state.hiddenCategoryRaws.filter { allowedRaws.contains($0) })
         let sanitizedFavorites = Set(state.favoriteCategoryRaws.filter { allowedRaws.contains($0) })
         let sanitizedPinned = Set(
             state.pinnedCategoryRaws.filter { allowedRaws.contains($0) && !sanitizedFavorites.contains($0) }
         )
 
+        let hiddenChanged = sanitizedHidden != state.hiddenCategoryRaws
         let favoritesChanged = sanitizedFavorites != state.favoriteCategoryRaws
         let pinnedChanged = sanitizedPinned != state.pinnedCategoryRaws
-        guard favoritesChanged || pinnedChanged else { return }
+        guard hiddenChanged || favoritesChanged || pinnedChanged else { return }
 
+        state.hiddenCategoryRaws = sanitizedHidden
         state.favoriteCategoryRaws = sanitizedFavorites
         state.pinnedCategoryRaws = sanitizedPinned
+        saveHiddenCategoryRaws()
         saveFavoriteCategoryRaws()
         savePinnedCategoryRaws()
     }

@@ -66,6 +66,7 @@ struct CashflowActionButtonsLayout {
 
 struct CashflowView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(AppState.self) private var appState
     @State private var viewModel: CashflowViewModel?
     
     var body: some View {
@@ -87,6 +88,12 @@ struct CashflowView: View {
             viewModel?.handle(.loadCards)
             viewModel?.handle(.loadTransactions)
         }
+        .onChange(of: appState.primaryCurrencyCode) { oldValue, newValue in
+            viewModel?.handle(.syncPrimaryCurrencyChange(old: oldValue, new: newValue))
+        }
+        .onDisappear {
+            viewModel?.handle(.setDisplayCurrency(appState.primaryCurrencyCode))
+        }
     }
 }
 
@@ -95,12 +102,14 @@ struct CashflowView: View {
 private struct CashflowContentView: View {
     @ObservedObject var viewModel: CashflowViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppRouter.self) private var router
     @State private var draftStartDate: Date = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
     @State private var draftEndDate: Date = Date()
     @State private var showAssetChangeInfoSheet: Bool = false
     @State private var showIncomeBreakdown: Bool = false
     @State private var showExpenseBreakdown: Bool = false
     @State private var selectedTopAction: TopToolbarAction = .currency
+    private let currentRoute: AppRoute = .cashflow
     
     private let neonCyan = Color(hex: "47D7FF")
     private let neonViolet = Color(hex: "8A6BFF")
@@ -534,17 +543,41 @@ private struct CashflowContentView: View {
     
     @ToolbarContentBuilder
     private var topToolbar: some ToolbarContent {
+        let itemSize: CGFloat = 28
+        let iconSize: CGFloat = 18
+
         ToolbarItem(placement: .topBarLeading) {
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.95))
-                    .frame(width: 44, height: 44)
+            HStack(spacing: 6) {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: iconSize, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.95))
+                        .frame(width: itemSize, height: itemSize)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Назад")
+
+                Menu {
+                    ForEach(MiniAppNavigation.destinations(excluding: currentRoute)) { destination in
+                        Button {
+                            MiniAppNavigation.navigate(to: destination.route, from: currentRoute, router: router)
+                        } label: {
+                            Label(destination.title, systemImage: destination.systemImage)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "square.grid.2x2")
+                        .font(.system(size: iconSize - 2, weight: .regular))
+                        .foregroundStyle(Color.white.opacity(0.90))
+                        .frame(width: itemSize, height: itemSize)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Быстрая навигация по мини-приложениям")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Назад")
+            .padding(.horizontal, 10)
+            .frame(height: 40)
         }
 
         ToolbarItem(placement: .topBarTrailing) {
@@ -568,13 +601,9 @@ private struct CashflowContentView: View {
                 viewModel.handle(.showCurrencySelector)
                 fireLightImpact()
             } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90.circle")
-                        .font(.system(size: 16, weight: .semibold))
-                    Text(toolbarCurrencyLabel())
-                        .font(.system(size: 11, weight: .bold))
-                        .tracking(0.4)
-                }
+                Text(toolbarCurrencyLabel())
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(0.4)
                 .foregroundStyle(selectedTopAction == .currency ? Color.white.opacity(0.96) : primarySecondaryText)
                 .frame(height: 38)
             }

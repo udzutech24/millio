@@ -382,23 +382,31 @@ enum SubscriptionError: LocalizedError {
     case verificationFailed
     case trialAlreadyUsed
     case alreadySubscribed
-    
-    var errorDescription: String? {
+
+    private var localizationKey: String {
         switch self {
         case .productNotFound:
-            return "Продукт не найден"
+            return "subscription.error.product_not_found"
         case .userCancelled:
-            return "Покупка отменена"
+            return "subscription.error.user_cancelled"
         case .pending:
-            return "Покупка ожидает подтверждения"
+            return "subscription.error.pending"
         case .unknown:
-            return "Неизвестная ошибка"
+            return "subscription.error.unknown"
         case .verificationFailed:
-            return "Ошибка проверки транзакции"
+            return "subscription.error.verification_failed"
         case .trialAlreadyUsed:
-            return "Пробный период уже использован"
+            return "subscription.error.trial_already_used"
         case .alreadySubscribed:
-            return "У вас уже есть активная подписка"
+            return "subscription.error.already_subscribed"
         }
+    }
+
+    func localizedDescription(for locale: Locale) -> String {
+        String(localized: String.LocalizationValue(localizationKey), locale: locale)
+    }
+    
+    var errorDescription: String? {
+        String(localized: String.LocalizationValue(localizationKey))
     }
 }

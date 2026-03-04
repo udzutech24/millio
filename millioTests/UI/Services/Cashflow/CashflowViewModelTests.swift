@@ -24,8 +24,7 @@ struct CashflowViewModelTests {
 
     private func createTestModelContext() throws -> ModelContext {
         let defaults = UserDefaults.standard
-        // Тесты не должны зависеть от пользовательского displayCurrency.
-        defaults.set("RUB", forKey: "cashflow_display_currency")
+        defaults.set("RUB", forKey: "primaryCurrencyCode")
 
         // Вьюмодель запускает фоновые Task при инициализации.
         // Отдельный контейнер на тест исключает утечки данных между кейсами.
@@ -39,6 +38,54 @@ struct CashflowViewModelTests {
 }
 
 extension CashflowViewModelTests {
+    @Test("CashflowViewModel смена display валюты не меняет primary валюту профиля")
+    func testSetDisplayCurrencyDoesNotChangePrimaryCurrency() throws {
+        let modelContext = try createTestModelContext()
+        let defaults = UserDefaults.standard
+        let primaryKey = "primaryCurrencyCode"
+        let originalPrimary = defaults.string(forKey: primaryKey)
+        defer {
+            if let originalPrimary {
+                defaults.set(originalPrimary, forKey: primaryKey)
+            } else {
+                defaults.removeObject(forKey: primaryKey)
+            }
+        }
+        defaults.set("USD", forKey: primaryKey)
+
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+        viewModel.handle(.setDisplayCurrency("AMD"))
+
+        #expect(viewModel.state.displayCurrency == "AMD")
+        #expect(SettingsManager.shared.primaryCurrencyCode == "USD")
+    }
+
+    @Test("CashflowViewModel синхронизирует display валюту при смене основной если модуль следовал прошлой основной")
+    func testSyncPrimaryCurrencyChangeUpdatesFollowingDisplayCurrency() throws {
+        let modelContext = try createTestModelContext()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+        #expect(viewModel.state.displayCurrency == "RUB")
+
+        viewModel.handle(.syncPrimaryCurrencyChange(old: "RUB", new: "USD"))
+
+        #expect(viewModel.state.displayCurrency == "USD")
+    }
+
+    @Test("CashflowViewModel всегда синхронизирует display валюту с основной при ее смене")
+    func testSyncPrimaryCurrencyChangeOverridesCustomDisplayCurrency() throws {
+        let modelContext = try createTestModelContext()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+        #expect(viewModel.state.displayCurrency == "RUB")
+        viewModel.handle(.setDisplayCurrency("EUR"))
+        #expect(viewModel.state.displayCurrency == "EUR")
+
+        viewModel.handle(.syncPrimaryCurrencyChange(old: "RUB", new: "USD"))
+
+        #expect(viewModel.state.displayCurrency == "USD")
+    }
+
     @Test("Расход не превышает доступный баланс карты")
     func testExpenseCannotExceedBalance() async throws {
         let modelContext = try createTestModelContext()
@@ -467,6 +514,27 @@ extension CashflowViewModelTests {
         #expect(viewModel.categoryOptions(for: .expense).contains { $0.displayName == "Книги" && $0.isCustom })
     }
 
+    @Test("Системные категории доходов и расходов по умолчанию используют emoji-иконки")
+    func testSystemCategoriesUseEmojiIconsByDefault() throws {
+        let modelContext = try createTestModelContext()
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+
+        let income = viewModel.categoryOption(for: IncomeCategory.salary.rawValue, kind: .income)
+        let expense = viewModel.categoryOption(for: ExpenseCategory.groceries.rawValue, kind: .expense)
+
+        #expect(income.icon == "💼")
+        #expect(expense.icon == "🛒")
+        #expect(!CashflowCustomCategory.isSFSymbolIcon(income.icon))
+        #expect(!CashflowCustomCategory.isSFSymbolIcon(expense.icon))
+    }
+
+    @Test("Нормализация иконки поддерживает emoji и SF Symbols")
+    func testNormalizeIconSupportsEmojiAndSFSymbol() {
+        #expect(CashflowCustomCategory.normalizeIcon("🛒") == "🛒")
+        #expect(CashflowCustomCategory.normalizeIcon("cart.fill") == "cart.fill")
+        #expect(CashflowCustomCategory.normalizeIcon("unknown.icon") == CashflowCustomCategory.defaultIcon)
+    }
+
     @Test("Удаление кастомной категории расхода мигрирует транзакции в Другое")
     func testDeleteCustomExpenseCategoryMigratesTransactions() async throws {
         let modelContext = try createTestModelContext()
@@ -856,6 +924,124 @@ extension CashflowViewModelTests {
 
         #expect(viewModel.recurringTemplates(for: .income, relativeTo: fixedNow).isEmpty)
         #expect(viewModel.plannedOneTimeTransactions(for: .expense, relativeTo: fixedNow).isEmpty)
+    }
+
+    @Test("История фильтруется по диапазону дат включительно и сохраняет сортировку по дате")
+    func testHistoryTransactionsFiltersByDateRangeInclusively() throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+
+        let firstDay = calendar.date(from: DateComponents(year: 2026, month: 3, day: 1)) ?? Date()
+        let secondDay = calendar.date(from: DateComponents(year: 2026, month: 3, day: 2)) ?? Date()
+        let thirdDay = calendar.date(from: DateComponents(year: 2026, month: 3, day: 3)) ?? Date()
+
+        let t1 = CashflowTransaction(
+            transactionType: .expense,
+            amount: 100,
+            currency: "RUB",
+            transactionDate: firstDay,
+            cardID: nil
+        )
+        let t2 = CashflowTransaction(
+            transactionType: .expense,
+            amount: 200,
+            currency: "RUB",
+            transactionDate: secondDay,
+            cardID: nil
+        )
+        let t3 = CashflowTransaction(
+            transactionType: .expense,
+            amount: 300,
+            currency: "RUB",
+            transactionDate: thirdDay,
+            cardID: nil
+        )
+
+        modelContext.insert(t1)
+        modelContext.insert(t2)
+        modelContext.insert(t3)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+        let result = viewModel.historyTransactions(
+            matching: CashflowHistoryQuery(
+                typeFilter: .all,
+                searchText: "",
+                startDate: thirdDay,
+                endDate: secondDay
+            )
+        )
+
+        #expect(result.count == 2)
+        #expect(result.map(\.amount) == [300, 200])
+    }
+
+    @Test("История фильтруется по типу и поиску по имени карты")
+    func testHistoryTransactionsFiltersByTypeAndCardNameSearch() throws {
+        let modelContext = try createTestModelContext()
+        let operationDate = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 10)) ?? Date()
+
+        let alphaCard = Card(
+            name: "Alpha Black",
+            cardNumber: "1111",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 1000
+        )
+        let betaCard = Card(
+            name: "Beta Blue",
+            cardNumber: "2222",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 1000
+        )
+        modelContext.insert(alphaCard)
+        modelContext.insert(betaCard)
+
+        let alphaExpense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 450,
+            currency: "RUB",
+            transactionDate: operationDate,
+            cardID: alphaCard.cardUniqueID,
+            expenseCategoryRaw: ExpenseCategory.groceries.rawValue
+        )
+        let alphaIncome = CashflowTransaction(
+            transactionType: .income,
+            amount: 900,
+            currency: "RUB",
+            transactionDate: operationDate,
+            cardID: alphaCard.cardUniqueID,
+            incomeCategoryRaw: IncomeCategory.salary.rawValue
+        )
+        let betaExpense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 330,
+            currency: "RUB",
+            transactionDate: operationDate,
+            cardID: betaCard.cardUniqueID,
+            expenseCategoryRaw: ExpenseCategory.shopping.rawValue
+        )
+        modelContext.insert(alphaExpense)
+        modelContext.insert(alphaIncome)
+        modelContext.insert(betaExpense)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+        let result = viewModel.historyTransactions(
+            matching: CashflowHistoryQuery(
+                typeFilter: .expense,
+                searchText: "alpha",
+                startDate: nil,
+                endDate: nil
+            )
+        )
+
+        #expect(result.count == 1)
+        #expect(result.first?.amount == 450)
+        #expect(result.first?.transactionType == .expense)
     }
 
     private func waitUntil(
