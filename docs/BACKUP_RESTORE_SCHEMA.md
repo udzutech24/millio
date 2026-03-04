@@ -411,7 +411,7 @@ restore_candidate stage=<...> outcome=<...> reason=<...> detail=<...> ...
 Пользовательские тексты ошибок restore централизованы в `RestoreFailureCode` и используются как единый source of truth.
 Модули `BackupManager`, `PassphraseBackupEncryption` и `KeychainBackupEncryption` используют этот каталог вместо локальных строк.
 Пользовательские тексты ошибок backup централизованы в `BackupFailureCode` и также используются как единый source of truth.
-Модули `BackupManager`, `BackupEnvelope`, `CloudBackupStore`, `PassphraseBackupEncryption` и `KeychainBackupEncryption` используют этот каталог вместо локальных строк.
+Модули `BackupManager`, `BackupEnvelope`, `CloudBackupStore`, `DataRepository`, `BackupJSON`, `PassphraseBackupEncryption` и `KeychainBackupEncryption` используют этот каталог вместо локальных строк.
 
 **Ошибки:**
 ```

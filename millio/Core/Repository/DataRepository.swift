@@ -78,7 +78,7 @@ final class DataRepository: DataRepositoryProtocol {
         let data = try encoder.encode(metadata)
         let object = try JSONSerialization.jsonObject(with: data)
         guard let dict = object as? [String: Any] else {
-            throw AppError.backupFailed("Не удалось сериализовать metadata для backup")
+            throw BackupFailureCode.metadataSerializationFailed.appError
         }
         return dict
     }

@@ -7,6 +7,7 @@ struct BackupFailureCodeTests {
         #expect(BackupFailureCode.compressionInitializationFailed.appError == .backupFailed("Ошибка инициализации сжатия"))
         #expect(BackupFailureCode.compressionEncodeFailed.appError == .backupFailed("Не удалось сжать backup"))
         #expect(BackupFailureCode.envelopeHeaderTooLarge.appError == .backupFailed("Слишком большой заголовок backup"))
+        #expect(BackupFailureCode.metadataSerializationFailed.appError == .backupFailed("Не удалось сериализовать metadata для backup"))
         #expect(BackupFailureCode.keychainKeyUpdateFailed.appError == .backupFailed("Не удалось обновить ключ шифрования backup"))
         #expect(BackupFailureCode.keychainKeySaveFailed.appError == .backupFailed("Не удалось сохранить ключ шифрования backup"))
         #expect(BackupFailureCode.keychainKeyDeleteFailed.appError == .backupFailed("Не удалось удалить ключ шифрования backup"))
@@ -18,6 +19,10 @@ struct BackupFailureCodeTests {
         #expect(
             BackupFailureCode.randomBytesGenerationFailed.appError
                 == .backupFailed("Не удалось сгенерировать случайные байты для backup")
+        )
+        #expect(
+            BackupFailureCode.modelExportUnexpectedFormat("BadExportModel").appError
+                == .backupFailed("Экспорт модели 'BadExportModel' вернул неожиданный формат")
         )
     }
 

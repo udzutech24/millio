@@ -4,7 +4,7 @@ enum BackupJSON {
     static func decodeExportedDict(_ data: Data, typeName: String) throws -> [String: Any] {
         let object = try JSONSerialization.jsonObject(with: data)
         guard let dict = object as? [String: Any] else {
-            throw AppError.backupFailed("Экспорт модели '\(typeName)' вернул неожиданный формат")
+            throw BackupFailureCode.modelExportUnexpectedFormat(typeName).appError
         }
         return dict
     }

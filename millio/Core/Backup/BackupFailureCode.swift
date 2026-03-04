@@ -11,6 +11,8 @@ enum BackupFailureCode {
     case compressionInitializationFailed
     case compressionEncodeFailed
     case envelopeHeaderTooLarge
+    case metadataSerializationFailed
+    case modelExportUnexpectedFormat(String)
     case keychainKeyUpdateFailed
     case keychainKeySaveFailed
     case keychainKeyDeleteFailed
@@ -27,6 +29,10 @@ enum BackupFailureCode {
             return "Не удалось сжать backup"
         case .envelopeHeaderTooLarge:
             return "Слишком большой заголовок backup"
+        case .metadataSerializationFailed:
+            return "Не удалось сериализовать metadata для backup"
+        case .modelExportUnexpectedFormat(let typeName):
+            return "Экспорт модели '\(typeName)' вернул неожиданный формат"
         case .keychainKeyUpdateFailed:
             return "Не удалось обновить ключ шифрования backup"
         case .keychainKeySaveFailed:
