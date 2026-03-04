@@ -60,6 +60,8 @@ enum RestoreCandidateReason: String {
             return .restoreFailed
         case .backupFailed:
             return .backupTransportFailed
+        case .securityFailed:
+            return .unknownError
         case .unknown:
             return .unknownError
         case .backupCorrupted:

@@ -18,6 +18,10 @@ struct AppErrorTests {
         let error1 = AppError.restoreFailed("test")
         let error2 = AppError.restoreFailed("test")
         #expect(error1 == error2)
+
+        let securityError1 = AppError.securityFailed("pin")
+        let securityError2 = AppError.securityFailed("pin")
+        #expect(securityError1 == securityError2)
     }
     
     @Test("Different errors are not equal")
@@ -27,6 +31,10 @@ struct AppErrorTests {
         let error1 = AppError.restoreFailed("test1")
         let error2 = AppError.restoreFailed("test2")
         #expect(error1 != error2)
+
+        let securityError1 = AppError.securityFailed("pin1")
+        let securityError2 = AppError.securityFailed("pin2")
+        #expect(securityError1 != securityError2)
     }
     
     @Test("Error has localized description")
@@ -34,5 +42,8 @@ struct AppErrorTests {
         let error = AppError.iCloudUnavailable
         #expect(!error.localizedDescription.isEmpty)
         #expect(error.localizedDescription.contains("iCloud"))
+
+        let securityError = AppError.securityFailed("PIN")
+        #expect(securityError.localizedDescription.contains("Ошибка безопасности"))
     }
 }

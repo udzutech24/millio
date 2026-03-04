@@ -116,7 +116,7 @@ final class AppLockPinStore {
     func save(pin: String) throws {
         let normalized = pin.trimmingCharacters(in: .whitespacesAndNewlines)
         guard Self.isValid(pin: normalized) else {
-            throw AppError.backupFailed("PIN-код должен состоять из 4 цифр")
+            throw AppLockFailureCode.invalidPinFormat.appError
         }
 
         let salt = try randomBytes(count: 16)
@@ -174,7 +174,7 @@ final class AppLockPinStore {
         if SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess {
             let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
             guard status == errSecSuccess else {
-                throw AppError.backupFailed("Не удалось обновить PIN-код")
+                throw AppLockFailureCode.keychainPinUpdateFailed.appError
             }
             return
         }
@@ -184,7 +184,7 @@ final class AppLockPinStore {
         newQuery[kSecAttrAccessible as String] = accessible
         let status = SecItemAdd(newQuery as CFDictionary, nil)
         guard status == errSecSuccess else {
-            throw AppError.backupFailed("Не удалось сохранить PIN-код")
+            throw AppLockFailureCode.keychainPinSaveFailed.appError
         }
     }
 
@@ -194,7 +194,7 @@ final class AppLockPinStore {
             SecRandomCopyBytes(kSecRandomDefault, count, buffer.baseAddress!)
         }
         guard result == errSecSuccess else {
-            throw AppError.backupFailed("Не удалось сгенерировать безопасный PIN")
+            throw AppLockFailureCode.secureRandomPinGenerationFailed.appError
         }
         return data
     }

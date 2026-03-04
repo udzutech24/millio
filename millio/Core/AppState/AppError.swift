@@ -14,6 +14,7 @@ enum AppError: Error, Equatable, Hashable {
     case incompatibleSchemaVersion
     case restoreFailed(String)
     case backupFailed(String)
+    case securityFailed(String)
     case unknown(Error)
     
     var localizedDescription: String {
@@ -30,6 +31,8 @@ enum AppError: Error, Equatable, Hashable {
             return "Ошибка восстановления: \(message)"
         case .backupFailed(let message):
             return "Ошибка резервного копирования: \(message)"
+        case .securityFailed(let message):
+            return "Ошибка безопасности: \(message)"
         case .unknown(let error):
             return "Неизвестная ошибка: \(error.localizedDescription)"
         }
@@ -43,7 +46,8 @@ enum AppError: Error, Equatable, Hashable {
              (.incompatibleSchemaVersion, .incompatibleSchemaVersion):
             return true
         case (.restoreFailed(let lhsMsg), .restoreFailed(let rhsMsg)),
-             (.backupFailed(let lhsMsg), .backupFailed(let rhsMsg)):
+             (.backupFailed(let lhsMsg), .backupFailed(let rhsMsg)),
+             (.securityFailed(let lhsMsg), .securityFailed(let rhsMsg)):
             return lhsMsg == rhsMsg
         case (.unknown(let lhsError), .unknown(let rhsError)):
             return lhsError.localizedDescription == rhsError.localizedDescription
@@ -68,8 +72,11 @@ enum AppError: Error, Equatable, Hashable {
         case .backupFailed(let message):
             hasher.combine(5)
             hasher.combine(message)
-        case .unknown(let error):
+        case .securityFailed(let message):
             hasher.combine(6)
+            hasher.combine(message)
+        case .unknown(let error):
+            hasher.combine(7)
             hasher.combine(error.localizedDescription)
         }
     }

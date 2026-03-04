@@ -34,6 +34,7 @@ struct RestoreCandidateTelemetryTests {
         #expect(RestoreCandidateReason.blockReason(for: .iCloudUnavailable) == .iCloudUnavailable)
         #expect(RestoreCandidateReason.blockReason(for: .networkUnavailable) == .networkUnavailable)
         #expect(RestoreCandidateReason.blockReason(for: .backupFailed("transport")) == .backupTransportFailed)
+        #expect(RestoreCandidateReason.blockReason(for: .securityFailed("pin")) == .unknownError)
         #expect(
             RestoreCandidateReason.blockReason(
                 for: .unknown(NSError(domain: "test", code: 1))
