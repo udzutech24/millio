@@ -403,7 +403,7 @@ enum SubscriptionError: LocalizedError {
     }
 
     func localizedDescription(for locale: Locale) -> String {
-        String(localized: String.LocalizationValue(localizationKey), locale: locale)
+        AppLocalization.string(localizationKey, locale: locale)
     }
     
     var errorDescription: String? {

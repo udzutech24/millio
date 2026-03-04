@@ -19,11 +19,11 @@ enum Language: String, Codable, CaseIterable, Hashable {
     func displayName(for locale: Locale) -> String {
         switch self {
         case .system:
-            return String(localized: "language.option.system", locale: locale)
+            return AppLocalization.string("language.option.system", locale: locale)
         case .english:
-            return String(localized: "language.option.english", locale: locale)
+            return AppLocalization.string("language.option.english", locale: locale)
         case .russian:
-            return String(localized: "language.option.russian", locale: locale)
+            return AppLocalization.string("language.option.russian", locale: locale)
         }
     }
     
