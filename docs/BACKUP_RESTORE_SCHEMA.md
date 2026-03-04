@@ -397,8 +397,15 @@ No backup found in iCloud
 ```
 Starting restore...
 Restore completed successfully
-restore_candidate stage=<...> outcome=<...> reason=<...> ...
+restore_candidate stage=<...> outcome=<...> reason=<...> detail=<...> ...
 ```
+
+`reason` теперь задается через фиксированные коды (typed enum в коде), например:
+- `missing_record_or_asset`
+- `corrupted_envelope`
+- `unsupported_compression`
+- `passphrase_required`
+- `backup_corrupted`
 
 **Ошибки:**
 ```

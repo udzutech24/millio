@@ -27,9 +27,9 @@ actor BackupManager: BackupManagerProtocol {
     private var backupTask: Task<Void, Never>?
 
     private enum RestoreCandidateDecision {
-        case ready(score: Int, profile: String)
-        case skip(reason: String)
-        case block(error: AppError, reason: String)
+        case ready(score: Int, reason: RestoreCandidateReason, detail: String?)
+        case skip(reason: RestoreCandidateReason)
+        case block(error: AppError, reason: RestoreCandidateReason)
     }
     
     init(
@@ -191,9 +191,9 @@ actor BackupManager: BackupManagerProtocol {
                 for (candidateIndex, recordName) in backupRecordNames.enumerated() {
                     guard let downloadedData = try await cloudStore.downloadBackup(recordName: recordName) else {
                         self.recordRestoreCandidateMetric(
-                            stage: "download",
-                            outcome: "skip",
-                            reason: "missing_record_or_asset",
+                            stage: .download,
+                            outcome: .skip,
+                            reason: .missingRecordOrAsset,
                             recordName: recordName,
                             candidateIndex: candidateIndex,
                             score: 0
@@ -203,19 +203,20 @@ actor BackupManager: BackupManagerProtocol {
                     hasAnyCandidateData = true
 
                     switch self.preflightCandidate(downloadedData, passphrase: passphrase) {
-                    case .ready(let score, let profile):
+                    case .ready(let score, let reason, let detail):
                         self.recordRestoreCandidateMetric(
-                            stage: "preflight",
-                            outcome: "ready",
-                            reason: profile,
+                            stage: .preflight,
+                            outcome: .ready,
+                            reason: reason,
                             recordName: recordName,
                             candidateIndex: candidateIndex,
-                            score: score
+                            score: score,
+                            detail: detail
                         )
                     case .skip(let reason):
                         self.recordRestoreCandidateMetric(
-                            stage: "preflight",
-                            outcome: "skip",
+                            stage: .preflight,
+                            outcome: .skip,
                             reason: reason,
                             recordName: recordName,
                             candidateIndex: candidateIndex,
@@ -224,8 +225,8 @@ actor BackupManager: BackupManagerProtocol {
                         continue
                     case .block(let error, let reason):
                         self.recordRestoreCandidateMetric(
-                            stage: "preflight",
-                            outcome: "block",
+                            stage: .preflight,
+                            outcome: .block,
                             reason: reason,
                             recordName: recordName,
                             candidateIndex: candidateIndex,
@@ -242,9 +243,9 @@ actor BackupManager: BackupManagerProtocol {
                             dataRepository: dataRepository
                         )
                         self.recordRestoreCandidateMetric(
-                            stage: "restore",
-                            outcome: "success",
-                            reason: "restored",
+                            stage: .restore,
+                            outcome: .success,
+                            reason: .restored,
                             recordName: recordName,
                             candidateIndex: candidateIndex,
                             score: 100
@@ -253,9 +254,9 @@ actor BackupManager: BackupManagerProtocol {
                     } catch let appError as AppError {
                         if self.shouldTryOlderSnapshot(after: appError) {
                             self.recordRestoreCandidateMetric(
-                                stage: "restore",
-                                outcome: "skip",
-                                reason: self.restoreSkipReason(for: appError),
+                                stage: .restore,
+                                outcome: .skip,
+                                reason: .skipReason(for: appError),
                                 recordName: recordName,
                                 candidateIndex: candidateIndex,
                                 score: 0
@@ -264,9 +265,9 @@ actor BackupManager: BackupManagerProtocol {
                             continue
                         }
                         self.recordRestoreCandidateMetric(
-                            stage: "restore",
-                            outcome: "block",
-                            reason: self.restoreBlockReason(for: appError),
+                            stage: .restore,
+                            outcome: .block,
+                            reason: .blockReason(for: appError),
                             recordName: recordName,
                             candidateIndex: candidateIndex,
                             score: 0
@@ -310,18 +311,18 @@ actor BackupManager: BackupManagerProtocol {
     private func preflightCandidate(_ downloadedData: Data, passphrase: String?) -> RestoreCandidateDecision {
         guard BackupEnvelope.looksLikeEnvelope(downloadedData) else {
             // Legacy payload path: valid but с меньшей уверенностью в целостности схемы.
-            return .ready(score: 50, profile: "legacy_payload")
+            return .ready(score: 50, reason: .legacyPayload, detail: nil)
         }
 
         let header: BackupEnvelopeHeader
         do {
             (header, _) = try BackupEnvelope.unpack(downloadedData)
         } catch {
-            return .skip(reason: "corrupted_envelope")
+            return .skip(reason: .corruptedEnvelope)
         }
 
         guard header.formatVersion == BackupEnvelopeHeader.currentFormatVersion else {
-            return .skip(reason: "incompatible_envelope_version")
+            return .skip(reason: .incompatibleEnvelopeVersion)
         }
 
         if let encryptionInfo = header.encryption {
@@ -330,21 +331,21 @@ actor BackupManager: BackupManagerProtocol {
                 guard passphrase != nil else {
                     return .block(
                         error: .restoreFailed("Backup зашифрован парольной фразой. Введите парольную фразу и повторите."),
-                        reason: "passphrase_required"
+                        reason: .passphraseRequired
                     )
                 }
                 guard encryptionInfo.kdf != nil else {
-                    return .skip(reason: "missing_kdf")
+                    return .skip(reason: .missingKDF)
                 }
             case "aesgcm-keychain":
                 break
             default:
-                return .skip(reason: "unsupported_encryption")
+                return .skip(reason: .unsupportedEncryption)
             }
         }
 
         if let compression = header.compression, compression.algorithm != "lzfse" {
-            return .skip(reason: "unsupported_compression")
+            return .skip(reason: .unsupportedCompression)
         }
 
         var score = 100
@@ -354,62 +355,33 @@ actor BackupManager: BackupManagerProtocol {
         if header.compression != nil {
             score -= 5
         }
-        return .ready(score: score, profile: "envelope_v\(header.formatVersion)")
-    }
-
-    private func recordRestoreCandidateMetric(
-        stage: String,
-        outcome: String,
-        reason: String,
-        recordName: String,
-        candidateIndex: Int,
-        score: Int
-    ) {
-        let safeRecordName = recordName.hasPrefix("snapshot_") ? "snapshot" : recordName
-        CrashReporting.setCustomValue(stage, forKey: "restore_candidate_stage")
-        CrashReporting.setCustomValue(outcome, forKey: "restore_candidate_outcome")
-        CrashReporting.setCustomValue(reason, forKey: "restore_candidate_reason")
-        CrashReporting.setCustomValue(candidateIndex, forKey: "restore_candidate_index")
-        CrashReporting.setCustomValue(score, forKey: "restore_candidate_score")
-        CrashReporting.log(
-            "restore_candidate stage=\(stage) outcome=\(outcome) reason=\(reason) index=\(candidateIndex) score=\(score) record=\(safeRecordName)"
+        return .ready(
+            score: score,
+            reason: .envelopeValid,
+            detail: "format_v\(header.formatVersion)"
         )
     }
 
-    private func restoreSkipReason(for error: AppError) -> String {
-        switch error {
-        case .backupCorrupted:
-            return "backup_corrupted"
-        case .incompatibleSchemaVersion:
-            return "incompatible_schema"
-        default:
-            return "runtime_skip"
-        }
-    }
-
-    private func restoreBlockReason(for error: AppError) -> String {
-        switch error {
-        case .iCloudUnavailable:
-            return "icloud_unavailable"
-        case .restoreFailed(let message):
-            if message.contains("парольной фразой") {
-                return "passphrase_required"
-            }
-            if message.contains("не может быть расшифрован") {
-                return "keychain_unavailable"
-            }
-            return "restore_failed"
-        case .backupFailed:
-            return "backup_transport_failed"
-        case .unknown:
-            return "unknown_error"
-        case .backupCorrupted:
-            return "backup_corrupted"
-        case .incompatibleSchemaVersion:
-            return "incompatible_schema"
-        case .networkUnavailable:
-            return "network_unavailable"
-        }
+    private func recordRestoreCandidateMetric(
+        stage: RestoreCandidateStage,
+        outcome: RestoreCandidateOutcome,
+        reason: RestoreCandidateReason,
+        recordName: String,
+        candidateIndex: Int,
+        score: Int,
+        detail: String? = nil
+    ) {
+        let safeRecordName = recordName.hasPrefix("snapshot_") ? "snapshot" : recordName
+        let detailValue = detail ?? "-"
+        CrashReporting.setCustomValue(stage.rawValue, forKey: "restore_candidate_stage")
+        CrashReporting.setCustomValue(outcome.rawValue, forKey: "restore_candidate_outcome")
+        CrashReporting.setCustomValue(reason.rawValue, forKey: "restore_candidate_reason")
+        CrashReporting.setCustomValue(detailValue, forKey: "restore_candidate_detail")
+        CrashReporting.setCustomValue(candidateIndex, forKey: "restore_candidate_index")
+        CrashReporting.setCustomValue(score, forKey: "restore_candidate_score")
+        CrashReporting.log(
+            "restore_candidate stage=\(stage.rawValue) outcome=\(outcome.rawValue) reason=\(reason.rawValue) detail=\(detailValue) index=\(candidateIndex) score=\(score) record=\(safeRecordName)"
+        )
     }
 
     private func restoreDownloadedBackup(
