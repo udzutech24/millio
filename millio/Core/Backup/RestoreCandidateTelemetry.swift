@@ -56,13 +56,7 @@ enum RestoreCandidateReason: String {
         switch error {
         case .iCloudUnavailable:
             return .iCloudUnavailable
-        case .restoreFailed(let message):
-            if message.contains("парольной фразой") {
-                return .passphraseRequired
-            }
-            if message.contains("не может быть расшифрован") {
-                return .keychainUnavailable
-            }
+        case .restoreFailed:
             return .restoreFailed
         case .backupFailed:
             return .backupTransportFailed

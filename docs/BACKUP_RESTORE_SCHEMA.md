@@ -407,6 +407,8 @@ restore_candidate stage=<...> outcome=<...> reason=<...> detail=<...> ...
 - `passphrase_required`
 - `backup_corrupted`
 
+Коды причин больше не вычисляются через `message.contains(...)` для `restoreFailed`; критичные причины маркируются типизированно в restore-пайплайне.
+
 **Ошибки:**
 ```
 Background backup failed: <error>

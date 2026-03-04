@@ -31,6 +31,11 @@ actor BackupManager: BackupManagerProtocol {
         case skip(reason: RestoreCandidateReason)
         case block(error: AppError, reason: RestoreCandidateReason)
     }
+
+    private struct TaggedRestoreFailure: Error {
+        let appError: AppError
+        let reason: RestoreCandidateReason
+    }
     
     init(
         cloudStore: CloudBackupStoreProtocol,
@@ -251,6 +256,28 @@ actor BackupManager: BackupManagerProtocol {
                             score: 100
                         )
                         return
+                    } catch let tagged as TaggedRestoreFailure {
+                        if self.shouldTryOlderSnapshot(after: tagged.appError) {
+                            self.recordRestoreCandidateMetric(
+                                stage: .restore,
+                                outcome: .skip,
+                                reason: .skipReason(for: tagged.appError),
+                                recordName: recordName,
+                                candidateIndex: candidateIndex,
+                                score: 0
+                            )
+                            self.logger.warning("Skipping restore candidate '\(recordName, privacy: .public)' due to \(tagged.appError.localizedDescription, privacy: .public)")
+                            continue
+                        }
+                        self.recordRestoreCandidateMetric(
+                            stage: .restore,
+                            outcome: .block,
+                            reason: tagged.reason,
+                            recordName: recordName,
+                            candidateIndex: candidateIndex,
+                            score: 0
+                        )
+                        throw tagged.appError
                     } catch let appError as AppError {
                         if self.shouldTryOlderSnapshot(after: appError) {
                             self.recordRestoreCandidateMetric(
@@ -306,6 +333,16 @@ actor BackupManager: BackupManagerProtocol {
         default:
             return false
         }
+    }
+
+    private func taggedRestoreFailure(
+        _ message: String,
+        reason: RestoreCandidateReason
+    ) -> TaggedRestoreFailure {
+        TaggedRestoreFailure(
+            appError: .restoreFailed(message),
+            reason: reason
+        )
     }
 
     private func preflightCandidate(_ downloadedData: Data, passphrase: String?) -> RestoreCandidateDecision {
@@ -422,7 +459,10 @@ actor BackupManager: BackupManagerProtocol {
                 switch encryptionInfo.algorithm {
                 case "aesgcm-passphrase":
                     guard let passphrase else {
-                        throw AppError.restoreFailed("Backup зашифрован парольной фразой. Введите парольную фразу и повторите.")
+                        throw taggedRestoreFailure(
+                            "Backup зашифрован парольной фразой. Введите парольную фразу и повторите.",
+                            reason: .passphraseRequired
+                        )
                     }
                     guard let kdf = encryptionInfo.kdf else {
                         throw AppError.backupCorrupted
@@ -433,7 +473,10 @@ actor BackupManager: BackupManagerProtocol {
                     do {
                         backupData = try decryptor.decrypt(backupData)
                     } catch {
-                        throw AppError.restoreFailed("Backup зашифрован и не может быть расшифрован на этом устройстве")
+                        throw taggedRestoreFailure(
+                            "Backup зашифрован и не может быть расшифрован на этом устройстве",
+                            reason: .keychainUnavailable
+                        )
                     }
                 default:
                     throw AppError.backupCorrupted
@@ -456,7 +499,10 @@ actor BackupManager: BackupManagerProtocol {
                 do {
                     backupData = try encryption.decrypt(backupData)
                 } catch {
-                    throw AppError.restoreFailed("Не удалось расшифровать backup")
+                    throw taggedRestoreFailure(
+                        "Не удалось расшифровать backup",
+                        reason: .restoreFailed
+                    )
                 }
             }
 
@@ -476,7 +522,10 @@ actor BackupManager: BackupManagerProtocol {
         do {
             try previousData.write(to: snapshotURL, options: .atomic)
         } catch {
-            throw AppError.restoreFailed("Не удалось создать снимок данных перед восстановлением")
+            throw taggedRestoreFailure(
+                "Не удалось создать снимок данных перед восстановлением",
+                reason: .restoreFailed
+            )
         }
 
         do {
@@ -490,7 +539,10 @@ actor BackupManager: BackupManagerProtocol {
                 try await dataRepository.importAllDataAsync(snapshotData)
                 try? FileManager.default.removeItem(at: snapshotURL)
             } catch {
-                throw AppError.restoreFailed("Не удалось восстановить данные после ошибки восстановления")
+                throw taggedRestoreFailure(
+                    "Не удалось восстановить данные после ошибки восстановления",
+                    reason: .restoreFailed
+                )
             }
 
             throw error
