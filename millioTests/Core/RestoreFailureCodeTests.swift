@@ -15,22 +15,22 @@ struct RestoreFailureCodeTests {
 
     @Test("RestoreFailureCode maps to AppError.restoreFailed with expected user message")
     func testAppErrorMapping() {
-        #expect(RestoreFailureCode.backupNotFound.appError == .restoreFailed("Backup не найден в iCloud"))
+        #expect(RestoreFailureCode.backupNotFound.appError == .restoreFailed("Backup not found in iCloud"))
         #expect(
             RestoreFailureCode.passphraseRequired.appError
-                == .restoreFailed("Backup зашифрован парольной фразой. Введите парольную фразу и повторите.")
+                == .restoreFailed("Backup is encrypted with a passphrase. Enter the passphrase and try again.")
         )
         #expect(
             RestoreFailureCode.keychainUnavailable.appError
-                == .restoreFailed("Backup зашифрован и не может быть расшифрован на этом устройстве")
+                == .restoreFailed("Backup is encrypted and cannot be decrypted on this device")
         )
         #expect(
             RestoreFailureCode.keychainKeyMissingOnDevice.appError
-                == .restoreFailed("Ключ шифрования backup не найден на этом устройстве")
+                == .restoreFailed("Backup encryption key is missing on this device")
         )
         #expect(
             RestoreFailureCode.passphraseDecryptFailed.appError
-                == .restoreFailed("Не удалось расшифровать backup (неверная парольная фраза или поврежденные данные)")
+                == .restoreFailed("Failed to decrypt backup (wrong passphrase or corrupted data)")
         )
     }
 }

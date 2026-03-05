@@ -4,25 +4,25 @@ import Testing
 struct BackupFailureCodeTests {
     @Test("BackupFailureCode maps to AppError.backupFailed with expected user message")
     func testAppErrorMapping() {
-        #expect(BackupFailureCode.compressionInitializationFailed.appError == .backupFailed("Ошибка инициализации сжатия"))
-        #expect(BackupFailureCode.compressionEncodeFailed.appError == .backupFailed("Не удалось сжать backup"))
-        #expect(BackupFailureCode.envelopeHeaderTooLarge.appError == .backupFailed("Слишком большой заголовок backup"))
-        #expect(BackupFailureCode.metadataSerializationFailed.appError == .backupFailed("Не удалось сериализовать metadata для backup"))
-        #expect(BackupFailureCode.keychainKeyUpdateFailed.appError == .backupFailed("Не удалось обновить ключ шифрования backup"))
-        #expect(BackupFailureCode.keychainKeySaveFailed.appError == .backupFailed("Не удалось сохранить ключ шифрования backup"))
-        #expect(BackupFailureCode.keychainKeyDeleteFailed.appError == .backupFailed("Не удалось удалить ключ шифрования backup"))
-        #expect(BackupFailureCode.passphraseEmpty.appError == .backupFailed("Парольная фраза пустая"))
+        #expect(BackupFailureCode.compressionInitializationFailed.appError == .backupFailed("Failed to initialize compression"))
+        #expect(BackupFailureCode.compressionEncodeFailed.appError == .backupFailed("Failed to compress backup"))
+        #expect(BackupFailureCode.envelopeHeaderTooLarge.appError == .backupFailed("Backup header is too large"))
+        #expect(BackupFailureCode.metadataSerializationFailed.appError == .backupFailed("Failed to serialize backup metadata"))
+        #expect(BackupFailureCode.keychainKeyUpdateFailed.appError == .backupFailed("Failed to update backup encryption key"))
+        #expect(BackupFailureCode.keychainKeySaveFailed.appError == .backupFailed("Failed to save backup encryption key"))
+        #expect(BackupFailureCode.keychainKeyDeleteFailed.appError == .backupFailed("Failed to delete backup encryption key"))
+        #expect(BackupFailureCode.passphraseEmpty.appError == .backupFailed("Passphrase is empty"))
         #expect(
             BackupFailureCode.passphraseKeyDerivationFailed.appError
-                == .backupFailed("Не удалось получить ключ шифрования из парольной фразы")
+                == .backupFailed("Failed to derive encryption key from passphrase")
         )
         #expect(
             BackupFailureCode.randomBytesGenerationFailed.appError
-                == .backupFailed("Не удалось сгенерировать случайные байты для backup")
+                == .backupFailed("Failed to generate random bytes for backup")
         )
         #expect(
             BackupFailureCode.modelExportUnexpectedFormat("BadExportModel").appError
-                == .backupFailed("Экспорт модели 'BadExportModel' вернул неожиданный формат")
+                == .backupFailed("Model export 'BadExportModel' returned an unexpected format")
         )
     }
 
@@ -30,11 +30,11 @@ struct BackupFailureCodeTests {
     func testCloudMessageMapping() {
         #expect(
             BackupFailureCode.cloudKitOperationFailed("Network timeout").appError
-                == .backupFailed("Ошибка CloudKit при работе с backup: Network timeout")
+                == .backupFailed("CloudKit backup operation failed: Network timeout")
         )
         #expect(
             BackupFailureCode.cloudKitOperationFailed("   ").appError
-                == .backupFailed("Ошибка CloudKit при работе с backup")
+                == .backupFailed("CloudKit backup operation failed")
         )
     }
 }

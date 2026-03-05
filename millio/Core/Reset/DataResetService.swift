@@ -19,11 +19,11 @@ enum DataResetPeriodPreset: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .allTime: return "Весь период"
-        case .last30Days: return "Последние 30 дней"
-        case .last90Days: return "Последние 90 дней"
-        case .last365Days: return "Последние 365 дней"
-        case .custom: return "Свой диапазон"
+        case .allTime: return "All time"
+        case .last30Days: return "Last 30 days"
+        case .last90Days: return "Last 90 days"
+        case .last365Days: return "Last 365 days"
+        case .custom: return "Custom range"
         }
     }
 }
@@ -89,13 +89,13 @@ enum DataResetTarget: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .operations: return "Операции"
-        case .accountOperations: return "Операции по счетам"
-        case .zeroAccountsInPeriod: return "Обнулить счета в периоде"
-        case .cashback: return "Кешбэк"
-        case .accounts: return "Счета"
-        case .categories: return "Категории"
-        case .settings: return "Настройки"
+        case .operations: return "Operations"
+        case .accountOperations: return "Account operations"
+        case .zeroAccountsInPeriod: return "Zero balances in period"
+        case .cashback: return "Cashback"
+        case .accounts: return "Accounts"
+        case .categories: return "Categories"
+        case .settings: return "Settings"
         }
     }
 }

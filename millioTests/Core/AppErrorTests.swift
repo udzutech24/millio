@@ -44,6 +44,6 @@ struct AppErrorTests {
         #expect(error.localizedDescription.contains("iCloud"))
 
         let securityError = AppError.securityFailed("PIN")
-        #expect(securityError.localizedDescription.contains("Ошибка безопасности"))
+        #expect(securityError.localizedDescription.contains("Security error"))
     }
 }

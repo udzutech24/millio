@@ -31,7 +31,7 @@ struct AppSecuritySettingsView: View {
 
             ScrollView {
                 VStack(spacing: 20) {
-                    FinancesSectionHeader(title: "Безопасность")
+                    FinancesSectionHeader(title: "Security")
 
                     FinancesGlassCard {
                         VStack(spacing: 0) {
@@ -45,7 +45,7 @@ struct AppSecuritySettingsView: View {
                                     }
                                 }
                             )) {
-                                securityRow(iconSystemName: "lock.fill", title: "PIN-код")
+                                securityRow(iconSystemName: "lock.fill", title: "PIN code")
                             }
                             .tint(AppColors.toggleOnGreen)
                             .padding(.vertical, 12)
@@ -75,7 +75,7 @@ struct AppSecuritySettingsView: View {
                                         .font(.system(size: 16, weight: .semibold))
                                         .foregroundStyle(AppColors.textSecondary)
                                         .frame(width: 22, alignment: .leading)
-                                    Text("Сменить PIN-код")
+                                    Text("Change PIN code")
                                         .font(.system(size: 16, weight: .regular))
                                         .foregroundStyle(AppColors.textPrimary)
                                     Spacer()
@@ -105,7 +105,7 @@ struct AppSecuritySettingsView: View {
                 .padding(.bottom, 40)
             }
         }
-        .navigationTitle("Защита приложения")
+        .navigationTitle("App security")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .sheet(isPresented: $showCreatePinSheet) {
@@ -124,7 +124,7 @@ struct AppSecuritySettingsView: View {
             }
             if !biometricsAvailable {
                 appState.isBiometricUnlockEnabled = false
-                infoText = "На этом устройстве биометрия недоступна."
+                infoText = "Biometrics are unavailable on this device."
             } else {
                 infoText = nil
             }

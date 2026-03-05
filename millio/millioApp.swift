@@ -119,7 +119,7 @@ struct millioApp: App {
                     error: .unknown(NSError(
                         domain: "App",
                         code: -1,
-                        userInfo: [NSLocalizedDescriptionKey: "Не удалось инициализировать хранилище данных"]
+                        userInfo: [NSLocalizedDescriptionKey: "Failed to initialize data storage"]
                     )),
                     appState: appState,
                     router: AppRouter()
@@ -200,7 +200,7 @@ struct millioApp: App {
         }
         isBiometricUnlockInProgress = true
         defer { isBiometricUnlockInProgress = false }
-        let success = await AppLockBiometricAuth.authenticate(reason: "Разблокируйте доступ к данным приложения")
+        let success = await AppLockBiometricAuth.authenticate(reason: "Unlock access to app data")
         if success {
             appState.isAppLocked = false
         }

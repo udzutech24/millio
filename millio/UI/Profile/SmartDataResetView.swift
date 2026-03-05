@@ -56,38 +56,38 @@ struct SmartDataResetView: View {
                 .padding(.top, 8)
             }
         }
-        .navigationTitle("Умная очистка")
+        .navigationTitle("Smart reset")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .confirmationDialog(
-            "Подтвердите очистку",
+            "Confirm reset",
             isPresented: $showConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Удалить выбранные данные", role: .destructive) {
+            Button("Delete selected data", role: .destructive) {
                 applyReset()
             }
-            Button("Отмена", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Операция необратима. Перед очисткой рекомендуется создать backup.")
+            Text("This action cannot be undone. Creating a backup first is recommended.")
         }
-        .alert("Очистка завершена", isPresented: Binding(
+        .alert("Reset complete", isPresented: Binding(
             get: { successMessage != nil },
             set: { newValue in
                 if !newValue { successMessage = nil }
             }
         )) {
-            Button("Ок", role: .cancel) {}
+            Button("OK", role: .cancel) {}
         } message: {
             Text(successMessage ?? "")
         }
-        .alert("Не удалось выполнить очистку", isPresented: Binding(
+        .alert("Failed to reset data", isPresented: Binding(
             get: { errorMessage != nil },
             set: { newValue in
                 if !newValue { errorMessage = nil }
             }
         )) {
-            Button("Ок", role: .cancel) {}
+            Button("OK", role: .cancel) {}
         } message: {
             Text(errorMessage ?? "")
         }
@@ -111,10 +111,10 @@ struct SmartDataResetView: View {
     private var warningCard: some View {
         FinancesGlassCard {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Что важно")
+                Text("Important")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
-                Text("Период применяется к операциям, операциям по счетам, обнулению счетов и кешбэку. Для удаления счетов/категорий/настроек период не используется.")
+                Text("Period is applied to operations, account operations, balance zeroing, and cashback. It is not used when deleting accounts, categories, or settings.")
                     .font(.system(size: 13, weight: .regular))
                     .foregroundStyle(AppColors.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -126,10 +126,10 @@ struct SmartDataResetView: View {
 
     private var periodCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Период")
+            FinancesSectionHeader(title: "Period")
             FinancesGlassCard {
                 VStack(spacing: 12) {
-                    Picker("Период", selection: $periodPreset) {
+                    Picker("Period", selection: $periodPreset) {
                         ForEach(DataResetPeriodPreset.allCases) { preset in
                             Text(preset.title).tag(preset)
                         }
@@ -139,14 +139,14 @@ struct SmartDataResetView: View {
 
                     if periodPreset == .custom {
                         DatePicker(
-                            "С",
+                            "From",
                             selection: $customStartDate,
                             displayedComponents: .date
                         )
                         .tint(AppColors.textPrimary)
 
                         DatePicker(
-                            "По",
+                            "To",
                             selection: $customEndDate,
                             displayedComponents: .date
                         )
@@ -160,10 +160,10 @@ struct SmartDataResetView: View {
 
     private var targetsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Что удалить")
+            FinancesSectionHeader(title: "What to delete")
             FinancesGlassCard {
                 VStack(spacing: 0) {
-                    Toggle("Полный сброс (все типы данных)", isOn: $isFullReset)
+                    Toggle("Full reset (all data types)", isOn: $isFullReset)
                         .foregroundStyle(AppColors.textPrimary)
                         .tint(AppColors.toggleOnGreen)
                         .padding(.vertical, 12)
@@ -198,30 +198,30 @@ struct SmartDataResetView: View {
 
     private var estimateCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Предпросмотр")
+            FinancesSectionHeader(title: "Preview")
             FinancesGlassCard {
                 VStack(alignment: .leading, spacing: 8) {
-                    estimateRow("Операции", value: estimate.deletedTransactions)
-                    estimateRow("Кешбэк", value: estimate.deletedCashbacks)
-                    estimateRow("Карты", value: estimate.deletedCards)
-                    estimateRow("Кредиты", value: estimate.deletedCredits)
-                    estimateRow("Инвестиции", value: estimate.deletedInvestments)
-                    estimateRow("Связи счетов", value: estimate.deletedFinanceAccounts)
-                    estimateRow("Группы счетов", value: estimate.deletedFinanceGroups)
-                    estimateRow("Кастомные категории cashflow", value: estimate.deletedCashflowCustomCategories)
-                    estimateRow("Оверрайды системных категорий", value: estimate.deletedCashflowSystemOverrides)
-                    estimateRow("Кастомные категории кешбэка", value: estimate.deletedCashbackCustomCategories)
-                    estimateRow("Обнулено карт", value: estimate.zeroedCards)
-                    estimateRow("Обнулено кредитов", value: estimate.zeroedCredits)
-                    estimateRow("Обнулено инвестиций", value: estimate.zeroedInvestments)
-                    estimateRow("Создано корректировок", value: estimate.createdAdjustmentTransactions)
-                    estimateRow("Сброс настроек", value: estimate.settingsReset ? 1 : 0)
+                    estimateRow("Operations", value: estimate.deletedTransactions)
+                    estimateRow("Cashback", value: estimate.deletedCashbacks)
+                    estimateRow("Cards", value: estimate.deletedCards)
+                    estimateRow("Credits", value: estimate.deletedCredits)
+                    estimateRow("Investments", value: estimate.deletedInvestments)
+                    estimateRow("Account links", value: estimate.deletedFinanceAccounts)
+                    estimateRow("Account groups", value: estimate.deletedFinanceGroups)
+                    estimateRow("Custom cashflow categories", value: estimate.deletedCashflowCustomCategories)
+                    estimateRow("System category overrides", value: estimate.deletedCashflowSystemOverrides)
+                    estimateRow("Custom cashback categories", value: estimate.deletedCashbackCustomCategories)
+                    estimateRow("Zeroed cards", value: estimate.zeroedCards)
+                    estimateRow("Zeroed credits", value: estimate.zeroedCredits)
+                    estimateRow("Zeroed investments", value: estimate.zeroedInvestments)
+                    estimateRow("Created adjustments", value: estimate.createdAdjustmentTransactions)
+                    estimateRow("Settings reset", value: estimate.settingsReset ? 1 : 0)
 
                     FinancesRowDivider()
                         .padding(.vertical, 4)
 
                     HStack {
-                        Text("Всего изменений")
+                        Text("Total changes")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
@@ -243,7 +243,7 @@ struct SmartDataResetView: View {
                 } label: {
                     HStack {
                         Image(systemName: "trash.fill")
-                        Text(isApplying ? "Очистка..." : "Применить очистку")
+                        Text(isApplying ? "Resetting..." : "Apply reset")
                             .font(.system(size: 16, weight: .semibold))
                         if isApplying {
                             ProgressView()
@@ -294,7 +294,7 @@ struct SmartDataResetView: View {
         do {
             let result = try service.execute(request)
             estimate = result
-            successMessage = "Изменений применено: \(result.totalChanges)"
+            successMessage = "Applied changes: \(result.totalChanges)"
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription

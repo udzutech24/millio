@@ -20,21 +20,21 @@ enum AppError: Error, Equatable, Hashable {
     var localizedDescription: String {
         switch self {
         case .iCloudUnavailable:
-            return "iCloud недоступен"
+            return "iCloud is unavailable"
         case .networkUnavailable:
-            return "Сеть недоступна"
+            return "Network is unavailable"
         case .backupCorrupted:
-            return "Резервная копия повреждена"
+            return "Backup is corrupted"
         case .incompatibleSchemaVersion:
-            return "Несовместимая версия данных"
+            return "Incompatible data version"
         case .restoreFailed(let message):
-            return "Ошибка восстановления: \(message)"
+            return "Restore failed: \(message)"
         case .backupFailed(let message):
-            return "Ошибка резервного копирования: \(message)"
+            return "Backup failed: \(message)"
         case .securityFailed(let message):
-            return "Ошибка безопасности: \(message)"
+            return "Security error: \(message)"
         case .unknown(let error):
-            return "Неизвестная ошибка: \(error.localizedDescription)"
+            return "Unknown error: \(error.localizedDescription)"
         }
     }
     

@@ -113,7 +113,7 @@ struct ProfileView: View {
                                 NavigationLink {
                                     SmartDataResetView()
                                 } label: {
-                                    settingsRow(iconSystemName: "trash", title: "Умная очистка данных") {
+                                    settingsRow(iconSystemName: "trash", title: "Smart data reset") {
                                         chevron
                                     }
                                 }
@@ -146,7 +146,7 @@ struct ProfileView: View {
                                         }
                                     }
                                 } label: {
-                                    settingsRow(iconSystemName: "sparkles.tv", title: "Стартовый баннер") {
+                                    settingsRow(iconSystemName: "sparkles.tv", title: "Launch splash") {
                                         Text(appState.launchSplashDisplayMode.profileTitle)
                                             .foregroundStyle(AppColors.profileValueAccent)
                                         chevron

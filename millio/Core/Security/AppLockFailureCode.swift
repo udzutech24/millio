@@ -16,13 +16,13 @@ enum AppLockFailureCode {
     var message: String {
         switch self {
         case .invalidPinFormat:
-            return "PIN-код должен состоять из 4 цифр"
+            return "PIN must contain exactly 4 digits"
         case .keychainPinUpdateFailed:
-            return "Не удалось обновить PIN-код"
+            return "Failed to update PIN"
         case .keychainPinSaveFailed:
-            return "Не удалось сохранить PIN-код"
+            return "Failed to save PIN"
         case .secureRandomPinGenerationFailed:
-            return "Не удалось сгенерировать безопасный PIN"
+            return "Failed to generate secure PIN"
         }
     }
 

@@ -15,17 +15,17 @@ private enum BackupEncryptionMode: String, CaseIterable, Identifiable {
     
     var title: String {
         switch self {
-        case .deviceKey: "На устройстве"
-        case .passphrase: "Парольная фраза"
+        case .deviceKey: "On device"
+        case .passphrase: "Passphrase"
         }
     }
     
     var description: String {
         switch self {
         case .deviceKey:
-            "Ключ хранится в iOS Keychain. После переустановки/на новом устройстве восстановление может быть невозможно."
+            "Key is stored in iOS Keychain. Restore may be unavailable after reinstall or on a new device."
         case .passphrase:
-            "Создание переносимого backup. Для восстановления нужна парольная фраза."
+            "Creates a portable backup. A passphrase is required for restore."
         }
     }
 }
@@ -95,7 +95,7 @@ struct BackupManagementView: View {
                     )
                 )
             
-            Text("Резервное копирование")
+            Text("Backup")
                 .font(.system(size: 28, weight: .bold))
                 .foregroundStyle(AppColors.textPrimary)
                 .multilineTextAlignment(.center)
@@ -106,13 +106,13 @@ struct BackupManagementView: View {
     
     private var settingsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Настройки")
+            FinancesSectionHeader(title: "Settings")
             
             FinancesGlassCard {
                 VStack(spacing: 0) {
                     // Backup Toggle
                     HStack {
-                        Text("Включить backup")
+                        Text("Enable backup")
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         Toggle("", isOn: Binding(
@@ -141,12 +141,12 @@ struct BackupManagementView: View {
                     // Encryption Settings
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            Text("Шифрование")
+                            Text("Encryption")
                                 .foregroundStyle(AppColors.textPrimary)
                             Spacer()
                         }
                         
-                        Picker("Шифрование", selection: $encryptionMode) {
+                        Picker("Encryption", selection: $encryptionMode) {
                             ForEach(BackupEncryptionMode.allCases) { mode in
                                 Text(mode.title).tag(mode)
                             }
@@ -175,10 +175,10 @@ struct BackupManagementView: View {
                         
                         HStack {
                             if isPassphraseVisible {
-                                TextField("Парольная фраза", text: $passphrase)
+                                TextField("Passphrase", text: $passphrase)
                                     .foregroundStyle(AppColors.textPrimary)
                             } else {
-                                SecureField("Парольная фраза", text: $passphrase)
+                                SecureField("Passphrase", text: $passphrase)
                                     .textContentType(.password)
                                     .privacySensitive()
                                     .foregroundStyle(AppColors.textPrimary)
@@ -197,7 +197,7 @@ struct BackupManagementView: View {
                         
                         FinancesRowDivider()
                         
-                        SecureField("Подтвердите фразу", text: $passphraseConfirmation)
+                        SecureField("Confirm passphrase", text: $passphraseConfirmation)
                             .textContentType(.password)
                             .privacySensitive()
                             .disabled(!appState.isBackupEnabled || isBusy)
@@ -212,7 +212,7 @@ struct BackupManagementView: View {
     
     private var statusCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Статус")
+            FinancesSectionHeader(title: "Status")
             
             FinancesGlassCard {
                 VStack(spacing: 0) {
@@ -220,7 +220,7 @@ struct BackupManagementView: View {
                         Text("iCloud")
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        Text(appState.isBackupEnabled ? (appState.isICloudAvailable ? "доступен" : "недоступен") : "выключен")
+                        Text(appState.isBackupEnabled ? (appState.isICloudAvailable ? "available" : "unavailable") : "off")
                             .foregroundStyle(AppColors.textTertiary)
                     }
                     .padding(.vertical, 12)
@@ -229,14 +229,14 @@ struct BackupManagementView: View {
                     FinancesRowDivider()
                     
                     HStack {
-                        Text("Последний backup")
+                        Text("Last backup")
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         if let date = appState.lastBackupDate {
                             Text(date.formatted(date: .abbreviated, time: .shortened))
                                 .foregroundStyle(AppColors.textTertiary)
                         } else {
-                            Text("нет")
+                            Text("none")
                                 .foregroundStyle(AppColors.textTertiary)
                         }
                     }
@@ -249,7 +249,7 @@ struct BackupManagementView: View {
                         Task { await refreshStatusIfNeeded(force: true) }
                     } label: {
                         HStack {
-                            Text("Обновить статус")
+                            Text("Refresh status")
                                 .font(.system(size: 16, weight: .medium))
                             Spacer()
                             Image(systemName: "arrow.clockwise")
@@ -268,7 +268,7 @@ struct BackupManagementView: View {
     
     private var actionsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Действия")
+            FinancesSectionHeader(title: "Actions")
             
             let trimmedPassphrase = passphrase.trimmingCharacters(in: .whitespacesAndNewlines)
             let trimmedConfirmation = passphraseConfirmation.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -283,7 +283,7 @@ struct BackupManagementView: View {
                         HStack {
                             Image(systemName: "icloud.and.arrow.up.fill")
                                 .font(.system(size: 16, weight: .semibold))
-                            Text(isBusy ? "Создание backup..." : "Создать backup сейчас")
+                            Text(isBusy ? "Creating backup..." : "Create backup now")
                                 .font(.system(size: 16, weight: .medium))
                             Spacer()
                             if isBusy {
@@ -306,7 +306,7 @@ struct BackupManagementView: View {
                         HStack {
                             Image(systemName: "pin.fill")
                                 .font(.system(size: 16, weight: .semibold))
-                            Text(isBusy ? "Сохранение версии..." : "Сохранить как версию")
+                            Text(isBusy ? "Saving version..." : "Save as version")
                                 .font(.system(size: 16, weight: .medium))
                             Spacer()
                             if isBusy {
@@ -325,7 +325,7 @@ struct BackupManagementView: View {
                         if trimmedPassphrase.isEmpty {
                             FinancesRowDivider()
                             
-                            Text("Введите парольную фразу, иначе backup будет невозможно восстановить.")
+                            Text("Enter a passphrase, otherwise this backup cannot be restored.")
                                 .font(.system(size: 12, weight: .regular))
                                 .foregroundStyle(AppColors.textTertiary)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -334,7 +334,7 @@ struct BackupManagementView: View {
                         } else if trimmedPassphrase != trimmedConfirmation {
                             FinancesRowDivider()
                             
-                            Text("Парольные фразы не совпадают")
+                            Text("Passphrases do not match")
                                 .font(.system(size: 12, weight: .regular))
                                 .foregroundStyle(AppColors.error)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -351,7 +351,7 @@ struct BackupManagementView: View {
                         HStack {
                             Image(systemName: "icloud.and.arrow.down.fill")
                                 .font(.system(size: 16, weight: .semibold))
-                            Text("Восстановить данные")
+                            Text("Restore data")
                                 .font(.system(size: 16, weight: .medium))
                             Spacer()
                             Image(systemName: "chevron.right")
@@ -371,11 +371,11 @@ struct BackupManagementView: View {
 
     private var versionsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Версии backup")
+            FinancesSectionHeader(title: "Backup versions")
 
             FinancesGlassCard {
                 if backupVersions.isEmpty {
-                    Text("Сохраненных версий пока нет")
+                    Text("No saved versions yet")
                         .font(.system(size: 14, weight: .regular))
                         .foregroundStyle(AppColors.textTertiary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -398,7 +398,7 @@ struct BackupManagementView: View {
                                 }
                                 Spacer()
                                 if version.isPinned {
-                                    Text("Закреплена")
+                                    Text("Pinned")
                                         .font(.system(size: 11, weight: .semibold))
                                         .foregroundStyle(AppColors.textPrimary)
                                         .padding(.horizontal, 8)

@@ -15,11 +15,11 @@ enum LaunchSplashDisplayMode: String, CaseIterable {
     var profileTitle: String {
         switch self {
         case .always:
-            return "Всегда"
+            return "Always"
         case .oncePerDay:
-            return "Раз в день"
+            return "Once per day"
         case .disabled:
-            return "Выключен"
+            return "Off"
         }
     }
 }

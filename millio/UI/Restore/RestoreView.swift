@@ -41,7 +41,7 @@ struct RestoreView: View {
                                 )
                             )
                         
-                        Text("Восстановление данных")
+                        Text("Restore data")
                             .font(.system(size: 32, weight: .bold))
                             .foregroundStyle(AppColors.textPrimary)
                             .multilineTextAlignment(.center)
@@ -74,17 +74,17 @@ struct RestoreView: View {
             }
         }
         .confirmationDialog(
-            "Пропустить восстановление?",
+            "Skip restore?",
             isPresented: $showSkipConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Пропустить", role: .destructive) {
+            Button("Skip", role: .destructive) {
                 appState.lifecycle = .ready
                 dismiss()
             }
-            Button("Отмена", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Вы уверены, что хотите пропустить восстановление? Все данные из резервной копии будут потеряны.")
+            Text("Are you sure you want to skip restore? Backup data will not be applied.")
         }
         .task {
             await refreshBackupStatusIfNeeded()
@@ -101,12 +101,12 @@ struct RestoreView: View {
                     .tint(AppColors.textPrimary)
                 
                 VStack(spacing: 8) {
-                    Text("Восстановление данных...")
+                    Text("Restoring data...")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                         .multilineTextAlignment(.center)
                     
-                    Text("Пожалуйста, подождите")
+                    Text("Please wait")
                         .font(.system(size: 14, weight: .regular))
                         .foregroundStyle(AppColors.textTertiary)
                         .multilineTextAlignment(.center)
@@ -133,7 +133,7 @@ struct RestoreView: View {
             FinancesGlassCard {
                 VStack(spacing: 16) {
                     VStack(spacing: 8) {
-                        Text("Найдена резервная копия")
+                        Text("Backup found")
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
                             .multilineTextAlignment(.center)
@@ -149,7 +149,7 @@ struct RestoreView: View {
                         }
                         
                         if version.isPinned {
-                            Text("Закрепленная версия")
+                            Text("Pinned version")
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(AppColors.textPrimary)
                         }
@@ -198,20 +198,20 @@ struct RestoreView: View {
             }
             
             // Warning text
-            Text("Восстановление заменит все текущие данные данными из резервной копии")
+            Text("Restore will replace all current data with backup data")
                 .font(.system(size: 13, weight: .regular))
                 .foregroundStyle(AppColors.textTertiary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
 
             VStack(spacing: 8) {
-                Text("Парольная фраза (если backup был зашифрован)")
+                Text("Passphrase (if backup is encrypted)")
                     .font(.system(size: 13, weight: .regular))
                     .foregroundStyle(AppColors.textTertiary)
                     .multilineTextAlignment(.center)
                 
                 FinancesGlassCard(contentPadding: EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)) {
-                    SecureField("Введите парольную фразу", text: $backupPassphrase)
+                    SecureField("Enter passphrase", text: $backupPassphrase)
                         .textContentType(.password)
                         .privacySensitive()
                         .foregroundStyle(AppColors.textPrimary)
@@ -224,7 +224,7 @@ struct RestoreView: View {
             // Action buttons
             VStack(spacing: 16) {
                 ActionButton(
-                    title: "Восстановить",
+                    title: "Restore",
                     icon: .system("arrow.down.circle.fill"),
                     gradientColors: AppColors.incomeGradient
                 ) {
@@ -235,7 +235,7 @@ struct RestoreView: View {
                 Button {
                     showSkipConfirmation = true
                 } label: {
-                    Text("Пропустить восстановление")
+                    Text("Skip restore")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(AppColors.textSecondary)
                         .frame(maxWidth: .infinity)
@@ -253,12 +253,12 @@ struct RestoreView: View {
         VStack(spacing: 24) {
             FinancesGlassCard {
                 VStack(spacing: 12) {
-                    Text("Резервная копия не найдена")
+                    Text("No backup found")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                         .multilineTextAlignment(.center)
                     
-                    Text("Продолжите работу с приложением")
+                    Text("Continue using the app")
                         .font(.system(size: 14, weight: .regular))
                         .foregroundStyle(AppColors.textSecondary)
                         .multilineTextAlignment(.center)
@@ -268,7 +268,7 @@ struct RestoreView: View {
             }
             
             ActionButton(
-                title: "Продолжить",
+                title: "Continue",
                 icon: .system("arrow.right"),
                 gradientColors: AppColors.incomeGradient
             ) {

@@ -36,11 +36,11 @@ enum AppLockBiometricAuth {
     static func buttonTitle() -> String {
         switch availableBiometry() {
         case .faceID:
-            return "Разблокировать Face ID"
+            return "Unlock with Face ID"
         case .touchID:
-            return "Разблокировать Touch ID"
+            return "Unlock with Touch ID"
         default:
-            return "Разблокировать биометрией"
+            return "Unlock with biometrics"
         }
     }
 
@@ -51,7 +51,7 @@ enum AppLockBiometricAuth {
         case .touchID:
             return "Touch ID"
         default:
-            return "Биометрия"
+            return "Biometrics"
         }
     }
 
@@ -71,7 +71,7 @@ enum AppLockBiometricAuth {
         guard let policy = preferredUnlockPolicy(for: context) else { return false }
 
         return await withCheckedContinuation { continuation in
-            context.localizedCancelTitle = "Отмена"
+            context.localizedCancelTitle = "Cancel"
             context.evaluatePolicy(policy, localizedReason: reason) { success, _ in
                 continuation.resume(returning: success)
             }

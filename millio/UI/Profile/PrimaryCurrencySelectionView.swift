@@ -31,7 +31,7 @@ struct PrimaryCurrencySelectionView: View {
                 }
             )
         }
-        .navigationTitle("Валюта")
+        .navigationTitle("Currency")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .onAppear {
@@ -41,19 +41,19 @@ struct PrimaryCurrencySelectionView: View {
             favoriteCurrencyCodes = SettingsManager.shared.favoriteCurrencyCodes
         }
         .confirmationDialog(
-            "Сменить основную валюту?",
+            "Change primary currency?",
             isPresented: $showPrimaryCurrencyConfirmation,
             presenting: pendingPrimaryCurrencyCode
         ) { pendingCode in
-            Button("Сменить на \(pendingCode)") {
+            Button("Change to \(pendingCode)") {
                 primaryCurrencyCode = pendingCode
                 pendingPrimaryCurrencyCode = nil
             }
-            Button("Отмена", role: .cancel) {
+            Button("Cancel", role: .cancel) {
                 pendingPrimaryCurrencyCode = nil
             }
         } message: { _ in
-            Text("Это обновит основную валюту приложения и валюты отображения, которые следуют основной валюте.")
+            Text("This updates the app primary currency and display currencies that follow the primary currency.")
         }
     }
 
