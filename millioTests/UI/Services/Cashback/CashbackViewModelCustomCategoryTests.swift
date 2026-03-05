@@ -561,7 +561,13 @@ struct CashbackViewModelCustomCategoryTests {
             defaults: defaults
         )
 
-        viewModel.handle(.togglePinnedCategory(rawValue: CashbackCategory.supermarket.rawValue))
+        let supermarketCashback = viewModel.state.visibleCashbacks.first {
+            $0.categoryRaw == CashbackCategory.supermarket.rawValue
+        }
+        #expect(supermarketCashback != nil)
+        guard let supermarketCashback else { return }
+
+        viewModel.handle(.togglePinnedCashback(supermarketCashback))
         viewModel.handle(.toggleFavoriteCategory(rawValue: CashbackCategory.restaurant.rawValue))
 
         #expect(viewModel.state.visibleCashbacks.count == 3)
@@ -625,16 +631,79 @@ struct CashbackViewModelCustomCategoryTests {
         #expect(custom != nil)
         guard let custom else { return }
 
+        let cashback = Cashback(
+            name: custom.displayName,
+            categoryRaw: custom.rawValue,
+            percentage: 7,
+            cardIDs: [],
+            monthKey: Cashback.monthKey(for: Date())
+        )
+        context.insert(cashback)
+        try context.save()
+        viewModel.handle(.loadCashbacks)
+
         viewModel.handle(.toggleFavoriteCategory(rawValue: custom.rawValue))
         viewModel.handle(.toggleFavoriteCategory(rawValue: custom.rawValue))
-        viewModel.handle(.togglePinnedCategory(rawValue: custom.rawValue))
-        #expect(viewModel.isPinnedCategory(rawValue: custom.rawValue))
+        viewModel.handle(.togglePinnedCashback(cashback))
+        #expect(viewModel.isPinnedCashback(cashback))
 
         let deleted = viewModel.deleteCustomCategory(rawValue: custom.rawValue)
 
         #expect(deleted)
         #expect(!viewModel.isFavoriteCategory(rawValue: custom.rawValue))
-        #expect(!viewModel.isPinnedCategory(rawValue: custom.rawValue))
+        #expect(!viewModel.isPinnedCashback(cashback))
+    }
+
+    @Test("Пин применяется к конкретной позиции, а не ко всем строкам категории")
+    func testPinTargetsConcreteCashbackEntryOnly() throws {
+        let context = try createModelContext()
+        let now = monthDate(year: 2026, month: 3)
+
+        let yandexPay = Card(
+            name: "Яндекс Пэй",
+            cardNumber: "1111 2222 3333 4444",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 1_000
+        )
+        let tinkoff = Card(
+            name: "Т Банк",
+            cardNumber: "5555 6666 7777 8888",
+            bank: .tinkoff,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 2_000
+        )
+        context.insert(yandexPay)
+        context.insert(tinkoff)
+
+        let allPurchases2 = Cashback(
+            name: "Все покупки",
+            categoryRaw: CashbackCategory.supermarket.rawValue,
+            percentage: 2,
+            cardIDs: [yandexPay.cardUniqueID],
+            monthKey: Cashback.monthKey(for: now)
+        )
+        let allPurchases1 = Cashback(
+            name: "Все покупки",
+            categoryRaw: CashbackCategory.supermarket.rawValue,
+            percentage: 1,
+            cardIDs: [tinkoff.cardUniqueID],
+            monthKey: Cashback.monthKey(for: now)
+        )
+        context.insert(allPurchases2)
+        context.insert(allPurchases1)
+        try context.save()
+
+        let viewModel = CashbackViewModel(modelContext: context, now: { now })
+        viewModel.handle(.togglePinnedCashback(allPurchases2))
+
+        #expect(viewModel.isPinnedCashback(allPurchases2))
+        #expect(!viewModel.isPinnedCashback(allPurchases1))
+
+        #expect(viewModel.state.visibleCashbacks.count == 2)
+        #expect(viewModel.state.visibleCashbacks.first?.percentage == 2)
     }
 
     @Test("Одинаковая категория и карта создаются раздельно для разных месяцев")

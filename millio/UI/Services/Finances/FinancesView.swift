@@ -28,6 +28,8 @@ struct FinancesView: View {
     @Environment(AppState.self) private var appState
     @Environment(AppRouter.self) private var router
     @State private var viewModel: FinanceViewModel?
+    @State private var showFinanceSettingsSheet: Bool = false
+    @State private var showBalanceAuditSheetFromSettings: Bool = false
     private let currentRoute: AppRoute = .finances
     
     var body: some View {
@@ -98,10 +100,10 @@ struct FinancesView: View {
                 }
             }
 
-            if let viewModel {
+            if viewModel != nil {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        viewModel.handle(.showSavingsGoalSheet)
+                        showFinanceSettingsSheet = true
                     } label: {
                         Image(systemName: "gearshape")
                             .font(.system(size: 17, weight: .semibold))
@@ -109,6 +111,28 @@ struct FinancesView: View {
                     }
                     .accessibilityLabel(String(localized: "finances.common.settings"))
                 }
+            }
+        }
+        .sheet(isPresented: $showFinanceSettingsSheet) {
+            if let viewModel {
+                FinancesSettingsSheet(
+                    onOpenSavingsGoal: {
+                        showFinanceSettingsSheet = false
+                        viewModel.handle(.showSavingsGoalSheet)
+                    },
+                    onOpenDailyAudit: {
+                        showFinanceSettingsSheet = false
+                        showBalanceAuditSheetFromSettings = true
+                    }
+                )
+            }
+        }
+        .sheet(isPresented: $showBalanceAuditSheetFromSettings) {
+            if let viewModel {
+                FinanceBalanceAuditSheet(
+                    financeViewModel: viewModel,
+                    modelContext: modelContext
+                )
             }
         }
     }
@@ -136,6 +160,98 @@ private struct FinancesContentViewInternal: View {
                 }
                 .tag(FinancesTab.dynamics)
         }
+    }
+}
+
+private struct FinancesSettingsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let onOpenSavingsGoal: () -> Void
+    let onOpenDailyAudit: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                GradientBackground()
+
+                VStack(spacing: 12) {
+                    Button {
+                        onOpenSavingsGoal()
+                    } label: {
+                        settingsRow(
+                            title: "Настройка цели",
+                            subtitle: "Цель накопления и прогресс",
+                            icon: "target"
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        onOpenDailyAudit()
+                    } label: {
+                        settingsRow(
+                            title: "Дневные срезы балансов",
+                            subtitle: "Аудит, корректировка и ревью",
+                            icon: "list.clipboard"
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+            }
+            .navigationTitle("Настройки финансов")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .foregroundStyle(AppColors.textPrimary)
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func settingsRow(title: String, subtitle: String, icon: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(AppColors.textPrimary)
+                .frame(width: 30, height: 30)
+                .background(Color.white.opacity(0.08))
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                Text(subtitle)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(AppColors.textSecondary)
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AppColors.textTertiary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.white.opacity(0.05))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.white.opacity(0.15), lineWidth: 0.8)
+                )
+        )
     }
 }
 

@@ -568,7 +568,7 @@ private struct CashbackRowView: View {
             fallbackName: cashback.name
         )
         let isFavorite = isFavoriteCategory
-        let isPinned = viewModel.isPinnedCategory(rawValue: cashback.categoryRaw)
+        let isPinned = viewModel.isPinnedCashback(cashback)
 
         HStack(spacing: 14) {
             CashbackCategoryIconView(
@@ -611,7 +611,7 @@ private struct CashbackRowView: View {
         .contentShape(Rectangle())
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
             Button {
-                viewModel.handle(.togglePinnedCategory(rawValue: cashback.categoryRaw))
+                viewModel.handle(.togglePinnedCashback(cashback))
             } label: {
                 Label(isPinned ? "Открепить" : "Закрепить", systemImage: isPinned ? "pin.slash.fill" : "pin.fill")
             }
