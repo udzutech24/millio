@@ -392,7 +392,13 @@ struct BackupManagementView: View {
                                     Text(version.date.formatted(date: .abbreviated, time: .shortened))
                                         .font(.system(size: 14, weight: .semibold))
                                         .foregroundStyle(AppColors.textPrimary)
-                                    Text("\(ByteCountFormatter.string(fromByteCount: version.size, countStyle: .file)) · v\(version.version)")
+                                    Text(
+                                        String(
+                                            format: String(localized: "restore.version_size_format"),
+                                            ByteCountFormatter.string(fromByteCount: version.size, countStyle: .file),
+                                            String(version.version)
+                                        )
+                                    )
                                         .font(.system(size: 12, weight: .regular))
                                         .foregroundStyle(AppColors.textTertiary)
                                 }

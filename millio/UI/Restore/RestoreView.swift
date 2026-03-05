@@ -175,7 +175,13 @@ struct RestoreView: View {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(item.date.formatted(date: .abbreviated, time: .shortened))
                                             .font(.system(size: 14, weight: .semibold))
-                                        Text("\(ByteCountFormatter.string(fromByteCount: item.size, countStyle: .file)) · v\(item.version)")
+                                        Text(
+                                            String(
+                                                format: String(localized: "restore.version_size_format"),
+                                                ByteCountFormatter.string(fromByteCount: item.size, countStyle: .file),
+                                                String(item.version)
+                                            )
+                                        )
                                             .font(.system(size: 12, weight: .regular))
                                             .foregroundStyle(AppColors.textTertiary)
                                     }

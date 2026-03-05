@@ -491,9 +491,9 @@ extension CashflowViewModelTests {
         }
 
         let expenseBreakdown = viewModel.state.expenseBreakdown
-        #expect(expenseBreakdown.map { $0.title } == ["Покупки", "Кафе", "Продукты"])
+        #expect(expenseBreakdown.map { $0.title } == ["Shopping", "Cafe", "Groceries"])
         #expect(expenseBreakdown.map { $0.convertedAmount } == [300, 200, 100])
-        #expect(viewModel.state.incomeBreakdown.first?.title == "Зарплата")
+        #expect(viewModel.state.incomeBreakdown.first?.title == "Salary")
         #expect(viewModel.state.incomeBreakdown.first?.convertedAmount == 400)
     }
 

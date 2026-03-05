@@ -112,25 +112,11 @@ struct FinanceChartContainerView: View {
 
     /// Компактное форматирование суммы для оси Y
     private func formatCompact(_ value: Double) -> String {
-        let absv = abs(value)
-        let sign = value < 0 ? "−" : ""
-        func fmt(_ x: Double) -> String {
-            String(format: "%.1f", x).replacingOccurrences(of: ".0", with: "")
-        }
-        if absv >= 1_000_000_000 {
-            return "\(sign)\(fmt(absv / 1_000_000_000)) млрд"
-        }
-        if absv >= 1_000_000 {
-            return "\(sign)\(fmt(absv / 1_000_000)) млн"
-        }
-        if absv >= 1_000 {
-            return "\(sign)\(fmt(absv / 1_000)) тыс"
-        }
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 0
-        formatter.usesGroupingSeparator = true
-        return formatter.string(from: NSNumber(value: value)) ?? "\(Int(value))"
+        value.formatted(
+            .number
+                .precision(.fractionLength(0...1))
+                .notation(.compactName)
+        )
     }
 
     /// Форматирование суммы для аннотации
@@ -152,9 +138,9 @@ struct FinanceChartContainerView: View {
             // Область под графиком с градиентом
             ForEach(points) { item in
                 AreaMark(
-                    x: .value("Дата", item.date),
-                    yStart: .value("Низ", niceY.lower),
-                    yEnd: .value("Итого", item.value)
+                    x: .value(FinancesL10n.tr("finances.chart.axis.date"), item.date),
+                    yStart: .value(FinancesL10n.tr("finances.chart.axis.low"), niceY.lower),
+                    yEnd: .value(FinancesL10n.tr("finances.chart.axis.total"), item.value)
                 )
                 .interpolationMethod(.catmullRom)
                 .foregroundStyle(
@@ -171,8 +157,8 @@ struct FinanceChartContainerView: View {
 
                 // Линия графика
                 LineMark(
-                    x: .value("Дата", item.date),
-                    y: .value("Итого", item.value)
+                    x: .value(FinancesL10n.tr("finances.chart.axis.date"), item.date),
+                    y: .value(FinancesL10n.tr("finances.chart.axis.total"), item.value)
                 )
                 .interpolationMethod(.catmullRom)
                 .lineStyle(StrokeStyle(lineWidth: 2.0, lineJoin: .round))
@@ -324,7 +310,7 @@ struct FinanceChartContainerView: View {
         return (0..<30).map { day in
             let date = calendar.date(byAdding: .day, value: -day, to: today) ?? today
             let value = Double.random(in: 100_000...500_000)
-            return ChartDataPoint(date: date, value: value, label: "Тест")
+            return ChartDataPoint(date: date, value: value, label: "Test")
         }.reversed()
     }()
 

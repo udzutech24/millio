@@ -149,7 +149,7 @@ private struct CashflowContentView: View {
                 .padding(.bottom, 20)
             }
         }
-        .navigationTitle("Кэшфлоу")
+        .navigationTitle("Cashflow")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar { topToolbar }
@@ -218,8 +218,8 @@ private struct CashflowContentView: View {
 
             HStack(spacing: CashflowActionButtonsLayout.buttonSpacing) {
                 CashflowActionButton(
-                    accessibilityLabel: "Доход",
-                    title: "Доход",
+                    accessibilityLabel: "Income",
+                    title: "Income",
                     icon: QuickActionIcons.income,
                     gradientColors: AppColors.incomeGradient,
                     style: .primary,
@@ -230,8 +230,8 @@ private struct CashflowContentView: View {
                 }
 
                 CashflowActionButton(
-                    accessibilityLabel: "Расход",
-                    title: "Расход",
+                    accessibilityLabel: "Expense",
+                    title: "Expense",
                     icon: QuickActionIcons.expense,
                     gradientColors: AppColors.expenseGradient,
                     style: .secondary,
@@ -242,8 +242,8 @@ private struct CashflowContentView: View {
                 }
 
                 CashflowActionButton(
-                    accessibilityLabel: "Перевод",
-                    title: "Перевод",
+                    accessibilityLabel: "Transfer",
+                    title: "Transfer",
                     icon: QuickActionIcons.transfer,
                     gradientColors: AppColors.cashflowGradient,
                     style: .secondary,
@@ -262,14 +262,14 @@ private struct CashflowContentView: View {
     private var assetBreakdownSection: some View {
         VStack(spacing: 14) {
             statRow(
-                title: "Активы на начало периода",
+                title: "Assets at start of period",
                 value: formatMoney(viewModel.state.assetsAtPeriodStart),
                 valueColor: AppColors.textPrimary
             )
             rowDivider
 
             expandableStatRow(
-                title: "Доходы",
+                title: "Income",
                 value: formatSignedMoney(viewModel.state.totalIncome),
                 valueColor: positiveColor(for: viewModel.state.totalIncome),
                 isExpanded: $showIncomeBreakdown
@@ -287,7 +287,7 @@ private struct CashflowContentView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .center) {
                     HStack(spacing: 8) {
-                        Text("Изменение стоимости активов")
+                        Text("Asset value change")
                             .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(primarySecondaryText)
                         Button {
@@ -311,7 +311,7 @@ private struct CashflowContentView: View {
             rowDivider
 
             expandableStatRow(
-                title: "Расходы внесенные",
+                title: "Recorded expenses",
                 value: formatSignedMoney(-viewModel.state.contributedExpense),
                 valueColor: negativeColor(for: -viewModel.state.contributedExpense),
                 isExpanded: $showExpenseBreakdown
@@ -328,7 +328,7 @@ private struct CashflowContentView: View {
 
             VStack(spacing: 8) {
                 statRow(
-                    title: "Активы на конец периода",
+                    title: "Assets at end of period",
                     value: formatMoney(viewModel.state.assetsAtPeriodEnd),
                     valueColor: AppColors.textPrimary
                 )
@@ -337,7 +337,7 @@ private struct CashflowContentView: View {
                     .overlay(innerSeparator)
 
                 HStack {
-                    Text("Итого")
+                    Text("Total")
                         .font(.system(size: 19, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                     Spacer()
@@ -400,7 +400,7 @@ private struct CashflowContentView: View {
                         .foregroundStyle(primarySecondaryText)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(isExpanded.wrappedValue ? "Скрыть детали" : "Показать детали")
+                .accessibilityLabel(isExpanded.wrappedValue ? "Hide details" : "Show details")
             }
         }
         .padding(.horizontal, 4)
@@ -414,7 +414,7 @@ private struct CashflowContentView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             if entries.isEmpty {
-                Text("Нет операций")
+                Text("No transactions")
                     .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(primarySecondaryText)
             } else {
@@ -523,7 +523,7 @@ private struct CashflowContentView: View {
             }
 
             let range = viewModel.currentDateRange()
-            Text("\(formatPeriod(range.0)) — \(formatPeriod(range.1))")
+            Text(String(format: String(localized: "cashflow.period.range_format"), formatPeriod(range.0), formatPeriod(range.1)))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(primarySecondaryText)
                 .contentTransition(.opacity)
@@ -557,7 +557,7 @@ private struct CashflowContentView: View {
                         .frame(width: itemSize, height: itemSize)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Назад")
+                .accessibilityLabel("Back")
 
                 Menu {
                     ForEach(MiniAppNavigation.destinations(excluding: currentRoute)) { destination in
@@ -574,7 +574,7 @@ private struct CashflowContentView: View {
                         .frame(width: itemSize, height: itemSize)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Быстрая навигация по мини-приложениям")
+                .accessibilityLabel("Quick navigation for mini apps")
             }
             .padding(.horizontal, 10)
             .frame(height: 40)
@@ -592,7 +592,7 @@ private struct CashflowContentView: View {
                     .frame(width: 42, height: 38)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("История операций")
+            .accessibilityLabel("Transaction history")
         }
 
         ToolbarItem(placement: .topBarTrailing) {
@@ -608,7 +608,7 @@ private struct CashflowContentView: View {
                 .frame(height: 38)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Выбор валюты отображения")
+            .accessibilityLabel("Display currency selector")
         }
     }
     
@@ -722,29 +722,29 @@ private struct CashflowContentView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
-                        Text("Как считается изменение стоимости активов?")
+                        Text("How is asset value change calculated?")
                             .font(.system(size: 34, weight: .bold))
                             .foregroundStyle(AppColors.textPrimary)
 
-                        Text("Формула:\nИзменение = (Итого на конец – Итого на начало) – Доходы + Расходы.")
+                        Text(String(localized: "cashflow.asset_change.formula"))
                             .font(.system(size: 18, weight: .regular))
                             .foregroundStyle(AppColors.textSecondary)
 
-                        Text("Подстановка:")
+                        Text("Substitution:")
                             .font(.system(size: 24, weight: .bold))
                             .foregroundStyle(AppColors.textPrimary)
 
                         Group {
-                            Text("Итого на начало: \(formatMoney(viewModel.state.assetsAtPeriodStart))")
-                            Text("Итого на конец: \(formatMoney(viewModel.state.assetsAtPeriodEnd))")
-                            Text("Доходы: \(formatSignedMoney(viewModel.state.totalIncome))")
-                            Text("Расходы: \(formatSignedMoney(-viewModel.state.contributedExpense))")
-                            Text("Изменение: \(formatSignedMoney(viewModel.state.assetValueChange))")
+                            Text(String(format: String(localized: "cashflow.asset_change.start_total_format"), formatMoney(viewModel.state.assetsAtPeriodStart)))
+                            Text(String(format: String(localized: "cashflow.asset_change.end_total_format"), formatMoney(viewModel.state.assetsAtPeriodEnd)))
+                            Text(String(format: String(localized: "cashflow.asset_change.income_format"), formatSignedMoney(viewModel.state.totalIncome)))
+                            Text(String(format: String(localized: "cashflow.asset_change.expenses_format"), formatSignedMoney(-viewModel.state.contributedExpense)))
+                            Text(String(format: String(localized: "cashflow.asset_change.change_format"), formatSignedMoney(viewModel.state.assetValueChange)))
                         }
                         .font(.system(size: 18, weight: .regular))
                         .foregroundStyle(AppColors.textPrimary)
 
-                        Text("Проверка баланса:")
+                        Text("Balance check:")
                             .font(.system(size: 24, weight: .bold))
                             .foregroundStyle(AppColors.textPrimary)
 
@@ -752,11 +752,11 @@ private struct CashflowContentView: View {
                             (viewModel.state.assetsAtPeriodEnd - viewModel.state.assetsAtPeriodStart) -
                             (viewModel.state.totalIncome + viewModel.state.assetValueChange - viewModel.state.contributedExpense)
                         )
-                        Text(checkValue < 0.01 ? "Сходится" : "Не сходится")
+                        Text(checkValue < 0.01 ? "Matches" : "Mismatch")
                             .font(.system(size: 18, weight: .bold))
                             .foregroundStyle(checkValue < 0.01 ? Color.green : Color.red)
 
-                        Text("Пояснение: это переоценка/движение стоимости активов за период после учета явных притоков (доходов) и учтенных расходов.")
+                        Text("Explanation: this is asset revaluation/movement for the period after explicit inflows (income) and recorded expenses are accounted for.")
                             .font(.system(size: 18, weight: .regular))
                             .foregroundStyle(AppColors.textSecondary)
                     }
@@ -789,10 +789,16 @@ private struct CashflowContentView: View {
                         let sameYear = Calendar.current.component(.year, from: draftStartDate) == Calendar.current.component(.year, from: draftEndDate)
                         let startFormat: Date.FormatStyle = sameYear ? .dateTime.day().month(.abbreviated) : .dateTime.day().month(.abbreviated).year()
                         let endFormat: Date.FormatStyle = .dateTime.day().month(.abbreviated).year()
-                        Text("Период: \(min(draftStartDate, draftEndDate).formatted(startFormat)) — \(max(draftStartDate, draftEndDate).formatted(endFormat))")
+                        Text(
+                            String(
+                                format: String(localized: "cashflow.history.date_range_format"),
+                                min(draftStartDate, draftEndDate).formatted(startFormat),
+                                max(draftStartDate, draftEndDate).formatted(endFormat)
+                            )
+                        )
                             .font(.headline)
                             .foregroundStyle(AppColors.textPrimary)
-                        Text("Выберите начало и конец периода на календаре")
+                        Text("Select start and end dates on the calendar")
                             .font(.callout)
                             .foregroundStyle(AppColors.textSecondary)
                     }
@@ -829,7 +835,7 @@ private struct CashflowContentView: View {
                         viewModel.handle(.setSelectedMonth(Date()))
                         viewModel.handle(.hidePeriodSelector)
                     } label: {
-                        Text("Сбросить")
+                        Text("Reset")
                             .font(.system(size: 16, weight: .semibold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
@@ -849,7 +855,7 @@ private struct CashflowContentView: View {
                         viewModel.handle(.setCustomPeriod(start: clampedStart, end: clampedEnd))
                         viewModel.handle(.hidePeriodSelector)
                     } label: {
-                        Text("Показать")
+                        Text("Show")
                             .font(.system(size: 16, weight: .semibold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)

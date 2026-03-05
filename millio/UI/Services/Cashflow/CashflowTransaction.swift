@@ -25,12 +25,12 @@ enum CashflowTransactionType: String, Codable, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .income: return "Доход"
-        case .expense: return "Расход"
-        case .transfer: return "Перевод"
-        case .balanceAdjustment: return "Изменение стоимости актива"
-        case .cardBalanceAdjustment: return "Корректировка баланса счета"
-        case .creditDebtAdjustment: return "Корректировка долга"
+        case .income: return "Income"
+        case .expense: return "Expense"
+        case .transfer: return "Transfer"
+        case .balanceAdjustment: return "Asset value adjustment"
+        case .cardBalanceAdjustment: return "Account balance adjustment"
+        case .creditDebtAdjustment: return "Debt adjustment"
         }
     }
     
@@ -54,8 +54,8 @@ enum CashflowRecurrenceRule: String, Codable, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .none: return "Не повторять"
-        case .monthly: return "Ежемесячно"
+        case .none: return "Do not repeat"
+        case .monthly: return "Monthly"
         }
     }
 }
@@ -72,12 +72,12 @@ enum IncomeCategory: String, Codable, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .salary: return "Зарплата"
-        case .freelance: return "Фриланс"
-        case .investment: return "Инвестиции"
-        case .gift: return "Подарок"
-        case .bonus: return "Премия"
-        case .other: return "Другое"
+        case .salary: return "Salary"
+        case .freelance: return "Freelance"
+        case .investment: return "Investments"
+        case .gift: return "Gift"
+        case .bonus: return "Bonus"
+        case .other: return "Other"
         }
     }
     
@@ -108,15 +108,15 @@ enum ExpenseCategory: String, Codable, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .groceries: return "Продукты"
-        case .cafe: return "Кафе"
-        case .transport: return "Транспорт"
-        case .shopping: return "Покупки"
-        case .entertainment: return "Развлечения"
-        case .bills: return "Счета"
-        case .health: return "Здоровье"
-        case .education: return "Образование"
-        case .other: return "Другое"
+        case .groceries: return "Groceries"
+        case .cafe: return "Cafe"
+        case .transport: return "Transport"
+        case .shopping: return "Shopping"
+        case .entertainment: return "Entertainment"
+        case .bills: return "Bills"
+        case .health: return "Health"
+        case .education: return "Education"
+        case .other: return "Other"
         }
     }
     

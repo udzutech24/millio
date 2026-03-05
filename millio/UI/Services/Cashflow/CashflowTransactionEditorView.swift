@@ -266,11 +266,11 @@ struct CashflowTransactionEditorView: View {
                         showCurrencyPicker = false
                     }
                 )
-                .navigationTitle("Валюта операции")
+                .navigationTitle("Transaction currency")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Отмена") {
+                        Button("Cancel") {
                             showCurrencyPicker = false
                         }
                         .foregroundStyle(AppColors.textPrimary)
@@ -286,21 +286,21 @@ struct CashflowTransactionEditorView: View {
         if let customNavigationTitle {
             return customNavigationTitle
         }
-        return editingTransaction == nil ? "Новая операция" : "Редактировать"
+        return editingTransaction == nil ? "New transaction" : "Edit"
     }
 
     // MARK: - Тип операции
 
     private var transactionTypeSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionTitle("Тип операции")
+            sectionTitle("Transaction type")
             editorCard {
                 VStack(spacing: 0) {
                     HStack {
-                        Text("Тип операции")
+                        Text("Transaction type")
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        Picker("Тип операции", selection: $selectedTransactionType) {
+                        Picker("Transaction type", selection: $selectedTransactionType) {
                             ForEach(CashflowTransactionType.allCases, id: \.self) { type in
                                 HStack(spacing: 6) {
                                     Image(systemName: type.icon)
@@ -336,14 +336,14 @@ struct CashflowTransactionEditorView: View {
 
     private var categorySection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionTitle("Категория")
+            sectionTitle("Category")
             editorCard {
                 Button {
                     fireLightImpact()
                     showCategorySheet = true
                 } label: {
                     HStack {
-                        Text(selectedTransactionType == .income ? "Категория дохода" : "Категория расхода")
+                        Text(selectedTransactionType == .income ? "Income category" : "Expense category")
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         HStack(spacing: 8) {
@@ -373,11 +373,11 @@ struct CashflowTransactionEditorView: View {
 
     private var mainInfoSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionTitle("Основная информация")
+            sectionTitle("Main info")
             editorCard {
                 VStack(spacing: 0) {
                     HStack {
-                        Text("Сумма")
+                        Text("Amount")
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
@@ -419,7 +419,7 @@ struct CashflowTransactionEditorView: View {
                     }
 
                     HStack {
-                        Text("Валюта")
+                        Text("Currency")
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         if isLoadingCurrencies {
@@ -449,7 +449,7 @@ struct CashflowTransactionEditorView: View {
                     FinancesRowDivider()
 
                     HStack {
-                        Text("Дата")
+                        Text("Date")
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         DatePicker("", selection: $transactionDate, displayedComponents: .date)
@@ -465,7 +465,7 @@ struct CashflowTransactionEditorView: View {
 
     private var selectedCategorySummarySection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionTitle(selectedTransactionType == .income ? "Выбранный доход" : "Выбранный расход")
+            sectionTitle(selectedTransactionType == .income ? "Selected income" : "Selected expense")
             editorCard {
                 HStack(spacing: 10) {
                     CashflowCategoryIconView(
@@ -487,13 +487,13 @@ struct CashflowTransactionEditorView: View {
 
     private var recurrenceSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionTitle("Повтор")
+            sectionTitle("Recurrence")
             editorCard {
                 HStack {
-                    Text("Частота")
+                    Text("Frequency")
                         .foregroundStyle(AppColors.textPrimary)
                     Spacer()
-                    Picker("Частота", selection: $recurrenceRule) {
+                    Picker("Frequency", selection: $recurrenceRule) {
                         ForEach(CashflowRecurrenceRule.allCases, id: \.self) { rule in
                             Text(rule.displayName).tag(rule)
                         }
@@ -518,7 +518,7 @@ struct CashflowTransactionEditorView: View {
     @ViewBuilder
     private var incomeExpenseCardContent: some View {
         if cardsForCurrentSelection.isEmpty {
-            Text("Нет карт в выбранной валюте")
+            Text("No cards in selected currency")
                 .font(.system(size: 14))
                 .foregroundStyle(AppColors.textTertiary)
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -526,15 +526,15 @@ struct CashflowTransactionEditorView: View {
                 .padding(.horizontal, 16)
         } else {
             HStack {
-                Text("Карта")
+                Text("Card")
                     .foregroundStyle(AppColors.textPrimary)
                     .layoutPriority(1)
                 Spacer()
-                Picker("Карта", selection: Binding(
+                Picker("Card", selection: Binding(
                     get: { selectedCardID ?? "" },
                     set: { selectedCardID = $0.isEmpty ? nil : $0 }
                 )) {
-                    Text("Выберите карту").tag("")
+                    Text("Select card").tag("")
                     ForEach(cardsForCurrentSelection) { card in
                         Text(card.name).tag(card.cardUniqueID)
                     }
@@ -558,7 +558,7 @@ struct CashflowTransactionEditorView: View {
 
             if isAmountOverBalance {
                 FinancesRowDivider()
-                Text("Недостаточно средств")
+                Text("Insufficient funds")
                     .font(.caption)
                     .foregroundStyle(AppColors.error)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -571,7 +571,7 @@ struct CashflowTransactionEditorView: View {
     @ViewBuilder
     private var transferCardContent: some View {
         if viewModel.state.availableCards.isEmpty {
-            Text("Нет доступных карт")
+            Text("No available cards")
                 .font(.system(size: 14))
                 .foregroundStyle(AppColors.textTertiary)
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -579,15 +579,15 @@ struct CashflowTransactionEditorView: View {
                 .padding(.horizontal, 16)
         } else {
             HStack {
-                Text("С карты")
+                Text("From card")
                     .foregroundStyle(AppColors.textPrimary)
                     .layoutPriority(1)
                 Spacer()
-                Picker("С карты", selection: Binding(
+                Picker("From card", selection: Binding(
                     get: { selectedCardID ?? "" },
                     set: { selectedCardID = $0.isEmpty ? nil : $0 }
                 )) {
-                    Text("Выберите карту").tag("")
+                    Text("Select card").tag("")
                     ForEach(viewModel.state.availableCards.filter { $0.cardUniqueID != selectedToCardID }) { card in
                         Text(card.name).tag(card.cardUniqueID)
                     }
@@ -611,7 +611,7 @@ struct CashflowTransactionEditorView: View {
 
             if isAmountOverBalance {
                 FinancesRowDivider()
-                Text("Недостаточно средств")
+                Text("Insufficient funds")
                     .font(.caption)
                     .foregroundStyle(AppColors.error)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -622,15 +622,15 @@ struct CashflowTransactionEditorView: View {
             FinancesRowDivider()
 
             HStack {
-                Text("На карту")
+                Text("To card")
                     .foregroundStyle(AppColors.textPrimary)
                     .layoutPriority(1)
                 Spacer()
-                Picker("На карту", selection: Binding(
+                Picker("To card", selection: Binding(
                     get: { selectedToCardID ?? "" },
                     set: { selectedToCardID = $0.isEmpty ? nil : $0 }
                 )) {
-                    Text("Выберите карту").tag("")
+                    Text("Select card").tag("")
                     ForEach(viewModel.state.availableCards.filter { $0.cardUniqueID != selectedCardID }) { card in
                         Text(card.name).tag(card.cardUniqueID)
                     }
@@ -648,10 +648,10 @@ struct CashflowTransactionEditorView: View {
 
     private var additionalSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionTitle("Дополнительно")
+            sectionTitle("Additional")
             editorCard {
                 VStack(spacing: 0) {
-                    TextField("Комментарий", text: $note, axis: .vertical)
+                    TextField("Comment", text: $note, axis: .vertical)
                         .lineLimit(3...6)
                         .foregroundStyle(AppColors.textPrimary)
                         .padding(.vertical, 12)
@@ -902,7 +902,7 @@ struct CashflowTransactionEditorView: View {
         }
 
         let formatted = formatNumberForDisplay(card.balance)
-        return "Доступно: \(formatted) \(card.currency)"
+        return "Available: \(formatted) \(card.currency)"
     }
 
     private func parseAmount() -> Double? {
@@ -1047,11 +1047,11 @@ private struct CashflowCategorySelectionSheet: View {
     @State private var pendingDeleteRaw: String?
 
     private var title: String {
-        kind == .income ? "Категории доходов" : "Категории расходов"
+        kind == .income ? "Income categories" : "Expense categories"
     }
 
     private var createButtonTitle: String {
-        kind == .income ? "Создать категорию дохода" : "Создать категорию расхода"
+        kind == .income ? "Create income category" : "Create expense category"
     }
 
     private var options: [CashflowCategoryOption] {
@@ -1073,7 +1073,7 @@ private struct CashflowCategorySelectionSheet: View {
                             Image(systemName: "magnifyingglass")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(AppColors.textSecondary)
-                            TextField("Поиск категории", text: $searchText)
+                            TextField("Search category", text: $searchText)
                                 .textInputAutocapitalization(.words)
                                 .foregroundStyle(AppColors.textPrimary)
                         }
@@ -1117,11 +1117,11 @@ private struct CashflowCategorySelectionSheet: View {
                                     }
                                     .buttonStyle(.plain)
                                     .contextMenu {
-                                        Button("Редактировать") {
+                                        Button("Edit") {
                                             openEditSheet(for: option)
                                         }
                                         if viewModel.canDeleteCategory(rawValue: option.rawValue, kind: kind) {
-                                            Button("Удалить", role: .destructive) {
+                                            Button("Delete", role: .destructive) {
                                                 pendingDeleteRaw = option.rawValue
                                                 showDeleteAlert = true
                                             }
@@ -1169,17 +1169,17 @@ private struct CashflowCategorySelectionSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Закрыть") {
+                    Button("Close") {
                         dismiss()
                     }
                     .foregroundStyle(AppColors.textPrimary)
                 }
             }
-            .alert("Удалить категорию?", isPresented: $showDeleteAlert) {
-                Button("Отмена", role: .cancel) {
+            .alert("Delete category?", isPresented: $showDeleteAlert) {
+                Button("Cancel", role: .cancel) {
                     pendingDeleteRaw = nil
                 }
-                Button("Удалить", role: .destructive) {
+                Button("Delete", role: .destructive) {
                     guard let raw = pendingDeleteRaw else { return }
                     if viewModel.deleteCategory(rawValue: raw, kind: kind), selectedRaw == raw {
                         selectedRaw = fallbackRaw
@@ -1187,7 +1187,7 @@ private struct CashflowCategorySelectionSheet: View {
                     pendingDeleteRaw = nil
                 }
             } message: {
-                Text("Связанные операции будут перенесены в безопасную системную категорию.")
+                Text("Linked transactions will be moved to a safe system category.")
             }
             .fullScreenCover(isPresented: $showEditorSheet) {
                 CashflowCategoryEditorSheet(
@@ -1250,8 +1250,8 @@ private struct CashflowCategorySelectionSheet: View {
 
 struct CashflowCategoryEditorSheet: View {
     private enum IconPickerTab: String, CaseIterable, Identifiable {
-        case emoji = "Эмодзи"
-        case symbols = "Иконки"
+        case emoji = "Emoji"
+        case symbols = "Icons"
 
         var id: String { rawValue }
     }
@@ -1268,8 +1268,8 @@ struct CashflowCategoryEditorSheet: View {
 
     private var title: String {
         switch mode {
-        case .create: return "Новая категория"
-        case .edit: return "Редактировать категорию"
+        case .create: return "New category"
+        case .edit: return "Edit category"
         }
     }
 
@@ -1295,9 +1295,9 @@ struct CashflowCategoryEditorSheet: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
-                        FinancesSectionHeader(title: "Название")
+                        FinancesSectionHeader(title: "Name")
                         FinancesGlassCard {
-                            TextField("Введите название", text: $name)
+                            TextField("Enter name", text: $name)
                                 .textInputAutocapitalization(.words)
                                 .foregroundStyle(AppColors.textPrimary)
                                 .focused($isNameFieldFocused)
@@ -1305,10 +1305,10 @@ struct CashflowCategoryEditorSheet: View {
                                 .padding(.vertical, 12)
                         }
 
-                        FinancesSectionHeader(title: "Иконка")
+                        FinancesSectionHeader(title: "Icon")
                         FinancesGlassCard {
                             VStack(spacing: 12) {
-                                Picker("Тип иконки", selection: $selectedTab) {
+                                Picker("Icon type", selection: $selectedTab) {
                                     ForEach(IconPickerTab.allCases) { tab in
                                         Text(tab.rawValue).tag(tab)
                                     }
@@ -1320,7 +1320,7 @@ struct CashflowCategoryEditorSheet: View {
                                         Image(systemName: "magnifyingglass")
                                             .font(.system(size: 14, weight: .medium))
                                             .foregroundStyle(AppColors.textTertiary)
-                                        TextField("Поиск иконки (например: car, cart, heart)", text: $iconSearchText)
+                                        TextField("Icon search (e.g. car, cart, heart)", text: $iconSearchText)
                                             .font(.system(size: 14, weight: .regular))
                                             .foregroundStyle(AppColors.textPrimary)
                                     }
@@ -1370,11 +1370,11 @@ struct CashflowCategoryEditorSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Отмена") { dismiss() }
+                    Button("Cancel") { dismiss() }
                         .foregroundStyle(AppColors.textPrimary)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Сохранить") {
+                    Button("Save") {
                         onSave(name, icon)
                     }
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

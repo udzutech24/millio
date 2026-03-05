@@ -221,7 +221,7 @@ final class FinanceViewModel: ViewModelProtocol {
     let marketDataClient: MarketDataClientProtocol
 
     private let defaults = UserDefaults.standard
-    private let ungroupedGroupName = String(localized: "finances.group.ungrouped")
+    private var ungroupedGroupName: String { String(localized: "finances.group.ungrouped") }
     private let ungroupedGroupColorHex = "#3C4B5E"
     private var financeEventsSubscriptionID: UUID?
 

@@ -20,7 +20,7 @@ extension ConversionError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .rateUnavailable(let from, let to, let date):
-            return "Курс недоступен: \(from) → \(to) на \(date)"
+            return "Rate unavailable: \(from) -> \(to) on \(date)"
         }
     }
 }
@@ -142,13 +142,13 @@ struct CashflowCategoryBreakdownEntry: Identifiable {
 // MARK: - Chart Period
 
 enum ChartPeriod: String, CaseIterable {
-    case month = "Месяц"
-    case quarter = "Квартал"
-    case year = "Год"
-    case specificMonth = "Конкретный месяц"
-    case specificQuarter = "Конкретный квартал"
-    case specificYear = "Конкретный год"
-    case custom = "Свой период"
+    case month = "Month"
+    case quarter = "Quarter"
+    case year = "Year"
+    case specificMonth = "Specific month"
+    case specificQuarter = "Specific quarter"
+    case specificYear = "Specific year"
+    case custom = "Custom period"
     
     var days: Int {
         switch self {
@@ -161,13 +161,13 @@ enum ChartPeriod: String, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .month: return "Месяц"
-        case .quarter: return "Квартал"
-        case .year: return "Год"
-        case .specificMonth: return "Месяц"
-        case .specificQuarter: return "Квартал"
-        case .specificYear: return "Год"
-        case .custom: return "Свой период"
+        case .month: return "Month"
+        case .quarter: return "Quarter"
+        case .year: return "Year"
+        case .specificMonth: return "Month"
+        case .specificQuarter: return "Quarter"
+        case .specificYear: return "Year"
+        case .custom: return "Custom period"
         }
     }
 }
@@ -851,12 +851,12 @@ final class CashflowViewModel: ViewModelProtocol {
     }
 
     func incomeCategoryDisplayName(for raw: String?) -> String {
-        guard let raw else { return "Без категории" }
+        guard let raw else { return "Uncategorized" }
         return categoryOption(for: raw, kind: .income).displayName
     }
 
     func expenseCategoryDisplayName(for raw: String?) -> String {
-        guard let raw else { return "Без категории" }
+        guard let raw else { return "Uncategorized" }
         return categoryOption(for: raw, kind: .expense).displayName
     }
 
@@ -1457,7 +1457,7 @@ final class CashflowViewModel: ViewModelProtocol {
 
         if result.resolution != .exact {
             if state.currencyConversionWarning == nil {
-                state.currencyConversionWarning = "Часть значений рассчитана по оценочному курсу."
+                state.currencyConversionWarning = "Some values were calculated using an estimated exchange rate."
             }
         }
         
@@ -1471,7 +1471,7 @@ final class CashflowViewModel: ViewModelProtocol {
             to: currency
         ) {
             if state.currencyConversionWarning == nil {
-                state.currencyConversionWarning = "Часть значений рассчитана по оценочному курсу."
+                state.currencyConversionWarning = "Some values were calculated using an estimated exchange rate."
             }
             return converted
         }
@@ -1707,7 +1707,7 @@ final class CashflowViewModel: ViewModelProtocol {
         let fallbackRaw = fallbackCategoryRaw(for: kind)
         return systemCategoryOption(for: fallbackRaw, kind: kind) ?? CashflowCategoryOption(
             rawValue: fallbackRaw,
-            displayName: "Другое",
+            displayName: "Other",
             icon: "ellipsis.circle.fill",
             isCustom: false
         )

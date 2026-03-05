@@ -30,6 +30,23 @@ struct FinanceDynamicsEstimatedRateWarningPrefs {
     }
 }
 
+enum FinanceDynamicsTopBarStyle {
+    static let passiveIconColor = Color.white.opacity(0.9)
+    static let compactButtonSide: CGFloat = 30
+    static let compactIconSize: CGFloat = 17
+    static let compactSeparatorHeight: CGFloat = 14
+    static let compactSeparatorColor = Color.white.opacity(0.14)
+    static let containerFillColor = Color(red: 0.05, green: 0.06, blue: 0.08).opacity(0.96)
+    static let containerStrokeColor = Color.white.opacity(0.16)
+    static let containerStrokeWidth: CGFloat = 0.7
+    static let containerHorizontalPadding: CGFloat = 6
+    static let containerVerticalPadding: CGFloat = 4
+
+    static func inlineEditorSymbol(isEditing: Bool) -> String {
+        isEditing ? "checkmark" : "pencil"
+    }
+}
+
 // MARK: - Finance Dynamics View
 
 struct FinanceDynamicsView: View {
@@ -458,11 +475,11 @@ private struct FinanceDynamicsContentView: View {
 
             Spacer(minLength: 4)
 
-            marketEditTopBar(for: investment, compactLayout: compactLayout)
+            marketEditTopBar(for: investment)
         }
     }
 
-    private func marketEditTopBar(for investment: Investment, compactLayout: Bool) -> some View {
+    private func marketEditTopBar(for investment: Investment) -> some View {
         HStack(spacing: 8) {
             let canFinish = canFinishInlineMarketEdit(for: investment)
             if isInlineMarketEdit {
@@ -471,14 +488,11 @@ private struct FinanceDynamicsContentView: View {
                         finishInlineMarketEdit(for: investment)
                     }
                 } label: {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: compactLayout ? 18 : 19, weight: .bold))
-                        .foregroundStyle(canFinish ? Color.black : Color.white.opacity(0.75))
-                        .frame(width: compactLayout ? 34 : 38, height: compactLayout ? 34 : 38)
-                        .background(
-                            Circle()
-                                .fill(canFinish ? Color.green.opacity(0.92) : Color.white.opacity(0.08))
-                        )
+                    Image(systemName: FinanceDynamicsTopBarStyle.inlineEditorSymbol(isEditing: true))
+                        .symbolRenderingMode(.monochrome)
+                        .font(.system(size: FinanceDynamicsTopBarStyle.compactIconSize, weight: .regular))
+                        .foregroundStyle(canFinish ? Color(red: 0.20, green: 0.92, blue: 0.49) : Color.white.opacity(0.4))
+                        .frame(width: FinanceDynamicsTopBarStyle.compactButtonSide, height: FinanceDynamicsTopBarStyle.compactButtonSide)
                 }
                 .buttonStyle(.plain)
             } else {
@@ -486,13 +500,18 @@ private struct FinanceDynamicsContentView: View {
                     isInlineMarketEdit = true
                     syncMarketDraft(from: investment)
                 } label: {
-                        Image(systemName: "slider.horizontal.3")
-                            .font(.system(size: compactLayout ? 18 : 19, weight: .semibold))
-                        .foregroundStyle(Color.cyan)
-                            .frame(width: compactLayout ? 34 : 38, height: compactLayout ? 34 : 38)
+                        Image(systemName: FinanceDynamicsTopBarStyle.inlineEditorSymbol(isEditing: false))
+                            .symbolRenderingMode(.monochrome)
+                            .font(.system(size: FinanceDynamicsTopBarStyle.compactIconSize, weight: .regular))
+                        .foregroundStyle(FinanceDynamicsTopBarStyle.passiveIconColor)
+                            .frame(width: FinanceDynamicsTopBarStyle.compactButtonSide, height: FinanceDynamicsTopBarStyle.compactButtonSide)
                 }
                 .buttonStyle(.plain)
             }
+
+            Divider()
+                .frame(height: FinanceDynamicsTopBarStyle.compactSeparatorHeight)
+                .overlay(FinanceDynamicsTopBarStyle.compactSeparatorColor)
 
             Button {
                 if cashflowViewModel == nil {
@@ -502,38 +521,28 @@ private struct FinanceDynamicsContentView: View {
                 showCashflowHistory = true
             } label: {
                 Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: compactLayout ? 19 : 20, weight: .medium))
-                    .foregroundStyle(Color.cyan)
-                    .frame(width: compactLayout ? 34 : 38, height: compactLayout ? 34 : 38)
+                    .symbolRenderingMode(.monochrome)
+                    .font(.system(size: FinanceDynamicsTopBarStyle.compactIconSize, weight: .regular))
+                    .foregroundStyle(FinanceDynamicsTopBarStyle.passiveIconColor)
+                    .frame(width: FinanceDynamicsTopBarStyle.compactButtonSide, height: FinanceDynamicsTopBarStyle.compactButtonSide)
             }
             .buttonStyle(.plain)
+
+            Divider()
+                .frame(height: FinanceDynamicsTopBarStyle.compactSeparatorHeight)
+                .overlay(FinanceDynamicsTopBarStyle.compactSeparatorColor)
 
             Button {
                 showFullProductEditSheet = true
             } label: {
                 Image(systemName: "gearshape")
-                    .font(.system(size: compactLayout ? 19 : 20, weight: .medium))
-                    .foregroundStyle(Color.cyan)
-                    .frame(width: compactLayout ? 34 : 38, height: compactLayout ? 34 : 38)
+                    .symbolRenderingMode(.monochrome)
+                    .font(.system(size: FinanceDynamicsTopBarStyle.compactIconSize, weight: .regular))
+                    .foregroundStyle(FinanceDynamicsTopBarStyle.passiveIconColor)
+                    .frame(width: FinanceDynamicsTopBarStyle.compactButtonSide, height: FinanceDynamicsTopBarStyle.compactButtonSide)
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, compactLayout ? 8 : 10)
-        .padding(.vertical, compactLayout ? 6 : 7)
-        .background(
-            Capsule()
-                .fill(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.08), Color.white.opacity(0.03)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .overlay(
-                    Capsule()
-                        .stroke(Color.white.opacity(0.22), lineWidth: 0.8)
-                )
-        )
     }
 
     private func statCell(
@@ -1027,8 +1036,8 @@ private struct FinanceDynamicsContentView: View {
 
                 Spacer()
 
-                // Бейдж с дельтой
-                if viewModel.state.chartData.count >= 2 && !isSingleAccountSummaryMode {
+                // Бейдж с дельтой (скрываем для detail-режима не-акций)
+                if viewModel.state.chartData.count >= 2 && !isSingleAccountSummaryMode && !(viewModel.state.isSingleAccountMode && marketInvestment == nil) {
                     let delta = viewModel.state.periodDelta
                     let positiveText = Color(.sRGB, red: 127.0 / 255.0, green: 1.0, blue: 189.0 / 255.0, opacity: 1.0)
                     let positiveBg = Color(.sRGB, red: 127.0 / 255.0, green: 1.0, blue: 189.0 / 255.0, opacity: 0.3)
@@ -1062,30 +1071,18 @@ private struct FinanceDynamicsContentView: View {
                case .singleAccount(let accountID) = viewModel.state.dynamicsMode,
                let account = viewModel.getAccountsForSelectedGroups().first(where: { $0.accountUniqueID == accountID }),
                let accountInfo = viewModel.getAccountInfoForDynamics(account: account) {
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     Image(systemName: accountInfo.icon)
-                        .font(.caption)
+                        .font(.system(size: 18, weight: .semibold))
                     Text(accountInfo.name)
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(1)
+                        .font(.system(size: 30, weight: .semibold))
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.cyan.opacity(0.14), Color.white.opacity(0.06)],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .overlay(
-                            Capsule()
-                                .stroke(Color.cyan.opacity(0.45), lineWidth: 0.8)
-                        )
-                )
+                .padding(.horizontal, 2)
+                .padding(.vertical, 2)
                 .foregroundStyle(AppColors.textPrimary.opacity(0.92))
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             if let account = initialAccount, inlineCreditCard(for: account) != nil {
@@ -1112,12 +1109,6 @@ private struct FinanceDynamicsContentView: View {
 
     private var singleAccountSummaryTable: some View {
         let symbol = MonetaCurrency(rawValue: viewModel.state.displayCurrency)?.symbol ?? viewModel.state.displayCurrency
-        let delta = viewModel.state.periodDelta
-        let growthTextColor: Color = delta.absolute > 0
-            ? Color(.sRGB, red: 127.0 / 255.0, green: 1.0, blue: 189.0 / 255.0, opacity: 1.0)
-            : (delta.absolute < 0
-               ? Color(.sRGB, red: 1.0, green: 0.37, blue: 0.37, opacity: 1.0)
-               : AppColors.textSecondary)
 
         let accountName: String = {
             guard case .singleAccount(let accountID) = viewModel.state.dynamicsMode,
@@ -1128,61 +1119,30 @@ private struct FinanceDynamicsContentView: View {
             return accountInfo.name
         }()
 
-        return HStack(spacing: 9) {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.08), Color.white.opacity(0.04)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
+        return RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [Color.white.opacity(0.08), Color.white.opacity(0.04)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
                 )
-                .overlay {
-                    VStack(spacing: 5) {
-                        Text("\(accountName), \(symbol)")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(AppColors.textSecondary)
-                            .lineLimit(1)
+            )
+            .overlay {
+                VStack(spacing: 5) {
+                    Text("\(accountName), \(symbol)")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .lineLimit(1)
 
-                        Text("\(formatBalance(viewModel.state.currentBalance)) \(symbol)")
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.78)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 12)
+                    Text("\(formatBalance(viewModel.state.currentBalance)) \(symbol)")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
                 }
-                .frame(maxWidth: .infinity)
-
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.07), Color.white.opacity(0.03)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.white.opacity(0.16), lineWidth: 0.8)
-                )
-                .overlay {
-                    VStack(spacing: 5) {
-                        Text(String(localized: "finances.dynamics.growth"))
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(AppColors.textSecondary)
-                            .lineLimit(1)
-                        Text(formatPercent(delta.percent))
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(growthTextColor)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.9)
-                    }
-                    .padding(.horizontal, 8)
-                }
-                .frame(width: 118)
-        }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 12)
+            }
         .frame(height: 88)
     }
 
@@ -1202,21 +1162,21 @@ private struct FinanceDynamicsContentView: View {
                     startInlineAccountEdit(for: account)
                 }
             } label: {
-                Image(systemName: isInlineAccountEdit ? "checkmark" : "minus")
+                Image(systemName: FinanceDynamicsTopBarStyle.inlineEditorSymbol(isEditing: isInlineAccountEdit))
                     .symbolRenderingMode(.monochrome)
-                    .font(.system(size: 19, weight: .semibold))
+                    .font(.system(size: FinanceDynamicsTopBarStyle.compactIconSize, weight: .regular))
                     .foregroundStyle(
                         isInlineAccountEdit
-                            ? (canSave ? Color(red: 0.20, green: 0.92, blue: 0.49) : Color.cyan.opacity(0.4))
-                            : Color.cyan
+                            ? (canSave ? Color(red: 0.20, green: 0.92, blue: 0.49) : Color.white.opacity(0.4))
+                            : FinanceDynamicsTopBarStyle.passiveIconColor
                     )
-                    .frame(width: 34, height: 34)
+                    .frame(width: FinanceDynamicsTopBarStyle.compactButtonSide, height: FinanceDynamicsTopBarStyle.compactButtonSide)
             }
             .buttonStyle(.plain)
 
             Divider()
-                .frame(height: 18)
-                .overlay(Color.white.opacity(0.16))
+                .frame(height: FinanceDynamicsTopBarStyle.compactSeparatorHeight)
+                .overlay(FinanceDynamicsTopBarStyle.compactSeparatorColor)
 
             Button {
                 if cashflowViewModel == nil {
@@ -1227,28 +1187,29 @@ private struct FinanceDynamicsContentView: View {
             } label: {
                 Image(systemName: "clock.arrow.circlepath")
                     .symbolRenderingMode(.monochrome)
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(Color.cyan)
-                    .frame(width: 34, height: 34)
+                    .font(.system(size: FinanceDynamicsTopBarStyle.compactIconSize, weight: .regular))
+                    .foregroundStyle(FinanceDynamicsTopBarStyle.passiveIconColor)
+                    .frame(width: FinanceDynamicsTopBarStyle.compactButtonSide, height: FinanceDynamicsTopBarStyle.compactButtonSide)
             }
             .buttonStyle(.plain)
 
             Divider()
-                .frame(height: 18)
-                .overlay(Color.white.opacity(0.16))
+                .frame(height: FinanceDynamicsTopBarStyle.compactSeparatorHeight)
+                .overlay(FinanceDynamicsTopBarStyle.compactSeparatorColor)
 
             Button {
                 showFullProductEditSheet = true
             } label: {
                 Image(systemName: "gearshape")
                     .symbolRenderingMode(.monochrome)
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(Color.cyan)
-                    .frame(width: 34, height: 34)
+                    .font(.system(size: FinanceDynamicsTopBarStyle.compactIconSize, weight: .regular))
+                    .foregroundStyle(FinanceDynamicsTopBarStyle.passiveIconColor)
+                    .frame(width: FinanceDynamicsTopBarStyle.compactButtonSide, height: FinanceDynamicsTopBarStyle.compactButtonSide)
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 2)
+        .padding(.horizontal, FinanceDynamicsTopBarStyle.containerHorizontalPadding)
+        .padding(.vertical, FinanceDynamicsTopBarStyle.containerVerticalPadding)
     }
 
     private func resolvedCard(for account: FinanceAccount) -> Card? {
@@ -1996,17 +1957,18 @@ private struct FinanceDynamicsContentView: View {
                             .frame(width: 92, alignment: .trailing)
                     }
 
-                    // Бейдж с изменением
-                    let badgeColor = deltaColor(for: item)
-                    let badgeBg = deltaBackground(for: item)
-                    let badgeText = "\(formatDelta(item.delta))  •  \(formatPercent(item.deltaPercent))"
-                    Text(badgeText)
-                        .font(.caption.weight(.semibold).monospacedDigit())
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(badgeBg))
-                        .foregroundStyle(badgeColor)
-                        .fixedSize()
+                    if !(viewModel.state.isSingleAccountMode && marketInvestment == nil) {
+                        let badgeColor = deltaColor(for: item)
+                        let badgeBg = deltaBackground(for: item)
+                        let badgeText = "\(formatDelta(item.delta))  •  \(formatPercent(item.deltaPercent))"
+                        Text(badgeText)
+                            .font(.caption.weight(.semibold).monospacedDigit())
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(badgeBg))
+                            .foregroundStyle(badgeColor)
+                            .fixedSize()
+                    }
                 }
             }
         }
@@ -2035,16 +1997,18 @@ private struct FinanceDynamicsContentView: View {
                             .frame(width: 92, alignment: .trailing)
                     }
 
-                    let badgeColor = deltaColor(for: item)
-                    let badgeBg = deltaBackground(for: item)
-                    let badgeText = "\(formatDelta(item.delta))  •  \(formatPercent(item.deltaPercent))"
-                    Text(badgeText)
-                        .font(.caption.weight(.semibold).monospacedDigit())
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(badgeBg))
-                        .foregroundStyle(badgeColor)
-                        .fixedSize()
+                    if !(viewModel.state.isSingleAccountMode && marketInvestment == nil) {
+                        let badgeColor = deltaColor(for: item)
+                        let badgeBg = deltaBackground(for: item)
+                        let badgeText = "\(formatDelta(item.delta))  •  \(formatPercent(item.deltaPercent))"
+                        Text(badgeText)
+                            .font(.caption.weight(.semibold).monospacedDigit())
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(badgeBg))
+                            .foregroundStyle(badgeColor)
+                            .fixedSize()
+                    }
                 }
             }
         }

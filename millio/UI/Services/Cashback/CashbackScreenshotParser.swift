@@ -23,11 +23,11 @@ enum CashbackScreenshotImportError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidImage:
-            return "Не удалось открыть изображение. Выберите другой скриншот."
+            return String(localized: "cashback.import.error.invalid_image")
         case .noTextFound:
-            return "Текст на скриншоте не распознан."
+            return String(localized: "cashback.import.error.no_text")
         case .noCashbackLinesFound:
-            return "Не нашёл строки с кешбэком формата «5% Категория» или «Категория +5%»."
+            return String(localized: "cashback.import.error.no_cashback_lines")
         }
     }
 }
@@ -182,7 +182,7 @@ struct CashbackScreenshotParser {
     }
 
     private static func parseInlineCashbackLine(_ line: String) -> (Double, String)? {
-        let pattern = #"^(?:[^\d]{0,8}\s*)?(?:до\s*)?(\d{1,3}(?:[.,]\d{1,2})?)\s*(?:%|％|°/o|°/о|o/o|о/о)\s*(.+)$"#
+        let pattern = #"^(?:[^\d]{0,8}\s*)?(?:(?:до|up to)\s*)?(\d{1,3}(?:[.,]\d{1,2})?)\s*(?:%|％|°/o|°/о|o/o|о/о)\s*(.+)$"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
             return nil
         }
@@ -228,7 +228,7 @@ struct CashbackScreenshotParser {
     }
 
     private static func parsePercentageOnlyLine(_ line: String) -> Double? {
-        let pattern = #"^(?:[^\d]{0,8}\s*)?(?:до\s*)?(\d{1,3}(?:[.,]\d{1,2})?)\s*(?:%|％|°/o|°/о|o/o|о/о)$"#
+        let pattern = #"^(?:[^\d]{0,8}\s*)?(?:(?:до|up to)\s*)?(\d{1,3}(?:[.,]\d{1,2})?)\s*(?:%|％|°/o|°/о|o/o|о/о)$"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
             return nil
         }
@@ -288,14 +288,20 @@ struct CashbackScreenshotParser {
         let blockedPrefixes = [
             "кешбэк",
             "кэшбэк",
+            "cashback",
+            "cash back",
             "условия",
+            "terms",
+            "terms and conditions",
             "подробные условия",
             "больше кешбэка",
             "больше кэшбэка",
+            "more cashback",
             "ваши категории",
+            "your categories",
             "категории в",
             "выгода",
-            "история"
+            "history"
         ]
         if blockedPrefixes.contains(where: { lowered.hasPrefix($0) }) {
             return false

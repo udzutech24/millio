@@ -395,6 +395,28 @@ struct AppLifecycleUseCaseTests {
         #expect(appState.lifecycle == .ready)
         #expect(splashPrefs.lastLaunchSplashShownAt == now)
     }
+
+    @Test("EntitlementPolicy ограничивает тикеры в Free и снимает лимит в PRO")
+    func testTrackedTickerLimitPolicy() {
+        #expect(EntitlementPolicy.canAddTrackedTicker(isPro: false, currentTrackedTickers: 0) == true)
+        #expect(EntitlementPolicy.canAddTrackedTicker(isPro: false, currentTrackedTickers: EntitlementPolicy.freeTrackedTickerLimit - 1) == true)
+        #expect(EntitlementPolicy.canAddTrackedTicker(isPro: false, currentTrackedTickers: EntitlementPolicy.freeTrackedTickerLimit) == false)
+        #expect(EntitlementPolicy.canAddTrackedTicker(isPro: true, currentTrackedTickers: 999) == true)
+    }
+
+    @Test("EntitlementPolicy ограничивает карты кешбэка в Free и снимает лимит в PRO")
+    func testCashbackCardLimitPolicy() {
+        #expect(EntitlementPolicy.canUseCashbackCard(isPro: false, cardIndex: 0) == true)
+        #expect(EntitlementPolicy.canUseCashbackCard(isPro: false, cardIndex: EntitlementPolicy.freeCashbackCardLimit - 1) == true)
+        #expect(EntitlementPolicy.canUseCashbackCard(isPro: false, cardIndex: EntitlementPolicy.freeCashbackCardLimit) == false)
+        #expect(EntitlementPolicy.canUseCashbackCard(isPro: true, cardIndex: 100) == true)
+    }
+
+    @Test("EntitlementPolicy закрывает crypto-конвертацию в Free и открывает в PRO")
+    func testConverterCryptoPolicy() {
+        #expect(EntitlementPolicy.canUseConverterCrypto(isPro: false) == false)
+        #expect(EntitlementPolicy.canUseConverterCrypto(isPro: true) == true)
+    }
 }
 
 final class FakeBackupManager: BackupManagerProtocol {

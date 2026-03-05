@@ -170,4 +170,21 @@ struct CashbackScreenshotParserTests {
         #expect(parsed.count == 1)
         #expect(parsed.first == CashbackScreenshotImportItem(categoryName: "Активный отдых", percentage: 7))
     }
+
+    @Test("Парсер поддерживает англоязычные строки cashback")
+    func testParseRecognizedLinesSupportsEnglishCashbackRows() {
+        let lines = [
+            "Your categories this month",
+            "Up to 10% Hotels",
+            "Cashback terms",
+            "Supermarkets +5%",
+            "More cashback from partners"
+        ]
+
+        let parsed = CashbackScreenshotParser.parseRecognizedLines(lines)
+
+        #expect(parsed.count == 2)
+        #expect(parsed.contains { $0.categoryName == "Hotels" && $0.percentage == 10 })
+        #expect(parsed.contains { $0.categoryName == "Supermarkets" && $0.percentage == 5 })
+    }
 }

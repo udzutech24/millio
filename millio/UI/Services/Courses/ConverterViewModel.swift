@@ -937,6 +937,27 @@ final class ConverterViewModel: ViewModelProtocol {
     var canAddCurrency: Bool {
         state.selectedCurrencies.count < maxCurrencies
     }
+
+    func enforceCryptoAccess(allowCrypto: Bool) {
+        guard !allowCrypto else { return }
+
+        state.selectedCurrencies = state.selectedCurrencies.filter { !CurrencySelectionSupport.isCrypto($0) }
+        if state.selectedCurrencies.isEmpty {
+            state.selectedCurrencies = ["USD", "EUR", "RUB"].filter { state.allRates[$0] != nil || $0 == "USD" }
+            if state.selectedCurrencies.isEmpty {
+                state.selectedCurrencies = ["USD"]
+            }
+        }
+
+        if CurrencySelectionSupport.isCrypto(state.activeCode) || !state.selectedCurrencies.contains(state.activeCode) {
+            state.activeCode = state.selectedCurrencies.first ?? "USD"
+            storedActive = state.activeCode
+            mirrorToICloud(key: "conv_active_code", value: state.activeCode)
+        }
+
+        persistSelected()
+        syncWidgetConverterSnapshot()
+    }
     
     private func persistInputIfNeeded(previousInput: String) {
         guard state.inputText != previousInput else { return }
