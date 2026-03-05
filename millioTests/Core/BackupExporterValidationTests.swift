@@ -37,7 +37,7 @@ struct BackupExporterValidationTests {
         context.insert(BadExportModel())
         try context.save()
         
-        #expect(throws: AppError.backupFailed("Экспорт модели 'BadExportModel' вернул неожиданный формат")) {
+        #expect(throws: BackupFailureCode.modelExportUnexpectedFormat("BadExportModel").appError) {
             _ = try DataRepository.exportAllData(from: context)
         }
     }
