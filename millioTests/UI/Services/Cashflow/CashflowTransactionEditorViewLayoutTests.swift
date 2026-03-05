@@ -74,8 +74,8 @@ struct CashflowTransactionEditorViewLayoutTests {
     @Test("Конфигурация cashflow-листа для дохода")
     func incomeSheetConfiguration() {
         let kind = CashflowCategoryTransactionSheetKind.income
-        #expect(kind.navigationTitle == "Новый доход")
-        #expect(kind.monthlyTotalTitle == "Итого доход за месяц")
+        #expect(kind.navigationTitle == "New income")
+        #expect(kind.monthlyTotalTitle == "Total income for month")
         #expect(kind.categoryKind == .income)
         #expect(kind.transactionType == .income)
         #expect(kind.historyFilter == .income)
@@ -84,8 +84,8 @@ struct CashflowTransactionEditorViewLayoutTests {
     @Test("Конфигурация cashflow-листа для расхода")
     func expenseSheetConfiguration() {
         let kind = CashflowCategoryTransactionSheetKind.expense
-        #expect(kind.navigationTitle == "Новый расход")
-        #expect(kind.monthlyTotalTitle == "Итого расход за месяц")
+        #expect(kind.navigationTitle == "New expense")
+        #expect(kind.monthlyTotalTitle == "Total expense for month")
         #expect(kind.categoryKind == .expense)
         #expect(kind.transactionType == .expense)
         #expect(kind.historyFilter == .expense)

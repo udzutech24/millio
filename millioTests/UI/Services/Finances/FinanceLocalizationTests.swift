@@ -4,6 +4,7 @@
 //
 
 import Testing
+import Foundation
 @testable import millio
 
 struct FinanceLocalizationTests {
@@ -34,6 +35,11 @@ struct FinanceLocalizationTests {
             "finances.dynamics.filter.title",
             "finances.group_editor.nav.new",
             "finances.transaction.note.credit_remaining_edit",
+            "finances.settings.title",
+            "finances.audit.nav.title",
+            "finances.audit.search.placeholder",
+            "finances.audit.date_picker.title",
+            "finances.chart.axis.total",
         ]
 
         for key in keys {
@@ -67,5 +73,36 @@ struct FinanceLocalizationTests {
         #expect(InvestmentCategory.crypto.displayName != "finances.investment.category.crypto")
         #expect(CreditType.consumer.displayName != "finances.credit.type.consumer")
         #expect(CreditPaymentMode.nextDate.displayName != "finances.credit.payment_mode.next_date")
+    }
+
+    @Test("Все ключи finances.* имеют переводы ru/en в Localizable.xcstrings")
+    func allFinanceKeysHaveRuAndEnTranslations() throws {
+        let testFileURL = URL(fileURLWithPath: #filePath)
+        let repoRootURL = testFileURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let xcstringsURL = repoRootURL
+            .appendingPathComponent("millio")
+            .appendingPathComponent("Localizable.xcstrings")
+
+        let data = try Data(contentsOf: xcstringsURL)
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let strings = try #require(json["strings"] as? [String: Any])
+
+        for (key, rawValue) in strings where key.hasPrefix("finances.") {
+            let value = try #require(rawValue as? [String: Any], "Invalid entry for key: \(key)")
+            let localizations = try #require(value["localizations"] as? [String: Any], "Missing localizations for key: \(key)")
+            let en = try #require(localizations["en"] as? [String: Any], "Missing en localization: \(key)")
+            let ru = try #require(localizations["ru"] as? [String: Any], "Missing ru localization: \(key)")
+            let enUnit = try #require(en["stringUnit"] as? [String: Any], "Missing en stringUnit: \(key)")
+            let ruUnit = try #require(ru["stringUnit"] as? [String: Any], "Missing ru stringUnit: \(key)")
+            let enValue = try #require(enUnit["value"] as? String, "Missing en value: \(key)")
+            let ruValue = try #require(ruUnit["value"] as? String, "Missing ru value: \(key)")
+            #expect(!enValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "Empty en value: \(key)")
+            #expect(!ruValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "Empty ru value: \(key)")
+        }
     }
 }

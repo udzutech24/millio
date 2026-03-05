@@ -45,7 +45,7 @@ struct PrimaryCurrencySelectionView: View {
             isPresented: $showPrimaryCurrencyConfirmation,
             presenting: pendingPrimaryCurrencyCode
         ) { pendingCode in
-            Button("Change to \(pendingCode)") {
+            Button(String(format: String(localized: "profile.primary_currency.change_to_format"), pendingCode)) {
                 primaryCurrencyCode = pendingCode
                 pendingPrimaryCurrencyCode = nil
             }

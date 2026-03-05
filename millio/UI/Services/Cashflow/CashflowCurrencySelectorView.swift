@@ -41,11 +41,11 @@ struct CashflowCurrencySelectorView: View {
                         .padding(.top, 6)
                 }
             }
-            .navigationTitle("Валюта отображения")
+            .navigationTitle("Display currency")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Отмена") {
+                    Button("Cancel") {
                         dismiss()
                     }
                     .foregroundStyle(AppColors.textPrimary)
@@ -57,7 +57,7 @@ struct CashflowCurrencySelectorView: View {
                         Image(systemName: "questionmark.circle")
                             .foregroundStyle(AppColors.textPrimary)
                     }
-                    .accessibilityLabel("Подсказка о валюте отображения")
+                    .accessibilityLabel("Display currency hint")
                 }
             }
             .onAppear {
@@ -66,7 +66,7 @@ struct CashflowCurrencySelectorView: View {
                     hasSeenDisplayCurrencyHint = true
                 }
             }
-            .alert("Подсказка", isPresented: $showInfoAlert) {
+            .alert("Hint", isPresented: $showInfoAlert) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(infoMessage)
@@ -75,7 +75,7 @@ struct CashflowCurrencySelectorView: View {
     }
 
     private var infoMessage: String {
-        "Основная валюта меняется только в Профиле. Здесь валюта влияет только на просмотр и сбрасывается после выхода из Кэшфлоу."
+        "Primary currency can only be changed in Profile. Here, currency affects only the view and resets after leaving Cashflow."
     }
 
     private func infoBanner(message: String) -> some View {
@@ -102,7 +102,7 @@ struct CashflowCurrencySelectorView: View {
                     .clipShape(Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Скрыть уведомление")
+            .accessibilityLabel("Hide notification")
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 10)

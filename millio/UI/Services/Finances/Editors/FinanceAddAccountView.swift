@@ -15,6 +15,8 @@ struct FinanceAddAccountView: View {
     let editingInvestment: Investment?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(AppState.self) private var appState
+    @Environment(AppRouter.self) private var router
 
     init(
         viewModel: FinanceViewModel,
@@ -61,6 +63,8 @@ struct FinanceAddAccountView: View {
     @State private var accountName: String = ""
     @FocusState private var isNameFieldFocused: Bool
     @State private var areHintsHidden: Bool = false
+    @State private var showPaywallAlert = false
+    @State private var paywallMessage = ""
 
     private enum HintsPrefs {
         static let hiddenKey = "finance_add_account_hints_hidden"
@@ -765,6 +769,14 @@ struct FinanceAddAccountView: View {
             }
             viewModel.handle(.loadAccounts)
         }
+        .alert(String(localized: "Ограничение Free-плана"), isPresented: $showPaywallAlert) {
+            Button(String(localized: "subscription.button.subscribe")) {
+                router.push(.subscription)
+            }
+            Button(String(localized: "finances.common.cancel"), role: .cancel) { }
+        } message: {
+            Text(paywallMessage)
+        }
     }
     
     var body: some View {
@@ -877,6 +889,21 @@ struct FinanceAddAccountView: View {
         if targetGroup == nil {
             hints.append(ValidationHint(text: String(localized: "finances.add_account.hint.recommended_group"), kind: .recommended))
         }
+        if selectedAccountType == .investment && selectedInvestmentCategory.isMarketTickerCategory {
+            let remaining = max(0, EntitlementPolicy.freeTrackedTickerLimit - currentTrackedTickerCount)
+            if !appState.isPro {
+                hints.append(
+                    ValidationHint(
+                        text: String(
+                            format: String(localized: "monetization.ticker.limit.remaining_format"),
+                            remaining,
+                            EntitlementPolicy.freeTrackedTickerLimit
+                        ),
+                        kind: .recommended
+                    )
+                )
+            }
+        }
         return hints
     }
 
@@ -897,6 +924,8 @@ struct FinanceAddAccountView: View {
     }
     
     private func addAccount() {
+        guard validateEntitlementsForSave() else { return }
+
         switch selectedAccountType {
         case .card:
             if let cardViewModel = cardViewModel {
@@ -939,7 +968,42 @@ struct FinanceAddAccountView: View {
             }
         }
     }
-    
+
+    private var currentTrackedTickerCount: Int {
+        viewModel.state.availableInvestments.reduce(into: 0) { partialResult, investment in
+            if investment.category.isMarketTickerCategory {
+                partialResult += 1
+            }
+        }
+    }
+
+    private var isCreatingNewTrackedTicker: Bool {
+        guard selectedAccountType == .investment else { return false }
+        guard selectedInvestmentCategory.isMarketTickerCategory else { return false }
+
+        if let editingInvestment {
+            return !editingInvestment.category.isMarketTickerCategory
+        }
+        return true
+    }
+
+    private func validateEntitlementsForSave() -> Bool {
+        guard isCreatingNewTrackedTicker else { return true }
+
+        let canAdd = EntitlementPolicy.canAddTrackedTicker(
+            isPro: appState.isPro,
+            currentTrackedTickers: currentTrackedTickerCount
+        )
+        guard canAdd else {
+            paywallMessage = String(
+                format: String(localized: "monetization.ticker.limit.hard_format"),
+                EntitlementPolicy.freeTrackedTickerLimit
+            )
+            showPaywallAlert = true
+            return false
+        }
+        return true
+    }
     private func createCardAndAddToGroup(cardViewModel: CardViewModel, group: FinanceGroup?) {
         guard let cardData = cardData else { return }
         
@@ -1169,5 +1233,11 @@ enum FinanceAddAccountGroupSelection {
         }
         
         return nil
+    }
+}
+
+private extension InvestmentCategory {
+    var isMarketTickerCategory: Bool {
+        self == .stocks || self == .crypto
     }
 }

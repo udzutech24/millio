@@ -45,7 +45,10 @@ struct FinanceBalanceAuditSheet: View {
 
                 VStack(spacing: 12) {
                     headerSection
-                    InlineSearchBar(text: $viewModel.searchText, placeholder: "Поиск счёта")
+                    InlineSearchBar(
+                        text: $viewModel.searchText,
+                        placeholder: FinancesL10n.tr("finances.audit.search.placeholder")
+                    )
                         .padding(.horizontal, 16)
 
                     if viewModel.filteredRows.isEmpty {
@@ -64,7 +67,7 @@ struct FinanceBalanceAuditSheet: View {
                 }
                 .padding(.top, 8)
             }
-            .navigationTitle("Дневные срезы")
+            .navigationTitle(FinancesL10n.tr("finances.audit.nav.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -79,20 +82,20 @@ struct FinanceBalanceAuditSheet: View {
                         Button {
                             showDatePickerSheet = true
                         } label: {
-                            Label("Дата", systemImage: "calendar")
+                            Label(FinancesL10n.tr("finances.audit.menu.date"), systemImage: "calendar")
                         }
 
                         if !isEditMode {
                             Button {
                                 isEditMode = true
                             } label: {
-                                Label("Режим редактирования", systemImage: "pencil")
+                                Label(FinancesL10n.tr("finances.audit.menu.edit_mode.start"), systemImage: "pencil")
                             }
                         } else {
                             Button {
                                 isEditMode = false
                             } label: {
-                                Label("Завершить редактирование", systemImage: "checkmark")
+                                Label(FinancesL10n.tr("finances.audit.menu.edit_mode.finish"), systemImage: "checkmark")
                             }
                         }
                     } label: {
@@ -104,7 +107,7 @@ struct FinanceBalanceAuditSheet: View {
                 datePickerSheet
             }
             .confirmationDialog(
-                "Подтвердите действие",
+                FinancesL10n.tr("finances.audit.confirmation.title"),
                 isPresented: Binding(
                     get: { pendingAction != nil },
                     set: { if !$0 { pendingAction = nil } }
@@ -113,25 +116,25 @@ struct FinanceBalanceAuditSheet: View {
             ) { action in
                 switch action {
                 case .deleteValue(let row):
-                    Button("Удалить значение", role: .destructive) {
+                    Button(FinancesL10n.tr("finances.audit.confirmation.delete_value"), role: .destructive) {
                         viewModel.deleteValue(for: row)
                         EventBus.shared.publish(FinanceEvent.auditSnapshotsUpdated)
                         pendingAction = nil
                     }
                 case .deleteAccount(let row):
-                    Button("Удалить счёт навсегда", role: .destructive) {
+                    Button(FinancesL10n.tr("finances.audit.confirmation.delete_account"), role: .destructive) {
                         viewModel.deleteAccountForever(row)
                         EventBus.shared.publish(FinanceEvent.auditSnapshotsUpdated)
                         pendingAction = nil
                     }
                 }
-                Button("Отмена", role: .cancel) {}
+                Button(FinancesL10n.tr("finances.common.cancel"), role: .cancel) {}
             } message: { action in
                 switch action {
                 case .deleteValue(let row):
-                    Text("Удалится только значение за выбранную дату для «\(row.title)». Операция идемпотентна.")
+                    Text(FinancesL10n.format("finances.audit.confirmation.delete_value.message", row.title))
                 case .deleteAccount(let row):
-                    Text("Счёт «\(row.title)» будет удалён из истории и текущей базы. Операция необратима.")
+                    Text(FinancesL10n.format("finances.audit.confirmation.delete_account.message", row.title))
                 }
             }
             .onChange(of: viewModel.selectedDate) { _, _ in
@@ -177,7 +180,7 @@ struct FinanceBalanceAuditSheet: View {
                     )
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Выбрать дату")
+                .accessibilityLabel(FinancesL10n.tr("finances.audit.accessibility.select_date"))
 
                 Spacer()
             }
@@ -241,13 +244,13 @@ struct FinanceBalanceAuditSheet: View {
                         Button(role: .destructive) {
                             pendingAction = .deleteValue(row)
                         } label: {
-                            Label("Удалить дату", systemImage: "trash")
+                            Label(FinancesL10n.tr("finances.audit.swipe.delete_date"), systemImage: "trash")
                         }
 
                         Button(role: .destructive) {
                             pendingAction = .deleteAccount(row)
                         } label: {
-                            Label("Удалить счёт", systemImage: "xmark.bin")
+                            Label(FinancesL10n.tr("finances.audit.swipe.delete_account"), systemImage: "xmark.bin")
                         }
                         .tint(.red)
                     }
@@ -268,7 +271,7 @@ struct FinanceBalanceAuditSheet: View {
                     .foregroundStyle(AppColors.textPrimary)
 
                 if row.isUnknown {
-                    Text("Неизвестный")
+                    Text(FinancesL10n.tr("finances.audit.badge.unknown"))
                         .font(.system(size: 10, weight: .bold))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
@@ -359,7 +362,7 @@ struct FinanceBalanceAuditSheet: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.circle.fill")
-                    Text("Сохранить")
+                    Text(FinancesL10n.tr("finances.audit.save"))
                         .fontWeight(.semibold)
                 }
                 .frame(maxWidth: .infinity)
@@ -415,10 +418,10 @@ struct FinanceBalanceAuditSheet: View {
             Image(systemName: "calendar.badge.exclamationmark")
                 .font(.system(size: 44))
                 .foregroundStyle(AppColors.textTertiary)
-            Text("На эту дату нет сохраненного среза")
+            Text(FinancesL10n.tr("finances.audit.empty.no_snapshot"))
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(AppColors.textPrimary)
-            Button("Выбрать другую дату") {
+            Button(FinancesL10n.tr("finances.audit.empty.select_other_date")) {
                 showDatePickerSheet = true
             }
             .buttonStyle(.borderedProminent)
@@ -432,7 +435,7 @@ struct FinanceBalanceAuditSheet: View {
         NavigationStack {
             VStack {
                 DatePicker(
-                    "Дата среза",
+                    FinancesL10n.tr("finances.audit.date_picker.label"),
                     selection: Binding(
                         get: { viewModel.selectedDate },
                         set: { viewModel.setDate($0) }
@@ -444,10 +447,10 @@ struct FinanceBalanceAuditSheet: View {
 
                 Spacer()
             }
-            .navigationTitle("Выбор даты")
+            .navigationTitle(FinancesL10n.tr("finances.audit.date_picker.title"))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Готово") { showDatePickerSheet = false }
+                    Button(FinancesL10n.tr("finances.audit.date_picker.done")) { showDatePickerSheet = false }
                 }
             }
         }

@@ -103,3 +103,21 @@ final class AppState {
         }
     }
 }
+
+/// Централизованные правила монетизации Free/PRO.
+enum EntitlementPolicy {
+    static let freeTrackedTickerLimit = 5
+    static let freeCashbackCardLimit = 3
+
+    static func canUseConverterCrypto(isPro: Bool) -> Bool {
+        isPro
+    }
+
+    static func canAddTrackedTicker(isPro: Bool, currentTrackedTickers: Int) -> Bool {
+        isPro || currentTrackedTickers < freeTrackedTickerLimit
+    }
+
+    static func canUseCashbackCard(isPro: Bool, cardIndex: Int) -> Bool {
+        isPro || cardIndex < freeCashbackCardLimit
+    }
+}

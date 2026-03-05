@@ -13,10 +13,14 @@ final class QuickSetupViewModel: ObservableObject {
     @Published var productSymbolInput: String = ""
     @Published var productAmountInput: String = ""
     @Published var products: [QuickSetupProductDraft] = []
+    @Published private(set) var lastAddDraftError: String?
+
+    private let isProUser: Bool
 
     static let maxFavoriteCurrencies = 4
 
     init(appState: AppState) {
+        isProUser = appState.isPro
         selectedLanguage = appState.selectedLanguage
         primaryCurrencyCode = appState.primaryCurrencyCode
         favoriteCurrencyCodes = Array(SettingsManager.shared.favoriteCurrencyCodes.prefix(Self.maxFavoriteCurrencies))
@@ -124,6 +128,7 @@ final class QuickSetupViewModel: ObservableObject {
 
     @discardableResult
     func addDraftProduct() -> Bool {
+        lastAddDraftError = nil
         let trimmedName = productNameInput.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedSymbol = productSymbolInput.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         let resolvedName: String
@@ -131,13 +136,32 @@ final class QuickSetupViewModel: ObservableObject {
 
         if productTypeForCreation == .ticker || productTypeForCreation == .crypto {
             if productTypeForCreation == .ticker, trimmedSymbol.isEmpty {
+                lastAddDraftError = String(localized: "quick_setup.error.enter_ticker")
+                return false
+            }
+            let currentTickerDraftCount = products.reduce(into: 0) { partialResult, item in
+                if item.type == .ticker || item.type == .crypto {
+                    partialResult += 1
+                }
+            }
+            if !EntitlementPolicy.canAddTrackedTicker(
+                isPro: isProUser,
+                currentTrackedTickers: currentTickerDraftCount
+            ) {
+                lastAddDraftError = String(
+                    format: String(localized: "monetization.ticker.limit.short_format"),
+                    EntitlementPolicy.freeTrackedTickerLimit
+                )
                 return false
             }
             let resolvedSymbol = trimmedSymbol.isEmpty ? "BTC" : trimmedSymbol
             resolvedName = trimmedName.isEmpty ? resolvedSymbol : trimmedName
             symbol = resolvedSymbol
         } else {
-            guard !trimmedName.isEmpty else { return false }
+            guard !trimmedName.isEmpty else {
+                lastAddDraftError = String(localized: "quick_setup.error.enter_name")
+                return false
+            }
             resolvedName = trimmedName
             symbol = nil
         }

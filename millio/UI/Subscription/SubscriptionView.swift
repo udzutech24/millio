@@ -72,15 +72,33 @@ struct SubscriptionView: View {
                         
                         VStack(spacing: 12) {
                             FeatureRow(
-                                icon: "sparkles",
-                                textKey: "subscription.features.unlimited_services",
+                                icon: "bitcoinsign.circle.fill",
+                                textKey: "subscription.features.crypto_converter",
                                 gradient: AppColors.financesGradient
                             )
                             
                             FeatureRow(
                                 icon: "chart.line.uptrend.xyaxis",
-                                textKey: "subscription.features.advanced_analytics",
+                                textKey: "subscription.features.investment_analytics",
                                 gradient: AppColors.coursesGradient
+                            )
+
+                            FeatureRow(
+                                icon: "list.bullet.rectangle.portrait",
+                                textKey: "subscription.features.unlimited_tickers",
+                                gradient: AppColors.incomeGradient
+                            )
+
+                            FeatureRow(
+                                icon: "creditcard.fill",
+                                textKey: "subscription.features.more_cashback_cards",
+                                gradient: AppColors.cashbackGradient
+                            )
+
+                            FeatureRow(
+                                icon: "rectangle.3.group.fill",
+                                textKey: "subscription.features.pro_widget",
+                                gradient: AppColors.expenseGradient
                             )
                         }
                         .padding(.horizontal, 24)

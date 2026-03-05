@@ -131,7 +131,7 @@ struct QuickSetupView: View {
 
     private var progressBar: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Шаг \(viewModel.currentStep.rawValue + 1) из \(QuickSetupStep.allCases.count): \(viewModel.currentStep.title)")
+            Text(stepProgressText)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary)
 
@@ -249,7 +249,7 @@ struct QuickSetupView: View {
                 }
             }
 
-            Text("Выбрано: \(viewModel.selectedExpenseCategoryIDs.count)")
+            Text(selectedExpenseCategoriesText)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary)
 
@@ -303,9 +303,7 @@ struct QuickSetupView: View {
                     let added = viewModel.addDraftProduct()
                     if !added {
                         fireWarningHaptic()
-                        errorMessage = (viewModel.productTypeForCreation == .ticker || viewModel.productTypeForCreation == .crypto)
-                            ? "Укажите тикер."
-                            : "Укажите название."
+                        errorMessage = viewModel.lastAddDraftError ?? String(localized: "quick_setup.error.check_data")
                     } else {
                         fireSuccessHaptic()
                     }
@@ -322,7 +320,7 @@ struct QuickSetupView: View {
 
             if !viewModel.products.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Добавлено: \(viewModel.products.count)")
+                    Text(addedProductsText)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
 
@@ -335,7 +333,7 @@ struct QuickSetupView: View {
                                 Text(product.name)
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundStyle(AppColors.textPrimary)
-                                Text("\(product.type.title) · \(moneyText(product.amount, currencyCode: product.currencyCode))")
+                                Text(productSummaryText(product))
                                     .font(.system(size: 12, weight: .regular))
                                     .foregroundStyle(AppColors.textSecondary)
                             }
@@ -521,6 +519,34 @@ struct QuickSetupView: View {
         return "\(formatted) \(currencyCode)"
     }
 
+    private var stepProgressText: String {
+        String(
+            format: String(localized: "quick_setup.step_progress_format"),
+            viewModel.currentStep.rawValue + 1,
+            QuickSetupStep.allCases.count,
+            viewModel.currentStep.title
+        )
+    }
+
+    private var selectedExpenseCategoriesText: String {
+        String(
+            format: String(localized: "quick_setup.selected_categories_count_format"),
+            viewModel.selectedExpenseCategoryIDs.count
+        )
+    }
+
+    private var addedProductsText: String {
+        String(
+            format: String(localized: "quick_setup.added_products_count_format"),
+            viewModel.products.count
+        )
+    }
+
+    private func productSummaryText(_ product: QuickSetupProductDraft) -> String {
+        let amountText = moneyText(product.amount, currencyCode: product.currencyCode)
+        return String(format: String(localized: "quick_setup.product_summary_format"), product.type.title, amountText)
+    }
+
     private func saveSelection() {
         guard !isSaving else { return }
 
@@ -679,7 +705,7 @@ private struct QuickSetupFavoriteCurrenciesSheet: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            Text("Можно выбрать до \(maxSelection) валют")
+            Text(String(format: String(localized: "quick_setup.favorite_limit_format"), maxSelection))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary)
                 .padding(.vertical, 10)

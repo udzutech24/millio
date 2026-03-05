@@ -18,6 +18,8 @@ struct ConverterView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var hSize
     @Environment(AppRouter.self) private var router
+    @Environment(AppState.self) private var appState
+    @State private var showCryptoProAlert = false
 
     private let rowStrokeColor = Color.white.opacity(0.16)
     private let rowInactiveStrokeColor = Color.white.opacity(0.07)
@@ -135,9 +137,13 @@ struct ConverterView: View {
             }
         }
         .task {
+            viewModel.enforceCryptoAccess(allowCrypto: EntitlementPolicy.canUseConverterCrypto(isPro: appState.isPro))
             if viewModel.state.allRates.count <= 1 {
                 await viewModel.fetchRates()
             }
+        }
+        .onChange(of: appState.isPro) { _, isPro in
+            viewModel.enforceCryptoAccess(allowCrypto: EntitlementPolicy.canUseConverterCrypto(isPro: isPro))
         }
         .sheet(isPresented: Binding(
             get: { viewModel.state.showPicker },
@@ -211,6 +217,14 @@ struct ConverterView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar { topToolbar }
+        .alert(String(localized: "Криптовалюты доступны в PRO"), isPresented: $showCryptoProAlert) {
+            Button(String(localized: "subscription.button.subscribe")) {
+                router.push(.subscription)
+            }
+            Button(String(localized: "finances.common.cancel"), role: .cancel) { }
+        } message: {
+            Text(String(localized: "Обычные валюты доступны бесплатно, криптовалюты доступны по подписке PRO."))
+        }
     }
     
     // MARK: - Split view helpers
@@ -265,13 +279,19 @@ struct ConverterView: View {
     private var pickerSheet: some View {
         NavigationStack {
             CurrencyPickerView(
-                allCodes: viewModel.allAvailableCodes,
+                allCodes: availablePickerCodes,
                 searchText: Binding(
                     get: { viewModel.state.searchText },
                     set: { viewModel.handle(.updateSearchText($0)) }
                 ),
                 selectedCodes: viewModel.state.selectedCurrencies,
                 onSelect: { code in
+                    if CurrencySelectionSupport.isCrypto(code),
+                       !EntitlementPolicy.canUseConverterCrypto(isPro: appState.isPro) {
+                        viewModel.handle(.hidePicker)
+                        showCryptoProAlert = true
+                        return
+                    }
                     viewModel.handle(.applyPickerSelection(code))
                 }
             )
@@ -288,6 +308,13 @@ struct ConverterView: View {
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+    }
+
+    private var availablePickerCodes: [String] {
+        if EntitlementPolicy.canUseConverterCrypto(isPro: appState.isPro) {
+            return viewModel.allAvailableCodes
+        }
+        return viewModel.allAvailableCodes.filter { !CurrencySelectionSupport.isCrypto($0) }
     }
     
     

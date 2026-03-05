@@ -315,11 +315,11 @@ final class FinanceBalanceAuditViewModel: ObservableObject {
             for account in accounts {
                 switch account.accountType {
                 case .card:
-                    cardGroupByID[account.accountID] = nonEmptyText(group.name) ?? "Без группы"
+                    cardGroupByID[account.accountID] = nonEmptyText(group.name) ?? FinancesL10n.tr("finances.audit.fallback.ungrouped")
                 case .credit:
-                    creditGroupByID[account.accountID] = nonEmptyText(group.name) ?? "Без группы"
+                    creditGroupByID[account.accountID] = nonEmptyText(group.name) ?? FinancesL10n.tr("finances.audit.fallback.ungrouped")
                 case .investment:
-                    investmentGroupByID[account.accountID] = nonEmptyText(group.name) ?? "Без группы"
+                    investmentGroupByID[account.accountID] = nonEmptyText(group.name) ?? FinancesL10n.tr("finances.audit.fallback.ungrouped")
                 }
             }
         }
@@ -336,7 +336,7 @@ final class FinanceBalanceAuditViewModel: ObservableObject {
                 accountID: card.cardUniqueID,
                 title: title,
                 bankName: card.bank.displayName,
-                groupName: cardGroupByID[card.cardUniqueID] ?? "Без группы",
+                groupName: cardGroupByID[card.cardUniqueID] ?? FinancesL10n.tr("finances.audit.fallback.ungrouped"),
                 currencyCode: normalizedCurrency(card.currency),
                 value: card.balance,
                 effectSign: effectSign
@@ -349,9 +349,9 @@ final class FinanceBalanceAuditViewModel: ObservableObject {
                 id: key,
                 accountTypeRaw: FinanceAccountType.credit.rawValue,
                 accountID: credit.creditUniqueID,
-                title: nonEmptyText(credit.name) ?? nonEmptyText(credit.bank.displayName) ?? "Неизвестный счёт",
+                title: nonEmptyText(credit.name) ?? nonEmptyText(credit.bank.displayName) ?? FinancesL10n.tr("finances.audit.fallback.unknown_account"),
                 bankName: credit.bank.displayName,
-                groupName: creditGroupByID[credit.creditUniqueID] ?? "Без группы",
+                groupName: creditGroupByID[credit.creditUniqueID] ?? FinancesL10n.tr("finances.audit.fallback.ungrouped"),
                 currencyCode: normalizedCurrency(credit.currency),
                 value: credit.remainingAmount,
                 effectSign: -1
@@ -364,9 +364,9 @@ final class FinanceBalanceAuditViewModel: ObservableObject {
                 id: key,
                 accountTypeRaw: FinanceAccountType.investment.rawValue,
                 accountID: investment.investmentUniqueID,
-                title: nonEmptyText(investment.name) ?? "Неизвестный счёт",
+                title: nonEmptyText(investment.name) ?? FinancesL10n.tr("finances.audit.fallback.unknown_account"),
                 bankName: "",
-                groupName: investmentGroupByID[investment.investmentUniqueID] ?? "Без группы",
+                groupName: investmentGroupByID[investment.investmentUniqueID] ?? FinancesL10n.tr("finances.audit.fallback.ungrouped"),
                 currencyCode: normalizedCurrency(investment.currency),
                 value: investment.amount,
                 effectSign: investment.investmentType == .negative ? -1 : 1
@@ -419,7 +419,7 @@ final class FinanceBalanceAuditViewModel: ObservableObject {
         if let bank = nonEmptyText(card.bank.displayName) {
             return bank
         }
-        return "Неизвестный счёт"
+        return FinancesL10n.tr("finances.audit.fallback.unknown_account")
     }
 
     private func resolvedTitle(snapshot: String, live: FinanceBalanceLiveAccount?) -> String {
@@ -434,7 +434,7 @@ final class FinanceBalanceAuditViewModel: ObservableObject {
                 return bank
             }
         }
-        return "Неизвестный счёт"
+        return FinancesL10n.tr("finances.audit.fallback.unknown_account")
     }
 
     private func resolvedGroupName(snapshot: String, live: FinanceBalanceLiveAccount?) -> String {
@@ -444,7 +444,7 @@ final class FinanceBalanceAuditViewModel: ObservableObject {
         if let live, let value = nonEmptyText(live.groupName) {
             return value
         }
-        return "Без группы"
+        return FinancesL10n.tr("finances.audit.fallback.ungrouped")
     }
 
     private func normalizedCurrency(_ code: String) -> String {

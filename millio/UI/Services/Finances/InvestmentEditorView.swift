@@ -14,6 +14,8 @@ struct InvestmentEditorView: View {
     let onClose: (() -> Void)?
     let onDelete: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppState.self) private var appState
+    @Environment(AppRouter.self) private var router
 
     @State private var name: String = ""
     @State private var selectedInvestmentType: InvestmentType = .positive
@@ -37,6 +39,8 @@ struct InvestmentEditorView: View {
     @State private var showMarketSearchSheet: Bool = false
     @State private var isRefreshingPrice: Bool = false
     @State private var marketErrorMessage: String?
+    @State private var showPaywallAlert = false
+    @State private var paywallMessage = ""
 
     private let marketDataClient: MarketDataClientProtocol
 
@@ -184,6 +188,14 @@ struct InvestmentEditorView: View {
                 }
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+            }
+            .alert(String(localized: "Ограничение Free-плана"), isPresented: $showPaywallAlert) {
+                Button(String(localized: "subscription.button.subscribe")) {
+                    router.push(.subscription)
+                }
+                Button(String(localized: "finances.common.cancel"), role: .cancel) { }
+            } message: {
+                Text(paywallMessage)
             }
         }
     }
@@ -632,6 +644,8 @@ struct InvestmentEditorView: View {
     }
 
     private func saveInvestment() {
+        guard validateEntitlementsForSave() else { return }
+
         let effectiveAmount: Double
         let marketData: InvestmentMarketData?
         let createCashflowTransaction: Bool
@@ -695,5 +709,40 @@ struct InvestmentEditorView: View {
         } else {
             dismiss()
         }
+    }
+
+    private var currentTrackedTickerCount: Int {
+        viewModel.state.investments.reduce(into: 0) { partialResult, investment in
+            if investment.category == .stocks || investment.category == .crypto {
+                partialResult += 1
+            }
+        }
+    }
+
+    private var isCreatingNewTrackedTicker: Bool {
+        guard isMarketCategory else { return false }
+
+        if let editing = viewModel.state.editingInvestment {
+            return !(editing.category == .stocks || editing.category == .crypto)
+        }
+        return true
+    }
+
+    private func validateEntitlementsForSave() -> Bool {
+        guard isCreatingNewTrackedTicker else { return true }
+
+        let canAdd = EntitlementPolicy.canAddTrackedTicker(
+            isPro: appState.isPro,
+            currentTrackedTickers: currentTrackedTickerCount
+        )
+        guard canAdd else {
+            paywallMessage = String(
+                format: String(localized: "monetization.ticker.limit.hard_format"),
+                EntitlementPolicy.freeTrackedTickerLimit
+            )
+            showPaywallAlert = true
+            return false
+        }
+        return true
     }
 }

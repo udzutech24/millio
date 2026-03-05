@@ -685,6 +685,8 @@ enum CashbackEditorCardSelectionResolver {
 private struct CashbackEditorView: View {
     @ObservedObject var viewModel: CashbackViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppState.self) private var appState
+    @Environment(AppRouter.self) private var router
 
     @State private var showCardPicker: Bool = false
     @State private var showCategoryEditorSheet: Bool = false
@@ -735,6 +737,22 @@ private struct CashbackEditorView: View {
         )
     }
 
+    private var limitedFreeCards: [Card] {
+        let sorted = viewModel.state.availableCards.sorted { $0.createdAt < $1.createdAt }
+        return Array(sorted.prefix(EntitlementPolicy.freeCashbackCardLimit))
+    }
+
+    private var availableCardsForPicker: [Card] {
+        if appState.isPro {
+            return viewModel.state.availableCards
+        }
+        return limitedFreeCards
+    }
+
+    private var cashbackCardsAreLimited: Bool {
+        !appState.isPro && viewModel.state.availableCards.count > EntitlementPolicy.freeCashbackCardLimit
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -777,7 +795,9 @@ private struct CashbackEditorView: View {
                         get: { selectedCardID ?? "" },
                         set: { selectedCardID = $0.isEmpty ? nil : $0 }
                     ),
-                    availableCards: viewModel.state.availableCards
+                    availableCards: availableCardsForPicker,
+                    hasFreeLimit: cashbackCardsAreLimited,
+                    onTapUpgrade: { router.push(.subscription) }
                 )
             }
             .sheet(isPresented: $showCategoryEditorSheet) {
@@ -896,6 +916,29 @@ private struct CashbackEditorView: View {
                 }
             }
             .buttonStyle(.plain)
+
+            if cashbackCardsAreLimited {
+                HStack(spacing: 8) {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppColors.textTertiary)
+                    Text(
+                        String(
+                            format: String(localized: "cashback.free_plan.card_limit_format"),
+                            EntitlementPolicy.freeCashbackCardLimit
+                        )
+                    )
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppColors.textTertiary)
+                    Spacer()
+                    Button(String(localized: "subscription.button.subscribe")) {
+                        router.push(.subscription)
+                    }
+                    .font(.system(size: 12, weight: .semibold))
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 4)
+            }
         }
     }
 
@@ -1668,6 +1711,8 @@ private struct CashbackCategoryEditorSheet: View {
 private struct CashbackSingleCardPickerView: View {
     @Binding var selectedCardID: String
     let availableCards: [Card]
+    let hasFreeLimit: Bool
+    let onTapUpgrade: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var isAddCardRecommendationHidden = CashbackCardPickerRecommendationPrefs.shared.isHidden()
 
@@ -1788,6 +1833,25 @@ private struct CashbackSingleCardPickerView: View {
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 16)
+
+                        if hasFreeLimit {
+                            Button {
+                                onTapUpgrade()
+                            } label: {
+                                Text(String(localized: "cashback.free_plan.show_all_cards_pro"))
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(AppColors.textPrimary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                            .fill(CashbackScreenStyle.subduedCircleFill)
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 8)
+                        }
                     }
                 }
 

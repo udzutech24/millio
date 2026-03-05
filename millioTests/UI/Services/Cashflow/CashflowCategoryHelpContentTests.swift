@@ -13,17 +13,17 @@ struct CashflowCategoryHelpContentTests {
     func incomeHelpContainsMainGuidance() {
         let content = CashflowCategoryHelpContent.make(for: .income)
 
-        #expect(content.title == "Как это работает")
-        #expect(content.lines.contains { $0.contains("«Доход»") })
-        #expect(content.lines.contains { $0.contains("Нажмите «+»") })
-        #expect(content.lines.contains { $0.contains("Удерживайте категорию") })
+        #expect(content.title == "How it works")
+        #expect(content.lines.contains { $0.contains("Income screen") })
+        #expect(content.lines.contains { $0.contains("Tap +") })
+        #expect(content.lines.contains { $0.contains("Long press a category") })
     }
 
     @Test("Подсказка для расходов содержит текст про перенос в системную категорию")
     func expenseHelpContainsSafeMigrationNote() {
         let content = CashflowCategoryHelpContent.make(for: .expense)
 
-        #expect(content.lines.contains { $0.contains("«Расход»") })
-        #expect(content.lines.contains { $0.contains("переносятся в безопасную системную категорию") })
+        #expect(content.lines.contains { $0.contains("Expense screen") })
+        #expect(content.lines.contains { $0.contains("moved to a safe system category") })
     }
 }

@@ -103,6 +103,7 @@ struct QuickSetupApplier {
         guard !products.isEmpty else { return }
 
         let group = try ensureUngroupedGroup()
+        var trackedTickerCount = try activeTrackedTickerCount()
 
         for draft in products {
             switch draft.type {
@@ -155,6 +156,12 @@ struct QuickSetupApplier {
                 modelContext.insert(link)
 
             case .crypto:
+                guard EntitlementPolicy.canAddTrackedTicker(
+                    isPro: appState.isPro,
+                    currentTrackedTickers: trackedTickerCount
+                ) else {
+                    throw QuickSetupApplyError.trackedTickerLimitReached(limit: EntitlementPolicy.freeTrackedTickerLimit)
+                }
                 let investment = Investment(
                     name: draft.name,
                     investmentType: .positive,
@@ -170,6 +177,7 @@ struct QuickSetupApplier {
                 let link = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
                 link.group = group
                 modelContext.insert(link)
+                trackedTickerCount += 1
 
             case .credit:
                 let amount = max(0, draft.amount)
@@ -193,6 +201,12 @@ struct QuickSetupApplier {
                 modelContext.insert(link)
 
             case .ticker:
+                guard EntitlementPolicy.canAddTrackedTicker(
+                    isPro: appState.isPro,
+                    currentTrackedTickers: trackedTickerCount
+                ) else {
+                    throw QuickSetupApplyError.trackedTickerLimitReached(limit: EntitlementPolicy.freeTrackedTickerLimit)
+                }
                 let investment = Investment(
                     name: draft.name,
                     investmentType: .positive,
@@ -208,6 +222,7 @@ struct QuickSetupApplier {
                 let link = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
                 link.group = group
                 modelContext.insert(link)
+                trackedTickerCount += 1
             }
         }
 
@@ -240,5 +255,30 @@ struct QuickSetupApplier {
         )
         modelContext.insert(group)
         return group
+    }
+
+    private func activeTrackedTickerCount() throws -> Int {
+        let descriptor = FetchDescriptor<Investment>()
+        let investments = try modelContext.fetch(descriptor)
+        return investments.reduce(into: 0) { partialResult, investment in
+            guard investment.archivedAt == nil else { return }
+            if investment.category == .stocks || investment.category == .crypto {
+                partialResult += 1
+            }
+        }
+    }
+}
+
+enum QuickSetupApplyError: LocalizedError {
+    case trackedTickerLimitReached(limit: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case .trackedTickerLimitReached(let limit):
+            return String(
+                format: String(localized: "monetization.ticker.limit.max_format"),
+                limit
+            )
+        }
     }
 }

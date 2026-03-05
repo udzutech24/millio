@@ -92,17 +92,17 @@ struct CashflowScheduledTransactionsView: View {
                 onSave: { editingTransaction = nil }
             )
         }
-        .alert("Удалить операцию?", isPresented: $showDeleteAlert) {
-            Button("Отмена", role: .cancel) {
+        .alert("Delete transaction?", isPresented: $showDeleteAlert) {
+            Button("Cancel", role: .cancel) {
                 pendingDeleteTransaction = nil
             }
-            Button("Удалить", role: .destructive) {
+            Button("Delete", role: .destructive) {
                 guard let transactionToDelete = pendingDeleteTransaction else { return }
                 viewModel.handle(.deleteTransaction(transactionToDelete))
                 pendingDeleteTransaction = nil
             }
         } message: {
-            Text("Операция будет удалена без возможности восстановления.")
+            Text("The transaction will be deleted permanently.")
         }
     }
 
@@ -112,7 +112,7 @@ struct CashflowScheduledTransactionsView: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(AppColors.textSecondary)
 
-            TextField("Поиск операции", text: $searchText)
+            TextField("Search transaction", text: $searchText)
                 .textInputAutocapitalization(.words)
                 .foregroundStyle(AppColors.textPrimary)
         }
@@ -186,7 +186,7 @@ struct CashflowScheduledTransactionsView: View {
                             .multilineTextAlignment(.leading)
 
                         if mode == .recurring {
-                            Text("Ежемесячно")
+                            Text("Monthly")
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundStyle(AppColors.textSecondary)
                                 .padding(.horizontal, 8)
@@ -219,10 +219,10 @@ struct CashflowScheduledTransactionsView: View {
             editingTransaction = transaction
         }
         .contextMenu {
-            Button("Редактировать") {
+            Button("Edit") {
                 editingTransaction = transaction
             }
-            Button("Удалить", role: .destructive) {
+            Button("Delete", role: .destructive) {
                 requestDelete(transaction)
             }
         }
@@ -230,7 +230,7 @@ struct CashflowScheduledTransactionsView: View {
             Button(role: .destructive) {
                 requestDelete(transaction)
             } label: {
-                Label("Удалить", systemImage: "trash")
+                Label("Delete", systemImage: "trash")
             }
         }
     }
@@ -271,16 +271,16 @@ struct CashflowScheduledTransactionsView: View {
         switch mode {
         case .recurring:
             if let nextDate = viewModel.nextOccurrenceDate(for: transaction) {
-                parts.append("Следующая: \(formatDate(nextDate))")
+                parts.append("Next: \(formatDate(nextDate))")
             } else {
-                parts.append("Дата старта: \(formatDate(plannedDate))")
+                parts.append("Start date: \(formatDate(plannedDate))")
             }
         case .plannedOneTime:
-            parts.append("Запланировано: \(formatDate(plannedDate))")
+            parts.append("Planned: \(formatDate(plannedDate))")
         }
 
         if let cardName = cardName(for: transaction.cardID) {
-            parts.append("Счет: \(cardName)")
+            parts.append("Account: \(cardName)")
         }
 
         if let note = transaction.note?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -350,65 +350,65 @@ enum CashflowScheduledTransactionsMode: Hashable {
     func navigationTitle(for kind: CashflowCategoryKind) -> String {
         switch (self, kind) {
         case (.recurring, .income):
-            return "Регулярные доходы"
+            return "Recurring income"
         case (.recurring, .expense):
-            return "Регулярные расходы"
+            return "Recurring expenses"
         case (.plannedOneTime, .income):
-            return "Запланированные доходы"
+            return "Planned income"
         case (.plannedOneTime, .expense):
-            return "Запланированные расходы"
+            return "Planned expenses"
         }
     }
 
     func createNavigationTitle(for kind: CashflowCategoryKind) -> String {
         switch (self, kind) {
         case (.recurring, .income):
-            return "Новый регулярный доход"
+            return "New recurring income"
         case (.recurring, .expense):
-            return "Новый регулярный расход"
+            return "New recurring expense"
         case (.plannedOneTime, .income):
-            return "Новый запланированный доход"
+            return "New planned income"
         case (.plannedOneTime, .expense):
-            return "Новый запланированный расход"
+            return "New planned expense"
         }
     }
 
     func editNavigationTitle(for kind: CashflowCategoryKind) -> String {
         switch (self, kind) {
         case (.recurring, .income):
-            return "Регулярный доход"
+            return "Recurring income"
         case (.recurring, .expense):
-            return "Регулярный расход"
+            return "Recurring expense"
         case (.plannedOneTime, .income):
-            return "Запланированный доход"
+            return "Planned income"
         case (.plannedOneTime, .expense):
-            return "Запланированный расход"
+            return "Planned expense"
         }
     }
 
     func emptyTitle(for kind: CashflowCategoryKind) -> String {
         switch (self, kind) {
         case (.recurring, .income):
-            return "Регулярные доходы пока не добавлены"
+            return "Recurring income has not been added yet"
         case (.recurring, .expense):
-            return "Регулярные расходы пока не добавлены"
+            return "Recurring expenses have not been added yet"
         case (.plannedOneTime, .income):
-            return "Нет запланированных доходов"
+            return "No planned income"
         case (.plannedOneTime, .expense):
-            return "Нет запланированных расходов"
+            return "No planned expenses"
         }
     }
 
     func createButtonTitle(for kind: CashflowCategoryKind) -> String {
         switch (self, kind) {
         case (.recurring, .income):
-            return "Добавить регулярный доход"
+            return "Add recurring income"
         case (.recurring, .expense):
-            return "Добавить регулярный расход"
+            return "Add recurring expense"
         case (.plannedOneTime, .income):
-            return "Добавить запланированный доход"
+            return "Add planned income"
         case (.plannedOneTime, .expense):
-            return "Добавить запланированный расход"
+            return "Add planned expense"
         }
     }
 }

@@ -137,7 +137,7 @@ private struct CurrencyConverterPremiumWidgetEntryView: View {
     private var premiumView: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Конвертер")
+                Text(String(localized: "widget.converter.title"))
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
 
@@ -169,7 +169,12 @@ private struct CurrencyConverterPremiumWidgetEntryView: View {
             Spacer(minLength: 0)
 
             if let lastUpdatedAt = entry.lastUpdatedAt {
-                Text("Обновлено: \(lastUpdatedAt.formatted(date: .omitted, time: .shortened))")
+                Text(
+                    String(
+                        format: String(localized: "widget.converter.updated_at_format"),
+                        lastUpdatedAt.formatted(date: .omitted, time: .shortened)
+                    )
+                )
                     .font(.system(size: 10, weight: .regular))
                     .foregroundStyle(Color.white.opacity(0.55))
             }
@@ -268,7 +273,7 @@ private struct CurrencyConverterPremiumWidgetEntryView: View {
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(.white)
 
-            Text("Виджет конвертера доступен только для Premium-пользователей")
+            Text(String(localized: "widget.converter.premium_only_message"))
                 .font(.system(size: 12, weight: .regular))
                 .foregroundStyle(Color.white.opacity(0.8))
                 .lineLimit(family == .systemSmall ? 3 : 2)
@@ -286,8 +291,8 @@ struct CurrencyConverterPremiumWidget: Widget {
         StaticConfiguration(kind: Self.kind, provider: CurrencyConverterWidgetProvider()) { entry in
             CurrencyConverterPremiumWidgetEntryView(entry: entry)
         }
-        .configurationDisplayName("Конвертер валют")
-        .description("Конвертация валют в формате виджета. Доступно для Premium.")
+        .configurationDisplayName(String(localized: "widget.converter.configuration_title"))
+        .description(String(localized: "widget.converter.configuration_description"))
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }

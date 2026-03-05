@@ -178,8 +178,8 @@ private struct FinancesSettingsSheet: View {
                         onOpenSavingsGoal()
                     } label: {
                         settingsRow(
-                            title: "Настройка цели",
-                            subtitle: "Цель накопления и прогресс",
+                            title: String(localized: "finances.settings.savings_goal.title"),
+                            subtitle: String(localized: "finances.settings.savings_goal.subtitle"),
                             icon: "target"
                         )
                     }
@@ -189,8 +189,8 @@ private struct FinancesSettingsSheet: View {
                         onOpenDailyAudit()
                     } label: {
                         settingsRow(
-                            title: "Дневные срезы балансов",
-                            subtitle: "Аудит, корректировка и ревью",
+                            title: String(localized: "finances.settings.daily_audit.title"),
+                            subtitle: String(localized: "finances.settings.daily_audit.subtitle"),
                             icon: "list.clipboard"
                         )
                     }
@@ -201,7 +201,7 @@ private struct FinancesSettingsSheet: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
             }
-            .navigationTitle("Настройки финансов")
+            .navigationTitle(String(localized: "finances.settings.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

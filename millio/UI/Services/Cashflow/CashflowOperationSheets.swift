@@ -154,11 +154,11 @@ private struct CashflowCategoryTransactionSheet: View {
                     handleCategoryEditorSave(name: name, icon: icon)
                 }
             }
-            .alert("Удалить категорию?", isPresented: $showDeleteCategoryAlert) {
-                Button("Отмена", role: .cancel) {
+            .alert("Delete category?", isPresented: $showDeleteCategoryAlert) {
+                Button("Cancel", role: .cancel) {
                     pendingDeleteCategoryRaw = nil
                 }
-                Button("Удалить", role: .destructive) {
+                Button("Delete", role: .destructive) {
                     guard let raw = pendingDeleteCategoryRaw else { return }
                     if viewModel.deleteCategory(rawValue: raw, kind: kind.categoryKind),
                        selectedCategory?.rawValue == raw {
@@ -167,7 +167,7 @@ private struct CashflowCategoryTransactionSheet: View {
                     pendingDeleteCategoryRaw = nil
                 }
             } message: {
-                Text("Связанные операции будут перенесены в безопасную системную категорию.")
+                Text("Linked transactions will be moved to a safe system category.")
             }
             .onAppear {
                 reloadMonthlyTotal()
@@ -223,7 +223,7 @@ private struct CashflowCategoryTransactionSheet: View {
                     )
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("История операций")
+            .accessibilityLabel("Transaction history")
 
             Button {
                 showHelpSheet = true
@@ -242,7 +242,12 @@ private struct CashflowCategoryTransactionSheet: View {
                     )
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Подсказка по экрану \(kind.navigationTitle.lowercased())")
+            .accessibilityLabel(
+                String(
+                    format: String(localized: "cashflow.category.hint_accessibility_format"),
+                    kind.navigationTitle.lowercased()
+                )
+            )
         }
         .padding(.top, 6)
     }
@@ -304,7 +309,7 @@ private struct CashflowCategoryTransactionSheet: View {
                 .padding(.horizontal, 2)
 
             HStack {
-                Text("Итого")
+                Text("Total")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary.opacity(0.92))
                 Spacer()
@@ -333,7 +338,7 @@ private struct CashflowCategoryTransactionSheet: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(AppColors.textSecondary)
-            TextField("Поиск категории", text: $searchText)
+            TextField("Search category", text: $searchText)
                 .textInputAutocapitalization(.words)
                 .foregroundStyle(AppColors.textPrimary)
         }
@@ -344,20 +349,20 @@ private struct CashflowCategoryTransactionSheet: View {
 
     private var managementSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Управление операциями")
+            Text("Transaction management")
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary)
                 .padding(.horizontal, 2)
 
             HStack(spacing: 10) {
                 managementButton(
-                    title: "Регулярные",
+                    title: "Recurring",
                     icon: "repeat",
                     action: { showRecurringManagement = true }
                 )
 
                 managementButton(
-                    title: "Запланированные",
+                    title: "Planned",
                     icon: "calendar.badge.plus",
                     action: { showPlannedManagement = true }
                 )
@@ -442,11 +447,11 @@ private struct CashflowCategoryTransactionSheet: View {
                 }
                 .buttonStyle(.plain)
                 .contextMenu {
-                    Button("Редактировать") {
+                    Button("Edit") {
                         openCategoryEditor(for: option)
                     }
                     if viewModel.canDeleteCategory(rawValue: option.rawValue, kind: kind.categoryKind) {
-                        Button("Удалить", role: .destructive) {
+                        Button("Delete", role: .destructive) {
                             pendingDeleteCategoryRaw = option.rawValue
                             showDeleteCategoryAlert = true
                         }
@@ -652,27 +657,27 @@ struct CashflowCategoryHelpContent {
     static func make(for kind: CashflowCategoryTransactionSheetKind) -> CashflowCategoryHelpContent {
         let intro = switch kind {
         case .income:
-            "Экран «Доход» показывает категории доходов за выбранный месяц."
+            "The Income screen shows income categories for the selected month."
         case .expense:
-            "Экран «Расход» показывает категории расходов за выбранный месяц."
+            "The Expense screen shows expense categories for the selected month."
         }
 
         let totalHint = switch kind {
         case .income:
-            "Сверху видно итог доходов за месяц в валюте отображения."
+            "At the top, you can see total income for the month in the display currency."
         case .expense:
-            "Сверху видно итог расходов за месяц в валюте отображения."
+            "At the top, you can see total expenses for the month in the display currency."
         }
 
         return CashflowCategoryHelpContent(
-            title: "Как это работает",
+            title: "How it works",
             lines: [
                 intro,
                 totalHint,
-                "Нажмите на категорию, чтобы добавить операцию в выбранной категории.",
-                "Нажмите «+», чтобы добавить свою категорию (название и иконка).",
-                "Удерживайте категорию, чтобы открыть меню: редактировать или удалить.",
-                "При удалении категории связанные операции автоматически переносятся в безопасную системную категорию."
+                "Tap a category to add a transaction in it.",
+                "Tap + to add your own category (name and icon).",
+                "Long press a category to open menu: edit or delete.",
+                "When deleting a category, linked transactions are automatically moved to a safe system category."
             ]
         )
     }
@@ -724,7 +729,7 @@ private struct CashflowCategoryHelpSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Закрыть") {
+                    Button("Close") {
                         dismiss()
                     }
                     .foregroundStyle(AppColors.textPrimary)
@@ -756,15 +761,15 @@ enum CashflowCategoryTransactionSheetKind {
 
     var navigationTitle: String {
         switch self {
-        case .income: return "Новый доход"
-        case .expense: return "Новый расход"
+        case .income: return "New income"
+        case .expense: return "New expense"
         }
     }
 
     var monthlyTotalTitle: String {
         switch self {
-        case .income: return "Итого доход за месяц"
-        case .expense: return "Итого расход за месяц"
+        case .income: return "Total income for month"
+        case .expense: return "Total expense for month"
         }
     }
 
@@ -812,15 +817,15 @@ struct CashflowTransferTransactionSheet: View {
             viewModel: viewModel,
             transactionType: .transfer,
             showsTransactionTypeSection: false,
-            customNavigationTitle: "Новый перевод"
+            customNavigationTitle: "New transfer"
         )
     }
 }
 
 private struct CashflowCategoryQuickCreateSheet: View {
     private enum IconPickerTab: String, CaseIterable, Identifiable {
-        case emoji = "Эмодзи"
-        case symbols = "Иконки"
+        case emoji = "Emoji"
+        case symbols = "Icons"
 
         var id: String { rawValue }
     }
@@ -856,9 +861,9 @@ private struct CashflowCategoryQuickCreateSheet: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
-                        FinancesSectionHeader(title: "Название")
+                        FinancesSectionHeader(title: "Name")
                         FinancesGlassCard {
-                            TextField("Введите название", text: $name)
+                            TextField("Enter name", text: $name)
                                 .textInputAutocapitalization(.words)
                                 .foregroundStyle(AppColors.textPrimary)
                                 .focused($isNameFieldFocused)
@@ -866,10 +871,10 @@ private struct CashflowCategoryQuickCreateSheet: View {
                                 .padding(.vertical, 12)
                         }
 
-                        FinancesSectionHeader(title: "Иконка")
+                        FinancesSectionHeader(title: "Icon")
                         FinancesGlassCard {
                             VStack(spacing: 12) {
-                                Picker("Тип иконки", selection: $selectedTab) {
+                                Picker("Icon type", selection: $selectedTab) {
                                     ForEach(IconPickerTab.allCases) { tab in
                                         Text(tab.rawValue).tag(tab)
                                     }
@@ -881,7 +886,7 @@ private struct CashflowCategoryQuickCreateSheet: View {
                                         Image(systemName: "magnifyingglass")
                                             .font(.system(size: 14, weight: .medium))
                                             .foregroundStyle(AppColors.textTertiary)
-                                        TextField("Поиск иконки (например: car, cart, heart)", text: $iconSearchText)
+                                        TextField("Icon search (e.g. car, cart, heart)", text: $iconSearchText)
                                             .font(.system(size: 14, weight: .regular))
                                             .foregroundStyle(AppColors.textPrimary)
                                     }
@@ -927,17 +932,17 @@ private struct CashflowCategoryQuickCreateSheet: View {
                 .scrollDismissesKeyboard(.immediately)
                 .dismissKeyboardOnTap()
             }
-            .navigationTitle("Новая категория")
+            .navigationTitle("New category")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Отмена") {
+                    Button("Cancel") {
                         dismiss()
                     }
                     .foregroundStyle(AppColors.textPrimary)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Сохранить") {
+                    Button("Save") {
                         onSave(name, icon)
                     }
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

@@ -32,68 +32,68 @@ struct CashflowPeriodSelectorView: View {
                 
                 Form {
                     Section {
-                        Picker("Тип периода", selection: $selectedPeriodType) {
-                            Text("Месяц").tag(PeriodType.month)
-                            Text("Квартал").tag(PeriodType.quarter)
-                            Text("Год").tag(PeriodType.year)
-                            Text("Свой период").tag(PeriodType.custom)
+                        Picker("Period type", selection: $selectedPeriodType) {
+                            Text("Month").tag(PeriodType.month)
+                            Text("Quarter").tag(PeriodType.quarter)
+                            Text("Year").tag(PeriodType.year)
+                            Text("Custom period").tag(PeriodType.custom)
                         }
                         .foregroundStyle(AppColors.textPrimary)
                     } header: {
-                        Text("Тип периода")
+                        Text("Period type")
                             .foregroundStyle(AppColors.textSecondary)
                     }
                     
                     if selectedPeriodType == .month {
                         Section {
-                            DatePicker("Месяц", selection: $selectedMonth, displayedComponents: .date)
+                            DatePicker("Month", selection: $selectedMonth, displayedComponents: .date)
                                 .datePickerStyle(.graphical)
                                 .foregroundStyle(AppColors.textPrimary)
                         } header: {
-                            Text("Выберите месяц")
+                            Text("Select month")
                                 .foregroundStyle(AppColors.textSecondary)
                         }
                     } else if selectedPeriodType == .quarter {
                         Section {
-                            DatePicker("Квартал", selection: $selectedQuarter, displayedComponents: .date)
+                            DatePicker("Quarter", selection: $selectedQuarter, displayedComponents: .date)
                                 .datePickerStyle(.graphical)
                                 .foregroundStyle(AppColors.textPrimary)
                         } header: {
-                            Text("Выберите квартал")
+                            Text("Select quarter")
                                 .foregroundStyle(AppColors.textSecondary)
                         }
                     } else if selectedPeriodType == .year {
                         Section {
-                            DatePicker("Год", selection: $selectedYear, displayedComponents: .date)
+                            DatePicker("Year", selection: $selectedYear, displayedComponents: .date)
                                 .datePickerStyle(.graphical)
                                 .foregroundStyle(AppColors.textPrimary)
                         } header: {
-                            Text("Выберите год")
+                            Text("Select year")
                                 .foregroundStyle(AppColors.textSecondary)
                         }
                     } else if selectedPeriodType == .custom {
                         Section {
                             CalendarRangeMonthView(startDate: $customStartDate, endDate: $customEndDate)
                         } header: {
-                            Text("Выберите период")
+                            Text("Select period")
                                 .foregroundStyle(AppColors.textSecondary)
                         }
                     }
                 }
                 .scrollContentBackground(.hidden)
             }
-            .navigationTitle("Выбор периода")
+            .navigationTitle("Period selection")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Отмена") {
+                    Button("Cancel") {
                         dismiss()
                     }
                     .foregroundStyle(AppColors.textPrimary)
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Применить") {
+                    Button("Apply") {
                         applyPeriod()
                     }
                     .foregroundStyle(

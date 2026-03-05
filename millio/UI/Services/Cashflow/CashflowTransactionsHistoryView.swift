@@ -601,7 +601,7 @@ private struct HistoryTransactionCard: View {
                 parts.append(viewModel.incomeCategoryDisplayName(for: categoryRaw))
             }
             if let cardName = cardName(for: transaction.cardID) {
-                parts.append("на \(cardName)")
+                parts.append("to \(cardName)")
             }
 
         case .expense:
@@ -609,7 +609,7 @@ private struct HistoryTransactionCard: View {
                 parts.append(viewModel.expenseCategoryDisplayName(for: categoryRaw))
             }
             if let cardName = cardName(for: transaction.cardID) {
-                parts.append("с \(cardName)")
+                parts.append("from \(cardName)")
             }
 
         case .transfer:
