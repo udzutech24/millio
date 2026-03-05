@@ -185,32 +185,47 @@ private struct CashbackContentViewInternal: View {
     // MARK: - Cashbacks List
 
     private var cashbacksList: some View {
-        List {
-            Section {
-                ForEach(viewModel.state.visibleCashbacks, id: \.id) { cashback in
-                    CashbackRowView(
-                        cashback: cashback,
-                        viewModel: viewModel
-                    )
-                    .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 16))
-                    .listRowBackground(CashbackScreenStyle.listFill)
-                    .listRowSeparator(.hidden)
-                }
-            } header: {
+        let containerShape = RoundedRectangle(cornerRadius: 32, style: .continuous)
+
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
                 Text("Категории кешбэка")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(AppColors.textPrimary.opacity(0.36))
-                    .textCase(nil)
-                    .padding(.leading, 2)
+                    .padding(.leading, 4)
+
+                VStack(spacing: 0) {
+                    ForEach(Array(viewModel.state.visibleCashbacks.enumerated()), id: \.element.id) { index, cashback in
+                        CashbackRowView(
+                            cashback: cashback,
+                            viewModel: viewModel
+                        )
+
+                        if index < viewModel.state.visibleCashbacks.count - 1 {
+                            Rectangle()
+                                .fill(CashbackScreenStyle.rowDivider)
+                                .frame(height: 1)
+                                .padding(.leading, 54)
+                                .padding(.trailing, 8)
+                        }
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background {
+                    containerShape
+                        .fill(CashbackScreenStyle.listFill)
+                        .overlay(
+                            containerShape
+                                .stroke(CashbackScreenStyle.neonBorder, lineWidth: 1)
+                        )
+                }
             }
+            .padding(.bottom, 100)
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .background(Color.clear)
-        .safeAreaInset(edge: .bottom) {
-            Color.clear.frame(height: 88)
-        }
-        .padding(.top, 8)
+        .scrollIndicators(.hidden)
     }
 
     @ToolbarContentBuilder

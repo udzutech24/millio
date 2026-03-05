@@ -387,7 +387,7 @@ struct BackupManagerTests {
         } catch let error as AppError {
             switch error {
             case .restoreFailed(let message):
-                #expect(message.contains("парольной фразой"))
+                #expect(message == RestoreFailureCode.passphraseRequired.message)
             default:
                 #expect(Bool(false))
             }
