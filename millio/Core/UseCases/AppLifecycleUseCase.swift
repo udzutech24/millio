@@ -18,31 +18,61 @@ protocol AppLifecycleUseCaseProtocol {
 @MainActor
 final class AppLifecycleUseCase: AppLifecycleUseCaseProtocol {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "AppLifecycleUseCase")
+    private static let defaultMinimumLaunchDurationSeconds: TimeInterval = 2.2
     private let appState: AppState
     private let backupManager: BackupManagerProtocol
+    private let splashPreferences: LaunchSplashPreferences
+    private let calendar: Calendar
+    private let nowProvider: () -> Date
     private let onboardingKey = "hasCompletedOnboarding"
+    private let minimumLaunchDurationNanoseconds: UInt64
     
-    init(appState: AppState, backupManager: BackupManagerProtocol) {
+    init(
+        appState: AppState,
+        backupManager: BackupManagerProtocol,
+        splashPreferences: LaunchSplashPreferences = SettingsManager.shared,
+        calendar: Calendar = .current,
+        nowProvider: @escaping () -> Date = Date.init,
+        minimumLaunchDuration: TimeInterval? = nil
+    ) {
         self.appState = appState
         self.backupManager = backupManager
+        self.splashPreferences = splashPreferences
+        self.calendar = calendar
+        self.nowProvider = nowProvider
+        let isRunningTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+        let resolvedDuration = minimumLaunchDuration ?? (isRunningTests ? 0 : Self.defaultMinimumLaunchDurationSeconds)
+        self.minimumLaunchDurationNanoseconds = UInt64(max(0, resolvedDuration) * 1_000_000_000)
     }
     
     func initialize() async {
         let overallStart = DispatchTime.now()
         logger.info("Initializing app...")
 
-        // Определяем следующий шаг
+        // Определяем следующий шаг, но применяем его только после минимальной выдержки splash.
         let lifecycleStart = DispatchTime.now()
+        let nextLifecycle: AppLifecycleState
         if !checkOnboardingStatus() {
-            appState.lifecycle = .onboarding
+            nextLifecycle = .onboarding
         } else {
             // Не показываем экран восстановления автоматически
             // Пользователь может перейти к нему из настроек
-            appState.lifecycle = .ready
+            nextLifecycle = .ready
         }
-        logger.info("Lifecycle decision finished in \(Double(DispatchTime.now().uptimeNanoseconds - lifecycleStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
+        let now = nowProvider()
+        if shouldShowLaunchSplash(now: now) {
+            await enforceMinimumLaunchDuration(since: overallStart)
+            splashPreferences.lastLaunchSplashShownAt = now
+        }
+        appState.lifecycle = nextLifecycle
+
+        logger.info(
+            "Lifecycle decision finished in \(Double(DispatchTime.now().uptimeNanoseconds - lifecycleStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms"
+        )
         
-        logger.info("App initialized in \(Double(DispatchTime.now().uptimeNanoseconds - overallStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms, lifecycle: \(String(describing: self.appState.lifecycle))")
+        logger.info(
+            "App initialized in \(Double(DispatchTime.now().uptimeNanoseconds - overallStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms, lifecycle: \(String(describing: self.appState.lifecycle))"
+        )
         
         // Проверяем iCloud только если backup включен (в фоне, не блокируя lifecycle)
         if appState.isBackupEnabled {
@@ -68,6 +98,31 @@ final class AppLifecycleUseCase: AppLifecycleUseCaseProtocol {
         } else {
             appState.isICloudAvailable = false
             appState.lastBackupDate = nil
+        }
+    }
+
+    private func enforceMinimumLaunchDuration(since start: DispatchTime) async {
+        guard minimumLaunchDurationNanoseconds > 0 else { return }
+        let elapsedNanoseconds = DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds
+        guard elapsedNanoseconds < minimumLaunchDurationNanoseconds else { return }
+
+        let remaining = minimumLaunchDurationNanoseconds - elapsedNanoseconds
+        do {
+            try await Task.sleep(nanoseconds: remaining)
+        } catch {
+            logger.error("Minimum launch delay interrupted: \(error.localizedDescription)")
+        }
+    }
+
+    private func shouldShowLaunchSplash(now: Date) -> Bool {
+        switch splashPreferences.launchSplashDisplayMode {
+        case .always:
+            return true
+        case .disabled:
+            return false
+        case .oncePerDay:
+            guard let lastShownAt = splashPreferences.lastLaunchSplashShownAt else { return true }
+            return !calendar.isDate(lastShownAt, inSameDayAs: now)
         }
     }
     

@@ -131,6 +131,29 @@ struct ProfileView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityIdentifier("profile.quickSetupLink")
+
+                                Menu {
+                                    ForEach(LaunchSplashDisplayMode.allCases, id: \.self) { mode in
+                                        Button {
+                                            appState.launchSplashDisplayMode = mode
+                                            SettingsManager.shared.launchSplashDisplayMode = mode
+                                        } label: {
+                                            if mode == appState.launchSplashDisplayMode {
+                                                Label(mode.profileTitle, systemImage: "checkmark")
+                                            } else {
+                                                Text(mode.profileTitle)
+                                            }
+                                        }
+                                    }
+                                } label: {
+                                    settingsRow(iconSystemName: "sparkles.tv", title: "Стартовый баннер") {
+                                        Text(appState.launchSplashDisplayMode.profileTitle)
+                                            .foregroundStyle(AppColors.profileValueAccent)
+                                        chevron
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("profile.launchSplashModeMenu")
                                 
                                 Toggle(isOn: Binding(
                                     get: { appState.isDailyReminderEnabled },

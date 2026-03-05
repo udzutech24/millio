@@ -17,7 +17,7 @@ protocol SettingsManagerProtocol {
     func resetToDefaults()
 }
 
-final class SettingsManager: SettingsManagerProtocol {
+final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
     static let shared = SettingsManager()
     static let defaultPrimaryCurrencyCode = "RUB"
     static let maxFavoriteCurrencyCodes = 5
@@ -36,6 +36,8 @@ final class SettingsManager: SettingsManagerProtocol {
     private let quickSetupCompletedKey = "quickSetupCompleted"
     private let quickSetupBannerHiddenKey = "quickSetupBannerHidden"
     private let quickSetupExpenseCategoryIDsKey = "quickSetupExpenseCategoryIDs"
+    private let launchSplashDisplayModeKey = "launchSplashDisplayMode"
+    private let lastLaunchSplashShownAtKey = "lastLaunchSplashShownAt"
     private static let legacyDefaultProfileDisplayNames: Set<String> = ["Гость", "Guest"]
     private let defaults: UserDefaults
 
@@ -203,6 +205,31 @@ final class SettingsManager: SettingsManagerProtocol {
             logger.info("Quick setup expense categories updated: \(newValue.count)")
         }
     }
+
+    var launchSplashDisplayMode: LaunchSplashDisplayMode {
+        get {
+            guard
+                let raw = defaults.string(forKey: launchSplashDisplayModeKey),
+                let mode = LaunchSplashDisplayMode(rawValue: raw)
+            else {
+                return .always
+            }
+            return mode
+        }
+        set {
+            defaults.set(newValue.rawValue, forKey: launchSplashDisplayModeKey)
+            logger.info("Launch splash display mode updated: \(newValue.rawValue)")
+        }
+    }
+
+    var lastLaunchSplashShownAt: Date? {
+        get {
+            defaults.object(forKey: lastLaunchSplashShownAtKey) as? Date
+        }
+        set {
+            defaults.set(newValue, forKey: lastLaunchSplashShownAtKey)
+        }
+    }
     
     static func normalizeCurrencyCodes(_ codes: [String]) -> [String] {
         var seen = Set<String>()
@@ -260,6 +287,8 @@ final class SettingsManager: SettingsManagerProtocol {
         isQuickSetupCompleted = false
         isQuickSetupBannerHidden = false
         quickSetupExpenseCategoryIDs = []
+        launchSplashDisplayMode = .always
+        lastLaunchSplashShownAt = nil
 
         // Модульные display-валюты и прочие временные UX-флаги.
         defaults.removeObject(forKey: "card_display_currency")

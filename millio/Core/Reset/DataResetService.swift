@@ -154,6 +154,8 @@ final class DataResetService: DataResetServiceProtocol {
     private let modelContext: ModelContext
     private let appState: AppState
     private let settingsManager: SettingsManager
+    private let defaults: UserDefaults
+    private let financeAuditSnapshotStorageKey: String
     private let clearPinCode: () -> Void
     private let disableDailyReminder: () -> Void
     private let publishEvent: (AppEvent) -> Void
@@ -163,6 +165,8 @@ final class DataResetService: DataResetServiceProtocol {
         modelContext: ModelContext,
         appState: AppState,
         settingsManager: SettingsManager = .shared,
+        defaults: UserDefaults = .standard,
+        financeAuditSnapshotStorageKey: String = "finance.balance.audit.snapshot.store",
         clearPinCode: @escaping () -> Void = { AppLockPinStore.shared.clear() },
         disableDailyReminder: @escaping () -> Void = {
             Task { await NotificationManager.shared.scheduleDailyReminder(enabled: false) }
@@ -173,6 +177,8 @@ final class DataResetService: DataResetServiceProtocol {
         self.modelContext = modelContext
         self.appState = appState
         self.settingsManager = settingsManager
+        self.defaults = defaults
+        self.financeAuditSnapshotStorageKey = financeAuditSnapshotStorageKey
         self.clearPinCode = clearPinCode
         self.disableDailyReminder = disableDailyReminder
         self.publishEvent = publishEvent ?? { event in
@@ -278,6 +284,14 @@ final class DataResetService: DataResetServiceProtocol {
             result.deletedCashbackCustomCategories = categoriesResult.deletedCashbackCustomCategories
         }
 
+        if shouldRebaseAccountHistoryAnchors(request: request, interval: interval) {
+            try rebaseAccountHistoryAnchorsToCurrentValues()
+        }
+
+        if shouldClearFinanceAuditSnapshotStore(for: request.targets) {
+            clearFinanceAuditSnapshotStore()
+        }
+
         if modelContext.hasChanges {
             try modelContext.save()
         }
@@ -291,6 +305,7 @@ final class DataResetService: DataResetServiceProtocol {
         publishEvent(FinanceEvent.cardsUpdated)
         publishEvent(FinanceEvent.creditsUpdated)
         publishEvent(FinanceEvent.transactionsUpdated)
+        publishEvent(FinanceEvent.auditSnapshotsUpdated)
         publishEvent(BackupEvent.restoreCompleted)
 
         return result
@@ -728,6 +743,48 @@ final class DataResetService: DataResetServiceProtocol {
         appState.isAppLocked = false
         appState.profileDisplayName = settingsManager.profileDisplayName
         appState.profileAvatarPath = settingsManager.profileAvatarFilePath
+    }
+
+    private func shouldRebaseAccountHistoryAnchors(
+        request: DataResetRequest,
+        interval: DateInterval?
+    ) -> Bool {
+        guard interval == nil else { return false }
+        return request.targets.contains(.operations) || request.targets.contains(.accountOperations)
+    }
+
+    private func shouldClearFinanceAuditSnapshotStore(for targets: Set<DataResetTarget>) -> Bool {
+        let affectingTargets: Set<DataResetTarget> = [
+            .operations,
+            .accountOperations,
+            .zeroAccountsInPeriod,
+            .accounts
+        ]
+        return !targets.isDisjoint(with: affectingTargets)
+    }
+
+    private func rebaseAccountHistoryAnchorsToCurrentValues() throws {
+        let cards = try modelContext.fetch(FetchDescriptor<Card>())
+        for card in cards {
+            card.initialBalance = card.balance
+            card.hasInitialBalance = true
+        }
+
+        let credits = try modelContext.fetch(FetchDescriptor<Credit>())
+        for credit in credits {
+            credit.initialRemainingAmount = credit.remainingAmount
+            credit.hasInitialRemainingAmount = true
+        }
+
+        let investments = try modelContext.fetch(FetchDescriptor<Investment>())
+        for investment in investments {
+            investment.initialAmount = investment.amount
+            investment.hasInitialAmount = true
+        }
+    }
+
+    private func clearFinanceAuditSnapshotStore() {
+        defaults.removeObject(forKey: financeAuditSnapshotStorageKey)
     }
 
     private static func matches(date: Date, in interval: DateInterval?) -> Bool {

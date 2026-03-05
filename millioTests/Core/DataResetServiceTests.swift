@@ -198,6 +198,128 @@ struct DataResetServiceTests {
         #expect(transactions.contains(where: { $0.amount == 700 }))
     }
 
+    @Test("Операции по счетам за весь период сбрасывают baseline и очищают audit snapshot store")
+    func testAllTimeAccountOperationsRebasesHistoryAnchorsAndClearsAuditSnapshotStore() throws {
+        let container = makeContainer()
+        let context = container.mainContext
+        let appState = AppState()
+
+        let defaultsSuite = "DataResetServiceTests.AuditStore.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: defaultsSuite)!
+        defaults.removePersistentDomain(forName: defaultsSuite)
+        defer { defaults.removePersistentDomain(forName: defaultsSuite) }
+
+        let auditStoreKey = "finance.balance.audit.snapshot.store"
+        defaults.set(Data([1, 2, 3]), forKey: auditStoreKey)
+
+        let service = DataResetService(
+            modelContext: context,
+            appState: appState,
+            defaults: defaults,
+            financeAuditSnapshotStorageKey: auditStoreKey,
+            clearPinCode: {},
+            disableDailyReminder: {},
+            publishEvent: { _ in }
+        )
+
+        let card = Card(name: "Карта", cardNumber: "1111", currency: "RUB", balance: 0)
+        card.initialBalance = 5_000
+        card.hasInitialBalance = true
+
+        let credit = Credit(
+            name: "Кредит",
+            amount: 100_000,
+            interestRate: 0,
+            monthlyPayment: 0,
+            startDate: Date(),
+            termMonths: 12,
+            currency: "RUB"
+        )
+        credit.remainingAmount = 0
+        credit.initialRemainingAmount = 42_000
+        credit.hasInitialRemainingAmount = true
+
+        let investment = Investment(
+            name: "Актив",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 0,
+            currency: "USD"
+        )
+        investment.initialAmount = 10_000
+        investment.hasInitialAmount = true
+
+        context.insert(card)
+        context.insert(credit)
+        context.insert(investment)
+        context.insert(CashflowTransaction(
+            transactionType: .expense,
+            amount: 1_000,
+            currency: "RUB",
+            transactionDate: Date(),
+            cardID: card.cardUniqueID
+        ))
+        try context.save()
+
+        _ = try service.execute(
+            DataResetRequest(period: .allTime(), targets: [.accountOperations])
+        )
+
+        let cards = try context.fetch(FetchDescriptor<Card>())
+        let credits = try context.fetch(FetchDescriptor<Credit>())
+        let investments = try context.fetch(FetchDescriptor<Investment>())
+
+        #expect(cards.count == 1)
+        #expect(credits.count == 1)
+        #expect(investments.count == 1)
+        #expect(abs(cards[0].initialBalance - cards[0].balance) < 0.01)
+        #expect(abs(credits[0].initialRemainingAmount - credits[0].remainingAmount) < 0.01)
+        #expect(abs(investments[0].initialAmount - investments[0].amount) < 0.01)
+        #expect(defaults.data(forKey: auditStoreKey) == nil)
+    }
+
+    @Test("Операции по счетам в ограниченном периоде не меняют baseline счетов")
+    func testBoundedAccountOperationsKeepsHistoryAnchors() throws {
+        let container = makeContainer()
+        let context = container.mainContext
+        let appState = AppState()
+        let service = DataResetService(
+            modelContext: context,
+            appState: appState,
+            clearPinCode: {},
+            disableDailyReminder: {},
+            publishEvent: { _ in }
+        )
+
+        let card = Card(name: "Карта", cardNumber: "2222", currency: "RUB", balance: 1_000)
+        card.initialBalance = 5_000
+        card.hasInitialBalance = true
+        context.insert(card)
+        context.insert(CashflowTransaction(
+            transactionType: .expense,
+            amount: 100,
+            currency: "RUB",
+            transactionDate: Date(),
+            cardID: card.cardUniqueID
+        ))
+        try context.save()
+
+        _ = try service.execute(
+            DataResetRequest(
+                period: DataResetPeriod(
+                    preset: .last30Days,
+                    customStartDate: Date(),
+                    customEndDate: Date()
+                ),
+                targets: [.accountOperations]
+            )
+        )
+
+        let cards = try context.fetch(FetchDescriptor<Card>())
+        #expect(cards.count == 1)
+        #expect(abs(cards[0].initialBalance - 5_000) < 0.01)
+    }
+
     @Test("Очистка категорий мигрирует custom-значения в safe fallback и удаляет пользовательские категории")
     func testCategoriesResetMigratesAndDeletes() throws {
         let container = makeContainer()
