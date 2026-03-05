@@ -16,3 +16,13 @@ struct BackupInfo: Codable {
         BackupVersion(string: version)
     }
 }
+
+struct BackupVersionInfo: Codable, Identifiable {
+    let recordName: String
+    let date: Date
+    let size: Int64
+    let version: String
+    let isPinned: Bool
+
+    var id: String { recordName }
+}

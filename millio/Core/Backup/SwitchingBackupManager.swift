@@ -33,6 +33,15 @@ final class SwitchingBackupManager: BackupManagerProtocol {
             try await disabledManager.backupNow(passphrase: passphrase)
         }
     }
+
+    func saveVersionNow(passphrase: String?) async throws {
+        let enabled = await MainActor.run { appState.isBackupEnabled }
+        if enabled {
+            try await enabledManager.saveVersionNow(passphrase: passphrase)
+        } else {
+            try await disabledManager.saveVersionNow(passphrase: passphrase)
+        }
+    }
     
     func restoreLatest() async throws {
         // Восстановление не зависит от тумблера автосоздания backup.
@@ -42,6 +51,18 @@ final class SwitchingBackupManager: BackupManagerProtocol {
     func restoreLatest(passphrase: String?) async throws {
         // Восстановление не зависит от тумблера автосоздания backup.
         try await enabledManager.restoreLatest(passphrase: passphrase)
+    }
+
+    func restoreVersion(recordName: String, passphrase: String?) async throws {
+        try await enabledManager.restoreVersion(recordName: recordName, passphrase: passphrase)
+    }
+
+    func listBackupVersions() async -> [BackupVersionInfo] {
+        await enabledManager.listBackupVersions()
+    }
+
+    func deleteBackupVersion(recordName: String) async throws {
+        try await enabledManager.deleteBackupVersion(recordName: recordName)
     }
     
     func lastBackupInfo() async -> BackupInfo? {

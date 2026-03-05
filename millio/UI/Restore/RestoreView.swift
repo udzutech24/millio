@@ -16,6 +16,8 @@ struct RestoreView: View {
     @State private var restoreError: AppError?
     @State private var showSkipConfirmation = false
     @State private var backupPassphrase: String = ""
+    @State private var backupVersions: [BackupVersionInfo] = []
+    @State private var selectedRecordName: String?
     
     private var backupManager: BackupManagerProtocol? {
         diContainer?.backupManager
@@ -51,8 +53,8 @@ struct RestoreView: View {
                     if isRestoring {
                         restoringView
                     } else {
-                        if let backupDate = appState.lastBackupDate {
-                            backupFoundView(backupDate: backupDate)
+                        if let selectedVersion = selectedBackupVersion {
+                            backupFoundView(version: selectedVersion)
                         } else {
                             noBackupView
                         }
@@ -118,7 +120,14 @@ struct RestoreView: View {
     
     // MARK: - Backup Found View
     
-    private func backupFoundView(backupDate: Date) -> some View {
+    private var selectedBackupVersion: BackupVersionInfo? {
+        if let selectedRecordName {
+            return backupVersions.first(where: { $0.recordName == selectedRecordName })
+        }
+        return backupVersions.first
+    }
+
+    private func backupFoundView(version: BackupVersionInfo) -> some View {
         VStack(spacing: 24) {
             // Backup info card
             FinancesGlassCard {
@@ -134,14 +143,58 @@ struct RestoreView: View {
                                 .font(.system(size: 14, weight: .regular))
                                 .foregroundStyle(AppColors.textTertiary)
                             
-                            Text(backupDate.formatted(date: .abbreviated, time: .shortened))
+                            Text(version.date.formatted(date: .abbreviated, time: .shortened))
                                 .font(.system(size: 14, weight: .regular))
                                 .foregroundStyle(AppColors.textTertiary)
+                        }
+                        
+                        if version.isPinned {
+                            Text("Закрепленная версия")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(AppColors.textPrimary)
                         }
                     }
                 }
                 .padding(24)
                 .frame(maxWidth: .infinity)
+            }
+
+            if backupVersions.count > 1 {
+                FinancesGlassCard(contentPadding: EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)) {
+                    VStack(spacing: 0) {
+                        ForEach(Array(backupVersions.enumerated()), id: \.element.id) { index, item in
+                            if index > 0 {
+                                FinancesRowDivider()
+                            }
+                            Button {
+                                selectedRecordName = item.recordName
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: selectedRecordName == item.recordName ? "largecircle.fill.circle" : "circle")
+                                        .font(.system(size: 14, weight: .semibold))
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(item.date.formatted(date: .abbreviated, time: .shortened))
+                                            .font(.system(size: 14, weight: .semibold))
+                                        Text("\(ByteCountFormatter.string(fromByteCount: item.size, countStyle: .file)) · v\(item.version)")
+                                            .font(.system(size: 12, weight: .regular))
+                                            .foregroundStyle(AppColors.textTertiary)
+                                    }
+                                    Spacer()
+                                    if item.isPinned {
+                                        Image(systemName: "pin.fill")
+                                            .font(.system(size: 12, weight: .semibold))
+                                    }
+                                }
+                                .foregroundStyle(AppColors.textPrimary)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(isRestoring)
+                        }
+                    }
+                }
+                .padding(.horizontal, 24)
             }
             
             // Warning text
@@ -240,7 +293,14 @@ struct RestoreView: View {
         Task {
             do {
                 let passphrase = backupPassphrase.trimmingCharacters(in: .whitespacesAndNewlines)
-                try await backupManager.restoreLatest(passphrase: passphrase.isEmpty ? nil : passphrase)
+                if let selectedRecordName {
+                    try await backupManager.restoreVersion(
+                        recordName: selectedRecordName,
+                        passphrase: passphrase.isEmpty ? nil : passphrase
+                    )
+                } else {
+                    try await backupManager.restoreLatest(passphrase: passphrase.isEmpty ? nil : passphrase)
+                }
                 await MainActor.run {
                     isRestoring = false
                     appState.lifecycle = .ready
@@ -270,11 +330,13 @@ struct RestoreView: View {
         appState.isICloudAvailable = available ?? false
         
         guard appState.isICloudAvailable, let backupManager else { return }
-        let info = await withTimeout(seconds: 3) {
-            await backupManager.lastBackupInfo()
+        let versions = await withTimeout(seconds: 3) {
+            await backupManager.listBackupVersions()
         }
-        if let infoOptional = info, let info = infoOptional {
-            appState.lastBackupDate = info.date
+        if let versionsOptional = versions {
+            backupVersions = versionsOptional
+            selectedRecordName = versionsOptional.first?.recordName
+            appState.lastBackupDate = versionsOptional.first?.date
         }
     }
     

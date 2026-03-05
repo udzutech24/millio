@@ -320,7 +320,11 @@ final class FakeBackupManager: BackupManagerProtocol {
     func isAvailable() async -> Bool { isAvailableResult }
     func backupNow() async throws {}
     func backupNow(passphrase: String?) async throws {}
+    func saveVersionNow(passphrase: String?) async throws {}
     func restoreLatest() async throws {}
     func restoreLatest(passphrase: String?) async throws {}
+    func restoreVersion(recordName: String, passphrase: String?) async throws {}
+    func listBackupVersions() async -> [BackupVersionInfo] { [] }
+    func deleteBackupVersion(recordName: String) async throws {}
     func lastBackupInfo() async -> BackupInfo? { lastBackupInfoResult }
 }

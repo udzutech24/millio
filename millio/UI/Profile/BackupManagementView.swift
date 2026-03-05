@@ -41,6 +41,8 @@ struct BackupManagementView: View {
     @State private var passphraseConfirmation: String = ""
     @State private var isPassphraseVisible: Bool = false
     @State private var encryptionMode: BackupEncryptionMode = .deviceKey
+    @State private var backupVersions: [BackupVersionInfo] = []
+    @State private var deletingRecordName: String?
     
     private var backupManager: BackupManagerProtocol? {
         diContainer?.backupManager
@@ -59,6 +61,8 @@ struct BackupManagementView: View {
                     statusCard
                     
                     actionsCard
+
+                    versionsCard
                     
                     if let backupError {
                         Text(backupError.localizedDescription)
@@ -120,6 +124,7 @@ struct BackupManagementView: View {
                                 if !newValue {
                                     appState.isICloudAvailable = false
                                     appState.lastBackupDate = nil
+                                    backupVersions = []
                                 }
                                 
                                 Task { await refreshStatusIfNeeded() }
@@ -268,7 +273,7 @@ struct BackupManagementView: View {
             let trimmedPassphrase = passphrase.trimmingCharacters(in: .whitespacesAndNewlines)
             let trimmedConfirmation = passphraseConfirmation.trimmingCharacters(in: .whitespacesAndNewlines)
             let isPassphraseValid = encryptionMode != .passphrase || (!trimmedPassphrase.isEmpty && trimmedPassphrase == trimmedConfirmation)
-            let canCreateBackup = appState.isBackupEnabled && !isBusy && isPassphraseValid
+            let canCreateBackup = appState.isBackupEnabled && !isBusy && deletingRecordName == nil && isPassphraseValid
             
             FinancesGlassCard {
                 VStack(spacing: 0) {
@@ -279,6 +284,29 @@ struct BackupManagementView: View {
                             Image(systemName: "icloud.and.arrow.up.fill")
                                 .font(.system(size: 16, weight: .semibold))
                             Text(isBusy ? "Создание backup..." : "Создать backup сейчас")
+                                .font(.system(size: 16, weight: .medium))
+                            Spacer()
+                            if isBusy {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                            }
+                        }
+                        .foregroundStyle(canCreateBackup ? AppColors.textPrimary : AppColors.textTertiary)
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canCreateBackup)
+
+                    FinancesRowDivider()
+
+                    Button {
+                        Task { await savePinnedVersionNow() }
+                    } label: {
+                        HStack {
+                            Image(systemName: "pin.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                            Text(isBusy ? "Сохранение версии..." : "Сохранить как версию")
                                 .font(.system(size: 16, weight: .medium))
                             Spacer()
                             if isBusy {
@@ -340,6 +368,66 @@ struct BackupManagementView: View {
             }
         }
     }
+
+    private var versionsCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesSectionHeader(title: "Версии backup")
+
+            FinancesGlassCard {
+                if backupVersions.isEmpty {
+                    Text("Сохраненных версий пока нет")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(AppColors.textTertiary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(Array(backupVersions.enumerated()), id: \.element.id) { index, version in
+                            if index > 0 {
+                                FinancesRowDivider()
+                            }
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(version.date.formatted(date: .abbreviated, time: .shortened))
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(AppColors.textPrimary)
+                                    Text("\(ByteCountFormatter.string(fromByteCount: version.size, countStyle: .file)) · v\(version.version)")
+                                        .font(.system(size: 12, weight: .regular))
+                                        .foregroundStyle(AppColors.textTertiary)
+                                }
+                                Spacer()
+                                if version.isPinned {
+                                    Text("Закреплена")
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundStyle(AppColors.textPrimary)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(AppColors.toggleOnGreen.opacity(0.25))
+                                        .clipShape(Capsule())
+                                }
+                                Button(role: .destructive) {
+                                    Task { await deleteVersion(recordName: version.recordName) }
+                                } label: {
+                                    if deletingRecordName == version.recordName {
+                                        ProgressView()
+                                            .scaleEffect(0.8)
+                                    } else {
+                                        Image(systemName: "trash")
+                                            .font(.system(size: 14, weight: .semibold))
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(isBusy || deletingRecordName != nil)
+                            }
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 16)
+                        }
+                    }
+                }
+            }
+        }
+    }
     
     @MainActor
     private func refreshStatusIfNeeded(force: Bool = false) async {
@@ -352,9 +440,8 @@ struct BackupManagementView: View {
         appState.isICloudAvailable = await cloudStore.isAvailable()
         
         guard appState.isICloudAvailable, let backupManager else { return }
-        if let backupInfo = await backupManager.lastBackupInfo() {
-            appState.lastBackupDate = backupInfo.date
-        }
+        backupVersions = await backupManager.listBackupVersions()
+        appState.lastBackupDate = backupVersions.first?.date
     }
     
     @MainActor
@@ -376,6 +463,48 @@ struct BackupManagementView: View {
             case .deviceKey:
                 try await backupManager.backupNow()
             }
+            await refreshStatusIfNeeded(force: true)
+        } catch let appError as AppError {
+            backupError = appError
+        } catch {
+            backupError = .unknown(error)
+        }
+    }
+
+    @MainActor
+    private func savePinnedVersionNow() async {
+        guard let backupManager else {
+            backupError = .iCloudUnavailable
+            return
+        }
+
+        isBusy = true
+        backupError = nil
+        defer { isBusy = false }
+
+        do {
+            let trimmed = passphrase.trimmingCharacters(in: .whitespacesAndNewlines)
+            try await backupManager.saveVersionNow(passphrase: encryptionMode == .passphrase ? (trimmed.isEmpty ? nil : trimmed) : nil)
+            await refreshStatusIfNeeded(force: true)
+        } catch let appError as AppError {
+            backupError = appError
+        } catch {
+            backupError = .unknown(error)
+        }
+    }
+
+    @MainActor
+    private func deleteVersion(recordName: String) async {
+        guard let backupManager else {
+            backupError = .iCloudUnavailable
+            return
+        }
+        deletingRecordName = recordName
+        backupError = nil
+        defer { deletingRecordName = nil }
+
+        do {
+            try await backupManager.deleteBackupVersion(recordName: recordName)
             await refreshStatusIfNeeded(force: true)
         } catch let appError as AppError {
             backupError = appError

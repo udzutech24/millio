@@ -26,6 +26,10 @@ actor SpyBackupManager: BackupManagerProtocol {
     func backupNow(passphrase: String?) async throws {
         backupCalls += 1
     }
+
+    func saveVersionNow(passphrase: String?) async throws {
+        backupCalls += 1
+    }
     
     func restoreLatest() async throws {
         restoreCalls += 1
@@ -34,6 +38,17 @@ actor SpyBackupManager: BackupManagerProtocol {
     func restoreLatest(passphrase: String?) async throws {
         restoreCalls += 1
     }
+
+    func restoreVersion(recordName: String, passphrase: String?) async throws {
+        restoreCalls += 1
+    }
+
+    func listBackupVersions() async -> [BackupVersionInfo] {
+        infoCalls += 1
+        return []
+    }
+
+    func deleteBackupVersion(recordName: String) async throws {}
     
     func lastBackupInfo() async -> BackupInfo? {
         infoCalls += 1
