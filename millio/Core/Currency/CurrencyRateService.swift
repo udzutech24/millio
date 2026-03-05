@@ -34,6 +34,8 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
     private var cachedRates: [String: Double] = ["USD": 1.0]
     private var lastUpdateTS: Double = 0
     private let cacheTimeout: TimeInterval = 12 * 3600 // 12 часов
+    private var knownHistoricalUnsupportedPairs: Set<String> = []
+    private var historicalFailureLogDedup: Set<String> = []
     
     init(rateSource: RateSource = .erapi, rateRepository: RateRepositoryProtocol = RateRepository.shared) {
         self.rateSource = rateSource
@@ -126,13 +128,48 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
     
     private func fetchFrankfurterRate(on date: Date, from: String, to: String) async -> Double? {
         let dateString = formatDateForFrankfurter(date)
+        let pairKey = "\(from)->\(to)"
+
+        // Для явно неподдерживаемых пар не делаем повторные сетевые запросы.
+        if knownHistoricalUnsupportedPairs.contains(pairKey) {
+            return nil
+        }
+
         guard let url = URL(string: "https://api.frankfurter.app/\(dateString)?from=\(from)&to=\(to)") else {
             return nil
         }
         
         do {
             let (data, response) = try await URLSession.shared.data(from: url)
-            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            guard let http = response as? HTTPURLResponse else {
+                throw URLError(.badServerResponse)
+            }
+
+            guard (200..<300).contains(http.statusCode) else {
+                let statusCode = http.statusCode
+                let body = String(data: data, encoding: .utf8)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let bodySnippet = body?.prefix(180) ?? ""
+                let logKey = "\(pairKey)|\(statusCode)"
+
+                if historicalFailureLogDedup.insert(logKey).inserted {
+                    AppLogger.log(
+                        .warning,
+                        category: "CurrencyRateService",
+                        "Historical rate API HTTP \(statusCode) for \(pairKey) on \(dateString). \(bodySnippet)"
+                    )
+                }
+
+                // Частые ожидаемые причины: неподдерживаемая валюта или rate limit.
+                // Не эскалируем как -1011 и не повторяем запросы для неподдерживаемых пар.
+                if statusCode == 400 || statusCode == 404 {
+                    knownHistoricalUnsupportedPairs.insert(pairKey)
+                    return nil
+                }
+                if statusCode == 429 {
+                    return nil
+                }
+
                 throw URLError(.badServerResponse)
             }
             

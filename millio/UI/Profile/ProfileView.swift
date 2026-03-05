@@ -110,6 +110,16 @@ struct ProfileView: View {
                                 .buttonStyle(.plain)
                                 .accessibilityIdentifier("profile.appSecurityLink")
 
+                                NavigationLink {
+                                    SmartDataResetView()
+                                } label: {
+                                    settingsRow(iconSystemName: "trash", title: "Умная очистка данных") {
+                                        chevron
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("profile.smartDataResetLink")
+
                                 Button {
                                     showQuickSetupSheet = true
                                 } label: {

@@ -25,6 +25,7 @@ enum FinanceEvent: AppEvent {
     case cardsUpdated
     case creditsUpdated
     case transactionsUpdated
+    case auditSnapshotsUpdated
 }
 
 /// Event Bus для слабой связанности между компонентами

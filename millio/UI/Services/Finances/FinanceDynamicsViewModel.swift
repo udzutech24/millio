@@ -289,6 +289,11 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         eventSubscriptionID = EventBus.shared.subscribe { [weak self] event in
             guard let self else { return }
             switch event {
+            case FinanceEvent.cardsUpdated,
+                 FinanceEvent.creditsUpdated,
+                 FinanceEvent.transactionsUpdated,
+                 FinanceEvent.auditSnapshotsUpdated:
+                self.loadData()
             case BackupEvent.restoreCompleted:
                 self.loadData()
             default:

@@ -10,6 +10,7 @@ Millio — iOS-приложение с локальным хранением д�
 - `docs/CORE_STATUS.md` — текущее состояние и компромиссы
 - `docs/CURRENCY_POLICY.md` — правила основной/избранных валют
 - `docs/BACKUP_RESTORE_SCHEMA.md` — backup/restore
+- `docs/SMART_DATA_RESET.md` — гибкая очистка данных
 - `docs/FINANCE_DATA_STORAGE.md` — хранение данных по финансам
 - `CLAUDE.md` — проектные правила для ассистента
 
@@ -30,6 +31,7 @@ Millio — iOS-приложение с локальным хранением д�
 - Backup запускается **автоматически** при уходе приложения в фон, если включен в профиле
 - Backup хранится в **CloudKit Private DB** (`AppBackup` / `latest_backup`)
 - В профиле доступен экран управления backup (включение/статус/ручной backup/restore)
+- В профиле доступна «Умная очистка данных» (выбор периода и типов данных для удаления)
 - Restore запускается **вручную** из профиля (`RestoreView`)
 - Шифрование backup поддерживает **keychain-mode** (device-only) и **passphrase-mode** (переносимо); режим выбирается в экране управления backup
 - В `RestoreView` есть поле для ввода парольной фразы (нужно для passphrase-mode)

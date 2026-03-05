@@ -18,6 +18,8 @@ final class FinanceBalanceAuditViewModel: ObservableObject {
     private let modelContext: ModelContext
     private let financeViewModel: FinanceViewModel
     private let store: FinanceBalanceAuditStoreProtocol
+    private let dynamicsViewModel: FinanceDynamicsViewModel
+    private var reloadTask: Task<Void, Never>?
 
     init(
         modelContext: ModelContext,
@@ -28,6 +30,11 @@ final class FinanceBalanceAuditViewModel: ObservableObject {
         self.modelContext = modelContext
         self.financeViewModel = financeViewModel
         self.store = store
+        self.dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: financeViewModel.currencyService
+        )
         self.selectedDate = selectedDate
         self.availableCurrencies = CurrencySelectionSupport.allCurrencyCodesForPicker
         reload()
@@ -61,7 +68,25 @@ final class FinanceBalanceAuditViewModel: ObservableObject {
             effectSign: row.effectSign,
             isUnknown: row.isUnknown
         )
-        reload()
+        if let index = rows.firstIndex(where: { $0.id == row.id }) {
+            let existing = rows[index]
+            rows[index] = FinanceBalanceAuditRow(
+                id: existing.id,
+                accountTypeRaw: existing.accountTypeRaw,
+                accountID: existing.accountID,
+                title: existing.title,
+                groupName: existing.groupName,
+                currencyCode: existing.currencyCode,
+                value: value,
+                effectSign: existing.effectSign,
+                hasDateSnapshot: true,
+                isUnknown: existing.isUnknown,
+                sourceOrder: existing.sourceOrder
+            )
+            recomputeAggregates()
+        } else {
+            reload()
+        }
     }
 
     func setCurrency(_ currencyCode: String, for row: FinanceBalanceAuditRow) {
@@ -121,22 +146,64 @@ final class FinanceBalanceAuditViewModel: ObservableObject {
     }
 
     func reload() {
-        let dayKey = FinanceBalanceDayKey(date: selectedDate)
+        reloadTask?.cancel()
+        let dateSnapshot = selectedDate
+        reloadTask = Task { [weak self] in
+            await self?.reloadAsync(for: dateSnapshot)
+        }
+    }
+
+    private func reloadAsync(for date: Date) async {
+        let dayKey = FinanceBalanceDayKey(date: date)
         let daySnapshot = store.daySnapshot(for: dayKey)
         let liveAccounts = liveAccountsLookup()
+        let historicalValues = await historicalValuesByAccountKey(
+            liveAccounts: liveAccounts,
+            on: date
+        )
+
+        if Task.isCancelled { return }
+        guard date == selectedDate else { return }
 
         var composed: [FinanceBalanceAuditRow] = []
 
-        let sortedSnapshot = daySnapshot.keys.sorted { lhs, rhs in
-            let leftTitle = daySnapshot[lhs]?.title ?? ""
-            let rightTitle = daySnapshot[rhs]?.title ?? ""
-            if leftTitle == rightTitle { return lhs < rhs }
-            return leftTitle.localizedCaseInsensitiveCompare(rightTitle) == .orderedAscending
+        let liveRows = liveAccounts.values.sorted { lhs, rhs in
+            if lhs.title == rhs.title { return lhs.id < rhs.id }
+            return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
         }
 
-        for key in sortedSnapshot {
+        for live in liveRows {
+            let snapshotValue = daySnapshot[live.id]
+            let displayedValue = snapshotValue?.value ?? historicalValues[live.id] ?? live.value
+            let row = FinanceBalanceAuditRow(
+                id: live.id,
+                accountTypeRaw: live.accountTypeRaw,
+                accountID: live.accountID,
+                title: resolvedTitle(snapshot: snapshotValue?.title ?? "", live: live),
+                groupName: resolvedGroupName(snapshot: snapshotValue?.groupName ?? "", live: live),
+                currencyCode: normalizedCurrency(store.currency(for: live.id) ?? live.currencyCode),
+                value: displayedValue,
+                effectSign: live.effectSign,
+                hasDateSnapshot: snapshotValue != nil,
+                isUnknown: false,
+                sourceOrder: 0
+            )
+            composed.append(row)
+        }
+
+        // Исторические snapshot-строки для уже удаленных/неизвестных счетов.
+        let unknownSnapshotKeys = daySnapshot.keys
+            .filter { liveAccounts[$0] == nil }
+            .sorted { lhs, rhs in
+                let leftTitle = daySnapshot[lhs]?.title ?? ""
+                let rightTitle = daySnapshot[rhs]?.title ?? ""
+                if leftTitle == rightTitle { return lhs < rhs }
+                return leftTitle.localizedCaseInsensitiveCompare(rightTitle) == .orderedAscending
+            }
+
+        for key in unknownSnapshotKeys {
             guard let snapshotValue = daySnapshot[key] else { continue }
-            let live = liveAccounts[key]
+
             let accountTypeRaw: String
             let accountID: String
             if let parts = key.split(separator: ":", maxSplits: 1).map(String.init) as [String]?, parts.count == 2 {
@@ -147,50 +214,17 @@ final class FinanceBalanceAuditViewModel: ObservableObject {
                 accountID = key
             }
 
-            let title = resolvedTitle(snapshot: snapshotValue.title, live: live)
-            let groupName = resolvedGroupName(snapshot: snapshotValue.groupName, live: live)
-            let currency = normalizedCurrency(
-                store.currency(for: key)
-                    ?? live?.currencyCode
-                    ?? snapshotValue.currencyCode
-            )
-
             let row = FinanceBalanceAuditRow(
                 id: key,
                 accountTypeRaw: accountTypeRaw,
                 accountID: accountID,
-                title: title,
-                groupName: groupName,
-                currencyCode: currency,
+                title: resolvedTitle(snapshot: snapshotValue.title, live: nil),
+                groupName: resolvedGroupName(snapshot: snapshotValue.groupName, live: nil),
+                currencyCode: normalizedCurrency(store.currency(for: key) ?? snapshotValue.currencyCode),
                 value: snapshotValue.value,
-                effectSign: live?.effectSign ?? snapshotValue.effectSign,
+                effectSign: snapshotValue.effectSign,
                 hasDateSnapshot: true,
-                isUnknown: live == nil,
-                sourceOrder: 0
-            )
-            composed.append(row)
-        }
-
-        let knownKeys = Set(composed.map(\.id))
-        let liveCardsMissingFromSnapshot = liveAccounts.values
-            .filter { $0.accountTypeRaw == FinanceAccountType.card.rawValue && !knownKeys.contains($0.id) }
-            .sorted { lhs, rhs in
-                if lhs.title == rhs.title { return lhs.id < rhs.id }
-                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
-            }
-
-        for card in liveCardsMissingFromSnapshot {
-            let row = FinanceBalanceAuditRow(
-                id: card.id,
-                accountTypeRaw: card.accountTypeRaw,
-                accountID: card.accountID,
-                title: resolvedTitle(snapshot: "", live: card),
-                groupName: resolvedGroupName(snapshot: "", live: card),
-                currencyCode: normalizedCurrency(store.currency(for: card.id) ?? card.currencyCode),
-                value: card.value,
-                effectSign: card.effectSign,
-                hasDateSnapshot: false,
-                isUnknown: false,
+                isUnknown: true,
                 sourceOrder: 1
             )
             composed.append(row)
@@ -206,6 +240,43 @@ final class FinanceBalanceAuditViewModel: ObservableObject {
                 self.focusedAccountKey = filteredRows.first?.id
             }
         }
+    }
+
+    private func historicalValuesByAccountKey(
+        liveAccounts: [String: FinanceBalanceLiveAccount],
+        on date: Date
+    ) async -> [String: Double] {
+        guard !liveAccounts.isEmpty else { return [:] }
+
+        dynamicsViewModel.handle(.loadData)
+
+        let endOfDay = Calendar.current.date(
+            bySettingHour: 23,
+            minute: 59,
+            second: 59,
+            of: date
+        ) ?? date
+
+        let accounts = (try? modelContext.fetch(FetchDescriptor<FinanceAccount>())) ?? []
+        var values: [String: Double] = [:]
+
+        for account in accounts {
+            let key = makeAccountKey(typeRaw: account.accountTypeRaw, accountID: account.accountID)
+            guard let live = liveAccounts[key] else { continue }
+
+            dynamicsViewModel.state.displayCurrency = live.currencyCode
+            let accountCardIDs = account.accountType == .card ? Set([account.accountID]) : Set<String>()
+            let value = await dynamicsViewModel.calculateBalanceAtDate(
+                accounts: [account],
+                date: endOfDay,
+                accountCardIDs: accountCardIDs,
+                debtAsNegative: false,
+                includeInitialBeforeCreation: false
+            )
+            values[key] = value
+        }
+
+        return values
     }
 
     private func recomputeAggregates() {

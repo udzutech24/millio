@@ -11,9 +11,8 @@ struct FinanceBalanceAuditSheet: View {
     @State private var showDatePickerSheet: Bool = false
     @State private var pendingAction: PendingAction?
     @State private var amountDrafts: [String: String] = [:]
-
-    @AppStorage("finance.balance.audit.review.frequency") private var reviewFrequencyRaw: String = FinanceBalanceReviewFrequency.off.rawValue
-    @AppStorage("finance.balance.audit.review.lastDate") private var lastReviewDateTS: Double = 0
+    @State private var isEditMode: Bool = false
+    @FocusState private var focusedRowID: String?
 
     private enum PendingAction: Identifiable {
         case deleteValue(FinanceBalanceAuditRow)
@@ -52,7 +51,15 @@ struct FinanceBalanceAuditSheet: View {
                     if viewModel.filteredRows.isEmpty {
                         emptyState
                     } else {
-                        listSection
+                        ScrollViewReader { proxy in
+                            listSection
+                                .onChange(of: focusedRowID) { _, newValue in
+                                    guard let newValue else { return }
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        proxy.scrollTo(newValue, anchor: .center)
+                                    }
+                                }
+                        }
                     }
                 }
                 .padding(.top, 8)
@@ -75,25 +82,17 @@ struct FinanceBalanceAuditSheet: View {
                             Label("Дата", systemImage: "calendar")
                         }
 
-                        Picker("Частота ревью", selection: $reviewFrequencyRaw) {
-                            ForEach(FinanceBalanceReviewFrequency.allCases) { frequency in
-                                Text(frequency.title).tag(frequency.rawValue)
-                            }
-                        }
-
-                        if !viewModel.isReviewMode {
+                        if !isEditMode {
                             Button {
-                                viewModel.beginReview()
-                                lastReviewDateTS = Date().timeIntervalSince1970
+                                isEditMode = true
                             } label: {
-                                Label("Режим ревью", systemImage: "text.cursor")
+                                Label("Режим редактирования", systemImage: "pencil")
                             }
                         } else {
                             Button {
-                                viewModel.stopReview()
-                                lastReviewDateTS = Date().timeIntervalSince1970
+                                isEditMode = false
                             } label: {
-                                Label("Завершить ревью", systemImage: "checkmark")
+                                Label("Завершить редактирование", systemImage: "checkmark")
                             }
                         }
                     } label: {
@@ -116,11 +115,13 @@ struct FinanceBalanceAuditSheet: View {
                 case .deleteValue(let row):
                     Button("Удалить значение", role: .destructive) {
                         viewModel.deleteValue(for: row)
+                        EventBus.shared.publish(FinanceEvent.auditSnapshotsUpdated)
                         pendingAction = nil
                     }
                 case .deleteAccount(let row):
                     Button("Удалить счёт навсегда", role: .destructive) {
                         viewModel.deleteAccountForever(row)
+                        EventBus.shared.publish(FinanceEvent.auditSnapshotsUpdated)
                         pendingAction = nil
                     }
                 }
@@ -136,9 +137,12 @@ struct FinanceBalanceAuditSheet: View {
             .onChange(of: viewModel.selectedDate) { _, _ in
                 amountDrafts.removeAll()
             }
+            .onChange(of: isEditMode) { _, isOn in
+                if !isOn { focusedRowID = nil }
+            }
             .safeAreaInset(edge: .bottom) {
-                if viewModel.isReviewMode {
-                    reviewControls
+                if isEditMode {
+                    saveBar
                 }
             }
         }
@@ -152,18 +156,30 @@ struct FinanceBalanceAuditSheet: View {
                 Button {
                     showDatePickerSheet = true
                 } label: {
-                    Label(viewModel.selectedDate.formatted(date: .abbreviated, time: .omitted), systemImage: "calendar")
-                        .font(.system(size: 14, weight: .semibold))
+                    HStack(spacing: 8) {
+                        Image(systemName: "calendar")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text(viewModel.selectedDate.formatted(date: .abbreviated, time: .omitted))
+                            .font(.system(size: 22, weight: .bold))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color.cyan.opacity(0.16))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(Color.cyan.opacity(0.55), lineWidth: 1.0)
+                            )
+                    )
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Выбрать дату")
 
                 Spacer()
-
-                if lastReviewDateTS > 0 {
-                    Text("Last: \(Date(timeIntervalSince1970: lastReviewDateTS).formatted(date: .abbreviated, time: .omitted))")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(AppColors.textSecondary)
-                }
             }
 
             totalsGrid
@@ -220,6 +236,7 @@ struct FinanceBalanceAuditSheet: View {
         List {
             ForEach(viewModel.filteredRows) { row in
                 rowView(row)
+                    .id(row.id)
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) {
                             pendingAction = .deleteValue(row)
@@ -242,7 +259,7 @@ struct FinanceBalanceAuditSheet: View {
     }
 
     private func rowView(_ row: FinanceBalanceAuditRow) -> some View {
-        let isFocused = viewModel.isFocused(row)
+        let isFocused = focusedRowID == row.id
 
         return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center, spacing: 8) {
@@ -283,23 +300,32 @@ struct FinanceBalanceAuditSheet: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(AppColors.textSecondary)
                 Spacer()
-                TextField(
-                    "0",
-                    text: Binding(
-                        get: { amountDraft(for: row) },
-                        set: { newValue in
-                            amountDrafts[row.id] = AmountInputFormatter.sanitize(newValue)
-                            if let parsed = AmountInputFormatter.parse(newValue), parsed.isFinite {
-                                viewModel.setValue(parsed, for: row)
+                if isEditMode {
+                    TextField(
+                        "0",
+                        text: Binding(
+                            get: { amountDraft(for: row) },
+                            set: { newValue in
+                                amountDrafts[row.id] = AmountInputFormatter.sanitize(newValue, maxFractionDigits: 8)
                             }
-                        }
+                        )
                     )
-                )
-                .keyboardType(.decimalPad)
-                .multilineTextAlignment(.trailing)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(AppColors.textPrimary)
-                .frame(maxWidth: 160)
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .frame(maxWidth: 160)
+                    .focused($focusedRowID, equals: row.id)
+                    .submitLabel(.done)
+                    .onTapGesture {
+                        focusedRowID = row.id
+                    }
+                } else {
+                    Text(money(row.value))
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .frame(maxWidth: 180, alignment: .trailing)
+                }
             }
         }
         .onAppear {
@@ -318,7 +344,7 @@ struct FinanceBalanceAuditSheet: View {
 
     private func amountDraft(for row: FinanceBalanceAuditRow) -> String {
         let draft = amountDrafts[row.id] ?? rawNumberString(row.value)
-        return AmountInputFormatter.display(draft)
+        return AmountInputFormatter.display(draft, maxFractionDigits: 8)
     }
 
     private func ensureAmountDraft(for row: FinanceBalanceAuditRow) {
@@ -326,31 +352,61 @@ struct FinanceBalanceAuditSheet: View {
         amountDrafts[row.id] = rawNumberString(row.value)
     }
 
-    private var reviewControls: some View {
-        HStack(spacing: 12) {
-            Button("Назад") {
-                viewModel.focusPrevious()
-                lastReviewDateTS = Date().timeIntervalSince1970
-            }
-            .buttonStyle(.bordered)
-
-            Button("Вперед") {
-                viewModel.focusNext()
-                lastReviewDateTS = Date().timeIntervalSince1970
-            }
-            .buttonStyle(.borderedProminent)
-
-            Spacer()
-
-            Button("Стоп") {
-                viewModel.stopReview()
-                lastReviewDateTS = Date().timeIntervalSince1970
+    private var saveBar: some View {
+        HStack {
+            Button {
+                saveDrafts()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                    Text("Сохранить")
+                        .fontWeight(.semibold)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
             }
             .buttonStyle(.plain)
+            .foregroundStyle(.white)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(hasChanges ? Color.green : Color.green.opacity(0.45))
+            )
+            .disabled(!hasChanges)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Color.black.opacity(0.35))
+        .padding(.top, 8)
+        .padding(.bottom, 10)
+        .background(.ultraThinMaterial)
+    }
+
+    private var hasChanges: Bool {
+        viewModel.filteredRows.contains(where: { row in
+            guard let draft = amountDrafts[row.id],
+                  let parsed = AmountInputFormatter.parse(draft) else {
+                return false
+            }
+            return abs(parsed - row.value) > 0.000_001
+        })
+    }
+
+    private func saveDrafts() {
+        var didSave = false
+        for row in viewModel.filteredRows {
+            guard let draft = amountDrafts[row.id],
+                  let parsed = AmountInputFormatter.parse(draft),
+                  parsed.isFinite else {
+                continue
+            }
+            if abs(parsed - row.value) > 0.000_001 {
+                viewModel.setValue(parsed, for: row)
+                amountDrafts[row.id] = rawNumberString(parsed)
+                didSave = true
+            }
+        }
+        if didSave {
+            EventBus.shared.publish(FinanceEvent.auditSnapshotsUpdated)
+        }
+        focusedRowID = nil
     }
 
     private var emptyState: some View {

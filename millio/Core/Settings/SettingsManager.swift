@@ -14,6 +14,7 @@ protocol SettingsManagerProtocol {
     var isDailyReminderEnabled: Bool { get set }
     var isAppLockEnabled: Bool { get set }
     var isBiometricUnlockEnabled: Bool { get set }
+    func resetToDefaults()
 }
 
 final class SettingsManager: SettingsManagerProtocol {
@@ -243,5 +244,27 @@ final class SettingsManager: SettingsManagerProtocol {
     
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+    }
+
+    /// Возвращает пользовательские настройки к безопасным дефолтам приложения.
+    func resetToDefaults() {
+        isBackupEnabled = false
+        isEncryptionEnabled = false
+        isDailyReminderEnabled = false
+        isAppLockEnabled = false
+        isBiometricUnlockEnabled = false
+        profileDisplayName = Self.defaultProfileDisplayName
+        profileAvatarFilePath = nil
+        primaryCurrencyCode = Self.defaultPrimaryCurrencyCode
+        favoriteCurrencyCodes = Self.defaultFavoriteCurrencyCodes
+        isQuickSetupCompleted = false
+        isQuickSetupBannerHidden = false
+        quickSetupExpenseCategoryIDs = []
+
+        // Модульные display-валюты и прочие временные UX-флаги.
+        defaults.removeObject(forKey: "card_display_currency")
+        defaults.removeObject(forKey: "credit_display_currency")
+        defaults.removeObject(forKey: "investment_display_currency")
+        defaults.removeObject(forKey: "conv_rate_source")
     }
 }
