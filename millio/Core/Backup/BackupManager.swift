@@ -13,8 +13,12 @@ protocol BackupManagerProtocol {
     func isAvailable() async -> Bool
     func backupNow() async throws
     func backupNow(passphrase: String?) async throws
+    func saveVersionNow(passphrase: String?) async throws
     func restoreLatest() async throws
     func restoreLatest(passphrase: String?) async throws
+    func restoreVersion(recordName: String, passphrase: String?) async throws
+    func listBackupVersions() async -> [BackupVersionInfo]
+    func deleteBackupVersion(recordName: String) async throws
     func lastBackupInfo() async -> BackupInfo?
 }
 
@@ -64,6 +68,14 @@ actor BackupManager: BackupManagerProtocol {
     }
     
     func backupNow(passphrase: String?) async throws {
+        try await performBackup(passphrase: passphrase, isPinned: false)
+    }
+
+    func saveVersionNow(passphrase: String?) async throws {
+        try await performBackup(passphrase: passphrase, isPinned: true)
+    }
+
+    private func performBackup(passphrase: String?, isPinned: Bool) async throws {
         logger.info("Starting backup...")
         
         let dataRepository = self.dataRepository
@@ -134,7 +146,7 @@ actor BackupManager: BackupManagerProtocol {
                 )
                 
                 let packed = try BackupEnvelope.pack(header: header, payload: payload)
-                try await cloudStore.uploadBackup(packed)
+                try await cloudStore.uploadBackup(packed, isPinned: isPinned)
             }
             
             logger.info("Backup completed successfully")
@@ -187,127 +199,13 @@ actor BackupManager: BackupManagerProtocol {
                 }
 
                 let backupRecordNames = try await cloudStore.listBackupRecordNamesForRestore()
-                guard !backupRecordNames.isEmpty else {
-                    throw self.restoreFailure(.backupNotFound)
-                }
-
-                var hasAnyCandidateData = false
-
-                for (candidateIndex, recordName) in backupRecordNames.enumerated() {
-                    guard let downloadedData = try await cloudStore.downloadBackup(recordName: recordName) else {
-                        self.recordRestoreCandidateMetric(
-                            stage: .download,
-                            outcome: .skip,
-                            reason: .missingRecordOrAsset,
-                            recordName: recordName,
-                            candidateIndex: candidateIndex,
-                            score: 0
-                        )
-                        continue
-                    }
-                    hasAnyCandidateData = true
-
-                    switch self.preflightCandidate(downloadedData, passphrase: passphrase) {
-                    case .ready(let score, let reason, let detail):
-                        self.recordRestoreCandidateMetric(
-                            stage: .preflight,
-                            outcome: .ready,
-                            reason: reason,
-                            recordName: recordName,
-                            candidateIndex: candidateIndex,
-                            score: score,
-                            detail: detail
-                        )
-                    case .skip(let reason):
-                        self.recordRestoreCandidateMetric(
-                            stage: .preflight,
-                            outcome: .skip,
-                            reason: reason,
-                            recordName: recordName,
-                            candidateIndex: candidateIndex,
-                            score: 0
-                        )
-                        continue
-                    case .block(let error, let reason):
-                        self.recordRestoreCandidateMetric(
-                            stage: .preflight,
-                            outcome: .block,
-                            reason: reason,
-                            recordName: recordName,
-                            candidateIndex: candidateIndex,
-                            score: 0
-                        )
-                        throw error
-                    }
-
-                    do {
-                        try await self.restoreDownloadedBackup(
-                            downloadedData,
-                            passphrase: passphrase,
-                            encryption: encryption,
-                            dataRepository: dataRepository
-                        )
-                        self.recordRestoreCandidateMetric(
-                            stage: .restore,
-                            outcome: .success,
-                            reason: .restored,
-                            recordName: recordName,
-                            candidateIndex: candidateIndex,
-                            score: 100
-                        )
-                        return
-                    } catch let tagged as TaggedRestoreFailure {
-                        if self.shouldTryOlderSnapshot(after: tagged.appError) {
-                            self.recordRestoreCandidateMetric(
-                                stage: .restore,
-                                outcome: .skip,
-                                reason: .skipReason(for: tagged.appError),
-                                recordName: recordName,
-                                candidateIndex: candidateIndex,
-                                score: 0
-                            )
-                            self.logger.warning("Skipping restore candidate '\(recordName, privacy: .public)' due to \(tagged.appError.localizedDescription, privacy: .public)")
-                            continue
-                        }
-                        self.recordRestoreCandidateMetric(
-                            stage: .restore,
-                            outcome: .block,
-                            reason: tagged.reason,
-                            recordName: recordName,
-                            candidateIndex: candidateIndex,
-                            score: 0
-                        )
-                        throw tagged.appError
-                    } catch let appError as AppError {
-                        if self.shouldTryOlderSnapshot(after: appError) {
-                            self.recordRestoreCandidateMetric(
-                                stage: .restore,
-                                outcome: .skip,
-                                reason: .skipReason(for: appError),
-                                recordName: recordName,
-                                candidateIndex: candidateIndex,
-                                score: 0
-                            )
-                            self.logger.warning("Skipping restore candidate '\(recordName, privacy: .public)' due to \(appError.localizedDescription, privacy: .public)")
-                            continue
-                        }
-                        self.recordRestoreCandidateMetric(
-                            stage: .restore,
-                            outcome: .block,
-                            reason: .blockReason(for: appError),
-                            recordName: recordName,
-                            candidateIndex: candidateIndex,
-                            score: 0
-                        )
-                        throw appError
-                    }
-                }
-
-                if hasAnyCandidateData {
-                    throw self.restoreFailure(.allCandidatesInvalid)
-                }
-
-                throw self.restoreFailure(.backupNotFound)
+                try await self.restoreFromRecordNames(
+                    backupRecordNames,
+                    passphrase: passphrase,
+                    encryption: encryption,
+                    dataRepository: dataRepository,
+                    cloudStore: cloudStore
+                )
             }
         
             logger.info("Restore completed successfully")
@@ -324,6 +222,185 @@ actor BackupManager: BackupManagerProtocol {
             CrashReporting.record(error: error)
             throw error
         }
+    }
+
+    func restoreVersion(recordName: String, passphrase: String?) async throws {
+        logger.info("Starting restore from selected version...")
+
+        await MainActor.run {
+            EventBus.shared.publish(BackupEvent.restoreStarted)
+        }
+
+        let dataRepository = self.dataRepository
+        let encryption = resolvedEncryption()
+        let cloudStore = self.cloudStore
+
+        do {
+            guard await self.isAvailable() else {
+                throw AppError.iCloudUnavailable
+            }
+            try await self.restoreFromRecordNames(
+                [recordName],
+                passphrase: passphrase,
+                encryption: encryption,
+                dataRepository: dataRepository,
+                cloudStore: cloudStore
+            )
+            await MainActor.run {
+                EventBus.shared.publish(BackupEvent.restoreCompleted)
+            }
+        } catch {
+            let appError = (error as? AppError) ?? .unknown(error)
+            await MainActor.run {
+                EventBus.shared.publish(BackupEvent.restoreFailed(appError))
+            }
+            CrashReporting.log("Restore selected version failed: \(String(describing: error))")
+            CrashReporting.record(error: error)
+            throw error
+        }
+    }
+
+    func listBackupVersions() async -> [BackupVersionInfo] {
+        do {
+            return try await cloudStore.listBackupVersions()
+        } catch {
+            logger.error("Failed to list backup versions: \(error.localizedDescription)")
+            return []
+        }
+    }
+
+    func deleteBackupVersion(recordName: String) async throws {
+        try await cloudStore.deleteBackup(recordName: recordName)
+    }
+
+    private func restoreFromRecordNames(
+        _ backupRecordNames: [String],
+        passphrase: String?,
+        encryption: BackupEncryptionProtocol?,
+        dataRepository: DataRepositoryProtocol,
+        cloudStore: CloudBackupStoreProtocol
+    ) async throws {
+        guard !backupRecordNames.isEmpty else {
+            throw self.restoreFailure(.backupNotFound)
+        }
+
+        var hasAnyCandidateData = false
+
+        for (candidateIndex, recordName) in backupRecordNames.enumerated() {
+            guard let downloadedData = try await cloudStore.downloadBackup(recordName: recordName) else {
+                self.recordRestoreCandidateMetric(
+                    stage: .download,
+                    outcome: .skip,
+                    reason: .missingRecordOrAsset,
+                    recordName: recordName,
+                    candidateIndex: candidateIndex,
+                    score: 0
+                )
+                continue
+            }
+            hasAnyCandidateData = true
+
+            switch self.preflightCandidate(downloadedData, passphrase: passphrase) {
+            case .ready(let score, let reason, let detail):
+                self.recordRestoreCandidateMetric(
+                    stage: .preflight,
+                    outcome: .ready,
+                    reason: reason,
+                    recordName: recordName,
+                    candidateIndex: candidateIndex,
+                    score: score,
+                    detail: detail
+                )
+            case .skip(let reason):
+                self.recordRestoreCandidateMetric(
+                    stage: .preflight,
+                    outcome: .skip,
+                    reason: reason,
+                    recordName: recordName,
+                    candidateIndex: candidateIndex,
+                    score: 0
+                )
+                continue
+            case .block(let error, let reason):
+                self.recordRestoreCandidateMetric(
+                    stage: .preflight,
+                    outcome: .block,
+                    reason: reason,
+                    recordName: recordName,
+                    candidateIndex: candidateIndex,
+                    score: 0
+                )
+                throw error
+            }
+
+            do {
+                try await self.restoreDownloadedBackup(
+                    downloadedData,
+                    passphrase: passphrase,
+                    encryption: encryption,
+                    dataRepository: dataRepository
+                )
+                self.recordRestoreCandidateMetric(
+                    stage: .restore,
+                    outcome: .success,
+                    reason: .restored,
+                    recordName: recordName,
+                    candidateIndex: candidateIndex,
+                    score: 100
+                )
+                return
+            } catch let tagged as TaggedRestoreFailure {
+                if self.shouldTryOlderSnapshot(after: tagged.appError) {
+                    self.recordRestoreCandidateMetric(
+                        stage: .restore,
+                        outcome: .skip,
+                        reason: .skipReason(for: tagged.appError),
+                        recordName: recordName,
+                        candidateIndex: candidateIndex,
+                        score: 0
+                    )
+                    self.logger.warning("Skipping restore candidate '\(recordName, privacy: .public)' due to \(tagged.appError.localizedDescription, privacy: .public)")
+                    continue
+                }
+                self.recordRestoreCandidateMetric(
+                    stage: .restore,
+                    outcome: .block,
+                    reason: tagged.reason,
+                    recordName: recordName,
+                    candidateIndex: candidateIndex,
+                    score: 0
+                )
+                throw tagged.appError
+            } catch let appError as AppError {
+                if self.shouldTryOlderSnapshot(after: appError) {
+                    self.recordRestoreCandidateMetric(
+                        stage: .restore,
+                        outcome: .skip,
+                        reason: .skipReason(for: appError),
+                        recordName: recordName,
+                        candidateIndex: candidateIndex,
+                        score: 0
+                    )
+                    self.logger.warning("Skipping restore candidate '\(recordName, privacy: .public)' due to \(appError.localizedDescription, privacy: .public)")
+                    continue
+                }
+                self.recordRestoreCandidateMetric(
+                    stage: .restore,
+                    outcome: .block,
+                    reason: .blockReason(for: appError),
+                    recordName: recordName,
+                    candidateIndex: candidateIndex,
+                    score: 0
+                )
+                throw appError
+            }
+        }
+
+        if hasAnyCandidateData {
+            throw self.restoreFailure(.allCandidatesInvalid)
+        }
+
+        throw self.restoreFailure(.backupNotFound)
     }
 
     private func shouldTryOlderSnapshot(after error: AppError) -> Bool {

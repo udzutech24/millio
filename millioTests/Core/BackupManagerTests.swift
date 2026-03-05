@@ -39,7 +39,25 @@ struct BackupManagerTests {
         try await backupManager.backupNow()
         
         #expect(mockCloudStore.uploadCalled == true)
+        #expect(mockCloudStore.uploadedIsPinned == false)
         #expect(mockDataRepository.exportCalled == true)
+    }
+
+    @Test("saveVersionNow stores pinned backup version")
+    func testSaveVersionNowStoresPinnedVersion() async throws {
+        let mockCloudStore = MockCloudBackupStore()
+        mockCloudStore.isAvailableResult = true
+        let mockDataRepository = MockDataRepository()
+        mockDataRepository.exportData = Data("test data".utf8)
+        let backupManager = BackupManager(
+            cloudStore: mockCloudStore,
+            dataRepository: mockDataRepository
+        )
+
+        try await backupManager.saveVersionNow(passphrase: nil)
+
+        #expect(mockCloudStore.uploadCalled == true)
+        #expect(mockCloudStore.uploadedIsPinned == true)
     }
     
     @Test("Backup now supports passphrase encryption (envelope header + decryptable payload)")
@@ -262,6 +280,28 @@ struct BackupManagerTests {
         #expect(mockDataRepository.importedData == expectedData)
     }
 
+    @Test("Restore selected version restores only requested record")
+    func testRestoreSelectedVersionUsesOnlyRequestedRecord() async throws {
+        let mockCloudStore = MockCloudBackupStore()
+        mockCloudStore.isAvailableResult = true
+        mockCloudStore.downloadDataByRecordName = [
+            "snapshot-target": Data("target-data".utf8),
+            "snapshot-other": Data("other-data".utf8)
+        ]
+
+        let mockDataRepository = MockDataRepository()
+        mockDataRepository.exportData = Data("existing data".utf8)
+        let backupManager = BackupManager(
+            cloudStore: mockCloudStore,
+            dataRepository: mockDataRepository
+        )
+
+        try await backupManager.restoreVersion(recordName: "snapshot-target", passphrase: nil)
+
+        #expect(mockCloudStore.requestedRecordNames == ["snapshot-target"])
+        #expect(mockDataRepository.importedData == Data("target-data".utf8))
+    }
+
     @Test("Restore latest fails with restoreFailed when all snapshot candidates are corrupted or incompatible")
     func testRestoreLatestFailsWhenAllCandidatesAreInvalid() async {
         let mockCloudStore = MockCloudBackupStore()
@@ -397,14 +437,18 @@ final class MockCloudBackupStore: CloudBackupStoreProtocol {
     var downloadErrorsByRecordName: [String: Error] = [:]
     var backupInfo: BackupInfo?
     var uploadedData: Data?
+    var uploadedIsPinned: Bool?
+    var listedVersions: [BackupVersionInfo] = []
+    var deletedRecordNames: [String] = []
     
     func isAvailable() async -> Bool {
         isAvailableResult
     }
     
-    func uploadBackup(_ data: Data) async throws {
+    func uploadBackup(_ data: Data, isPinned: Bool) async throws {
         uploadCalled = true
         uploadedData = data
+        uploadedIsPinned = isPinned
     }
     
     func downloadLatestBackup() async throws -> Data? {
@@ -433,6 +477,14 @@ final class MockCloudBackupStore: CloudBackupStoreProtocol {
     
     func getLatestBackupInfo() async throws -> BackupInfo? {
         backupInfo
+    }
+
+    func listBackupVersions() async throws -> [BackupVersionInfo] {
+        listedVersions
+    }
+
+    func deleteBackup(recordName: String) async throws {
+        deletedRecordNames.append(recordName)
     }
 }
 
@@ -535,7 +587,7 @@ struct CloudBackupStoreTests {
         let store = CloudBackupStore(container: container)
         
         let data = Data((0..<256).map { _ in UInt8.random(in: 0...255) })
-        try await store.uploadBackup(data)
+        try await store.uploadBackup(data, isPinned: false)
         
         let saved = db.lastSavedRecord
         #expect(saved != nil)
@@ -642,7 +694,7 @@ struct CloudBackupStoreTests {
         )
 
         for index in 1...4 {
-            try await store.uploadBackup(Data("payload-\(index)".utf8))
+            try await store.uploadBackup(Data("payload-\(index)".utf8), isPinned: false)
         }
 
         let indexRecord = db.recordsByName["backup_index"]
@@ -656,6 +708,26 @@ struct CloudBackupStoreTests {
 
         let latest = try await store.downloadLatestBackup()
         #expect(latest == Data("payload-4".utf8))
+    }
+
+    @Test("uploadBackup не удаляет закрепленные версии при retention авто-бэкапов")
+    func testUploadBackupKeepsPinnedVersionsWhileTrimmingRollingSnapshots() async throws {
+        let db = FakeCloudBackupDatabase()
+        let store = CloudBackupStore(
+            container: FakeCloudBackupContainer(accountStatusResult: .available, database: db),
+            maxSnapshots: 2
+        )
+
+        try await store.uploadBackup(Data("pinned".utf8), isPinned: true)
+        try await store.uploadBackup(Data("auto-1".utf8), isPinned: false)
+        try await store.uploadBackup(Data("auto-2".utf8), isPinned: false)
+        try await store.uploadBackup(Data("auto-3".utf8), isPinned: false)
+
+        let versions = try await store.listBackupVersions()
+        #expect(versions.count == 3)
+        #expect(versions.filter(\.isPinned).count == 1)
+        #expect(versions.filter { !$0.isPinned }.count == 2)
+        #expect(db.deletedRecordNames.count == 1)
     }
 
     @Test("downloadLatestBackup fallback к legacy latest, если index указывает на отсутствующие snapshots")

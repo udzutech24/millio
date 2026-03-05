@@ -24,33 +24,33 @@ enum BackupFailureCode {
     var message: String {
         switch self {
         case .compressionInitializationFailed:
-            return "Ошибка инициализации сжатия"
+            return "Failed to initialize compression"
         case .compressionEncodeFailed:
-            return "Не удалось сжать backup"
+            return "Failed to compress backup"
         case .envelopeHeaderTooLarge:
-            return "Слишком большой заголовок backup"
+            return "Backup header is too large"
         case .metadataSerializationFailed:
-            return "Не удалось сериализовать metadata для backup"
+            return "Failed to serialize backup metadata"
         case .modelExportUnexpectedFormat(let typeName):
-            return "Экспорт модели '\(typeName)' вернул неожиданный формат"
+            return "Model export '\(typeName)' returned an unexpected format"
         case .keychainKeyUpdateFailed:
-            return "Не удалось обновить ключ шифрования backup"
+            return "Failed to update backup encryption key"
         case .keychainKeySaveFailed:
-            return "Не удалось сохранить ключ шифрования backup"
+            return "Failed to save backup encryption key"
         case .keychainKeyDeleteFailed:
-            return "Не удалось удалить ключ шифрования backup"
+            return "Failed to delete backup encryption key"
         case .passphraseEmpty:
-            return "Парольная фраза пустая"
+            return "Passphrase is empty"
         case .passphraseKeyDerivationFailed:
-            return "Не удалось получить ключ шифрования из парольной фразы"
+            return "Failed to derive encryption key from passphrase"
         case .randomBytesGenerationFailed:
-            return "Не удалось сгенерировать случайные байты для backup"
+            return "Failed to generate random bytes for backup"
         case .cloudKitOperationFailed(let detail):
             let trimmedDetail = detail.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmedDetail.isEmpty else {
-                return "Ошибка CloudKit при работе с backup"
+                return "CloudKit backup operation failed"
             }
-            return "Ошибка CloudKit при работе с backup: \(trimmedDetail)"
+            return "CloudKit backup operation failed: \(trimmedDetail)"
         }
     }
 

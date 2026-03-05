@@ -110,6 +110,16 @@ struct ProfileView: View {
                                 .buttonStyle(.plain)
                                 .accessibilityIdentifier("profile.appSecurityLink")
 
+                                NavigationLink {
+                                    SmartDataResetView()
+                                } label: {
+                                    settingsRow(iconSystemName: "trash", title: "Smart data reset") {
+                                        chevron
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("profile.smartDataResetLink")
+
                                 Button {
                                     showQuickSetupSheet = true
                                 } label: {
@@ -121,6 +131,29 @@ struct ProfileView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityIdentifier("profile.quickSetupLink")
+
+                                Menu {
+                                    ForEach(LaunchSplashDisplayMode.allCases, id: \.self) { mode in
+                                        Button {
+                                            appState.launchSplashDisplayMode = mode
+                                            SettingsManager.shared.launchSplashDisplayMode = mode
+                                        } label: {
+                                            if mode == appState.launchSplashDisplayMode {
+                                                Label(mode.profileTitle, systemImage: "checkmark")
+                                            } else {
+                                                Text(mode.profileTitle)
+                                            }
+                                        }
+                                    }
+                                } label: {
+                                    settingsRow(iconSystemName: "sparkles.tv", title: "Launch splash") {
+                                        Text(appState.launchSplashDisplayMode.profileTitle)
+                                            .foregroundStyle(AppColors.profileValueAccent)
+                                        chevron
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("profile.launchSplashModeMenu")
                                 
                                 Toggle(isOn: Binding(
                                     get: { appState.isDailyReminderEnabled },

@@ -306,6 +306,95 @@ struct AppLifecycleUseCaseTests {
         
         #expect(didUpdate == true)
     }
+
+    @Test("initialize удерживает launching минимум указанное время")
+    func testInitializeRespectsMinimumLaunchDuration() async throws {
+        let defaults = UserDefaults.standard
+        let key = "hasCompletedOnboarding"
+        let previous = defaults.object(forKey: key)
+        defer {
+            if let previous { defaults.set(previous, forKey: key) } else { defaults.removeObject(forKey: key) }
+        }
+        defaults.set(true, forKey: key)
+
+        let appState = AppState()
+        appState.isBackupEnabled = false
+
+        let useCase = AppLifecycleUseCase(
+            appState: appState,
+            backupManager: FakeBackupManager(),
+            minimumLaunchDuration: 0.06
+        )
+
+        let start = ContinuousClock.now
+        async let initialization: Void = useCase.initialize()
+
+        try await Task.sleep(for: .milliseconds(20))
+        #expect(appState.lifecycle == .launching)
+
+        await initialization
+        let elapsed = start.duration(to: .now)
+
+        #expect(elapsed >= .milliseconds(55))
+        #expect(appState.lifecycle == .ready)
+    }
+
+    @Test("initialize не удерживает splash когда режим показа выключен")
+    func testInitializeSkipsSplashDelayWhenDisabled() async {
+        let defaults = UserDefaults.standard
+        let key = "hasCompletedOnboarding"
+        let previous = defaults.object(forKey: key)
+        defer {
+            if let previous { defaults.set(previous, forKey: key) } else { defaults.removeObject(forKey: key) }
+        }
+        defaults.set(true, forKey: key)
+
+        let appState = AppState()
+        appState.isBackupEnabled = false
+
+        let splashPrefs = FakeLaunchSplashPreferences(mode: .disabled, lastShownAt: nil)
+        let useCase = AppLifecycleUseCase(
+            appState: appState,
+            backupManager: FakeBackupManager(),
+            splashPreferences: splashPrefs,
+            minimumLaunchDuration: 0.2
+        )
+
+        await useCase.initialize()
+
+        #expect(appState.lifecycle == .ready)
+        #expect(splashPrefs.lastLaunchSplashShownAt == nil)
+    }
+
+    @Test("initialize пропускает splash в режиме раз в день, если уже показывали сегодня")
+    func testInitializeSkipsSplashDelayWhenAlreadyShownToday() async {
+        let defaults = UserDefaults.standard
+        let key = "hasCompletedOnboarding"
+        let previous = defaults.object(forKey: key)
+        defer {
+            if let previous { defaults.set(previous, forKey: key) } else { defaults.removeObject(forKey: key) }
+        }
+        defaults.set(true, forKey: key)
+
+        let now = Date(timeIntervalSince1970: 1_741_170_000)
+        let appState = AppState()
+        appState.isBackupEnabled = false
+
+        let splashPrefs = FakeLaunchSplashPreferences(mode: .oncePerDay, lastShownAt: now)
+        let useCase = AppLifecycleUseCase(
+            appState: appState,
+            backupManager: FakeBackupManager(),
+            splashPreferences: splashPrefs,
+            calendar: Calendar(identifier: .gregorian),
+            nowProvider: { now },
+            minimumLaunchDuration: 0.2
+        )
+
+        await useCase.initialize()
+
+        #expect(appState.lifecycle == .ready)
+        #expect(splashPrefs.lastLaunchSplashShownAt == now)
+    }
 }
 
 final class FakeBackupManager: BackupManagerProtocol {
@@ -320,7 +409,21 @@ final class FakeBackupManager: BackupManagerProtocol {
     func isAvailable() async -> Bool { isAvailableResult }
     func backupNow() async throws {}
     func backupNow(passphrase: String?) async throws {}
+    func saveVersionNow(passphrase: String?) async throws {}
     func restoreLatest() async throws {}
     func restoreLatest(passphrase: String?) async throws {}
+    func restoreVersion(recordName: String, passphrase: String?) async throws {}
+    func listBackupVersions() async -> [BackupVersionInfo] { [] }
+    func deleteBackupVersion(recordName: String) async throws {}
     func lastBackupInfo() async -> BackupInfo? { lastBackupInfoResult }
+}
+
+final class FakeLaunchSplashPreferences: LaunchSplashPreferences {
+    var launchSplashDisplayMode: LaunchSplashDisplayMode
+    var lastLaunchSplashShownAt: Date?
+
+    init(mode: LaunchSplashDisplayMode, lastShownAt: Date?) {
+        self.launchSplashDisplayMode = mode
+        self.lastLaunchSplashShownAt = lastShownAt
+    }
 }

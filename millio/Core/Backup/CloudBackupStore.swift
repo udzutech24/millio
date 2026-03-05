@@ -58,11 +58,13 @@ struct CKDatabaseAdapter: CloudBackupDatabaseProtocol {
 
 protocol CloudBackupStoreProtocol {
     func isAvailable() async -> Bool
-    func uploadBackup(_ data: Data) async throws
+    func uploadBackup(_ data: Data, isPinned: Bool) async throws
     func downloadLatestBackup() async throws -> Data?
     func listBackupRecordNamesForRestore() async throws -> [String]
     func downloadBackup(recordName: String) async throws -> Data?
     func getLatestBackupInfo() async throws -> BackupInfo?
+    func listBackupVersions() async throws -> [BackupVersionInfo]
+    func deleteBackup(recordName: String) async throws
 }
 
 final class CloudBackupStore: CloudBackupStoreProtocol {
@@ -81,6 +83,32 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         let date: Date
         let size: Int64
         let version: String
+        let isPinned: Bool
+
+        init(recordName: String, date: Date, size: Int64, version: String, isPinned: Bool) {
+            self.recordName = recordName
+            self.date = date
+            self.size = size
+            self.version = version
+            self.isPinned = isPinned
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case recordName
+            case date
+            case size
+            case version
+            case isPinned
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            recordName = try container.decode(String.self, forKey: .recordName)
+            date = try container.decode(Date.self, forKey: .date)
+            size = try container.decode(Int64.self, forKey: .size)
+            version = try container.decode(String.self, forKey: .version)
+            isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+        }
     }
     
     init(
@@ -113,7 +141,7 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         }
     }
     
-    func uploadBackup(_ data: Data) async throws {
+    func uploadBackup(_ data: Data, isPinned: Bool) async throws {
         let privateDB = container.privateCloudDatabase
         let backupDate = now()
         let backupVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -141,13 +169,17 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
                 recordName: snapshotRecordID.recordName,
                 date: backupDate,
                 size: Int64(data.count),
-                version: backupVersion
+                version: backupVersion,
+                isPinned: isPinned
             ),
             at: 0
         )
 
-        let staleEntries = Array(entries.dropFirst(maxSnapshots))
-        entries = Array(entries.prefix(maxSnapshots))
+        let pinnedEntries = entries.filter(\.isPinned)
+        let rollingEntries = entries.filter { !$0.isPinned }
+        let staleEntries = Array(rollingEntries.dropFirst(maxSnapshots))
+        entries = pinnedEntries + Array(rollingEntries.prefix(maxSnapshots))
+        entries.sort { $0.date > $1.date }
         try await saveIndexEntries(entries, to: privateDB)
 
         for stale in staleEntries {
@@ -234,6 +266,53 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         }
 
         return nil
+    }
+
+    func listBackupVersions() async throws -> [BackupVersionInfo] {
+        let privateDB = container.privateCloudDatabase
+        let entries = try await loadIndexEntries(from: privateDB).sorted { $0.date > $1.date }
+        if !entries.isEmpty {
+            return entries.map {
+                BackupVersionInfo(
+                    recordName: $0.recordName,
+                    date: $0.date,
+                    size: $0.size,
+                    version: $0.version,
+                    isPinned: $0.isPinned
+                )
+            }
+        }
+
+        if let legacy = try await legacyLatestInfo(using: privateDB) {
+            return [
+                BackupVersionInfo(
+                    recordName: legacyLatestRecordID.recordName,
+                    date: legacy.date,
+                    size: legacy.size,
+                    version: legacy.version,
+                    isPinned: false
+                )
+            ]
+        }
+        return []
+    }
+
+    func deleteBackup(recordName: String) async throws {
+        let privateDB = container.privateCloudDatabase
+        do {
+            try await privateDB.deleteRecord(withID: CKRecord.ID(recordName: recordName))
+        } catch let error as CKError where error.code == .unknownItem {
+            // Запись уже отсутствует — удаляем только из индекса.
+        } catch {
+            throw BackupFailureCode.cloudKitOperationFailed(error.localizedDescription).appError
+        }
+
+        var entries = try await loadIndexEntries(from: privateDB)
+        let initialCount = entries.count
+        entries.removeAll { $0.recordName == recordName }
+        if entries.count != initialCount {
+            try await saveIndexEntries(entries, to: privateDB)
+        }
     }
 
     private func makeSnapshotRecordName(on date: Date) -> String {

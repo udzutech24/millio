@@ -53,11 +53,11 @@ struct AppPinCodeSetupView: View {
                 }
                 .padding(.horizontal, 24)
             }
-            .navigationTitle(mode == .create ? "PIN-код" : "Смена PIN")
+            .navigationTitle(mode == .create ? "PIN code" : "Change PIN")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Отмена") {
+                    Button("Cancel") {
                         dismiss()
                     }
                 }
@@ -73,11 +73,11 @@ struct AppPinCodeSetupView: View {
     private var stepTitle: String {
         switch step {
         case .verifyCurrent:
-            return "Введите текущий PIN"
+            return "Enter current PIN"
         case .enterNew:
-            return "Введите новый PIN"
+            return "Enter new PIN"
         case .confirmNew:
-            return "Повторите новый PIN"
+            return "Re-enter new PIN"
         }
     }
 
@@ -139,7 +139,7 @@ struct AppPinCodeSetupView: View {
         switch step {
         case .verifyCurrent:
             guard AppLockPinStore.shared.verify(pin: enteredPin) else {
-                errorText = "Текущий PIN неверный"
+                errorText = "Current PIN is incorrect"
                 enteredPin = ""
                 return
             }
@@ -151,7 +151,7 @@ struct AppPinCodeSetupView: View {
             step = .confirmNew
         case .confirmNew:
             guard enteredPin == firstPin else {
-                errorText = "PIN-коды не совпадают"
+                errorText = "PIN codes do not match"
                 firstPin = ""
                 enteredPin = ""
                 step = .enterNew
@@ -162,7 +162,7 @@ struct AppPinCodeSetupView: View {
                 onSaved()
                 dismiss()
             } catch {
-                errorText = "Не удалось сохранить PIN"
+                errorText = "Failed to save PIN"
                 firstPin = ""
                 enteredPin = ""
                 step = .enterNew

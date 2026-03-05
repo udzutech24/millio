@@ -53,6 +53,7 @@ final class AppState {
             SettingsManager.shared.isBiometricUnlockEnabled = isBiometricUnlockEnabled
         }
     }
+    var launchSplashDisplayMode: LaunchSplashDisplayMode = .always
     var isAppLocked: Bool = false
     
     // Subscription status
@@ -75,6 +76,7 @@ final class AppState {
         self.isDailyReminderEnabled = SettingsManager.shared.isDailyReminderEnabled
         self.isAppLockEnabled = SettingsManager.shared.isAppLockEnabled
         self.isBiometricUnlockEnabled = SettingsManager.shared.isBiometricUnlockEnabled
+        self.launchSplashDisplayMode = SettingsManager.shared.launchSplashDisplayMode
         self.selectedLanguage = LanguageManager.shared.currentLanguage
         self.primaryCurrencyCode = SettingsManager.shared.primaryCurrencyCode
         self.profileDisplayName = SettingsManager.shared.profileDisplayName

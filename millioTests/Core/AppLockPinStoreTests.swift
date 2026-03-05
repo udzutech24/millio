@@ -27,7 +27,7 @@ struct AppLockPinStoreTests {
         )
         defer { store.clear() }
 
-        #expect(throws: AppError.securityFailed("PIN-код должен состоять из 4 цифр")) {
+        #expect(throws: AppError.securityFailed("PIN must contain exactly 4 digits")) {
             try store.save(pin: "12")
         }
     }

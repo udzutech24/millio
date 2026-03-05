@@ -673,6 +673,12 @@ final class FinanceViewModel: ViewModelProtocol {
                 Task {
                     await self.refreshGroupTotalsAndAmounts()
                 }
+            case FinanceEvent.auditSnapshotsUpdated:
+                self.loadGroups()
+                self.loadAccounts()
+                Task {
+                    await self.refreshGroupTotalsAndAmounts()
+                }
             case BackupEvent.restoreCompleted:
                 self.loadGroups()
                 self.loadAccounts()

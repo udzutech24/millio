@@ -20,12 +20,28 @@ final class MockBackupManager: BackupManagerProtocol {
     func backupNow(passphrase: String?) async throws {
         // Ничего не делаем, backup отключен
     }
+
+    func saveVersionNow(passphrase: String?) async throws {
+        // Ничего не делаем, backup отключен
+    }
     
     func restoreLatest() async throws {
         // Ничего не делаем, backup отключен
     }
 
     func restoreLatest(passphrase: String?) async throws {
+        // Ничего не делаем, backup отключен
+    }
+
+    func restoreVersion(recordName: String, passphrase: String?) async throws {
+        // Ничего не делаем, backup отключен
+    }
+
+    func listBackupVersions() async -> [BackupVersionInfo] {
+        []
+    }
+
+    func deleteBackupVersion(recordName: String) async throws {
         // Ничего не делаем, backup отключен
     }
     

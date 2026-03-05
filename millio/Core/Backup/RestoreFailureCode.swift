@@ -22,25 +22,25 @@ enum RestoreFailureCode {
     var message: String {
         switch self {
         case .backupNotFound:
-            return "Backup не найден в iCloud"
+            return "Backup not found in iCloud"
         case .allCandidatesInvalid:
-            return "Не удалось восстановить данные: доступные backup повреждены или несовместимы"
+            return "Failed to restore data: available backups are corrupted or incompatible"
         case .passphraseRequired:
-            return "Backup зашифрован парольной фразой. Введите парольную фразу и повторите."
+            return "Backup is encrypted with a passphrase. Enter the passphrase and try again."
         case .passphraseNeededForDecrypt:
-            return "Нужна парольная фраза для расшифровки backup"
+            return "A passphrase is required to decrypt this backup"
         case .passphraseDecryptFailed:
-            return "Не удалось расшифровать backup (неверная парольная фраза или поврежденные данные)"
+            return "Failed to decrypt backup (wrong passphrase or corrupted data)"
         case .keychainUnavailable:
-            return "Backup зашифрован и не может быть расшифрован на этом устройстве"
+            return "Backup is encrypted and cannot be decrypted on this device"
         case .keychainKeyMissingOnDevice:
-            return "Ключ шифрования backup не найден на этом устройстве"
+            return "Backup encryption key is missing on this device"
         case .decryptFailed:
-            return "Не удалось расшифровать backup"
+            return "Failed to decrypt backup"
         case .preRestoreSnapshotFailed:
-            return "Не удалось создать снимок данных перед восстановлением"
+            return "Failed to create pre-restore snapshot"
         case .rollbackFailed:
-            return "Не удалось восстановить данные после ошибки восстановления"
+            return "Failed to roll back data after restore error"
         }
     }
 
