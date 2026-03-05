@@ -71,7 +71,6 @@ private struct CashbackContentViewInternal: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppRouter.self) private var router
     @State private var showFavoriteCategoriesSheet: Bool = false
-    @State private var activeSwipeCashbackID: PersistentIdentifier?
     private let currentRoute: AppRoute = .cashback
 
     var body: some View {
@@ -82,14 +81,7 @@ private struct CashbackContentViewInternal: View {
                 emptyStateView
                     .padding(.horizontal, 16)
             } else {
-                ScrollView {
-                    VStack(spacing: 24) {
-                        cashbacksList
-                    }
-                    .padding(.bottom, 100)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 16)
-                }
+                cashbacksList
             }
 
             addCashbackFAB
@@ -193,43 +185,32 @@ private struct CashbackContentViewInternal: View {
     // MARK: - Cashbacks List
 
     private var cashbacksList: some View {
-        let containerShape = RoundedRectangle(cornerRadius: 32, style: .continuous)
-
-        return VStack(alignment: .leading, spacing: 12) {
-            Text("Категории кешбэка")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(AppColors.textPrimary.opacity(0.36))
-                .padding(.leading, 4)
-
-            VStack(spacing: 0) {
-                ForEach(Array(viewModel.state.visibleCashbacks.enumerated()), id: \.element.id) { index, cashback in
+        List {
+            Section {
+                ForEach(viewModel.state.visibleCashbacks, id: \.id) { cashback in
                     CashbackRowView(
                         cashback: cashback,
-                        cashbackID: cashback.id,
-                        activeSwipeCashbackID: $activeSwipeCashbackID,
                         viewModel: viewModel
                     )
-
-                    if index < viewModel.state.visibleCashbacks.count - 1 {
-                        Rectangle()
-                            .fill(CashbackScreenStyle.rowDivider)
-                            .frame(height: 1)
-                            .padding(.leading, 54)
-                            .padding(.trailing, 8)
-                    }
+                    .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 16))
+                    .listRowBackground(CashbackScreenStyle.listFill)
+                    .listRowSeparator(.hidden)
                 }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background {
-                containerShape
-                    .fill(CashbackScreenStyle.listFill)
-                    .overlay(
-                        containerShape
-                            .stroke(CashbackScreenStyle.neonBorder, lineWidth: 1)
-                    )
+            } header: {
+                Text("Категории кешбэка")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(AppColors.textPrimary.opacity(0.36))
+                    .textCase(nil)
+                    .padding(.leading, 2)
             }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Color.clear)
+        .safeAreaInset(edge: .bottom) {
+            Color.clear.frame(height: 88)
+        }
+        .padding(.top, 8)
     }
 
     @ToolbarContentBuilder
@@ -575,18 +556,12 @@ private struct CashbackFavoriteCategoriesSheet: View {
 
 private struct CashbackRowView: View {
     let cashback: Cashback
-    let cashbackID: PersistentIdentifier
-    @Binding var activeSwipeCashbackID: PersistentIdentifier?
     @ObservedObject var viewModel: CashbackViewModel
-    @State private var rowOffset: CGFloat = 0
-    @State private var dragOriginOffset: CGFloat?
 
-    private let actionButtonSize: CGFloat = 44
-    private let deleteRevealWidth: CGFloat = 64
-    private var leadingActionsWidth: CGFloat { (actionButtonSize * 2) + 10 }
     private var isFavoriteCategory: Bool {
         viewModel.isFavoriteCategory(rawValue: cashback.categoryRaw)
     }
+
     var body: some View {
         let categoryOption = viewModel.categoryOption(
             for: cashback.categoryRaw,
@@ -595,136 +570,68 @@ private struct CashbackRowView: View {
         let isFavorite = isFavoriteCategory
         let isPinned = viewModel.isPinnedCategory(rawValue: cashback.categoryRaw)
 
-        ZStack(alignment: .trailing) {
-            HStack {
+        HStack(spacing: 14) {
+            CashbackCategoryIconView(
+                icon: categoryOption.icon,
+                fontSize: 24,
+                fontWeight: .regular,
+                tint: AnyShapeStyle(AppColors.textPrimary)
+            )
+            .frame(width: 36, height: 36)
+
+            VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
-                    Button {
-                        withAnimation(.easeOut(duration: 0.16)) {
-                            rowOffset = 0
-                        }
-                        activeSwipeCashbackID = nil
-                        viewModel.handle(.togglePinnedCategory(rawValue: cashback.categoryRaw))
-                    } label: {
-                        Image(systemName: isPinned ? "pin.slash.fill" : "pin.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: actionButtonSize, height: actionButtonSize)
-                            .background(
-                                Circle()
-                                    .fill(Color.orange.opacity(0.95))
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(isPinned ? "Открепить категорию" : "Закрепить категорию")
-                    .disabled(isFavorite)
-                    .opacity(isFavorite ? 0.45 : 1)
-
-                    Button {
-                        withAnimation(.easeOut(duration: 0.16)) {
-                            rowOffset = 0
-                        }
-                        activeSwipeCashbackID = nil
-                        viewModel.handle(.editCashback(cashback))
-                    } label: {
-                        Image(systemName: "pencil")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: actionButtonSize, height: actionButtonSize)
-                            .background(
-                                Circle()
-                                    .fill(CashbackScreenStyle.accent.opacity(0.95))
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Редактировать кешбэк")
-                }
-                .padding(.leading, 12)
-                .opacity(rowOffset > 8 ? 1 : 0)
-
-                Spacer()
-            }
-
-            HStack(spacing: 14) {
-                CashbackCategoryIconView(
-                    icon: categoryOption.icon,
-                    fontSize: 24,
-                    fontWeight: .regular,
-                    tint: AnyShapeStyle(AppColors.textPrimary)
-                )
-                .frame(width: 36, height: 36)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
-                        Text(cashback.displayCategoryName)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary)
-                            .lineLimit(1)
-
-                        if isFavorite {
-                            statusBadge(title: "TOP", fill: Color.orange.opacity(0.18), tint: .orange)
-                        } else if isPinned {
-                            statusBadge(title: "PIN", fill: CashbackScreenStyle.neonCyan.opacity(0.18), tint: CashbackScreenStyle.neonCyan)
-                        }
-                    }
-
-                    Text(cardSubtitle)
-                        .font(.system(size: 13, weight: .regular))
-                        .foregroundStyle(AppColors.textSecondary)
-                        .lineLimit(1)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                Text(cashback.formattedPercentage)
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .minimumScaleFactor(0.5)
-                    .lineLimit(1)
-                    .foregroundStyle(AppColors.textPrimary)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
-            .offset(x: rowOffset)
-            .gesture(deleteSwipeGesture)
-            .onTapGesture {
-                if rowOffset != 0 {
-                    withAnimation(.easeOut(duration: 0.16)) {
-                        rowOffset = 0
-                    }
-                    activeSwipeCashbackID = nil
-                }
-            }
-            .animation(.easeOut(duration: 0.16), value: rowOffset)
-            .clipped()
-            .onChange(of: activeSwipeCashbackID) { _, newValue in
-                if newValue != cashbackID && rowOffset != 0 {
-                    withAnimation(.easeOut(duration: 0.16)) {
-                        rowOffset = 0
-                    }
-                }
-            }
-
-            HStack {
-                Spacer()
-                Button(role: .destructive) {
-                    withAnimation(.easeOut(duration: 0.16)) {
-                        rowOffset = 0
-                    }
-                    activeSwipeCashbackID = nil
-                    viewModel.handle(.deleteCashback(cashback))
-                } label: {
-                    Image(systemName: "trash")
+                    Text(cashback.displayCategoryName)
                         .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: actionButtonSize, height: actionButtonSize)
-                    .background(
-                        Circle()
-                            .fill(AppColors.error.opacity(0.95))
-                    )
+                        .foregroundStyle(AppColors.textPrimary)
+                        .lineLimit(1)
+
+                    if isFavorite {
+                        statusBadge(title: "TOP", fill: Color.orange.opacity(0.18), tint: .orange)
+                    } else if isPinned {
+                        statusBadge(title: "PIN", fill: CashbackScreenStyle.neonCyan.opacity(0.18), tint: CashbackScreenStyle.neonCyan)
+                    }
                 }
-                .buttonStyle(.plain)
-                .padding(.trailing, 12)
-                .opacity(-rowOffset > 8 ? 1 : 0)
+
+                Text(cardSubtitle)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(AppColors.textSecondary)
+                    .lineLimit(1)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text(cashback.formattedPercentage)
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
+                .foregroundStyle(AppColors.textPrimary)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
+        .contentShape(Rectangle())
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            Button {
+                viewModel.handle(.togglePinnedCategory(rawValue: cashback.categoryRaw))
+            } label: {
+                Label(isPinned ? "Открепить" : "Закрепить", systemImage: isPinned ? "pin.slash.fill" : "pin.fill")
+            }
+            .tint(.orange)
+            .disabled(isFavorite)
+
+            Button {
+                viewModel.handle(.editCashback(cashback))
+            } label: {
+                Label("Редактировать", systemImage: "pencil")
+            }
+            .tint(CashbackScreenStyle.accent)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) {
+                viewModel.handle(.deleteCashback(cashback))
+            } label: {
+                Label("Удалить", systemImage: "trash")
+            }
+            .tint(AppColors.error)
         }
     }
 
@@ -738,44 +645,6 @@ private struct CashbackRowView: View {
                 Capsule(style: .continuous)
                     .fill(fill)
             )
-    }
-
-    private var deleteSwipeGesture: some Gesture {
-        DragGesture(minimumDistance: 8)
-            .onChanged { value in
-                guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                if activeSwipeCashbackID != cashbackID {
-                    activeSwipeCashbackID = cashbackID
-                }
-                if dragOriginOffset == nil {
-                    dragOriginOffset = rowOffset
-                }
-                let origin = dragOriginOffset ?? rowOffset
-                let proposed = origin + value.translation.width
-                let maxRight = leadingActionsWidth
-                rowOffset = min(maxRight, max(-deleteRevealWidth, proposed))
-            }
-            .onEnded { value in
-                defer { dragOriginOffset = nil }
-                guard abs(value.translation.width) > abs(value.translation.height) else { return }
-
-                let shouldRevealLeft = value.predictedEndTranslation.width < -45 || rowOffset < -36
-                let shouldRevealRight = value.predictedEndTranslation.width > 55 || rowOffset > 42
-                withAnimation(.easeOut(duration: 0.16)) {
-                    if shouldRevealLeft {
-                        rowOffset = -deleteRevealWidth
-                        activeSwipeCashbackID = cashbackID
-                    } else if shouldRevealRight {
-                        rowOffset = leadingActionsWidth
-                        activeSwipeCashbackID = cashbackID
-                    } else {
-                        rowOffset = 0
-                        if activeSwipeCashbackID == cashbackID {
-                            activeSwipeCashbackID = nil
-                        }
-                    }
-                }
-            }
     }
 
     private var cardSubtitle: String {
