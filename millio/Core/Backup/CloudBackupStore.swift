@@ -393,6 +393,7 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
 
     private func listSnapshotVersions(using database: CloudBackupDatabaseProtocol) async throws -> [BackupVersionInfo] {
         do {
+            // Snapshot records are the source of truth. backup_index is only a best-effort cache.
             let records = try await database.records(recordType: snapshotRecordType)
             return records
                 .filter { $0.recordID != legacyLatestRecordID }

@@ -18,7 +18,9 @@ struct BackupEncryptionInfo: Codable {
 }
 
 struct BackupEnvelopeHeader: Codable {
+    /// Legacy envelope format without magic bytes or checksum. Kept for backward-compatible restore.
     static let legacyFormatVersion = 1
+    /// Current envelope format with magic bytes and payload checksum.
     static let currentFormatVersion = 2
     
     let formatVersion: Int
@@ -47,6 +49,7 @@ struct BackupEnvelopeHeader: Codable {
 }
 
 enum BackupEnvelope {
+    /// Magic prefix for current envelope format. Legacy format starts directly with the header length.
     private static let magicBytes = Data("MBKP".utf8)
 
     static func pack(header: BackupEnvelopeHeader, payload: Data) throws -> Data {

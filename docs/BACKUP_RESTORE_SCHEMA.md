@@ -1,443 +1,198 @@
-# Схема работы Backup/Restore в Millio
+# Backup/Restore Schema
 
-Документ описывает механизм резервного копирования и восстановления данных в приложении Millio.
+Документ фиксирует текущий контракт backup/restore в Millio после усиления формата envelope, смены source of truth в CloudKit и пересмотра правил совместимости.
 
-**Версия:** 2.0  
-**Дата:** 2026-01-30
-
----
-
-## 1. Архитектурные принципы
-
-### 1.1. Offline-First подход
-
-- Все данные хранятся **локально** в SwiftData
-- Интернет используется **только** для backup/restore и опциональных сетевых фич
-- Приложение работает **полностью офлайн**
-
-### 1.2. Snapshot-стратегия
-
-- Backup представляет собой **полный снимок** всех данных
-- Restore **полностью заменяет** локальные данные
-- Нет частичного восстановления или merge данных
-
-### 1.3. CloudKit Private Database
-
-- Используется **только Private CloudKit Database**
-- Данные доступны **только владельцу iCloud аккаунта**
-- Мы не имеем доступа к данным пользователя
-
-### 1.4. Совместимость
-
-- Начиная с версии **2.0**, backup **не совместим** с предыдущими версиями.
-- Старые backup-файлы считаются устаревшими и не поддерживаются.
+**Версия:** 2.3  
+**Дата:** 2026-03-06
 
 ---
 
-## 2. Схема работы Backup
+## 1. Инварианты
 
-### 2.1. Когда происходит Backup
+- Backup всегда является полным snapshot всех локальных данных SwiftData.
+- Restore всегда заменяет локальные данные целиком. Merge-restore не поддерживается.
+- Source of truth в CloudKit: immutable snapshot records типа `AppBackup`.
+- `backup_index` больше не считается источником истины. Это best-effort cache, который можно потерять или пересобрать.
+- `latest_backup` сохраняется только как legacy fallback и совместимость.
 
-#### Автоматический backup
+---
 
-**Триггер:** Приложение уходит в фоновый режим  
-**Событие:** `UIApplication.willResignActiveNotification`  
-**Код:** `millio/millioApp.swift` (`triggerBackgroundBackup()`)
+## 2. CloudKit Storage Model
 
-**Условия:**
-- ✅ Резервное копирование включено (`appState.isBackupEnabled == true`)
-- ✅ `DIContainer` уже инициализирован
-- ✅ iCloud доступен (проверяется внутри `BackupManager.backupNow()`)
+### 2.1. Записи
 
-```swift
-.onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
-    triggerBackgroundBackup()
-}
-```
+- `AppBackup`:
+  - immutable snapshot record
+  - содержит `backupData`, `backupDate`, `backupVersion`, `backupSize`, `isPinned`
+- `backup_index`:
+  - кэш списка snapshot-ов для совместимости/UI
+  - не должен ломать backup/restore при повреждении или конфликте записи
+- `latest_backup`:
+  - legacy fallback record
+  - используется только если snapshot records отсутствуют или недоступны
 
-#### Ручной backup
+### 2.2. Правила retention
 
-В UI доступен экран управления backup, где можно:
-- проверить статус iCloud и дату последнего backup
-- создать backup вручную
-- выбрать режим шифрования (device-key / passphrase)
+- Авто-snapshot-ы ограничены `maxSnapshots`.
+- Закреплённые (`isPinned == true`) snapshot-ы не удаляются автоматически.
+- Retention считается по snapshot records, а не по `backup_index`.
 
-Для отладки из кода можно вызвать:
+### 2.3. Требования к отказоустойчивости
 
-```swift
-try await backupManager.backupNow()
-```
+- Ошибка записи `backup_index` не должна отменять успешный backup snapshot-а.
+- Ошибка пересборки `backup_index` после delete не должна откатывать удаление snapshot-а.
+- Повреждённый `backup_index` не должен скрывать валидные snapshot records.
+- Частично битые snapshot records должны игнорироваться, если рядом есть валидные.
 
-> Backup по умолчанию **выключен** и включается пользователем в экране «Профиль».
+---
 
-### 2.2. Процесс Backup
+## 3. Envelope Format
 
-```
-┌─────────────────────────────────────────────────────────┐
-│ 1. ТРИГГЕР: Приложение уходит в фон                     │
-│    UIApplication.willResignActiveNotification           │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│ 2. ПРОВЕРКА УСЛОВИЙ                                     │
-│    • isBackupEnabled == true?                           │
-│    • DIContainer доступен?                              │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│ 3. BackupManager.backupNow()                            │
-│    • Проверка доступности iCloud                        │
-│    • Retry по политике .default                         │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│ 4. ЭКСПОРТ ДАННЫХ                                       │
-│    DataRepository.exportAllDataAsync()                  │
-│    • metadata + массив моделей                           │
-│    • JSON сериализация                                  │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│ 5. СЖАТИЕ                                               │
-│    Compression framework (LZFSE)                        │
-│    • применяется только если уменьшает размер            │
-│    • ошибки сжатия считаются критическими               │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│ 6. ШИФРОВАНИЕ (опционально)                             │
-│    AES-GCM                                                │
-│    • keychain-mode: ключ в iOS Keychain (device-only)      │
-│      - удобно, но restore на новом устройстве/после         │
-│        переустановки может быть невозможен                 │
-│    • passphrase-mode: PBKDF2(HMAC-SHA256)+salt → ключ      │
-│      - переносимо между устройствами, если пользователь     │
-│        знает парольную фразу                               │
-│    • режим выбирается в экране управления backup            │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│ 7. ЗАГРУЗКА В CLOUDKIT                                  │
-│    CloudBackupStore.uploadBackup()                      │
-│    • Создается immutable snapshot: "snapshot_*"         │
-│    • Обновляется индекс: "backup_index"                 │
-│    • Retention: хранятся последние 3 auto-snapshot      │
-│      (закрепленные версии не удаляются автоматически)    │
-│    • "latest_backup" поддерживается как legacy fallback │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│ 8. УСПЕХ                                                │
-│    • Backup завершен                                    │
-│    • Логирование                                        │
-│    • Дата backup обновляется при следующем запросе      │
-│      lastBackupInfo()                                   │
-└─────────────────────────────────────────────────────────┘
-```
+### 3.1. Поддерживаемые версии
 
-### 2.3. Формат данных backup
+- `v1`:
+  - legacy envelope
+  - layout: `UInt32 headerLength` + `headerJSON` + `payload`
+  - без magic bytes
+  - без checksum
+- `v2`:
+  - current envelope
+  - layout: `magic("MBKP")` + `UInt32 headerLength` + `headerJSON` + `payload`
+  - payload checksum обязателен
 
-Backup сохраняется в CloudKit как **envelope**:
-
-- `UInt32` (big-endian) — длина JSON-заголовка
-- JSON-заголовок (`BackupEnvelopeHeader`)
-- payload (данные экспорта, опционально сжатые/зашифрованные)
-
-#### 2.3.1. Заголовок envelope
+### 3.2. Header
 
 `BackupEnvelopeHeader` содержит:
-- `formatVersion` — версия envelope-формата
-- `metadata` — метаданные backup
-- `compression` — алгоритм/оригинальный размер (если применялось)
-- `encryption` — алгоритм и параметры KDF (если применялось)
 
-Payload формируется так:
-1) `DataRepository.exportAllDataAsync()` → JSON (metadata + models)  
-2) опционально сжатие LZFSE  
-3) опционально шифрование AES-GCM  
+- `formatVersion`
+- `metadata`
+- `compression`
+- `encryption`
+- `payloadChecksumSHA256Base64` для `v2+`
 
-`encryption.algorithm`:
-- `aesgcm-keychain` — ключ хранится в iOS Keychain (device-only)
-- `aesgcm-passphrase` — ключ derive'ится из парольной фразы, `encryption.kdf` обязателен:
-  - `algorithm`: `pbkdf2-hmac-sha256`
-  - `iterations`
-  - `saltBase64`
+### 3.3. Payload pipeline
 
-#### 2.3.2. Экспорт данных (payload до сжатия/шифрования)
+1. `DataRepository.exportAllDataAsync()` сериализует `metadata + models`
+2. опционально применяется LZFSE, только если payload становится меньше
+3. опционально применяется шифрование:
+   - `aesgcm-keychain`
+   - `aesgcm-passphrase`
+4. payload пакуется в envelope
 
-Экспорт содержит **metadata** и массив моделей:
+### 3.4. Валидация
 
-- `BackupMetadata`:
-  - `version` (`BackupVersion`, сейчас `2.0.0`)
-  - `timestamp`
-  - `schemaVersion` (строка, сейчас `"2.0"`)
-  - `modelCount`
-
-### 2.4. Обработка ошибок
-
-- **iCloud недоступен:** `AppError.iCloudUnavailable`, логируется, приложение продолжает работу
-- **Сетевая ошибка:** повтор через `withRetry` (3 попытки, экспоненциальная задержка)
-- **Ошибка шифрования:** backup не создается, ошибка пробрасывается
-- **Crashlytics (Release):** ошибки backup/restore отправляются как non-fatal через `CrashReporting.record(error:)`
+- `looksLikeEnvelope()` распознаёт и `v1`, и `v2`
+- `unpack()`:
+  - для `v2` проверяет magic bytes и checksum
+  - для `v1` поддерживает только legacy parsing
+- checksum mismatch трактуется как `backupCorrupted`
 
 ---
 
-## 3. Схема работы Restore
+## 4. Restore Candidate Policy
 
-### 3.1. Когда происходит Restore
+### 4.1. Выбор кандидатов
 
-#### В текущей версии
+`CloudBackupStore.listBackupRecordNamesForRestore()` возвращает:
 
-- Restore **не запускается автоматически** при старте приложения
-- Экран восстановления **открывается вручную** из «Профиль → Восстановить данные»
-- Restore доступен **даже если backup-toggle выключен** (toggle влияет только на автосоздание backup)
-- Состояние `.restoring` существует, но сейчас не устанавливается автоматически
+1. snapshot records, отсортированные по `backupDate` от новых к старым
+2. `latest_backup` как legacy fallback
 
-#### Технически возможно
+Restore больше не зависит от `backup_index` для выбора кандидатов.
 
-Если выставить `appState.lifecycle = .restoring`, `RootViewResolver` покажет `RestoreView`.
+### 4.2. Auto restore (`restoreLatest`)
 
-### 3.2. Процесс восстановления
+Auto restore обязан пробовать older snapshot при следующих ошибках:
 
-```
-┌─────────────────────────────────────────────────────────┐
-│ 1. Пользователь открывает RestoreView                   │
-│    Профиль → Восстановить данные                        │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│ 2. BackupManager.restoreLatest()                        │
-│    • Проверка доступности iCloud                        │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│ 3. ВЫБОР КАНДИДАТОВ BACKUP                              │
-│    CloudBackupStore.listBackupRecordNamesForRestore()   │
-│    • snapshot из "backup_index" (новые → старые)        │
-│    • затем "latest_backup" (legacy fallback)            │
-│    • BackupManager скачивает кандидаты по очереди       │
-│    • Preflight sanity-scoring (header/schema/encryption)│
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│ 4. РАСШИФРОВКА (если было зашифровано)                  │
-│    По envelope-заголовку:                               │
-│    • aesgcm-keychain → KeychainBackupEncryption.decrypt()│
-│    • aesgcm-passphrase → PassphraseBackupEncryption      │
-│      (нужна парольная фраза)                             │
-│    • Если backup поврежден/несовместим: пробуется        │
-│      следующий кандидат из истории snapshot              │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│ 5. РАСПАКОВКА                                           │
-│    Compression framework (LZFSE)                        │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│ 6. ОЧИСТКА ЛОКАЛЬНЫХ ДАННЫХ                             │
-│    DataRepository.clearAllData()                        │
-│    • удаление всех моделей из SwiftData                 │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│ 7. ИМПОРТ ДАННЫХ                                        │
-│    DataRepository.importAllData()                       │
-│    • проверка BackupVersion                             │
-│    • восстановление связей                              │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│ 8. УСПЕХ                                                │
-│    • appState.lifecycle = .ready                        │
-│    • переход на главный экран                           │
-└─────────────────────────────────────────────────────────┘
-```
+- corrupted envelope / checksum mismatch
+- incompatible schema
+- unknown model types
+- недоступный keychain key на этом устройстве
 
-### 3.3. Важные моменты
+Auto restore не должен silently пропускать:
 
-⚠️ **Restore полностью заменяет локальные данные.**
+- backup, требующий passphrase, если passphrase не передан
+- rollback failure
+- pre-restore snapshot failure
 
-- Все существующие локальные данные удаляются
-- Данные из backup полностью заменяют локальные данные
-- Нет merge или частичного восстановления
+### 4.3. Explicit restore (`restoreVersion`)
+
+При явном выборе версии пользователем restore блокируется на первой критической ошибке. Переход на older snapshot не выполняется.
 
 ---
 
-## 4. Состояния приложения
+## 5. Compatibility Contract
 
-### 4.1. AppLifecycleState
+### 5.1. Что определяет совместимость
 
-```swift
-enum AppLifecycleState {
-    case launching
-    case onboarding
-    case restoring
-    case ready
-    case error(AppError)
-}
-```
+Совместимость restore определяется `BackupMetadata.schemaVersion`, а не `BackupVersion` приложения.
 
-### 4.2. Текущие переходы
+- `BackupVersion`:
+  - informational metadata о сборке/producer version
+  - не используется как import gate
+- `schemaVersion`:
+  - источник истины для restore compatibility
 
-```
-launching
-    ↓
-    ├─→ onboarding (если первый запуск)
-    │       ↓
-    │   completeOnboarding()
-    │       ↓
-    │   ready
-    │
-    └─→ ready (если онбординг пройден)
-```
+### 5.2. Правило
 
-> Состояние `restoring` зарезервировано, но сейчас не используется автоматически.
+`schemaVersion` парсится как `major.minor`.
+
+- одинаковый `major` => схема считается совместимой
+- другой `major` => `incompatibleSchemaVersion`
+- непарсибельный `schemaVersion` => `incompatibleSchemaVersion`
+
+Это значит:
+
+- backup от другой app version допустим, если schema совместима
+- breaking changes данных должны сопровождаться bump `schemaVersion.major`
 
 ---
 
-## 5. Тестирование Backup/Restore
+## 6. Encryption Modes
 
-### 5.1. Подготовка
+### 6.1. `aesgcm-keychain`
 
-- Устройство или симулятор с iCloud
-- Включен CloudKit capability
-- Backup включен в «Профиль»
+- ключ хранится локально в iOS Keychain
+- backup может быть нерасшифруем на новом устройстве или после reinstall
+- в `restoreLatest` такой snapshot можно пропустить в пользу older compatible candidate
+- в `restoreVersion` это блокирующая ошибка
 
-### 5.2. Тест-кейс 1: Автоматический backup
+### 6.2. `aesgcm-passphrase`
 
-1. Включить резервное копирование в профиле
-2. Создать тестовые данные (карты/группы)
-3. Перевести приложение в фон
-4. Проверить запись в CloudKit Console:
-   - `AppBackupIndex` / `backup_index`
-   - `AppBackup` / `snapshot_*` (последние 3)
-   - `AppBackup` / `latest_backup` (legacy fallback)
-
-### 5.3. Тест-кейс 2: Restore после переустановки
-
-1. Создать backup (как в тест-кейсе 1)
-2. Удалить и переустановить приложение
-3. Пройти онбординг
-4. Перейти «Профиль → Восстановить данные»
-5. Нажать «Восстановить» и проверить, что данные восстановились
-
-### 5.4. Тест-кейс 3: Restore поверх локальных данных
-
-1. Создать backup с данными A
-2. Изменить локальные данные (данные B)
-3. Запустить restore из профиля (можно выбрать конкретную версию)
-4. Убедиться, что остались данные A, а данные B удалены
-
-### 5.5. Тест-кейс 4: Шифрование
-
-1. Включить шифрование (через `SettingsManager.isEncryptionEnabled`)
-2. Создать backup
-3. Выполнить restore и проверить восстановление
-
-### 5.6. Тест-кейс 5: Ошибки
-
-- **iCloud недоступен:** отключить iCloud, попробовать backup
-- **Сеть недоступна:** включить авиарежим, проверить retry
-- **Backup не найден:** удалить `backup_index` и `latest_backup` в CloudKit Console
+- ключ derive-ится через PBKDF2(HMAC-SHA256)
+- backup переносим между устройствами
+- отсутствие passphrase при restore считается блокирующей ошибкой
 
 ---
 
-## 6. Чек-лист
+## 7. Rollback Contract
 
-- [ ] Backup создается при уходе в фон
-- [ ] Backup создается только если включен
-- [ ] Restore запускается вручную из профиля
-- [ ] Restore полностью заменяет локальные данные
-- [ ] Ошибки обрабатываются gracefully
-- [ ] Приложение работает при недоступном iCloud
-- [ ] Логи содержат достаточно информации для отладки
+Перед restore текущие локальные данные сохраняются во временный pre-restore snapshot.
+
+- если import нового backup не удался, выполняется rollback
+- если rollback не удался, restore завершается критической ошибкой
+- restore не считается успешным, пока импорт и post-import cleanup не завершены
 
 ---
 
-## 7. Известные ограничения и TODO
+## 8. Что тестами уже покрыто
 
-1. **Нет индикатора прогресса фонового backup** (`BackupMonitor` не подключен к ключевым пользовательским сценариям)
-2. **Auto-история ограничена retention=3**, закрепленные версии хранятся до ручного удаления
-3. **`checkRestoreNeeded()` не используется** — auto-restore пока отключен
-
----
-
-## 8. Логирование и отладка
-
-### Ключевые логи
-
-**BackupManager:**
-```
-Starting backup...
-Backup completed successfully
-```
-
-**CloudBackupStore:**
-```
-Backup uploaded successfully
-Backup downloaded successfully, size: <bytes>
-No backup found in iCloud
-```
-
-**Restore:**
-```
-Starting restore...
-Restore completed successfully
-restore_candidate stage=<...> outcome=<...> reason=<...> detail=<...> ...
-```
-
-`reason` теперь задается через фиксированные коды (typed enum в коде), например:
-- `missing_record_or_asset`
-- `corrupted_envelope`
-- `unsupported_compression`
-- `passphrase_required`
-- `backup_corrupted`
-
-Коды причин больше не вычисляются через `message.contains(...)` для `restoreFailed`; критичные причины маркируются типизированно в restore-пайплайне.
-Пользовательские тексты ошибок restore централизованы в `RestoreFailureCode` и используются как единый source of truth.
-Модули `BackupManager`, `PassphraseBackupEncryption` и `KeychainBackupEncryption` используют этот каталог вместо локальных строк.
-Пользовательские тексты ошибок backup централизованы в `BackupFailureCode` и также используются как единый source of truth.
-Модули `BackupManager`, `BackupEnvelope`, `CloudBackupStore`, `DataRepository`, `BackupJSON`, `PassphraseBackupEncryption` и `KeychainBackupEncryption` используют этот каталог вместо локальных строк.
-
-**Ошибки:**
-```
-Background backup failed: <error>
-Failed to check iCloud availability: <error>
-```
+- fallback на older snapshot при corrupted envelope
+- fallback при checksum mismatch
+- fallback при unknown model types
+- fallback при keychain-unavailable snapshot в `restoreLatest`
+- block при keychain-unavailable в `restoreVersion`
+- source of truth на snapshot records при corrupted `backup_index`
+- success path при падении cache-update `backup_index`
+- delete path при падении resync `backup_index`
+- игнор malformed snapshot records
+- backward compatibility envelope `v1`
+- current envelope `v2` roundtrip + checksum validation
 
 ---
 
-## 9. Безопасность
+## 9. Что остаётся рискованным
 
-- Локальные данные в iOS sandbox
-- CloudKit Private DB
-- Шифрование содержимого backup (AES-GCM) — опционально
-- Ключи хранятся в Keychain
-
----
-
-## 10. Заключение
-
-Backup/Restore в Millio реализован в соответствии с принципами:
-
-- ✅ **Offline-First**
-- ✅ **Snapshot-стратегия**
-- ✅ **Fail-Safe поведение**
-- ✅ **Безопасность**
-
-**Важно:** Restore полностью заменяет локальные данные. Пользователь должен понимать это при запуске восстановления.
+- race/conflict между несколькими устройствами при почти одновременной записи snapshot records всё ещё ограничивается поведением CloudKit query/save и не имеет отдельного merge-протокола
+- header checksum пока не добавлен; сейчас защищён payload, но не отдельная целостность header сверх JSON decode
+- часть UI/integration suite вне backup-подсистемы периодически виснет в `xcodebuild`, что мешает полной сквозной верификации

@@ -1020,6 +1020,58 @@ struct CloudBackupStoreTests {
         #expect(downloaded == nil)
         #expect(db.deletedRecordNames.contains("snapshot_delete_me"))
     }
+
+    @Test("listBackupVersions ignores malformed snapshot records and keeps valid ones")
+    func testListBackupVersionsIgnoresMalformedSnapshotRecords() async throws {
+        let db = FakeCloudBackupDatabase()
+
+        let malformed = CKRecord(recordType: "AppBackup", recordID: CKRecord.ID(recordName: "snapshot_bad"))
+        malformed["backupDate"] = Date()
+        db.recordsByName["snapshot_bad"] = malformed
+
+        let valid = CKRecord(recordType: "AppBackup", recordID: CKRecord.ID(recordName: "snapshot_good"))
+        valid["backupDate"] = Date(timeIntervalSince1970: 2000)
+        valid["backupSize"] = Int64(42)
+        valid["backupVersion"] = "2.0.0"
+        valid["isPinned"] = 1
+        db.recordsByName["snapshot_good"] = valid
+
+        let store = CloudBackupStore(
+            container: FakeCloudBackupContainer(accountStatusResult: .available, database: db)
+        )
+
+        let versions = try await store.listBackupVersions()
+
+        #expect(versions.count == 1)
+        #expect(versions.first?.recordName == "snapshot_good")
+        #expect(versions.first?.isPinned == true)
+    }
+
+    @Test("getLatestBackupInfo falls back to legacy latest when snapshot records are malformed")
+    func testGetLatestBackupInfoFallsBackToLegacyWhenSnapshotsMalformed() async throws {
+        let db = FakeCloudBackupDatabase()
+
+        let malformed = CKRecord(recordType: "AppBackup", recordID: CKRecord.ID(recordName: "snapshot_bad"))
+        malformed["backupDate"] = Date()
+        db.recordsByName["snapshot_bad"] = malformed
+
+        let legacy = CKRecord(recordType: "AppBackup", recordID: CKRecord.ID(recordName: "latest_backup"))
+        let legacyDate = Date(timeIntervalSince1970: 3000)
+        legacy["backupDate"] = legacyDate
+        legacy["backupSize"] = Int64(99)
+        legacy["backupVersion"] = "2.0.0"
+        db.recordsByName["latest_backup"] = legacy
+
+        let store = CloudBackupStore(
+            container: FakeCloudBackupContainer(accountStatusResult: .available, database: db)
+        )
+
+        let info = try await store.getLatestBackupInfo()
+
+        #expect(info?.date == legacyDate)
+        #expect(info?.size == Int64(99))
+        #expect(info?.version == "2.0.0")
+    }
 }
 
 final class FakeCloudBackupContainer: CloudBackupContainerProtocol {
