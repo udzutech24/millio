@@ -278,7 +278,7 @@ struct FinanceDynamicsViewModelTests {
         #expect(abs(balanceNow - 15000) < 0.01)
     }
 
-    @Test("Карта: актуальный баланс учитывается после обновления без транзакций")
+    @Test("Карта: без истории корректировок используем актуальный баланс после создания")
     func testCardUsesActualAmountAfterUpdateWithoutTransactions() async throws {
         let modelContext = try createTestModelContext()
 
@@ -319,7 +319,7 @@ struct FinanceDynamicsViewModelTests {
             date: updatedAt.addingTimeInterval(-60),
             accountCardIDs: [card.cardUniqueID]
         )
-        #expect(abs(beforeUpdate - 10_000) < 0.01)
+        #expect(abs(beforeUpdate - 15_000) < 0.01)
 
         let afterUpdate = await dynamicsViewModel.calculateBalanceAtDate(
             accounts: [account],
@@ -760,7 +760,7 @@ struct FinanceDynamicsViewModelTests {
         #expect(abs(balance - 200.0) < 0.01)
     }
 
-    @Test("Крипта: прирост учитывается после обновления рыночной позиции без транзакций")
+    @Test("Крипта: без истории корректировок используем актуальную позицию после создания")
     func testCryptoGrowthUsesActualAmountAfterUpdateWithoutTransactions() async throws {
         let modelContext = try createTestModelContext()
 
@@ -805,7 +805,7 @@ struct FinanceDynamicsViewModelTests {
             date: updatedAt.addingTimeInterval(-60),
             accountCardIDs: []
         )
-        #expect(abs(beforeUpdate - 50_000) < 0.01)
+        #expect(abs(beforeUpdate - 66_236) < 0.01)
 
         let afterUpdate = await dynamicsViewModel.calculateBalanceAtDate(
             accounts: [account],
@@ -815,7 +815,7 @@ struct FinanceDynamicsViewModelTests {
         #expect(abs(afterUpdate - 66_236) < 0.01)
     }
 
-    @Test("Акции: прирост учитывается после обновления рыночной позиции без транзакций")
+    @Test("Акции: без истории корректировок используем актуальную позицию после создания")
     func testStocksGrowthUsesActualAmountAfterUpdateWithoutTransactions() async throws {
         let modelContext = try createTestModelContext()
 
@@ -860,7 +860,7 @@ struct FinanceDynamicsViewModelTests {
             date: updatedAt.addingTimeInterval(-60),
             accountCardIDs: []
         )
-        #expect(abs(beforeUpdate - 3_900) < 0.01)
+        #expect(abs(beforeUpdate - 4_672) < 0.01)
 
         let afterUpdate = await dynamicsViewModel.calculateBalanceAtDate(
             accounts: [account],
@@ -868,5 +868,89 @@ struct FinanceDynamicsViewModelTests {
             accountCardIDs: []
         )
         #expect(abs(afterUpdate - 4_672) < 0.01)
+    }
+
+    @Test("Агрегат: вчера и сегодня совпадают, если не было транзакций изменений")
+    func testAggregateBalanceStableBetweenYesterdayAndTodayWithoutChanges() async throws {
+        let modelContext = try createTestModelContext()
+
+        let createdAt = Date().addingTimeInterval(-20 * 86400)
+        let updatedAt = Date().addingTimeInterval(-1800)
+
+        let card = Card(name: "Дебет", cardNumber: "1111", bank: .other, cardType: .debit, currency: "RUB")
+        card.createdAt = createdAt
+        card.updatedAt = updatedAt
+        card.initialBalance = 100_000
+        card.hasInitialBalance = true
+        card.balance = 150_000
+        modelContext.insert(card)
+
+        let creditCard = Card(name: "Кредит", cardNumber: "2222", bank: .other, cardType: .credit, currency: "RUB")
+        creditCard.createdAt = createdAt
+        creditCard.updatedAt = updatedAt
+        creditCard.creditLimit = 1_000_000
+        creditCard.initialBalance = 0
+        creditCard.hasInitialBalance = true
+        creditCard.balance = 900_000
+        modelContext.insert(creditCard)
+
+        let investment = Investment(
+            name: "APP",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 118_002.16,
+            currency: "USD"
+        )
+        investment.createdAt = createdAt
+        investment.updatedAt = updatedAt
+        investment.initialAmount = 10_000
+        investment.hasInitialAmount = true
+        modelContext.insert(investment)
+
+        let group = FinanceGroup(name: "Тест", colorHex: "#FFFFFF")
+        let account1 = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        let account2 = FinanceAccount(accountType: .card, accountID: creditCard.cardUniqueID)
+        let account3 = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+        account1.group = group
+        account2.group = group
+        account3.group = group
+        group.accounts = [account1, account2, account3]
+        modelContext.insert(group)
+        modelContext.insert(account1)
+        modelContext.insert(account2)
+        modelContext.insert(account3)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+
+        let accounts = [account1, account2, account3]
+        let today = Date()
+        let yesterday = today.addingTimeInterval(-86400)
+        let accountCardIDs: Set<String> = [card.cardUniqueID, creditCard.cardUniqueID]
+
+        let yesterdayBalance = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: accounts,
+            date: yesterday,
+            accountCardIDs: accountCardIDs,
+            debtAsNegative: true
+        )
+        let todayBalance = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: accounts,
+            date: today,
+            accountCardIDs: accountCardIDs,
+            debtAsNegative: true
+        )
+
+        #expect(abs(yesterdayBalance - todayBalance) < 0.01)
     }
 }

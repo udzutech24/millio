@@ -1330,6 +1330,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     initialBalancesCache[initialBalanceKey] = initialBalanceAtCreation
                 }
                 
+                let cardTransactions = transactionsByCardCache[account.accountID] ?? []
+
                 // Определяем баланс на запрашиваемую дату
                 var cardBalance: Double
                 if date < card.createdAt {
@@ -1345,7 +1347,6 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     cardBalance = initialBalanceAtCreation
                     
                     // Используем предфильтрованные транзакции из кэша вместо фильтрации всех транзакций
-                    let cardTransactions = transactionsByCardCache[account.accountID] ?? []
                     let transactionsUpToDate = cardTransactions
                         .filter { $0.transactionDate >= card.createdAt && $0.transactionDate <= date }
                         .sorted(by: { $0.transactionDate < $1.transactionDate })
@@ -1412,7 +1413,10 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 // История по Cashflow может быть неполной (например, прямое редактирование баланса
                 // без создания balanceAdjustment), поэтому для дат не раньше последнего обновления
                 // счета синхронизируемся с фактическим текущим значением модели.
-                if date >= card.updatedAt {
+                let lastTrackedCardChangeDate = cardTransactions
+                    .map(\.transactionDate)
+                    .max() ?? card.createdAt
+                if date >= lastTrackedCardChangeDate {
                     let actualCurrentValue: Double
                     if card.cardType == .credit, let limit = card.creditLimit {
                         actualCurrentValue = max(0, limit - card.balance)
@@ -1511,7 +1515,10 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     // Если история неполная (например, для рыночных активов при изменении цены/количества
                     // без создания balanceAdjustment), фиксируем актуальное значение на дату последнего обновления.
                     let actualSignedAmount = investment.investmentType == .positive ? investment.amount : -investment.amount
-                    if date >= investment.updatedAt {
+                    let lastTrackedInvestmentChangeDate = balanceAdjustmentTransactions
+                        .map(\.transactionDate)
+                        .max() ?? investment.createdAt
+                    if date >= lastTrackedInvestmentChangeDate {
                         let deltaToActual = actualSignedAmount - investmentBalance
                         if abs(deltaToActual) > 0.01 {
                             investmentBalance += deltaToActual
@@ -1649,7 +1656,10 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
 
         // Если итог расходится с текущим остатком, фиксируем актуальное значение
         // на дату последнего изменения (legacy/ручные правки без полной истории транзакций).
-        if date >= credit.updatedAt {
+        let lastTrackedCreditChangeDate = balanceAdjustmentTransactions
+            .map(\.transactionDate)
+            .max() ?? credit.createdAt
+        if date >= lastTrackedCreditChangeDate {
             let deltaToActual = credit.remainingAmount - remainingAmount
             if abs(deltaToActual) > 0.01 {
                 remainingAmount = max(0, remainingAmount + deltaToActual)

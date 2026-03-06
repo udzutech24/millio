@@ -185,47 +185,63 @@ private struct CashbackContentViewInternal: View {
     // MARK: - Cashbacks List
 
     private var cashbacksList: some View {
-        let containerShape = RoundedRectangle(cornerRadius: 32, style: .continuous)
-
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
+        List {
+            Section {
+                ForEach(Array(viewModel.state.visibleCashbacks.enumerated()), id: \.element.id) { index, cashback in
+                    CashbackRowView(
+                        cashback: cashback,
+                        viewModel: viewModel
+                    )
+                    .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
+                    .listRowBackground(
+                        cashbackRowBackground(
+                            isFirst: index == 0,
+                            isLast: index == viewModel.state.visibleCashbacks.count - 1
+                        )
+                    )
+                    .listRowSeparator(.hidden)
+                }
+            } header: {
                 Text("Категории кешбэка")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(AppColors.textPrimary.opacity(0.36))
-                    .padding(.leading, 4)
-
-                VStack(spacing: 0) {
-                    ForEach(Array(viewModel.state.visibleCashbacks.enumerated()), id: \.element.id) { index, cashback in
-                        CashbackRowView(
-                            cashback: cashback,
-                            viewModel: viewModel
-                        )
-
-                        if index < viewModel.state.visibleCashbacks.count - 1 {
-                            Rectangle()
-                                .fill(CashbackScreenStyle.rowDivider)
-                                .frame(height: 1)
-                                .padding(.leading, 54)
-                                .padding(.trailing, 8)
-                        }
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background {
-                    containerShape
-                        .fill(CashbackScreenStyle.listFill)
-                        .overlay(
-                            containerShape
-                                .stroke(CashbackScreenStyle.neonBorder, lineWidth: 1)
-                        )
-                }
+                    .textCase(nil)
+                    .padding(.leading, 6)
             }
-            .padding(.bottom, 100)
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
         }
-        .scrollIndicators(.hidden)
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Color.clear)
+        .safeAreaInset(edge: .bottom) {
+            Color.clear.frame(height: 88)
+        }
+        .padding(.top, 8)
+    }
+
+    @ViewBuilder
+    private func cashbackRowBackground(isFirst: Bool, isLast: Bool) -> some View {
+        let shape = UnevenRoundedRectangle(
+            cornerRadii: .init(
+                topLeading: isFirst ? 28 : 0,
+                bottomLeading: isLast ? 28 : 0,
+                bottomTrailing: isLast ? 28 : 0,
+                topTrailing: isFirst ? 28 : 0
+            ),
+            style: .continuous
+        )
+
+        ZStack(alignment: .bottom) {
+            shape
+                .fill(CashbackScreenStyle.listFill)
+
+            if !isLast {
+                Rectangle()
+                    .fill(CashbackScreenStyle.rowDivider)
+                    .frame(height: 1)
+                    .padding(.leading, 62)
+                    .padding(.trailing, 10)
+            }
+        }
     }
 
     @ToolbarContentBuilder
