@@ -57,6 +57,7 @@ final class QuickSetupViewModelTests: XCTestCase {
 
         XCTAssertEqual(selection.primaryCurrencyCode, "RUB")
         XCTAssertEqual(selection.favoriteCurrencyCodes, ["USD", "EUR"])
+        XCTAssertEqual(selection.backupPreference, .localOnly)
     }
 
     func testTickerWithoutSymbolFails() {
@@ -70,5 +71,17 @@ final class QuickSetupViewModelTests: XCTestCase {
 
         XCTAssertFalse(viewModel.addDraftProduct())
         XCTAssertTrue(viewModel.products.isEmpty)
+    }
+
+    func testBackupPreferenceFollowsAppState() {
+        let appState = AppState()
+        appState.isBackupEnabled = true
+        let viewModel = QuickSetupViewModel(appState: appState)
+
+        XCTAssertEqual(viewModel.backupPreference, .cloudBackup)
+
+        viewModel.backupPreference = .localOnly
+        let selection = viewModel.makeSelection()
+        XCTAssertEqual(selection.backupPreference, .localOnly)
     }
 }

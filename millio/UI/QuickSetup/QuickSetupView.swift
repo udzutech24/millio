@@ -421,9 +421,59 @@ struct QuickSetupView: View {
                     .transition(.scale(scale: 0.9).combined(with: .opacity))
             }
 
-            Text("Проверьте настройки")
+            Text("Безопасность данных")
                 .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(AppColors.textPrimary)
+
+            Text("Выберите, как хранить ваши данные. Это можно изменить позже в Профиль -> Backup.")
+                .font(.system(size: 13, weight: .regular))
+                .foregroundStyle(AppColors.textSecondary)
+
+            VStack(spacing: 10) {
+                ForEach(QuickSetupBackupPreference.allCases) { preference in
+                    let isSelected = viewModel.backupPreference == preference
+                    Button {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+                            viewModel.backupPreference = preference
+                        }
+                        fireSelectionHaptic()
+                    } label: {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 8) {
+                                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                    .font(.system(size: 18, weight: .semibold))
+                                Text(preference.title)
+                                    .font(.system(size: 16, weight: .semibold))
+                            }
+                            .foregroundStyle(AppColors.textPrimary)
+
+                            Text(preference.subtitle)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(AppColors.textSecondary)
+
+                            Text(preference.details)
+                                .font(.system(size: 12, weight: .regular))
+                                .foregroundStyle(AppColors.textSecondary.opacity(0.9))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(isSelected ? AppColors.textPrimary.opacity(0.16) : AppColors.textPrimary.opacity(0.08))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .stroke(isSelected ? AppColors.textPrimary.opacity(0.55) : AppColors.textPrimary.opacity(0.14), lineWidth: 1)
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Text("Коротко: без выгрузки данные остаются только на устройстве. С выгрузкой они попадают в ваш приватный CloudKit.")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(AppColors.textSecondary)
+                .padding(.top, 8)
 
             summaryRow(title: "Язык", value: selection.language.displayName)
             summaryRow(title: "Основная валюта", value: selection.primaryCurrencyCode)
@@ -433,11 +483,6 @@ struct QuickSetupView: View {
             )
             summaryRow(title: "Категории трат", value: "\(selection.selectedExpenseCategoryIDs.count)")
             summaryRow(title: "Продукты", value: "\(selection.products.count)")
-
-            Text("Можно изменить позже в профиле")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(AppColors.textSecondary)
-                .padding(.top, 8)
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.78), value: showCelebrate)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -494,7 +539,7 @@ struct QuickSetupView: View {
                         ProgressView()
                             .tint(AppColors.textPrimary)
                     }
-                    Text(viewModel.currentStep == .summary ? "Вперед" : viewModel.continueTitle)
+                    Text(viewModel.currentStep == .summary ? "Завершить" : viewModel.continueTitle)
                         .font(.system(size: 16, weight: .semibold))
                 }
                 .foregroundStyle(AppColors.textPrimary)

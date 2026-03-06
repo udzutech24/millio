@@ -66,9 +66,9 @@ private struct CashflowCategoryTransactionSheet: View {
 
     private var monthTitle: String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ru_RU")
-        formatter.dateFormat = "LLLL yyyy"
-        return formatter.string(from: selectedMonth).capitalized
+        formatter.locale = .autoupdatingCurrent
+        formatter.setLocalizedDateFormatFromTemplate("LLLL y")
+        return formatter.string(from: selectedMonth).localizedCapitalized
     }
 
     private var categories: [CashflowCategoryOption] {
@@ -635,7 +635,7 @@ private struct CashflowCategoryTransactionSheet: View {
         }
 
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.locale = .autoupdatingCurrent
         formatter.dateFormat = "dd.MM.yyyy"
         return "\(formatter.string(from: start)) — \(formatter.string(from: end))"
     }

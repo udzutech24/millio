@@ -17,7 +17,7 @@ enum QuickSetupStep: Int, CaseIterable, Identifiable {
         case .products:
             return "Добавить продукты"
         case .summary:
-            return "Готово"
+            return "Безопасность"
         }
     }
 }
@@ -100,6 +100,50 @@ struct QuickSetupSelection {
     let favoriteCurrencyCodes: [String]
     let selectedExpenseCategoryIDs: [String]
     let products: [QuickSetupProductDraft]
+    let backupPreference: QuickSetupBackupPreference
+}
+
+enum QuickSetupBackupPreference: String, CaseIterable, Identifiable {
+    case localOnly
+    case cloudBackup
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .localOnly:
+            return "Только на устройстве"
+        case .cloudBackup:
+            return "Выгружать в iCloud"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .localOnly:
+            return "Данные останутся локально в SwiftData. Выгрузка выключена."
+        case .cloudBackup:
+            return "Снимки хранятся в Private CloudKit вашего Apple ID."
+        }
+    }
+
+    var details: String {
+        switch self {
+        case .localOnly:
+            return "В любой момент можно включить выгрузку в Профиль -> Backup."
+        case .cloudBackup:
+            return "Шифрование backup: AES-GCM (ключ устройства) или парольная фраза в Backup."
+        }
+    }
+
+    var isBackupEnabled: Bool {
+        switch self {
+        case .localOnly:
+            return false
+        case .cloudBackup:
+            return true
+        }
+    }
 }
 
 enum QuickSetupFlowMode {

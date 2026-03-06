@@ -108,9 +108,14 @@ final class AppState {
 enum EntitlementPolicy {
     static let freeTrackedTickerLimit = 5
     static let freeCashbackCardLimit = 3
+    /// Feature flag: криптовалюта в конвертере доступна только при PRO-подписке.
+    static let isConverterCryptoProOnly = true
+    /// Feature flag: импорт категорий кешбэка со скриншота доступен только при PRO-подписке.
+    static let isCashbackScreenshotImportProOnly = true
 
     static func canUseConverterCrypto(isPro: Bool) -> Bool {
-        isPro
+        guard isConverterCryptoProOnly else { return true }
+        return isPro
     }
 
     static func canAddTrackedTicker(isPro: Bool, currentTrackedTickers: Int) -> Bool {
@@ -119,5 +124,10 @@ enum EntitlementPolicy {
 
     static func canUseCashbackCard(isPro: Bool, cardIndex: Int) -> Bool {
         isPro || cardIndex < freeCashbackCardLimit
+    }
+
+    static func canImportCashbackFromScreenshot(isPro: Bool) -> Bool {
+        guard isCashbackScreenshotImportProOnly else { return true }
+        return isPro
     }
 }

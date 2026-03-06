@@ -326,8 +326,8 @@ struct CashflowTransactionsHistoryView: View {
             return String(localized: "cashflow.history.period")
         }
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ru_RU")
-        formatter.dateFormat = "d MMM"
+        formatter.locale = .autoupdatingCurrent
+        formatter.setLocalizedDateFormatFromTemplate("dMMM")
         switch (selectedStartDate, selectedEndDate) {
         case let (start?, end?):
             let normalizedStart = min(start, end)
@@ -351,8 +351,8 @@ struct CashflowTransactionsHistoryView: View {
 
     private func formatSectionDate(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ru_RU")
-        formatter.dateFormat = "d MMMM yyyy"
+        formatter.locale = .autoupdatingCurrent
+        formatter.setLocalizedDateFormatFromTemplate("dMMMM y")
         return formatter.string(from: date)
     }
 }
@@ -505,8 +505,8 @@ private struct HistoryDateRangeSheet: View {
 
     private var periodTitle: String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ru_RU")
-        formatter.dateFormat = "d MMM yyyy"
+        formatter.locale = .autoupdatingCurrent
+        formatter.setLocalizedDateFormatFromTemplate("dMMM y")
         let start = min(draftStartDate, draftEndDate)
         let end = max(draftStartDate, draftEndDate)
         if Calendar.current.isDate(start, inSameDayAs: end) {

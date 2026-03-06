@@ -111,6 +111,16 @@ struct ProfileView: View {
                                 .accessibilityIdentifier("profile.appSecurityLink")
 
                                 NavigationLink {
+                                    ProfileFAQView(selectedLanguage: appState.selectedLanguage)
+                                } label: {
+                                    settingsRow(iconSystemName: "questionmark.circle", title: "FAQ") {
+                                        chevron
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("profile.faqLink")
+
+                                NavigationLink {
                                     SmartDataResetView()
                                 } label: {
                                     settingsRow(iconSystemName: "trash", title: "Smart data reset") {

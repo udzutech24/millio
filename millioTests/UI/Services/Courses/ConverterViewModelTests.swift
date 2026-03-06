@@ -286,6 +286,24 @@ struct ConverterViewModelTests {
         }
     }
 
+    @Test("formattedInputText добавляет разделители тысяч")
+    func testFormattedInputTextGroupsThousands() async {
+        let viewModel = ConverterViewModel(rateRepository: MockConverterRateRepository())
+        viewModel.handle(.updateInputText("22222"))
+        #expect(viewModel.formattedInputText == "22 222")
+    }
+
+    @Test("formattedInputText сохраняет дробную часть и хвостовой разделитель")
+    func testFormattedInputTextPreservesFractionInput() async {
+        let viewModel = ConverterViewModel(rateRepository: MockConverterRateRepository())
+
+        viewModel.handle(.updateInputText("22222,30"))
+        #expect(viewModel.formattedInputText == "22 222,30")
+
+        viewModel.handle(.updateInputText("123,"))
+        #expect(viewModel.formattedInputText == "123,")
+    }
+
     @Test("История шаринга пополняется только после успешной отправки")
     func testShareHistoryAddedOnlyOnCompletedShare() async {
         let key = "conv_share_history"
@@ -333,5 +351,23 @@ struct ConverterViewModelTests {
 
         viewModel.handle(.clearShareHistory)
         #expect(viewModel.state.shareHistory.isEmpty)
+    }
+
+    @Test("allAvailableCodes включает crypto даже если пришли только фиатные курсы")
+    func testAllAvailableCodesIncludesCryptoWithoutCryptoRates() async {
+        let viewModel = ConverterViewModel(rateRepository: MockConverterRateRepository())
+        viewModel.state.allRates = ["USD": 1.0, "EUR": 0.92, "RUB": 90.0]
+
+        #expect(viewModel.allAvailableCodes.contains("BTC"))
+        #expect(viewModel.allAvailableCodes.contains("ETH"))
+    }
+
+    @Test("Поиск по crypto-алиасу работает в filteredCodes")
+    func testFilteredCodesMatchesCryptoAlias() async {
+        let viewModel = ConverterViewModel(rateRepository: MockConverterRateRepository())
+        viewModel.state.allRates = ["USD": 1.0, "EUR": 0.92, "RUB": 90.0]
+
+        viewModel.handle(.updateSearchText("биткоин"))
+        #expect(viewModel.filteredCodes.contains("BTC"))
     }
 }
