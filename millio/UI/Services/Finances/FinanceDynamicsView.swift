@@ -43,7 +43,7 @@ enum FinanceDynamicsTopBarStyle {
     static let containerVerticalPadding: CGFloat = 4
 
     static func inlineEditorSymbol(isEditing: Bool) -> String {
-        isEditing ? "checkmark" : "pencil"
+        isEditing ? "checkmark" : "square.and.pencil"
     }
 }
 

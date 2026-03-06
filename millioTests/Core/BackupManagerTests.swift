@@ -396,6 +396,118 @@ struct BackupManagerTests {
         #expect(mockCloudStore.requestedRecordNames == ["snapshot-passphrase"])
         #expect(mockDataRepository.importCalled == false)
     }
+
+    @Test("Restore latest falls back to older snapshot when newest snapshot contains unknown model types")
+    func testRestoreLatestFallsBackToOlderSnapshotOnUnknownModelTypes() async throws {
+        let mockCloudStore = MockCloudBackupStore()
+        mockCloudStore.isAvailableResult = true
+        mockCloudStore.backupRecordNamesForRestore = ["snapshot-new", "snapshot-old"]
+
+        let incompatiblePayload: [String: Any] = [
+            "metadata": [
+                "version": ["major": BackupVersion.current.major, "minor": BackupVersion.current.minor, "patch": BackupVersion.current.patch],
+                "timestamp": Date().timeIntervalSince1970,
+                "schemaVersion": BackupMetadata.currentSchemaVersion,
+                "modelCount": 1
+            ],
+            "models": [["_type": "UnknownType"]]
+        ]
+        let incompatibleData = try JSONSerialization.data(withJSONObject: incompatiblePayload)
+        let expectedData = Data("fallback-restored-data".utf8)
+
+        mockCloudStore.downloadDataByRecordName = [
+            "snapshot-new": incompatibleData,
+            "snapshot-old": expectedData
+        ]
+
+        let repository = FailingImportDataRepository()
+        repository.storage = Data("existing data".utf8)
+        repository.nextImportError = AppError.restoreFailed("\(DataRepository.unknownModelTypesErrorPrefix)UnknownType")
+        let backupManager = BackupManager(
+            cloudStore: mockCloudStore,
+            dataRepository: repository
+        )
+
+        try await backupManager.restoreLatest()
+
+        #expect(mockCloudStore.requestedRecordNames == ["snapshot-new", "snapshot-old"])
+        #expect(repository.storage == expectedData)
+    }
+
+    @Test("Restore latest falls back to older snapshot when newest keychain snapshot cannot be decrypted on this device")
+    func testRestoreLatestFallsBackWhenNewestKeychainSnapshotIsUnavailable() async throws {
+        let mockCloudStore = MockCloudBackupStore()
+        mockCloudStore.isAvailableResult = true
+        mockCloudStore.backupRecordNamesForRestore = ["snapshot-keychain", "snapshot-old"]
+
+        let keychainHeader = BackupEnvelopeHeader(
+            formatVersion: BackupEnvelopeHeader.currentFormatVersion,
+            metadata: BackupMetadata(version: .current, timestamp: Date(), schemaVersion: BackupMetadata.currentSchemaVersion, modelCount: 0),
+            compression: nil,
+            encryption: BackupEncryptionInfo(algorithm: "aesgcm-keychain", kdf: nil)
+        )
+        let keychainProtectedData = try BackupEnvelope.pack(
+            header: keychainHeader,
+            payload: Data("encrypted-payload".utf8)
+        )
+        let expectedData = Data("fallback-restored-data".utf8)
+
+        mockCloudStore.downloadDataByRecordName = [
+            "snapshot-keychain": keychainProtectedData,
+            "snapshot-old": expectedData
+        ]
+
+        let repository = FailingImportDataRepository()
+        repository.storage = Data("existing data".utf8)
+        let backupManager = BackupManager(
+            cloudStore: mockCloudStore,
+            dataRepository: repository,
+            encryption: ConditionalFailingBackupEncryption(failingPayload: Data("encrypted-payload".utf8))
+        )
+
+        try await backupManager.restoreLatest()
+
+        #expect(mockCloudStore.requestedRecordNames == ["snapshot-keychain", "snapshot-old"])
+        #expect(repository.storage == expectedData)
+    }
+
+    @Test("Restore selected version stops when keychain snapshot cannot be decrypted on this device")
+    func testRestoreSelectedVersionFailsWhenKeychainSnapshotIsUnavailable() async throws {
+        let mockCloudStore = MockCloudBackupStore()
+        mockCloudStore.isAvailableResult = true
+
+        let keychainHeader = BackupEnvelopeHeader(
+            formatVersion: BackupEnvelopeHeader.currentFormatVersion,
+            metadata: BackupMetadata(version: .current, timestamp: Date(), schemaVersion: BackupMetadata.currentSchemaVersion, modelCount: 0),
+            compression: nil,
+            encryption: BackupEncryptionInfo(algorithm: "aesgcm-keychain", kdf: nil)
+        )
+        let keychainProtectedData = try BackupEnvelope.pack(
+            header: keychainHeader,
+            payload: Data("encrypted-payload".utf8)
+        )
+        mockCloudStore.downloadDataByRecordName = [
+            "snapshot-keychain": keychainProtectedData
+        ]
+
+        let mockDataRepository = MockDataRepository()
+        mockDataRepository.exportData = Data("existing data".utf8)
+        let backupManager = BackupManager(
+            cloudStore: mockCloudStore,
+            dataRepository: mockDataRepository,
+            encryption: ConditionalFailingBackupEncryption(failingPayload: Data("encrypted-payload".utf8))
+        )
+
+        do {
+            try await backupManager.restoreVersion(recordName: "snapshot-keychain", passphrase: nil)
+            #expect(Bool(false))
+        } catch let error as AppError {
+            #expect(error == RestoreFailureCode.keychainUnavailable.appError)
+        }
+
+        #expect(mockCloudStore.requestedRecordNames == ["snapshot-keychain"])
+        #expect(mockDataRepository.importCalled == false)
+    }
     
     @Test("Last backup info returns correct information")
     func testLastBackupInfo() async {
@@ -488,6 +600,21 @@ final class MockCloudBackupStore: CloudBackupStoreProtocol {
     }
 }
 
+private struct ConditionalFailingBackupEncryption: BackupEncryptionProtocol {
+    let failingPayload: Data
+
+    func encrypt(_ data: Data) throws -> Data {
+        data
+    }
+
+    func decrypt(_ data: Data) throws -> Data {
+        if data == failingPayload {
+            throw AppError.securityFailed("Simulated keychain failure")
+        }
+        return data
+    }
+}
+
 final class MockDataRepository: DataRepositoryProtocol {
     var exportCalled = false
     var importCalled = false
@@ -525,6 +652,7 @@ final class MockDataRepository: DataRepositoryProtocol {
 final class FailingImportDataRepository: DataRepositoryProtocol {
     var storage = Data()
     var failNextImport = false
+    var nextImportError: AppError?
     var exportCalls = 0
     var importCalls = 0
     var clearCalls = 0
@@ -536,6 +664,10 @@ final class FailingImportDataRepository: DataRepositoryProtocol {
     
     func importAllData(_ data: Data) throws {
         importCalls += 1
+        if let nextImportError {
+            self.nextImportError = nil
+            throw nextImportError
+        }
         if failNextImport {
             failNextImport = false
             throw AppError.restoreFailed("Simulated import failure")
@@ -589,7 +721,9 @@ struct CloudBackupStoreTests {
         let data = Data((0..<256).map { _ in UInt8.random(in: 0...255) })
         try await store.uploadBackup(data, isPinned: false)
         
-        let saved = db.lastSavedRecord
+        let saved = db.savedRecords.first {
+            $0.recordType == "AppBackup" && $0.recordID.recordName != "latest_backup"
+        }
         #expect(saved != nil)
         #expect(saved?["backupSize"] as? Int64 == Int64(data.count))
         #expect(saved?["backupDate"] as? Date != nil)
@@ -764,6 +898,39 @@ struct CloudBackupStoreTests {
 
         #expect(downloaded == payload)
     }
+
+    @Test("listBackupVersions and downloadLatestBackup ignore corrupted backup_index when snapshot records exist")
+    func testSnapshotRecordsRemainSourceOfTruthWhenIndexIsCorrupted() async throws {
+        let db = FakeCloudBackupDatabase()
+
+        let corruptedIndexRecord = CKRecord(recordType: "AppBackupIndex", recordID: CKRecord.ID(recordName: "backup_index"))
+        corruptedIndexRecord["entriesJSON"] = "{not-valid-json"
+        db.recordsByName["backup_index"] = corruptedIndexRecord
+
+        let payload = Data("snapshot-payload".utf8)
+        let payloadURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("backup")
+        try payload.write(to: payloadURL)
+        defer { try? FileManager.default.removeItem(at: payloadURL) }
+
+        let snapshotRecord = CKRecord(recordType: "AppBackup", recordID: CKRecord.ID(recordName: "snapshot_live"))
+        snapshotRecord["backupData"] = CKAsset(fileURL: payloadURL)
+        snapshotRecord["backupDate"] = Date(timeIntervalSince1970: 1234)
+        snapshotRecord["backupSize"] = Int64(payload.count)
+        snapshotRecord["backupVersion"] = "2.0.0"
+        snapshotRecord["isPinned"] = 0
+        db.recordsByName["snapshot_live"] = snapshotRecord
+
+        let store = CloudBackupStore(container: FakeCloudBackupContainer(accountStatusResult: .available, database: db))
+
+        let versions = try await store.listBackupVersions()
+        let downloaded = try await store.downloadLatestBackup()
+
+        #expect(versions.count == 1)
+        #expect(versions.first?.recordName == "snapshot_live")
+        #expect(downloaded == payload)
+    }
 }
 
 final class FakeCloudBackupContainer: CloudBackupContainerProtocol {
@@ -803,6 +970,11 @@ final class FakeCloudBackupDatabase: CloudBackupDatabaseProtocol {
         if let stored = recordsByName[recordID.recordName] { return stored }
         if let recordToReturn { return recordToReturn }
         return CKRecord(recordType: "AppBackup", recordID: recordID)
+    }
+
+    func records(recordType: String) async throws -> [CKRecord] {
+        if let errorOnFetch { throw errorOnFetch }
+        return recordsByName.values.filter { $0.recordType == recordType }
     }
     
     func save(_ record: CKRecord) async throws -> CKRecord {

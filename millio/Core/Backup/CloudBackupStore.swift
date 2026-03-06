@@ -16,6 +16,7 @@ protocol CloudBackupContainerProtocol {
 
 protocol CloudBackupDatabaseProtocol {
     func record(for recordID: CKRecord.ID) async throws -> CKRecord
+    func records(recordType: String) async throws -> [CKRecord]
     func save(_ record: CKRecord) async throws -> CKRecord
     func deleteRecord(withID recordID: CKRecord.ID) async throws
 }
@@ -46,6 +47,10 @@ struct CKDatabaseAdapter: CloudBackupDatabaseProtocol {
     func record(for recordID: CKRecord.ID) async throws -> CKRecord {
         try await database.record(for: recordID)
     }
+
+    func records(recordType: String) async throws -> [CKRecord] {
+        try await fetchRecords(matching: CKQuery(recordType: recordType, predicate: NSPredicate(value: true)))
+    }
     
     func save(_ record: CKRecord) async throws -> CKRecord {
         try await database.save(record)
@@ -53,6 +58,73 @@ struct CKDatabaseAdapter: CloudBackupDatabaseProtocol {
 
     func deleteRecord(withID recordID: CKRecord.ID) async throws {
         _ = try await database.deleteRecord(withID: recordID)
+    }
+
+    private func fetchRecords(matching query: CKQuery) async throws -> [CKRecord] {
+        var records: [CKRecord] = []
+        var cursor: CKQueryOperation.Cursor?
+
+        repeat {
+            let page = try await fetchQueryPage(query: cursor == nil ? query : nil, cursor: cursor)
+            records.append(contentsOf: page.records)
+            cursor = page.cursor
+        } while cursor != nil
+
+        return records
+    }
+
+    private func fetchQueryPage(
+        query: CKQuery?,
+        cursor: CKQueryOperation.Cursor?
+    ) async throws -> (records: [CKRecord], cursor: CKQueryOperation.Cursor?) {
+        try await withCheckedThrowingContinuation { continuation in
+            let operation: CKQueryOperation
+            if let cursor {
+                operation = CKQueryOperation(cursor: cursor)
+            } else if let query {
+                operation = CKQueryOperation(query: query)
+            } else {
+                continuation.resume(throwing: BackupFailureCode.cloudKitOperationFailed("Invalid query state").appError)
+                return
+            }
+
+            var fetchedRecords: [CKRecord] = []
+            var firstError: Error?
+            var didResume = false
+
+            func resumeOnce(with result: Result<(records: [CKRecord], cursor: CKQueryOperation.Cursor?), Error>) {
+                guard !didResume else { return }
+                didResume = true
+                continuation.resume(with: result)
+            }
+
+            operation.recordMatchedBlock = { _, result in
+                switch result {
+                case .success(let record):
+                    fetchedRecords.append(record)
+                case .failure(let error):
+                    if firstError == nil {
+                        firstError = error
+                    }
+                }
+            }
+
+            operation.queryResultBlock = { result in
+                if let firstError {
+                    resumeOnce(with: .failure(firstError))
+                    return
+                }
+
+                switch result {
+                case .success(let nextCursor):
+                    resumeOnce(with: .success((records: fetchedRecords, cursor: nextCursor)))
+                case .failure(let error):
+                    resumeOnce(with: .failure(error))
+                }
+            }
+
+            database.add(operation)
+        }
     }
 }
 
@@ -75,6 +147,10 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
     private let indexRecordType = "AppBackupIndex"
     private let indexRecordID = CKRecord.ID(recordName: "backup_index")
     private let indexEntriesField = "entriesJSON"
+    private let snapshotDateField = "backupDate"
+    private let snapshotVersionField = "backupVersion"
+    private let snapshotSizeField = "backupSize"
+    private let snapshotPinnedField = "isPinned"
     private let maxSnapshots: Int
     private let now: () -> Date
 
@@ -157,30 +233,14 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         let snapshotRecordID = CKRecord.ID(recordName: makeSnapshotRecordName(on: backupDate))
         let snapshotRecord = CKRecord(recordType: snapshotRecordType, recordID: snapshotRecordID)
         snapshotRecord["backupData"] = CKAsset(fileURL: tempURL)
-        snapshotRecord["backupDate"] = backupDate
-        snapshotRecord["backupVersion"] = backupVersion
-        snapshotRecord["backupSize"] = Int64(data.count)
+        snapshotRecord[snapshotDateField] = backupDate
+        snapshotRecord[snapshotVersionField] = backupVersion
+        snapshotRecord[snapshotSizeField] = Int64(data.count)
+        snapshotRecord[snapshotPinnedField] = isPinned ? 1 : 0
         _ = try await privateDB.save(snapshotRecord)
 
-        var entries = try await loadIndexEntries(from: privateDB)
-        entries.removeAll { $0.recordName == snapshotRecordID.recordName }
-        entries.insert(
-            BackupIndexEntry(
-                recordName: snapshotRecordID.recordName,
-                date: backupDate,
-                size: Int64(data.count),
-                version: backupVersion,
-                isPinned: isPinned
-            ),
-            at: 0
-        )
-
-        let pinnedEntries = entries.filter(\.isPinned)
-        let rollingEntries = entries.filter { !$0.isPinned }
-        let staleEntries = Array(rollingEntries.dropFirst(maxSnapshots))
-        entries = pinnedEntries + Array(rollingEntries.prefix(maxSnapshots))
-        entries.sort { $0.date > $1.date }
-        try await saveIndexEntries(entries, to: privateDB)
+        let versions = try await listSnapshotVersions(using: privateDB)
+        let staleEntries = staleSnapshotEntries(from: versions)
 
         for stale in staleEntries {
             do {
@@ -189,6 +249,8 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
                 logger.warning("Failed to delete stale snapshot '\(stale.recordName, privacy: .public)': \(error.localizedDescription)")
             }
         }
+
+        await syncIndexCacheBestEffort(using: privateDB)
 
         do {
             try await saveLegacyLatestRecord(
@@ -222,14 +284,14 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
 
     func listBackupRecordNamesForRestore() async throws -> [String] {
         let privateDB = container.privateCloudDatabase
-        let entries = try await loadIndexEntries(from: privateDB)
+        let versions = try await listSnapshotVersions(using: privateDB)
 
         var orderedNames: [String] = []
         var seen = Set<String>()
 
-        for entry in entries {
-            if seen.insert(entry.recordName).inserted {
-                orderedNames.append(entry.recordName)
+        for version in versions {
+            if seen.insert(version.recordName).inserted {
+                orderedNames.append(version.recordName)
             }
         }
 
@@ -257,7 +319,7 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
     func getLatestBackupInfo() async throws -> BackupInfo? {
         let privateDB = container.privateCloudDatabase
 
-        if let info = try await latestInfoFromIndex(using: privateDB) {
+        if let info = try await latestInfoFromSnapshots(using: privateDB) {
             return info
         }
 
@@ -270,17 +332,9 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
 
     func listBackupVersions() async throws -> [BackupVersionInfo] {
         let privateDB = container.privateCloudDatabase
-        let entries = try await loadIndexEntries(from: privateDB).sorted { $0.date > $1.date }
-        if !entries.isEmpty {
-            return entries.map {
-                BackupVersionInfo(
-                    recordName: $0.recordName,
-                    date: $0.date,
-                    size: $0.size,
-                    version: $0.version,
-                    isPinned: $0.isPinned
-                )
-            }
+        let versions = try await listSnapshotVersions(using: privateDB)
+        if !versions.isEmpty {
+            return versions
         }
 
         if let legacy = try await legacyLatestInfo(using: privateDB) {
@@ -307,12 +361,7 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
             throw BackupFailureCode.cloudKitOperationFailed(error.localizedDescription).appError
         }
 
-        var entries = try await loadIndexEntries(from: privateDB)
-        let initialCount = entries.count
-        entries.removeAll { $0.recordName == recordName }
-        if entries.count != initialCount {
-            try await saveIndexEntries(entries, to: privateDB)
-        }
+        await syncIndexCacheBestEffort(using: privateDB)
     }
 
     private func makeSnapshotRecordName(on date: Date) -> String {
@@ -336,10 +385,37 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         }
 
         legacyRecord["backupData"] = CKAsset(fileURL: assetURL)
-        legacyRecord["backupDate"] = backupDate
-        legacyRecord["backupVersion"] = backupVersion
-        legacyRecord["backupSize"] = dataSize
+        legacyRecord[snapshotDateField] = backupDate
+        legacyRecord[snapshotVersionField] = backupVersion
+        legacyRecord[snapshotSizeField] = dataSize
         _ = try await database.save(legacyRecord)
+    }
+
+    private func listSnapshotVersions(using database: CloudBackupDatabaseProtocol) async throws -> [BackupVersionInfo] {
+        do {
+            let records = try await database.records(recordType: snapshotRecordType)
+            return records
+                .filter { $0.recordID != legacyLatestRecordID }
+                .compactMap(snapshotVersionInfo(from:))
+                .sorted { $0.date > $1.date }
+        } catch let error as CKError where error.code == .unknownItem {
+            return []
+        } catch {
+            throw BackupFailureCode.cloudKitOperationFailed(error.localizedDescription).appError
+        }
+    }
+
+    private func staleSnapshotEntries(from versions: [BackupVersionInfo]) -> [BackupVersionInfo] {
+        let pinnedEntries = versions.filter(\.isPinned)
+        let rollingEntries = versions.filter { !$0.isPinned }
+        let retainedRecordNames = Set(
+            pinnedEntries.map(\.recordName) +
+            rollingEntries.prefix(maxSnapshots).map(\.recordName)
+        )
+
+        return versions.filter {
+            !$0.isPinned && !retainedRecordNames.contains($0.recordName)
+        }
     }
 
     private func loadIndexEntries(from database: CloudBackupDatabaseProtocol) async throws -> [BackupIndexEntry] {
@@ -375,6 +451,23 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         _ = try await database.save(indexRecord)
     }
 
+    private func syncIndexCacheBestEffort(using database: CloudBackupDatabaseProtocol) async {
+        do {
+            let entries = try await listSnapshotVersions(using: database).map {
+                BackupIndexEntry(
+                    recordName: $0.recordName,
+                    date: $0.date,
+                    size: $0.size,
+                    version: $0.version,
+                    isPinned: $0.isPinned
+                )
+            }
+            try await saveIndexEntries(entries, to: database)
+        } catch {
+            logger.warning("Failed to sync backup index cache: \(error.localizedDescription)")
+        }
+    }
+
     private func readBackupData(from record: CKRecord) async throws -> Data? {
         guard let asset = record["backupData"] as? CKAsset else {
             return nil
@@ -389,25 +482,10 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         }.value
     }
 
-    private func latestInfoFromIndex(using database: CloudBackupDatabaseProtocol) async throws -> BackupInfo? {
-        let entries = try await loadIndexEntries(from: database)
-        guard !entries.isEmpty else { return nil }
-
-        for entry in entries {
-            do {
-                let snapshotRecord = try await database.record(for: CKRecord.ID(recordName: entry.recordName))
-                if let info = backupInfo(from: snapshotRecord) {
-                    return info
-                }
-                return BackupInfo(date: entry.date, size: entry.size, version: entry.version)
-            } catch let error as CKError where error.code == .unknownItem {
-                continue
-            } catch {
-                throw BackupFailureCode.cloudKitOperationFailed(error.localizedDescription).appError
-            }
+    private func latestInfoFromSnapshots(using database: CloudBackupDatabaseProtocol) async throws -> BackupInfo? {
+        try await listSnapshotVersions(using: database).first.map {
+            BackupInfo(date: $0.date, size: $0.size, version: $0.version)
         }
-
-        return nil
     }
 
     private func legacyLatestInfo(using database: CloudBackupDatabaseProtocol) async throws -> BackupInfo? {
@@ -422,11 +500,34 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
     }
 
     private func backupInfo(from record: CKRecord) -> BackupInfo? {
-        guard let date = record["backupDate"] as? Date,
-              let size = record["backupSize"] as? Int64,
-              let version = record["backupVersion"] as? String else {
+        guard let date = record[snapshotDateField] as? Date,
+              let size = record[snapshotSizeField] as? Int64,
+              let version = record[snapshotVersionField] as? String else {
             return nil
         }
         return BackupInfo(date: date, size: size, version: version)
+    }
+
+    private func snapshotVersionInfo(from record: CKRecord) -> BackupVersionInfo? {
+        guard let info = backupInfo(from: record) else {
+            return nil
+        }
+
+        let isPinned: Bool
+        if let value = record[snapshotPinnedField] as? Int64 {
+            isPinned = value != 0
+        } else if let value = record[snapshotPinnedField] as? NSNumber {
+            isPinned = value.boolValue
+        } else {
+            isPinned = false
+        }
+
+        return BackupVersionInfo(
+            recordName: record.recordID.recordName,
+            date: info.date,
+            size: info.size,
+            version: info.version,
+            isPinned: isPinned
+        )
     }
 }

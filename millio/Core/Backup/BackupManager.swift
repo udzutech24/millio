@@ -40,6 +40,11 @@ actor BackupManager: BackupManagerProtocol {
         let appError: AppError
         let reason: RestoreCandidateReason
     }
+
+    private enum RestoreMode {
+        case automatic
+        case explicitVersion
+    }
     
     init(
         cloudStore: CloudBackupStoreProtocol,
@@ -202,6 +207,7 @@ actor BackupManager: BackupManagerProtocol {
                 try await self.restoreFromRecordNames(
                     backupRecordNames,
                     passphrase: passphrase,
+                    mode: .automatic,
                     encryption: encryption,
                     dataRepository: dataRepository,
                     cloudStore: cloudStore
@@ -242,6 +248,7 @@ actor BackupManager: BackupManagerProtocol {
             try await self.restoreFromRecordNames(
                 [recordName],
                 passphrase: passphrase,
+                mode: .explicitVersion,
                 encryption: encryption,
                 dataRepository: dataRepository,
                 cloudStore: cloudStore
@@ -276,6 +283,7 @@ actor BackupManager: BackupManagerProtocol {
     private func restoreFromRecordNames(
         _ backupRecordNames: [String],
         passphrase: String?,
+        mode: RestoreMode,
         encryption: BackupEncryptionProtocol?,
         dataRepository: DataRepositoryProtocol,
         cloudStore: CloudBackupStoreProtocol
@@ -350,7 +358,7 @@ actor BackupManager: BackupManagerProtocol {
                 )
                 return
             } catch let tagged as TaggedRestoreFailure {
-                if self.shouldTryOlderSnapshot(after: tagged.appError) {
+                if self.shouldTryOlderSnapshot(after: tagged.appError, mode: mode) {
                     self.recordRestoreCandidateMetric(
                         stage: .restore,
                         outcome: .skip,
@@ -372,7 +380,7 @@ actor BackupManager: BackupManagerProtocol {
                 )
                 throw tagged.appError
             } catch let appError as AppError {
-                if self.shouldTryOlderSnapshot(after: appError) {
+                if self.shouldTryOlderSnapshot(after: appError, mode: mode) {
                     self.recordRestoreCandidateMetric(
                         stage: .restore,
                         outcome: .skip,
@@ -403,10 +411,21 @@ actor BackupManager: BackupManagerProtocol {
         throw self.restoreFailure(.backupNotFound)
     }
 
-    private func shouldTryOlderSnapshot(after error: AppError) -> Bool {
+    private func shouldTryOlderSnapshot(after error: AppError, mode: RestoreMode) -> Bool {
         switch error {
         case .backupCorrupted, .incompatibleSchemaVersion:
             return true
+        case .restoreFailed(let message):
+            if message == RestoreFailureCode.keychainUnavailable.message ||
+                message == RestoreFailureCode.keychainKeyMissingOnDevice.message {
+                return mode == .automatic
+            }
+
+            if message.hasPrefix(DataRepository.unknownModelTypesErrorPrefix) {
+                return true
+            }
+
+            return false
         default:
             return false
         }

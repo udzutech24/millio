@@ -19,6 +19,8 @@ protocol DataRepositoryProtocol {
 }
 
 final class DataRepository: DataRepositoryProtocol {
+    static let unknownModelTypesErrorPrefix = "Неизвестные типы моделей в backup: "
+
     private let modelContext: ModelContext
     private let worker: DataRepositoryWorker
     
@@ -136,7 +138,7 @@ final class DataRepository: DataRepositoryProtocol {
         
         if !unknownTypes.isEmpty {
             let types = unknownTypes.sorted().joined(separator: ", ")
-            throw AppError.restoreFailed("Неизвестные типы моделей в backup: \(types)")
+            throw AppError.restoreFailed("\(Self.unknownModelTypesErrorPrefix)\(types)")
         }
         
         typedModels.sort { lhs, rhs in
