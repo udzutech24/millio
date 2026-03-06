@@ -34,6 +34,7 @@ struct CashflowTransactionsHistoryView: View {
     @State private var selectedEndDate: Date? = nil
     @State private var isDateFilterSheetPresented = false
     @State private var displayedTransactionsLimit = Self.pageSize
+    @State private var selectedTransaction: CashflowTransaction?
     @FocusState private var isSearchFocused: Bool
     private static let pageSize = 20
 
@@ -132,6 +133,12 @@ struct CashflowTransactionsHistoryView: View {
                 HistoryDateRangeSheet(
                     startDate: $selectedStartDate,
                     endDate: $selectedEndDate
+                )
+            }
+            .navigationDestination(item: $selectedTransaction) { transaction in
+                HistoryTransactionDetailView(
+                    transaction: transaction,
+                    viewModel: viewModel
                 )
             }
         }
@@ -262,7 +269,8 @@ struct CashflowTransactionsHistoryView: View {
                             // Карточка операции
                             HistoryTransactionCard(
                                 transaction: transaction,
-                                viewModel: viewModel
+                                viewModel: viewModel,
+                                onOpenDetails: { selectedTransaction = transaction }
                             )
                         }
                     }
@@ -518,13 +526,219 @@ private struct HistoryDateRangeSheet: View {
 
 // MARK: - History Transaction Card
 
-private struct HistoryTransactionCard: View {
+private struct HistoryTransactionDetailView: View {
     let transaction: CashflowTransaction
     @ObservedObject var viewModel: CashflowViewModel
 
+    @Environment(\.dismiss) private var dismiss
+    @State private var showDeleteAlert = false
+    @State private var showEditSheet = false
+
+    private var cardNameByID: [String: String] {
+        Dictionary(uniqueKeysWithValues: viewModel.state.allCards.map { ($0.cardUniqueID, $0.name) })
+    }
+
+    var body: some View {
+        ZStack {
+            GradientBackground()
+
+            ScrollView {
+                VStack(spacing: 14) {
+                    detailCard
+                    actionButtons
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 24)
+            }
+        }
+        .navigationTitle(String(localized: "cashflow.history.detail.title"))
+        .navigationBarTitleDisplayMode(.inline)
+        .alert(String(localized: "cashflow.history.detail.delete.title"), isPresented: $showDeleteAlert) {
+            Button(String(localized: "cashflow.common.cancel"), role: .cancel) {}
+            Button(String(localized: "cashflow.history.detail.delete.with_recalc"), role: .destructive) {
+                deleteTransaction(recalculate: true)
+            }
+            Button(String(localized: "cashflow.history.detail.delete.without_recalc"), role: .destructive) {
+                deleteTransaction(recalculate: false)
+            }
+        } message: {
+            Text(String(localized: "cashflow.history.detail.delete.message"))
+        }
+        .sheet(isPresented: $showEditSheet) {
+            CashflowTransactionEditorView(
+                viewModel: viewModel,
+                transaction: transaction,
+                onSave: {
+                    showEditSheet = false
+                    dismiss()
+                }
+            )
+        }
+    }
+
+    private var detailCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            detailRow(
+                title: String(localized: "cashflow.history.detail.amount"),
+                value: formattedAmount
+            )
+            detailRow(
+                title: String(localized: "cashflow.history.detail.type"),
+                value: transaction.transactionType.displayName
+            )
+            detailRow(
+                title: String(localized: "cashflow.history.detail.date"),
+                value: formattedDate
+            )
+
+            if let category = categoryTitle {
+                detailRow(
+                    title: String(localized: "cashflow.history.detail.category"),
+                    value: category
+                )
+            }
+
+            if let fromCard = cardName(for: transaction.cardID) {
+                detailRow(
+                    title: String(localized: "cashflow.history.detail.from_account"),
+                    value: fromCard
+                )
+            }
+
+            if let toCard = cardName(for: transaction.toCardID) {
+                detailRow(
+                    title: String(localized: "cashflow.history.detail.to_account"),
+                    value: toCard
+                )
+            }
+
+            if let note = transaction.note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
+                detailRow(
+                    title: String(localized: "cashflow.history.detail.note"),
+                    value: note
+                )
+            }
+        }
+        .padding(18)
+        .background {
+            GlassBackground(
+                gradient: AppColors.cashflowGradient,
+                cornerRadius: 18,
+                strokeWidth: 1
+            )
+        }
+    }
+
+    private var actionButtons: some View {
+        VStack(spacing: 10) {
+            Button {
+                showEditSheet = true
+            } label: {
+                Label(String(localized: "cashflow.history.detail.edit"), systemImage: "square.and.pencil")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Color.white.opacity(0.12))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                showDeleteAlert = true
+            } label: {
+                Label(String(localized: "cashflow.history.detail.delete"), systemImage: "trash")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.red.opacity(0.95))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Color.red.opacity(0.14))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .stroke(Color.red.opacity(0.36), lineWidth: 1)
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func detailRow(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(AppColors.textSecondary)
+            Text(value)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(AppColors.textPrimary)
+                .multilineTextAlignment(.leading)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var formattedDate: String {
+        let formatter = DateFormatter()
+        formatter.locale = .autoupdatingCurrent
+        formatter.setLocalizedDateFormatFromTemplate("d MMMM y, HH:mm")
+        return formatter.string(from: transaction.transactionDate)
+    }
+
+    private var categoryTitle: String? {
+        switch transaction.transactionType {
+        case .income:
+            return viewModel.incomeCategoryDisplayName(for: transaction.incomeCategoryRaw)
+        case .expense:
+            return viewModel.expenseCategoryDisplayName(for: transaction.expenseCategoryRaw)
+        case .transfer, .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
+            return nil
+        }
+    }
+
+    private var formattedAmount: String {
+        let amount = cashflowHistoryAmountText(transaction.amount)
+        return "\(amount) \(resolvedCurrencyCode)"
+    }
+
+    private var resolvedCurrencyCode: String {
+        let rawCurrency = transaction.currency
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+        if !rawCurrency.isEmpty {
+            return rawCurrency
+        }
+        return viewModel.state.displayCurrency
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+    }
+
+    private func cardName(for cardID: String?) -> String? {
+        guard let cardID, let name = cardNameByID[cardID], !name.isEmpty else { return nil }
+        return name
+    }
+
+    private func deleteTransaction(recalculate: Bool) {
+        viewModel.handle(.deleteTransaction(transaction, recalculate: recalculate))
+        dismiss()
+    }
+}
+
+private struct HistoryTransactionCard: View {
+    let transaction: CashflowTransaction
+    @ObservedObject var viewModel: CashflowViewModel
+    let onOpenDetails: () -> Void
+
     var body: some View {
         Button {
-            viewModel.handle(.editTransaction(transaction))
+            onOpenDetails()
         } label: {
             VStack(alignment: .leading, spacing: 8) {
                 // Сумма с префиксом +/–

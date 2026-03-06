@@ -101,6 +101,22 @@ struct SubscriptionManagerTests {
         #expect(defaults.bool(forKey: "debug_premium_enabled") == false)
         #expect(manager.isDebugPremiumActive == false)
     }
+
+    @Test("snapshot отражает debug override как отдельный источник доступа")
+    func testSnapshotUsesDebugAccessSource() {
+        let suiteName = "SubscriptionManagerTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let now = Date(timeIntervalSince1970: 10_000)
+        let manager = SubscriptionManager(defaults: defaults, startTransactionListener: false, now: { now })
+
+        manager.grantDebugPremium()
+
+        #expect(manager.snapshot.hasDebugPremiumOverride == true)
+        #expect(manager.snapshot.accessSource == .debug)
+        #expect(manager.snapshot.isPro == true)
+    }
 }
 
 final class FakeNotificationCenter: UserNotificationCenterProtocol {

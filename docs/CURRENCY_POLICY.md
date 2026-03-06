@@ -25,6 +25,7 @@
 
 - Converter keeps independent `conv_*` settings by design.
 - Profile `primary`/`favorites` do not override converter selected currencies.
+- Converter selected currency list must stay unique: the same code cannot be selected in two different rows.
 - Converter supports fiat + crypto codes:
   - fiat rates are loaded from selected `RateSource` (`erapi`/`frankfurter`);
   - crypto rates are loaded from CoinGecko and merged into converter rates as `1 USD = X CRYPTO`.

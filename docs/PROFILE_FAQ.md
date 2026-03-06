@@ -1,7 +1,7 @@
 # Profile FAQ
 
 ## What was added
-- Settings now includes an `FAQ` item in Profile.
+- Profile now includes an `FAQ` item in the `Support & tools` section instead of mixing it into app settings.
 - FAQ includes:
   - a list screen with sections and clickable questions
   - a detail screen with question and answer text

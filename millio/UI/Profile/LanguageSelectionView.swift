@@ -12,17 +12,22 @@ struct LanguageSelectionView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
+    private let availableLanguages: [Language]
+
+    init(selectedLanguage: Binding<Language>, availableLanguages: [Language] = Language.allCases) {
+        self._selectedLanguage = selectedLanguage
+        self.availableLanguages = availableLanguages
+    }
 
     private var currentLocale: Locale {
         appState.selectedLanguage.locale ?? Locale.current
     }
     
     private var filteredLanguages: [Language] {
-        let all = Language.allCases
         if searchText.isEmpty {
-            return all
+            return availableLanguages
         }
-        return all.filter {
+        return availableLanguages.filter {
             $0.displayName(for: currentLocale).localizedCaseInsensitiveContains(searchText)
         }
     }

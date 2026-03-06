@@ -8,6 +8,12 @@
 - Select app language.
 - Select primary currency.
 - Select up to 4 favorite currencies.
+- Quick setup filters language options by system locale:
+  - Russian system locale: `System`, `English`, `Russian`.
+  - Non-Russian system locale: `System`, `English`.
+- Quick setup prioritizes currencies by system locale:
+  - Russian system locale: `RUB`, `USD`, `CNY`, `EUR`, `TRY`.
+  - Non-Russian system locale: system currency first, then global fallback currencies.
 
 2. `expenseCategories`
 - Choose expense categories to keep visible in Cashflow.

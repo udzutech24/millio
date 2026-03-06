@@ -10,6 +10,47 @@ import StoreKit
 import OSLog
 import Combine
 
+enum SubscriptionAccessSource: String, CaseIterable {
+    case free
+    case trial
+    case subscription
+    case debug
+
+    var hasPremiumAccess: Bool {
+        switch self {
+        case .free:
+            return false
+        case .trial, .subscription, .debug:
+            return true
+        }
+    }
+}
+
+struct SubscriptionSnapshot {
+    let status: SubscriptionStatus
+    let expirationDate: Date?
+    let isTrialActive: Bool
+    let hasDebugPremiumOverride: Bool
+
+    var accessSource: SubscriptionAccessSource {
+        if hasDebugPremiumOverride {
+            return .debug
+        }
+        switch status {
+        case .trial:
+            return .trial
+        case .subscribed:
+            return .subscription
+        case .notSubscribed, .expired:
+            return .free
+        }
+    }
+
+    var isPro: Bool {
+        accessSource.hasPremiumAccess
+    }
+}
+
 /// Статус подписки
 enum SubscriptionStatus {
     case notSubscribed
@@ -236,11 +277,25 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         logger.info("Debug premium revoked")
     }
     
+    var hasDebugPremiumOverride: Bool {
+        guard defaults.bool(forKey: debugPremiumKey),
+              let expirationDate = defaults.object(forKey: debugSubscriptionExpirationKey) as? Date else {
+            return false
+        }
+        return expirationDate > now()
+    }
+
     var isDebugPremiumActive: Bool {
-        defaults.bool(forKey: debugPremiumKey) && 
-        status == .subscribed && 
-        expirationDate != nil && 
-        expirationDate! > now()
+        hasDebugPremiumOverride
+    }
+
+    var snapshot: SubscriptionSnapshot {
+        SubscriptionSnapshot(
+            status: status,
+            expirationDate: expirationDate,
+            isTrialActive: isTrialActive,
+            hasDebugPremiumOverride: hasDebugPremiumOverride
+        )
     }
     
     // MARK: - Private Methods

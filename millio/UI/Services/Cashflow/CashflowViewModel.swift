@@ -224,7 +224,7 @@ enum CashflowAction {
     case loadTransactions
     case addTransaction(CashflowTransactionType)
     case editTransaction(CashflowTransaction)
-    case deleteTransaction(CashflowTransaction)
+    case deleteTransaction(CashflowTransaction, recalculate: Bool)
     case updateTransaction(CashflowTransaction)
     case hideTransactionEditor
     case setChartPeriod(ChartPeriod)
@@ -310,8 +310,8 @@ final class CashflowViewModel: ViewModelProtocol {
             state.creatingTransactionType = nil
             state.showTransactionEditor = true
             
-        case .deleteTransaction(let transaction):
-            deleteTransaction(transaction)
+        case .deleteTransaction(let transaction, let recalculate):
+            deleteTransaction(transaction, recalculate: recalculate)
             
         case .updateTransaction(let transaction):
             Task { @MainActor in
@@ -1494,12 +1494,17 @@ final class CashflowViewModel: ViewModelProtocol {
         return transaction.amount
     }
     
-    private func deleteTransaction(_ transaction: CashflowTransaction) {
+    private func deleteTransaction(_ transaction: CashflowTransaction, recalculate: Bool) {
         modelContext.delete(transaction)
         
         do {
             try modelContext.save()
-            loadTransactions()
+            if recalculate {
+                loadTransactions()
+            } else {
+                state.transactions.removeAll(where: { $0.persistentModelID == transaction.persistentModelID })
+                state.filteredTransactions.removeAll(where: { $0.persistentModelID == transaction.persistentModelID })
+            }
         } catch {
             AppLogger.log(.error, category: "Cashflow", "Failed to delete transaction: \(error.localizedDescription)")
         }

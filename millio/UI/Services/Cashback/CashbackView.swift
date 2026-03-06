@@ -734,6 +734,7 @@ private struct CashbackEditorView: View {
     @State private var screenshotPhotoItem: PhotosPickerItem?
     @State private var isImportingFromScreenshot: Bool = false
     @State private var importAlertMessage: String?
+    @State private var isImportAlertPremiumLocked: Bool = false
     private let screenshotParser = CashbackScreenshotParser()
 
     private var filteredCategories: [CashbackCategoryOption] {
@@ -762,6 +763,7 @@ private struct CashbackEditorView: View {
             get: { importAlertMessage != nil },
             set: { isPresented in
                 if !isPresented {
+                    isImportAlertPremiumLocked = false
                     importAlertMessage = nil
                 }
             }
@@ -874,6 +876,7 @@ private struct CashbackEditorView: View {
             .onChange(of: screenshotPhotoItem) { _, newValue in
                 guard let item = newValue else { return }
                 guard !isScreenshotImportLocked else {
+                    isImportAlertPremiumLocked = true
                     importAlertMessage = "Импорт со скриншота доступен только для Premium-подписки."
                     screenshotPhotoItem = nil
                     return
@@ -883,7 +886,13 @@ private struct CashbackEditorView: View {
                 }
             }
             .alert("Импорт из скриншота", isPresented: isShowingImportAlert) {
+                if isImportAlertPremiumLocked {
+                    Button(String(localized: "subscription.button.subscribe")) {
+                        router.push(.subscription)
+                    }
+                }
                 Button("OK", role: .cancel) {
+                    isImportAlertPremiumLocked = false
                     importAlertMessage = nil
                 }
             } message: {
@@ -1343,10 +1352,12 @@ private struct CashbackEditorView: View {
     @MainActor
     private func importFromScreenshot(item: PhotosPickerItem) async {
         guard !isScreenshotImportLocked else {
+            isImportAlertPremiumLocked = true
             importAlertMessage = "Импорт со скриншота доступен только для Premium-подписки."
             screenshotPhotoItem = nil
             return
         }
+        isImportAlertPremiumLocked = false
 
         isImportingFromScreenshot = true
         defer {

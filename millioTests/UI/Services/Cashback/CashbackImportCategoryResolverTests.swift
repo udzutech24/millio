@@ -25,6 +25,15 @@ struct CashbackImportCategoryResolverTests {
         #expect(resolver.resolveSystemCategoryRaw(for: "Транспорт") == CashbackCategory.transport.rawValue)
     }
 
+    @Test("Резолвер маппит очевидные англоязычные категории в системные")
+    func testResolveSystemCategoryRawMapsObviousEnglishNames() {
+        #expect(resolver.resolveSystemCategoryRaw(for: "Supermarkets") == CashbackCategory.supermarket.rawValue)
+        #expect(resolver.resolveSystemCategoryRaw(for: "Restaurants") == CashbackCategory.restaurant.rawValue)
+        #expect(resolver.resolveSystemCategoryRaw(for: "Fuel and Gas Stations") == CashbackCategory.gasStation.rawValue)
+        #expect(resolver.resolveSystemCategoryRaw(for: "Hotels") == CashbackCategory.hotels.rawValue)
+        #expect(resolver.resolveSystemCategoryRaw(for: "Electronics") == CashbackCategory.electronics.rawValue)
+    }
+
     @Test("Неочевидные категории остаются без маппинга")
     func testResolveSystemCategoryRawKeepsUnknownAsNil() {
         #expect(resolver.resolveSystemCategoryRaw(for: "Медицинские клиники") == nil)

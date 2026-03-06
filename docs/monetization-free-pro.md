@@ -18,3 +18,27 @@
 
 - `EntitlementPolicy` in `Core/AppState/AppState.swift` is the only place for limits.
 - UI/modules must use policy methods instead of hardcoded checks.
+
+## Debug override and diagnostics
+
+- Profile now has a dedicated debug toggle for `debug premium override`.
+- The toggle changes only the debug override. It does not pretend to cancel a real App Store subscription.
+- Profile also has a `Premium diagnostics` screen that shows:
+  - effective access source: `Free` / `Trial` / `Subscription` / `Debug premium`
+  - current premium state
+  - all known monetization points in the app
+
+## Code locations for monetization points
+
+- Converter crypto:
+  - `millio/UI/Services/Courses/ConverterView.swift`
+- Tracked tickers in finances:
+  - `millio/UI/Services/Finances/Editors/FinanceAddAccountView.swift`
+  - `millio/UI/Services/Finances/InvestmentEditorView.swift`
+- Tracked tickers during quick setup:
+  - `millio/UI/QuickSetup/QuickSetupViewModel.swift`
+  - `millio/UI/QuickSetup/QuickSetupApplier.swift`
+- Cashback card limit and screenshot import:
+  - `millio/UI/Services/Cashback/CashbackView.swift`
+- Premium widget behavior:
+  - `millioCurrencyWidgetExtension/CurrencyConverterPremiumWidget.swift`

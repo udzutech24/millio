@@ -80,17 +80,63 @@ struct AppStateTests {
     func testIsProComputedFromSubscriptionStatus() {
         let appState = AppState()
         
-        appState.subscriptionStatus = .notSubscribed
+        appState.applySubscriptionSnapshot(
+            SubscriptionSnapshot(
+                status: .notSubscribed,
+                expirationDate: nil,
+                isTrialActive: false,
+                hasDebugPremiumOverride: false
+            )
+        )
         #expect(appState.isPro == false)
         
-        appState.subscriptionStatus = .trial
+        appState.applySubscriptionSnapshot(
+            SubscriptionSnapshot(
+                status: .trial,
+                expirationDate: nil,
+                isTrialActive: true,
+                hasDebugPremiumOverride: false
+            )
+        )
         #expect(appState.isPro == true)
         
-        appState.subscriptionStatus = .subscribed
+        appState.applySubscriptionSnapshot(
+            SubscriptionSnapshot(
+                status: .subscribed,
+                expirationDate: Date(),
+                isTrialActive: false,
+                hasDebugPremiumOverride: false
+            )
+        )
         #expect(appState.isPro == true)
         
-        appState.subscriptionStatus = .expired
+        appState.applySubscriptionSnapshot(
+            SubscriptionSnapshot(
+                status: .expired,
+                expirationDate: nil,
+                isTrialActive: false,
+                hasDebugPremiumOverride: false
+            )
+        )
         #expect(appState.isPro == false)
+    }
+
+    @Test("AppState учитывает debug override как отдельный источник premium-доступа")
+    func testApplySubscriptionSnapshotTracksDebugSourceSeparately() {
+        let appState = AppState()
+
+        appState.applySubscriptionSnapshot(
+            SubscriptionSnapshot(
+                status: .notSubscribed,
+                expirationDate: nil,
+                isTrialActive: false,
+                hasDebugPremiumOverride: true
+            )
+        )
+
+        #expect(appState.isPro == true)
+        #expect(appState.hasDebugPremiumOverride == true)
+        #expect(appState.subscriptionAccessSource == .debug)
     }
     
     @Test("AppState сохраняет primaryCurrencyCode нормализованным и не принимает пустое значение")

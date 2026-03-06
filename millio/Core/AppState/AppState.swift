@@ -60,9 +60,11 @@ final class AppState {
     var subscriptionStatus: SubscriptionStatus = .notSubscribed
     var subscriptionExpirationDate: Date?
     var isTrialActive: Bool = false
+    var hasDebugPremiumOverride: Bool = false
+    var subscriptionAccessSource: SubscriptionAccessSource = .free
     
     var isPro: Bool {
-        subscriptionStatus == .subscribed || subscriptionStatus == .trial
+        subscriptionAccessSource.hasPremiumAccess
     }
     
     // Профиль: имя и путь к аватарке
@@ -82,6 +84,14 @@ final class AppState {
         self.profileDisplayName = SettingsManager.shared.profileDisplayName
         self.profileAvatarPath = SettingsManager.shared.profileAvatarFilePath
         self.isAppLocked = self.isAppLockEnabled
+    }
+
+    func applySubscriptionSnapshot(_ snapshot: SubscriptionSnapshot) {
+        subscriptionStatus = snapshot.status
+        subscriptionExpirationDate = snapshot.expirationDate
+        isTrialActive = snapshot.isTrialActive
+        hasDebugPremiumOverride = snapshot.hasDebugPremiumOverride
+        subscriptionAccessSource = snapshot.accessSource
     }
 
     /// При смене основной валюты мигрируем только persisted display-настройки модулей,

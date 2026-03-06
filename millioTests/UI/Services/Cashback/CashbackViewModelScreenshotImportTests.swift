@@ -43,6 +43,18 @@ struct CashbackViewModelScreenshotImportTests {
         #expect(option.displayName == CashbackCategory.gasStation.displayName)
     }
 
+    @Test("Англоязычное импортное имя маппится в системную категорию")
+    func testCategoryOptionForImportedNameUsesSystemCategoryForEnglish() throws {
+        let context = try createModelContext()
+        let viewModel = CashbackViewModel(modelContext: context)
+
+        let option = viewModel.categoryOptionForImportedName("Supermarkets")
+
+        #expect(option.rawValue == CashbackCategory.supermarket.rawValue)
+        #expect(option.isCustom == false)
+        #expect(option.displayName == CashbackCategory.supermarket.displayName)
+    }
+
     @Test("Неизвестная импортная категория создаётся как кастомная и дедуплицируется")
     func testCategoryOptionForImportedNameCreatesCustomCategory() throws {
         let context = try createModelContext()

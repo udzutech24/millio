@@ -1,8 +1,123 @@
 import Foundation
 import Combine
 
+struct QuickSetupSystemContext {
+    let preferredLanguageIdentifiers: [String]
+    let locale: Locale
+
+    static var current: QuickSetupSystemContext {
+        QuickSetupSystemContext(
+            preferredLanguageIdentifiers: Locale.preferredLanguages,
+            locale: Locale.autoupdatingCurrent
+        )
+    }
+
+    var hasRussianSystemLanguage: Bool {
+        preferredLanguageIdentifiers.contains { identifier in
+            normalizedLanguageCode(from: identifier) == Language.russian.rawValue
+        } || normalizedLanguageCode(from: locale.identifier) == Language.russian.rawValue
+    }
+
+    var quickSetupAvailableLanguages: [Language] {
+        hasRussianSystemLanguage ? [.system, .english, .russian] : [.system, .english]
+    }
+
+    var recommendedCurrencyCodes: [String] {
+        if hasRussianSystemLanguage {
+            return ["RUB", "USD", "CNY", "EUR", "TRY"]
+        }
+
+        return uniqueCurrencyCodes([
+            systemCurrencyCode,
+            fallbackCurrencyCodeForPrimaryLanguage,
+            "USD",
+            "EUR",
+            "CNY",
+            "TRY"
+        ])
+    }
+
+    func recommendedPrimaryCurrency(fallback fallbackCode: String) -> String {
+        let normalizedFallback = normalizeCurrencyCode(fallbackCode)
+        return recommendedCurrencyCodes.first ?? normalizedFallback
+    }
+
+    func recommendedFavoriteCurrencies(primaryCode: String, maxCount: Int) -> [String] {
+        let normalizedPrimary = normalizeCurrencyCode(primaryCode)
+        return Array(
+            recommendedCurrencyCodes
+                .filter { $0 != normalizedPrimary }
+                .prefix(maxCount)
+        )
+    }
+
+    private var systemCurrencyCode: String? {
+        if #available(iOS 16.0, *) {
+            return locale.currency?.identifier.uppercased()
+        }
+        return locale.currencyCode?.uppercased()
+    }
+
+    private var fallbackCurrencyCodeForPrimaryLanguage: String? {
+        switch normalizedLanguageCode(from: preferredLanguageIdentifiers.first ?? locale.identifier) {
+        case "en":
+            return "USD"
+        case "tr":
+            return "TRY"
+        case "zh":
+            return "CNY"
+        case "ja":
+            return "JPY"
+        case "de", "fr", "es", "it", "pt", "nl":
+            return "EUR"
+        default:
+            return nil
+        }
+    }
+
+    private func normalizedLanguageCode(from identifier: String) -> String {
+        String(
+            identifier
+                .split(whereSeparator: { $0 == "-" || $0 == "_" })
+                .first?
+                .lowercased() ?? ""
+        )
+    }
+
+    private func normalizeCurrencyCode(_ code: String?) -> String {
+        code?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() ?? ""
+    }
+
+    private func uniqueCurrencyCodes(_ codes: [String?]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+
+        for code in codes {
+            let normalized = normalizeCurrencyCode(code)
+            guard !normalized.isEmpty, !seen.contains(normalized) else { continue }
+            seen.insert(normalized)
+            result.append(normalized)
+        }
+
+        return result
+    }
+}
+
 @MainActor
 final class QuickSetupViewModel: ObservableObject {
+    static let recommendedExpenseCategoryIDs: [String] = [
+        ExpenseCategory.groceries.rawValue,
+        ExpenseCategory.transport.rawValue,
+        ExpenseCategory.shopping.rawValue,
+        ExpenseCategory.cafe.rawValue,
+        ExpenseCategory.bills.rawValue,
+        ExpenseCategory.health.rawValue,
+        ExpenseCategory.education.rawValue,
+        ExpenseCategory.other.rawValue,
+        "custom:travel",
+        "custom:home"
+    ]
+
     @Published var currentStep: QuickSetupStep = .localeAndCurrencies
     @Published var selectedLanguage: Language
     @Published var primaryCurrencyCode: String
@@ -12,38 +127,124 @@ final class QuickSetupViewModel: ObservableObject {
     @Published var productNameInput: String = ""
     @Published var productSymbolInput: String = ""
     @Published var productAmountInput: String = ""
+    @Published var productQuantityInput: String = ""
+    @Published var productPurchasePriceInput: String = ""
+    @Published private(set) var productMarketExchange: String?
+    @Published private(set) var productMarketCurrencyCode: String?
+    @Published private(set) var productLatestUnitPrice: Double?
+    @Published private(set) var productLastPriceUpdatedAt: Date?
+    @Published private(set) var isRefreshingProductQuote = false
+    @Published private(set) var productMarketError: String?
     @Published var products: [QuickSetupProductDraft] = []
     @Published var backupPreference: QuickSetupBackupPreference
     @Published private(set) var lastAddDraftError: String?
 
     private let isProUser: Bool
+    private let systemContext: QuickSetupSystemContext
+    private let marketDataClient: MarketDataClientProtocol
+    private let defaults: UserDefaults
 
     static let maxFavoriteCurrencies = 4
 
-    init(appState: AppState) {
+    init(
+        appState: AppState,
+        systemContext: QuickSetupSystemContext = .current,
+        marketDataClient: MarketDataClientProtocol = TwelveDataClient.shared,
+        defaults: UserDefaults = .standard
+    ) {
         isProUser = appState.isPro
+        self.systemContext = systemContext
+        self.marketDataClient = marketDataClient
+        self.defaults = defaults
         selectedLanguage = appState.selectedLanguage
-        primaryCurrencyCode = appState.primaryCurrencyCode
-        favoriteCurrencyCodes = Array(SettingsManager.shared.favoriteCurrencyCodes.prefix(Self.maxFavoriteCurrencies))
+        let hasStoredPrimaryCurrency = defaults.object(forKey: "primaryCurrencyCode") != nil
+        let initialPrimaryCurrency = hasStoredPrimaryCurrency
+            ? appState.primaryCurrencyCode
+            : systemContext.recommendedPrimaryCurrency(fallback: appState.primaryCurrencyCode)
+        primaryCurrencyCode = initialPrimaryCurrency
+
+        let hasStoredFavoriteCurrencies = defaults.object(forKey: "favoriteCurrencyCodes") != nil
+        favoriteCurrencyCodes = hasStoredFavoriteCurrencies
+            ? Array(SettingsManager.shared.favoriteCurrencyCodes.prefix(Self.maxFavoriteCurrencies))
+            : systemContext.recommendedFavoriteCurrencies(
+                primaryCode: initialPrimaryCurrency,
+                maxCount: Self.maxFavoriteCurrencies
+            )
         backupPreference = appState.isBackupEnabled ? .cloudBackup : .localOnly
 
         let storedCategories = SettingsManager.shared.quickSetupExpenseCategoryIDs
         if storedCategories.isEmpty {
-            selectedExpenseCategoryIDs = Set(
-                [
-                    ExpenseCategory.groceries,
-                    ExpenseCategory.transport,
-                    ExpenseCategory.shopping,
-                    ExpenseCategory.cafe,
-                    ExpenseCategory.bills,
-                    ExpenseCategory.health,
-                    ExpenseCategory.education,
-                    ExpenseCategory.other
-                ].map(\.rawValue) + ["custom:travel", "custom:home"]
-            )
+            selectedExpenseCategoryIDs = Set(Self.recommendedExpenseCategoryIDs)
         } else {
             selectedExpenseCategoryIDs = Set(storedCategories)
         }
+    }
+
+    var availableLanguages: [Language] {
+        systemContext.quickSetupAvailableLanguages
+    }
+
+    var recommendedCurrencyCodes: [String] {
+        systemContext.recommendedCurrencyCodes
+    }
+
+    var isMarketProductDraft: Bool {
+        productTypeForCreation.isMarketTracked
+    }
+
+    var productAmountFieldTitle: String {
+        switch productTypeForCreation {
+        case .card:
+            return "Баланс в \(primaryCurrencyCode)"
+        case .realEstate:
+            return "Стоимость в \(primaryCurrencyCode)"
+        case .debt:
+            return "Сумма долга в \(primaryCurrencyCode)"
+        case .credit:
+            return "Остаток долга в \(primaryCurrencyCode)"
+        case .crypto, .ticker:
+            return "Количество"
+        }
+    }
+
+    var productPurchasePriceTitle: String {
+        productTypeForCreation == .crypto ? "Цена покупки за монету" : "Цена покупки за 1 шт."
+    }
+
+    var productMarketSearchTitle: String {
+        productTypeForCreation == .crypto ? "Найти пару" : "Найти тикер"
+    }
+
+    var productResolvedCurrencyCode: String {
+        let preferredCode = productMarketCurrencyCode ?? primaryCurrencyCode
+        let normalized = preferredCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        return normalized.isEmpty ? SettingsManager.defaultPrimaryCurrencyCode : normalized
+    }
+
+    var productPositionTotal: Double? {
+        guard let quantity = parsedDecimal(productQuantityInput), quantity > 0 else { return nil }
+        if let latestUnitPrice = productLatestUnitPrice, latestUnitPrice > 0 {
+            return quantity * latestUnitPrice
+        }
+        if let purchaseUnitPrice = parsedDecimal(productPurchasePriceInput), purchaseUnitPrice > 0 {
+            return quantity * purchaseUnitPrice
+        }
+        return nil
+    }
+
+    var productPositionGrowthAbsolute: Double? {
+        guard
+            let quantity = parsedDecimal(productQuantityInput),
+            quantity > 0,
+            let latestUnitPrice = productLatestUnitPrice,
+            latestUnitPrice > 0,
+            let purchaseUnitPrice = parsedDecimal(productPurchasePriceInput),
+            purchaseUnitPrice > 0
+        else {
+            return nil
+        }
+
+        return quantity * (latestUnitPrice - purchaseUnitPrice)
     }
 
     var progress: Double {
@@ -122,10 +323,40 @@ final class QuickSetupViewModel: ObservableObject {
         }
     }
 
+    func applyRecommendedExpenseCategories() {
+        selectedExpenseCategoryIDs = Set(Self.recommendedExpenseCategoryIDs)
+    }
+
+    func clearExpenseCategories() {
+        selectedExpenseCategoryIDs.removeAll()
+    }
+
     func selectProductType(_ type: QuickSetupProductType) {
         productTypeForCreation = type
-        if type != .ticker && type != .crypto {
-            productSymbolInput = ""
+        resetDraftInputs(keepingTypeSpecificData: false)
+    }
+
+    func applySelectedMarketSymbol(_ symbol: TwelveDataSymbol) {
+        productSymbolInput = symbol.symbol.uppercased()
+        productMarketExchange = symbol.exchange
+        productMarketCurrencyCode = symbol.currency?.uppercased()
+        productMarketError = nil
+    }
+
+    func refreshSelectedMarketQuote(forceRefresh: Bool) async {
+        let symbol = productSymbolInput.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !symbol.isEmpty else { return }
+
+        isRefreshingProductQuote = true
+        productMarketError = nil
+        defer { isRefreshingProductQuote = false }
+
+        do {
+            let latestPrice = try await marketDataClient.latestPrice(symbol: symbol, forceRefresh: forceRefresh)
+            productLatestUnitPrice = latestPrice
+            productLastPriceUpdatedAt = latestPrice == nil ? nil : Date()
+        } catch {
+            productMarketError = error.localizedDescription
         }
     }
 
@@ -135,15 +366,24 @@ final class QuickSetupViewModel: ObservableObject {
         let trimmedName = productNameInput.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedSymbol = productSymbolInput.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         let resolvedName: String
-        let symbol: String?
+        let amount: Double
+        let marketSnapshot: QuickSetupProductMarketSnapshot?
 
-        if productTypeForCreation == .ticker || productTypeForCreation == .crypto {
-            if productTypeForCreation == .ticker, trimmedSymbol.isEmpty {
+        if productTypeForCreation.isMarketTracked {
+            guard !trimmedSymbol.isEmpty else {
                 lastAddDraftError = String(localized: "quick_setup.error.enter_ticker")
                 return false
             }
+            guard let quantity = parsedDecimal(productQuantityInput), quantity > 0 else {
+                lastAddDraftError = "Укажи количество позиции."
+                return false
+            }
+            guard let purchaseUnitPrice = parsedDecimal(productPurchasePriceInput), purchaseUnitPrice > 0 else {
+                lastAddDraftError = "Укажи цену покупки."
+                return false
+            }
             let currentTickerDraftCount = products.reduce(into: 0) { partialResult, item in
-                if item.type == .ticker || item.type == .crypto {
+                if item.type.isMarketTracked {
                     partialResult += 1
                 }
             }
@@ -157,20 +397,34 @@ final class QuickSetupViewModel: ObservableObject {
                 )
                 return false
             }
-            let resolvedSymbol = trimmedSymbol.isEmpty ? "BTC" : trimmedSymbol
-            resolvedName = trimmedName.isEmpty ? resolvedSymbol : trimmedName
-            symbol = resolvedSymbol
+
+            let currentUnitPrice = productLatestUnitPrice ?? purchaseUnitPrice
+            let resolvedCurrency = productResolvedCurrencyCode
+            resolvedName = trimmedSymbol
+            amount = quantity * currentUnitPrice
+            marketSnapshot = QuickSetupProductMarketSnapshot(
+                symbol: trimmedSymbol,
+                exchange: productMarketExchange,
+                currencyCode: resolvedCurrency,
+                quantity: quantity,
+                purchaseUnitPrice: purchaseUnitPrice,
+                currentUnitPrice: productLatestUnitPrice,
+                priceUpdatedAt: productLastPriceUpdatedAt,
+                providerRaw: productLatestUnitPrice == nil ? nil : "twelvedata"
+            )
         } else {
             guard !trimmedName.isEmpty else {
                 lastAddDraftError = String(localized: "quick_setup.error.enter_name")
                 return false
             }
             resolvedName = trimmedName
-            symbol = nil
+            amount = max(0, parsedDecimal(productAmountInput) ?? 0)
+            marketSnapshot = nil
         }
 
-        let normalizedCurrency = primaryCurrencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        let amount = max(0, Double(productAmountInput.replacingOccurrences(of: ",", with: ".")) ?? 0)
+        let normalizedCurrency = productTypeForCreation.isMarketTracked
+            ? productResolvedCurrencyCode
+            : primaryCurrencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
 
         products.append(
             QuickSetupProductDraft(
@@ -178,18 +432,36 @@ final class QuickSetupViewModel: ObservableObject {
                 name: resolvedName,
                 amount: amount,
                 currencyCode: normalizedCurrency.isEmpty ? SettingsManager.defaultPrimaryCurrencyCode : normalizedCurrency,
-                symbol: symbol,
+                marketSnapshot: marketSnapshot,
                 visualIcon: productTypeForCreation.icon
             )
         )
 
-        productNameInput = ""
-        productSymbolInput = ""
-        productAmountInput = ""
+        resetDraftInputs(keepingTypeSpecificData: false)
         return true
     }
 
     func removeProduct(id: UUID) {
         products.removeAll { $0.id == id }
+    }
+
+    private func resetDraftInputs(keepingTypeSpecificData: Bool) {
+        productNameInput = ""
+        productAmountInput = ""
+        productQuantityInput = ""
+        productPurchasePriceInput = ""
+
+        guard !keepingTypeSpecificData else { return }
+
+        productSymbolInput = ""
+        productMarketExchange = nil
+        productMarketCurrencyCode = nil
+        productLatestUnitPrice = nil
+        productLastPriceUpdatedAt = nil
+        productMarketError = nil
+    }
+
+    private func parsedDecimal(_ text: String) -> Double? {
+        Double(text.replacingOccurrences(of: ",", with: "."))
     }
 }

@@ -227,6 +227,20 @@ struct ConverterViewModelTests {
         }
     }
 
+    @Test("При замене нельзя выбрать валюту, которая уже есть в другом слоте")
+    func testReplaceCurrencyRejectsDuplicateCode() async {
+        let viewModel = ConverterViewModel(rateRepository: MockConverterRateRepository())
+        viewModel.state.selectedCurrencies = ["USD", "EUR", "RUB"]
+        viewModel.state.activeCode = "USD"
+
+        viewModel.handle(.replaceCurrency(0))
+        viewModel.handle(.applyPickerSelection("EUR"))
+
+        #expect(viewModel.state.selectedCurrencies == ["USD", "EUR", "RUB"])
+        #expect(Set(viewModel.state.selectedCurrencies).count == viewModel.state.selectedCurrencies.count)
+        #expect(viewModel.state.showPicker == true)
+    }
+
     @Test("Установка fractionDigits")
     func testSetFractionDigits() async {
         let mockRepo = MockConverterRateRepository()

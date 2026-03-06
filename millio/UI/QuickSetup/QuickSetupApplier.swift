@@ -165,7 +165,7 @@ struct QuickSetupApplier {
                     throw QuickSetupApplyError.trackedTickerLimitReached(limit: EntitlementPolicy.freeTrackedTickerLimit)
                 }
                 let investment = Investment(
-                    name: draft.name,
+                    name: draft.symbol ?? draft.name,
                     investmentType: .positive,
                     category: .crypto,
                     amount: draft.amount,
@@ -174,7 +174,7 @@ struct QuickSetupApplier {
                     priority: .normal,
                     isFavorite: true
                 )
-                investment.marketSymbol = (draft.symbol ?? draft.name).uppercased()
+                applyMarketSnapshot(draft.marketSnapshot, to: investment)
                 modelContext.insert(investment)
                 let link = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
                 link.group = group
@@ -210,7 +210,7 @@ struct QuickSetupApplier {
                     throw QuickSetupApplyError.trackedTickerLimitReached(limit: EntitlementPolicy.freeTrackedTickerLimit)
                 }
                 let investment = Investment(
-                    name: draft.name,
+                    name: draft.symbol ?? draft.name,
                     investmentType: .positive,
                     category: .stocks,
                     amount: draft.amount,
@@ -219,7 +219,7 @@ struct QuickSetupApplier {
                     priority: .normal,
                     isFavorite: true
                 )
-                investment.marketSymbol = (draft.symbol ?? draft.name).uppercased()
+                applyMarketSnapshot(draft.marketSnapshot, to: investment)
                 modelContext.insert(investment)
                 let link = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
                 link.group = group
@@ -278,6 +278,21 @@ struct QuickSetupApplier {
                 partialResult += 1
             }
         }
+    }
+
+    private func applyMarketSnapshot(_ snapshot: QuickSetupProductMarketSnapshot?, to investment: Investment) {
+        guard let snapshot else { return }
+
+        investment.marketSymbol = snapshot.symbol
+        investment.marketExchange = snapshot.exchange
+        investment.marketCurrency = snapshot.currencyCode
+        investment.marketQuantity = snapshot.quantity
+        investment.averagePurchaseUnitPrice = snapshot.purchaseUnitPrice
+        investment.totalPurchaseCost = snapshot.purchaseUnitPrice * snapshot.quantity
+        investment.lastKnownUnitPrice = snapshot.currentUnitPrice ?? snapshot.purchaseUnitPrice
+        investment.lastKnownPriceUpdatedAt = snapshot.priceUpdatedAt
+        investment.marketProviderRaw = snapshot.providerRaw
+        investment.recalculateAmountFromPosition()
     }
 }
 

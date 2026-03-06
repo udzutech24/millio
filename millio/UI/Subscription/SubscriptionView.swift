@@ -413,9 +413,7 @@ struct SubscriptionView: View {
             )
 
             await SubscriptionManager.shared.checkSubscriptionStatus()
-            appState.subscriptionStatus = SubscriptionManager.shared.status
-            appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
-            appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+            appState.applySubscriptionSnapshot(SubscriptionManager.shared.snapshot)
 
         } catch {
             if let subscriptionError = error as? SubscriptionError,
@@ -432,9 +430,7 @@ struct SubscriptionView: View {
 
         do {
             try await SubscriptionManager.shared.restorePurchases()
-            appState.subscriptionStatus = SubscriptionManager.shared.status
-            appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
-            appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+            appState.applySubscriptionSnapshot(SubscriptionManager.shared.snapshot)
 
         } catch {
             errorMessage = String(localized: "subscription.error.restore_purchases")
@@ -448,8 +444,7 @@ struct SubscriptionView: View {
 
         do {
             try await SubscriptionManager.shared.startTrial()
-            appState.subscriptionStatus = SubscriptionManager.shared.status
-            appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+            appState.applySubscriptionSnapshot(SubscriptionManager.shared.snapshot)
 
         } catch {
             errorMessage = (error as? SubscriptionError)?.localizedDescription ?? String(localized: "subscription.error.start_trial")

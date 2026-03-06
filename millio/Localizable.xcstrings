@@ -161,6 +161,7 @@
 
     },
     "Are you sure you want to skip restore? Backup data will not be applied." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -192,9 +193,6 @@
         }
       }
     },
-    "available" : {
-
-    },
     "Back" : {
       "localizations" : {
         "en" : {
@@ -212,6 +210,7 @@
       }
     },
     "Backup" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -228,6 +227,7 @@
       }
     },
     "Backup found" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1351,6 +1351,244 @@
         }
       }
     },
+    "cashflow.history.detail.amount" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Amount"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сумма"
+          }
+        }
+      }
+    },
+    "cashflow.history.detail.category" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Category"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Категория"
+          }
+        }
+      }
+    },
+    "cashflow.history.detail.date" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Date"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Дата"
+          }
+        }
+      }
+    },
+    "cashflow.history.detail.delete" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete operation"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить операцию"
+          }
+        }
+      }
+    },
+    "cashflow.history.detail.delete.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "With recalculation, account balances are updated. Without recalculation, only history entry is deleted."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "С пересчетом обновятся остатки затронутых счетов. Без пересчета удалится только запись в истории."
+          }
+        }
+      }
+    },
+    "cashflow.history.detail.delete.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete operation?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить операцию?"
+          }
+        }
+      }
+    },
+    "cashflow.history.detail.delete.with_recalc" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete + update balances"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить + обновить остатки"
+          }
+        }
+      }
+    },
+    "cashflow.history.detail.delete.without_recalc" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete history only"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить только из истории"
+          }
+        }
+      }
+    },
+    "cashflow.history.detail.edit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit operation"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Изменить операцию"
+          }
+        }
+      }
+    },
+    "cashflow.history.detail.from_account" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "From account"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "С счета"
+          }
+        }
+      }
+    },
+    "cashflow.history.detail.note" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Note"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Комментарий"
+          }
+        }
+      }
+    },
+    "cashflow.history.detail.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transaction"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Операция"
+          }
+        }
+      }
+    },
+    "cashflow.history.detail.to_account" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To account"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На счет"
+          }
+        }
+      }
+    },
+    "cashflow.history.detail.type" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тип"
+          }
+        }
+      }
+    },
     "cashflow.history.empty.default" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1727,13 +1965,11 @@
         }
       }
     },
-    "Confirm passphrase" : {
-
-    },
     "Confirm reset" : {
 
     },
     "Continue using the app" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2582,12 +2818,6 @@
         }
       }
     },
-    "Create backup now" : {
-
-    },
-    "Creating backup..." : {
-
-    },
     "Currency" : {
       "localizations" : {
         "en" : {
@@ -2603,6 +2833,9 @@
           }
         }
       }
+    },
+    "Current access" : {
+
     },
     "Custom period" : {
       "localizations" : {
@@ -2765,6 +2998,7 @@
       }
     },
     "Enable backup" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2781,6 +3015,7 @@
       }
     },
     "Encryption" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2797,6 +3032,7 @@
       }
     },
     "Enter a passphrase, otherwise this backup cannot be restored." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2827,9 +3063,6 @@
           }
         }
       }
-    },
-    "Enter passphrase" : {
-
     },
     "error" : {
       "extractionState" : "manual",
@@ -8077,6 +8310,7 @@
     },
     "iCloud" : {
       "comment" : "A label displayed within the status card, indicating the availability of iCloud.",
+      "extractionState" : "stale",
       "isCommentAutoGenerated" : true,
       "localizations" : {
         "en" : {
@@ -8212,6 +8446,7 @@
       }
     },
     "Last backup" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -8550,6 +8785,7 @@
       }
     },
     "No backup found" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -8582,6 +8818,7 @@
       }
     },
     "No saved versions yet" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -8614,6 +8851,7 @@
       }
     },
     "none" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -8628,9 +8866,6 @@
           }
         }
       }
-    },
-    "off" : {
-
     },
     "OK" : {
       "comment" : "The text for an \"OK\" button. Used in an alert.",
@@ -8651,6 +8886,7 @@
       }
     },
     "Passphrase" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -8667,6 +8903,7 @@
       }
     },
     "Passphrase (if backup is encrypted)" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -8683,6 +8920,7 @@
       }
     },
     "Passphrases do not match" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -8766,6 +9004,7 @@
 
     },
     "Pinned" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -8782,6 +9021,7 @@
       }
     },
     "Pinned version" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -8798,6 +9038,7 @@
       }
     },
     "Please wait" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -8829,6 +9070,9 @@
           }
         }
       }
+    },
+    "Premium diagnostics" : {
+
     },
     "profile.backup" : {
       "extractionState" : "manual",
@@ -9152,6 +9396,23 @@
         }
       }
     },
+    "profile.section.experience" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Experience"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Опыт использования"
+          }
+        }
+      }
+    },
     "profile.section.general" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -9182,6 +9443,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Настройки"
+          }
+        }
+      }
+    },
+    "profile.section.support" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Support & tools"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поддержка и инструменты"
           }
         }
       }
@@ -9357,6 +9635,9 @@
         }
       }
     },
+    "Quick setup" : {
+
+    },
     "quick_setup.added_products_count_format" : {
       "localizations" : {
         "en" : {
@@ -9503,6 +9784,7 @@
       }
     },
     "Refresh status" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -9571,6 +9853,7 @@
       }
     },
     "Restore data" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -9587,6 +9870,7 @@
       }
     },
     "Restore will replace all current data with backup data" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -9636,6 +9920,7 @@
       }
     },
     "Restoring data..." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -9666,12 +9951,6 @@
           }
         }
       }
-    },
-    "Save as version" : {
-
-    },
-    "Saving version..." : {
-
     },
     "Search category" : {
       "localizations" : {
@@ -9821,6 +10100,7 @@
 
     },
     "Skip" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -9837,6 +10117,7 @@
       }
     },
     "Skip restore" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -9851,9 +10132,6 @@
           }
         }
       }
-    },
-    "Skip restore?" : {
-
     },
     "Smart data reset" : {
 
@@ -10668,9 +10946,6 @@
         }
       }
     },
-    "unavailable" : {
-
-    },
     "welcome" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -10687,6 +10962,9 @@
           }
         }
       }
+    },
+    "Where premium changes behavior" : {
+
     },
     "widget.converter.configuration_description" : {
       "extractionState" : "stale",
@@ -10806,9 +11084,6 @@
         }
       }
     },
-    "Безопасность данных" : {
-
-    },
     "Быстрая навигация по мини-приложениям" : {
       "localizations" : {
         "en" : {
@@ -10841,6 +11116,9 @@
         }
       }
     },
+    "Ваш выбор" : {
+
+    },
     "Введите PIN-код" : {
       "comment" : "A prompt instructing the user to enter their PIN code.",
       "isCommentAutoGenerated" : true,
@@ -10858,6 +11136,15 @@
           }
         }
       }
+    },
+    "Введите кодовую фразу" : {
+
+    },
+    "Восстанавливаем данные" : {
+
+    },
+    "Восстановить данные" : {
+
     },
     "Восстановление данных" : {
       "extractionState" : "stale",
@@ -10937,6 +11224,7 @@
       }
     },
     "Выберите категории трат" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -10951,6 +11239,12 @@
           }
         }
       }
+    },
+    "Выберите нужный снимок и замените локальные данные." : {
+
+    },
+    "Выберите нужный снимок. Восстановление полностью заменит локальные данные." : {
+
     },
     "Выберите хотя бы одну категорию" : {
       "comment" : "A message displayed when a user hasn't selected any categories for cashback.",
@@ -10969,9 +11263,6 @@
           }
         }
       }
-    },
-    "Выберите, как хранить ваши данные. Это можно изменить позже в Профиль -> Backup." : {
-
     },
     "Выбор карты" : {
       "comment" : "A title for a view that lets users select a cashback card.",
@@ -11041,6 +11332,9 @@
         }
       }
     },
+    "Где premium меняет поведение" : {
+
+    },
     "Где добавить новую карту" : {
       "localizations" : {
         "en" : {
@@ -11087,7 +11381,11 @@
         }
       }
     },
+    "Диагностика Premium" : {
+
+    },
     "До 4 валют для быстрого выбора в операциях" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -11204,6 +11502,7 @@
       }
     },
     "Добавьте продукты" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -11218,6 +11517,15 @@
           }
         }
       }
+    },
+    "Добавьте только те продукты, которые хотите сразу увидеть в Финансах. Остальное можно создать позже." : {
+
+    },
+    "Если вы только что включили резервное копирование, сначала создайте первую копию в профиле." : {
+
+    },
+    "Если копия была защищена кодовой фразой, без нее восстановление не завершится." : {
+
     },
     "Закрепить" : {
       "localizations" : {
@@ -11289,6 +11597,9 @@
           }
         }
       }
+    },
+    "Изменить" : {
+
     },
     "Иконка" : {
       "extractionState" : "stale",
@@ -11390,6 +11701,7 @@
       }
     },
     "Категории можно изменить и добавить позже в процессе работы." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -11404,6 +11716,9 @@
           }
         }
       }
+    },
+    "Категории можно изменить позже." : {
+
     },
     "Категория" : {
       "extractionState" : "stale",
@@ -11422,7 +11737,13 @@
         }
       }
     },
-    "Коротко: без выгрузки данные остаются только на устройстве. С выгрузкой они попадают в ваш приватный CloudKit." : {
+    "Кодовая фраза" : {
+
+    },
+    "Кодовая фраза готова" : {
+
+    },
+    "Кодовая фраза для восстановления" : {
 
     },
     "Криптовалюты доступны в PRO" : {
@@ -11618,6 +11939,9 @@
         }
       }
     },
+    "Необязательно" : {
+
+    },
     "Нет доступных карт" : {
       "localizations" : {
         "en" : {
@@ -11689,6 +12013,9 @@
         }
       }
     },
+    "Нужна только для переносимого шифрования" : {
+
+    },
     "Обычные валюты доступны бесплатно, криптовалюты доступны по подписке PRO." : {
       "localizations" : {
         "en" : {
@@ -11736,6 +12063,9 @@
           }
         }
       }
+    },
+    "Она будет использована для создания этой резервной копии. Millio ее не сохраняет." : {
+
     },
     "Основная валюта" : {
       "comment" : "A section header in the Onboarding view",
@@ -11794,6 +12124,7 @@
       }
     },
     "От них зависит, что вы увидите при добавлении расхода" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -11875,6 +12206,15 @@
         }
       }
     },
+    "Перед восстановлением" : {
+
+    },
+    "Повторите кодовую фразу" : {
+
+    },
+    "Подождите, локальная база будет заменена выбранной копией." : {
+
+    },
     "Пожалуйста, подождите" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -11885,6 +12225,9 @@
           }
         }
       }
+    },
+    "Позиция" : {
+
     },
     "Поиск иконки (например: car, cart, heart)" : {
       "localizations" : {
@@ -11956,6 +12299,12 @@
         }
       }
     },
+    "После «Готово» поля свернутся." : {
+
+    },
+    "После ввода нажмите «Готово», чтобы скрыть клавиатуру и подтвердить фразу." : {
+
+    },
     "Предыдущий месяц" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -12002,6 +12351,12 @@
         }
       }
     },
+    "Продолжить без восстановления" : {
+
+    },
+    "Продолжить без восстановления?" : {
+
+    },
     "Продолжить работу с приложением" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -12012,6 +12367,9 @@
           }
         }
       }
+    },
+    "Прозрачный контроль за тем, где лежат данные и как они восстанавливаются." : {
+
     },
     "Пропустить" : {
       "localizations" : {
@@ -12149,6 +12507,18 @@
         }
       }
     },
+    "Резервная копия" : {
+
+    },
+    "Резервная копия найдена" : {
+
+    },
+    "Рекомендуемые" : {
+
+    },
+    "Рост/убыток" : {
+
+    },
     "Свернуть" : {
       "comment" : "A button label that collapses the view.",
       "isCommentAutoGenerated" : true,
@@ -12232,6 +12602,12 @@
         }
       }
     },
+    "Сначала введите одинаковую фразу в оба поля." : {
+
+    },
+    "Снимок" : {
+
+    },
     "Создать категорию" : {
       "comment" : "A button label that allows users to create new cashback categories.",
       "isCommentAutoGenerated" : true,
@@ -12249,6 +12625,9 @@
           }
         }
       }
+    },
+    "Сохраненных снимков пока нет" : {
+
     },
     "Сохранить" : {
       "comment" : "A button that saves user settings.",
@@ -12268,7 +12647,7 @@
         }
       }
     },
-    "Сумма в %@" : {
+    "Способ защиты" : {
 
     },
     "Текущая сумма: %@ %@" : {
@@ -12290,10 +12669,13 @@
         }
       }
     },
-    "Тикер (AAPL)" : {
+    "Текущая установка приложения останется без данных из облачной копии." : {
 
     },
-    "Тикер (BTC)" : {
+    "Текущая цена" : {
+
+    },
+    "Текущий доступ" : {
 
     },
     "Тип иконки" : {
@@ -12376,6 +12758,9 @@
         }
       }
     },
+    "Фраза подтверждена для этой сессии. Можно создавать резервную копию." : {
+
+    },
     "Эмодзи" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -12392,6 +12777,9 @@
           }
         }
       }
+    },
+    "Эта операция полностью заменит локальные данные на выбранный облачный снимок." : {
+
     },
     "Язык" : {
       "comment" : "A",

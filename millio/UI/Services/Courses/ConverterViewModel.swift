@@ -558,12 +558,25 @@ final class ConverterViewModel: ViewModelProtocol {
     }
     
     private func applyPickerSelection(_ code: String) {
+        let normalizedCode = code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !normalizedCode.isEmpty else { return }
+
+        // Курсы: список выбранных валют должен оставаться уникальным.
+        // При replace не даем выбрать код, который уже есть в другом слоте.
+        if let replaceIndex = state.replaceIndex,
+           state.selectedCurrencies.indices.contains(replaceIndex),
+           state.selectedCurrencies.enumerated().contains(where: { index, existingCode in
+               index != replaceIndex && existingCode.uppercased() == normalizedCode
+           }) {
+            return
+        }
+
         if let idx = state.replaceIndex, state.selectedCurrencies.indices.contains(idx) {
-            state.selectedCurrencies[idx] = code
+            state.selectedCurrencies[idx] = normalizedCode
         } else {
             guard state.selectedCurrencies.count < maxCurrencies else { return }
-            if !state.selectedCurrencies.contains(code) {
-                state.selectedCurrencies.append(code)
+            if !state.selectedCurrencies.contains(normalizedCode) {
+                state.selectedCurrencies.append(normalizedCode)
             }
         }
         if !state.selectedCurrencies.contains(state.activeCode) {
@@ -574,7 +587,7 @@ final class ConverterViewModel: ViewModelProtocol {
         persistSelected()
         state.showPicker = false
 
-        if supportedCryptoCodes.contains(code.uppercased()), state.allRates[code.uppercased()] == nil {
+        if supportedCryptoCodes.contains(normalizedCode), state.allRates[normalizedCode] == nil {
             Task { [weak self] in
                 await self?.fetchRates(force: true)
             }

@@ -98,7 +98,7 @@ struct CashflowScheduledTransactionsView: View {
             }
             Button("Delete", role: .destructive) {
                 guard let transactionToDelete = pendingDeleteTransaction else { return }
-                viewModel.handle(.deleteTransaction(transactionToDelete))
+                viewModel.handle(.deleteTransaction(transactionToDelete, recalculate: true))
                 pendingDeleteTransaction = nil
             }
         } message: {

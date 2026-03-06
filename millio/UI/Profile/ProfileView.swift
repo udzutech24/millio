@@ -44,203 +44,17 @@ struct ProfileView: View {
                     
                     sectionHeader("profile.section.general")
                     card {
-                        VStack(spacing: 16) {
-                            NavigationLink {
-                                LanguageSelectionView(selectedLanguage: Binding(
-                                    get: { appState.selectedLanguage },
-                                    set: { appState.selectedLanguage = $0 }
-                                ))
-                            } label: {
-                                settingsRow(iconSystemName: "globe", title: "profile.language") {
-                                    Text(appState.selectedLanguage.displayName)
-                                        .foregroundStyle(AppColors.profileValueAccent)
-                                    chevron
-                                }
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("profile.languageLink")
-                            
-                            NavigationLink {
-                                PrimaryCurrencySelectionView(primaryCurrencyCode: Binding(
-                                    get: { appState.primaryCurrencyCode },
-                                    set: { appState.primaryCurrencyCode = $0 }
-                                ))
-                            } label: {
-                                settingsRow(iconSystemName: "dollarsign", title: "profile.currency") {
-                                    Text(appState.primaryCurrencyCode)
-                                        .foregroundStyle(AppColors.profileValueAccent)
-                                    chevron
-                                }
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("profile.primaryCurrencyLink")
-
-                        }
+                        sectionContent(for: .general)
                     }
                     
                     // Premium блок
                     premiumSubscriptionBlock
 
-                    // Settings section
                     VStack(spacing: 20) {
-                        sectionHeader("profile.section.settings")
-                        card {
-                            VStack(spacing: 16) {
-                                NavigationLink {
-                                    BackupManagementView(router: router)
-                                } label: {
-                                    settingsRow(iconSystemName: "arrow.clockwise.icloud", title: "profile.backup") {
-                                        Text(backupStatusText)
-                                            .foregroundStyle(AppColors.textTertiary)
-                                        chevron
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier("profile.backupLink")
-
-                                NavigationLink {
-                                    AppSecuritySettingsView()
-                                } label: {
-                                    settingsRow(iconSystemName: "lock.shield", title: "profile.security") {
-                                        Text(appLockStatusText)
-                                            .foregroundStyle(AppColors.textTertiary)
-                                        chevron
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier("profile.appSecurityLink")
-
-                                NavigationLink {
-                                    ProfileFAQView(selectedLanguage: appState.selectedLanguage)
-                                } label: {
-                                    settingsRow(iconSystemName: "questionmark.circle", title: "FAQ") {
-                                        chevron
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier("profile.faqLink")
-
-                                NavigationLink {
-                                    SmartDataResetView()
-                                } label: {
-                                    settingsRow(iconSystemName: "trash", title: "Smart data reset") {
-                                        chevron
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier("profile.smartDataResetLink")
-
-                                Button {
-                                    showQuickSetupSheet = true
-                                } label: {
-                                    settingsRow(iconSystemName: "sparkles.rectangle.stack", title: "profile.quick_setup") {
-                                        Text(quickSetupStatusText)
-                                            .foregroundStyle(AppColors.profileValueAccent)
-                                        chevron
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier("profile.quickSetupLink")
-
-                                Menu {
-                                    ForEach(LaunchSplashDisplayMode.allCases, id: \.self) { mode in
-                                        Button {
-                                            appState.launchSplashDisplayMode = mode
-                                            SettingsManager.shared.launchSplashDisplayMode = mode
-                                        } label: {
-                                            if mode == appState.launchSplashDisplayMode {
-                                                Label(mode.profileTitle, systemImage: "checkmark")
-                                            } else {
-                                                Text(mode.profileTitle)
-                                            }
-                                        }
-                                    }
-                                } label: {
-                                    settingsRow(iconSystemName: "sparkles.tv", title: "Launch splash") {
-                                        Text(appState.launchSplashDisplayMode.profileTitle)
-                                            .foregroundStyle(AppColors.profileValueAccent)
-                                        chevron
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier("profile.launchSplashModeMenu")
-                                
-                                Toggle(isOn: Binding(
-                                    get: { appState.isDailyReminderEnabled },
-                                    set: { newValue in
-                                        appState.isDailyReminderEnabled = newValue
-                                        SettingsManager.shared.isDailyReminderEnabled = newValue
-                                        
-                                        Task {
-                                            await NotificationManager.shared.scheduleDailyReminder(enabled: newValue)
-                                        }
-                                    }
-                                )) {
-                                    settingsRow(iconSystemName: "bell", title: "profile.daily_reminders") { EmptyView() }
-                                }
-                                .tint(AppColors.toggleOnGreen)
-                                .accessibilityIdentifier("profile.dailyReminderToggle")
-                            }
-                        }
-                        
-                        sectionHeader("profile.section.about")
-                        card {
-                            VStack(spacing: 16) {
-                                settingsRow(iconSystemName: "info.circle", title: "profile.version") {
-                                    Text(appVersion)
-                                        .foregroundStyle(AppColors.textTertiary)
-                                }
-                                .accessibilityIdentifier("profile.versionRow")
-
-                                Link(destination: legalLinks.privacyURL) {
-                                    legalSettingsRow(iconSystemName: "hand.raised", title: legalLinks.privacyTitle) {
-                                        chevron
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier("profile.privacyPolicyLink")
-
-                                Link(destination: legalLinks.termsURL) {
-                                    legalSettingsRow(iconSystemName: "doc.text", title: legalLinks.termsTitle) {
-                                        chevron
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier("profile.termsOfUseLink")
-                            }
-                        }
-                        
-                        sectionHeader("profile.section.debug")
-                        card {
-                            VStack(spacing: 16) {
-                                Toggle(isOn: Binding(
-                                    get: { appState.isPro },
-                                    set: { newValue in
-                                        if newValue {
-                                            SubscriptionManager.shared.grantDebugPremium()
-                                        } else {
-                                            SubscriptionManager.shared.revokeDebugPremium()
-                                        }
-                                        appState.subscriptionStatus = SubscriptionManager.shared.status
-                                        appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
-                                        appState.isTrialActive = SubscriptionManager.shared.isTrialActive
-                                    }
-                                )) {
-                                    settingsRow(iconSystemName: "crown", title: "profile.premium_access") { EmptyView() }
-                                }
-                                .tint(AppColors.toggleOnGreen)
-                                .accessibilityIdentifier("profile.debugPremiumToggle")
-
-                                Button {
-                                    UserDefaults.standard.set(false, forKey: "hasCompletedOnboarding")
-                                    appState.lifecycle = .onboarding
-                                } label: {
-                                    settingsRow(iconSystemName: "sparkles", title: "profile.show_onboarding") {
-                                        chevron
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier("profile.debugOnboardingButton")
+                        ForEach(secondarySections) { section in
+                            sectionHeader(section.id.titleKey)
+                            card {
+                                sectionContent(for: section.id)
                             }
                         }
                     }
@@ -272,9 +86,7 @@ struct ProfileView: View {
         .task {
             // Обновляем статус подписки при открытии профиля
             await SubscriptionManager.shared.checkSubscriptionStatus()
-            appState.subscriptionStatus = SubscriptionManager.shared.status
-            appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
-            appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+            appState.applySubscriptionSnapshot(SubscriptionManager.shared.snapshot)
         }
     }
     
@@ -396,6 +208,11 @@ struct ProfileView: View {
                         .minimumScaleFactor(0.82)
                         .allowsTightening(true)
 
+                    Text(premiumStatusLine)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(appState.isPro ? AppColors.brandPrimary : AppColors.textPrimary.opacity(0.7))
+                        .lineLimit(1)
+
                     HStack(spacing: 4) {
                         Text("profile.premium.details")
                             .font(.system(size: 12, weight: .medium))
@@ -481,6 +298,265 @@ struct ProfileView: View {
             ? String(localized: "profile.status.completed", locale: locale)
             : String(localized: "profile.status.not_completed", locale: locale)
     }
+
+    private var premiumStatusLine: String {
+        switch appState.subscriptionAccessSource {
+        case .free:
+            return isRussianInterface ? "Текущий режим: Free" : "Current mode: Free"
+        case .trial:
+            return isRussianInterface ? "Текущий режим: Триал" : "Current mode: Trial"
+        case .subscription:
+            return isRussianInterface ? "Текущий режим: Подписка" : "Current mode: Subscription"
+        case .debug:
+            return isRussianInterface ? "Текущий режим: Debug premium" : "Current mode: Debug premium"
+        }
+    }
+
+    private var premiumDiagnosticsSummary: String {
+        let items = EntitlementDiagnostics.items(for: appState)
+        let activeCount = items.filter(\.isPremiumActive).count
+        return isRussianInterface
+            ? "\(activeCount)/\(items.count) активно"
+            : "\(activeCount)/\(items.count) active"
+    }
+
+    private var premiumDiagnosticsTitle: String {
+        isRussianInterface ? "Диагностика Premium" : "Premium diagnostics"
+    }
+
+    private var isRussianInterface: Bool {
+        (appState.selectedLanguage.locale ?? Locale.current).identifier.hasPrefix("ru")
+    }
+
+    private var secondarySections: [ProfileMenuSection] {
+        ProfileMenuStructure.sections.filter { $0.id != .general }
+    }
+
+    @ViewBuilder
+    private func sectionContent(for sectionID: ProfileMenuSectionID) -> some View {
+        let section = ProfileMenuStructure.sections.first { $0.id == sectionID }
+
+        VStack(spacing: 16) {
+            ForEach(section?.items ?? []) { item in
+                profileMenuRow(for: item)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func profileMenuRow(for item: ProfileMenuItemID) -> some View {
+        switch item {
+        case .language:
+            NavigationLink {
+                LanguageSelectionView(selectedLanguage: Binding(
+                    get: { appState.selectedLanguage },
+                    set: { appState.selectedLanguage = $0 }
+                ))
+            } label: {
+                settingsRow(iconSystemName: "globe", title: "profile.language") {
+                    Text(appState.selectedLanguage.displayName)
+                        .foregroundStyle(AppColors.profileValueAccent)
+                    chevron
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("profile.languageLink")
+
+        case .primaryCurrency:
+            NavigationLink {
+                PrimaryCurrencySelectionView(primaryCurrencyCode: Binding(
+                    get: { appState.primaryCurrencyCode },
+                    set: { appState.primaryCurrencyCode = $0 }
+                ))
+            } label: {
+                settingsRow(iconSystemName: "dollarsign", title: "profile.currency") {
+                    Text(appState.primaryCurrencyCode)
+                        .foregroundStyle(AppColors.profileValueAccent)
+                    chevron
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("profile.primaryCurrencyLink")
+
+        case .backup:
+            NavigationLink {
+                BackupManagementView(router: router)
+            } label: {
+                settingsRow(iconSystemName: "arrow.clockwise.icloud", title: "profile.backup") {
+                    Text(backupStatusText)
+                        .foregroundStyle(AppColors.textTertiary)
+                    chevron
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("profile.backupLink")
+
+        case .security:
+            NavigationLink {
+                AppSecuritySettingsView()
+            } label: {
+                settingsRow(iconSystemName: "lock.shield", title: "profile.security") {
+                    Text(appLockStatusText)
+                        .foregroundStyle(AppColors.textTertiary)
+                    chevron
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("profile.appSecurityLink")
+
+        case .dailyReminders:
+            Toggle(isOn: Binding(
+                get: { appState.isDailyReminderEnabled },
+                set: { newValue in
+                    appState.isDailyReminderEnabled = newValue
+                    SettingsManager.shared.isDailyReminderEnabled = newValue
+
+                    Task {
+                        await NotificationManager.shared.scheduleDailyReminder(enabled: newValue)
+                    }
+                }
+            )) {
+                settingsRow(iconSystemName: "bell", title: "profile.daily_reminders") { EmptyView() }
+            }
+            .tint(AppColors.toggleOnGreen)
+            .accessibilityIdentifier("profile.dailyReminderToggle")
+
+        case .quickSetup:
+            Button {
+                showQuickSetupSheet = true
+            } label: {
+                settingsRow(iconSystemName: "sparkles.rectangle.stack", title: "profile.quick_setup") {
+                    Text(quickSetupStatusText)
+                        .foregroundStyle(AppColors.profileValueAccent)
+                    chevron
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("profile.quickSetupLink")
+
+        case .launchSplash:
+            Menu {
+                ForEach(LaunchSplashDisplayMode.allCases, id: \.self) { mode in
+                    Button {
+                        appState.launchSplashDisplayMode = mode
+                        SettingsManager.shared.launchSplashDisplayMode = mode
+                    } label: {
+                        if mode == appState.launchSplashDisplayMode {
+                            Label(mode.profileTitle, systemImage: "checkmark")
+                        } else {
+                            Text(mode.profileTitle)
+                        }
+                    }
+                }
+            } label: {
+                settingsRow(iconSystemName: "sparkles.tv", title: "Launch splash") {
+                    Text(appState.launchSplashDisplayMode.profileTitle)
+                        .foregroundStyle(AppColors.profileValueAccent)
+                    chevron
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("profile.launchSplashModeMenu")
+
+        case .faq:
+            NavigationLink {
+                ProfileFAQView(selectedLanguage: appState.selectedLanguage)
+            } label: {
+                settingsRow(iconSystemName: "questionmark.circle", title: "FAQ") {
+                    chevron
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("profile.faqLink")
+
+        case .smartDataReset:
+            NavigationLink {
+                SmartDataResetView()
+            } label: {
+                settingsRow(
+                    iconSystemName: "trash",
+                    title: "Smart data reset",
+                    titleColor: AppColors.error,
+                    iconColor: AppColors.error
+                ) {
+                    chevron
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("profile.smartDataResetLink")
+
+        case .version:
+            settingsRow(iconSystemName: "info.circle", title: "profile.version") {
+                Text(appVersion)
+                    .foregroundStyle(AppColors.textTertiary)
+            }
+            .accessibilityIdentifier("profile.versionRow")
+
+        case .privacy:
+            Link(destination: legalLinks.privacyURL) {
+                legalSettingsRow(iconSystemName: "hand.raised", title: legalLinks.privacyTitle) {
+                    chevron
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("profile.privacyPolicyLink")
+
+        case .terms:
+            Link(destination: legalLinks.termsURL) {
+                legalSettingsRow(iconSystemName: "doc.text", title: legalLinks.termsTitle) {
+                    chevron
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("profile.termsOfUseLink")
+
+        case .premiumAccess:
+            Toggle(isOn: Binding(
+                get: { appState.hasDebugPremiumOverride },
+                set: { newValue in
+                    Task { @MainActor in
+                        if newValue {
+                            SubscriptionManager.shared.grantDebugPremium()
+                        } else {
+                            SubscriptionManager.shared.revokeDebugPremium()
+                            await SubscriptionManager.shared.checkSubscriptionStatus()
+                        }
+
+                        appState.applySubscriptionSnapshot(SubscriptionManager.shared.snapshot)
+                    }
+                }
+            )) {
+                settingsRow(iconSystemName: "crown", title: "profile.premium_access") { EmptyView() }
+            }
+            .tint(AppColors.toggleOnGreen)
+            .accessibilityIdentifier("profile.debugPremiumToggle")
+
+        case .premiumDiagnostics:
+            NavigationLink {
+                ProfilePremiumDiagnosticsView()
+            } label: {
+                settingsRow(iconSystemName: "flag", title: LocalizedStringKey(premiumDiagnosticsTitle)) {
+                    Text(premiumDiagnosticsSummary)
+                        .foregroundStyle(AppColors.profileValueAccent)
+                    chevron
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("profile.premiumDiagnosticsLink")
+
+        case .showOnboarding:
+            Button {
+                UserDefaults.standard.set(false, forKey: "hasCompletedOnboarding")
+                appState.lifecycle = .onboarding
+            } label: {
+                settingsRow(iconSystemName: "sparkles", title: "profile.show_onboarding") {
+                    chevron
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("profile.debugOnboardingButton")
+        }
+    }
     
     private func sectionHeader(_ title: LocalizedStringKey) -> some View {
         Text(title)
@@ -522,17 +598,19 @@ struct ProfileView: View {
     private func settingsRow<Trailing: View>(
         iconSystemName: String,
         title: LocalizedStringKey,
+        titleColor: Color = AppColors.textPrimary,
+        iconColor: Color = AppColors.textSecondary,
         @ViewBuilder trailing: () -> Trailing
     ) -> some View {
         HStack(spacing: 12) {
             Image(systemName: iconSystemName)
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(AppColors.textSecondary)
+                .foregroundStyle(iconColor)
                 .frame(width: 22, alignment: .leading)
             
             Text(title)
                 .font(.system(size: 16, weight: .regular))
-                .foregroundStyle(AppColors.textPrimary)
+                .foregroundStyle(titleColor)
             
             Spacer()
             

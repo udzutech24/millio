@@ -137,9 +137,7 @@ struct MainAppView: View {
                 // Обновляем статус подписки при открытии главного экрана
                 Task {
                     await SubscriptionManager.shared.checkSubscriptionStatus()
-                    appState.subscriptionStatus = SubscriptionManager.shared.status
-                    appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
-                    appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+                    appState.applySubscriptionSnapshot(SubscriptionManager.shared.snapshot)
                 }
             }
         }

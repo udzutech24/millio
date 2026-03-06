@@ -102,9 +102,7 @@ struct millioApp: App {
                     Task { @MainActor in
                         // Обновляем статус подписки при возврате из фона
                         await SubscriptionManager.shared.checkSubscriptionStatus()
-                        appState.subscriptionStatus = SubscriptionManager.shared.status
-                        appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
-                        appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+                        appState.applySubscriptionSnapshot(SubscriptionManager.shared.snapshot)
                         CurrencyWidgetSyncService.bootstrapFromStandardDefaults()
                         await appLockCoordinator.handleDidBecomeActive(
                             appState: appState,
@@ -164,9 +162,7 @@ struct millioApp: App {
         
         Task { @MainActor in
             await SubscriptionManager.shared.checkSubscriptionStatus()
-            appState.subscriptionStatus = SubscriptionManager.shared.status
-            appState.subscriptionExpirationDate = SubscriptionManager.shared.expirationDate
-            appState.isTrialActive = SubscriptionManager.shared.isTrialActive
+            appState.applySubscriptionSnapshot(SubscriptionManager.shared.snapshot)
             CurrencyWidgetSyncService.bootstrapFromStandardDefaults()
 
             await appLockCoordinator.handleDidBecomeActive(

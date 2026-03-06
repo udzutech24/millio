@@ -958,11 +958,62 @@ extension CashflowViewModelTests {
         #expect(viewModel.recurringTemplates(for: .income, relativeTo: fixedNow).count == 1)
         #expect(viewModel.plannedOneTimeTransactions(for: .expense, relativeTo: fixedNow).count == 1)
 
-        viewModel.handle(.deleteTransaction(recurringIncome))
-        viewModel.handle(.deleteTransaction(plannedExpense))
+        viewModel.handle(.deleteTransaction(recurringIncome, recalculate: true))
+        viewModel.handle(.deleteTransaction(plannedExpense, recalculate: true))
 
         #expect(viewModel.recurringTemplates(for: .income, relativeTo: fixedNow).isEmpty)
         #expect(viewModel.plannedOneTimeTransactions(for: .expense, relativeTo: fixedNow).isEmpty)
+    }
+
+    @Test("Удаление без пересчета удаляет операцию из истории, но не трогает агрегаты до reload")
+    func testDeleteTransactionWithoutRecalculationKeepsAggregatesUntilReload() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 10)) ?? Date()
+
+        let income = CashflowTransaction(
+            transactionType: .income,
+            amount: 1_000,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: nil
+        )
+        let expense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 200,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: nil
+        )
+        modelContext.insert(income)
+        modelContext.insert(expense)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(
+            modelContext: modelContext,
+            now: { fixedNow },
+            assetsSnapshotProvider: { _, _, _ in (start: 0, end: 0) }
+        )
+
+        viewModel.handle(.loadTransactions)
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            abs(viewModel.state.totalIncome - 1_000) < 0.01
+            && abs(viewModel.state.totalExpense - 200) < 0.01
+            && viewModel.state.transactions.count == 2
+        }
+
+        viewModel.handle(.deleteTransaction(expense, recalculate: false))
+
+        #expect(viewModel.state.transactions.count == 1)
+        #expect(abs(viewModel.state.totalIncome - 1_000) < 0.01)
+        #expect(abs(viewModel.state.totalExpense - 200) < 0.01)
+
+        viewModel.handle(.loadTransactions)
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            abs(viewModel.state.totalExpense) < 0.01
+        }
+
+        #expect(abs(viewModel.state.totalExpense) < 0.01)
     }
 
     @Test("История фильтруется по диапазону дат включительно и сохраняет сортировку по дате")

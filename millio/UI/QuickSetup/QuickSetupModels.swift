@@ -20,6 +20,19 @@ enum QuickSetupStep: Int, CaseIterable, Identifiable {
             return "Безопасность"
         }
     }
+
+    var subtitle: String {
+        switch self {
+        case .localeAndCurrencies:
+            return "Выберите язык приложения и основные валюты."
+        case .expenseCategories:
+            return "Оставьте только те категории, которые нужны с первого дня."
+        case .products:
+            return "Добавьте счета и активы, если хотите увидеть их сразу в Финансах."
+        case .summary:
+            return "Выберите, как хранить данные и резервные копии."
+        }
+    }
 }
 
 enum QuickSetupProductType: String, CaseIterable, Identifiable {
@@ -64,6 +77,21 @@ enum QuickSetupProductType: String, CaseIterable, Identifiable {
         case .ticker: return "magnifyingglass"
         }
     }
+
+    var isMarketTracked: Bool {
+        self == .ticker || self == .crypto
+    }
+}
+
+struct QuickSetupProductMarketSnapshot: Hashable {
+    let symbol: String
+    let exchange: String?
+    let currencyCode: String
+    let quantity: Double
+    let purchaseUnitPrice: Double
+    let currentUnitPrice: Double?
+    let priceUpdatedAt: Date?
+    let providerRaw: String?
 }
 
 struct QuickSetupProductDraft: Identifiable, Hashable {
@@ -72,8 +100,12 @@ struct QuickSetupProductDraft: Identifiable, Hashable {
     let name: String
     let amount: Double
     let currencyCode: String
-    let symbol: String?
+    let marketSnapshot: QuickSetupProductMarketSnapshot?
     let visualIcon: String?
+
+    var symbol: String? {
+        marketSnapshot?.symbol
+    }
 
     init(
         id: UUID = UUID(),
@@ -81,7 +113,7 @@ struct QuickSetupProductDraft: Identifiable, Hashable {
         name: String,
         amount: Double,
         currencyCode: String,
-        symbol: String? = nil,
+        marketSnapshot: QuickSetupProductMarketSnapshot? = nil,
         visualIcon: String? = nil
     ) {
         self.id = id
@@ -89,7 +121,7 @@ struct QuickSetupProductDraft: Identifiable, Hashable {
         self.name = name
         self.amount = amount
         self.currencyCode = currencyCode
-        self.symbol = symbol
+        self.marketSnapshot = marketSnapshot
         self.visualIcon = visualIcon
     }
 }
