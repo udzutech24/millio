@@ -966,6 +966,60 @@ struct CloudBackupStoreTests {
         #expect(versions.first?.recordName == "snapshot_live")
         #expect(downloaded == payload)
     }
+
+    @Test("uploadBackup succeeds when backup_index cache update fails")
+    func testUploadBackupSucceedsWhenIndexCacheWriteFails() async throws {
+        let db = FakeCloudBackupDatabase()
+        db.saveErrorByRecordName["backup_index"] = CKError(.serverRecordChanged)
+
+        let store = CloudBackupStore(
+            container: FakeCloudBackupContainer(accountStatusResult: .available, database: db)
+        )
+
+        let payload = Data("payload".utf8)
+        try await store.uploadBackup(payload, isPinned: false)
+
+        let versions = try await store.listBackupVersions()
+        let downloaded = try await store.downloadLatestBackup()
+
+        #expect(versions.count == 1)
+        #expect(versions.first?.recordName.hasPrefix("snapshot_") == true)
+        #expect(downloaded == payload)
+    }
+
+    @Test("deleteBackup removes snapshot even when backup_index cache resync fails")
+    func testDeleteBackupSucceedsWhenIndexCacheResyncFails() async throws {
+        let db = FakeCloudBackupDatabase()
+        let payload = Data("payload".utf8)
+        let payloadURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("backup")
+        try payload.write(to: payloadURL)
+        defer { try? FileManager.default.removeItem(at: payloadURL) }
+
+        let snapshotRecord = CKRecord(recordType: "AppBackup", recordID: CKRecord.ID(recordName: "snapshot_delete_me"))
+        snapshotRecord["backupData"] = CKAsset(fileURL: payloadURL)
+        snapshotRecord["backupDate"] = Date(timeIntervalSince1970: 1234)
+        snapshotRecord["backupSize"] = Int64(payload.count)
+        snapshotRecord["backupVersion"] = "2.0.0"
+        snapshotRecord["isPinned"] = 0
+        db.recordsByName["snapshot_delete_me"] = snapshotRecord
+
+        db.saveErrorByRecordName["backup_index"] = CKError(.serverRecordChanged)
+
+        let store = CloudBackupStore(
+            container: FakeCloudBackupContainer(accountStatusResult: .available, database: db)
+        )
+
+        try await store.deleteBackup(recordName: "snapshot_delete_me")
+
+        let versions = try await store.listBackupVersions()
+        let downloaded = try await store.downloadLatestBackup()
+
+        #expect(versions.isEmpty)
+        #expect(downloaded == nil)
+        #expect(db.deletedRecordNames.contains("snapshot_delete_me"))
+    }
 }
 
 final class FakeCloudBackupContainer: CloudBackupContainerProtocol {
@@ -998,6 +1052,7 @@ final class FakeCloudBackupDatabase: CloudBackupDatabaseProtocol {
     var recordsByName: [String: CKRecord] = [:]
     var savedRecords: [CKRecord] = []
     var deletedRecordNames: [String] = []
+    var saveErrorByRecordName: [String: Error] = [:]
     private var persistedAssetURLs: [URL] = []
     
     func record(for recordID: CKRecord.ID) async throws -> CKRecord {
@@ -1013,6 +1068,9 @@ final class FakeCloudBackupDatabase: CloudBackupDatabaseProtocol {
     }
     
     func save(_ record: CKRecord) async throws -> CKRecord {
+        if let saveError = saveErrorByRecordName[record.recordID.recordName] {
+            throw saveError
+        }
         let persisted = try materializeRecord(record)
         lastSavedRecord = persisted
         savedRecords.append(persisted)
