@@ -111,10 +111,7 @@ final class DataRepository: DataRepositoryProtocol {
             throw AppError.backupCorrupted
         }
         
-        if metadata.schemaVersion != BackupMetadata.currentSchemaVersion {
-            throw AppError.incompatibleSchemaVersion
-        }
-        if !metadata.version.isCompatible(with: .current) {
+        if !metadata.isCompatibleWithCurrentSchema() {
             throw AppError.incompatibleSchemaVersion
         }
         if metadata.modelCount != modelsData.count {

@@ -154,6 +154,9 @@ final class FinanceBalanceAuditViewModel: ObservableObject {
     }
 
     private func reloadAsync(for date: Date) async {
+        financeViewModel.handle(.loadGroups)
+        financeViewModel.handle(.loadAccounts)
+
         let dayKey = FinanceBalanceDayKey(date: date)
         let daySnapshot = store.daySnapshot(for: dayKey)
         let liveAccounts = liveAccountsLookup()

@@ -100,8 +100,8 @@ struct BackupImportValidationTests {
         }
     }
     
-    @Test("Import fails when schemaVersion mismatch")
-    func testSchemaVersionMismatchFails() throws {
+    @Test("Import fails when schemaVersion major mismatch")
+    func testSchemaVersionMajorMismatchFails() throws {
         let payload: [String: Any] = [
             "metadata": makeMetadata(modelCount: 0, schemaVersion: "1.0"),
             "models": []
@@ -110,6 +110,21 @@ struct BackupImportValidationTests {
         #expect(throws: AppError.incompatibleSchemaVersion) {
             try DataRepository.importAllData(data, into: makeContext())
         }
+    }
+
+    @Test("Import accepts compatible schemaVersion minor and ignores app version mismatch")
+    func testCompatibleSchemaMinorIsSourceOfTruth() throws {
+        let payload: [String: Any] = [
+            "metadata": makeMetadata(
+                modelCount: 0,
+                schemaVersion: "2.5",
+                version: BackupVersion(major: 99, minor: 0, patch: 0)
+            ),
+            "models": []
+        ]
+        let data = try JSONSerialization.data(withJSONObject: payload)
+
+        try DataRepository.importAllData(data, into: makeContext())
     }
     
     @Test("Import fails when modelCount mismatch")
@@ -136,10 +151,10 @@ struct BackupImportValidationTests {
         }
     }
     
-    @Test("Import fails when backup major version mismatch")
-    func testMajorVersionMismatchFails() throws {
+    @Test("Import fails when schemaVersion cannot be parsed")
+    func testSchemaVersionParseFails() throws {
         let payload: [String: Any] = [
-            "metadata": makeMetadata(modelCount: 0, version: BackupVersion(major: 1, minor: 0, patch: 0)),
+            "metadata": makeMetadata(modelCount: 0, schemaVersion: "2"),
             "models": []
         ]
         let data = try JSONSerialization.data(withJSONObject: payload)
