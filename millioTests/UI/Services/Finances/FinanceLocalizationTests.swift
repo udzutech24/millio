@@ -40,6 +40,11 @@ struct FinanceLocalizationTests {
             "finances.audit.search.placeholder",
             "finances.audit.date_picker.title",
             "finances.chart.axis.total",
+            "finances.main.empty_intro.title",
+            "finances.main.empty_intro.description",
+            "finances.main.empty_intro.add_product",
+            "finances.main.empty_intro.open_dynamics",
+            "finances.main.empty_intro.dismiss",
         ]
 
         for key in keys {

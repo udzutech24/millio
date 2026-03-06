@@ -1801,14 +1801,12 @@ private struct FinanceDynamicsContentView: View {
                 )
                     .font(.title3.weight(.bold))
                     .foregroundStyle(AppColors.textPrimary)
-                
-                Text(
-                    viewModel.state.viewMode == .groups
-                        ? String(localized: "finances.main.empty_groups.subtitle")
-                        : String(localized: "finances.dynamics.empty.products.subtitle")
-                )
-                    .font(.subheadline)
-                    .foregroundStyle(AppColors.textSecondary)
+
+                if viewModel.state.viewMode != .groups {
+                    Text(String(localized: "finances.dynamics.empty.products.subtitle"))
+                        .font(.subheadline)
+                        .foregroundStyle(AppColors.textSecondary)
+                }
             }
         }
     }

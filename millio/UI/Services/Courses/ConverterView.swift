@@ -965,7 +965,7 @@ struct ConverterView: View {
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.6)
                         }
-                        Text(viewModel.state.inputText)
+                        Text(viewModel.formattedInputText)
                             .font(.system(size: 17, weight: .bold))
                             .monospacedDigit()
                             .minimumScaleFactor(0.6)
@@ -979,7 +979,7 @@ struct ConverterView: View {
                     }
                     .padding(.trailing, 2)
                 } else {
-                    Text(isActive ? viewModel.state.inputText : valueText)
+                    Text(isActive ? viewModel.formattedInputText : valueText)
                         .font(.system(size: isActive ? 18 : 17, weight: isActive ? .bold : .semibold))
                         .monospacedDigit()
                         .minimumScaleFactor(0.6)

@@ -14,6 +14,8 @@ struct CashflowTransactionEditorView: View {
 
     @ObservedObject var viewModel: CashflowViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppState.self) private var appState
+    @Environment(AppRouter.self) private var router
 
     let transactionType: CashflowTransactionType?
     let editingTransaction: CashflowTransaction?
@@ -50,6 +52,7 @@ struct CashflowTransactionEditorView: View {
 
     private let primarySecondaryText = Color.white.opacity(0.78)
     private let innerGlassFill = Color.white.opacity(0.022)
+    private let currentRoute: AppRoute = .cashflow
 
     init(
         viewModel: CashflowViewModel,
@@ -518,12 +521,33 @@ struct CashflowTransactionEditorView: View {
     @ViewBuilder
     private var incomeExpenseCardContent: some View {
         if cardsForCurrentSelection.isEmpty {
-            Text("No cards in selected currency")
-                .font(.system(size: 14))
-                .foregroundStyle(AppColors.textTertiary)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.vertical, 14)
-                .padding(.horizontal, 16)
+            VStack(spacing: 10) {
+                Text("No cards in selected currency")
+                    .font(.system(size: 14))
+                    .foregroundStyle(AppColors.textTertiary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+
+                Button {
+                    openFinancesAddCard()
+                } label: {
+                    Text("Add card in Finances")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(Color.white.opacity(0.08))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.vertical, 14)
+            .padding(.horizontal, 16)
         } else {
             HStack {
                 Text("Card")
@@ -760,6 +784,14 @@ struct CashflowTransactionEditorView: View {
     private func fireLightImpact() {
         let generator = UIImpactFeedbackGenerator(style: .light)
         generator.impactOccurred(intensity: 0.9)
+    }
+
+    private func openFinancesAddCard() {
+        appState.pendingOpenFinanceAddCard = true
+        dismiss()
+        DispatchQueue.main.async {
+            MiniAppNavigation.navigate(to: .finances, from: currentRoute, router: router)
+        }
     }
 
     private func fireSuccessHaptic() {

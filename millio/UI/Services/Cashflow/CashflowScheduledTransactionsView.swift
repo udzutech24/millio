@@ -305,8 +305,8 @@ struct CashflowScheduledTransactionsView: View {
 
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ru_RU")
-        formatter.dateFormat = "d MMM yyyy"
+        formatter.locale = .autoupdatingCurrent
+        formatter.setLocalizedDateFormatFromTemplate("dMMM y")
         return formatter.string(from: date)
     }
 

@@ -768,6 +768,10 @@ private struct CashbackEditorView: View {
         !appState.isPro && viewModel.state.availableCards.count > EntitlementPolicy.freeCashbackCardLimit
     }
 
+    private var isScreenshotImportLocked: Bool {
+        !EntitlementPolicy.canImportCashbackFromScreenshot(isPro: appState.isPro)
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -853,6 +857,11 @@ private struct CashbackEditorView: View {
             }
             .onChange(of: screenshotPhotoItem) { _, newValue in
                 guard let item = newValue else { return }
+                guard !isScreenshotImportLocked else {
+                    importAlertMessage = "Импорт со скриншота доступен только для Premium-подписки."
+                    screenshotPhotoItem = nil
+                    return
+                }
                 Task {
                     await importFromScreenshot(item: item)
                 }
@@ -961,31 +970,49 @@ private struct CashbackEditorView: View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: "Выбор категорий")
             HStack {
-                PhotosPicker(
-                    selection: $screenshotPhotoItem,
-                    matching: .images
-                ) {
+                if isScreenshotImportLocked {
                     HStack(spacing: 8) {
-                        if isImportingFromScreenshot {
-                            ProgressView()
-                                .tint(AppColors.textPrimary)
-                        } else {
-                            Image(systemName: "photo.badge.magnifyingglass")
-                                .font(.system(size: 16, weight: .regular))
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AppColors.textTertiary)
+                        Text("Импорт со скриншота доступен только в Premium")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(AppColors.textTertiary)
+                        Spacer()
+                        Button(String(localized: "subscription.button.subscribe")) {
+                            router.push(.subscription)
                         }
-                        Text(isImportingFromScreenshot ? "Распознаю скриншот..." : "Импорт со скриншота")
-                            .font(.system(size: 14, weight: .medium))
+                        .font(.system(size: 12, weight: .semibold))
+                        .buttonStyle(.plain)
                     }
-                    .foregroundStyle(AppColors.textPrimary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background {
-                        Capsule()
-                            .fill(CashbackScreenStyle.subduedCircleFill)
+                    .padding(.horizontal, 4)
+                } else {
+                    PhotosPicker(
+                        selection: $screenshotPhotoItem,
+                        matching: .images
+                    ) {
+                        HStack(spacing: 8) {
+                            if isImportingFromScreenshot {
+                                ProgressView()
+                                    .tint(AppColors.textPrimary)
+                            } else {
+                                Image(systemName: "photo.badge.magnifyingglass")
+                                    .font(.system(size: 16, weight: .regular))
+                            }
+                            Text(isImportingFromScreenshot ? "Распознаю скриншот..." : "Импорт со скриншота")
+                                .font(.system(size: 14, weight: .medium))
+                        }
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background {
+                            Capsule()
+                                .fill(CashbackScreenStyle.subduedCircleFill)
+                        }
                     }
+                    .buttonStyle(.plain)
+                    .disabled(isImportingFromScreenshot)
                 }
-                .buttonStyle(.plain)
-                .disabled(isImportingFromScreenshot)
                 Spacer()
             }
 
@@ -1299,6 +1326,12 @@ private struct CashbackEditorView: View {
 
     @MainActor
     private func importFromScreenshot(item: PhotosPickerItem) async {
+        guard !isScreenshotImportLocked else {
+            importAlertMessage = "Импорт со скриншота доступен только для Premium-подписки."
+            screenshotPhotoItem = nil
+            return
+        }
+
         isImportingFromScreenshot = true
         defer {
             isImportingFromScreenshot = false

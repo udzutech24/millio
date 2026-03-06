@@ -13,6 +13,7 @@ final class QuickSetupViewModel: ObservableObject {
     @Published var productSymbolInput: String = ""
     @Published var productAmountInput: String = ""
     @Published var products: [QuickSetupProductDraft] = []
+    @Published var backupPreference: QuickSetupBackupPreference
     @Published private(set) var lastAddDraftError: String?
 
     private let isProUser: Bool
@@ -24,6 +25,7 @@ final class QuickSetupViewModel: ObservableObject {
         selectedLanguage = appState.selectedLanguage
         primaryCurrencyCode = appState.primaryCurrencyCode
         favoriteCurrencyCodes = Array(SettingsManager.shared.favoriteCurrencyCodes.prefix(Self.maxFavoriteCurrencies))
+        backupPreference = appState.isBackupEnabled ? .cloudBackup : .localOnly
 
         let storedCategories = SettingsManager.shared.quickSetupExpenseCategoryIDs
         if storedCategories.isEmpty {
@@ -80,7 +82,8 @@ final class QuickSetupViewModel: ObservableObject {
             primaryCurrencyCode: normalizedPrimary,
             favoriteCurrencyCodes: Array(normalizedFavorites.prefix(Self.maxFavoriteCurrencies)),
             selectedExpenseCategoryIDs: Array(selectedExpenseCategoryIDs),
-            products: products
+            products: products,
+            backupPreference: backupPreference
         )
     }
 

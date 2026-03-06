@@ -10,6 +10,7 @@ struct QuickSetupApplier {
         applyLanguageAndCurrencies(selection)
         try applyExpenseCategories(selection.selectedExpenseCategoryIDs)
         try applyProducts(selection.products)
+        applyBackupPreference(selection.backupPreference)
 
         SettingsManager.shared.quickSetupExpenseCategoryIDs = selection.selectedExpenseCategoryIDs
         SettingsManager.shared.isQuickSetupCompleted = true
@@ -29,7 +30,8 @@ struct QuickSetupApplier {
 
     private func applyExpenseCategories(_ selectedIDs: [String]) throws {
         let baseCategories = ExpenseCategory.allCases
-        let presetsByID = Dictionary(uniqueKeysWithValues: QuickSetupExpenseCategoryPreset.all.map { ($0.id, $0) })
+        let locale = appState.selectedLanguage.locale ?? Locale.current
+        let presetsByID = Dictionary(uniqueKeysWithValues: QuickSetupExpenseCategoryPreset.all(for: locale).map { ($0.id, $0) })
         var selectedSystemRaws = Set<String>()
         var selectedCustomPresets: [QuickSetupExpenseCategoryPreset] = []
 
@@ -233,6 +235,16 @@ struct QuickSetupApplier {
         }
         if products.contains(where: { $0.type == .credit }) {
             EventBus.shared.publish(FinanceEvent.creditsUpdated)
+        }
+    }
+
+    private func applyBackupPreference(_ preference: QuickSetupBackupPreference) {
+        SettingsManager.shared.isBackupEnabled = preference.isBackupEnabled
+        appState.isBackupEnabled = preference.isBackupEnabled
+
+        if !preference.isBackupEnabled {
+            appState.isICloudAvailable = false
+            appState.lastBackupDate = nil
         }
     }
 

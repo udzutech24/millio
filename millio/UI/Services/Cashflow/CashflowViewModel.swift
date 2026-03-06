@@ -643,22 +643,37 @@ final class CashflowViewModel: ViewModelProtocol {
     }
 
     func currentPeriodHeaderTitle() -> String {
-        if state.chartPeriod == .custom {
-            let start = min(state.customStartDate, state.customEndDate)
-            let end = max(state.customStartDate, state.customEndDate)
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "ru_RU")
-            formatter.dateFormat = "d MMM yyyy"
+        Self.makePeriodHeaderTitle(
+            chartPeriod: state.chartPeriod,
+            selectedMonth: state.selectedMonth,
+            customStartDate: state.customStartDate,
+            customEndDate: state.customEndDate,
+            calendar: .current,
+            locale: .autoupdatingCurrent
+        )
+    }
+
+    static func makePeriodHeaderTitle(
+        chartPeriod: ChartPeriod,
+        selectedMonth: Date,
+        customStartDate: Date,
+        customEndDate: Date,
+        calendar: Calendar = .current,
+        locale: Locale = .autoupdatingCurrent
+    ) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+
+        if chartPeriod == .custom {
+            let start = min(customStartDate, customEndDate)
+            let end = max(customStartDate, customEndDate)
+            formatter.setLocalizedDateFormatFromTemplate("dMMM y")
             return "\(formatter.string(from: start)) — \(formatter.string(from: end))"
         }
 
-        let monthFormatter = DateFormatter()
-        monthFormatter.locale = Locale(identifier: "ru_RU")
-        let monthIndex = Calendar.current.component(.month, from: state.selectedMonth) - 1
-        let standaloneMonths = monthFormatter.standaloneMonthSymbols ?? monthFormatter.monthSymbols ?? []
-        let month = standaloneMonths.indices.contains(monthIndex) ? standaloneMonths[monthIndex].lowercased() : ""
-        let year = Calendar.current.component(.year, from: state.selectedMonth)
-        return "\(month) \(year)"
+        let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: selectedMonth)) ?? selectedMonth
+        formatter.setLocalizedDateFormatFromTemplate("LLLL y")
+        return formatter.string(from: monthStart)
     }
 
     func canMovePeriodForward() -> Bool {

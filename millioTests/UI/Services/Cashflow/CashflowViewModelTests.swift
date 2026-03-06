@@ -38,6 +38,45 @@ struct CashflowViewModelTests {
 }
 
 extension CashflowViewModelTests {
+    @Test("Заголовок месяца в Cashflow учитывает locale (en_US)")
+    func periodHeaderTitleUsesProvidedLocaleForMonthPeriod() {
+        let calendar = Calendar(identifier: .gregorian)
+        let selectedMonth = calendar.date(from: DateComponents(year: 2026, month: 1, day: 15)) ?? Date()
+
+        let title = CashflowViewModel.makePeriodHeaderTitle(
+            chartPeriod: .month,
+            selectedMonth: selectedMonth,
+            customStartDate: selectedMonth,
+            customEndDate: selectedMonth,
+            calendar: calendar,
+            locale: Locale(identifier: "en_US")
+        )
+
+        #expect(title.localizedLowercase.contains("january"))
+        #expect(title.contains("2026"))
+    }
+
+    @Test("Заголовок custom периода в Cashflow учитывает locale (en_US)")
+    func periodHeaderTitleUsesProvidedLocaleForCustomPeriod() {
+        let calendar = Calendar(identifier: .gregorian)
+        let start = calendar.date(from: DateComponents(year: 2026, month: 1, day: 5)) ?? Date()
+        let end = calendar.date(from: DateComponents(year: 2026, month: 2, day: 12)) ?? Date()
+
+        let title = CashflowViewModel.makePeriodHeaderTitle(
+            chartPeriod: .custom,
+            selectedMonth: start,
+            customStartDate: start,
+            customEndDate: end,
+            calendar: calendar,
+            locale: Locale(identifier: "en_US")
+        )
+
+        let lowercased = title.localizedLowercase
+        #expect(title.contains("—"))
+        #expect(lowercased.contains("jan"))
+        #expect(lowercased.contains("feb"))
+    }
+
     @Test("CashflowViewModel смена display валюты не меняет primary валюту профиля")
     func testSetDisplayCurrencyDoesNotChangePrimaryCurrency() throws {
         let modelContext = try createTestModelContext()

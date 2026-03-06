@@ -12,6 +12,7 @@
 2. `expenseCategories`
 - Choose expense categories to keep visible in Cashflow.
 - Non-selected system categories are hidden via `CashflowSystemCategoryOverride`.
+- Category names in quick setup are localized based on the currently selected app language.
 
 3. `products`
 - Add one or many products in a row:
@@ -21,8 +22,14 @@
   - crypto (`Investment.crypto`)
 - Every added product is attached to the ungrouped finance group.
 
-4. `summary`
-- Review and apply all settings.
+4. `summary` (security slide)
+- Explain data safety and storage model before completing setup.
+- User selects backup preference:
+  - `localOnly`: data stays local in SwiftData, backup remains disabled.
+  - `cloudBackup`: snapshots are uploaded to user's Private CloudKit database.
+- Security note on this slide clarifies backup encryption options:
+  - AES-GCM with device key (Keychain-backed key).
+  - AES-GCM with passphrase (portable mode, configured in Profile -> Backup).
 
 ## Entry Points
 - First launch: `OnboardingView` opens `QuickSetupView` in onboarding mode.

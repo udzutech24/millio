@@ -414,8 +414,16 @@ struct AppLifecycleUseCaseTests {
 
     @Test("EntitlementPolicy закрывает crypto-конвертацию в Free и открывает в PRO")
     func testConverterCryptoPolicy() {
+        #expect(EntitlementPolicy.isConverterCryptoProOnly == true)
         #expect(EntitlementPolicy.canUseConverterCrypto(isPro: false) == false)
         #expect(EntitlementPolicy.canUseConverterCrypto(isPro: true) == true)
+    }
+
+    @Test("EntitlementPolicy закрывает импорт кешбэка со скриншота в Free и открывает в PRO")
+    func testCashbackScreenshotImportPolicy() {
+        #expect(EntitlementPolicy.isCashbackScreenshotImportProOnly == true)
+        #expect(EntitlementPolicy.canImportCashbackFromScreenshot(isPro: false) == false)
+        #expect(EntitlementPolicy.canImportCashbackFromScreenshot(isPro: true) == true)
     }
 }
 

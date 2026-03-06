@@ -13,6 +13,24 @@ enum FinancesTab: String {
     case dynamics = "dynamics"
 }
 
+struct FinancesEmptyStateIntroPrefs {
+    static let hiddenKey = "finances_main_empty_intro_hidden"
+
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    func isHidden() -> Bool {
+        defaults.bool(forKey: Self.hiddenKey)
+    }
+
+    func setHidden(_ hidden: Bool) {
+        defaults.set(hidden, forKey: Self.hiddenKey)
+    }
+}
+
 @MainActor
 enum FinancesDeepLinkHandler {
     static func openAddCardIfRequested(appState: AppState, viewModel: FinanceViewModel?) {
@@ -147,7 +165,10 @@ private struct FinancesContentViewInternal: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             // Вкладка 1: Основной экран
-            FinancesMainTabView(viewModel: viewModel)
+            FinancesMainTabView(
+                viewModel: viewModel,
+                selectedTab: $selectedTab
+            )
                 .tabItem {
                     Label("finances.main.title", systemImage: "creditcard")
                 }
@@ -269,6 +290,8 @@ private struct FinancesSettingsSheet: View {
 
 private struct FinancesMainTabView: View {
     @ObservedObject var viewModel: FinanceViewModel
+    @Binding var selectedTab: FinancesTab
+    @State private var isEmptyIntroHidden: Bool = FinancesEmptyStateIntroPrefs().isHidden()
     
     var body: some View {
         mainContent
@@ -523,21 +546,7 @@ private struct FinancesMainTabView: View {
     private var groupsListSection: some View {
         VStack(spacing: 12) {
             if viewModel.state.groups.isEmpty {
-                VStack(spacing: 16) {
-                    Image(systemName: "folder.fill")
-                        .font(.system(size: 64))
-                        .foregroundStyle(AppColors.textTertiary)
-                    
-                    Text("finances.main.empty_groups.title")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                    
-                    Text("finances.main.empty_groups.subtitle")
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundStyle(AppColors.textSecondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 48)
+                emptyGroupsOnboardingState
             } else {
                 groupsListView
             }
@@ -595,6 +604,102 @@ private struct FinancesMainTabView: View {
             }
         }
         .frame(height: 10)
+    }
+
+    private var emptyGroupsOnboardingState: some View {
+        VStack(spacing: 14) {
+            HStack {
+                Spacer()
+
+                if !isEmptyIntroHidden {
+                    Button {
+                        isEmptyIntroHidden = true
+                        FinancesEmptyStateIntroPrefs().setHidden(true)
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AppColors.textSecondary)
+                            .frame(width: 24, height: 24)
+                            .background(Color.white.opacity(0.08))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(String(localized: "finances.main.empty_intro.dismiss"))
+                }
+            }
+
+            Image(systemName: "sparkles.rectangle.stack.fill")
+                .font(.system(size: 42))
+                .foregroundStyle(AppColors.textTertiary)
+
+            Text("finances.main.empty_intro.title")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(AppColors.textPrimary)
+                .multilineTextAlignment(.center)
+
+            if !isEmptyIntroHidden {
+                Text("finances.main.empty_intro.description")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(AppColors.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(2)
+            }
+
+            Button {
+                viewModel.handle(.showAddAccountSheet(nil))
+            } label: {
+                Text("finances.main.empty_intro.add_product")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: AppColors.financesGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+
+            if !isEmptyIntroHidden {
+                Button {
+                    selectedTab = .dynamics
+                } label: {
+                    Text("finances.main.empty_intro.open_dynamics")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.white.opacity(0.08))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 18)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                )
+        )
+        .padding(.top, 8)
+        .padding(.bottom, 40)
     }
 }
 

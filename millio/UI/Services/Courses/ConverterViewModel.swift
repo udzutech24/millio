@@ -183,8 +183,44 @@ final class ConverterViewModel: ViewModelProtocol {
     
     private let maxCurrencies: Int = 6
     private let maxShareHistoryItems: Int = 30
+
+    /// CoinGecko IDs для поддерживаемых криптовалют в конвертере.
+    /// Используется для догрузки crypto-курсов поверх фиатных источников.
+    private let cryptoCodeToId: [String: String] = [
+        "BTC": "bitcoin",
+        "ETH": "ethereum",
+        "USDT": "tether",
+        "USDC": "usd-coin",
+        "BNB": "binancecoin",
+        "SOL": "solana",
+        "XRP": "ripple",
+        "ADA": "cardano",
+        "DOGE": "dogecoin",
+        "TON": "toncoin",
+        "TRX": "tron",
+        "DOT": "polkadot",
+        "MATIC": "polygon",
+        "AVAX": "avalanche-2",
+        "SHIB": "shiba-inu",
+        "LTC": "litecoin",
+        "BCH": "bitcoin-cash",
+        "ATOM": "cosmos",
+        "LINK": "chainlink",
+        "XLM": "stellar",
+        "ETC": "ethereum-classic",
+        "FIL": "filecoin",
+        "NEAR": "near",
+        "HBAR": "hedera-hashgraph",
+        "APT": "aptos",
+        "OP": "optimism",
+        "ARB": "arbitrum",
+        "ICP": "internet-computer",
+        "SUI": "sui",
+        "PEPE": "pepe"
+    ]
     
     private var decSep: String { Locale.current.decimalSeparator ?? "," }
+    private var supportedCryptoCodes: Set<String> { Set(cryptoCodeToId.keys) }
     
     var currentFractionDigits: Int {
         max(0, min(8, storedFractionDigits))
@@ -453,6 +489,12 @@ final class ConverterViewModel: ViewModelProtocol {
         let amountInCode = convert(amount: input, from: state.activeCode, to: code)
         return formatPlain(amountInCode, maxFrac: currentFractionDigits)
     }
+
+    /// Форматированное значение текущего ввода для UI:
+    /// добавляет разделители тысяч, но сохраняет "живую" дробную часть как ввел пользователь.
+    var formattedInputText: String {
+        formatInputForDisplay(state.inputText)
+    }
     
     private func convert(amount: Double, from: String, to: String) -> Double {
         guard let rFrom = rateUSD(from), let rTo = rateUSD(to), rFrom > 0 else { return 0 }
@@ -490,7 +532,7 @@ final class ConverterViewModel: ViewModelProtocol {
     /// Фильтрует выбранные валюты, оставляя только те, что доступны в текущем источнике
     private func filterSelectedCurrenciesToAvailable() {
         // Получаем список доступных валют (USD всегда доступен)
-        let availableCodes = Set(state.allRates.keys).union(["USD"])
+        let availableCodes = Set(state.allRates.keys).union(["USD"]).union(supportedCryptoCodes)
         
         // Фильтруем выбранные валюты
         let filtered = state.selectedCurrencies.filter { availableCodes.contains($0) }
@@ -531,6 +573,12 @@ final class ConverterViewModel: ViewModelProtocol {
         mirrorToICloud(key: "conv_active_code", value: state.activeCode)
         persistSelected()
         state.showPicker = false
+
+        if supportedCryptoCodes.contains(code.uppercased()), state.allRates[code.uppercased()] == nil {
+            Task { [weak self] in
+                await self?.fetchRates(force: true)
+            }
+        }
     }
     
     // MARK: - Calculator Logic
@@ -713,6 +761,61 @@ final class ConverterViewModel: ViewModelProtocol {
         let normalized = s.replacingOccurrences(of: ",", with: ".").replacingOccurrences(of: " ", with: "")
         return Double(normalized)
     }
+
+    private func formatInputForDisplay(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return "0" }
+
+        let isNegative = trimmed.hasPrefix("-")
+        let signless = isNegative ? String(trimmed.dropFirst()) : trimmed
+        let separatorIndex = signless.firstIndex(where: { $0 == "," || $0 == "." })
+
+        let integerPartRaw: String
+        let fractionalPartRaw: String?
+        let hasTrailingSeparator: Bool
+
+        if let separatorIndex {
+            integerPartRaw = String(signless[..<separatorIndex])
+            let fractionStart = signless.index(after: separatorIndex)
+            fractionalPartRaw = String(signless[fractionStart...])
+            hasTrailingSeparator = fractionStart == signless.endIndex
+        } else {
+            integerPartRaw = signless
+            fractionalPartRaw = nil
+            hasTrailingSeparator = false
+        }
+
+        let safeInteger = integerPartRaw.isEmpty ? "0" : integerPartRaw
+        let groupedInteger = groupedThousands(safeInteger)
+
+        var output = isNegative ? "-\(groupedInteger)" : groupedInteger
+        if hasTrailingSeparator {
+            output += decSep
+            return output
+        }
+
+        if let fractionalPartRaw {
+            output += decSep + fractionalPartRaw
+        }
+
+        return output
+    }
+
+    private func groupedThousands(_ digits: String) -> String {
+        guard !digits.isEmpty else { return "0" }
+        guard digits.allSatisfy(\.isNumber) else { return digits }
+
+        var result: [Character] = []
+        result.reserveCapacity(digits.count + digits.count / 3)
+
+        for (idx, char) in digits.reversed().enumerated() {
+            if idx > 0 && idx % 3 == 0 {
+                result.append(" ")
+            }
+            result.append(char)
+        }
+        return String(result.reversed())
+    }
     
     private func formatPlain(_ value: Double, maxFrac: Int = 2) -> String {
         struct F {
@@ -736,19 +839,33 @@ final class ConverterViewModel: ViewModelProtocol {
     
     func fetchRates(haptic: Bool = false, force: Bool = false) async {
         if state.isFetchingRates { return }
+
+        let requiredCrypto = requiredCryptoCodes()
+        let needsCryptoBackfill = hasMissingCryptoRates(for: requiredCrypto)
         
         let now = Date().timeIntervalSince1970
-        if !force, state.allRates.count > 1, storedLastRatesTS > 0, (now - storedLastRatesTS) < 6 * 3600 {
+        if !force, state.allRates.count > 1, storedLastRatesTS > 0, (now - storedLastRatesTS) < 6 * 3600, !needsCryptoBackfill {
             return
         }
         
         state.isFetchingRates = true
         defer { state.isFetchingRates = false }
+
+        if !force, state.allRates.count > 1, storedLastRatesTS > 0, (now - storedLastRatesTS) < 6 * 3600, needsCryptoBackfill {
+            let updated = await refreshCryptoRates(requiredCodes: requiredCrypto)
+            if updated {
+                storedCachedRates = state.allRates
+                syncWidgetConverterSnapshot()
+            }
+            return
+        }
         
         do {
             let snapshot = try await rateRepository.getLatestRates(source: state.rateSource, forceRefresh: true, allowStaleOnError: false)
             state.allRates = snapshot.rates
-            storedCachedRates = snapshot.rates
+
+            _ = await refreshCryptoRates(requiredCodes: requiredCrypto)
+            storedCachedRates = state.allRates
             storedLastRatesTS = snapshot.updatedAt
             state.isOffline = false
             
@@ -890,10 +1007,13 @@ final class ConverterViewModel: ViewModelProtocol {
     // MARK: - Helpers
     
     var allAvailableCodes: [String] {
-        // Фильтруем по доступным валютам в текущем источнике
-        let availableCodes = Set(state.allRates.keys).union(["USD"])
+        // Фиат — из текущего источника. Крипта — из поддерживаемого списка.
+        let fiatCodes = Set(state.allRates.keys).union(["USD"])
         let allCodes = CurrencySelectionSupport.allCodes(includeCrypto: true)
-        return allCodes.filter { availableCodes.contains($0.uppercased()) }
+        return allCodes.filter { code in
+            let uppercased = code.uppercased()
+            return fiatCodes.contains(uppercased) || supportedCryptoCodes.contains(uppercased)
+        }
     }
     
     var filteredCodes: [String] {
@@ -977,6 +1097,64 @@ final class ConverterViewModel: ViewModelProtocol {
         
         if storedLastRatesTS > 0 {
             CurrencyWidgetSyncService.setLastRatesTimestamp(storedLastRatesTS, forSource: state.rateSource.rawValue)
+        }
+    }
+
+    private func requiredCryptoCodes() -> [String] {
+        Set((state.selectedCurrencies + [state.activeCode]).map { $0.uppercased() })
+            .filter { supportedCryptoCodes.contains($0) }
+            .sorted()
+    }
+
+    private func hasMissingCryptoRates(for codes: [String]) -> Bool {
+        codes.contains { (state.allRates[$0] ?? 0) <= 0 }
+    }
+
+    /// Догружает crypto-курсы в формате "1 USD = X CRYPTO" и мержит в текущий словарь.
+    @discardableResult
+    private func refreshCryptoRates(requiredCodes: [String]) async -> Bool {
+        let codes = requiredCodes.filter { supportedCryptoCodes.contains($0) }
+        guard !codes.isEmpty else { return false }
+
+        let ids = codes.compactMap { cryptoCodeToId[$0] }
+        guard !ids.isEmpty else { return false }
+
+        guard var components = URLComponents(string: "https://api.coingecko.com/api/v3/simple/price") else {
+            return false
+        }
+        components.queryItems = [
+            URLQueryItem(name: "ids", value: ids.joined(separator: ",")),
+            URLQueryItem(name: "vs_currencies", value: "usd")
+        ]
+        guard let url = components.url else { return false }
+
+        do {
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 10
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                return false
+            }
+
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: [String: Double]] ?? [:]
+            var updates: [String: Double] = [:]
+
+            for code in codes {
+                guard let id = cryptoCodeToId[code], let usdPrice = json[id]?["usd"], usdPrice > 0 else {
+                    continue
+                }
+                updates[code] = 1.0 / usdPrice
+            }
+
+            guard !updates.isEmpty else { return false }
+            for (code, rate) in updates {
+                state.allRates[code] = rate
+            }
+            return true
+        } catch {
+            return false
         }
     }
 }
