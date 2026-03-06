@@ -46,7 +46,7 @@ enum BackupFailureCode {
         case .randomBytesGenerationFailed:
             return "Failed to generate random bytes for backup"
         case .cloudKitOperationFailed(let detail):
-            let trimmedDetail = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmedDetail = Self.normalizedCloudKitDetail(detail)
             guard !trimmedDetail.isEmpty else {
                 return "CloudKit backup operation failed"
             }
@@ -56,5 +56,44 @@ enum BackupFailureCode {
 
     var appError: AppError {
         .backupFailed(message)
+    }
+
+    private static func normalizedCloudKitDetail(_ detail: String) -> String {
+        let trimmedDetail = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedDetail.isEmpty else {
+            return ""
+        }
+
+        let lowercaseDetail = trimmedDetail.lowercased()
+        if lowercaseDetail.contains("cannot create new type"),
+           lowercaseDetail.contains("production schema") {
+            if let recordType = missingProductionRecordType(in: trimmedDetail) {
+                return "CloudKit production schema is missing record type '\(recordType)'. Deploy the latest schema to production before using TestFlight or App Store builds."
+            }
+            return "CloudKit production schema is missing a required record type. Deploy the latest schema to production before using TestFlight or App Store builds."
+        }
+
+        if lowercaseDetail.contains("not marked queryable") {
+            return "CloudKit production schema is missing required queryable indexes for backup records. Deploy the latest schema indexes to production."
+        }
+
+        return trimmedDetail
+    }
+
+    private static func missingProductionRecordType(in detail: String) -> String? {
+        let marker = "Cannot create new type "
+        let suffix = " in production schema"
+
+        guard let markerRange = detail.range(of: marker) else {
+            return nil
+        }
+
+        let typeStart = markerRange.upperBound
+        guard let suffixRange = detail.range(of: suffix, range: typeStart..<detail.endIndex) else {
+            return nil
+        }
+
+        let recordType = detail[typeStart..<suffixRange.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
+        return recordType.isEmpty ? nil : recordType
     }
 }

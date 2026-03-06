@@ -162,6 +162,7 @@ ModelTypeRegistry.shared.registerImporter(MyModelImporter.self)
 
 - **CloudKit capability** подключается в Xcode → Target → Signing & Capabilities
 - **Container ID**: `iCloud.com.millio.app`
+- После добавления новых `CKRecord` типов или полей schema нужно вручную выкатить из CloudKit `Development` в `Production`, иначе в TestFlight/App Store backup упадет с ошибкой `Cannot create new type ... in production schema`
 - **Минимальная версия iOS**: 18.6 (см. настройки проекта)
 - **Темная тема** принудительная (Dark Mode only)
 - **Локализация** через `Localizable.xcstrings`

@@ -29,6 +29,38 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES"
       shouldAutocreateTestPlan = "YES">
+      <MacroExpansion>
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "772BE51C2F12DBED00193DE9"
+            BuildableName = "millio.app"
+            BlueprintName = "millio"
+            ReferencedContainer = "container:millio.xcodeproj">
+         </BuildableReference>
+      </MacroExpansion>
+      <Testables>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "772BE52B2F12DBEF00193DE9"
+               BuildableName = "millioTests.xctest"
+               BlueprintName = "millioTests"
+               ReferencedContainer = "container:millio.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "772BE5352F12DBEF00193DE9"
+               BuildableName = "millioUITests.xctest"
+               BlueprintName = "millioUITests"
+               ReferencedContainer = "container:millio.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+      </Testables>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"

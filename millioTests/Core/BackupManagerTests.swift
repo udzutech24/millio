@@ -987,6 +987,53 @@ struct CloudBackupStoreTests {
         #expect(downloaded == payload)
     }
 
+    @Test("uploadBackup succeeds when snapshot query is not supported but index path is available")
+    func testUploadBackupSucceedsWhenSnapshotQueryIsNotSupported() async throws {
+        let db = FakeCloudBackupDatabase()
+        db.recordsError = NSError(
+            domain: CKError.errorDomain,
+            code: CKError.invalidArguments.rawValue,
+            userInfo: [
+                NSLocalizedFailureReasonErrorKey: "Field 'recordName' is not marked queryable"
+            ]
+        )
+
+        let store = CloudBackupStore(
+            container: FakeCloudBackupContainer(accountStatusResult: .available, database: db)
+        )
+
+        let payload = Data("payload".utf8)
+        try await store.uploadBackup(payload, isPinned: false)
+
+        let versions = try await store.listBackupVersions()
+        let downloaded = try await store.downloadLatestBackup()
+
+        #expect(versions.count == 1)
+        #expect(versions.first?.recordName.hasPrefix("snapshot_") == true)
+        #expect(downloaded == payload)
+    }
+
+    @Test("uploadBackup maps missing production schema to actionable AppError")
+    func testUploadBackupMapsProductionSchemaError() async {
+        let db = FakeCloudBackupDatabase()
+        db.saveErrorByRecordName["__default__"] = NSError(
+            domain: CKError.errorDomain,
+            code: CKError.serverRejectedRequest.rawValue,
+            userInfo: [
+                NSLocalizedDescriptionKey: "Unknown error",
+                NSLocalizedFailureReasonErrorKey: "Error saving record <CKRecordID: 0x1; recordName=snapshot_1, zoneID=_defaultZone:__defaultOwner__> to server: Cannot create new type AppBackup in production schema"
+            ]
+        )
+
+        let store = CloudBackupStore(
+            container: FakeCloudBackupContainer(accountStatusResult: .available, database: db)
+        )
+
+        await #expect(throws: AppError.backupFailed("CloudKit backup operation failed: CloudKit production schema is missing record type 'AppBackup'. Deploy the latest schema to production before using TestFlight or App Store builds.")) {
+            try await store.uploadBackup(Data("payload".utf8), isPinned: false)
+        }
+    }
+
     @Test("deleteBackup removes snapshot even when backup_index cache resync fails")
     func testDeleteBackupSucceedsWhenIndexCacheResyncFails() async throws {
         let db = FakeCloudBackupDatabase()
@@ -1099,6 +1146,7 @@ final class FakeCloudBackupContainer: CloudBackupContainerProtocol {
 
 final class FakeCloudBackupDatabase: CloudBackupDatabaseProtocol {
     var errorOnFetch: Error?
+    var recordsError: Error?
     var recordToReturn: CKRecord?
     var lastSavedRecord: CKRecord?
     var recordsByName: [String: CKRecord] = [:]
@@ -1115,12 +1163,16 @@ final class FakeCloudBackupDatabase: CloudBackupDatabaseProtocol {
     }
 
     func records(recordType: String) async throws -> [CKRecord] {
+        if let recordsError { throw recordsError }
         if let errorOnFetch { throw errorOnFetch }
         return recordsByName.values.filter { $0.recordType == recordType }
     }
     
     func save(_ record: CKRecord) async throws -> CKRecord {
         if let saveError = saveErrorByRecordName[record.recordID.recordName] {
+            throw saveError
+        }
+        if let saveError = saveErrorByRecordName["__default__"] {
             throw saveError
         }
         let persisted = try materializeRecord(record)

@@ -29,6 +29,7 @@ fastlane/test_output
 
 .trae/
 .idea/
+.build/
 
 # Local secrets
 millio/Config/Secrets.local

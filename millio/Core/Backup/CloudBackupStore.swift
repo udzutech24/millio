@@ -230,39 +230,54 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         try data.write(to: tempURL)
         defer { try? FileManager.default.removeItem(at: tempURL) }
         
-        let snapshotRecordID = CKRecord.ID(recordName: makeSnapshotRecordName(on: backupDate))
-        let snapshotRecord = CKRecord(recordType: snapshotRecordType, recordID: snapshotRecordID)
-        snapshotRecord["backupData"] = CKAsset(fileURL: tempURL)
-        snapshotRecord[snapshotDateField] = backupDate
-        snapshotRecord[snapshotVersionField] = backupVersion
-        snapshotRecord[snapshotSizeField] = Int64(data.count)
-        snapshotRecord[snapshotPinnedField] = isPinned ? 1 : 0
-        _ = try await privateDB.save(snapshotRecord)
-
-        let versions = try await listSnapshotVersions(using: privateDB)
-        let staleEntries = staleSnapshotEntries(from: versions)
-
-        for stale in staleEntries {
-            do {
-                try await privateDB.deleteRecord(withID: CKRecord.ID(recordName: stale.recordName))
-            } catch {
-                logger.warning("Failed to delete stale snapshot '\(stale.recordName, privacy: .public)': \(error.localizedDescription)")
-            }
-        }
-
-        await syncIndexCacheBestEffort(using: privateDB)
-
         do {
-            try await saveLegacyLatestRecord(
-                dataSize: Int64(data.count),
-                backupDate: backupDate,
-                backupVersion: backupVersion,
-                assetURL: tempURL,
-                database: privateDB
+            let snapshotRecordID = CKRecord.ID(recordName: makeSnapshotRecordName(on: backupDate))
+            let snapshotRecord = CKRecord(recordType: snapshotRecordType, recordID: snapshotRecordID)
+            snapshotRecord["backupData"] = CKAsset(fileURL: tempURL)
+            snapshotRecord[snapshotDateField] = backupDate
+            snapshotRecord[snapshotVersionField] = backupVersion
+            snapshotRecord[snapshotSizeField] = Int64(data.count)
+            snapshotRecord[snapshotPinnedField] = isPinned ? 1 : 0
+            _ = try await privateDB.save(snapshotRecord)
+
+            let newEntry = BackupIndexEntry(
+                recordName: snapshotRecordID.recordName,
+                date: backupDate,
+                size: Int64(data.count),
+                version: backupVersion,
+                isPinned: isPinned
             )
+            let existingEntries = try await loadIndexEntries(from: privateDB)
+            let indexUpdate = mergeIndexEntries(existingEntries, appending: newEntry)
+
+            for stale in indexUpdate.staleEntries {
+                do {
+                    try await privateDB.deleteRecord(withID: CKRecord.ID(recordName: stale.recordName))
+                } catch {
+                    logger.warning("Failed to delete stale snapshot '\(stale.recordName, privacy: .public)': \(self.descriptiveCloudKitError(error), privacy: .public)")
+                }
+            }
+
+            do {
+                try await saveIndexEntries(indexUpdate.retainedEntries, to: privateDB)
+            } catch {
+                logger.warning("Failed to save backup index cache: \(self.descriptiveCloudKitError(error), privacy: .public)")
+            }
+
+            do {
+                try await saveLegacyLatestRecord(
+                    dataSize: Int64(data.count),
+                    backupDate: backupDate,
+                    backupVersion: backupVersion,
+                    assetURL: tempURL,
+                    database: privateDB
+                )
+            } catch {
+                // Legacy latest используется только как fallback/совместимость.
+                logger.warning("Failed to update legacy latest backup record: \(self.descriptiveCloudKitError(error), privacy: .public)")
+            }
         } catch {
-            // Legacy latest используется только как fallback/совместимость.
-            logger.warning("Failed to update legacy latest backup record: \(error.localizedDescription)")
+            throw mapCloudKitError(error)
         }
         
         logger.info("Backup uploaded successfully")
@@ -312,7 +327,7 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         } catch let error as CKError where error.code == .unknownItem {
             return nil
         } catch {
-            throw BackupFailureCode.cloudKitOperationFailed(error.localizedDescription).appError
+            throw mapCloudKitError(error)
         }
     }
     
@@ -358,10 +373,16 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         } catch let error as CKError where error.code == .unknownItem {
             // Запись уже отсутствует — удаляем только из индекса.
         } catch {
-            throw BackupFailureCode.cloudKitOperationFailed(error.localizedDescription).appError
+            throw mapCloudKitError(error)
         }
 
-        await syncIndexCacheBestEffort(using: privateDB)
+        do {
+            let currentEntries = try await loadIndexEntries(from: privateDB)
+            let filteredEntries = currentEntries.filter { $0.recordName != recordName }
+            try await saveIndexEntries(filteredEntries, to: privateDB)
+        } catch {
+            logger.warning("Failed to update backup index cache after delete: \(self.descriptiveCloudKitError(error), privacy: .public)")
+        }
     }
 
     private func makeSnapshotRecordName(on date: Date) -> String {
@@ -381,17 +402,36 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         } catch let error as CKError where error.code == .unknownItem {
             legacyRecord = CKRecord(recordType: snapshotRecordType, recordID: legacyLatestRecordID)
         } catch {
-            throw BackupFailureCode.cloudKitOperationFailed(error.localizedDescription).appError
+            throw mapCloudKitError(error)
         }
 
         legacyRecord["backupData"] = CKAsset(fileURL: assetURL)
         legacyRecord[snapshotDateField] = backupDate
         legacyRecord[snapshotVersionField] = backupVersion
         legacyRecord[snapshotSizeField] = dataSize
-        _ = try await database.save(legacyRecord)
+        do {
+            _ = try await database.save(legacyRecord)
+        } catch {
+            throw mapCloudKitError(error)
+        }
     }
 
     private func listSnapshotVersions(using database: CloudBackupDatabaseProtocol) async throws -> [BackupVersionInfo] {
+        let indexEntries = try await loadIndexEntries(from: database)
+        if !indexEntries.isEmpty {
+            return indexEntries
+                .map {
+                    BackupVersionInfo(
+                        recordName: $0.recordName,
+                        date: $0.date,
+                        size: $0.size,
+                        version: $0.version,
+                        isPinned: $0.isPinned
+                    )
+                }
+                .sorted { $0.date > $1.date }
+        }
+
         do {
             // Snapshot records are the source of truth. backup_index is only a best-effort cache.
             let records = try await database.records(recordType: snapshotRecordType)
@@ -402,8 +442,30 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         } catch let error as CKError where error.code == .unknownItem {
             return []
         } catch {
-            throw BackupFailureCode.cloudKitOperationFailed(error.localizedDescription).appError
+            throw mapCloudKitError(error)
         }
+    }
+
+    private func mergeIndexEntries(
+        _ existingEntries: [BackupIndexEntry],
+        appending newEntry: BackupIndexEntry
+    ) -> (retainedEntries: [BackupIndexEntry], staleEntries: [BackupIndexEntry]) {
+        let dedupedEntries = [newEntry] + existingEntries.filter { $0.recordName != newEntry.recordName }
+        let sortedEntries = dedupedEntries.sorted { $0.date > $1.date }
+
+        let pinnedEntries = sortedEntries.filter(\.isPinned)
+        let rollingEntries = sortedEntries.filter { !$0.isPinned }
+        let retainedNames = Set(
+            pinnedEntries.map(\.recordName) +
+            rollingEntries.prefix(maxSnapshots).map(\.recordName)
+        )
+
+        let retainedEntries = sortedEntries.filter { retainedNames.contains($0.recordName) }
+        let staleEntries = sortedEntries.filter {
+            !$0.isPinned && !retainedNames.contains($0.recordName)
+        }
+
+        return (retainedEntries, staleEntries)
     }
 
     private func staleSnapshotEntries(from versions: [BackupVersionInfo]) -> [BackupVersionInfo] {
@@ -432,7 +494,7 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         } catch let error as CKError where error.code == .unknownItem {
             return []
         } catch {
-            throw BackupFailureCode.cloudKitOperationFailed(error.localizedDescription).appError
+            throw mapCloudKitError(error)
         }
     }
 
@@ -443,13 +505,17 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         } catch let error as CKError where error.code == .unknownItem {
             indexRecord = CKRecord(recordType: indexRecordType, recordID: indexRecordID)
         } catch {
-            throw BackupFailureCode.cloudKitOperationFailed(error.localizedDescription).appError
+            throw mapCloudKitError(error)
         }
 
         let encoded = try JSONEncoder().encode(entries)
         indexRecord[indexEntriesField] = String(decoding: encoded, as: UTF8.self)
         indexRecord["updatedAt"] = now()
-        _ = try await database.save(indexRecord)
+        do {
+            _ = try await database.save(indexRecord)
+        } catch {
+            throw mapCloudKitError(error)
+        }
     }
 
     private func syncIndexCacheBestEffort(using database: CloudBackupDatabaseProtocol) async {
@@ -465,7 +531,7 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
             }
             try await saveIndexEntries(entries, to: database)
         } catch {
-            logger.warning("Failed to sync backup index cache: \(error.localizedDescription)")
+            logger.warning("Failed to sync backup index cache: \(self.descriptiveCloudKitError(error), privacy: .public)")
         }
     }
 
@@ -496,8 +562,31 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         } catch let error as CKError where error.code == .unknownItem {
             return nil
         } catch {
-            throw BackupFailureCode.cloudKitOperationFailed(error.localizedDescription).appError
+            throw mapCloudKitError(error)
         }
+    }
+
+    private func mapCloudKitError(_ error: Error) -> Error {
+        if let appError = error as? AppError {
+            return appError
+        }
+
+        let nsError = error as NSError
+        if nsError.domain == CKError.errorDomain || error is CKError {
+            return BackupFailureCode.cloudKitOperationFailed(descriptiveCloudKitError(error)).appError
+        }
+
+        return BackupFailureCode.cloudKitOperationFailed(error.localizedDescription).appError
+    }
+
+    private func descriptiveCloudKitError(_ error: Error) -> String {
+        let nsError = error as NSError
+        if let serverMessage = nsError.userInfo[NSLocalizedFailureReasonErrorKey] as? String,
+           !serverMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return serverMessage
+        }
+
+        return error.localizedDescription
     }
 
     private func backupInfo(from record: CKRecord) -> BackupInfo? {
