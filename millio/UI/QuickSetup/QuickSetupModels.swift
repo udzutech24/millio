@@ -116,22 +116,101 @@ struct QuickSetupExpenseCategoryPreset: Identifiable, Hashable {
     static let customPrefix = "custom:"
 
     static var all: [QuickSetupExpenseCategoryPreset] {
+        all(for: Locale.current)
+    }
+
+    static func all(for locale: Locale) -> [QuickSetupExpenseCategoryPreset] {
+        let languageCode = preferredLanguageCode(for: locale)
         var result: [QuickSetupExpenseCategoryPreset] = ExpenseCategory.allCases.map { category in
             QuickSetupExpenseCategoryPreset(
                 id: category.rawValue,
-                displayName: category.displayName,
+                displayName: localizedSystemName(for: category, languageCode: languageCode),
                 icon: category.icon,
                 systemRaw: category.rawValue
             )
         }
 
         result.append(contentsOf: [
-            QuickSetupExpenseCategoryPreset(id: "custom:travel", displayName: "Путешествия", icon: "✈️", systemRaw: nil),
-            QuickSetupExpenseCategoryPreset(id: "custom:home", displayName: "Дом", icon: "🏠", systemRaw: nil),
-            QuickSetupExpenseCategoryPreset(id: "custom:pets", displayName: "Питомцы", icon: "🐾", systemRaw: nil),
-            QuickSetupExpenseCategoryPreset(id: "custom:sport", displayName: "Спорт", icon: "🏋️", systemRaw: nil)
+            QuickSetupExpenseCategoryPreset(
+                id: "custom:travel",
+                displayName: localizedCustomName(for: "custom:travel", languageCode: languageCode),
+                icon: "✈️",
+                systemRaw: nil
+            ),
+            QuickSetupExpenseCategoryPreset(
+                id: "custom:home",
+                displayName: localizedCustomName(for: "custom:home", languageCode: languageCode),
+                icon: "🏠",
+                systemRaw: nil
+            ),
+            QuickSetupExpenseCategoryPreset(
+                id: "custom:pets",
+                displayName: localizedCustomName(for: "custom:pets", languageCode: languageCode),
+                icon: "🐾",
+                systemRaw: nil
+            ),
+            QuickSetupExpenseCategoryPreset(
+                id: "custom:sport",
+                displayName: localizedCustomName(for: "custom:sport", languageCode: languageCode),
+                icon: "🏋️",
+                systemRaw: nil
+            )
         ])
 
         return result
+    }
+
+    private static func preferredLanguageCode(for locale: Locale) -> String {
+        if #available(iOS 16.0, *),
+           let code = locale.language.languageCode?.identifier,
+           !code.isEmpty {
+            return code.lowercased()
+        }
+
+        if let code = locale.identifier
+            .split(whereSeparator: { $0 == "-" || $0 == "_" })
+            .first?
+            .lowercased() {
+            return String(code)
+        }
+
+        return "en"
+    }
+
+    private static func localizedSystemName(for category: ExpenseCategory, languageCode: String) -> String {
+        switch (category, languageCode) {
+        case (.groceries, "ru"): return "Продукты"
+        case (.cafe, "ru"): return "Кафе"
+        case (.transport, "ru"): return "Транспорт"
+        case (.shopping, "ru"): return "Покупки"
+        case (.entertainment, "ru"): return "Развлечения"
+        case (.bills, "ru"): return "Счета"
+        case (.health, "ru"): return "Здоровье"
+        case (.education, "ru"): return "Образование"
+        case (.other, "ru"): return "Другое"
+        case (.groceries, _): return "Groceries"
+        case (.cafe, _): return "Cafe"
+        case (.transport, _): return "Transport"
+        case (.shopping, _): return "Shopping"
+        case (.entertainment, _): return "Entertainment"
+        case (.bills, _): return "Bills"
+        case (.health, _): return "Health"
+        case (.education, _): return "Education"
+        case (.other, _): return "Other"
+        }
+    }
+
+    private static func localizedCustomName(for presetID: String, languageCode: String) -> String {
+        switch (presetID, languageCode) {
+        case ("custom:travel", "ru"): return "Путешествия"
+        case ("custom:home", "ru"): return "Дом"
+        case ("custom:pets", "ru"): return "Питомцы"
+        case ("custom:sport", "ru"): return "Спорт"
+        case ("custom:travel", _): return "Travel"
+        case ("custom:home", _): return "Home"
+        case ("custom:pets", _): return "Pets"
+        case ("custom:sport", _): return "Sport"
+        default: return presetID
+        }
     }
 }

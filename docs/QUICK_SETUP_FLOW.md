@@ -12,6 +12,7 @@
 2. `expenseCategories`
 - Choose expense categories to keep visible in Cashflow.
 - Non-selected system categories are hidden via `CashflowSystemCategoryOverride`.
+- Category names in quick setup are localized based on the currently selected app language.
 
 3. `products`
 - Add one or many products in a row:

@@ -29,7 +29,8 @@ struct QuickSetupApplier {
 
     private func applyExpenseCategories(_ selectedIDs: [String]) throws {
         let baseCategories = ExpenseCategory.allCases
-        let presetsByID = Dictionary(uniqueKeysWithValues: QuickSetupExpenseCategoryPreset.all.map { ($0.id, $0) })
+        let locale = appState.selectedLanguage.locale ?? Locale.current
+        let presetsByID = Dictionary(uniqueKeysWithValues: QuickSetupExpenseCategoryPreset.all(for: locale).map { ($0.id, $0) })
         var selectedSystemRaws = Set<String>()
         var selectedCustomPresets: [QuickSetupExpenseCategoryPreset] = []
 

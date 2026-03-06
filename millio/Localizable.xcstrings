@@ -6709,6 +6709,91 @@
         }
       }
     },
+    "finances.main.empty_intro.add_product" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add product"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавить продукт"
+          }
+        }
+      }
+    },
+    "finances.main.empty_intro.description" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You are in Finances: track cards, loans and investments in one place. Open Dynamics to see how balances change over time and where money grows or leaks."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вы в разделе «Финансы»: здесь собраны карты, кредиты и инвестиции в одном месте. Перейдите в «Динамику», чтобы увидеть, как меняются балансы по времени и где деньги растут или утекают."
+          }
+        }
+      }
+    },
+    "finances.main.empty_intro.dismiss" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide explanation"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скрыть объяснение"
+          }
+        }
+      }
+    },
+    "finances.main.empty_intro.open_dynamics" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Go to Dynamics"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перейти в Динамику"
+          }
+        }
+      }
+    },
+    "finances.main.empty_intro.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add product"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавить продукт"
+          }
+        }
+      }
+    },
     "finances.main.empty_groups.title" : {
       "extractionState" : "manual",
       "localizations" : {

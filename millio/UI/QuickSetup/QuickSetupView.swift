@@ -218,7 +218,7 @@ struct QuickSetupView: View {
                 .foregroundStyle(AppColors.textSecondary)
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 10)], spacing: 10) {
-                ForEach(QuickSetupExpenseCategoryPreset.all) { category in
+                ForEach(expenseCategoryPresets) { category in
                     let isSelected = viewModel.selectedExpenseCategoryIDs.contains(category.id)
                     Button {
                         withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
@@ -545,6 +545,10 @@ struct QuickSetupView: View {
     private func productSummaryText(_ product: QuickSetupProductDraft) -> String {
         let amountText = moneyText(product.amount, currencyCode: product.currencyCode)
         return String(format: String(localized: "quick_setup.product_summary_format"), product.type.title, amountText)
+    }
+
+    private var expenseCategoryPresets: [QuickSetupExpenseCategoryPreset] {
+        QuickSetupExpenseCategoryPreset.all(for: viewModel.selectedLanguage.locale ?? Locale.current)
     }
 
     private func saveSelection() {
