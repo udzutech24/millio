@@ -455,7 +455,7 @@ actor BackupManager: BackupManagerProtocol {
             return .skip(reason: .corruptedEnvelope)
         }
 
-        guard header.formatVersion == BackupEnvelopeHeader.currentFormatVersion else {
+        guard BackupEnvelopeHeader.isSupportedFormatVersion(header.formatVersion) else {
             return .skip(reason: .incompatibleEnvelopeVersion)
         }
 
@@ -546,7 +546,7 @@ actor BackupManager: BackupManagerProtocol {
             } catch {
                 throw AppError.backupCorrupted
             }
-            guard header.formatVersion == BackupEnvelopeHeader.currentFormatVersion else {
+            guard BackupEnvelopeHeader.isSupportedFormatVersion(header.formatVersion) else {
                 throw AppError.incompatibleSchemaVersion
             }
 

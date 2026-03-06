@@ -243,6 +243,41 @@ struct BackupManagerTests {
         #expect(mockDataRepository.importedData == expectedData)
     }
 
+    @Test("Restore latest falls back to older snapshot when newest snapshot fails checksum validation")
+    func testRestoreLatestFallsBackToOlderSnapshotOnChecksumMismatch() async throws {
+        let mockCloudStore = MockCloudBackupStore()
+        mockCloudStore.isAvailableResult = true
+        mockCloudStore.backupRecordNamesForRestore = ["snapshot-new", "snapshot-old"]
+
+        let header = BackupEnvelopeHeader(
+            formatVersion: BackupEnvelopeHeader.currentFormatVersion,
+            metadata: BackupMetadata(version: .current, timestamp: Date(), schemaVersion: "2.0", modelCount: 0),
+            compression: nil,
+            encryption: nil
+        )
+        var corruptedCandidate = try BackupEnvelope.pack(header: header, payload: Data("payload".utf8))
+        corruptedCandidate[corruptedCandidate.index(before: corruptedCandidate.endIndex)] ^= 0xFF
+
+        let expectedData = Data("restored-from-older-snapshot".utf8)
+        mockCloudStore.downloadDataByRecordName = [
+            "snapshot-new": corruptedCandidate,
+            "snapshot-old": expectedData
+        ]
+
+        let mockDataRepository = MockDataRepository()
+        mockDataRepository.exportData = Data("existing data".utf8)
+        let backupManager = BackupManager(
+            cloudStore: mockCloudStore,
+            dataRepository: mockDataRepository
+        )
+
+        try await backupManager.restoreLatest()
+
+        #expect(mockCloudStore.requestedRecordNames == ["snapshot-new", "snapshot-old"])
+        #expect(mockDataRepository.importCalled == true)
+        #expect(mockDataRepository.importedData == expectedData)
+    }
+
     @Test("Restore latest preflight skips unsupported compression and restores older snapshot")
     func testRestoreLatestPreflightSkipsUnsupportedCompression() async throws {
         let mockCloudStore = MockCloudBackupStore()
