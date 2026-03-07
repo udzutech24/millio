@@ -14,17 +14,20 @@ final class DIContainer {
     let modelContainer: ModelContainer
     let dataRepository: DataRepositoryProtocol
     let backupManager: BackupManagerProtocol
+    let authService: any AuthServiceProtocol
     
     init(
         appState: AppState,
         modelContainer: ModelContainer,
         dataRepository: DataRepositoryProtocol,
-        backupManager: BackupManagerProtocol
+        backupManager: BackupManagerProtocol,
+        authService: any AuthServiceProtocol
     ) {
         self.appState = appState
         self.modelContainer = modelContainer
         self.dataRepository = dataRepository
         self.backupManager = backupManager
+        self.authService = authService
     }
     
     @MainActor
@@ -50,12 +53,21 @@ final class DIContainer {
             enabled: enabledBackupManager,
             disabled: disabledBackupManager
         )
+        let authService: any AuthServiceProtocol
+        do {
+            let authConfiguration = try AuthConfiguration.live()
+            authService = AuthService(apiClient: AuthAPIClient(configuration: authConfiguration))
+        } catch {
+            AppLogger.log(.error, category: "Auth", "Failed to initialize auth service: \(error.localizedDescription)")
+            authService = UnconfiguredAuthService()
+        }
         
         return DIContainer(
             appState: appState,
             modelContainer: modelContainer,
             dataRepository: dataRepository,
-            backupManager: backupManager
+            backupManager: backupManager,
+            authService: authService
         )
     }
 }

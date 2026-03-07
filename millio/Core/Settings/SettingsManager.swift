@@ -38,18 +38,36 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
     private let quickSetupExpenseCategoryIDsKey = "quickSetupExpenseCategoryIDs"
     private let launchSplashDisplayModeKey = "launchSplashDisplayMode"
     private let lastLaunchSplashShownAtKey = "lastLaunchSplashShownAt"
+    private let guestModeEnabledKey = "guestModeEnabled"
     private static let legacyDefaultProfileDisplayNames: Set<String> = ["Гость", "Guest"]
     private let defaults: UserDefaults
 
     static var defaultProfileDisplayName: String {
-        String(
-            localized: "profile.default_guest",
-            locale: LanguageManager.shared.currentLanguage.locale ?? Locale.current
+        AppLocalization.string(
+            "profile.default_guest",
+            locale: LanguageManager.shared.currentLanguage.locale ?? Locale.current,
+            fallback: "Guest"
         )
     }
 
     static func isDefaultProfileDisplayName(_ value: String) -> Bool {
-        legacyDefaultProfileDisplayNames.contains(value.trimmingCharacters(in: .whitespacesAndNewlines))
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return false }
+
+        if legacyDefaultProfileDisplayNames.contains(normalized) {
+            return true
+        }
+
+        let localizedDefaults = Set(
+            Language.allCases.map { language in
+                AppLocalization.string(
+                    "profile.default_guest",
+                    locale: language.locale ?? Locale.current,
+                    fallback: "Guest"
+                ).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        )
+        return localizedDefaults.contains(normalized)
     }
     
     var isBackupEnabled: Bool {
@@ -230,6 +248,16 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
             defaults.set(newValue, forKey: lastLaunchSplashShownAtKey)
         }
     }
+
+    var isGuestModeEnabled: Bool {
+        get {
+            defaults.object(forKey: guestModeEnabledKey) as? Bool ?? false
+        }
+        set {
+            defaults.set(newValue, forKey: guestModeEnabledKey)
+            logger.info("Guest mode enabled: \(newValue)")
+        }
+    }
     
     static func normalizeCurrencyCodes(_ codes: [String]) -> [String] {
         var seen = Set<String>()
@@ -289,6 +317,7 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
         quickSetupExpenseCategoryIDs = []
         launchSplashDisplayMode = .always
         lastLaunchSplashShownAt = nil
+        isGuestModeEnabled = false
 
         // Модульные display-валюты и прочие временные UX-флаги.
         defaults.removeObject(forKey: "card_display_currency")

@@ -85,11 +85,14 @@ struct AppRouterTests {
 struct RootViewResolverTests {
     @Test("RootViewResolver.route корректно маппит AppLifecycleState")
     func testRouteMapping() {
-        #expect(RootViewResolver.route(for: .launching) == .launching)
-        #expect(RootViewResolver.route(for: .onboarding) == .onboarding)
-        #expect(RootViewResolver.route(for: .restoring) == .restoring)
-        #expect(RootViewResolver.route(for: .ready) == .ready)
-        #expect(RootViewResolver.route(for: .error(.iCloudUnavailable)) == .error)
+        #expect(RootViewResolver.route(for: .launching, authStatus: .signedOut, isAuthenticated: false, isGuestModeEnabled: false) == .launching)
+        #expect(RootViewResolver.route(for: .ready, authStatus: .restoring, isAuthenticated: false, isGuestModeEnabled: false) == .launching)
+        #expect(RootViewResolver.route(for: .onboarding, authStatus: .signedOut, isAuthenticated: false, isGuestModeEnabled: false) == .auth)
+        #expect(RootViewResolver.route(for: .onboarding, authStatus: .signedOut, isAuthenticated: false, isGuestModeEnabled: true) == .onboarding)
+        #expect(RootViewResolver.route(for: .onboarding, authStatus: .authenticated, isAuthenticated: true, isGuestModeEnabled: false) == .onboarding)
+        #expect(RootViewResolver.route(for: .restoring, authStatus: .authenticated, isAuthenticated: true, isGuestModeEnabled: false) == .restoring)
+        #expect(RootViewResolver.route(for: .ready, authStatus: .authenticated, isAuthenticated: true, isGuestModeEnabled: false) == .ready)
+        #expect(RootViewResolver.route(for: .error(.iCloudUnavailable), authStatus: .authenticated, isAuthenticated: true, isGuestModeEnabled: false) == .error)
     }
 }
 

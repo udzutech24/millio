@@ -2,6 +2,31 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>AUTH_BASE_URL</key>
+	<string>$(AUTH_BASE_URL)</string>
+	<key>AUTH_BASE_SCHEME</key>
+	<string>$(AUTH_BASE_SCHEME)</string>
+	<key>AUTH_BASE_HOST</key>
+	<string>$(AUTH_BASE_HOST)</string>
+	<key>AUTH_BASE_PORT</key>
+	<string>$(AUTH_BASE_PORT)</string>
+	<key>AUTH_BASE_PATH</key>
+	<string>$(AUTH_BASE_PATH)</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>localhost</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+		</dict>
+	</dict>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Use Face ID to unlock the app</string>
 	<key>TWELVE_DATA_API_KEY</key>

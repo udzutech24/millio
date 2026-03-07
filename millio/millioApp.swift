@@ -18,6 +18,7 @@ struct millioApp: App {
     @State private var diContainer: DIContainer?
     @State private var lifecycleUseCase: AppLifecycleUseCase?
     @State private var financeStartupWarmupUseCase: FinanceStartupWarmupUseCase?
+    @State private var authManager = AuthManager()
     @State private var isBiometricUnlockInProgress = false
     private let appLockCoordinator = AppLockLifecycleCoordinator()
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "App")
@@ -86,6 +87,7 @@ struct millioApp: App {
                 }
                 .preferredColorScheme(.dark)
                 .environment(appState)
+                .environment(authManager)
                 .modelContainer(container)
                 .environment(\.diContainer, diContainer)
                 .environment(\.locale, appState.selectedLanguage.locale ?? Locale.current)
@@ -113,6 +115,11 @@ struct millioApp: App {
                         )
 
                         await financeStartupWarmupUseCase?.warmupIfNeeded()
+                    }
+                }
+                .onChange(of: authManager.isAuthenticated) { _, isAuthenticated in
+                    if isAuthenticated && appState.isGuestModeEnabled {
+                        appState.isGuestModeEnabled = false
                     }
                 }
             } else {
@@ -146,6 +153,7 @@ struct millioApp: App {
             modelContainer: container
         )
         self.diContainer = container
+        authManager.configure(service: container.authService)
         self.financeStartupWarmupUseCase = FinanceStartupWarmupUseCase(
             modelContext: container.modelContainer.mainContext
         )
@@ -160,6 +168,7 @@ struct millioApp: App {
         self.lifecycleUseCase = useCase
         let initStart = DispatchTime.now()
         await useCase.initialize()
+        await authManager.restoreSession()
         logger.info("AppLifecycleUseCase.initialize finished in \(Double(DispatchTime.now().uptimeNanoseconds - initStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
         logger.info("initializeApp finished in \(Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
         

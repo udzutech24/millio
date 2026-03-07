@@ -11,6 +11,7 @@ import PhotosUI
 struct ProfileView: View {
     @Bindable var router: AppRouter
     @Environment(AppState.self) private var appState
+    @Environment(AuthManager.self) private var authManager
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var showNameEditSheet = false
     @State private var editedName = ""
@@ -42,6 +43,11 @@ struct ProfileView: View {
                     // Блок приветствия и аватарки
                     profileHeaderBlock
                         .padding(.top, 16)
+
+                    sectionHeader(ProfileAuthSection.sectionHeaderTitle)
+                    card {
+                        ProfileAuthSection()
+                    }
                     
                     sectionHeader("profile.section.general")
                     card {
@@ -91,6 +97,9 @@ struct ProfileView: View {
             // Обновляем статус подписки при открытии профиля
             await SubscriptionManager.shared.checkSubscriptionStatus()
             appState.applySubscriptionSnapshot(SubscriptionManager.shared.snapshot)
+            if authManager.isAuthenticated {
+                await authManager.reloadCurrentUser()
+            }
         }
     }
     
@@ -588,6 +597,14 @@ struct ProfileView: View {
     }
     
     private func sectionHeader(_ title: LocalizedStringKey) -> some View {
+        Text(title)
+            .font(.system(size: 12, weight: .regular))
+            .foregroundStyle(AppColors.textPrimary.opacity(0.35))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
         Text(title)
             .font(.system(size: 12, weight: .regular))
             .foregroundStyle(AppColors.textPrimary.opacity(0.35))

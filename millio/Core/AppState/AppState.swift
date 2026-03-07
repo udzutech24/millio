@@ -66,6 +66,11 @@ final class AppState {
     }
     var launchSplashDisplayMode: LaunchSplashDisplayMode = .always
     var isAppLocked: Bool = false
+    var isGuestModeEnabled: Bool = false {
+        didSet {
+            SettingsManager.shared.isGuestModeEnabled = isGuestModeEnabled
+        }
+    }
     
     // Subscription status
     var subscriptionStatus: SubscriptionStatus = .notSubscribed
@@ -96,6 +101,7 @@ final class AppState {
         self.profileDisplayName = SettingsManager.shared.profileDisplayName
         self.profileAvatarPath = SettingsManager.shared.profileAvatarFilePath
         self.isAppLocked = self.isAppLockEnabled
+        self.isGuestModeEnabled = SettingsManager.shared.isGuestModeEnabled
     }
 
     func applySubscriptionSnapshot(_ snapshot: SubscriptionSnapshot) {

@@ -9,6 +9,7 @@ import SwiftUI
 
 enum RootViewRoute: Equatable {
     case launching
+    case auth
     case onboarding
     case restoring
     case ready
@@ -17,9 +18,23 @@ enum RootViewRoute: Equatable {
 
 struct RootViewResolver: View {
     @Bindable var appState: AppState
+    @Environment(AuthManager.self) private var authManager
     @State private var router = AppRouter()
     
-    static func route(for lifecycle: AppLifecycleState) -> RootViewRoute {
+    static func route(
+        for lifecycle: AppLifecycleState,
+        authStatus: AuthManagerStatus,
+        isAuthenticated: Bool,
+        isGuestModeEnabled: Bool
+    ) -> RootViewRoute {
+        if lifecycle == .launching || authStatus == .restoring {
+            return .launching
+        }
+
+        if !isAuthenticated && !isGuestModeEnabled {
+            return .auth
+        }
+
         switch lifecycle {
         case .launching:
             return .launching
@@ -36,9 +51,16 @@ struct RootViewResolver: View {
     
     var body: some View {
         Group {
-            switch Self.route(for: appState.lifecycle) {
+            switch Self.route(
+                for: appState.lifecycle,
+                authStatus: authManager.status,
+                isAuthenticated: authManager.isAuthenticated,
+                isGuestModeEnabled: appState.isGuestModeEnabled
+            ) {
             case .launching:
                 LaunchingView()
+            case .auth:
+                AuthWelcomeView()
             case .onboarding:
                 OnboardingView(appState: appState, router: router)
             case .restoring:
