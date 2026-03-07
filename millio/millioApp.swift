@@ -71,15 +71,18 @@ struct millioApp: App {
         WindowGroup {
             if let container = sharedModelContainer {
                 ZStack {
-                    RootViewResolver(appState: appState)
-                        .zIndex(0)
+                    Group {
+                        RootViewResolver(appState: appState)
+                            .zIndex(0)
 
-                    if appState.isAppLocked && appState.lifecycle == .ready {
-                        AppLockScreenView {
-                            await unlockWithBiometricsIfEnabled()
+                        if appState.isAppLocked && appState.lifecycle == .ready {
+                            AppLockScreenView {
+                                await unlockWithBiometricsIfEnabled()
+                            }
+                            .zIndex(1)
                         }
-                        .zIndex(1)
                     }
+                    .id(appState.languageRefreshToken)
                 }
                 .preferredColorScheme(.dark)
                 .environment(appState)

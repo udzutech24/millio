@@ -84,17 +84,16 @@ struct FinanceCreateCardView: View {
                     }
             }
         }
-        .alert(String(localized: "Ограничение Free-плана"), isPresented: $showPaywallAlert) {
-            Button(String(localized: "subscription.button.subscribe")) {
+        .premiumUpsellAlert(
+            isPresented: $showPaywallAlert,
+            titleKey: "Ограничение Free-плана",
+            message: paywallMessage,
+            onSubscribe: {
                 router.push(.subscription)
                 dismiss()
-            }
-            Button(String(localized: "finances.common.cancel"), role: .cancel) {
-                dismiss()
-            }
-        } message: {
-            Text(paywallMessage)
-        }
+            },
+            onCancel: { dismiss() }
+        )
     }
 }
 
@@ -174,17 +173,16 @@ struct FinanceCreateCreditView: View {
                     }
             }
         }
-        .alert(String(localized: "Ограничение Free-плана"), isPresented: $showPaywallAlert) {
-            Button(String(localized: "subscription.button.subscribe")) {
+        .premiumUpsellAlert(
+            isPresented: $showPaywallAlert,
+            titleKey: "Ограничение Free-плана",
+            message: paywallMessage,
+            onSubscribe: {
                 router.push(.subscription)
                 dismiss()
-            }
-            Button(String(localized: "finances.common.cancel"), role: .cancel) {
-                dismiss()
-            }
-        } message: {
-            Text(paywallMessage)
-        }
+            },
+            onCancel: { dismiss() }
+        )
     }
 }
 
@@ -264,16 +262,15 @@ struct FinanceCreateInvestmentView: View {
                     }
             }
         }
-        .alert(String(localized: "Ограничение Free-плана"), isPresented: $showPaywallAlert) {
-            Button(String(localized: "subscription.button.subscribe")) {
+        .premiumUpsellAlert(
+            isPresented: $showPaywallAlert,
+            titleKey: "Ограничение Free-плана",
+            message: paywallMessage,
+            onSubscribe: {
                 router.push(.subscription)
                 dismiss()
-            }
-            Button(String(localized: "finances.common.cancel"), role: .cancel) {
-                dismiss()
-            }
-        } message: {
-            Text(paywallMessage)
-        }
+            },
+            onCancel: { dismiss() }
+        )
     }
 }

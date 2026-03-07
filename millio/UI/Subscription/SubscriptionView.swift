@@ -26,42 +26,49 @@ struct SubscriptionView: View {
         .init(icon: "chart.line.uptrend.xyaxis", titleKey: "subscription.features.finance_markets"),
         .init(icon: "chart.bar.fill", titleKey: "subscription.features.finance_charts")
     ]
-    private let heroItems: [SubscriptionHeroFeature] = [
-        .init(icon: "bitcoinsign.circle.fill", titleKey: "subscription.hero.card.crypto.title", subtitleKey: "subscription.hero.card.crypto.subtitle"),
-        .init(icon: "text.viewfinder", titleKey: "subscription.hero.card.cashback.title", subtitleKey: "subscription.hero.card.cashback.subtitle"),
-        .init(icon: "chart.xyaxis.line", titleKey: "subscription.hero.card.charts.title", subtitleKey: "subscription.hero.card.charts.subtitle")
-    ]
+
+    private var localizationLocale: Locale {
+        appState.selectedLanguage.locale ?? Locale.current
+    }
 
     var body: some View {
-        GeometryReader { geometry in
-            let topInset = geometry.safeAreaInsets.top
+        ZStack {
+            subscriptionBackground
 
-            ZStack(alignment: .top) {
-                subscriptionBackground
-
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 20) {
-                        topBar
-                        header
-                        plansCard
-                        benefitsSection
-                        controlsSection
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, max(10, topInset + 6))
-                    .padding(.bottom, 132)
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 20) {
+                    header
+                    plansCard
+                    benefitsSection
+                    controlsSection
                 }
-                .scrollBounceBehavior(.basedOnSize)
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .padding(.bottom, 24)
             }
+            .scrollBounceBehavior(.basedOnSize)
         }
-        .safeAreaInset(edge: .bottom) {
-            subscribeButton
+        .safeAreaInset(edge: .top) {
+            topBar
+                .padding(.horizontal, 20)
+                .padding(.top, 6)
+                .padding(.bottom, 8)
+                .frame(maxWidth: .infinity)
+                .background(
+                    LinearGradient(
+                        colors: [Color.black.opacity(0.55), Color.black.opacity(0.0)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .ignoresSafeArea()
+                )
         }
+        .safeAreaInset(edge: .bottom) { subscribeButton }
         .toolbar(.hidden, for: .navigationBar)
         .alert("subscription.alert.error.title", isPresented: $showError) {
             Button("OK", role: .cancel) { }
         } message: {
-            Text(errorMessage ?? String(localized: "subscription.error.unknown"))
+            Text(errorMessage ?? String(localized: "subscription.error.unknown", locale: localizationLocale))
         }
         .task {
             await loadProducts()
@@ -167,15 +174,19 @@ struct SubscriptionView: View {
                             .font(.system(size: 42, weight: .black, design: .rounded))
                             .foregroundStyle(AppColors.textPrimary)
                             .multilineTextAlignment(.center)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.72)
 
                         Text("subscription.hero.subtitle")
                             .font(.system(size: 17, weight: .medium))
                             .foregroundStyle(Color.white.opacity(0.68))
                             .multilineTextAlignment(.center)
+                            .lineLimit(3)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
+                    .frame(maxWidth: 460)
 
                     heroHighlights
-                    heroFeatureCards
                 }
                 .padding(.horizontal, 18)
                 .padding(.vertical, 22)
@@ -184,11 +195,29 @@ struct SubscriptionView: View {
     }
 
     private var heroHighlights: some View {
-        HStack(spacing: 10) {
-            subscriptionPill(icon: "crown.fill", text: String(localized: "subscription.hero.pill.value"))
-            subscriptionPill(icon: "lock.open.display", text: String(localized: "subscription.hero.pill.unlock"))
-            subscriptionPill(icon: "bolt.badge.checkmark.fill", text: String(localized: "subscription.hero.pill.smart"))
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                heroValuePill
+                heroUnlockPill
+                heroSmartPill
+            }
+
+            VStack(spacing: 10) {
+                HStack(spacing: 10) {
+                    heroValuePill
+                    heroUnlockPill
+                }
+
+                heroSmartPill
+            }
+
+            VStack(spacing: 10) {
+                heroValuePill
+                heroUnlockPill
+                heroSmartPill
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func subscriptionPill(icon: String, text: String) -> some View {
@@ -198,11 +227,11 @@ struct SubscriptionView: View {
             Text(text)
                 .font(.system(size: 11, weight: .semibold))
                 .lineLimit(1)
+                .minimumScaleFactor(0.85)
         }
         .foregroundStyle(Color.white.opacity(0.78))
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .frame(maxWidth: .infinity)
         .background(
             Capsule()
                 .fill(Color.white.opacity(0.07))
@@ -213,42 +242,16 @@ struct SubscriptionView: View {
         )
     }
 
-    private var heroFeatureCards: some View {
-        HStack(spacing: 10) {
-            ForEach(heroItems) { item in
-                VStack(alignment: .leading, spacing: 10) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(Color.white.opacity(0.08))
+    private var heroValuePill: some View {
+        subscriptionPill(icon: "crown.fill", text: String(localized: "subscription.hero.pill.value", locale: localizationLocale))
+    }
 
-                        Image(systemName: item.icon)
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(.white)
-                    }
-                    .frame(width: 42, height: 42)
+    private var heroUnlockPill: some View {
+        subscriptionPill(icon: "lock.open.display", text: String(localized: "subscription.hero.pill.unlock", locale: localizationLocale))
+    }
 
-                    Text(item.titleKey)
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
-
-                    Text(item.subtitleKey)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.62))
-                        .lineLimit(3)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(14)
-                .background(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(Color.white.opacity(0.05))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                        )
-                )
-            }
-        }
+    private var heroSmartPill: some View {
+        subscriptionPill(icon: "bolt.badge.checkmark.fill", text: String(localized: "subscription.hero.pill.smart", locale: localizationLocale))
     }
 
     private var plansCard: some View {
@@ -279,56 +282,23 @@ struct SubscriptionView: View {
         Button {
             selectedPlan = plan
         } label: {
-            HStack(spacing: 14) {
-                ZStack {
-                    Circle()
-                        .stroke(Color.white.opacity(0.35), lineWidth: 2)
-                        .frame(width: 34, height: 34)
-
-                    if selectedPlan == plan {
-                        Circle()
-                            .fill(Color(hex: "50E07C"))
-                            .frame(width: 34, height: 34)
-
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 14) {
+                    planSelectionIndicator(for: plan)
+                    planMainInfo(for: plan)
+                    Spacer(minLength: 8)
+                    planPriceInfo(for: plan)
                 }
 
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
-                        Text(plan.title)
-                            .font(.system(size: 21, weight: .bold))
-                            .foregroundStyle(.white)
-
-                        if let badge = plan.badge {
-                            Text(badge)
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(Color(hex: "4DD471"))
-                                .clipShape(Capsule())
-                        }
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .top, spacing: 14) {
+                        planSelectionIndicator(for: plan)
+                        planMainInfo(for: plan)
                     }
 
-                    Text(planSubtitle(for: plan))
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundStyle(Color.white.opacity(0.65))
-                }
-
-                Spacer(minLength: 8)
-
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(planPriceLabel(for: plan))
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(.white)
-
-                    if selectedPlan == plan {
-                        Text("subscription.plan.popular")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(Color.white.opacity(0.5))
+                    HStack {
+                        Spacer(minLength: 0)
+                        planPriceInfo(for: plan)
                     }
                 }
             }
@@ -347,6 +317,78 @@ struct SubscriptionView: View {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    private func planSelectionIndicator(for plan: SubscriptionPlan) -> some View {
+        ZStack {
+            Circle()
+                .stroke(Color.white.opacity(0.35), lineWidth: 2)
+                .frame(width: 34, height: 34)
+
+            if selectedPlan == plan {
+                Circle()
+                    .fill(Color(hex: "50E07C"))
+                    .frame(width: 34, height: 34)
+
+                Image(systemName: "checkmark")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.white)
+            }
+        }
+    }
+
+    private func planMainInfo(for plan: SubscriptionPlan) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(plan.titleKey)
+                .font(.system(size: 21, weight: .bold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+
+            planBadge(for: plan)
+        }
+    }
+
+    @ViewBuilder
+    private func planBadge(for plan: SubscriptionPlan) -> some View {
+        if let badgeKey = plan.badgeKey {
+            Text(badgeKey)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(hex: "2B5CFF"), Color(hex: "50E07C")],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                )
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(Color.white.opacity(0.25), lineWidth: 1)
+                )
+        }
+    }
+
+    private func planPriceInfo(for plan: SubscriptionPlan) -> some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            planPriceLabel(for: plan)
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            Text(plan.periodLabelKey)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.7))
+
+        }
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var benefitsSection: some View {
@@ -386,7 +428,7 @@ struct SubscriptionView: View {
     }
 
     private func benefitRow(_ benefit: SubscriptionBenefit) -> some View {
-        HStack(spacing: 14) {
+        HStack(alignment: .top, spacing: 14) {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(
                     LinearGradient(
@@ -403,8 +445,13 @@ struct SubscriptionView: View {
                 }
 
             Text(benefit.titleKey)
-                .font(.system(size: 18, weight: .semibold))
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(.white)
+                .lineLimit(2)
+                .minimumScaleFactor(0.82)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 10)
 
             Spacer()
         }
@@ -442,7 +489,7 @@ struct SubscriptionView: View {
             }
         } label: {
             VStack(spacing: 4) {
-                Text(ctaTitle)
+                ctaTitle
                     .font(.system(size: 20, weight: .bold))
                     .foregroundStyle(.white)
 
@@ -498,7 +545,7 @@ struct SubscriptionView: View {
             }
 
             if let expirationDate = appState.subscriptionExpirationDate {
-                Text("\(String(localized: "subscription.status.expires_at")): \(formatDate(expirationDate))")
+                (Text("subscription.status.expires_at") + Text(": ") + Text(verbatim: formatDate(expirationDate)))
                     .font(.system(size: 14))
                     .foregroundStyle(Color.white.opacity(0.7))
             }
@@ -539,23 +586,14 @@ struct SubscriptionView: View {
         .disabled(isLoading)
     }
 
-    private var ctaTitle: String {
+    private var ctaTitle: Text {
         let fallback = selectedPlan.fallbackTotalPrice
         let totalPrice = planTotalPrice(for: selectedPlan) ?? fallback
-        return "\(String(localized: "subscription.button.subscribe")) \(totalPrice)"
+        return Text("subscription.button.subscribe") + Text(" ") + Text(verbatim: totalPrice)
     }
 
-    private func planPriceLabel(for plan: SubscriptionPlan) -> String {
-        if let label = perMonthPriceLabel(for: plan) {
-            return label
-        }
-
-        return plan.fallbackPerMonthPrice
-    }
-
-    private func planSubtitle(for plan: SubscriptionPlan) -> String {
-        let totalPrice = planTotalPrice(for: plan) ?? plan.fallbackTotalPrice
-        return "\(plan.periodLabel) • \(totalPrice)"
+    private func planPriceLabel(for plan: SubscriptionPlan) -> Text {
+        Text(verbatim: planTotalPrice(for: plan) ?? plan.fallbackTotalPrice)
     }
 
     private func planTotalPrice(for plan: SubscriptionPlan) -> String? {
@@ -564,23 +602,6 @@ struct SubscriptionView: View {
         }
 
         return product.displayPrice
-    }
-
-    private func perMonthPriceLabel(for plan: SubscriptionPlan) -> String? {
-        guard let product = product(for: plan) else {
-            return nil
-        }
-
-        let total = NSDecimalNumber(decimal: product.price)
-        let divisor = NSDecimalNumber(value: plan.months)
-        guard divisor != .zero else {
-            return nil
-        }
-
-        let perMonth = total.dividing(by: divisor).decimalValue
-        let currencyCode = product.priceFormatStyle.currencyCode
-        let monthly = perMonth.formatted(.currency(code: currencyCode))
-        return "\(monthly)/мес"
     }
 
     private func product(for plan: SubscriptionPlan) -> Product? {
@@ -598,7 +619,7 @@ struct SubscriptionView: View {
             ]
             products = try await Product.products(for: productIds)
         } catch {
-            errorMessage = String(localized: "subscription.error.load_products")
+            errorMessage = String(localized: "subscription.error.load_products", locale: localizationLocale)
             showError = true
         }
     }
@@ -621,7 +642,7 @@ struct SubscriptionView: View {
         } catch {
             if let subscriptionError = error as? SubscriptionError,
                subscriptionError != .userCancelled {
-                errorMessage = subscriptionError.localizedDescription
+                errorMessage = subscriptionError.localizedDescription(for: localizationLocale)
                 showError = true
             }
         }
@@ -636,7 +657,7 @@ struct SubscriptionView: View {
             appState.applySubscriptionSnapshot(SubscriptionManager.shared.snapshot)
 
         } catch {
-            errorMessage = String(localized: "subscription.error.restore_purchases")
+            errorMessage = String(localized: "subscription.error.restore_purchases", locale: localizationLocale)
             showError = true
         }
     }
@@ -650,7 +671,8 @@ struct SubscriptionView: View {
             appState.applySubscriptionSnapshot(SubscriptionManager.shared.snapshot)
 
         } catch {
-            errorMessage = (error as? SubscriptionError)?.localizedDescription ?? String(localized: "subscription.error.start_trial")
+            errorMessage = (error as? SubscriptionError)?.localizedDescription(for: localizationLocale)
+                ?? String(localized: "subscription.error.start_trial", locale: localizationLocale)
             showError = true
         }
     }
@@ -670,33 +692,19 @@ enum SubscriptionPlan: CaseIterable, Identifiable {
 
     var id: Self { self }
 
-    var title: String {
+    var titleKey: LocalizedStringKey {
         switch self {
-        case .yearly: return String(localized: "subscription.plan.yearly.title")
-        case .monthly: return String(localized: "subscription.plan.monthly.title")
+        case .yearly: return "subscription.plan.yearly.title"
+        case .monthly: return "subscription.plan.monthly.title"
         }
     }
 
-    var badge: String? {
-        switch self {
-        case .yearly: return String(localized: "subscription.plan.yearly.savings")
-        case .monthly: return nil
-        }
-    }
-
-    var periodLabel: String {
+    var periodLabelKey: LocalizedStringKey {
         switch self {
         case .yearly:
-            return String(localized: "subscription.plan.yearly.period")
+            return "subscription.plan.yearly.period"
         case .monthly:
-            return String(localized: "subscription.plan.monthly.period")
-        }
-    }
-
-    var months: Int {
-        switch self {
-        case .yearly: return 12
-        case .monthly: return 1
+            return "subscription.plan.monthly.period"
         }
     }
 
@@ -707,10 +715,11 @@ enum SubscriptionPlan: CaseIterable, Identifiable {
         }
     }
 
-    var fallbackPerMonthPrice: String {
+    /// Optional badge label for emphasizing plan-specific savings.
+    var badgeKey: LocalizedStringKey? {
         switch self {
-        case .yearly: return "207,50 ₽/мес"
-        case .monthly: return "299 ₽/мес"
+        case .yearly: return "subscription.plan.yearly.savings"
+        case .monthly: return nil
         }
     }
 
@@ -725,13 +734,6 @@ enum SubscriptionPlan: CaseIterable, Identifiable {
 private struct SubscriptionBenefit {
     let icon: String
     let titleKey: LocalizedStringKey
-}
-
-private struct SubscriptionHeroFeature: Identifiable {
-    let id = UUID()
-    let icon: String
-    let titleKey: LocalizedStringKey
-    let subtitleKey: LocalizedStringKey
 }
 
 private struct PremiumStarsBackground: View {

@@ -20,7 +20,7 @@ struct SubscriptionPlanTests {
 
     @Test("Годовой план содержит бейдж скидки, месячный нет")
     func yearlyHasSavingsBadgeOnly() {
-        #expect(SubscriptionPlan.yearly.badge?.isEmpty == false)
-        #expect(SubscriptionPlan.monthly.badge == nil)
+        #expect(SubscriptionPlan.yearly.badgeKey != nil)
+        #expect(SubscriptionPlan.monthly.badgeKey == nil)
     }
 }

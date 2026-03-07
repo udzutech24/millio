@@ -140,7 +140,7 @@ enum BackupExperiencePresenter {
 
     static func restoreEmptyStateMessage(isICloudAvailable: Bool) -> String {
         if isICloudAvailable {
-            return "Мы не нашли сохраненные снимки в вашем приватном CloudKit контейнере для этого Apple ID."
+            return "Мы не нашли сохраненные копии в вашем приватном CloudKit контейнере для этого Apple ID."
         }
         return "Без доступа к iCloud Millio не сможет проверить наличие резервных копий и восстановить данные."
     }
@@ -155,7 +155,7 @@ enum BackupExperiencePresenter {
         [
             BackupReadinessItem(
                 title: "Резервное копирование включено",
-                detail: isBackupEnabled ? "Автоматический снимок будет создаваться при уходе приложения в фон." : "Включите резервное копирование, чтобы Millio начал создавать снимки.",
+                detail: isBackupEnabled ? "Автоматическая копия будет создаваться при уходе приложения в фон." : "Включите резервное копирование, чтобы Millio начал создавать копии.",
                 isComplete: isBackupEnabled
             ),
             BackupReadinessItem(
@@ -170,12 +170,12 @@ enum BackupExperiencePresenter {
             ),
             BackupReadinessItem(
                 title: "Есть актуальная копия",
-                detail: lastBackupDate != nil ? "Можно восстановить состояние из последнего облачного снимка." : "Создайте первую копию вручную, чтобы убедиться, что восстановление будет доступно.",
+                detail: lastBackupDate != nil ? "Можно восстановить состояние из последней облачной копии." : "Создайте первую копию вручную, чтобы убедиться, что восстановление будет доступно.",
                 isComplete: lastBackupDate != nil
             ),
             BackupReadinessItem(
-                title: "Сохраненные снимки",
-                detail: hasPinnedVersions ? "Есть хотя бы один закрепленный снимок, который не удаляется автоматически." : "При необходимости сохраните отдельный снимок как версию.",
+                title: "Сохраненные копии",
+                detail: hasPinnedVersions ? "Есть хотя бы одна закрепленная копия, которая не удаляется автоматически." : "При необходимости сохраните дополнительную копию как версию.",
                 isComplete: hasPinnedVersions
             )
         ]

@@ -280,56 +280,54 @@ struct ProfileView: View {
     }
     
     private var backupStatusText: String {
+        let locale = appState.selectedLanguage.locale ?? Locale.current
         if appState.isBackupEnabled {
             if let backupDate = appState.lastBackupDate {
                 return backupDate.formatted(date: .abbreviated, time: .shortened)
             }
-            return String(localized: "profile.status.enabled", locale: appState.selectedLanguage.locale ?? Locale.current)
+            return AppLocalization.string("profile.status.enabled", locale: locale)
         }
-        return String(localized: "profile.status.disabled", locale: appState.selectedLanguage.locale ?? Locale.current)
+        return AppLocalization.string("profile.status.disabled", locale: locale)
     }
 
     private var appLockStatusText: String {
         let locale = appState.selectedLanguage.locale ?? Locale.current
         return appState.isAppLockEnabled
-            ? String(localized: "profile.status.enabled", locale: locale)
-            : String(localized: "profile.status.disabled", locale: locale)
+            ? AppLocalization.string("profile.status.enabled", locale: locale)
+            : AppLocalization.string("profile.status.disabled", locale: locale)
     }
 
     private var quickSetupStatusText: String {
         let locale = appState.selectedLanguage.locale ?? Locale.current
         return SettingsManager.shared.isQuickSetupCompleted
-            ? String(localized: "profile.status.completed", locale: locale)
-            : String(localized: "profile.status.not_completed", locale: locale)
+            ? AppLocalization.string("profile.status.completed", locale: locale)
+            : AppLocalization.string("profile.status.not_completed", locale: locale)
     }
 
     private var premiumStatusLine: String {
+        let locale = appState.selectedLanguage.locale ?? Locale.current
         switch appState.subscriptionAccessSource {
         case .free:
-            return isRussianInterface ? "Текущий режим: Free" : "Current mode: Free"
+            return AppLocalization.string("profile.premium.status.free", locale: locale)
         case .trial:
-            return isRussianInterface ? "Текущий режим: Триал" : "Current mode: Trial"
+            return AppLocalization.string("profile.premium.status.trial", locale: locale)
         case .subscription:
-            return isRussianInterface ? "Текущий режим: Подписка" : "Current mode: Subscription"
+            return AppLocalization.string("profile.premium.status.subscription", locale: locale)
         case .debug:
-            return isRussianInterface ? "Текущий режим: Debug premium" : "Current mode: Debug premium"
+            return AppLocalization.string("profile.premium.status.debug", locale: locale)
         }
     }
 
     private var premiumDiagnosticsSummary: String {
         let items = EntitlementDiagnostics.items(for: appState)
         let activeCount = items.filter(\.isPremiumActive).count
-        return isRussianInterface
-            ? "\(activeCount)/\(items.count) активно"
-            : "\(activeCount)/\(items.count) active"
+        let locale = appState.selectedLanguage.locale ?? Locale.current
+        let format = AppLocalization.string("profile.premium.diagnostics.summary", locale: locale)
+        return String(format: format, locale: locale, activeCount, items.count)
     }
 
-    private var premiumDiagnosticsTitle: String {
-        isRussianInterface ? "Диагностика PRO" : "PRO diagnostics"
-    }
-
-    private var isRussianInterface: Bool {
-        (appState.selectedLanguage.locale ?? Locale.current).identifier.hasPrefix("ru")
+    private var premiumDiagnosticsTitleKey: LocalizedStringKey {
+        "profile.premium.diagnostics.title"
     }
 
     private var secondarySections: [ProfileMenuSection] {
@@ -446,15 +444,15 @@ struct ProfileView: View {
                         SettingsManager.shared.launchSplashDisplayMode = mode
                     } label: {
                         if mode == appState.launchSplashDisplayMode {
-                            Label(mode.profileTitle, systemImage: "checkmark")
+                            Label(mode.profileTitle(locale: appState.selectedLanguage.locale ?? Locale.current), systemImage: "checkmark")
                         } else {
-                            Text(mode.profileTitle)
+                            Text(mode.profileTitle(locale: appState.selectedLanguage.locale ?? Locale.current))
                         }
                     }
                 }
             } label: {
-                settingsRow(iconSystemName: "sparkles.tv", title: "Launch splash") {
-                    Text(appState.launchSplashDisplayMode.profileTitle)
+                settingsRow(iconSystemName: "sparkles.tv", title: "profile.launch_splash.title") {
+                    Text(appState.launchSplashDisplayMode.profileTitle(locale: appState.selectedLanguage.locale ?? Locale.current))
                         .foregroundStyle(AppColors.profileValueAccent)
                     chevron
                 }
@@ -466,7 +464,7 @@ struct ProfileView: View {
             NavigationLink {
                 ProfileFAQView(selectedLanguage: appState.selectedLanguage)
             } label: {
-                settingsRow(iconSystemName: "questionmark.circle", title: "FAQ") {
+                settingsRow(iconSystemName: "questionmark.circle", title: "profile.faq.title") {
                     chevron
                 }
             }
@@ -479,7 +477,7 @@ struct ProfileView: View {
             } label: {
                 settingsRow(
                     iconSystemName: "trash",
-                    title: "Smart data reset",
+                    title: "profile.smart_data_reset",
                     titleColor: AppColors.error,
                     iconColor: AppColors.error
                 ) {
@@ -566,7 +564,7 @@ struct ProfileView: View {
             NavigationLink {
                 ProfilePremiumDiagnosticsView()
             } label: {
-                settingsRow(iconSystemName: "flag", title: LocalizedStringKey(premiumDiagnosticsTitle)) {
+                settingsRow(iconSystemName: "flag", title: premiumDiagnosticsTitleKey) {
                     Text(premiumDiagnosticsSummary)
                         .foregroundStyle(AppColors.profileValueAccent)
                     chevron

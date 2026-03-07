@@ -31,25 +31,22 @@ struct ProfileFAQView: View {
                 .padding(.bottom, 40)
             }
         }
-        .navigationTitle("FAQ")
+        .navigationTitle("profile.faq.title")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
     }
 
     private var introBlock: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Basic FAQ")
+        let locale = selectedLanguage.locale ?? Locale.current
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("profile.faq.basic")
                 .font(.system(size: 34, weight: .medium, design: .serif))
                 .foregroundStyle(AppColors.textPrimary)
 
-            Text(
-                selectedLanguage == .russian
-                ? "Здесь собраны базовые ответы по работе приложения."
-                : "This FAQ provides basic answers about how the app works."
-            )
-            .font(.system(size: 17, weight: .regular))
-            .foregroundStyle(AppColors.textSecondary)
-            .italic()
+            Text(AppLocalization.string("profile.faq.subtitle", locale: locale))
+                .font(.system(size: 17, weight: .regular))
+                .foregroundStyle(AppColors.textSecondary)
+                .italic()
         }
         .padding(.leading, 16)
         .overlay(alignment: .leading) {
@@ -124,6 +121,10 @@ struct ProfileFAQView: View {
 
 struct ProfileFAQDetailView: View {
     let item: ProfileFAQItem
+    private var questionPrefix: String {
+        let locale = LanguageManager.shared.currentLanguage.locale ?? Locale.current
+        return AppLocalization.string("profile.faq.question_prefix", locale: locale)
+    }
 
     var body: some View {
         ZStack {
@@ -131,7 +132,7 @@ struct ProfileFAQDetailView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    Text("Q: \(item.question)")
+                    Text("\(questionPrefix) \(item.question)")
                         .font(.system(size: 36, weight: .medium, design: .serif))
                         .foregroundStyle(AppColors.textPrimary)
 
@@ -162,7 +163,7 @@ struct ProfileFAQDetailView: View {
                 .padding(.bottom, 40)
             }
         }
-        .navigationTitle("FAQ")
+        .navigationTitle("profile.faq.title")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
     }

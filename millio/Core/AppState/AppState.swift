@@ -16,9 +16,20 @@ final class AppState {
     var lifecycle: AppLifecycleState = .launching
     var isICloudAvailable: Bool = false
     var lastBackupDate: Date?
+    /// Forces SwiftUI to rebuild the UI tree on language change (soft restart).
+    var languageRefreshToken: UUID = UUID()
     var selectedLanguage: Language = .system {
         didSet {
+            guard selectedLanguage != oldValue else { return }
             LanguageManager.shared.setLanguage(selectedLanguage)
+            languageRefreshToken = UUID()
+            if SettingsManager.isDefaultProfileDisplayName(profileDisplayName) {
+                let localizedDefault = SettingsManager.defaultProfileDisplayName
+                if profileDisplayName != localizedDefault {
+                    profileDisplayName = localizedDefault
+                    SettingsManager.shared.profileDisplayName = localizedDefault
+                }
+            }
         }
     }
     var primaryCurrencyCode: String = "RUB" {

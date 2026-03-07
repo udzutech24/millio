@@ -29,4 +29,11 @@ struct LanguageAndSubscriptionLocalizationTests {
         #expect(error.localizedDescription(for: Locale(identifier: "en")) == "Trial has already been used")
         #expect(error.localizedDescription(for: Locale(identifier: "ru")) == "Пробный период уже использован")
     }
+
+    @Test("Subscription per-month suffix is localized for English and Russian locales")
+    func testSubscriptionPerMonthSuffixLocalization() {
+        #expect(AppLocalization.string("subscription.plan.per_month_suffix", locale: Locale(identifier: "en")) == "/mo")
+        #expect(AppLocalization.string("subscription.plan.per_month_suffix", locale: Locale(identifier: "ru")) == "/мес")
+    }
+
 }

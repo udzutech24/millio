@@ -7,8 +7,8 @@ struct ProfilePremiumDiagnosticsView: View {
         EntitlementDiagnostics.items(for: appState)
     }
 
-    private var isRussian: Bool {
-        (appState.selectedLanguage.locale ?? Locale.current).identifier.hasPrefix("ru")
+    private var locale: Locale {
+        appState.selectedLanguage.locale ?? Locale.current
     }
 
     var body: some View {
@@ -25,14 +25,14 @@ struct ProfilePremiumDiagnosticsView: View {
                 .padding(.bottom, 24)
             }
         }
-        .navigationTitle(isRussian ? "Диагностика PRO" : "PRO diagnostics")
+        .navigationTitle("profile.premium.diagnostics.title")
         .navigationBarTitleDisplayMode(.inline)
     }
 
     private var summaryCard: some View {
         card {
             VStack(alignment: .leading, spacing: 14) {
-                Text(isRussian ? "Текущий доступ" : "Current access")
+                Text("profile.premium.diagnostics.current_access")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppColors.textSecondary)
 
@@ -43,20 +43,41 @@ struct ProfilePremiumDiagnosticsView: View {
                     )
 
                     if appState.hasDebugPremiumOverride {
-                        statusBadge(title: isRussian ? "Debug override" : "Debug override", tint: AppColors.toggleOnGreen)
+                        statusBadge(
+                            title: AppLocalization.string("profile.premium.diagnostics.debug_override", locale: locale),
+                            tint: AppColors.toggleOnGreen
+                        )
                     }
 
                     Spacer()
                 }
 
-                detailRow(title: isRussian ? "Эффективный premium" : "Effective premium", value: appState.isPro ? (isRussian ? "Вкл" : "On") : (isRussian ? "Выкл" : "Off"))
-                detailRow(title: isRussian ? "Сохранённый статус" : "Stored status", value: subscriptionStatusTitle)
-                detailRow(title: isRussian ? "Триал" : "Trial", value: appState.isTrialActive ? (isRussian ? "Активен" : "Active") : (isRussian ? "Неактивен" : "Inactive"))
-                detailRow(title: isRussian ? "Триал отключен (override)" : "Trial disabled (override)", value: appState.hasTrialDisabledOverride ? (isRussian ? "Да" : "Yes") : (isRussian ? "Нет" : "No"))
+                detailRow(
+                    title: AppLocalization.string("profile.premium.diagnostics.effective_premium", locale: locale),
+                    value: appState.isPro
+                    ? AppLocalization.string("profile.premium.diagnostics.on", locale: locale)
+                    : AppLocalization.string("profile.premium.diagnostics.off", locale: locale)
+                )
+                detailRow(
+                    title: AppLocalization.string("profile.premium.diagnostics.stored_status", locale: locale),
+                    value: subscriptionStatusTitle
+                )
+                detailRow(
+                    title: AppLocalization.string("profile.premium.diagnostics.trial", locale: locale),
+                    value: appState.isTrialActive
+                    ? AppLocalization.string("profile.premium.diagnostics.active", locale: locale)
+                    : AppLocalization.string("profile.premium.diagnostics.inactive", locale: locale)
+                )
+                detailRow(
+                    title: AppLocalization.string("profile.premium.diagnostics.trial_disabled", locale: locale),
+                    value: appState.hasTrialDisabledOverride
+                    ? AppLocalization.string("profile.premium.diagnostics.yes", locale: locale)
+                    : AppLocalization.string("profile.premium.diagnostics.no", locale: locale)
+                )
 
                 if let expirationDate = appState.subscriptionExpirationDate {
                     detailRow(
-                        title: isRussian ? "Истекает" : "Expiration",
+                        title: AppLocalization.string("profile.premium.diagnostics.expiration", locale: locale),
                         value: expirationDate.formatted(date: .abbreviated, time: .omitted)
                     )
                 }
@@ -67,7 +88,7 @@ struct ProfilePremiumDiagnosticsView: View {
     private var diagnosticsCard: some View {
         card {
             VStack(alignment: .leading, spacing: 16) {
-                Text(isRussian ? "Где premium меняет поведение" : "Where premium changes behavior")
+                Text("profile.premium.diagnostics.behavior")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppColors.textSecondary)
 
@@ -91,10 +112,10 @@ struct ProfilePremiumDiagnosticsView: View {
                             )
                         }
 
-                        Text("\(isRussian ? "Free" : "Free"): \(item.freeBehavior)")
+                        Text("\(AppLocalization.string("profile.premium.diagnostics.free", locale: locale)): \(item.freeBehavior)")
                             .font(.system(size: 13, weight: .regular))
                             .foregroundStyle(AppColors.textSecondary)
-                        Text("\(isRussian ? "PRO" : "PRO"): \(item.premiumBehavior)")
+                        Text("\(AppLocalization.string("profile.premium.diagnostics.pro", locale: locale)): \(item.premiumBehavior)")
                             .font(.system(size: 13, weight: .regular))
                             .foregroundStyle(AppColors.textSecondary)
                     }
@@ -111,26 +132,26 @@ struct ProfilePremiumDiagnosticsView: View {
     private var accessSourceTitle: String {
         switch appState.subscriptionAccessSource {
         case .free:
-            return isRussian ? "Free" : "Free"
+            return AppLocalization.string("profile.premium.diagnostics.access.free", locale: locale)
         case .trial:
-            return isRussian ? "Триал" : "Trial"
+            return AppLocalization.string("profile.premium.diagnostics.access.trial", locale: locale)
         case .subscription:
-            return isRussian ? "Подписка" : "Subscription"
+            return AppLocalization.string("profile.premium.diagnostics.access.subscription", locale: locale)
         case .debug:
-            return isRussian ? "Debug premium" : "Debug premium"
+            return AppLocalization.string("profile.premium.diagnostics.access.debug", locale: locale)
         }
     }
 
     private var subscriptionStatusTitle: String {
         switch appState.subscriptionStatus {
         case .notSubscribed:
-            return isRussian ? "Нет подписки" : "Not subscribed"
+            return AppLocalization.string("profile.premium.diagnostics.status.not_subscribed", locale: locale)
         case .trial:
-            return isRussian ? "Триал" : "Trial"
+            return AppLocalization.string("profile.premium.diagnostics.status.trial", locale: locale)
         case .subscribed:
-            return isRussian ? "Подписка активна" : "Subscribed"
+            return AppLocalization.string("profile.premium.diagnostics.status.subscribed", locale: locale)
         case .expired:
-            return isRussian ? "Истекла" : "Expired"
+            return AppLocalization.string("profile.premium.diagnostics.status.expired", locale: locale)
         }
     }
 

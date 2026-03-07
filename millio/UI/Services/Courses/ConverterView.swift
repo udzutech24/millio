@@ -217,14 +217,12 @@ struct ConverterView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar { topToolbar }
-        .alert(String(localized: "Криптовалюты доступны в PRO"), isPresented: $showCryptoProAlert) {
-            Button(String(localized: "subscription.button.subscribe")) {
-                router.push(.subscription)
-            }
-            Button(String(localized: "finances.common.cancel"), role: .cancel) { }
-        } message: {
-            Text(String(localized: "Обычные валюты доступны бесплатно, криптовалюты доступны по подписке PRO."))
-        }
+        .premiumUpsellAlert(
+            isPresented: $showCryptoProAlert,
+            titleKey: "Криптовалюты доступны в PRO",
+            message: String(localized: "Обычные валюты доступны бесплатно, криптовалюты доступны по подписке PRO."),
+            onSubscribe: { router.push(.subscription) }
+        )
     }
     
     // MARK: - Split view helpers
@@ -784,7 +782,7 @@ struct ConverterView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 }
             }
-            .navigationTitle(ConverterL10n.sharePreviewTitle)
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
 #if os(iOS)
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
@@ -806,6 +804,14 @@ struct ConverterView: View {
                     Button(ConverterL10n.cancel) {
                         viewModel.handle(.hideSharePreview)
                     }
+                }
+                ToolbarItem(placement: .principal) {
+                    Text("предусмотр")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.94))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .allowsTightening(true)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(ConverterL10n.sendButton) {

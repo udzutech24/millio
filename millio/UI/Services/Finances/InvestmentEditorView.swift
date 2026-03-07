@@ -197,14 +197,12 @@ struct InvestmentEditorView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
-            .alert(String(localized: "Ограничение Free-плана"), isPresented: $showPaywallAlert) {
-                Button(String(localized: "subscription.button.subscribe")) {
-                    router.push(.subscription)
-                }
-                Button(String(localized: "finances.common.cancel"), role: .cancel) { }
-            } message: {
-                Text(paywallMessage)
-            }
+            .premiumUpsellAlert(
+                isPresented: $showPaywallAlert,
+                titleKey: "Ограничение Free-плана",
+                message: paywallMessage,
+                onSubscribe: { router.push(.subscription) }
+            )
         }
     }
     

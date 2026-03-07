@@ -13,13 +13,17 @@ enum LaunchSplashDisplayMode: String, CaseIterable {
     case disabled
 
     var profileTitle: String {
+        profileTitle(locale: Locale.current)
+    }
+
+    func profileTitle(locale: Locale) -> String {
         switch self {
         case .always:
-            return "Always"
+            return AppLocalization.string("profile.launch_splash.mode.always", locale: locale)
         case .oncePerDay:
-            return "Once per day"
+            return AppLocalization.string("profile.launch_splash.mode.once_per_day", locale: locale)
         case .disabled:
-            return "Off"
+            return AppLocalization.string("profile.launch_splash.mode.off", locale: locale)
         }
     }
 }

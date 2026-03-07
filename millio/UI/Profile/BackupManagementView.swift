@@ -455,7 +455,7 @@ struct BackupManagementView: View {
                     } label: {
                         compactActionTile(
                             icon: isBusy ? "hourglass" : "pin.fill",
-                            title: "Сохранить снимок",
+                            title: "Сохранить копию",
                             subtitle: "Не удаляется автоматически"
                         )
                     }
@@ -488,7 +488,7 @@ struct BackupManagementView: View {
                             Text("Восстановить данные")
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundStyle(AppColors.textPrimary)
-                            Text("Выберите нужный снимок и замените локальные данные.")
+                            Text("Выберите нужную копию и замените локальные данные.")
                                 .font(.system(size: 12, weight: .regular))
                                 .foregroundStyle(AppColors.textSecondary)
                         }
@@ -555,11 +555,11 @@ struct BackupManagementView: View {
 
     private var versionsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Сохраненные снимки")
+            FinancesSectionHeader(title: "Сохраненные копии")
 
             FinancesGlassCard {
                 if backupVersions.isEmpty {
-                    Text("Сохраненных снимков пока нет")
+                    Text("Сохраненных копий пока нет")
                         .font(.system(size: 14, weight: .regular))
                         .foregroundStyle(AppColors.textTertiary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -591,7 +591,7 @@ struct BackupManagementView: View {
                                 Spacer()
 
                                 if version.isPinned {
-                                    Text("Снимок")
+                                    Text("Закреплено")
                                         .font(.system(size: 11, weight: .semibold))
                                         .foregroundStyle(AppColors.textPrimary)
                                         .padding(.horizontal, 8)
