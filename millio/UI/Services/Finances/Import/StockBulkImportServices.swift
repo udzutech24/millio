@@ -226,11 +226,9 @@ struct StockBulkImportPersistenceService {
             )
 
             modelContext.insert(investment)
-            if let targetGroup {
-                let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
-                account.group = targetGroup
-                modelContext.insert(account)
-            }
+            let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+            account.group = targetGroup
+            modelContext.insert(account)
         }
 
         try modelContext.save()

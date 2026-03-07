@@ -104,17 +104,6 @@ enum EntitlementDiagnostics {
                     ? (isRussian ? "Открыто" : "Unlocked")
                     : (isRussian ? "Закрыто на Free" : "Locked for Free")
             ),
-            EntitlementDiagnosticItem(
-                id: "widget.pro",
-                title: isRussian ? "PRO-виджет" : "PRO widget",
-                location: isRussian ? "Виджет на домашнем экране -> PRO-конвертер" : "Home Screen widget -> PRO converter widget",
-                freeBehavior: isRussian ? "Показывает сообщение PRO-only." : "Shows PRO-only message.",
-                premiumBehavior: isRussian ? "Показывает полноценный виджет-конвертер." : "Shows full converter widget.",
-                isPremiumActive: appState.isPro,
-                currentState: appState.isPro
-                    ? (isRussian ? "Полный виджет" : "Full widget")
-                    : (isRussian ? "PRO-only заглушка" : "PRO-only placeholder")
-            )
         ]
     }
 }

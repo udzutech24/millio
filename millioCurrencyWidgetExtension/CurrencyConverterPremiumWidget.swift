@@ -21,7 +21,6 @@ private struct CurrencyConverterWidgetRow: Identifiable, Equatable {
 
 private struct CurrencyConverterWidgetEntry: TimelineEntry {
     let date: Date
-    let hasPremiumAccess: Bool
     let activeCode: String
     let inputText: String
     let rows: [CurrencyConverterWidgetRow]
@@ -32,7 +31,6 @@ private struct CurrencyConverterWidgetProvider: TimelineProvider {
     func placeholder(in context: Context) -> CurrencyConverterWidgetEntry {
         CurrencyConverterWidgetEntry(
             date: Date(),
-            hasPremiumAccess: true,
             activeCode: "USD",
             inputText: "1200",
             rows: [
@@ -57,20 +55,13 @@ private struct CurrencyConverterWidgetProvider: TimelineProvider {
 
     private func makeEntry(now: Date) -> CurrencyConverterWidgetEntry {
         let defaults = UserDefaults(suiteName: CurrencyWidgetShared.appGroupID) ?? .standard
-        let subscription = CurrencyWidgetShared.SubscriptionSnapshot.load(from: defaults)
         let converter = CurrencyWidgetShared.ConverterSnapshot.load(from: defaults)
-        let hasPremiumAccess = subscription.hasPremiumAccess(now: now)
-
-        let rows = hasPremiumAccess
-            ? makeRows(converter: converter)
-            : []
 
         return CurrencyConverterWidgetEntry(
             date: now,
-            hasPremiumAccess: hasPremiumAccess,
             activeCode: converter.activeCode,
             inputText: converter.inputText,
-            rows: rows,
+            rows: makeRows(converter: converter),
             lastUpdatedAt: converter.lastUpdatedAt
         )
     }
@@ -102,7 +93,7 @@ private struct CurrencyConverterWidgetProvider: TimelineProvider {
     }
 }
 
-private struct CurrencyConverterPremiumWidgetEntryView: View {
+private struct CurrencyConverterWidgetEntryView: View {
     let entry: CurrencyConverterWidgetEntry
     @Environment(\.widgetFamily) private var family
 
@@ -118,13 +109,7 @@ private struct CurrencyConverterPremiumWidgetEntryView: View {
     }
 
     var body: some View {
-        Group {
-            if entry.hasPremiumAccess {
-                premiumView
-            } else {
-                lockedView
-            }
-        }
+        premiumView
         .containerBackground(for: .widget) {
             LinearGradient(
                 colors: [Color(hex: "101828"), Color(hex: "0B1220")],
@@ -263,33 +248,14 @@ private struct CurrencyConverterPremiumWidgetEntryView: View {
 #endif
     }
 
-    private var lockedView: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Image(systemName: "lock.fill")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(Color(hex: "FDE68A"))
-
-            Text("Premium")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(.white)
-
-            Text(String(localized: "widget.converter.premium_only_message"))
-                .font(.system(size: 12, weight: .regular))
-                .foregroundStyle(Color.white.opacity(0.8))
-                .lineLimit(family == .systemSmall ? 3 : 2)
-
-            Spacer(minLength: 0)
-        }
-        .padding(12)
-    }
 }
 
-struct CurrencyConverterPremiumWidget: Widget {
+struct CurrencyConverterWidget: Widget {
     static let kind = "CurrencyConverterPremiumWidget"
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: Self.kind, provider: CurrencyConverterWidgetProvider()) { entry in
-            CurrencyConverterPremiumWidgetEntryView(entry: entry)
+            CurrencyConverterWidgetEntryView(entry: entry)
         }
         .configurationDisplayName(String(localized: "widget.converter.configuration_title"))
         .description(String(localized: "widget.converter.configuration_description"))

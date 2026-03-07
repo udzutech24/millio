@@ -35,12 +35,6 @@ enum CurrencyWidgetSyncService {
             set(defaults.object(forKey: timestampKey), forKey: timestampKey, in: sharedDefaults)
         }
 
-        set(defaults.object(forKey: CurrencyWidgetShared.Keys.subscriptionStatus), forKey: CurrencyWidgetShared.Keys.subscriptionStatus, in: sharedDefaults)
-        set(defaults.object(forKey: CurrencyWidgetShared.Keys.subscriptionExpiration), forKey: CurrencyWidgetShared.Keys.subscriptionExpiration, in: sharedDefaults)
-        set(defaults.object(forKey: CurrencyWidgetShared.Keys.subscriptionIsTrialActive), forKey: CurrencyWidgetShared.Keys.subscriptionIsTrialActive, in: sharedDefaults)
-        set(defaults.object(forKey: CurrencyWidgetShared.Keys.debugPremiumEnabled), forKey: CurrencyWidgetShared.Keys.debugPremiumEnabled, in: sharedDefaults)
-        set(defaults.object(forKey: CurrencyWidgetShared.Keys.debugSubscriptionExpiration), forKey: CurrencyWidgetShared.Keys.debugSubscriptionExpiration, in: sharedDefaults)
-
         reloadWidgetTimelines(force: true)
     }
 
@@ -68,24 +62,6 @@ enum CurrencyWidgetSyncService {
     static func setLastRatesTimestamp(_ timestamp: Double, forSource sourceRaw: String) {
         let key = CurrencyWidgetShared.Keys.lastRatesTimestamp(for: sourceRaw)
         setAny(timestamp, forKey: key)
-    }
-
-    static func syncSubscription(
-        statusRaw: String,
-        expirationDate: Date?,
-        isTrialActive: Bool,
-        debugPremiumEnabled: Bool,
-        debugPremiumExpiration: Date?
-    ) {
-        guard let sharedDefaults else { return }
-
-        set(statusRaw, forKey: CurrencyWidgetShared.Keys.subscriptionStatus, in: sharedDefaults)
-        set(expirationDate, forKey: CurrencyWidgetShared.Keys.subscriptionExpiration, in: sharedDefaults)
-        set(isTrialActive, forKey: CurrencyWidgetShared.Keys.subscriptionIsTrialActive, in: sharedDefaults)
-        set(debugPremiumEnabled, forKey: CurrencyWidgetShared.Keys.debugPremiumEnabled, in: sharedDefaults)
-        set(debugPremiumExpiration, forKey: CurrencyWidgetShared.Keys.debugSubscriptionExpiration, in: sharedDefaults)
-
-        reloadWidgetTimelines(force: true)
     }
 
     private static func setAny(_ value: Any?, forKey key: String) {

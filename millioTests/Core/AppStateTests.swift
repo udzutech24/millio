@@ -370,10 +370,12 @@ struct AppLifecycleUseCaseTests {
 
         let appState = AppState()
         appState.isBackupEnabled = false
+        let splashPrefs = FakeLaunchSplashPreferences(mode: .always, lastShownAt: nil)
 
         let useCase = AppLifecycleUseCase(
             appState: appState,
             backupManager: FakeBackupManager(),
+            splashPreferences: splashPrefs,
             minimumLaunchDuration: 0.06
         )
 

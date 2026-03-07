@@ -18,11 +18,19 @@ struct EntitlementDiagnosticsTests {
         )
 
         let items = EntitlementDiagnostics.items(for: appState)
+        let ids = items.map(\.id)
 
-        #expect(items.count == 6)
-        #expect(items.map(\.id).contains("converter.crypto"))
-        #expect(items.map(\.id).contains("finances.trackedTickers"))
-        #expect(items.map(\.id).contains("cashback.screenshot"))
+        #expect(items.count == 8)
+        #expect(ids == [
+            "converter.crypto",
+            "finances.market_assets",
+            "finances.products",
+            "finances.charts",
+            "cashflow.chart",
+            "cashback.cards",
+            "cashback.categories",
+            "cashback.screenshot"
+        ])
         #expect(items.first(where: { $0.id == "converter.crypto" })?.isPremiumActive == false)
     }
 

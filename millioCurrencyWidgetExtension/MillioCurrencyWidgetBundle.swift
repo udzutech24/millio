@@ -11,6 +11,6 @@ import WidgetKit
 @main
 struct MillioCurrencyWidgetBundle: WidgetBundle {
     var body: some Widget {
-        CurrencyConverterPremiumWidget()
+        CurrencyConverterWidget()
     }
 }

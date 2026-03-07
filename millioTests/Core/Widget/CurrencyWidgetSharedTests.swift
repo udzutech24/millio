@@ -4,33 +4,6 @@ import Testing
 
 @Suite(.serialized)
 struct CurrencyWidgetSharedTests {
-    @Test("Trial-статус дает доступ к Premium в виджете")
-    func testTrialStatusHasPremiumAccess() {
-        let suiteName = "CurrencyWidgetSharedTests-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-
-        defaults.set("trial", forKey: CurrencyWidgetShared.Keys.subscriptionStatus)
-
-        let snapshot = CurrencyWidgetShared.SubscriptionSnapshot.load(from: defaults)
-        #expect(snapshot.hasPremiumAccess(now: Date(timeIntervalSince1970: 1000)) == true)
-    }
-
-    @Test("Просроченная подписка и выключенный debug premium закрывают доступ")
-    func testExpiredSubscriptionHasNoPremiumAccess() {
-        let suiteName = "CurrencyWidgetSharedTests-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-
-        let now = Date(timeIntervalSince1970: 2_000)
-        defaults.set("subscribed", forKey: CurrencyWidgetShared.Keys.subscriptionStatus)
-        defaults.set(now.addingTimeInterval(-10), forKey: CurrencyWidgetShared.Keys.subscriptionExpiration)
-        defaults.set(false, forKey: CurrencyWidgetShared.Keys.debugPremiumEnabled)
-
-        let snapshot = CurrencyWidgetShared.SubscriptionSnapshot.load(from: defaults)
-        #expect(snapshot.hasPremiumAccess(now: now) == false)
-    }
-
     @Test("ConverterSnapshot загружает и нормализует данные для виджета")
     func testConverterSnapshotLoad() {
         let suiteName = "CurrencyWidgetSharedTests-\(UUID().uuidString)"
@@ -53,6 +26,22 @@ struct CurrencyWidgetSharedTests {
         #expect(snapshot.rates["USD"] == 1.0)
         #expect(snapshot.rates["RUB"] == 90.0)
         #expect(snapshot.lastUpdatedAt == Date(timeIntervalSince1970: 3_600.0))
+    }
+
+    @Test("ConverterSnapshot использует безопасные дефолты без настроек")
+    func testConverterSnapshotLoadUsesDefaults() {
+        let suiteName = "CurrencyWidgetSharedTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let snapshot = CurrencyWidgetShared.ConverterSnapshot.load(from: defaults)
+
+        #expect(snapshot.selectedCodes == ["RUB", "USD", "EUR", "TRY", "GBP", "KZT"])
+        #expect(snapshot.activeCode == "RUB")
+        #expect(snapshot.inputText == "1200")
+        #expect(snapshot.rateSourceRaw == "erapi")
+        #expect(snapshot.rates == ["USD": 1.0])
+        #expect(snapshot.lastUpdatedAt == nil)
     }
 
     @Test("Конвертация использует кросс-курс через USD")

@@ -16,63 +16,12 @@ enum CurrencyWidgetShared {
         static let inputText = "conv_input_text"
         static let rateSource = "conv_rate_source"
 
-        static let subscriptionStatus = "subscription_status"
-        static let subscriptionExpiration = "subscription_expiration"
-        static let subscriptionIsTrialActive = "widget_subscription_is_trial_active"
-        static let debugPremiumEnabled = "debug_premium_enabled"
-        static let debugSubscriptionExpiration = "debug_subscription_expiration"
-
         static func cachedRates(for sourceRaw: String) -> String {
             "conv_cached_rates_\(sourceRaw)"
         }
 
         static func lastRatesTimestamp(for sourceRaw: String) -> String {
             "conv_last_rates_ts_\(sourceRaw)"
-        }
-    }
-
-    struct SubscriptionSnapshot: Equatable {
-        let statusRaw: String
-        let expirationDate: Date?
-        let isTrialActive: Bool
-        let debugPremiumEnabled: Bool
-        let debugPremiumExpiration: Date?
-
-        func hasPremiumAccess(now: Date = Date()) -> Bool {
-            if debugPremiumEnabled {
-                if let debugPremiumExpiration {
-                    return debugPremiumExpiration > now
-                }
-                return true
-            }
-
-            switch statusRaw {
-            case "trial":
-                return true
-            case "subscribed":
-                if let expirationDate {
-                    return expirationDate > now
-                }
-                return true
-            default:
-                return isTrialActive
-            }
-        }
-
-        static func load(from defaults: UserDefaults) -> Self {
-            let statusRaw = defaults.string(forKey: Keys.subscriptionStatus) ?? "notSubscribed"
-            let expirationDate = defaults.object(forKey: Keys.subscriptionExpiration) as? Date
-            let isTrialActive = defaults.object(forKey: Keys.subscriptionIsTrialActive) as? Bool ?? false
-            let debugPremiumEnabled = defaults.object(forKey: Keys.debugPremiumEnabled) as? Bool ?? false
-            let debugPremiumExpiration = defaults.object(forKey: Keys.debugSubscriptionExpiration) as? Date
-
-            return SubscriptionSnapshot(
-                statusRaw: statusRaw,
-                expirationDate: expirationDate,
-                isTrialActive: isTrialActive,
-                debugPremiumEnabled: debugPremiumEnabled,
-                debugPremiumExpiration: debugPremiumExpiration
-            )
         }
     }
 

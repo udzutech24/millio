@@ -41,5 +41,5 @@
   - `millio/UI/QuickSetup/QuickSetupApplier.swift`
 - Cashback card limit and screenshot import:
   - `millio/UI/Services/Cashback/CashbackView.swift`
-- Premium widget behavior:
+- Home Screen widget is not paywalled:
   - `millioCurrencyWidgetExtension/CurrencyConverterPremiumWidget.swift`

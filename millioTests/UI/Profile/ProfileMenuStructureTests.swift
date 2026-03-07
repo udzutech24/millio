@@ -30,6 +30,6 @@ struct ProfileMenuStructureTests {
     func testSectionOrder() {
         let order = ProfileMenuStructure.sections.map(\.id)
 
-        #expect(order == [.general, .settings, .experience, .support, .about, .debug])
+        #expect(order == [.general, .settings, .experience, .support, .about, .debug, .contacts])
     }
 }

@@ -412,13 +412,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
     }
     
     private func syncWidgetSubscriptionSnapshot() {
-        CurrencyWidgetSyncService.syncSubscription(
-            statusRaw: status.rawValue,
-            expirationDate: expirationDate,
-            isTrialActive: isTrialActive,
-            debugPremiumEnabled: defaults.bool(forKey: debugPremiumKey),
-            debugPremiumExpiration: defaults.object(forKey: debugSubscriptionExpirationKey) as? Date
-        )
+        CurrencyWidgetSyncService.bootstrapFromStandardDefaults(defaults: defaults)
     }
     
     // MARK: - Product IDs
