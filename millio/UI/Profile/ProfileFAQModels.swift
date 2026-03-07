@@ -100,7 +100,7 @@ enum ProfileFAQContent {
                     question: "How can I manage or cancel my subscription?",
                     answerParagraphs: [
                         "Subscription management is handled by Apple ID settings on your device.",
-                        "In the app, open Profile and tap the Premium card to check status."
+                        "In the app, open Profile and tap the PRO card to check status."
                     ],
                     note: nil
                 )
@@ -169,7 +169,7 @@ enum ProfileFAQContent {
                     question: "Как управлять или отменить подписку?",
                     answerParagraphs: [
                         "Управление подпиской выполняется в настройках Apple ID на устройстве.",
-                        "В приложении откройте Профиль и нажмите карточку Premium, чтобы проверить статус."
+                        "В приложении откройте Профиль и нажмите карточку PRO, чтобы проверить статус."
                     ],
                     note: nil
                 )

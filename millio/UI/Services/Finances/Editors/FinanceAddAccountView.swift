@@ -65,6 +65,7 @@ struct FinanceAddAccountView: View {
     @State private var areHintsHidden: Bool = false
     @State private var showPaywallAlert = false
     @State private var paywallMessage = ""
+    @State private var groupIDsBeforeCreate: Set<String> = []
 
     private enum HintsPrefs {
         static let hiddenKey = "finance_add_account_hints_hidden"
@@ -274,7 +275,7 @@ struct FinanceAddAccountView: View {
                             .frame(maxWidth: .infinity, alignment: .center)
                         
                         Button {
-                            showCreateGroup = true
+                            presentCreateGroup()
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: "folder.badge.plus")
@@ -385,7 +386,7 @@ struct FinanceAddAccountView: View {
                 }
                 
                 Button {
-                    showCreateGroup = true
+                    presentCreateGroup()
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "folder.badge.plus")
@@ -403,6 +404,11 @@ struct FinanceAddAccountView: View {
                 .padding(.top, 4)
             }
         }
+    }
+
+    private func presentCreateGroup() {
+        groupIDsBeforeCreate = Set(viewModel.state.groups.map(\.groupUniqueID))
+        showCreateGroup = true
     }
     
     private var addAccountModeSection: some View {
@@ -685,9 +691,13 @@ struct FinanceAddAccountView: View {
             FinanceGroupEditorView(viewModel: viewModel)
                 .onDisappear {
                     viewModel.handle(.loadGroups)
-                    if let newGroup = viewModel.state.groups.last {
-                        selectedGroupID = newGroup.groupUniqueID
+                    if let createdGroup = FinanceGroupCreationDetector.detectCreatedGroup(
+                        previousGroupIDs: groupIDsBeforeCreate,
+                        groups: viewModel.state.groups
+                    ) {
+                        selectedGroupID = createdGroup.groupUniqueID
                     }
+                    groupIDsBeforeCreate = []
                 }
         }
         .toolbar {
@@ -786,7 +796,15 @@ struct FinanceAddAccountView: View {
                 .onChange(of: selectedAccountType) { _, _ in
                     focusNameFieldIfNeeded()
                 }
-                .onChange(of: selectedInvestmentCategory) { _, _ in
+                .onChange(of: selectedInvestmentCategory) { _, newValue in
+                    if newValue == .stocks || newValue == .crypto {
+                        if !canUseMarketCategory(newValue) {
+                            paywallMessage = marketCategoryPaywallMessage(for: newValue)
+                            showPaywallAlert = true
+                            selectedInvestmentCategory = .other
+                            return
+                        }
+                    }
                     if isTickerDrivenName {
                         let selectedSymbol = investmentData?.marketData?.symbol?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                         if selectedSymbol.isEmpty {
@@ -889,7 +907,9 @@ struct FinanceAddAccountView: View {
         if targetGroup == nil {
             hints.append(ValidationHint(text: String(localized: "finances.add_account.hint.recommended_group"), kind: .recommended))
         }
-        if selectedAccountType == .investment && selectedInvestmentCategory.isMarketTickerCategory {
+        if selectedAccountType == .investment,
+           selectedInvestmentCategory.isMarketTickerCategory,
+           canUseMarketCategory(selectedInvestmentCategory) {
             let remaining = max(0, EntitlementPolicy.freeTrackedTickerLimit - currentTrackedTickerCount)
             if !appState.isPro {
                 hints.append(
@@ -977,6 +997,12 @@ struct FinanceAddAccountView: View {
         }
     }
 
+    private var currentFinanceProductCount: Int {
+        viewModel.state.availableCards.count
+        + viewModel.state.availableCredits.count
+        + viewModel.state.availableInvestments.count
+    }
+
     private var isCreatingNewTrackedTicker: Bool {
         guard selectedAccountType == .investment else { return false }
         guard selectedInvestmentCategory.isMarketTickerCategory else { return false }
@@ -988,6 +1014,29 @@ struct FinanceAddAccountView: View {
     }
 
     private func validateEntitlementsForSave() -> Bool {
+        if addAccountMode == .create {
+            let canAddProduct = EntitlementPolicy.canAddFinanceProduct(
+                isPro: appState.isPro,
+                currentProducts: currentFinanceProductCount
+            )
+            guard canAddProduct else {
+                paywallMessage = String(
+                    format: String(localized: "monetization.finance.products.limit.hard_format"),
+                    EntitlementPolicy.freeFinanceProductLimit
+                )
+                showPaywallAlert = true
+                return false
+            }
+        }
+
+        if selectedAccountType == .investment,
+           selectedInvestmentCategory == .stocks || selectedInvestmentCategory == .crypto,
+           !canUseMarketCategory(selectedInvestmentCategory) {
+            paywallMessage = marketCategoryPaywallMessage(for: selectedInvestmentCategory)
+            showPaywallAlert = true
+            return false
+        }
+
         guard isCreatingNewTrackedTicker else { return true }
 
         let canAdd = EntitlementPolicy.canAddTrackedTicker(
@@ -1003,6 +1052,28 @@ struct FinanceAddAccountView: View {
             return false
         }
         return true
+    }
+
+    private func canUseMarketCategory(_ category: InvestmentCategory) -> Bool {
+        switch category {
+        case .stocks:
+            return EntitlementPolicy.canUseFinanceStocks(isPro: appState.isPro)
+        case .crypto:
+            return EntitlementPolicy.canUseFinanceCrypto(isPro: appState.isPro)
+        default:
+            return true
+        }
+    }
+
+    private func marketCategoryPaywallMessage(for category: InvestmentCategory) -> String {
+        switch category {
+        case .stocks:
+            return String(localized: "monetization.finance.stocks.pro_only")
+        case .crypto:
+            return String(localized: "monetization.finance.crypto.pro_only")
+        default:
+            return String(localized: "monetization.finance.market_assets.pro_only")
+        }
     }
     private func createCardAndAddToGroup(cardViewModel: CardViewModel, group: FinanceGroup?) {
         guard let cardData = cardData else { return }

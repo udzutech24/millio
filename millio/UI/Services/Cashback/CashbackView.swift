@@ -735,6 +735,8 @@ private struct CashbackEditorView: View {
     @State private var isImportingFromScreenshot: Bool = false
     @State private var importAlertMessage: String?
     @State private var isImportAlertPremiumLocked: Bool = false
+    @State private var showPaywallAlert: Bool = false
+    @State private var paywallMessage: String = ""
     private let screenshotParser = CashbackScreenshotParser()
 
     private var filteredCategories: [CashbackCategoryOption] {
@@ -877,7 +879,7 @@ private struct CashbackEditorView: View {
                 guard let item = newValue else { return }
                 guard !isScreenshotImportLocked else {
                     isImportAlertPremiumLocked = true
-                    importAlertMessage = "Импорт со скриншота доступен только для Premium-подписки."
+                    importAlertMessage = String(localized: "cashback.import.screenshot.pro_only")
                     screenshotPhotoItem = nil
                     return
                 }
@@ -885,7 +887,7 @@ private struct CashbackEditorView: View {
                     await importFromScreenshot(item: item)
                 }
             }
-            .alert("Импорт из скриншота", isPresented: isShowingImportAlert) {
+            .alert(String(localized: "Импорт со скриншота"), isPresented: isShowingImportAlert) {
                 if isImportAlertPremiumLocked {
                     Button(String(localized: "subscription.button.subscribe")) {
                         router.push(.subscription)
@@ -897,6 +899,14 @@ private struct CashbackEditorView: View {
                 }
             } message: {
                 Text(importAlertMessage ?? "")
+            }
+            .alert(String(localized: "Ограничение Free-плана"), isPresented: $showPaywallAlert) {
+                Button(String(localized: "subscription.button.subscribe")) {
+                    router.push(.subscription)
+                }
+                Button(String(localized: "finances.common.cancel"), role: .cancel) { }
+            } message: {
+                Text(paywallMessage)
             }
         }
     }
@@ -1000,7 +1010,7 @@ private struct CashbackEditorView: View {
                         Image(systemName: "lock.fill")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(AppColors.textTertiary)
-                        Text("Импорт со скриншота доступен только в Premium")
+                        Text("cashback.import.screenshot.pro_only")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(AppColors.textTertiary)
                         Spacer()
@@ -1024,7 +1034,7 @@ private struct CashbackEditorView: View {
                                 Image(systemName: "photo.badge.magnifyingglass")
                                     .font(.system(size: 16, weight: .regular))
                             }
-                            Text(isImportingFromScreenshot ? "Распознаю скриншот..." : "Импорт со скриншота")
+                            Text(isImportingFromScreenshot ? "cashback.import.screenshot.loading" : "Импорт со скриншота")
                                 .font(.system(size: 14, weight: .medium))
                         }
                         .foregroundStyle(AppColors.textPrimary)
@@ -1330,6 +1340,22 @@ private struct CashbackEditorView: View {
     func saveCashback() {
         guard let cardID = selectedCardID else { return }
 
+        let projectedCategoryCount = viewModel.projectedCategoryCountForMonth(
+            cardID: cardID,
+            newCategoryRaws: selectedCategoryRaws
+        )
+        guard EntitlementPolicy.canAddCashbackCategories(
+            isPro: appState.isPro,
+            projectedCategoryCount: projectedCategoryCount
+        ) else {
+            paywallMessage = String(
+                format: String(localized: "monetization.cashback.categories.limit.hard_format"),
+                EntitlementPolicy.freeCashbackCategoryLimitPerMonth
+            )
+            showPaywallAlert = true
+            return
+        }
+
         let validCashbacks = selectedCategoryRaws.compactMap { raw -> (categoryRaw: String, categoryName: String, percentage: Double)? in
             guard let percentage = percentageValue(for: raw),
                   percentage > 0 && percentage <= 100 else {
@@ -1353,7 +1379,7 @@ private struct CashbackEditorView: View {
     private func importFromScreenshot(item: PhotosPickerItem) async {
         guard !isScreenshotImportLocked else {
             isImportAlertPremiumLocked = true
-            importAlertMessage = "Импорт со скриншота доступен только для Premium-подписки."
+            importAlertMessage = String(localized: "cashback.import.screenshot.pro_only")
             screenshotPhotoItem = nil
             return
         }
@@ -1366,18 +1392,21 @@ private struct CashbackEditorView: View {
         }
 
         guard let data = try? await item.loadTransferable(type: Data.self) else {
-            importAlertMessage = "Не удалось прочитать изображение. Попробуйте выбрать другой скриншот."
+            importAlertMessage = String(localized: "cashback.import.screenshot.read_failed")
             return
         }
 
         do {
             let parsed = try await screenshotParser.parse(from: data)
             applyImportedItems(parsed)
-            importAlertMessage = "Распознано категорий: \(parsed.count). Проверь и нажми «Сохранить»."
+            importAlertMessage = String(
+                format: String(localized: "cashback.import.screenshot.recognized_format"),
+                parsed.count
+            )
         } catch let error as CashbackScreenshotImportError {
             importAlertMessage = error.errorDescription
         } catch {
-            importAlertMessage = "Не удалось распознать скриншот. Попробуйте более чёткое изображение."
+            importAlertMessage = String(localized: "cashback.import.screenshot.parse_failed")
         }
     }
 

@@ -13,6 +13,7 @@ enum ProfileMenuSectionID: String, Identifiable {
     case experience
     case support
     case about
+    case contacts
     case debug
 
     var id: String { rawValue }
@@ -29,6 +30,8 @@ enum ProfileMenuSectionID: String, Identifiable {
             return "profile.section.support"
         case .about:
             return "profile.section.about"
+        case .contacts:
+            return "profile.section.contacts"
         case .debug:
             return "profile.section.debug"
         }
@@ -48,7 +51,9 @@ enum ProfileMenuItemID: String, Identifiable {
     case version
     case privacy
     case terms
+    case contactUs
     case premiumAccess
+    case trialDisabled
     case premiumDiagnostics
     case showOnboarding
 
@@ -104,8 +109,15 @@ enum ProfileMenuStructure {
             id: .debug,
             items: [
                 .premiumAccess,
+                .trialDisabled,
                 .premiumDiagnostics,
                 .showOnboarding
+            ]
+        ),
+        ProfileMenuSection(
+            id: .contacts,
+            items: [
+                .contactUs
             ]
         )
     ]

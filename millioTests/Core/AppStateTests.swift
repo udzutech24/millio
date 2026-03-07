@@ -85,7 +85,8 @@ struct AppStateTests {
                 status: .notSubscribed,
                 expirationDate: nil,
                 isTrialActive: false,
-                hasDebugPremiumOverride: false
+                hasDebugPremiumOverride: false,
+                hasTrialDisabledOverride: false
             )
         )
         #expect(appState.isPro == false)
@@ -95,7 +96,8 @@ struct AppStateTests {
                 status: .trial,
                 expirationDate: nil,
                 isTrialActive: true,
-                hasDebugPremiumOverride: false
+                hasDebugPremiumOverride: false,
+                hasTrialDisabledOverride: false
             )
         )
         #expect(appState.isPro == true)
@@ -105,7 +107,8 @@ struct AppStateTests {
                 status: .subscribed,
                 expirationDate: Date(),
                 isTrialActive: false,
-                hasDebugPremiumOverride: false
+                hasDebugPremiumOverride: false,
+                hasTrialDisabledOverride: false
             )
         )
         #expect(appState.isPro == true)
@@ -115,7 +118,8 @@ struct AppStateTests {
                 status: .expired,
                 expirationDate: nil,
                 isTrialActive: false,
-                hasDebugPremiumOverride: false
+                hasDebugPremiumOverride: false,
+                hasTrialDisabledOverride: false
             )
         )
         #expect(appState.isPro == false)
@@ -130,7 +134,8 @@ struct AppStateTests {
                 status: .notSubscribed,
                 expirationDate: nil,
                 isTrialActive: false,
-                hasDebugPremiumOverride: true
+                hasDebugPremiumOverride: true,
+                hasTrialDisabledOverride: false
             )
         )
 

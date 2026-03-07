@@ -117,6 +117,30 @@ struct SubscriptionManagerTests {
         #expect(manager.snapshot.accessSource == .debug)
         #expect(manager.snapshot.isPro == true)
     }
+
+    @Test("Trial можно форс-выключить через override и вернуть обратно, пока он не истек")
+    func testTrialDisabledOverrideForcesTrialOff() async throws {
+        let suiteName = "SubscriptionManagerTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let now = Date(timeIntervalSince1970: 10_000)
+        let manager = SubscriptionManager(defaults: defaults, startTransactionListener: false, now: { now })
+
+        try await manager.startTrial()
+        #expect(manager.isTrialActive == true)
+        #expect(manager.snapshot.accessSource == .trial)
+
+        manager.setTrialDisabledOverride(true)
+        #expect(manager.hasTrialDisabledOverride == true)
+        #expect(manager.isTrialActive == false)
+        #expect(manager.snapshot.accessSource == .free)
+
+        manager.setTrialDisabledOverride(false)
+        #expect(manager.hasTrialDisabledOverride == false)
+        #expect(manager.isTrialActive == true)
+        #expect(manager.snapshot.accessSource == .trial)
+    }
 }
 
 final class FakeNotificationCenter: UserNotificationCenterProtocol {

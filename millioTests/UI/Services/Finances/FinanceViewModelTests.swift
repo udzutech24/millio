@@ -1442,4 +1442,40 @@ struct FinanceViewModelTests {
         #expect(viewModel.state.groups.contains(where: { $0.name == "Основная" }))
         #expect(!viewModel.state.groups.contains(where: { $0.name == ungroupedName }))
     }
+
+    @Test("Добавление счета без выбранной группы создает и использует системную группу")
+    func testAddAccountWithoutSelectedGroupUsesSystemUngrouped() throws {
+        let modelContext = try createTestModelContext()
+        let card = Card(
+            name: "Новая карта",
+            cardNumber: "1234",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 10
+        )
+        modelContext.insert(card)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+
+        viewModel.handle(
+            .addAccountToGroup(
+                accountType: .card,
+                accountID: card.cardUniqueID,
+                group: nil
+            )
+        )
+
+        let links = (try? modelContext.fetch(FetchDescriptor<FinanceAccount>())) ?? []
+        let createdLink = try #require(links.first(where: {
+            $0.accountType == .card && $0.accountID == card.cardUniqueID
+        }))
+        let ungroupedName = String(localized: "finances.group.ungrouped")
+        #expect(createdLink.group?.name == ungroupedName)
+    }
 }

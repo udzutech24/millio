@@ -243,6 +243,9 @@
         }
       }
     },
+    "Balance" : {
+
+    },
     "Balance check:" : {
       "localizations" : {
         "en" : {
@@ -1054,6 +1057,86 @@
         }
       }
     },
+    "cashback.import.screenshot.loading" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recognizing screenshot..."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Распознаю скриншот..."
+          }
+        }
+      }
+    },
+    "cashback.import.screenshot.parse_failed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not recognize the screenshot. Try a clearer image."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось распознать скриншот. Попробуйте более чёткое изображение."
+          }
+        }
+      }
+    },
+    "cashback.import.screenshot.pro_only" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screenshot import is available only in PRO."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Импорт со скриншота доступен только в PRO."
+          }
+        }
+      }
+    },
+    "cashback.import.screenshot.read_failed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not read the image. Try another screenshot."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось прочитать изображение. Попробуйте выбрать другой скриншот."
+          }
+        }
+      }
+    },
+    "cashback.import.screenshot.recognized_format" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recognized categories: %lld. Review and tap Save."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Распознано категорий: %lld. Проверь и нажми «Сохранить»."
+          }
+        }
+      }
+    },
     "Cashflow" : {
       "localizations" : {
         "en" : {
@@ -1229,6 +1312,70 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Подсказка для экрана %@"
+          }
+        }
+      }
+    },
+    "cashflow.chart.empty" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No data for the chart yet."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет данных для графика."
+          }
+        }
+      }
+    },
+    "cashflow.chart.pro.subtitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Upgrade to see cashflow dynamics."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Оформите PRO, чтобы видеть динамику cashflow."
+          }
+        }
+      }
+    },
+    "cashflow.chart.pro.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chart is available in PRO"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "График доступен в PRO"
+          }
+        }
+      }
+    },
+    "cashflow.chart.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cashflow chart"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "График cashflow"
           }
         }
       }
@@ -6740,6 +6887,125 @@
         }
       }
     },
+    "finances.group_editor.name_template.debit_cards" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Debit cards"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Дебитовые карты"
+          }
+        }
+      }
+    },
+    "finances.group_editor.name_template.stocks" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stocks"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Акции"
+          }
+        }
+      }
+    },
+    "finances.group_editor.name_template.my_real_estate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "My real estate"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Моя недвижимость"
+          }
+        }
+      }
+    },
+    "finances.group_editor.name_template.local_cards" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Local cards"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Карты моей страны"
+          }
+        }
+      }
+    },
+    "finances.group_editor.name_template.credits" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loans"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Кредиты"
+          }
+        }
+      }
+    },
+    "finances.group_editor.name_template.deposits" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deposits"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вклады"
+          }
+        }
+      }
+    },
+    "finances.group_editor.name_template.foreign_cards" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foreign cards"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Иностранные карты"
+          }
+        }
+      }
+    },
     "finances.group.menu.favorite" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7658,6 +7924,635 @@
         }
       }
     },
+    "finances.mass_import.add_button" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавить"
+          }
+        }
+      }
+    },
+    "finances.mass_import.add_row" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add row"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавить строку"
+          }
+        }
+      }
+    },
+    "finances.mass_import.add_row_hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ticker, market, quantity and buy price"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тикер, рынок, количество и цена покупки"
+          }
+        }
+      }
+    },
+    "finances.mass_import.buy_price" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buy Price"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цена покупки"
+          }
+        }
+      }
+    },
+    "finances.mass_import.choose_instrument" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose instrument"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выбрать инструмент"
+          }
+        }
+      }
+    },
+    "finances.mass_import.error.invalid_image" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Failed to read screenshot."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось прочитать скриншот."
+          }
+        }
+      }
+    },
+    "finances.mass_import.error.no_rows" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No importable ticker rows found."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не нашёл строк для импорта тикеров."
+          }
+        }
+      }
+    },
+    "finances.mass_import.error.no_text" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No text found on screenshots."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На скриншотах не найден текст."
+          }
+        }
+      }
+    },
+    "finances.mass_import.field_buy_price" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buy price"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Цена покупки"
+          }
+        }
+      }
+    },
+    "finances.mass_import.field_current_price" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current price"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Текущая цена"
+          }
+        }
+      }
+    },
+    "finances.mass_import.field_market" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Market"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Рынок"
+          }
+        }
+      }
+    },
+    "finances.mass_import.field_quantity" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quantity"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Количество"
+          }
+        }
+      }
+    },
+    "finances.mass_import.field_ticker" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ticker or pair"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тикер или пара"
+          }
+        }
+      }
+    },
+    "finances.mass_import.group" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Group"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Группа"
+          }
+        }
+      }
+    },
+    "finances.mass_import.group_none" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No group"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Без группы"
+          }
+        }
+      }
+    },
+    "finances.mass_import.include_in_total" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Include in Total"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Учитывать в Итого"
+          }
+        }
+      }
+    },
+    "finances.mass_import.management" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Management"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Управление"
+          }
+        }
+      }
+    },
+    "finances.mass_import.market" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Market"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Рынок"
+          }
+        }
+      }
+    },
+    "finances.mass_import.merge_duplicates" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Merge duplicate tickers"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Объединять дубликаты тикеров"
+          }
+        }
+      }
+    },
+    "finances.mass_import.mode.manual" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manual"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вручную"
+          }
+        }
+      }
+    },
+    "finances.mass_import.mode.screenshot" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screenshot"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "По скриншоту"
+          }
+        }
+      }
+    },
+    "finances.mass_import.mode.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mode"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Режим"
+          }
+        }
+      }
+    },
+    "finances.mass_import.params" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parameters"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Параметры"
+          }
+        }
+      }
+    },
+    "finances.mass_import.parse_manual" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parse rows"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Разобрать строки"
+          }
+        }
+      }
+    },
+    "finances.mass_import.pick_screenshots" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pick up to 8 screenshots"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выбрать до 8 скриншотов"
+          }
+        }
+      }
+    },
+    "finances.mass_import.preview_empty" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add screenshots or paste rows to build an import preview."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавьте скриншоты или вставьте строки, чтобы собрать превью импорта."
+          }
+        }
+      }
+    },
+    "finances.mass_import.preview_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ready: %1$lld of %2$lld"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Готово: %1$lld из %2$lld"
+          }
+        }
+      }
+    },
+    "finances.mass_import.priority" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Priority"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Приоритет"
+          }
+        }
+      }
+    },
+    "finances.mass_import.qty" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qty"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Кол-во"
+          }
+        }
+      }
+    },
+    "finances.mass_import.quick_settings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quick Settings"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Быстрые настройки"
+          }
+        }
+      }
+    },
+    "finances.mass_import.screenshot_count" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selected screenshots: %lld"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выбрано скриншотов: %lld"
+          }
+        }
+      }
+    },
+    "finances.mass_import.show_problems" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show only rows that need attention"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показать только требующие внимания"
+          }
+        }
+      }
+    },
+    "finances.mass_import.source.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Source"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Источник"
+          }
+        }
+      }
+    },
+    "finances.mass_import.status.ambiguous" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ambiguous"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нужно выбрать"
+          }
+        }
+      }
+    },
+    "finances.mass_import.status.found" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Found"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Найдено"
+          }
+        }
+      }
+    },
+    "finances.mass_import.status.not_found" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not found"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не найдено"
+          }
+        }
+      }
+    },
+    "finances.mass_import.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bulk Stock Import"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Массовый импорт акций"
+          }
+        }
+      }
+    },
     "finances.priority.high" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7977,6 +8872,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Дневные срезы балансов"
+          }
+        }
+      }
+    },
+    "finances.settings.mass_import.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add stock tickers from screenshots or text"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавление тикеров из скриншотов или текста"
+          }
+        }
+      }
+    },
+    "finances.settings.mass_import.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bulk Ticker Import"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Массовый импорт тикеров"
           }
         }
       }
@@ -8656,6 +9585,86 @@
     "Mismatch" : {
 
     },
+    "monetization.cashback.categories.limit.hard_format" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Free plan: up to %lld cashback categories per month. Upgrade to PRO for unlimited."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Free-план: до %lld категорий кешбэка в месяц. Оформите PRO для снятия лимита."
+          }
+        }
+      }
+    },
+    "monetization.finance.crypto.pro_only" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crypto is available in PRO."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Крипта доступна в PRO."
+          }
+        }
+      }
+    },
+    "monetization.finance.market_assets.pro_only" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stocks and crypto are available in PRO."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Акции и крипта доступны в PRO."
+          }
+        }
+      }
+    },
+    "monetization.finance.products.limit.hard_format" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Free plan: up to %lld products in Finance. Upgrade to PRO to add more."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Free-план: до %lld продуктов в финансах. Оформите PRO, чтобы добавить больше."
+          }
+        }
+      }
+    },
+    "monetization.finance.stocks.pro_only" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stocks are available in PRO."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Акции доступны в PRO."
+          }
+        }
+      }
+    },
     "monetization.ticker.limit.hard_format" : {
       "localizations" : {
         "en" : {
@@ -9060,18 +10069,35 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Premium"
+            "value" : "PRO"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Премиум"
+            "value" : "PRO"
           }
         }
       }
     },
     "Premium diagnostics" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PRO diagnostics"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Диагностика PRO"
+          }
+        }
+      }
+    },
+    "PRO diagnostics" : {
 
     },
     "profile.backup" : {
@@ -9087,6 +10113,74 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Резервное копирование"
+          }
+        }
+      }
+    },
+    "profile.contact_us" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contact us"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Связаться с нами"
+          }
+        }
+      }
+    },
+    "profile.contact.option.email" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Email"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Почта"
+          }
+        }
+      }
+    },
+    "profile.contact.option.telegram" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Telegram"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Телеграм"
+          }
+        }
+      }
+    },
+    "profile.contact.option.whatsapp" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "WhatsApp"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "WhatsApp"
           }
         }
       }
@@ -9267,13 +10361,30 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Premium access"
+            "value" : "PRO access"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Премиум доступ"
+            "value" : "Доступ PRO"
+          }
+        }
+      }
+    },
+    "profile.trial_disabled" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disable trial"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выключить триал"
           }
         }
       }
@@ -9318,13 +10429,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Premium"
+            "value" : "millio PRO"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Premium"
+            "value" : "millio PRO"
           }
         }
       }
@@ -9375,6 +10486,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "О приложении"
+          }
+        }
+      }
+    },
+    "profile.section.contacts" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contacts"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Контакты"
           }
         }
       }
@@ -10424,6 +11552,38 @@
         }
       }
     },
+    "subscription.features.cashback_categories" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unlimited cashback categories"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Безлимит категорий кешбэка"
+          }
+        }
+      }
+    },
+    "subscription.features.cashback_screenshot" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import cashback from screenshot"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Импорт кешбэка со скриншота"
+          }
+        }
+      }
+    },
     "subscription.features.crypto_converter" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -10436,7 +11596,55 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Криптовалюты в конвертере"
+            "value" : "Крипта в конвертере"
+          }
+        }
+      }
+    },
+    "subscription.features.finance_charts" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Charts in Finance and Cashflow"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Графики в финансах и Cashflow"
+          }
+        }
+      }
+    },
+    "subscription.features.finance_markets" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stocks and crypto in Finance"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Акции и крипта в Финансах"
+          }
+        }
+      }
+    },
+    "subscription.features.finance_products" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Up to 15 products and more"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Больше 15 продуктов в Финансах"
           }
         }
       }
@@ -10498,13 +11706,29 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "What's included"
+            "value" : "Why PRO"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Что включено"
+            "value" : "Зачем нужен PRO"
+          }
+        }
+      }
+    },
+    "subscription.features.subtitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Everything that removes limits and saves time every month."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Все, что снимает лимиты и экономит время каждый месяц."
           }
         }
       }
@@ -10549,13 +11773,157 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Advanced features"
+            "value" : "Crypto, smart cashback and charts in one plan"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Расширенные возможности"
+            "value" : "Крипта, умный кэшбэк и графики в одном тарифе"
+          }
+        }
+      }
+    },
+    "subscription.hero.pill.smart" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Smart features"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Умные фичи"
+          }
+        }
+      }
+    },
+    "subscription.hero.pill.unlock" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unlock limits"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Снятие лимитов"
+          }
+        }
+      }
+    },
+    "subscription.hero.pill.value" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Best value"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Максимум пользы"
+          }
+        }
+      }
+    },
+    "subscription.hero.card.cashback.subtitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parse categories from a screenshot in seconds."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Распознавайте категории по скриншоту за секунды."
+          }
+        }
+      }
+    },
+    "subscription.hero.card.cashback.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cashback by screenshot"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Кэшбэк по скриншоту"
+          }
+        }
+      }
+    },
+    "subscription.hero.card.charts.subtitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "See trends in Finance and Cashflow."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Смотрите динамику в Финансах и Cashflow."
+          }
+        }
+      }
+    },
+    "subscription.hero.card.charts.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Visual analytics"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Визуальная аналитика"
+          }
+        }
+      }
+    },
+    "subscription.hero.card.crypto.subtitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Convert crypto and track market assets."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Конвертируйте крипту и ведите рыночные активы."
+          }
+        }
+      }
+    },
+    "subscription.hero.card.crypto.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crypto unlocked"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Крипта без ограничений"
           }
         }
       }
@@ -10590,6 +11958,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Подписка"
+          }
+        }
+      }
+    },
+    "subscription.plans.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose your plan"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выберите план"
           }
         }
       }
@@ -10709,6 +12093,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Действует до:"
+          }
+        }
+      }
+    },
+    "subscription.cta.subtitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unlock all PRO features today"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Откройте все возможности PRO уже сегодня"
           }
         }
       }
@@ -10972,13 +12372,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Currency conversion in widget format. Premium only."
+            "value" : "Currency conversion in widget format. PRO only."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Конвертация валют в формате виджета. Доступно для Premium."
+            "value" : "Конвертация валют в формате виджета. Доступно для PRO."
           }
         }
       }
@@ -11006,13 +12406,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The converter widget is available only for Premium users"
+            "value" : "The converter widget is available only for PRO users"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Виджет конвертера доступен только для Premium-пользователей"
+            "value" : "Виджет конвертера доступен только для PRO-пользователей"
           }
         }
       }
@@ -11382,6 +12782,23 @@
       }
     },
     "Диагностика Premium" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PRO diagnostics"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Диагностика PRO"
+          }
+        }
+      }
+    },
+    "Диагностика PRO" : {
 
     },
     "До 4 валют для быстрого выбора в операциях" : {
@@ -11637,6 +13054,7 @@
     },
     "Импорт из скриншота" : {
       "comment" : "A title for an alert that appears when the user attempts to import a cashback offer from a screenshot.",
+      "extractionState" : "stale",
       "isCommentAutoGenerated" : true,
       "localizations" : {
         "en" : {
@@ -11670,7 +13088,21 @@
       }
     },
     "Импорт со скриншота доступен только в Premium" : {
-
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screenshot import is available only in PRO"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Импорт со скриншота доступен только в PRO"
+          }
+        }
+      }
     },
     "Имя" : {
       "comment" : "Label for the profile display name field.",
@@ -12440,6 +13872,7 @@
       }
     },
     "Распознаю скриншот..." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {

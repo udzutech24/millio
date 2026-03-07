@@ -699,6 +699,36 @@ final class CashbackViewModel: ViewModelProtocol {
         }
     }
 
+    func projectedCategoryCountForMonth(
+        cardID: String,
+        newCategoryRaws: Set<String>
+    ) -> Int {
+        let monthKey = Cashback.monthKey(for: state.selectedMonth)
+        let monthCashbacks = state.cashbacks.filter { $0.monthKey == monthKey }
+        var categorySet: Set<String> = []
+
+        for cashback in monthCashbacks {
+            if cashback.cardIDs.contains(cardID) {
+                if newCategoryRaws.contains(cashback.categoryRaw) {
+                    categorySet.insert(cashback.categoryRaw)
+                } else {
+                    let remainingCardIDs = cashback.cardIDs.filter { $0 != cardID }
+                    if !remainingCardIDs.isEmpty {
+                        categorySet.insert(cashback.categoryRaw)
+                    }
+                }
+            } else {
+                categorySet.insert(cashback.categoryRaw)
+            }
+        }
+
+        for raw in newCategoryRaws {
+            categorySet.insert(raw)
+        }
+
+        return categorySet.count
+    }
+
     private static func customRawValue(from categoryID: String) -> String {
         "\(Cashback.customCategoryPrefix)\(categoryID)"
     }

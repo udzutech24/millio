@@ -12,7 +12,8 @@ struct EntitlementDiagnosticsTests {
                 status: .notSubscribed,
                 expirationDate: nil,
                 isTrialActive: false,
-                hasDebugPremiumOverride: false
+                hasDebugPremiumOverride: false,
+                hasTrialDisabledOverride: false
             )
         )
 
@@ -33,7 +34,8 @@ struct EntitlementDiagnosticsTests {
                 status: .notSubscribed,
                 expirationDate: nil,
                 isTrialActive: false,
-                hasDebugPremiumOverride: true
+                hasDebugPremiumOverride: true,
+                hasTrialDisabledOverride: false
             )
         )
 

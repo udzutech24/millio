@@ -945,7 +945,7 @@ private struct FinanceDynamicsContentView: View {
                 chartHeader
 
                 // График
-                if !appState.isPro {
+                if !EntitlementPolicy.canUseFinanceCharts(isPro: appState.isPro) {
                     proBlockedView
                 } else if viewModel.state.isLoading {
                     ProgressView()

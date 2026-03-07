@@ -173,6 +173,14 @@ struct InvestmentEditorView: View {
                 loadAvailableCurrencies()
             }
             .onChange(of: selectedCategory) { _, newValue in
+                if (newValue == .stocks || newValue == .crypto),
+                   !canUseMarketCategory(newValue),
+                   !isEditingMarketAssetWithLockedIdentity {
+                    paywallMessage = marketCategoryPaywallMessage(for: newValue)
+                    showPaywallAlert = true
+                    selectedCategory = .other
+                    return
+                }
                 if !(newValue == .stocks || newValue == .crypto) {
                     clearMarketState()
                 }
@@ -284,14 +292,19 @@ struct InvestmentEditorView: View {
 
             FinancesRowDivider()
 
-            if !isEditingMarketAssetWithLockedIdentity {
-                HStack(spacing: 12) {
-                    Button {
-                        showMarketSearchSheet = true
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "magnifyingglass")
-                            Text(marketSearchButtonTitle)
+                if !isEditingMarketAssetWithLockedIdentity {
+                    HStack(spacing: 12) {
+                        Button {
+                            guard canUseMarketCategory(selectedCategory) else {
+                                paywallMessage = marketCategoryPaywallMessage(for: selectedCategory)
+                                showPaywallAlert = true
+                                return
+                            }
+                            showMarketSearchSheet = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "magnifyingglass")
+                                Text(marketSearchButtonTitle)
                         }
                         .foregroundStyle(
                             LinearGradient(
@@ -729,6 +742,12 @@ struct InvestmentEditorView: View {
     }
 
     private func validateEntitlementsForSave() -> Bool {
+        if isMarketCategory, !canUseMarketCategory(selectedCategory) {
+            paywallMessage = marketCategoryPaywallMessage(for: selectedCategory)
+            showPaywallAlert = true
+            return false
+        }
+
         guard isCreatingNewTrackedTicker else { return true }
 
         let canAdd = EntitlementPolicy.canAddTrackedTicker(
@@ -744,5 +763,27 @@ struct InvestmentEditorView: View {
             return false
         }
         return true
+    }
+
+    private func canUseMarketCategory(_ category: InvestmentCategory) -> Bool {
+        switch category {
+        case .stocks:
+            return EntitlementPolicy.canUseFinanceStocks(isPro: appState.isPro)
+        case .crypto:
+            return EntitlementPolicy.canUseFinanceCrypto(isPro: appState.isPro)
+        default:
+            return true
+        }
+    }
+
+    private func marketCategoryPaywallMessage(for category: InvestmentCategory) -> String {
+        switch category {
+        case .stocks:
+            return String(localized: "monetization.finance.stocks.pro_only")
+        case .crypto:
+            return String(localized: "monetization.finance.crypto.pro_only")
+        default:
+            return String(localized: "monetization.finance.market_assets.pro_only")
+        }
     }
 }

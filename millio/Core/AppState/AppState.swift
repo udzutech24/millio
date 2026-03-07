@@ -61,6 +61,7 @@ final class AppState {
     var subscriptionExpirationDate: Date?
     var isTrialActive: Bool = false
     var hasDebugPremiumOverride: Bool = false
+    var hasTrialDisabledOverride: Bool = false
     var subscriptionAccessSource: SubscriptionAccessSource = .free
     
     var isPro: Bool {
@@ -91,6 +92,7 @@ final class AppState {
         subscriptionExpirationDate = snapshot.expirationDate
         isTrialActive = snapshot.isTrialActive
         hasDebugPremiumOverride = snapshot.hasDebugPremiumOverride
+        hasTrialDisabledOverride = snapshot.hasTrialDisabledOverride
         subscriptionAccessSource = snapshot.accessSource
     }
 
@@ -118,10 +120,20 @@ final class AppState {
 enum EntitlementPolicy {
     static let freeTrackedTickerLimit = 5
     static let freeCashbackCardLimit = 3
+    static let freeCashbackCategoryLimitPerMonth = 10
+    static let freeFinanceProductLimit = 15
     /// Feature flag: криптовалюта в конвертере доступна только при PRO-подписке.
     static let isConverterCryptoProOnly = true
     /// Feature flag: импорт категорий кешбэка со скриншота доступен только при PRO-подписке.
     static let isCashbackScreenshotImportProOnly = true
+    /// Feature flag: акции в финансах доступны только при PRO-подписке.
+    static let isFinanceStocksProOnly = true
+    /// Feature flag: крипта в финансах доступна только при PRO-подписке.
+    static let isFinanceCryptoProOnly = true
+    /// Feature flag: графики в финансах доступны только при PRO-подписке.
+    static let isFinanceChartsProOnly = true
+    /// Feature flag: график cashflow доступен только при PRO-подписке.
+    static let isCashflowChartProOnly = true
 
     static func canUseConverterCrypto(isPro: Bool) -> Bool {
         guard isConverterCryptoProOnly else { return true }
@@ -138,6 +150,34 @@ enum EntitlementPolicy {
 
     static func canImportCashbackFromScreenshot(isPro: Bool) -> Bool {
         guard isCashbackScreenshotImportProOnly else { return true }
+        return isPro
+    }
+
+    static func canAddCashbackCategories(isPro: Bool, projectedCategoryCount: Int) -> Bool {
+        isPro || projectedCategoryCount <= freeCashbackCategoryLimitPerMonth
+    }
+
+    static func canAddFinanceProduct(isPro: Bool, currentProducts: Int) -> Bool {
+        isPro || currentProducts < freeFinanceProductLimit
+    }
+
+    static func canUseFinanceStocks(isPro: Bool) -> Bool {
+        guard isFinanceStocksProOnly else { return true }
+        return isPro
+    }
+
+    static func canUseFinanceCrypto(isPro: Bool) -> Bool {
+        guard isFinanceCryptoProOnly else { return true }
+        return isPro
+    }
+
+    static func canUseFinanceCharts(isPro: Bool) -> Bool {
+        guard isFinanceChartsProOnly else { return true }
+        return isPro
+    }
+
+    static func canUseCashflowChart(isPro: Bool) -> Bool {
+        guard isCashflowChartProOnly else { return true }
         return isPro
     }
 }

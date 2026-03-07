@@ -189,3 +189,44 @@ final class QuickSetupViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.products.first?.marketSnapshot?.purchaseUnitPrice, 10)
     }
 }
+
+final class SupportContactResolverTests: XCTestCase {
+    func testEmailContactBuildsMailtoURL() {
+        let config = SupportContactConfig(
+            emailAddress: "hello@millio.app",
+            telegramHandle: "millio_help",
+            whatsappNumber: "1234567890",
+            telegramIconAssetName: "telegram",
+            whatsappIconAssetName: "whatsapp"
+        )
+        let resolver = SupportContactResolver(config: config)
+
+        XCTAssertEqual(resolver.url(for: .email)?.absoluteString, "mailto:hello@millio.app")
+    }
+
+    func testTelegramContactBuildsPublicURL() {
+        let config = SupportContactConfig(
+            emailAddress: "hello@millio.app",
+            telegramHandle: "millio_help",
+            whatsappNumber: "1234567890",
+            telegramIconAssetName: "telegram",
+            whatsappIconAssetName: "whatsapp"
+        )
+        let resolver = SupportContactResolver(config: config)
+
+        XCTAssertEqual(resolver.url(for: .telegram)?.absoluteString, "https://t.me/millio_help")
+    }
+
+    func testWhatsAppContactBuildsPublicURL() {
+        let config = SupportContactConfig(
+            emailAddress: "hello@millio.app",
+            telegramHandle: "millio_help",
+            whatsappNumber: "1234567890",
+            telegramIconAssetName: "telegram",
+            whatsappIconAssetName: "whatsapp"
+        )
+        let resolver = SupportContactResolver(config: config)
+
+        XCTAssertEqual(resolver.url(for: .whatsapp)?.absoluteString, "https://wa.me/1234567890")
+    }
+}

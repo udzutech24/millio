@@ -35,7 +35,12 @@ final class millioUITests: XCTestCase {
     func testLaunchPerformance() throws {
         // This measures how long it takes to launch your application.
         measure(metrics: [XCTApplicationLaunchMetric()]) {
-            XCUIApplication().launch()
+            // `XCTApplicationLaunchMetric` expects a cold launch each iteration.
+            // If the app remains running between iterations, XCTest may record 0 metrics and fail the test.
+            let app = XCUIApplication()
+            app.terminate()
+            app.launch()
+            app.terminate()
         }
     }
 }

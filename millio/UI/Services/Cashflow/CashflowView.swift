@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import UIKit
+import Charts
 
 enum CashflowValueTone {
     case positive
@@ -160,6 +161,7 @@ private struct CashflowContentView: View {
                 VStack(spacing: 16) {
                     // Выбор периода
                     periodSelectionSection
+                    cashflowChartSection
 
                     if viewModel.state.transactions.isEmpty {
                         emptyTransactionsOnboardingState
@@ -784,6 +786,115 @@ private struct CashflowContentView: View {
         Divider()
             .overlay(innerSeparator)
             .padding(.horizontal, 4)
+    }
+
+    private var cashflowChartSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("cashflow.chart.title")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                Spacer()
+                Text(viewModel.currentPeriodHeaderTitle())
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(primarySecondaryText)
+            }
+
+            if EntitlementPolicy.canUseCashflowChart(isPro: appState.isPro) {
+                if hasChartData {
+                    cashflowChartContent
+                } else {
+                    cashflowChartEmptyState
+                }
+            } else {
+                cashflowChartProLocked
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 16)
+        .background(financeCardBackground(cornerRadius: panelCornerRadius))
+    }
+
+    private var cashflowChartContent: some View {
+        Chart(viewModel.state.chartPoints) { point in
+            AreaMark(
+                x: .value("Date", point.date),
+                y: .value("Balance", point.balance)
+            )
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [neonCyan.opacity(0.35), neonCyan.opacity(0.02)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+
+            LineMark(
+                x: .value("Date", point.date),
+                y: .value("Balance", point.balance)
+            )
+            .foregroundStyle(neonCyan)
+            .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+        }
+        .chartXAxis(.hidden)
+        .chartYAxis(.hidden)
+        .frame(height: 140)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 8)
+        .background(financeInnerBackground(cornerRadius: rowCornerRadius))
+    }
+
+    private var cashflowChartEmptyState: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "chart.xyaxis.line")
+                .font(.system(size: 26))
+                .foregroundStyle(primarySecondaryText)
+            Text("cashflow.chart.empty")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(primarySecondaryText)
+        }
+        .frame(maxWidth: .infinity, minHeight: 120)
+        .background(financeInnerBackground(cornerRadius: rowCornerRadius))
+    }
+
+    private var cashflowChartProLocked: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(primarySecondaryText)
+
+            Text("cashflow.chart.pro.title")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(AppColors.textPrimary)
+
+            Text("cashflow.chart.pro.subtitle")
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(primarySecondaryText)
+                .multilineTextAlignment(.center)
+
+            Button {
+                router.push(.subscription)
+            } label: {
+                Text("finances.dynamics.pro.cta")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule()
+                            .fill(LinearGradient(colors: [neonCyan, neonViolet], startPoint: .leading, endPoint: .trailing))
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(maxWidth: .infinity, minHeight: 140)
+        .background(financeInnerBackground(cornerRadius: rowCornerRadius))
+    }
+
+    private var hasChartData: Bool {
+        viewModel.state.chartPoints.contains { point in
+            abs(point.income) > 0.000001 || abs(point.expense) > 0.000001 || abs(point.balance) > 0.000001
+        }
     }
 
     private var hasIncomeOrExpenseTransactions: Bool {

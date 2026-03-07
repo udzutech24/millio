@@ -1,0 +1,216 @@
+import Foundation
+
+enum StockBulkImportNumberParser {
+    static func parse(_ rawValue: String) -> Double? {
+        let normalized = rawValue
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: ",", with: ".")
+        guard !normalized.isEmpty else { return nil }
+        return Double(normalized)
+    }
+}
+
+struct StockBulkImportCandidate: Identifiable, Equatable, Hashable, Sendable {
+    let symbol: String
+    let market: String?
+    let displayName: String
+    let currency: String
+    let providerRaw: String?
+
+    var id: String {
+        "\(normalizedMarket ?? "")|\(normalizedSymbol)"
+    }
+
+    var normalizedSymbol: String {
+        symbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+    }
+
+    var normalizedMarket: String? {
+        StockBulkImportMarketNormalizer.normalize(market)
+    }
+
+    var storedSymbol: String {
+        guard let normalizedMarket, !normalizedMarket.isEmpty else {
+            return normalizedSymbol
+        }
+        return "\(normalizedMarket):\(normalizedSymbol)"
+    }
+
+    var mergeKey: String {
+        "\(normalizedMarket ?? "")|\(normalizedSymbol)"
+    }
+}
+
+struct StockBulkImportParsedRow: Equatable, Sendable {
+    let rawLine: String
+    let ticker: String
+    let market: String?
+    let quantity: Double?
+    let buyPrice: Double?
+    let sourceOrderIndex: Int
+}
+
+enum StockBulkImportRowStatus: String, Sendable {
+    case found
+    case ambiguous
+    case notFound
+
+    var localizationKey: String {
+        switch self {
+        case .found:
+            return "finances.mass_import.status.found"
+        case .ambiguous:
+            return "finances.mass_import.status.ambiguous"
+        case .notFound:
+            return "finances.mass_import.status.not_found"
+        }
+    }
+}
+
+struct StockBulkImportRowDraft: Identifiable, Equatable, Sendable {
+    let id: UUID
+    let rawLine: String
+    var tickerText: String
+    var marketText: String
+    var quantityText: String
+    var buyPriceText: String
+    var currentPriceText: String
+    let sourceOrderIndex: Int
+    var candidates: [StockBulkImportCandidate]
+    var selectedCandidate: StockBulkImportCandidate?
+
+    init(
+        id: UUID = UUID(),
+        rawLine: String,
+        tickerText: String,
+        marketText: String,
+        quantityText: String,
+        buyPriceText: String,
+        currentPriceText: String = "",
+        sourceOrderIndex: Int,
+        candidates: [StockBulkImportCandidate],
+        selectedCandidate: StockBulkImportCandidate?
+    ) {
+        self.id = id
+        self.rawLine = rawLine
+        self.tickerText = tickerText
+        self.marketText = marketText
+        self.quantityText = quantityText
+        self.buyPriceText = buyPriceText
+        self.currentPriceText = currentPriceText
+        self.sourceOrderIndex = sourceOrderIndex
+        self.candidates = candidates
+        self.selectedCandidate = selectedCandidate
+    }
+
+    var ticker: String {
+        tickerText.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+    }
+
+    var market: String? {
+        let trimmed = marketText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed.uppercased()
+    }
+
+    var quantity: Double? {
+        StockBulkImportNumberParser.parse(quantityText)
+    }
+
+    var buyPrice: Double? {
+        StockBulkImportNumberParser.parse(buyPriceText)
+    }
+
+    var currentPrice: Double? {
+        StockBulkImportNumberParser.parse(currentPriceText)
+    }
+
+    var status: StockBulkImportRowStatus {
+        if selectedCandidate != nil {
+            return .found
+        }
+        if candidates.isEmpty {
+            return .notFound
+        }
+        return .ambiguous
+    }
+
+    var isAddable: Bool {
+        guard selectedCandidate != nil else { return false }
+        guard let quantity, quantity > 0 else { return false }
+        return buyPrice != nil
+    }
+}
+
+struct StockBulkImportResolvedRow: Equatable, Sendable {
+    let candidate: StockBulkImportCandidate
+    let quantity: Double
+    let buyPrice: Double
+    let currentPrice: Double?
+    let sourceOrderIndex: Int
+}
+
+enum StockBulkImportMode: String, CaseIterable, Identifiable {
+    case screenshot
+    case manual
+
+    var id: String { rawValue }
+
+    var titleKey: String {
+        switch self {
+        case .screenshot:
+            return "finances.mass_import.mode.screenshot"
+        case .manual:
+            return "finances.mass_import.mode.manual"
+        }
+    }
+}
+
+enum StockBulkImportPriorityOption: Int, CaseIterable, Identifiable {
+    case zero = 0
+    case one = 1
+    case two = 2
+
+    var id: Int { rawValue }
+
+    var investmentPriority: InvestmentPriority {
+        switch self {
+        case .zero:
+            return .high
+        case .one:
+            return .normal
+        case .two:
+            return .low
+        }
+    }
+}
+
+enum StockBulkImportMarketNormalizer {
+    private static let aliases: [String: String] = [
+        "NASDAQ": "NASDAQ",
+        "NAS": "NASDAQ",
+        "NYSE": "NYSE",
+        "NYQ": "NYSE",
+        "AMEX": "AMEX",
+        "ARCX": "AMEX",
+        "ARCA": "AMEX",
+        "BATS": "BATS",
+        "IEX": "IEX",
+        "MOEX": "MOEX",
+        "MISX": "MOEX",
+        "SPB": "SPBX",
+        "SPBX": "SPBX",
+        "LSE": "LSE",
+        "LON": "LSE",
+        "US": "US"
+    ]
+
+    static func normalize(_ rawValue: String?) -> String? {
+        guard let rawValue else { return nil }
+        let trimmed = rawValue
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+        guard !trimmed.isEmpty else { return nil }
+        return aliases[trimmed]
+    }
+}

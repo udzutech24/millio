@@ -22,6 +22,7 @@
 ## Debug override and diagnostics
 
 - Profile now has a dedicated debug toggle for `debug premium override`.
+- Profile also has a dedicated debug toggle to disable trial (`trial disabled override`), so you can test Free mode even during an active trial.
 - The toggle changes only the debug override. It does not pretend to cancel a real App Store subscription.
 - Profile also has a `Premium diagnostics` screen that shows:
   - effective access source: `Free` / `Trial` / `Subscription` / `Debug premium`

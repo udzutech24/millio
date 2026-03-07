@@ -25,7 +25,7 @@ struct ProfilePremiumDiagnosticsView: View {
                 .padding(.bottom, 24)
             }
         }
-        .navigationTitle(isRussian ? "Диагностика Premium" : "Premium diagnostics")
+        .navigationTitle(isRussian ? "Диагностика PRO" : "PRO diagnostics")
         .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -52,6 +52,7 @@ struct ProfilePremiumDiagnosticsView: View {
                 detailRow(title: isRussian ? "Эффективный premium" : "Effective premium", value: appState.isPro ? (isRussian ? "Вкл" : "On") : (isRussian ? "Выкл" : "Off"))
                 detailRow(title: isRussian ? "Сохранённый статус" : "Stored status", value: subscriptionStatusTitle)
                 detailRow(title: isRussian ? "Триал" : "Trial", value: appState.isTrialActive ? (isRussian ? "Активен" : "Active") : (isRussian ? "Неактивен" : "Inactive"))
+                detailRow(title: isRussian ? "Триал отключен (override)" : "Trial disabled (override)", value: appState.hasTrialDisabledOverride ? (isRussian ? "Да" : "Yes") : (isRussian ? "Нет" : "No"))
 
                 if let expirationDate = appState.subscriptionExpirationDate {
                     detailRow(
@@ -93,7 +94,7 @@ struct ProfilePremiumDiagnosticsView: View {
                         Text("\(isRussian ? "Free" : "Free"): \(item.freeBehavior)")
                             .font(.system(size: 13, weight: .regular))
                             .foregroundStyle(AppColors.textSecondary)
-                        Text("\(isRussian ? "Premium" : "Premium"): \(item.premiumBehavior)")
+                        Text("\(isRussian ? "PRO" : "PRO"): \(item.premiumBehavior)")
                             .font(.system(size: 13, weight: .regular))
                             .foregroundStyle(AppColors.textSecondary)
                     }

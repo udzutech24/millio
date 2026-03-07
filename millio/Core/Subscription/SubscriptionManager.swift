@@ -31,10 +31,14 @@ struct SubscriptionSnapshot {
     let expirationDate: Date?
     let isTrialActive: Bool
     let hasDebugPremiumOverride: Bool
+    let hasTrialDisabledOverride: Bool
 
     var accessSource: SubscriptionAccessSource {
         if hasDebugPremiumOverride {
             return .debug
+        }
+        if hasTrialDisabledOverride, status == .trial {
+            return .free
         }
         switch status {
         case .trial:
@@ -87,6 +91,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
     private let trialStartDateKey = "trial_start_date"
     private let debugPremiumKey = "debug_premium_enabled"
     private let debugSubscriptionExpirationKey = "debug_subscription_expiration"
+    private let trialDisabledOverrideKey = "debug_trial_disabled_override"
     private let trialDurationDays = 7
     
     // Product IDs (нужно будет настроить в App Store Connect)
@@ -237,9 +242,14 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         let trialStartDate = now()
         defaults.set(trialStartDate, forKey: trialStartDateKey)
         defaults.set(true, forKey: "trial_used")
-        
-        self.isTrialActive = true
-        self.status = .trial
+
+        // Если пользователь/дебаг отключил триал, не даем premium через trial даже при валидной дате.
+        checkTrialStatus()
+        if isTrialActive {
+            self.status = .trial
+        } else if status == .trial {
+            self.status = .notSubscribed
+        }
         saveLocalStatus()
         
         logger.info("Trial started, expires: \(trialStartDate.addingTimeInterval(TimeInterval(self.trialDurationDays * 24 * 60 * 60)))")
@@ -289,12 +299,24 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         hasDebugPremiumOverride
     }
 
+    var hasTrialDisabledOverride: Bool {
+        defaults.bool(forKey: trialDisabledOverrideKey)
+    }
+
+    func setTrialDisabledOverride(_ enabled: Bool) {
+        defaults.set(enabled, forKey: trialDisabledOverrideKey)
+        // Локально пересчитываем trial. StoreKit подписка проверяется отдельным вызовом checkSubscriptionStatus().
+        checkTrialStatus()
+        saveLocalStatus()
+    }
+
     var snapshot: SubscriptionSnapshot {
         SubscriptionSnapshot(
             status: status,
             expirationDate: expirationDate,
             isTrialActive: isTrialActive,
-            hasDebugPremiumOverride: hasDebugPremiumOverride
+            hasDebugPremiumOverride: hasDebugPremiumOverride,
+            hasTrialDisabledOverride: hasTrialDisabledOverride
         )
     }
     
@@ -319,11 +341,8 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         if let expirationTimestamp = defaults.object(forKey: subscriptionExpirationKey) as? Date {
             self.expirationDate = expirationTimestamp
         }
-        
-        if let trialStartDate = defaults.object(forKey: trialStartDateKey) as? Date {
-            let trialEndDate = trialStartDate.addingTimeInterval(TimeInterval(self.trialDurationDays * 24 * 60 * 60))
-            self.isTrialActive = trialEndDate > now()
-        }
+
+        checkTrialStatus()
         
         syncWidgetSubscriptionSnapshot()
     }
@@ -340,6 +359,15 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
     }
     
     private func checkTrialStatus() {
+        // Debug override: форсируем отсутствие триала, не трогая флаг "trial_used".
+        if defaults.bool(forKey: trialDisabledOverrideKey) {
+            self.isTrialActive = false
+            if status == .trial {
+                self.status = .notSubscribed
+            }
+            return
+        }
+
         guard let trialStartDate = defaults.object(forKey: trialStartDateKey) as? Date else {
             return
         }

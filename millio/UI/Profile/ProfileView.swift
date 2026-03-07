@@ -15,6 +15,7 @@ struct ProfileView: View {
     @State private var showNameEditSheet = false
     @State private var editedName = ""
     @State private var showQuickSetupSheet = false
+    @State private var showContactSheet = false
 
     private var legalLinks: ProfileLegalLinks {
         ProfileLegalLinks.make(for: appState.selectedLanguage)
@@ -47,7 +48,7 @@ struct ProfileView: View {
                         sectionContent(for: .general)
                     }
                     
-                    // Premium блок
+            // PRO блок
                     premiumSubscriptionBlock
 
                     VStack(spacing: 20) {
@@ -73,6 +74,9 @@ struct ProfileView: View {
                 appState: appState,
                 mode: .settings
             )
+        }
+        .sheet(isPresented: $showContactSheet) {
+            SupportContactSheet()
         }
         .onChange(of: selectedPhotoItem) { _, newItem in
             Task {
@@ -188,7 +192,7 @@ struct ProfileView: View {
         }
     }
     
-    // MARK: - Premium Subscription Block
+    // MARK: - PRO Subscription Block
 
     private var premiumSubscriptionBlock: some View {
         Button {
@@ -321,7 +325,7 @@ struct ProfileView: View {
     }
 
     private var premiumDiagnosticsTitle: String {
-        isRussianInterface ? "Диагностика Premium" : "Premium diagnostics"
+        isRussianInterface ? "Диагностика PRO" : "PRO diagnostics"
     }
 
     private var isRussianInterface: Bool {
@@ -510,6 +514,17 @@ struct ProfileView: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("profile.termsOfUseLink")
 
+        case .contactUs:
+            Button {
+                showContactSheet = true
+            } label: {
+                settingsRow(iconSystemName: "message", title: "profile.contact_us") {
+                    chevron
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("profile.contactUsLink")
+
         case .premiumAccess:
             Toggle(isOn: Binding(
                 get: { appState.hasDebugPremiumOverride },
@@ -530,6 +545,22 @@ struct ProfileView: View {
             }
             .tint(AppColors.toggleOnGreen)
             .accessibilityIdentifier("profile.debugPremiumToggle")
+
+        case .trialDisabled:
+            Toggle(isOn: Binding(
+                get: { appState.hasTrialDisabledOverride },
+                set: { newValue in
+                    Task { @MainActor in
+                        SubscriptionManager.shared.setTrialDisabledOverride(newValue)
+                        await SubscriptionManager.shared.checkSubscriptionStatus()
+                        appState.applySubscriptionSnapshot(SubscriptionManager.shared.snapshot)
+                    }
+                }
+            )) {
+                settingsRow(iconSystemName: "pause.circle", title: "profile.trial_disabled") { EmptyView() }
+            }
+            .tint(AppColors.toggleOnGreen)
+            .accessibilityIdentifier("profile.trialDisabledToggle")
 
         case .premiumDiagnostics:
             NavigationLink {
@@ -645,6 +676,164 @@ struct ProfileView: View {
         }
         .frame(minHeight: 28)
         .contentShape(Rectangle())
+    }
+}
+
+private struct SupportContactSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
+
+    private let channels = SupportContactChannel.allCases
+    private let resolver = SupportContactResolver(config: .default)
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                GradientBackground()
+
+                VStack(spacing: 16) {
+                    FinancesGlassCard(contentPadding: EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16)) {
+                        VStack(spacing: 0) {
+                            ForEach(channels) { channel in
+                                Button {
+                                    if let url = resolver.url(for: channel) {
+                                        openURL(url)
+                                    }
+                                    dismiss()
+                                } label: {
+                                    contactRow(for: channel)
+                                }
+                                .buttonStyle(.plain)
+
+                                if channel != channels.last {
+                                    FinancesRowDivider(leadingPadding: 40)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 24)
+            }
+            .navigationTitle("profile.contact_us")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("profile.done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+
+    private func contactRow(for channel: SupportContactChannel) -> some View {
+        HStack(spacing: 12) {
+            SupportContactIconView(icon: channel.icon)
+                .frame(width: 24, height: 24)
+
+            Text(channel.titleKey)
+                .font(.system(size: 16, weight: .regular))
+                .foregroundStyle(AppColors.textPrimary)
+
+            Spacer()
+
+            Image(systemName: "arrow.up.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(AppColors.textTertiary)
+        }
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+    }
+}
+
+enum SupportContactChannel: String, Identifiable, CaseIterable {
+    case email
+    case telegram
+    case whatsapp
+
+    var id: String { rawValue }
+
+    var titleKey: LocalizedStringKey {
+        switch self {
+        case .email:
+            return "profile.contact.option.email"
+        case .telegram:
+            return "profile.contact.option.telegram"
+        case .whatsapp:
+            return "profile.contact.option.whatsapp"
+        }
+    }
+
+    var icon: SupportContactIcon {
+        switch self {
+        case .email:
+            return .system("envelope.fill")
+        case .telegram:
+            return .asset(name: SupportContactConfig.default.telegramIconAssetName, fallbackSystemName: "paperplane.fill")
+        case .whatsapp:
+            return .asset(name: SupportContactConfig.default.whatsappIconAssetName, fallbackSystemName: "phone.fill")
+        }
+    }
+}
+
+enum SupportContactIcon {
+    case system(String)
+    case asset(name: String, fallbackSystemName: String)
+}
+
+private struct SupportContactIconView: View {
+    let icon: SupportContactIcon
+
+    var body: some View {
+        switch icon {
+        case .system(let name):
+            Image(systemName: name)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(AppColors.textSecondary)
+        case .asset(let name, let fallback):
+            if let image = UIImage(named: name) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                Image(systemName: fallback)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppColors.textSecondary)
+            }
+        }
+    }
+}
+
+struct SupportContactConfig {
+    let emailAddress: String
+    let telegramHandle: String
+    let whatsappNumber: String
+    let telegramIconAssetName: String
+    let whatsappIconAssetName: String
+
+    // Replace with real contacts + asset names before release.
+    static let `default` = SupportContactConfig(
+        emailAddress: "support@millio.app",
+        telegramHandle: "millio_support",
+        whatsappNumber: "15551234567",
+        telegramIconAssetName: "telegram",
+        whatsappIconAssetName: "whatsapp"
+    )
+}
+
+struct SupportContactResolver {
+    let config: SupportContactConfig
+
+    func url(for channel: SupportContactChannel) -> URL? {
+        switch channel {
+        case .email:
+            return URL(string: "mailto:\(config.emailAddress)")
+        case .telegram:
+            return URL(string: "https://t.me/\(config.telegramHandle)")
+        case .whatsapp:
+            return URL(string: "https://wa.me/\(config.whatsappNumber)")
+        }
     }
 }
 

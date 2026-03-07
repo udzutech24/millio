@@ -48,6 +48,7 @@ struct FinancesView: View {
     @State private var viewModel: FinanceViewModel?
     @State private var showFinanceSettingsSheet: Bool = false
     @State private var showBalanceAuditSheetFromSettings: Bool = false
+    @State private var showMassTickerImportSheet: Bool = false
     private let currentRoute: AppRoute = .finances
     
     var body: some View {
@@ -141,6 +142,10 @@ struct FinancesView: View {
                     onOpenDailyAudit: {
                         showFinanceSettingsSheet = false
                         showBalanceAuditSheetFromSettings = true
+                    },
+                    onOpenMassTickerImport: {
+                        showFinanceSettingsSheet = false
+                        showMassTickerImportSheet = true
                     }
                 )
             }
@@ -150,6 +155,15 @@ struct FinancesView: View {
                 FinanceBalanceAuditSheet(
                     financeViewModel: viewModel,
                     modelContext: modelContext
+                )
+            }
+        }
+        .sheet(isPresented: $showMassTickerImportSheet) {
+            if let viewModel {
+                StockBulkImportSheet(
+                    financeViewModel: viewModel,
+                    modelContext: modelContext,
+                    marketDataClient: viewModel.marketDataClient
                 )
             }
         }
@@ -188,6 +202,7 @@ private struct FinancesSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     let onOpenSavingsGoal: () -> Void
     let onOpenDailyAudit: () -> Void
+    let onOpenMassTickerImport: () -> Void
 
     var body: some View {
         NavigationStack {
@@ -195,6 +210,17 @@ private struct FinancesSettingsSheet: View {
                 GradientBackground()
 
                 VStack(spacing: 12) {
+                    Button {
+                        onOpenMassTickerImport()
+                    } label: {
+                        settingsRow(
+                            title: String(localized: "finances.settings.mass_import.title"),
+                            subtitle: String(localized: "finances.settings.mass_import.subtitle"),
+                            icon: "text.insert"
+                        )
+                    }
+                    .buttonStyle(.plain)
+
                     Button {
                         onOpenSavingsGoal()
                     } label: {
@@ -638,11 +664,18 @@ private struct FinancesMainTabView: View {
                 .multilineTextAlignment(.center)
 
             if !isEmptyIntroHidden {
-                Text("finances.main.empty_intro.description")
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(AppColors.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(2)
+                FinancesGlassCard(
+                    accentColor: emptyIntroAccentColor,
+                    contentPadding: EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12)
+                ) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        emptyIntroHintRow(
+                            text: String(localized: "finances.main.empty_intro.description"),
+                            systemImage: "sparkles",
+                            accentColor: emptyIntroAccentColor
+                        )
+                    }
+                }
             }
 
             Button {
@@ -700,6 +733,39 @@ private struct FinancesMainTabView: View {
         )
         .padding(.top, 8)
         .padding(.bottom, 40)
+    }
+
+    private var emptyIntroAccentColor: Color {
+        AppColors.financesGradient.first ?? AppColors.brandPrimary
+    }
+
+    private func emptyIntroHintRow(
+        text: String,
+        systemImage: String,
+        accentColor: Color
+    ) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: systemImage)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(accentColor)
+                .frame(width: 14)
+
+            Text(text)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(AppColors.textPrimary)
+                .multilineTextAlignment(.leading)
+                .lineSpacing(2)
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.black.opacity(0.28))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(accentColor.opacity(0.65), lineWidth: 1)
+                )
+        )
     }
 }
 

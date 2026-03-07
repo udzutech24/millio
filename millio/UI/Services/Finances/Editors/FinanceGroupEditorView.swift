@@ -12,6 +12,7 @@ struct FinanceGroupEditorView: View {
     @Environment(\.dismiss) private var dismiss
     
     @State private var name: String = ""
+    @FocusState private var isNameFocused: Bool
     @State private var selectedColor: Color = Color.blue
     @State private var selectedCurrency: String? = nil
     @State private var availableCurrencies: [String] = []
@@ -161,10 +162,32 @@ struct FinanceGroupEditorView: View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: String(localized: "finances.group_editor.section.name"))
             FinancesGlassCard {
-                TextField(String(localized: "finances.add_account.section.name"), text: $name)
-                    .foregroundStyle(AppColors.textPrimary)
-                    .padding(.vertical, 14)
-                    .padding(.horizontal, 16)
+                VStack(spacing: 0) {
+                    TextField(String(localized: "finances.add_account.section.name"), text: $name)
+                        .focused($isNameFocused)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 16)
+
+                    if viewModel.state.editingGroup == nil {
+                        FinancesRowDivider(leadingPadding: 0)
+                            .padding(.horizontal, 16)
+
+                        ScrollView(.horizontal) {
+                            LazyHStack(spacing: 8) {
+                                ForEach(FinanceGroupNameTemplate.allCases) { template in
+                                    FinancesPillButton(title: template.title) {
+                                        applyNameTemplate(template)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.top, 12)
+                            .padding(.bottom, 14)
+                        }
+                        .scrollIndicators(.hidden)
+                    }
+                }
             }
         }
     }
@@ -345,6 +368,11 @@ struct FinanceGroupEditorView: View {
         let colorHex = selectedColor.toHex()
         viewModel.handle(.updateGroup(name: name, colorHex: colorHex, displayCurrency: selectedCurrency, isFavorite: isFavorite, priority: selectedPriority))
         dismiss()
+    }
+
+    private func applyNameTemplate(_ template: FinanceGroupNameTemplate) {
+        name = template.title
+        isNameFocused = true
     }
 
     private func deleteGroup() {

@@ -120,6 +120,9 @@ struct CashflowState {
 
     /// Детализация расходов по категориям за период (по убыванию суммы)
     var expenseBreakdown: [CashflowCategoryBreakdownEntry] = []
+
+    /// Точки графика cashflow (по дням за период)
+    var chartPoints: [CashflowChartPoint] = []
     
     /// Флаг загрузки данных
     var isLoading: Bool = false
@@ -137,6 +140,16 @@ struct CashflowCategoryBreakdownEntry: Identifiable {
         self.title = title
         self.convertedAmount = convertedAmount
     }
+}
+
+// MARK: - Cashflow Chart Point
+
+struct CashflowChartPoint: Identifiable {
+    let id: Date
+    let date: Date
+    let income: Double
+    let expense: Double
+    let balance: Double
 }
 
 // MARK: - Chart Period
@@ -587,12 +600,15 @@ final class CashflowViewModel: ViewModelProtocol {
     
     private func updateChartDataAsync() async {
         let (startDate, endDate) = getDateRange()
+        let calendar = Calendar.current
         
         // Рассчитываем общие суммы за период и детализацию по категориям
         var totalIncome: Double = 0.0
         var totalExpense: Double = 0.0
         var incomeByCategory: [String: Double] = [:]
         var expenseByCategory: [String: Double] = [:]
+        var incomeByDay: [Date: Double] = [:]
+        var expenseByDay: [Date: Double] = [:]
         
         for transaction in state.transactions {
             guard transaction.transactionDate >= startDate && transaction.transactionDate <= endDate else {
@@ -606,6 +622,8 @@ final class CashflowViewModel: ViewModelProtocol {
                     to: state.displayCurrency
                 )
                 totalIncome += converted
+                let day = calendar.startOfDay(for: transaction.transactionDate)
+                incomeByDay[day, default: 0.0] += converted
                 let title = incomeCategoryDisplayName(for: transaction.incomeCategoryRaw)
                 incomeByCategory[title, default: 0.0] += converted
                 
@@ -615,6 +633,8 @@ final class CashflowViewModel: ViewModelProtocol {
                     to: state.displayCurrency
                 )
                 totalExpense += converted
+                let day = calendar.startOfDay(for: transaction.transactionDate)
+                expenseByDay[day, default: 0.0] += converted
                 let title = expenseCategoryDisplayName(for: transaction.expenseCategoryRaw)
                 expenseByCategory[title, default: 0.0] += converted
                 
@@ -634,6 +654,28 @@ final class CashflowViewModel: ViewModelProtocol {
         state.expenseBreakdown = expenseByCategory
             .map { CashflowCategoryBreakdownEntry(title: $0.key, convertedAmount: $0.value) }
             .sorted { $0.convertedAmount > $1.convertedAmount }
+
+        let normalizedStart = calendar.startOfDay(for: startDate)
+        let normalizedEnd = calendar.startOfDay(for: endDate)
+        var points: [CashflowChartPoint] = []
+        var cursor = normalizedStart
+        while cursor <= normalizedEnd {
+            let income = incomeByDay[cursor, default: 0.0]
+            let expense = expenseByDay[cursor, default: 0.0]
+            let balance = income - expense
+            points.append(
+                CashflowChartPoint(
+                    id: cursor,
+                    date: cursor,
+                    income: income,
+                    expense: expense,
+                    balance: balance
+                )
+            )
+            guard let nextDay = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
+            cursor = nextDay
+        }
+        state.chartPoints = points
 
         await updateAssetsBreakdown(startDate: startDate, endDate: endDate)
     }
