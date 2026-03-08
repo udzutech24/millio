@@ -123,6 +123,9 @@ struct CashflowState {
 
     /// Точки графика cashflow (по дням за период)
     var chartPoints: [CashflowChartPoint] = []
+
+    /// Конвертированные доходы/расходы по операциям для агрегированного графика
+    var convertedTransactions: [CashflowConvertedTransaction] = []
     
     /// Флаг загрузки данных
     var isLoading: Bool = false
@@ -609,34 +612,51 @@ final class CashflowViewModel: ViewModelProtocol {
         var expenseByCategory: [String: Double] = [:]
         var incomeByDay: [Date: Double] = [:]
         var expenseByDay: [Date: Double] = [:]
+        var convertedTransactions: [CashflowConvertedTransaction] = []
         
         for transaction in state.transactions {
-            guard transaction.transactionDate >= startDate && transaction.transactionDate <= endDate else {
-                continue
-            }
-            
             switch transaction.transactionType {
             case .income:
                 let converted = await convertAmountForTransaction(
                     transaction,
                     to: state.displayCurrency
                 )
-                totalIncome += converted
-                let day = calendar.startOfDay(for: transaction.transactionDate)
-                incomeByDay[day, default: 0.0] += converted
-                let title = incomeCategoryDisplayName(for: transaction.incomeCategoryRaw)
-                incomeByCategory[title, default: 0.0] += converted
+                convertedTransactions.append(
+                    CashflowConvertedTransaction(
+                        id: transaction.transactionUniqueID,
+                        date: transaction.transactionDate,
+                        income: converted,
+                        expense: 0
+                    )
+                )
+                if transaction.transactionDate >= startDate && transaction.transactionDate <= endDate {
+                    totalIncome += converted
+                    let day = calendar.startOfDay(for: transaction.transactionDate)
+                    incomeByDay[day, default: 0.0] += converted
+                    let title = incomeCategoryDisplayName(for: transaction.incomeCategoryRaw)
+                    incomeByCategory[title, default: 0.0] += converted
+                }
                 
             case .expense:
                 let converted = await convertAmountForTransaction(
                     transaction,
                     to: state.displayCurrency
                 )
-                totalExpense += converted
-                let day = calendar.startOfDay(for: transaction.transactionDate)
-                expenseByDay[day, default: 0.0] += converted
-                let title = expenseCategoryDisplayName(for: transaction.expenseCategoryRaw)
-                expenseByCategory[title, default: 0.0] += converted
+                convertedTransactions.append(
+                    CashflowConvertedTransaction(
+                        id: transaction.transactionUniqueID,
+                        date: transaction.transactionDate,
+                        income: 0,
+                        expense: converted
+                    )
+                )
+                if transaction.transactionDate >= startDate && transaction.transactionDate <= endDate {
+                    totalExpense += converted
+                    let day = calendar.startOfDay(for: transaction.transactionDate)
+                    expenseByDay[day, default: 0.0] += converted
+                    let title = expenseCategoryDisplayName(for: transaction.expenseCategoryRaw)
+                    expenseByCategory[title, default: 0.0] += converted
+                }
                 
             case .transfer, .balanceAdjustment:
                 break
@@ -676,6 +696,7 @@ final class CashflowViewModel: ViewModelProtocol {
             cursor = nextDay
         }
         state.chartPoints = points
+        state.convertedTransactions = convertedTransactions.sorted { $0.date < $1.date }
 
         await updateAssetsBreakdown(startDate: startDate, endDate: endDate)
     }

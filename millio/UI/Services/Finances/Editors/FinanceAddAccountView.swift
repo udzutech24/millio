@@ -1230,27 +1230,11 @@ struct FinanceAddAccountView: View {
             uniqueID: investment.investmentUniqueID
         ))
 
-        let investmentID = investment.investmentUniqueID
-        let descriptor = FetchDescriptor<FinanceAccount>()
-        let existingAccount = (try? modelContext.fetch(descriptor))?.first(where: {
-            $0.accountType == .investment && $0.accountID == investmentID
-        })
-        if let existingAccount {
-            existingAccount.group = group
-        } else {
-            let link = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
-            link.group = group
-            modelContext.insert(link)
-        }
-
-        do {
-            try modelContext.save()
-        } catch {
-            AppLogger.log(.error, category: "FinanceAddAccount", "Failed to update group link for investment: \(error.localizedDescription)")
-        }
-
-        viewModel.handle(.loadAccounts)
-        viewModel.handle(.loadGroups)
+        viewModel.handle(.addAccountToGroup(
+            accountType: .investment,
+            accountID: investment.investmentUniqueID,
+            group: group
+        ))
         dismiss()
     }
 }

@@ -221,8 +221,7 @@ final class FinanceViewModel: ViewModelProtocol {
     let marketDataClient: MarketDataClientProtocol
 
     private let defaults = UserDefaults.standard
-    private var ungroupedGroupName: String { String(localized: "finances.group.ungrouped") }
-    private let ungroupedGroupColorHex = "#3C4B5E"
+    private var ungroupedGroupName: String { FinanceSystemGroups.ungroupedName }
     private var financeEventsSubscriptionID: UUID?
 
     /// Быстрые словари для поиска счетов по ID (O(1) вместо O(n))
@@ -747,14 +746,31 @@ final class FinanceViewModel: ViewModelProtocol {
         let descriptor = FetchDescriptor<FinanceAccount>()
         guard let accounts = try? modelContext.fetch(descriptor) else { return }
 
+        var didMutate = false
         var removedCount = 0
+        var reassignedToUngroupedCount = 0
+        var createdMissingInvestmentLinksCount = 0
+
+        var ungroupedGroup: FinanceGroup?
+        func resolveUngroupedGroup() -> FinanceGroup {
+            if let ungroupedGroup { return ungroupedGroup }
+            let group = FinanceSystemGroups.ensureUngroupedGroup(in: modelContext)
+            ungroupedGroup = group
+            return group
+        }
+
+        var linkedInvestmentIDs = Set(accounts.compactMap { account in
+            account.accountType == .investment ? account.accountID : nil
+        })
 
         for account in accounts {
-            // Если счет больше не связан с группой — удаляем запись связи
+            // `group == nil` — невалидное состояние. Нормализуем в системную "Без группы",
+            // иначе счет будет теряться из основного списка (это проявляется на массовом импорте акций).
             if account.group == nil {
-                modelContext.delete(account)
-                removedCount += 1
-                continue
+                account.group = resolveUngroupedGroup()
+                account.updatedAt = Date()
+                reassignedToUngroupedCount += 1
+                didMutate = true
             }
 
             // Если целевой объект не найден — удаляем связь
@@ -763,25 +779,49 @@ final class FinanceViewModel: ViewModelProtocol {
                 if allCardByID[account.accountID] == nil {
                     modelContext.delete(account)
                     removedCount += 1
+                    didMutate = true
                 }
             case .credit:
                 if allCreditByID[account.accountID] == nil {
                     modelContext.delete(account)
                     removedCount += 1
+                    didMutate = true
                 }
             case .investment:
                 if allInvestmentByID[account.accountID] == nil {
                     modelContext.delete(account)
                     removedCount += 1
+                    didMutate = true
                 }
             }
         }
 
-        guard removedCount > 0 else { return }
+        // Восстанавливаем отсутствующие связи для инвестиций:
+        // раньше они могли "пропасть" из групп из-за очистки nil-group связей.
+        for investment in allInvestmentByID.values where investment.archivedAt == nil {
+            guard !linkedInvestmentIDs.contains(investment.investmentUniqueID) else { continue }
+            let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+            account.group = resolveUngroupedGroup()
+            modelContext.insert(account)
+            linkedInvestmentIDs.insert(investment.investmentUniqueID)
+            createdMissingInvestmentLinksCount += 1
+            didMutate = true
+        }
+
+        guard didMutate else { return }
 
         do {
             try modelContext.save()
-            AppLogger.log(.info, category: "Finance", "Removed \(removedCount) invalid finance account links")
+            if removedCount > 0 {
+                AppLogger.log(.info, category: "Finance", "Removed \(removedCount) invalid finance account links")
+            }
+            if reassignedToUngroupedCount > 0 {
+                AppLogger.log(.info, category: "Finance", "Reassigned \(reassignedToUngroupedCount) finance account links to ungrouped group")
+            }
+            if createdMissingInvestmentLinksCount > 0 {
+                AppLogger.log(.info, category: "Finance", "Created \(createdMissingInvestmentLinksCount) missing investment finance account links")
+            }
+            loadGroups()
         } catch {
             AppLogger.log(.error, category: "Finance", "Failed to cleanup finance accounts: \(error.localizedDescription)")
         }
@@ -1488,10 +1528,7 @@ final class FinanceViewModel: ViewModelProtocol {
     }
     
     private func addAccountToGroup(accountType: FinanceAccountType, accountID: String, group: FinanceGroup?) {
-        guard let targetGroup = group ?? ensureUngroupedGroup() else {
-            AppLogger.log(.error, category: "Finance", "Failed to resolve target group")
-            return
-        }
+        let targetGroup = group ?? FinanceSystemGroups.ensureUngroupedGroup(in: modelContext)
         
         // Проверяем, не добавлен ли уже этот счет в любую группу
         let allAccountsDescriptor = FetchDescriptor<FinanceAccount>()
@@ -1655,29 +1692,6 @@ final class FinanceViewModel: ViewModelProtocol {
         }
     }
 
-    private func ensureUngroupedGroup() -> FinanceGroup? {
-        if let existing = state.groups.first(where: { $0.name == ungroupedGroupName }) {
-            return existing
-        }
-
-        let descriptor = FetchDescriptor<FinanceGroup>()
-        if let groups = try? modelContext.fetch(descriptor),
-           let existing = groups.first(where: { $0.name == ungroupedGroupName }) {
-            return existing
-        }
-
-        let maxOrder = state.groups.map(\.order).max() ?? -1
-        let group = FinanceGroup(
-            name: ungroupedGroupName,
-            colorHex: ungroupedGroupColorHex,
-            order: maxOrder + 1,
-            isFavorite: false,
-            priority: .low
-        )
-        modelContext.insert(group)
-        return group
-    }
-    
     private func editAccount(_ account: FinanceAccount) {
         switch account.accountType {
         case .card:

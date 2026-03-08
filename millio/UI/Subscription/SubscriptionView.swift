@@ -31,6 +31,10 @@ struct SubscriptionView: View {
         appState.selectedLanguage.locale ?? Locale.current
     }
 
+    private var isRunningInPreview: Bool {
+        ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+    }
+
     var body: some View {
         ZStack {
             subscriptionBackground
@@ -71,8 +75,10 @@ struct SubscriptionView: View {
             Text(errorMessage ?? String(localized: "subscription.error.unknown", locale: localizationLocale))
         }
         .task {
+            guard !isRunningInPreview else { return }
             await loadProducts()
         }
+        .environment(\.locale, localizationLocale)
     }
 
     private var subscriptionBackground: some View {
@@ -195,29 +201,12 @@ struct SubscriptionView: View {
     }
 
     private var heroHighlights: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 10) {
-                heroValuePill
-                heroUnlockPill
-                heroSmartPill
-            }
-
-            VStack(spacing: 10) {
-                HStack(spacing: 10) {
-                    heroValuePill
-                    heroUnlockPill
-                }
-
-                heroSmartPill
-            }
-
-            VStack(spacing: 10) {
-                heroValuePill
-                heroUnlockPill
-                heroSmartPill
-            }
+        WrappingHStack(alignment: .center, horizontalSpacing: 10, verticalSpacing: 10) {
+            heroValuePill
+            heroUnlockPill
+            heroSmartPill
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
     private func subscriptionPill(icon: String, text: String) -> some View {
@@ -227,7 +216,8 @@ struct SubscriptionView: View {
             Text(text)
                 .font(.system(size: 11, weight: .semibold))
                 .lineLimit(1)
-                .minimumScaleFactor(0.85)
+                .minimumScaleFactor(0.75)
+                .allowsTightening(true)
         }
         .foregroundStyle(Color.white.opacity(0.78))
         .padding(.horizontal, 10)
@@ -492,6 +482,9 @@ struct SubscriptionView: View {
                 ctaTitle
                     .font(.system(size: 20, weight: .bold))
                     .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                    .allowsTightening(true)
 
                 Text("subscription.cta.subtitle")
                     .font(.system(size: 12, weight: .medium))
@@ -798,8 +791,30 @@ private struct SeededGenerator: RandomNumberGenerator {
     }
 }
 
-#Preview {
-    NavigationStack {
-        SubscriptionView()
+private enum SubscriptionViewPreview {
+    @MainActor
+    static func appState(language: Language) -> AppState {
+        let appState = AppState()
+        appState.selectedLanguage = language
+        return appState
     }
+}
+
+#Preview("Subscription RU — Compact") {
+    NavigationStack { SubscriptionView() }
+        .environment(SubscriptionViewPreview.appState(language: .russian))
+        .frame(width: 320, height: 820)
+}
+
+#Preview("Subscription EN — Compact") {
+    NavigationStack { SubscriptionView() }
+        .environment(SubscriptionViewPreview.appState(language: .english))
+        .frame(width: 320, height: 820)
+}
+
+#Preview("Subscription RU — Large Text") {
+    NavigationStack { SubscriptionView() }
+        .environment(SubscriptionViewPreview.appState(language: .russian))
+        .dynamicTypeSize(.accessibility1)
+        .frame(width: 390, height: 900)
 }

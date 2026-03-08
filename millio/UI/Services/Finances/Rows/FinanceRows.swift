@@ -194,37 +194,37 @@ struct FinanceGroupRow: View {
     }
     
     private var groupBackground: some View {
-        let accentColor = AppColors.financesGradient.first ?? .cyan
+        let accentColor = group.color
         let fillGradient = LinearGradient(
             colors: [
-                Color(red: 0.03, green: 0.07, blue: 0.11),
-                Color(red: 0.02, green: 0.04, blue: 0.06),
-                Color.black
+                Color.white.opacity(0.07),
+                Color.white.opacity(0.035),
+                Color.white.opacity(0.02)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
-        )
-        let glowGradient = LinearGradient(
-            colors: [
-                accentColor.opacity(0.18),
-                Color.clear
-            ],
-            startPoint: .leading,
-            endPoint: .trailing
         )
 
         return RoundedRectangle(cornerRadius: 16, style: .continuous)
             .fill(fillGradient)
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(glowGradient)
-                    .opacity(0.6)
+                    .stroke(Color.white.opacity(0.10), lineWidth: 0.8)
             )
-            .overlay(
+            .overlay(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(accentColor.opacity(0.55), lineWidth: 1)
-            )
-          
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                accentColor.opacity(0.18),
+                                Color.clear
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .blendMode(.screen)
+            }
     }
     
     @ViewBuilder

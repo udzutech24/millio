@@ -187,4 +187,51 @@ struct CurrencyRateServiceTests {
         #expect(rateReverse != nil)
         #expect(abs(rateReverse! - (1.0 / 0.92)) < 0.01)
     }
+
+    @Test("Frankfurter HTTP 404 не должен банить пару навсегда (следующий запрос должен выполняться)")
+    func testHistorical404DoesNotBlacklistPair() async {
+        final class MockHistoricalLoader: HTTPDataLoading {
+            struct Response {
+                let statusCode: Int
+                let body: String
+            }
+
+            private(set) var requestedURLs: [URL] = []
+            var responses: [String: Response] = [:]
+
+            func data(from url: URL) async throws -> (Data, URLResponse) {
+                requestedURLs.append(url)
+
+                let response = responses[url.absoluteString] ?? Response(statusCode: 404, body: #"{"message":"not found"}"#)
+                let data = Data(response.body.utf8)
+                let http = HTTPURLResponse(
+                    url: url,
+                    statusCode: response.statusCode,
+                    httpVersion: "HTTP/1.1",
+                    headerFields: ["Content-Type": "application/json"]
+                )!
+                return (data, http)
+            }
+        }
+
+        let loader = MockHistoricalLoader()
+        let mockRepo = MockRateRepository()
+        let service = CurrencyRateService(rateSource: .erapi, rateRepository: mockRepo, historicalLoader: loader)
+
+        let d1 = Date(timeIntervalSince1970: 1_704_067_200) // 2024-01-01 00:00:00 UTC
+        let d2 = Date(timeIntervalSince1970: 1_704_153_600) // 2024-01-02 00:00:00 UTC
+
+        let url1 = URL(string: "https://api.frankfurter.app/2024-01-01?from=USD&to=RUB")!
+        let url2 = URL(string: "https://api.frankfurter.app/2024-01-02?from=USD&to=RUB")!
+
+        loader.responses[url1.absoluteString] = .init(statusCode: 404, body: #"{"message":"not found"}"#)
+        loader.responses[url2.absoluteString] = .init(statusCode: 200, body: #"{"rates":{"RUB":90.0}}"#)
+
+        let r1 = await service.getHistoricalRate(on: d1, from: "USD", to: "RUB")
+        #expect(r1 == nil)
+
+        let r2 = await service.getHistoricalRate(on: d2, from: "USD", to: "RUB")
+        #expect(r2 == 90.0)
+        #expect(loader.requestedURLs == [url1, url2])
+    }
 }

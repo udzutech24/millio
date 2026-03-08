@@ -94,7 +94,7 @@ struct FinanceDynamicsViewModelTests {
         let financeViewModel = FinanceViewModel(
             modelContext: modelContext,
             currencyService: MockDynamicsCurrencyRateService(),
-            skipInitialLoad: true
+            skipInitialLoad: false
         )
         let dynamicsViewModel = FinanceDynamicsViewModel(
             modelContext: modelContext,
@@ -952,5 +952,89 @@ struct FinanceDynamicsViewModelTests {
         )
 
         #expect(abs(yesterdayBalance - todayBalance) < 0.01)
+    }
+
+    @Test("Overview chart относит рост активов в debit, а рост долга в credit")
+    func overviewEntriesSeparateDebitAndCreditFlows() async throws {
+        let schema = Schema([
+            Card.self,
+            Credit.self,
+            Investment.self,
+            FinanceGroup.self,
+            FinanceAccount.self,
+            CashflowTransaction.self,
+            HistoricalRate.self
+        ])
+        let container = try ModelContainer(
+            for: schema,
+            configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+        )
+        let modelContext = container.mainContext
+        let calendar = Calendar(identifier: .gregorian)
+        let referenceDate = calendar.date(from: DateComponents(year: 2026, month: 3, day: 8, hour: 12)) ?? Date()
+
+        let debitCard = Card(name: "Дебет", cardNumber: "1111", bank: .other, cardType: .debit, currency: "RUB")
+        debitCard.createdAt = calendar.date(from: DateComponents(year: 2026, month: 2, day: 1)) ?? referenceDate
+        debitCard.updatedAt = referenceDate
+        debitCard.initialBalance = 100
+        debitCard.hasInitialBalance = true
+        debitCard.balance = 160
+        modelContext.insert(debitCard)
+
+        let credit = Credit(
+            name: "Кредит",
+            amount: 100,
+            interestRate: 0,
+            monthlyPayment: 10,
+            startDate: calendar.date(from: DateComponents(year: 2026, month: 2, day: 1)) ?? referenceDate,
+            termMonths: 12,
+            currency: "RUB",
+            bank: .other,
+            creditType: .consumer
+        )
+        credit.createdAt = calendar.date(from: DateComponents(year: 2026, month: 2, day: 1)) ?? referenceDate
+        credit.updatedAt = referenceDate
+        credit.initialRemainingAmount = 100
+        credit.hasInitialRemainingAmount = true
+        credit.remainingAmount = 130
+        modelContext.insert(credit)
+
+        let group = FinanceGroup(name: "Основная", colorHex: "#FFFFFF")
+        let debitAccount = FinanceAccount(accountType: .card, accountID: debitCard.cardUniqueID)
+        let creditAccount = FinanceAccount(accountType: .credit, accountID: credit.creditUniqueID)
+        debitAccount.group = group
+        creditAccount.group = group
+        group.accounts = [debitAccount, creditAccount]
+        modelContext.insert(group)
+        modelContext.insert(debitAccount)
+        modelContext.insert(creditAccount)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        dynamicsViewModel.state.groups = [group]
+
+        let entries = await dynamicsViewModel.buildOverviewEntries(
+            granularity: .month,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+
+        let marchStart = calendar.date(from: DateComponents(year: 2026, month: 3, day: 1)) ?? referenceDate
+        let marchEntry = try #require(entries.first(where: {
+            calendar.isDate($0.date, equalTo: marchStart, toGranularity: .month)
+        }))
+
+        #expect(abs(marchEntry.debit - 60) < 0.01)
+        #expect(abs(marchEntry.credit - 30) < 0.01)
     }
 }

@@ -7,6 +7,12 @@
 
 import Foundation
 
+protocol HTTPDataLoading {
+    func data(from url: URL) async throws -> (Data, URLResponse)
+}
+
+extension URLSession: HTTPDataLoading {}
+
 // MARK: - Currency Rate Service Protocol
 
 /// Протокол сервиса курсов валют для dependency injection
@@ -30,6 +36,7 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
     /// Глобально для приложения используется `.erapi`.
     private(set) var rateSource: RateSource
     private let rateRepository: RateRepositoryProtocol
+    private let historicalLoader: HTTPDataLoading
     
     private var cachedRates: [String: Double] = ["USD": 1.0]
     private var lastUpdateTS: Double = 0
@@ -37,9 +44,14 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
     private var knownHistoricalUnsupportedPairs: Set<String> = []
     private var historicalFailureLogDedup: Set<String> = []
     
-    init(rateSource: RateSource = .erapi, rateRepository: RateRepositoryProtocol = RateRepository.shared) {
+    init(
+        rateSource: RateSource = .erapi,
+        rateRepository: RateRepositoryProtocol = RateRepository.shared,
+        historicalLoader: HTTPDataLoading = URLSession.shared
+    ) {
         self.rateSource = rateSource
         self.rateRepository = rateRepository
+        self.historicalLoader = historicalLoader
     }
     
     /// Получить курс конвертации: сколько единиц 'to' за 1 единицу 'from'
@@ -140,7 +152,7 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
         }
         
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await historicalLoader.data(from: url)
             guard let http = response as? HTTPURLResponse else {
                 throw URLError(.badServerResponse)
             }
@@ -162,7 +174,10 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
 
                 // Частые ожидаемые причины: неподдерживаемая валюта или rate limit.
                 // Не эскалируем как -1011 и не повторяем запросы для неподдерживаемых пар.
-                if statusCode == 400 || statusCode == 404 {
+                // Важно: HTTP 404 у Frankfurter часто означает “нет данных на эту дату”
+                // (например, выходной/праздник), и это НЕ означает, что валютная пара
+                // неподдерживается. Поэтому 404 не должен банить пару навсегда.
+                if statusCode == 400 {
                     knownHistoricalUnsupportedPairs.insert(pairKey)
                     return nil
                 }

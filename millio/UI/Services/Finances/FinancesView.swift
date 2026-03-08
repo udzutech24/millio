@@ -330,8 +330,7 @@ private struct FinancesMainTabView: View {
             
             ScrollView {
                 VStack(spacing: 20) {
-                    // Общая сумма
-                    totalAmountSection
+                    overviewHeroModule
                     
                     // Список групп
                     groupsListSection
@@ -392,6 +391,40 @@ private struct FinancesMainTabView: View {
                 }
             }
         }
+    }
+    
+    // MARK: - Hero Overview Module
+
+    private var overviewHeroModule: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            totalAmountSection
+
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.02),
+                            Color.white.opacity(0.12),
+                            Color.white.opacity(0.02)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(height: 1)
+
+            FinanceOverviewCardView(
+                financeViewModel: viewModel,
+                chrome: .embedded
+            )
+        }
+        .padding(20)
+        .background(heroModuleBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(Color.white.opacity(0.10), lineWidth: 0.8)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
     
     // MARK: - Total Amount Section
@@ -520,10 +553,7 @@ private struct FinancesMainTabView: View {
                     .tint(AppColors.textTertiary)
             }
         }
-        .padding(.vertical, 20)
-        
-     
-        
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var refreshMenu: some View {
@@ -566,6 +596,28 @@ private struct FinancesMainTabView: View {
             ? String(localized: "finances.common.refreshing")
             : String(localized: "finances.common.refresh"))
     }
+
+    private var heroModuleBackground: some View {
+        RoundedRectangle(cornerRadius: 28, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.08),
+                        Color.white.opacity(0.04),
+                        Color.white.opacity(0.02)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .overlay(alignment: .topLeading) {
+                Circle()
+                    .fill((AppColors.financesGradient.first ?? .cyan).opacity(0.10))
+                    .blur(radius: 30)
+                    .frame(width: 180, height: 180)
+                    .offset(x: -40, y: -50)
+            }
+    }
     
     // MARK: - Groups List Section
     
@@ -581,14 +633,11 @@ private struct FinancesMainTabView: View {
 
     private var groupsListView: some View {
         VStack(spacing: 12) {
-            ForEach(0..<viewModel.state.groups.count, id: \.self) { index in
-                Group {
-                    let group = viewModel.state.groups[index]
-                    FinanceGroupRow(
-                        group: group,
-                        viewModel: viewModel
-                    )
-                }
+            ForEach(viewModel.state.groups) { group in
+                FinanceGroupRow(
+                    group: group,
+                    viewModel: viewModel
+                )
             }
         }
     }

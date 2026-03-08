@@ -177,6 +177,11 @@ private struct FinanceDynamicsContentView: View {
     @State private var inlineCreditLimitText: String = ""
     @State private var inlineCreditDebtText: String = ""
     @State private var isEstimatedRateWarningHidden: Bool = FinanceDynamicsEstimatedRateWarningPrefs().isHidden()
+    @State private var showOverviewExpandedChart: Bool = false
+    @State private var selectedOverviewGranularity: FinanceOverviewGranularity = .month
+    @State private var selectedOverviewPeriods: [FinanceOverviewGranularity: Date] = [:]
+    @State private var overviewEntriesByGranularity: [FinanceOverviewGranularity: [FinanceOverviewPeriodEntry]] = [:]
+    @State private var isOverviewChartLoading: Bool = false
 
     // Кэшированные значения для графика
     @State private var cachedSelectedPoint: (date: Date, value: Double)? = nil
@@ -208,7 +213,6 @@ private struct FinanceDynamicsContentView: View {
                                 }
                             )
 
-                        // Карточка графика
                         chartCard
 
                         if let warning = viewModel.state.currencyConversionWarning, !isEstimatedRateWarningHidden {
@@ -929,6 +933,420 @@ private struct FinanceDynamicsContentView: View {
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = maxFractionDigits
         return formatter.string(from: NSNumber(value: value)) ?? "0"
+    }
+
+    private var overviewReloadToken: String {
+        let chartSignature = viewModel.state.chartData.map {
+            "\($0.date.timeIntervalSince1970)_\($0.value)"
+        }.joined(separator: "|")
+        let groups = viewModel.state.selectedGroupIDs.sorted().joined(separator: ",")
+        let accounts = viewModel.state.selectedAccountIDs.sorted().joined(separator: ",")
+        return [
+            viewModel.state.displayCurrency,
+            viewModel.state.showArchivedAccounts ? "1" : "0",
+            groups,
+            accounts,
+            chartSignature
+        ].joined(separator: "#")
+    }
+
+    private func reloadOverviewChart() async {
+        guard EntitlementPolicy.canUseFinanceCharts(isPro: appState.isPro) else { return }
+        isOverviewChartLoading = true
+
+        async let weekEntries = viewModel.buildOverviewEntries(granularity: .week)
+        async let monthEntries = viewModel.buildOverviewEntries(granularity: .month)
+        async let yearEntries = viewModel.buildOverviewEntries(granularity: .year)
+
+        overviewEntriesByGranularity = [
+            .week: await weekEntries,
+            .month: await monthEntries,
+            .year: await yearEntries
+        ]
+        isOverviewChartLoading = false
+    }
+
+    private var financeOverviewChartSection: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack {
+                Text(String(localized: "finances.overview.chart.title"))
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+
+                Spacer()
+
+                Button {
+                    showOverviewExpandedChart = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text(String(localized: "finances.overview.chart.full"))
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundStyle(AppColors.textPrimary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule()
+                            .fill(Color.white.opacity(0.08))
+                            .overlay(
+                                Capsule().stroke(Color.white.opacity(0.12), lineWidth: 0.8)
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+
+            if !EntitlementPolicy.canUseFinanceCharts(isPro: appState.isPro) {
+                proBlockedView
+            } else if isOverviewChartLoading {
+                ProgressView()
+                    .tint(AppColors.textPrimary)
+                    .frame(maxWidth: .infinity, minHeight: 180)
+            } else if hasOverviewData {
+                VStack(spacing: 16) {
+                    financeOverviewSummaryRow(presentation: compactOverviewPresentation, compact: true)
+                    financeOverviewBars(
+                        presentation: compactOverviewPresentation,
+                        chartHeight: 170,
+                        maxBarHeight: 108,
+                        minimumGroupWidth: 60,
+                        barWidth: 16,
+                        labelFontSize: 13,
+                        scrollable: false
+                    )
+                    financeOverviewGranularityPicker
+                }
+            } else {
+                financeOverviewEmptyState
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 16)
+        .background(dynamicsCardBackground)
+    }
+
+    private var financeOverviewExpandedChartSheet: some View {
+        NavigationStack {
+            ZStack {
+                GradientBackground()
+
+                ScrollView {
+                    VStack(spacing: 18) {
+                        financeOverviewSummaryRow(presentation: fullScreenOverviewPresentation, compact: false)
+                        financeOverviewBars(
+                            presentation: fullScreenOverviewPresentation,
+                            chartHeight: 270,
+                            maxBarHeight: 186,
+                            minimumGroupWidth: 58,
+                            barWidth: 18,
+                            labelFontSize: 14,
+                            scrollable: true
+                        )
+                        financeOverviewGranularityPicker
+                    }
+                    .padding(16)
+                }
+            }
+            .navigationTitle(String(localized: "finances.overview.chart.title"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(String(localized: "cashflow.common.dismiss")) {
+                        showOverviewExpandedChart = false
+                    }
+                    .foregroundStyle(AppColors.textPrimary)
+                }
+            }
+        }
+    }
+
+    private func financeOverviewSummaryRow(
+        presentation: FinanceOverviewPresentation,
+        compact: Bool
+    ) -> some View {
+        HStack(spacing: compact ? 8 : 12) {
+            financeOverviewSummaryCard(
+                title: String(localized: "finances.overview.chart.credit"),
+                value: presentation.selectedBar.credit,
+                accent: AppColors.error,
+                compact: compact
+            )
+            financeOverviewSummaryCard(
+                title: String(localized: "finances.overview.chart.debit"),
+                value: presentation.selectedBar.debit,
+                accent: Color(red: 0.38, green: 0.96, blue: 0.71),
+                compact: compact
+            )
+            financeOverviewSummaryCard(
+                title: String(localized: "finances.overview.chart.saldo"),
+                value: presentation.selectedBar.saldo,
+                accent: overviewSaldoColor(for: presentation.selectedBar.saldo),
+                compact: compact,
+                signed: true
+            )
+        }
+    }
+
+    private func financeOverviewSummaryCard(
+        title: String,
+        value: Double,
+        accent: Color,
+        compact: Bool,
+        signed: Bool = false
+    ) -> some View {
+        VStack(alignment: .leading, spacing: compact ? 8 : 10) {
+            Text(title)
+                .font(.system(size: compact ? 12 : 13, weight: .medium))
+                .foregroundStyle(AppColors.textSecondary)
+            Text(signed ? formatDelta(value) : formatBalance(value))
+                .font(.system(size: compact ? 18 : 22, weight: .semibold))
+                .foregroundStyle(accent)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, compact ? 12 : 14)
+        .padding(.vertical, compact ? 12 : 14)
+        .background(
+            RoundedRectangle(cornerRadius: compact ? 16 : 18, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+                .overlay(
+                    RoundedRectangle(cornerRadius: compact ? 16 : 18, style: .continuous)
+                        .stroke(accent.opacity(0.28), lineWidth: 0.9)
+                )
+        )
+    }
+
+    private func financeOverviewBars(
+        presentation: FinanceOverviewPresentation,
+        chartHeight: CGFloat,
+        maxBarHeight: CGFloat,
+        minimumGroupWidth: CGFloat,
+        barWidth: CGFloat,
+        labelFontSize: CGFloat,
+        scrollable: Bool
+    ) -> some View {
+        Group {
+            if scrollable {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .bottom, spacing: 10) {
+                        ForEach(presentation.bars) { bar in
+                            financeOverviewBarGroup(
+                                bar: bar,
+                                presentation: presentation,
+                                maxValue: overviewBarMaxValue(for: presentation),
+                                groupWidth: minimumGroupWidth,
+                                maxBarHeight: maxBarHeight,
+                                barWidth: barWidth,
+                                labelFontSize: labelFontSize
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 4)
+                }
+            } else {
+                GeometryReader { proxy in
+                    let groupWidth = max((proxy.size.width - 24) / CGFloat(max(presentation.bars.count, 1)), minimumGroupWidth)
+                    HStack(alignment: .bottom, spacing: 8) {
+                        ForEach(presentation.bars) { bar in
+                            financeOverviewBarGroup(
+                                bar: bar,
+                                presentation: presentation,
+                                maxValue: overviewBarMaxValue(for: presentation),
+                                groupWidth: groupWidth,
+                                maxBarHeight: maxBarHeight,
+                                barWidth: barWidth,
+                                labelFontSize: labelFontSize
+                            )
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                }
+            }
+        }
+        .frame(height: chartHeight)
+    }
+
+    private func financeOverviewBarGroup(
+        bar: FinanceOverviewBar,
+        presentation: FinanceOverviewPresentation,
+        maxValue: Double,
+        groupWidth: CGFloat,
+        maxBarHeight: CGFloat,
+        barWidth: CGFloat,
+        labelFontSize: CGFloat
+    ) -> some View {
+        let isSelected = bar.periodStart == presentation.selectedPeriodStart
+        let creditHeight = overviewBarHeight(value: bar.credit, maxValue: maxValue, maxBarHeight: maxBarHeight, isSelected: isSelected)
+        let debitHeight = overviewBarHeight(value: bar.debit, maxValue: maxValue, maxBarHeight: maxBarHeight, isSelected: isSelected)
+
+        return Button {
+            selectedOverviewPeriods[selectedOverviewGranularity] = bar.periodStart
+        } label: {
+            VStack(spacing: 10) {
+                ZStack(alignment: .bottom) {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.white.opacity(isSelected ? 0.08 : 0.04))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(Color.white.opacity(isSelected ? 0.18 : 0.08), lineWidth: 0.8)
+                        )
+
+                    VStack(spacing: 10) {
+                        Spacer(minLength: 0)
+
+                        HStack(alignment: .bottom, spacing: 10) {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [AppColors.error.opacity(0.95), AppColors.error.opacity(0.55)],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                                .frame(width: barWidth, height: creditHeight)
+
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color(red: 0.38, green: 0.96, blue: 0.71), Color(red: 0.26, green: 0.72, blue: 1.0)],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                                .frame(width: barWidth, height: debitHeight)
+                        }
+                        .frame(height: maxBarHeight, alignment: .bottom)
+
+                        HStack(spacing: 10) {
+                            Text(String(localized: "finances.overview.chart.credit"))
+                                .foregroundStyle(AppColors.textSecondary)
+                            Text(String(localized: "finances.overview.chart.debit"))
+                                .foregroundStyle(AppColors.textSecondary)
+                        }
+                        .font(.system(size: 10, weight: .medium))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 12)
+                }
+                .frame(width: groupWidth, height: maxBarHeight + 64)
+
+                VStack(spacing: 4) {
+                    Text(bar.label)
+                        .font(.system(size: labelFontSize, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                    Text(formatDelta(bar.saldo))
+                        .font(.system(size: max(11, labelFontSize - 1), weight: .medium))
+                        .foregroundStyle(overviewSaldoColor(for: bar.saldo))
+                }
+            }
+            .frame(width: groupWidth)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var financeOverviewGranularityPicker: some View {
+        HStack(spacing: 8) {
+            ForEach(FinanceOverviewGranularity.allCases) { granularity in
+                Button {
+                    selectedOverviewGranularity = granularity
+                } label: {
+                    Text(granularity.title)
+                        .font(.system(size: 13, weight: .medium))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule()
+                                .fill(Color.white.opacity(selectedOverviewGranularity == granularity ? 0.14 : 0.05))
+                        )
+                        .overlay(
+                            Capsule()
+                                .stroke(Color.white.opacity(selectedOverviewGranularity == granularity ? 0.18 : 0.08), lineWidth: 0.8)
+                        )
+                        .foregroundStyle(
+                            selectedOverviewGranularity == granularity
+                                ? AppColors.textPrimary
+                                : AppColors.textSecondary
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var compactOverviewPresentation: FinanceOverviewPresentation {
+        FinanceOverviewChartBuilder.makePresentation(
+            entries: overviewEntriesByGranularity[selectedOverviewGranularity] ?? [],
+            granularity: selectedOverviewGranularity,
+            selectedPeriodStart: selectedOverviewPeriods[selectedOverviewGranularity],
+            referenceDate: Date(),
+            calendar: .current,
+            locale: .autoupdatingCurrent
+        )
+    }
+
+    private var fullScreenOverviewPresentation: FinanceOverviewPresentation {
+        FinanceOverviewChartBuilder.makeFullScreenPresentation(
+            entries: overviewEntriesByGranularity[selectedOverviewGranularity] ?? [],
+            granularity: selectedOverviewGranularity,
+            selectedPeriodStart: selectedOverviewPeriods[selectedOverviewGranularity] ?? compactOverviewPresentation.selectedPeriodStart,
+            referenceDate: Date(),
+            calendar: .current,
+            locale: .autoupdatingCurrent
+        )
+    }
+
+    private var hasOverviewData: Bool {
+        (overviewEntriesByGranularity[selectedOverviewGranularity] ?? []).contains {
+            $0.debit > 0.01 || $0.credit > 0.01
+        }
+    }
+
+    private var financeOverviewEmptyState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "chart.bar.xaxis")
+                .font(.system(size: 28, weight: .semibold))
+                .foregroundStyle(AppColors.textSecondary)
+            Text(String(localized: "finances.overview.chart.empty"))
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(AppColors.textSecondary)
+        }
+        .frame(maxWidth: .infinity, minHeight: 160)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+        )
+    }
+
+    private func overviewBarHeight(
+        value: Double,
+        maxValue: Double,
+        maxBarHeight: CGFloat,
+        isSelected: Bool
+    ) -> CGFloat {
+        guard value > 0.000001 else { return 0 }
+        let normalized = maxValue > 0.000001 ? CGFloat(value / maxValue) : 0
+        let minimumHeight: CGFloat = isSelected ? 22 : 16
+        return max(minimumHeight, normalized * maxBarHeight)
+    }
+
+    private func overviewBarMaxValue(for presentation: FinanceOverviewPresentation) -> Double {
+        max(
+            presentation.bars.flatMap { [$0.debit, $0.credit] }.max() ?? 0,
+            1
+        )
+    }
+
+    private func overviewSaldoColor(for value: Double) -> Color {
+        if value > 0.01 {
+            return Color(red: 0.38, green: 0.96, blue: 0.71)
+        }
+        if value < -0.01 {
+            return AppColors.error
+        }
+        return AppColors.textSecondary
     }
 
     // MARK: - Chart Card
