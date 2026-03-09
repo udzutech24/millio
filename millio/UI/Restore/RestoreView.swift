@@ -18,6 +18,7 @@ struct RestoreView: View {
     @State private var backupPassphrase: String = ""
     @State private var backupVersions: [BackupVersionInfo] = []
     @State private var selectedRecordName: String?
+    @State private var isVersionsExpanded = false
 
     private var backupManager: BackupManagerProtocol? {
         diContainer?.backupManager
@@ -35,7 +36,7 @@ struct RestoreView: View {
             GradientBackground()
 
             ScrollView {
-                VStack(spacing: 24) {
+                VStack(spacing: 14) {
                     header
 
                     if isRestoring {
@@ -48,14 +49,14 @@ struct RestoreView: View {
 
                     if let error = restoreError {
                         Text(error.localizedDescription)
-                            .font(.system(size: 14, weight: .regular))
+                            .font(.system(size: 13, weight: .regular))
                             .foregroundStyle(AppColors.error)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 24)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 40)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 24)
             }
             .refreshable {
                 await refreshBackupStatusIfNeeded()
@@ -72,7 +73,7 @@ struct RestoreView: View {
             }
             Button("Отмена", role: .cancel) {}
         } message: {
-            Text("Текущая установка приложения останется без данных из облачной копии.")
+            Text("Локальные данные останутся как есть.")
         }
         .task {
             await refreshBackupStatusIfNeeded()
@@ -80,74 +81,58 @@ struct RestoreView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Image(systemName: "arrow.down.doc.fill")
-                .font(.system(size: 42, weight: .semibold))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.95)] + AppColors.financesGradient,
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                Image(systemName: "arrow.down.doc.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(AppColors.brandPrimary)
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Восстановить данные")
-                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                Text("Восстановление")
+                    .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundStyle(AppColors.textPrimary)
-                Text("Выберите нужный снимок. Восстановление полностью заменит локальные данные.")
-                    .font(.system(size: 15, weight: .regular))
-                    .foregroundStyle(AppColors.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
+
+            Text("Выберите копию. Восстановление заменит текущие локальные данные.")
+                .font(.system(size: 13, weight: .regular))
+                .foregroundStyle(AppColors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, 26)
+        .padding(.top, 14)
     }
 
     private var restoringView: some View {
-        FinancesGlassCard(accentColor: AppColors.brandPrimary, cornerRadius: 24) {
-            VStack(spacing: 24) {
+        FinancesGlassCard(accentColor: AppColors.brandPrimary, cornerRadius: 22) {
+            VStack(spacing: 14) {
                 ProgressView()
-                    .scaleEffect(1.5)
+                    .scaleEffect(1.2)
                     .tint(AppColors.textPrimary)
 
-                VStack(spacing: 8) {
-                    Text("Восстанавливаем данные")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                        .multilineTextAlignment(.center)
+                Text("Восстанавливаем данные")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
 
-                    Text("Подождите, локальная база будет заменена выбранной копией.")
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundStyle(AppColors.textTertiary)
-                        .multilineTextAlignment(.center)
-                }
+                Text("Подождите, база будет заменена выбранной копией.")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(AppColors.textTertiary)
+                    .multilineTextAlignment(.center)
             }
-            .padding(40)
+            .padding(22)
             .frame(maxWidth: .infinity)
         }
     }
 
     private func backupFoundView(version: BackupVersionInfo) -> some View {
-        VStack(spacing: 24) {
-            FinancesGlassCard(
-                accentColor: AppColors.brandPrimary,
-                cornerRadius: 24,
-                contentPadding: EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20)
-            ) {
-                VStack(alignment: .leading, spacing: 16) {
+        VStack(spacing: 12) {
+            FinancesGlassCard(accentColor: AppColors.brandPrimary, cornerRadius: 22, contentPadding: EdgeInsets(top: 14, leading: 14, bottom: 14, trailing: 14)) {
+                VStack(alignment: .leading, spacing: 10) {
                     statusPill(
-                        title: version.isPinned ? "Сохраненный снимок" : "Последняя копия",
+                        title: version.isPinned ? "Сохраненная версия" : "Последняя копия",
                         icon: version.isPinned ? "pin.fill" : "clock.fill",
                         color: version.isPinned ? AppColors.toggleOnGreen : AppColors.brandPrimary
                     )
 
-                    Text("Резервная копия найдена")
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
-                        .foregroundStyle(AppColors.textPrimary)
-
-                    HStack(spacing: 12) {
+                    HStack(spacing: 10) {
                         restoreMetric(
                             title: "Дата",
                             value: version.date.formatted(date: .abbreviated, time: .shortened)
@@ -157,120 +142,117 @@ struct RestoreView: View {
                             value: ByteCountFormatter.string(fromByteCount: version.size, countStyle: .file)
                         )
                     }
+
+                    Text("Локальные данные будут полностью заменены.")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(AppColors.textSecondary)
                 }
             }
 
             if backupVersions.count > 1 {
-                FinancesGlassCard(cornerRadius: 24, contentPadding: EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)) {
+                FinancesGlassCard(cornerRadius: 20, contentPadding: EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12)) {
                     VStack(spacing: 0) {
-                        ForEach(Array(backupVersions.enumerated()), id: \.element.id) { index, item in
-                            if index > 0 {
-                                FinancesRowDivider()
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                isVersionsExpanded.toggle()
                             }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Text("Выбрать другую копию")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(AppColors.textPrimary)
+                                Spacer()
+                                Image(systemName: isVersionsExpanded ? "chevron.up" : "chevron.down")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(AppColors.textTertiary)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
 
-                            Button {
-                                selectedRecordName = item.recordName
-                            } label: {
-                                HStack(spacing: 10) {
-                                    Image(systemName: selectedRecordName == item.recordName ? "largecircle.fill.circle" : "circle")
-                                        .font(.system(size: 14, weight: .semibold))
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(item.date.formatted(date: .abbreviated, time: .shortened))
-                                            .font(.system(size: 14, weight: .semibold))
-                                        Text(
-                                            String(
-                                                format: String(localized: "restore.version_size_format"),
-                                                ByteCountFormatter.string(fromByteCount: item.size, countStyle: .file),
-                                                String(item.version)
-                                            )
-                                        )
-                                        .font(.system(size: 12, weight: .regular))
-                                        .foregroundStyle(AppColors.textTertiary)
+                        if isVersionsExpanded {
+                            VStack(spacing: 0) {
+                                ForEach(Array(backupVersions.enumerated()), id: \.element.id) { index, item in
+                                    if index > 0 {
+                                        FinancesRowDivider()
                                     }
-                                    Spacer()
-                                    if item.isPinned {
-                                        Image(systemName: "pin.fill")
-                                            .font(.system(size: 12, weight: .semibold))
+
+                                    Button {
+                                        selectedRecordName = item.recordName
+                                    } label: {
+                                        HStack(spacing: 10) {
+                                            Image(systemName: selectedRecordName == item.recordName ? "largecircle.fill.circle" : "circle")
+                                                .font(.system(size: 13, weight: .semibold))
+
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(item.date.formatted(date: .abbreviated, time: .shortened))
+                                                    .font(.system(size: 13, weight: .semibold))
+                                                Text(
+                                                    String(
+                                                        format: String(localized: "restore.version_size_format"),
+                                                        ByteCountFormatter.string(fromByteCount: item.size, countStyle: .file),
+                                                        String(item.version)
+                                                    )
+                                                )
+                                                .font(.system(size: 11, weight: .regular))
+                                                .foregroundStyle(AppColors.textTertiary)
+                                            }
+
+                                            Spacer()
+
+                                            if item.isPinned {
+                                                Image(systemName: "pin.fill")
+                                                    .font(.system(size: 11, weight: .semibold))
+                                            }
+                                        }
+                                        .foregroundStyle(AppColors.textPrimary)
+                                        .padding(.vertical, 10)
                                     }
+                                    .buttonStyle(.plain)
+                                    .disabled(isRestoring)
                                 }
-                                .foregroundStyle(AppColors.textPrimary)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
                             }
-                            .buttonStyle(.plain)
-                            .disabled(isRestoring)
+                            .padding(.top, 8)
                         }
                     }
                 }
             }
 
-            FinancesGlassCard(accentColor: AppColors.warning, cornerRadius: 22, contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Перед восстановлением")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                    Text("Эта операция полностью заменит локальные данные на выбранный облачный снимок.")
-                        .font(.system(size: 13, weight: .regular))
-                        .foregroundStyle(AppColors.textSecondary)
-                    Text("Если копия была защищена кодовой фразой, без нее восстановление не завершится.")
-                        .font(.system(size: 13, weight: .regular))
-                        .foregroundStyle(AppColors.textSecondary)
-                }
+            FinancesGlassCard(cornerRadius: 20, contentPadding: EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)) {
+                SecureField("Кодовая фраза (если есть)", text: $backupPassphrase)
+                    .textContentType(.password)
+                    .privacySensitive()
+                    .foregroundStyle(AppColors.textPrimary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
             }
 
-            VStack(spacing: 8) {
-                HStack {
-                    Text("Кодовая фраза")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                    Spacer()
-                    Text("Нужна только для переносимого шифрования")
-                        .font(.system(size: 11, weight: .regular))
-                        .foregroundStyle(AppColors.textTertiary)
-                }
-
-                FinancesGlassCard(cornerRadius: 20, contentPadding: EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)) {
-                    SecureField("Введите кодовую фразу", text: $backupPassphrase)
-                        .textContentType(.password)
-                        .privacySensitive()
-                        .foregroundStyle(AppColors.textPrimary)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
-                }
+            ActionButton(
+                title: "Восстановить из копии",
+                icon: .system("arrow.down.circle.fill"),
+                gradientColors: AppColors.financesGradient
+            ) {
+                restore()
             }
+            .disabled(isRestoring)
 
-            VStack(spacing: 16) {
-                ActionButton(
-                    title: "Восстановить из этой копии",
-                    icon: .system("arrow.down.circle.fill"),
-                    gradientColors: AppColors.financesGradient
-                ) {
-                    restore()
-                }
-                .disabled(isRestoring)
-
-                Button {
-                    showSkipConfirmation = true
-                } label: {
-                    Text("Продолжить без восстановления")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppColors.textSecondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                }
-                .disabled(isRestoring)
+            Button {
+                showSkipConfirmation = true
+            } label: {
+                Text("Продолжить без восстановления")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppColors.textSecondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
             }
+            .disabled(isRestoring)
         }
     }
 
     private var noBackupView: some View {
-        VStack(spacing: 24) {
-            FinancesGlassCard(
-                accentColor: AppColors.warning,
-                cornerRadius: 24,
-                contentPadding: EdgeInsets(top: 24, leading: 24, bottom: 24, trailing: 24)
-            ) {
-                VStack(alignment: .leading, spacing: 14) {
+        VStack(spacing: 12) {
+            FinancesGlassCard(accentColor: AppColors.warning, cornerRadius: 22, contentPadding: EdgeInsets(top: 14, leading: 14, bottom: 14, trailing: 14)) {
+                VStack(alignment: .leading, spacing: 8) {
                     statusPill(
                         title: appState.isICloudAvailable ? "Копия не найдена" : "iCloud недоступен",
                         icon: appState.isICloudAvailable ? "exclamationmark.circle.fill" : "icloud.slash.fill",
@@ -278,38 +260,32 @@ struct RestoreView: View {
                     )
 
                     Text(BackupExperiencePresenter.restoreEmptyStateTitle(isICloudAvailable: appState.isICloudAvailable))
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
                         .foregroundStyle(AppColors.textPrimary)
 
                     Text(BackupExperiencePresenter.restoreEmptyStateMessage(isICloudAvailable: appState.isICloudAvailable))
-                        .font(.system(size: 14, weight: .regular))
+                        .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(AppColors.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
-
-                    Text("Если вы только что включили резервное копирование, сначала создайте первую копию в профиле.")
-                        .font(.system(size: 13, weight: .regular))
-                        .foregroundStyle(AppColors.textTertiary)
                 }
             }
 
-            VStack(spacing: 12) {
-                ActionButton(
-                    title: "Повторить поиск",
-                    icon: .system("arrow.clockwise"),
-                    gradientColors: AppColors.financesGradient
-                ) {
-                    Task { await refreshBackupStatusIfNeeded() }
-                }
+            ActionButton(
+                title: "Повторить поиск",
+                icon: .system("arrow.clockwise"),
+                gradientColors: AppColors.financesGradient
+            ) {
+                Task { await refreshBackupStatusIfNeeded() }
+            }
 
-                Button {
-                    showSkipConfirmation = true
-                } label: {
-                    Text("Продолжить без восстановления")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppColors.textSecondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                }
+            Button {
+                showSkipConfirmation = true
+            } label: {
+                Text("Продолжить без восстановления")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppColors.textSecondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
             }
         }
     }
@@ -368,7 +344,9 @@ struct RestoreView: View {
         }
         if let versions {
             backupVersions = versions
-            selectedRecordName = versions.first?.recordName
+            if selectedRecordName == nil || versions.contains(where: { $0.recordName == selectedRecordName }) == false {
+                selectedRecordName = versions.first?.recordName
+            }
             appState.lastBackupDate = versions.first?.date
         }
     }
@@ -402,27 +380,27 @@ struct RestoreView: View {
             Image(systemName: icon)
             Text(title)
         }
-        .font(.system(size: 12, weight: .semibold))
+        .font(.system(size: 11, weight: .semibold))
         .foregroundStyle(color)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
         .background(color.opacity(0.14), in: Capsule())
     }
 
     @ViewBuilder
     private func restoreMetric(title: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 5) {
             Text(title.uppercased())
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(AppColors.textTertiary)
             Text(value)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(AppColors.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .padding(11)
+        .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 

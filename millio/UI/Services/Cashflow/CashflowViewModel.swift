@@ -56,7 +56,7 @@ struct CashflowState {
     var systemCategoryOverrides: [CashflowSystemCategoryOverride] = []
     
     /// Период для графика
-    var chartPeriod: ChartPeriod = .month
+    var chartPeriod: ChartPeriod = .specificMonth
     
     /// Начальная дата для custom периода
     var customStartDate: Date = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
@@ -93,7 +93,7 @@ struct CashflowState {
     
     /// Сумма расходов за выбранный период
     var totalExpense: Double = 0.0
-    
+
     /// Баланс за выбранный период (доходы - расходы)
     var periodBalance: Double = 0.0
 
@@ -244,6 +244,7 @@ enum CashflowAction {
     case updateTransaction(CashflowTransaction)
     case hideTransactionEditor
     case setChartPeriod(ChartPeriod)
+    case resetToLastMonth
     case setCustomPeriod(start: Date, end: Date)
     case setSelectedMonth(Date)
     case setSelectedQuarter(Date)
@@ -288,9 +289,11 @@ final class CashflowViewModel: ViewModelProtocol {
         self.now = now
         self.assetsSnapshotProvider = assetsSnapshotProvider
         state.displayCurrency = SettingsManager.shared.primaryCurrencyCode
-        state.selectedMonth = now()
-        state.selectedQuarter = now()
-        state.selectedYear = now()
+        let nowDate = now()
+        state.selectedMonth = nowDate
+        state.selectedQuarter = nowDate
+        state.selectedYear = nowDate
+        resetToLastMonthInternal(referenceDate: nowDate)
         loadCards()
         loadTransactions()
         loadCustomCategories()
@@ -342,10 +345,15 @@ final class CashflowViewModel: ViewModelProtocol {
         case .setChartPeriod(let period):
             state.chartPeriod = period
             updateChartData()
-            
+
+        case .resetToLastMonth:
+            resetToLastMonthInternal(referenceDate: now())
+            updateChartData()
+
         case .setCustomPeriod(let start, let end):
-            state.customStartDate = start
-            state.customEndDate = end
+            let calendar = Calendar.current
+            state.customStartDate = calendar.startOfDay(for: start)
+            state.customEndDate = calendar.startOfDay(for: end)
             state.chartPeriod = .custom
             updateChartData()
             
@@ -365,10 +373,10 @@ final class CashflowViewModel: ViewModelProtocol {
             updateChartData()
 
         case .movePeriodBackward:
-            moveSelectedMonth(by: -1)
+            movePeriod(by: -1)
 
         case .movePeriodForward:
-            moveSelectedMonth(by: 1)
+            movePeriod(by: 1)
             
         case .showPeriodSelector:
             state.showPeriodSelector = true
@@ -604,6 +612,12 @@ final class CashflowViewModel: ViewModelProtocol {
     private func updateChartDataAsync() async {
         let (startDate, endDate) = getDateRange()
         let calendar = Calendar.current
+        let startDay = calendar.startOfDay(for: startDate)
+        let endDay = calendar.startOfDay(for: endDate)
+        let endExclusive = calendar.date(byAdding: .day, value: 1, to: endDay) ?? endDay
+        let dayCount = max((calendar.dateComponents([.day], from: startDay, to: endDay).day ?? 0) + 1, 1)
+        let previousEndDay = calendar.date(byAdding: .day, value: -1, to: startDay) ?? startDay
+        let previousStartDay = calendar.date(byAdding: .day, value: -(dayCount - 1), to: previousEndDay) ?? previousEndDay
         
         // Рассчитываем общие суммы за период и детализацию по категориям
         var totalIncome: Double = 0.0
@@ -621,15 +635,17 @@ final class CashflowViewModel: ViewModelProtocol {
                     transaction,
                     to: state.displayCurrency
                 )
-                convertedTransactions.append(
-                    CashflowConvertedTransaction(
-                        id: transaction.transactionUniqueID,
-                        date: transaction.transactionDate,
-                        income: converted,
-                        expense: 0
+                if transaction.transactionDate >= previousStartDay && transaction.transactionDate < endExclusive {
+                    convertedTransactions.append(
+                        CashflowConvertedTransaction(
+                            id: transaction.transactionUniqueID,
+                            date: transaction.transactionDate,
+                            income: converted,
+                            expense: 0
+                        )
                     )
-                )
-                if transaction.transactionDate >= startDate && transaction.transactionDate <= endDate {
+                }
+                if transaction.transactionDate >= startDay && transaction.transactionDate < endExclusive {
                     totalIncome += converted
                     let day = calendar.startOfDay(for: transaction.transactionDate)
                     incomeByDay[day, default: 0.0] += converted
@@ -642,15 +658,17 @@ final class CashflowViewModel: ViewModelProtocol {
                     transaction,
                     to: state.displayCurrency
                 )
-                convertedTransactions.append(
-                    CashflowConvertedTransaction(
-                        id: transaction.transactionUniqueID,
-                        date: transaction.transactionDate,
-                        income: 0,
-                        expense: converted
+                if transaction.transactionDate >= previousStartDay && transaction.transactionDate < endExclusive {
+                    convertedTransactions.append(
+                        CashflowConvertedTransaction(
+                            id: transaction.transactionUniqueID,
+                            date: transaction.transactionDate,
+                            income: 0,
+                            expense: converted
+                        )
                     )
-                )
-                if transaction.transactionDate >= startDate && transaction.transactionDate <= endDate {
+                }
+                if transaction.transactionDate >= startDay && transaction.transactionDate < endExclusive {
                     totalExpense += converted
                     let day = calendar.startOfDay(for: transaction.transactionDate)
                     expenseByDay[day, default: 0.0] += converted
@@ -675,8 +693,8 @@ final class CashflowViewModel: ViewModelProtocol {
             .map { CashflowCategoryBreakdownEntry(title: $0.key, convertedAmount: $0.value) }
             .sorted { $0.convertedAmount > $1.convertedAmount }
 
-        let normalizedStart = calendar.startOfDay(for: startDate)
-        let normalizedEnd = calendar.startOfDay(for: endDate)
+        let normalizedStart = startDay
+        let normalizedEnd = endDay
         var points: [CashflowChartPoint] = []
         var cursor = normalizedStart
         while cursor <= normalizedEnd {
@@ -698,7 +716,7 @@ final class CashflowViewModel: ViewModelProtocol {
         state.chartPoints = points
         state.convertedTransactions = convertedTransactions.sorted { $0.date < $1.date }
 
-        await updateAssetsBreakdown(startDate: startDate, endDate: endDate)
+        await updateAssetsBreakdown(startDate: startDay, endDate: endDay)
     }
     
     func currentDateRange() -> (Date, Date) {
@@ -709,6 +727,8 @@ final class CashflowViewModel: ViewModelProtocol {
         Self.makePeriodHeaderTitle(
             chartPeriod: state.chartPeriod,
             selectedMonth: state.selectedMonth,
+            selectedQuarter: state.selectedQuarter,
+            selectedYear: state.selectedYear,
             customStartDate: state.customStartDate,
             customEndDate: state.customEndDate,
             calendar: .current,
@@ -719,6 +739,8 @@ final class CashflowViewModel: ViewModelProtocol {
     static func makePeriodHeaderTitle(
         chartPeriod: ChartPeriod,
         selectedMonth: Date,
+        selectedQuarter: Date,
+        selectedYear: Date,
         customStartDate: Date,
         customEndDate: Date,
         calendar: Calendar = .current,
@@ -727,22 +749,70 @@ final class CashflowViewModel: ViewModelProtocol {
         let formatter = DateFormatter()
         formatter.locale = locale
 
-        if chartPeriod == .custom {
+        switch chartPeriod {
+        case .custom:
             let start = min(customStartDate, customEndDate)
             let end = max(customStartDate, customEndDate)
             formatter.setLocalizedDateFormatFromTemplate("dMMM y")
             return "\(formatter.string(from: start)) — \(formatter.string(from: end))"
-        }
 
-        let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: selectedMonth)) ?? selectedMonth
-        formatter.setLocalizedDateFormatFromTemplate("LLLL y")
-        return formatter.string(from: monthStart)
+        case .year, .specificYear:
+            formatter.setLocalizedDateFormatFromTemplate("y")
+            return formatter.string(from: selectedYear)
+
+        case .quarter, .specificQuarter:
+            let components = calendar.dateComponents([.year, .month], from: selectedQuarter)
+            let month = components.month ?? calendar.component(.month, from: selectedQuarter)
+            let year = components.year ?? calendar.component(.year, from: selectedQuarter)
+            let quarter = max(1, min(4, (month - 1) / 3 + 1))
+            let format = AppLocalization.string("cashflow.period.quarter_title_format", locale: locale)
+            return String(format: format, quarter, year)
+
+        case .month, .specificMonth:
+            let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: selectedMonth)) ?? selectedMonth
+            formatter.setLocalizedDateFormatFromTemplate("LLLL y")
+            return formatter.string(from: monthStart)
+        }
     }
 
     func canMovePeriodForward() -> Bool {
         let calendar = Calendar.current
-        let selectedStart = calendar.date(from: calendar.dateComponents([.year, .month], from: state.selectedMonth)) ?? state.selectedMonth
-        let currentStart = calendar.date(from: calendar.dateComponents([.year, .month], from: now())) ?? now()
+        let nowDate = now()
+
+        let selectedStart: Date
+        let currentStart: Date
+
+        switch state.chartPeriod {
+        case .month, .specificMonth:
+            selectedStart = calendar.date(from: calendar.dateComponents([.year, .month], from: state.selectedMonth)) ?? state.selectedMonth
+            currentStart = calendar.date(from: calendar.dateComponents([.year, .month], from: nowDate)) ?? nowDate
+
+        case .quarter, .specificQuarter:
+            let selectedComponents = calendar.dateComponents([.year, .month], from: state.selectedQuarter)
+            let selectedMonth = selectedComponents.month ?? calendar.component(.month, from: state.selectedQuarter)
+            let selectedYear = selectedComponents.year ?? calendar.component(.year, from: state.selectedQuarter)
+            let selectedQuarter = (selectedMonth - 1) / 3
+            let selectedQuarterStartMonth = selectedQuarter * 3 + 1
+            selectedStart = calendar.date(from: DateComponents(year: selectedYear, month: selectedQuarterStartMonth, day: 1)) ?? state.selectedQuarter
+
+            let currentComponents = calendar.dateComponents([.year, .month], from: nowDate)
+            let currentMonth = currentComponents.month ?? calendar.component(.month, from: nowDate)
+            let currentYear = currentComponents.year ?? calendar.component(.year, from: nowDate)
+            let currentQuarter = (currentMonth - 1) / 3
+            let currentQuarterStartMonth = currentQuarter * 3 + 1
+            currentStart = calendar.date(from: DateComponents(year: currentYear, month: currentQuarterStartMonth, day: 1)) ?? nowDate
+
+        case .year, .specificYear:
+            selectedStart = calendar.date(from: calendar.dateComponents([.year], from: state.selectedYear)) ?? state.selectedYear
+            currentStart = calendar.date(from: calendar.dateComponents([.year], from: nowDate)) ?? nowDate
+
+        case .custom:
+            let end = max(state.customStartDate, state.customEndDate)
+            let endDay = calendar.startOfDay(for: end)
+            let today = calendar.startOfDay(for: nowDate)
+            return endDay < today
+        }
+
         return selectedStart < currentStart
     }
 
@@ -1175,19 +1245,27 @@ final class CashflowViewModel: ViewModelProtocol {
         
         switch state.chartPeriod {
         case .month:
-            let endDate = now()
-            let startDate = calendar.date(byAdding: .day, value: -30, to: endDate) ?? endDate
-            return (startDate, endDate)
+            let reference = now()
+            let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: reference)) ?? reference
+            let endOfMonth = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: startOfMonth) ?? reference
+            return (startOfMonth, endOfMonth)
             
         case .quarter:
-            let endDate = now()
-            let startDate = calendar.date(byAdding: .day, value: -90, to: endDate) ?? endDate
-            return (startDate, endDate)
+            let reference = now()
+            let components = calendar.dateComponents([.year, .month], from: reference)
+            let month = components.month ?? calendar.component(.month, from: reference)
+            let year = components.year ?? calendar.component(.year, from: reference)
+            let quarter = (month - 1) / 3
+            let startMonth = quarter * 3 + 1
+            let startOfQuarter = calendar.date(from: DateComponents(year: year, month: startMonth, day: 1)) ?? reference
+            let endOfQuarter = calendar.date(byAdding: DateComponents(month: 3, day: -1), to: startOfQuarter) ?? reference
+            return (startOfQuarter, endOfQuarter)
             
         case .year:
-            let endDate = now()
-            let startDate = calendar.date(byAdding: .day, value: -365, to: endDate) ?? endDate
-            return (startDate, endDate)
+            let reference = now()
+            let startOfYear = calendar.date(from: calendar.dateComponents([.year], from: reference)) ?? reference
+            let endOfYear = calendar.date(byAdding: DateComponents(year: 1, day: -1), to: startOfYear) ?? reference
+            return (startOfYear, endOfYear)
             
         case .specificMonth:
             let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: state.selectedMonth)) ?? state.selectedMonth
@@ -1208,8 +1286,58 @@ final class CashflowViewModel: ViewModelProtocol {
             return (startOfYear, endOfYear)
             
         case .custom:
-            return (state.customStartDate, state.customEndDate)
+            let start = min(state.customStartDate, state.customEndDate)
+            let end = max(state.customStartDate, state.customEndDate)
+            return (calendar.startOfDay(for: start), calendar.startOfDay(for: end))
         }
+    }
+
+    private func movePeriod(by value: Int) {
+        switch state.chartPeriod {
+        case .month, .specificMonth:
+            moveSelectedMonth(by: value)
+        case .quarter, .specificQuarter:
+            moveSelectedQuarter(by: value)
+        case .year, .specificYear:
+            moveSelectedYear(by: value)
+        case .custom:
+            moveCustomPeriod(by: value)
+        }
+    }
+
+    private func moveCustomPeriod(by value: Int) {
+        guard value != 0 else { return }
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: min(state.customStartDate, state.customEndDate))
+        let end = calendar.startOfDay(for: max(state.customStartDate, state.customEndDate))
+        let dayCount = max((calendar.dateComponents([.day], from: start, to: end).day ?? 0) + 1, 1)
+        let shift = value * dayCount
+
+        let candidateStart = calendar.date(byAdding: .day, value: shift, to: start) ?? start
+        let candidateEnd = calendar.date(byAdding: .day, value: shift, to: end) ?? end
+
+        let today = calendar.startOfDay(for: now())
+        let clampedEnd = min(candidateEnd, today)
+        let clampedStart: Date
+        if clampedEnd != candidateEnd {
+            clampedStart = calendar.date(byAdding: .day, value: -(dayCount - 1), to: clampedEnd) ?? clampedEnd
+        } else {
+            clampedStart = candidateStart
+        }
+
+        state.customStartDate = clampedStart
+        state.customEndDate = clampedEnd
+        state.chartPeriod = .custom
+        updateChartData()
+    }
+
+    private func resetToLastMonthInternal(referenceDate: Date) {
+        let calendar = Calendar.current
+        let end = calendar.startOfDay(for: referenceDate)
+        let start = calendar.date(byAdding: .day, value: -30, to: end) ?? end
+        state.customStartDate = start
+        state.customEndDate = end
+        state.chartPeriod = .custom
     }
 
     private func moveSelectedMonth(by value: Int) {
@@ -1224,6 +1352,43 @@ final class CashflowViewModel: ViewModelProtocol {
             state.selectedMonth = candidateMonth
         }
         state.chartPeriod = .specificMonth
+        updateChartData()
+    }
+
+    private func moveSelectedQuarter(by value: Int) {
+        let calendar = Calendar.current
+        let nowDate = now()
+
+        let currentComponents = calendar.dateComponents([.year, .month], from: nowDate)
+        let currentMonth = currentComponents.month ?? calendar.component(.month, from: nowDate)
+        let currentYear = currentComponents.year ?? calendar.component(.year, from: nowDate)
+        let currentQuarter = (currentMonth - 1) / 3
+        let currentQuarterStartMonth = currentQuarter * 3 + 1
+        let currentQuarterStart = calendar.date(from: DateComponents(year: currentYear, month: currentQuarterStartMonth, day: 1)) ?? nowDate
+
+        let selectedComponents = calendar.dateComponents([.year, .month], from: state.selectedQuarter)
+        let selectedMonth = selectedComponents.month ?? calendar.component(.month, from: state.selectedQuarter)
+        let selectedYear = selectedComponents.year ?? calendar.component(.year, from: state.selectedQuarter)
+        let selectedQuarter = (selectedMonth - 1) / 3
+        let selectedQuarterStartMonth = selectedQuarter * 3 + 1
+        let selectedQuarterStart = calendar.date(from: DateComponents(year: selectedYear, month: selectedQuarterStartMonth, day: 1)) ?? state.selectedQuarter
+
+        let candidate = calendar.date(byAdding: .month, value: value * 3, to: selectedQuarterStart) ?? selectedQuarterStart
+        state.selectedQuarter = min(candidate, currentQuarterStart)
+        state.chartPeriod = .specificQuarter
+        updateChartData()
+    }
+
+    private func moveSelectedYear(by value: Int) {
+        let calendar = Calendar.current
+        let nowDate = now()
+
+        let currentYearStart = calendar.date(from: calendar.dateComponents([.year], from: nowDate)) ?? nowDate
+        let selectedYearStart = calendar.date(from: calendar.dateComponents([.year], from: state.selectedYear)) ?? state.selectedYear
+        let candidate = calendar.date(byAdding: .year, value: value, to: selectedYearStart) ?? selectedYearStart
+
+        state.selectedYear = min(candidate, currentYearStart)
+        state.chartPeriod = .specificYear
         updateChartData()
     }
 

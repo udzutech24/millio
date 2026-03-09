@@ -23,5 +23,12 @@ struct CashflowInsightsControlsStyleTests {
         #expect(full.fontSize > compact.fontSize)
         #expect(full.itemVerticalPadding > compact.itemVerticalPadding)
     }
-}
 
+    @Test("Compact granularity picker has usable touch target")
+    func compactPickerHasUsableTouchTarget() {
+        let compact = CashflowInsightsControlsStyle.granularityPickerMetrics(isFullScreen: false)
+
+        #expect(compact.itemVerticalPadding >= 6)
+        #expect(compact.containerPadding >= 2)
+    }
+}

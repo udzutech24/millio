@@ -41,4 +41,20 @@ struct BackupExperienceModelsTests {
         #expect(BackupExperiencePresenter.restoreEmptyStateTitle(isICloudAvailable: true) == "Резервная копия не найдена")
         #expect(BackupExperiencePresenter.restoreEmptyStateTitle(isICloudAvailable: false) == "iCloud сейчас недоступен")
     }
+
+    @Test("Dashboard keeps compact checklist and short action-oriented copy")
+    func testDashboardCompactContract() {
+        let content = BackupExperiencePresenter.dashboard(
+            isBackupEnabled: true,
+            isICloudAvailable: false,
+            lastBackupDate: nil,
+            encryptionMode: .deviceKey,
+            hasPinnedVersions: false
+        )
+
+        #expect(content.readiness.count == 5)
+        #expect(content.title.count <= 24)
+        #expect(content.subtitle.contains("iCloud"))
+        #expect(content.storageTitle == "Хранение недоступно")
+    }
 }

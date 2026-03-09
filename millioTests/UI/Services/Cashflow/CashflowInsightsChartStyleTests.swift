@@ -5,6 +5,7 @@
 //  Created by Codex on 08.03.2026.
 //
 
+import Foundation
 import CoreGraphics
 import Testing
 @testable import millio

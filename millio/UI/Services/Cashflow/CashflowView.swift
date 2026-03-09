@@ -134,8 +134,6 @@ private struct CashflowContentView: View {
     @State private var isEmptyIntroHidden: Bool = CashflowEmptyStateIntroPrefs().isHidden()
     @State private var selectedTopAction: TopToolbarAction = .currency
     @State private var showExpandedChart: Bool = false
-    @State private var selectedInsightsGranularity: CashflowInsightsGranularity = .month
-    @State private var selectedInsightsPeriods: [CashflowInsightsGranularity: Date] = [:]
     @State private var fullScreenChartVisiblePeriods: Int = 4
     @State private var historyInitialFilter: CashflowHistoryTypeFilter = .all
     @State private var historyInitialStartDate: Date? = nil
@@ -263,11 +261,14 @@ private struct CashflowContentView: View {
             let useCompactMetrics = CashflowActionButtonsLayout.shouldUseCompactMetrics(
                 containerWidth: proxy.size.width
             )
+            let incomeTitle = String(localized: "main.quick_action.income")
+            let expenseTitle = String(localized: "main.quick_action.expense")
+            let transferTitle = String(localized: "cashflow.quick_action.transfer")
 
             HStack(spacing: CashflowActionButtonsLayout.buttonSpacing) {
                 CashflowActionButton(
-                    accessibilityLabel: "Income",
-                    title: "Income",
+                    accessibilityLabel: incomeTitle,
+                    title: incomeTitle,
                     icon: QuickActionIcons.income,
                     gradientColors: AppColors.incomeGradient,
                     style: .primary,
@@ -278,8 +279,8 @@ private struct CashflowContentView: View {
                 }
 
                 CashflowActionButton(
-                    accessibilityLabel: "Expense",
-                    title: "Expense",
+                    accessibilityLabel: expenseTitle,
+                    title: expenseTitle,
                     icon: QuickActionIcons.expense,
                     gradientColors: AppColors.expenseGradient,
                     style: .secondary,
@@ -290,8 +291,8 @@ private struct CashflowContentView: View {
                 }
 
                 CashflowActionButton(
-                    accessibilityLabel: "Transfer",
-                    title: "Transfer",
+                    accessibilityLabel: transferTitle,
+                    title: transferTitle,
                     icon: QuickActionIcons.transfer,
                     gradientColors: AppColors.cashflowGradient,
                     style: .secondary,
@@ -310,14 +311,14 @@ private struct CashflowContentView: View {
     private var assetBreakdownSection: some View {
         VStack(spacing: 14) {
             statRow(
-                title: "Assets at start of period",
+                title: String(localized: "cashflow.stats.assets_start"),
                 value: formatMoney(viewModel.state.assetsAtPeriodStart),
                 valueColor: AppColors.textPrimary
             )
             rowDivider
 
             expandableStatRow(
-                title: "Income",
+                title: String(localized: "Income"),
                 value: formatSignedMoney(viewModel.state.totalIncome),
                 valueColor: positiveColor(for: viewModel.state.totalIncome),
                 isExpanded: $showIncomeBreakdown
@@ -363,7 +364,7 @@ private struct CashflowContentView: View {
             rowDivider
 
             expandableStatRow(
-                title: "Recorded expenses",
+                title: String(localized: "cashflow.stats.expenses"),
                 value: formatSignedMoney(-viewModel.state.contributedExpense),
                 valueColor: negativeColor(for: -viewModel.state.contributedExpense),
                 isExpanded: $showExpenseBreakdown
@@ -384,7 +385,7 @@ private struct CashflowContentView: View {
 
             VStack(spacing: 8) {
                 statRow(
-                    title: "Assets at end of period",
+                    title: String(localized: "cashflow.stats.assets_end"),
                     value: formatMoney(viewModel.state.assetsAtPeriodEnd),
                     valueColor: AppColors.textPrimary
                 )
@@ -456,7 +457,7 @@ private struct CashflowContentView: View {
                         .foregroundStyle(primarySecondaryText)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(isExpanded.wrappedValue ? "Hide details" : "Show details")
+                .accessibilityLabel(Text(isExpanded.wrappedValue ? "Hide details" : "Show details"))
             }
         }
         .padding(.horizontal, 4)
@@ -575,24 +576,20 @@ private struct CashflowContentView: View {
 
                 Spacer()
 
-                HStack(spacing: 8) {
-                    periodHeaderTitleView
-
-                    Button {
-                        draftStartDate = viewModel.state.customStartDate
-                        draftEndDate = viewModel.state.customEndDate
-                        viewModel.handle(.showPeriodSelector)
-                        fireLightImpact()
-                    } label: {
-                        Image("calendar")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 16, height: 16)
-                            .padding(8)
-                            .background(periodControlBackground)
-                    }
-                    .buttonStyle(.plain)
+                Button {
+                    draftStartDate = viewModel.state.customStartDate
+                    draftEndDate = viewModel.state.customEndDate
+                    viewModel.handle(.showPeriodSelector)
+                    fireLightImpact()
+                } label: {
+                    Image("calendar")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 16, height: 16)
+                        .padding(8)
+                        .background(periodControlBackground)
                 }
+                .buttonStyle(.plain)
 
                 Spacer()
 
@@ -617,16 +614,9 @@ private struct CashflowContentView: View {
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(primarySecondaryText)
                 .contentTransition(.opacity)
+                .frame(maxWidth: .infinity, alignment: .center)
         }
-        .animation(.easeInOut(duration: 0.2), value: viewModel.state.selectedMonth)
-    }
-
-    @ViewBuilder
-    private var periodHeaderTitleView: some View {
-        Text(viewModel.currentPeriodHeaderTitle())
-            .font(.system(size: 17, weight: .semibold))
-            .foregroundStyle(AppColors.textPrimary)
-            .lineLimit(1)
+        .animation(.easeInOut(duration: 0.2), value: viewModel.state.customStartDate)
     }
     
     @ToolbarContentBuilder
@@ -645,7 +635,7 @@ private struct CashflowContentView: View {
                         .frame(width: itemSize, height: itemSize)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Back")
+                .accessibilityLabel(Text("Back"))
 
                 Menu {
                     ForEach(MiniAppNavigation.destinations(excluding: currentRoute)) { destination in
@@ -662,7 +652,7 @@ private struct CashflowContentView: View {
                         .frame(width: itemSize, height: itemSize)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Quick navigation for mini apps")
+                .accessibilityLabel(Text("Quick navigation for mini apps"))
             }
             .padding(.horizontal, 10)
             .frame(height: 40)
@@ -671,7 +661,7 @@ private struct CashflowContentView: View {
         ToolbarItem(placement: .topBarTrailing) {
             Button {
                 selectedTopAction = .history
-                openHistory(filter: .all, periodStart: nil)
+                openHistory(filter: .all)
             } label: {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.system(size: 18, weight: .regular))
@@ -679,7 +669,7 @@ private struct CashflowContentView: View {
                     .frame(width: 42, height: 38)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Transaction history")
+            .accessibilityLabel(Text("Transaction history"))
         }
 
         ToolbarItem(placement: .topBarTrailing) {
@@ -695,7 +685,7 @@ private struct CashflowContentView: View {
                 .frame(height: 38)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Display currency selector")
+            .accessibilityLabel(Text("Display currency selector"))
         }
     }
     
@@ -727,20 +717,12 @@ private struct CashflowContentView: View {
         return displayCurrencyLabel()
     }
 
-    private func openHistory(filter: CashflowHistoryTypeFilter, periodStart: Date?) {
+    private func openHistory(filter: CashflowHistoryTypeFilter, dateRange: ClosedRange<Date>? = nil) {
         historyInitialFilter = filter
-        if let periodStart {
-            let range = CashflowInsightsChartBuilder.periodRange(
-                for: periodStart,
-                granularity: selectedInsightsGranularity,
-                calendar: .current
-            )
-            historyInitialStartDate = range.lowerBound
-            historyInitialEndDate = range.upperBound
-        } else {
-            historyInitialStartDate = nil
-            historyInitialEndDate = nil
-        }
+        let calendar = Calendar.current
+        let range: ClosedRange<Date> = dateRange ?? cashflowInsightsSelectedDateRange
+        historyInitialStartDate = calendar.startOfDay(for: range.lowerBound)
+        historyInitialEndDate = calendar.startOfDay(for: range.upperBound)
         viewModel.handle(.showTransactionsHistory)
         fireLightImpact()
     }
@@ -836,12 +818,15 @@ private struct CashflowContentView: View {
 
     private var cashflowChartContent: some View {
         let presentation = cashflowInsightsPresentation
+        let granularity = cashflowInsightsGranularity
 
         return VStack(spacing: 18) {
             HStack {
                 Text("cashflow.chart.title")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(primarySecondaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
 
                 Spacer()
 
@@ -849,22 +834,20 @@ private struct CashflowContentView: View {
                     showExpandedChart = true
                     fireLightImpact()
                 } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.system(size: 12, weight: .semibold))
-                        Text("Full")
-                            .font(.system(size: 12, weight: .semibold))
-                    }
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 8)
                     .background(periodControlBackground)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(Text("cashflow.chart.expand"))
             }
 
             cashflowInsightsBars(
                 presentation: presentation,
+                granularity: granularity,
                 chartHeight: CashflowInsightsControlsStyle.compactBarsHeight,
                 maxBarHeight: 110,
                 minimumGroupWidth: 56,
@@ -872,7 +855,7 @@ private struct CashflowContentView: View {
                 labelFontSize: 14
             )
 
-            cashflowInsightsGranularityPicker(isFullScreen: false)
+            
         }
     }
 
@@ -888,20 +871,14 @@ private struct CashflowContentView: View {
                                 model: cashflowFullScreenPresentation.expenseCard,
                                 accent: neonNegative,
                                 onTap: {
-                                    openHistory(
-                                        filter: .expense,
-                                        periodStart: cashflowFullScreenPresentation.selectedPeriodStart
-                                    )
+                                    openHistory(filter: .expense)
                                 }
                             )
                             cashflowInsightCard(
                                 model: cashflowFullScreenPresentation.incomeCard,
                                 accent: neonPositive,
                                 onTap: {
-                                    openHistory(
-                                        filter: .income,
-                                        periodStart: cashflowFullScreenPresentation.selectedPeriodStart
-                                    )
+                                    openHistory(filter: .income)
                                 }
                             )
                         }
@@ -913,7 +890,6 @@ private struct CashflowContentView: View {
                 .safeAreaInset(edge: .bottom, alignment: .center, spacing: 0) {
                     VStack(spacing: 12) {
                         fullScreenVisiblePeriodsControl
-                        cashflowInsightsGranularityPicker(isFullScreen: true)
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
@@ -969,29 +945,35 @@ private struct CashflowContentView: View {
     }
 
     private var hasChartData: Bool {
-        viewModel.state.convertedTransactions.contains { transaction in
-            abs(transaction.income) > 0.000001 || abs(transaction.expense) > 0.000001
-        }
+        abs(viewModel.state.totalIncome) > 0.000001 || abs(viewModel.state.totalExpense) > 0.000001
+    }
+
+    private var cashflowInsightsSelectedDateRange: ClosedRange<Date> {
+        let current = viewModel.currentDateRange()
+        let start = min(current.0, current.1)
+        let end = max(current.0, current.1)
+        return start...end
+    }
+
+    private var cashflowInsightsGranularity: CashflowInsightsGranularity {
+        .month
     }
 
     private var cashflowInsightsPresentation: CashflowInsightsPresentation {
-        CashflowInsightsChartBuilder.makePresentation(
+        return CashflowInsightsChartBuilder.makePresentation(
             entries: viewModel.state.convertedTransactions,
-            granularity: selectedInsightsGranularity,
-            selectedPeriodStart: selectedInsightsPeriods[selectedInsightsGranularity],
-            referenceDate: Date(),
+            dateRange: cashflowInsightsSelectedDateRange,
+            granularity: cashflowInsightsGranularity,
             calendar: .current,
             locale: .autoupdatingCurrent
         )
     }
 
     private var cashflowFullScreenPresentation: CashflowInsightsPresentation {
-        CashflowInsightsChartBuilder.makeFullScreenPresentation(
+        CashflowInsightsChartBuilder.makePresentation(
             entries: viewModel.state.convertedTransactions,
-            granularity: selectedInsightsGranularity,
-            selectedPeriodStart: selectedInsightsPeriods[selectedInsightsGranularity],
-            referenceDate: Date(),
-            maxVisiblePeriods: fullScreenChartVisiblePeriods,
+            dateRange: cashflowInsightsSelectedDateRange,
+            granularity: cashflowInsightsGranularity,
             calendar: .current,
             locale: .autoupdatingCurrent
         )
@@ -1084,6 +1066,7 @@ private struct CashflowContentView: View {
 
     private func cashflowInsightsBars(
         presentation: CashflowInsightsPresentation,
+        granularity: CashflowInsightsGranularity,
         chartHeight: CGFloat,
         maxBarHeight: CGFloat,
         minimumGroupWidth: CGFloat,
@@ -1101,27 +1084,31 @@ private struct CashflowContentView: View {
                 minimumGroupWidth: minimumGroupWidth
             )
 
-            HStack(alignment: .bottom, spacing: 8) {
-                ForEach(presentation.bars) { bar in
-                    cashflowInsightsBarGroup(
-                        bar: bar,
-                        granularity: selectedInsightsGranularity,
-                        selectedPeriodStart: presentation.selectedPeriodStart,
-                        maxValue: maxValue,
-                        groupWidth: groupWidth,
-                        maxBarHeight: maxBarHeight,
-                        barWidth: barWidth,
-                        labelFontSize: labelFontSize
-                    )
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .bottom, spacing: 8) {
+                    ForEach(presentation.bars) { bar in
+                        cashflowInsightsBarGroup(
+                            bar: bar,
+                            granularity: granularity,
+                            selectedPeriodStart: presentation.selectedPeriodStart,
+                            maxValue: maxValue,
+                            groupWidth: groupWidth,
+                            maxBarHeight: maxBarHeight,
+                            barWidth: barWidth,
+                            labelFontSize: labelFontSize
+                        )
+                    }
                 }
+                .frame(maxHeight: .infinity, alignment: .bottomLeading)
+                .padding(.horizontal, 2)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
         }
         .frame(height: chartHeight)
     }
 
     private var cashflowFullScreenChart: some View {
         let presentation = cashflowFullScreenPresentation
+        let granularity = cashflowInsightsGranularity
 
         return GeometryReader { proxy in
             let metrics = CashflowInsightsChartStyle.fullScreenMetrics(
@@ -1134,24 +1121,26 @@ private struct CashflowContentView: View {
                 1
             )
 
-            HStack(alignment: .bottom, spacing: metrics.spacing) {
-                ForEach(presentation.bars) { bar in
-                    cashflowInsightsBarGroup(
-                        bar: bar,
-                        granularity: selectedInsightsGranularity,
-                        selectedPeriodStart: presentation.selectedPeriodStart,
-                        maxValue: maxValue,
-                        groupWidth: metrics.groupWidth,
-                        maxBarHeight: metrics.maxBarHeight,
-                        barWidth: metrics.barWidth,
-                        labelFontSize: metrics.labelFontSize
-                    )
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .bottom, spacing: metrics.spacing) {
+                    ForEach(presentation.bars) { bar in
+                        cashflowInsightsBarGroup(
+                            bar: bar,
+                            granularity: granularity,
+                            selectedPeriodStart: presentation.selectedPeriodStart,
+                            maxValue: maxValue,
+                            groupWidth: metrics.groupWidth,
+                            maxBarHeight: metrics.maxBarHeight,
+                            barWidth: metrics.barWidth,
+                            labelFontSize: metrics.labelFontSize
+                        )
+                    }
                 }
+                .frame(maxHeight: .infinity, alignment: .bottom)
+                .padding(.horizontal, 10)
+                .padding(.top, 12)
+                .padding(.bottom, 14)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-            .padding(.horizontal, 10)
-            .padding(.top, 12)
-            .padding(.bottom, 14)
         }
         .frame(height: 332)
     }
@@ -1167,7 +1156,7 @@ private struct CashflowContentView: View {
         labelFontSize: CGFloat
     ) -> some View {
         let comparisonGranularity: Calendar.Component = {
-            switch selectedInsightsGranularity {
+            switch granularity {
             case .year:
                 return .year
             case .month:
@@ -1182,54 +1171,48 @@ private struct CashflowContentView: View {
             toGranularity: comparisonGranularity
         )
 
-        return Button {
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) {
-                selectedInsightsPeriods[selectedInsightsGranularity] = bar.periodStart
+        return VStack(spacing: 12) {
+            Spacer(minLength: 0)
+
+            HStack(alignment: .bottom, spacing: 8) {
+                chartColumn(
+                    value: bar.expense,
+                    maxValue: maxValue,
+                    maxBarHeight: maxBarHeight,
+                    barWidth: barWidth,
+                    isSelected: isSelected,
+                    trackTint: neonNegative,
+                    glowColor: neonNegative,
+                    fill: LinearGradient(
+                        colors: [
+                            Color(hex: "FF7A7A"),
+                            Color(hex: "FF6666"),
+                            Color(hex: "4A1414")
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+
+                chartColumn(
+                    value: bar.income,
+                    maxValue: maxValue,
+                    maxBarHeight: maxBarHeight,
+                    barWidth: barWidth,
+                    isSelected: isSelected,
+                    trackTint: neonPositive,
+                    glowColor: neonPositive,
+                    fill: LinearGradient(
+                        colors: [
+                            Color(hex: "7BFFD0"),
+                            Color(hex: "30D6A8"),
+                            Color(hex: "0B3A2A")
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
             }
-            fireLightImpact()
-        } label: {
-            VStack(spacing: 12) {
-                Spacer(minLength: 0)
-
-                HStack(alignment: .bottom, spacing: 8) {
-                    chartColumn(
-                        value: bar.expense,
-                        maxValue: maxValue,
-                        maxBarHeight: maxBarHeight,
-                        barWidth: barWidth,
-                        isSelected: isSelected,
-                        trackTint: neonNegative,
-                        glowColor: neonNegative,
-                        fill: LinearGradient(
-                            colors: [
-                                Color(hex: "FF7A7A"),
-                                Color(hex: "FF6666"),
-                                Color(hex: "4A1414")
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-
-                    chartColumn(
-                        value: bar.income,
-                        maxValue: maxValue,
-                        maxBarHeight: maxBarHeight,
-                        barWidth: barWidth,
-                        isSelected: isSelected,
-                        trackTint: neonPositive,
-                        glowColor: neonPositive,
-                        fill: LinearGradient(
-                            colors: [
-                                Color(hex: "7BFFD0"),
-                                Color(hex: "30D6A8"),
-                                Color(hex: "0B3A2A")
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                }
                 .padding(.horizontal, 10)
                 .padding(.top, 16)
                 .padding(.bottom, 8)
@@ -1293,8 +1276,6 @@ private struct CashflowContentView: View {
                 y: 10
             )
             .offset(y: isSelected ? -2 : 0)
-        }
-        .buttonStyle(.plain)
     }
 
     private func chartColumn(
@@ -1385,52 +1366,6 @@ private struct CashflowContentView: View {
                 y: 6
             )
             .opacity(visibleHeight > 0 ? 1 : 0)
-    }
-
-    private func cashflowInsightsGranularityPicker(isFullScreen: Bool) -> some View {
-        let metrics = CashflowInsightsControlsStyle.granularityPickerMetrics(isFullScreen: isFullScreen)
-        return HStack(spacing: 6) {
-            ForEach(CashflowInsightsGranularity.allCases) { granularity in
-                Button {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
-                        selectedInsightsGranularity = granularity
-                    }
-                    fireLightImpact()
-                } label: {
-                    Text(granularity.title)
-                        .font(.system(size: metrics.fontSize, weight: .medium))
-                        .foregroundStyle(
-                            selectedInsightsGranularity == granularity
-                                ? AppColors.textPrimary
-                                : primarySecondaryText
-                        )
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, metrics.itemVerticalPadding)
-                        .background(
-                            Capsule(style: .continuous)
-                                .fill(Color.white.opacity(selectedInsightsGranularity == granularity ? 0.14 : 0.0))
-                                .overlay(
-                                    Capsule(style: .continuous)
-                                        .stroke(
-                                            Color.white.opacity(selectedInsightsGranularity == granularity ? 0.10 : 0.0),
-                                            lineWidth: 0.6
-                                        )
-                                )
-                        )
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(metrics.containerPadding)
-        .background(
-            Capsule(style: .continuous)
-                .fill(Color.white.opacity(0.05))
-                .overlay(
-                    Capsule(style: .continuous)
-                        .stroke(Color.white.opacity(0.06), lineWidth: 0.8)
-                )
-        )
-        .padding(metrics.outerPadding)
     }
 
     private func visibleRangeChip(_ value: Int) -> some View {
@@ -1708,7 +1643,7 @@ private struct CashflowContentView: View {
 
                 HStack(spacing: 12) {
                     Button {
-                        viewModel.handle(.setSelectedMonth(Date()))
+                        viewModel.handle(.resetToLastMonth)
                         viewModel.handle(.hidePeriodSelector)
                     } label: {
                         Text("Reset")
