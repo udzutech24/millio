@@ -14,6 +14,34 @@ struct LocalizationHotReloadTests {
         )
     }
 
+    @Test("Converter share preview title is localized (no hardcoded Russian)")
+    func converterSharePreviewTitleIsLocalized() throws {
+        let source = try sourceFile(
+            "millio/UI/Services/Courses/ConverterView.swift",
+            fromTestFilePath: #filePath
+        )
+        #expect(
+            !source.contains("\"предусмотр\""),
+            "Do not hardcode Russian UI strings in ConverterView. Use ConverterL10n.sharePreviewTitle."
+        )
+    }
+
+    @Test("Courses title uses localization key (no hardcoded Russian)")
+    func coursesTitleUsesLocalizationKey() throws {
+        let source = try sourceFile(
+            "millio/UI/Services/Courses/CoursesView.swift",
+            fromTestFilePath: #filePath
+        )
+        #expect(
+            !source.contains("\"Курсы\""),
+            "Do not hardcode Russian UI strings in CoursesView. Use MainLocalization.serviceCourses."
+        )
+        #expect(
+            source.contains("MainLocalization.serviceCourses"),
+            "CoursesView should use MainLocalization.serviceCourses for the title."
+        )
+    }
+
     @Test("Finance ungrouped group name is resolved dynamically")
     func financeUngroupedNameIsDynamic() throws {
         let source = try sourceFile(

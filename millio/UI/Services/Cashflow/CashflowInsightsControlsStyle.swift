@@ -36,10 +36,11 @@ enum CashflowInsightsControlsStyle {
 
         return CashflowInsightsGranularityPickerMetrics(
             fontSize: 10,
-            itemVerticalPadding: 2,
-            containerPadding: 1,
+            // Увеличиваем тач-таргет переключателя (Год/Месяц/Week) в compact режиме:
+            // визуально "толще" и проще попасть пальцем, но без чрезмерного роста UI.
+            itemVerticalPadding: 6,
+            containerPadding: 2,
             outerPadding: 0
         )
     }
 }
-

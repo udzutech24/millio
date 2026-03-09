@@ -16,9 +16,6 @@ struct AuthWelcomeView: View {
     @ScaledMetric(relativeTo: .body) private var cardPaddingHorizontal: CGFloat = 22
     @ScaledMetric(relativeTo: .body) private var cardPaddingBottom: CGFloat = 20
 
-    @ScaledMetric(relativeTo: .body) private var pillCornerRadius: CGFloat = 14
-    @ScaledMetric(relativeTo: .footnote) private var pillVerticalPadding: CGFloat = 10
-
     @ScaledMetric(relativeTo: .largeTitle) private var heroTitleSize: CGFloat = 36
     @ScaledMetric(relativeTo: .title3) private var brandTitleSize: CGFloat = 20
 
@@ -35,6 +32,9 @@ struct AuthWelcomeView: View {
         static let featureAppleSignIn: LocalizedStringKey = "auth.welcome.feature.apple_sign_in"
         static let featurePrivateSession: LocalizedStringKey = "auth.welcome.feature.private_session"
         static let featureGuestAccess: LocalizedStringKey = "auth.welcome.feature.guest_access"
+
+        static let debugLocalBackendPrefix: LocalizedStringKey = "auth.welcome.debug.local_backend_prefix"
+        static let debugLocalBackendFallback: LocalizedStringKey = "auth.welcome.debug.local_backend_fallback"
     }
 
     private let featureItems: [(icon: String, title: LocalizedStringKey)] = [
@@ -42,6 +42,28 @@ struct AuthWelcomeView: View {
         ("lock.fill", L10n.featurePrivateSession),
         ("sparkles", L10n.featureGuestAccess)
     ]
+
+    private var backendHost: String? {
+        let host = Bundle.main.object(forInfoDictionaryKey: "AUTH_BASE_HOST") as? String
+        let port = Bundle.main.object(forInfoDictionaryKey: "AUTH_BASE_PORT") as? String
+        if let host, !host.isEmpty {
+            if let port, !port.isEmpty {
+                return "\(host):\(port)"
+            }
+            return host
+        }
+
+        guard
+            let raw = Bundle.main.object(forInfoDictionaryKey: "AUTH_BASE_URL") as? String,
+            let url = URL(string: raw)
+        else {
+            return nil
+        }
+        if let port = url.port {
+            return "\(url.host() ?? raw):\(port)"
+        }
+        return url.host() ?? raw
+    }
 
     var body: some View {
         GeometryReader { proxy in
@@ -85,7 +107,6 @@ struct AuthWelcomeView: View {
                         ) {
                             VStack(alignment: .leading, spacing: sectionSpacing) {
                                 hero
-                                featureList
                                 actionBlock
                             }
                         }
@@ -142,37 +163,6 @@ struct AuthWelcomeView: View {
         }
     }
 
-    private var featureList: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ForEach(featureItems, id: \.icon) { item in
-                premiumPill(icon: item.icon, title: item.title)
-            }
-        }
-    }
-
-    private func premiumPill(icon: String, title: LocalizedStringKey) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.footnote.weight(.semibold))
-                .frame(width: 18)
-            Text(title)
-                .font(.footnote.weight(.semibold))
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-        }
-        .foregroundStyle(Color.white.opacity(0.8))
-        .padding(.horizontal, 14)
-        .padding(.vertical, pillVerticalPadding)
-        .background(
-            RoundedRectangle(cornerRadius: pillCornerRadius, style: .continuous)
-                .fill(Color.white.opacity(0.05))
-                .overlay(
-                    RoundedRectangle(cornerRadius: pillCornerRadius, style: .continuous)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                )
-        )
-    }
-
     private var actionBlock: some View {
         VStack(alignment: .leading, spacing: 12) {
             SignInWithAppleButton(.continue) { request in
@@ -204,6 +194,31 @@ struct AuthWelcomeView: View {
             }
             .buttonStyle(.plain)
             .disabled(authManager.isBusy)
+
+            #if DEBUG
+            HStack {
+                if let backendHost {
+                    Text(L10n.debugLocalBackendPrefix) + Text(verbatim: " \(backendHost)")
+                } else {
+                    Text(L10n.debugLocalBackendFallback)
+                }
+
+                Spacer()
+
+                if authManager.isBusy {
+                    ProgressView()
+                        .tint(.white)
+                }
+            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(Color.white.opacity(0.55))
+            #endif
+
+            if let errorMessage = authManager.errorMessage, !errorMessage.isEmpty {
+                Text(errorMessage)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.red.opacity(0.92))
+            }
         }
     }
 }

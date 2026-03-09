@@ -13,10 +13,10 @@ struct AuthWelcomeLocalizationTests {
         return localizedBundle.localizedString(forKey: key, value: nil, table: nil)
     }
 
-    private func assertNoTrailingPeriod(_ value: String, _ message: String) {
+    private func assertNoTrailingPeriod(_ value: String, key: String, locale: String) {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        #expect(trimmed.isEmpty == false)
-        #expect(trimmed.hasSuffix(".") == false)
+        #expect(trimmed.isEmpty == false, message)
+        #expect(trimmed.hasSuffix(".") == false, message)
     }
 
     @Test("Auth welcome copy is localized and has no trailing periods")
@@ -30,7 +30,7 @@ struct AuthWelcomeLocalizationTests {
 
         for item in cases {
             let value = localized(item.key, localeIdentifier: item.locale)
-            #expect(value == item.expected)
+            #expect(value == item.expected, "Unexpected localization for \(item.key) (\(item.locale))")
             assertNoTrailingPeriod(value, "\(item.key) (\(item.locale)) must not end with a period")
         }
     }

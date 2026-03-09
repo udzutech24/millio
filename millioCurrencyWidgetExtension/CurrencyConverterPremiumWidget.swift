@@ -14,31 +14,24 @@ import UIKit
 private struct CurrencyConverterWidgetRow: Identifiable, Equatable {
     let code: String
     let valueText: String
-    let isActive: Bool
 
     var id: String { code }
 }
 
 private struct CurrencyConverterWidgetEntry: TimelineEntry {
     let date: Date
-    let activeCode: String
-    let inputText: String
     let rows: [CurrencyConverterWidgetRow]
-    let lastUpdatedAt: Date?
 }
 
 private struct CurrencyConverterWidgetProvider: TimelineProvider {
     func placeholder(in context: Context) -> CurrencyConverterWidgetEntry {
         CurrencyConverterWidgetEntry(
             date: Date(),
-            activeCode: "USD",
-            inputText: "1200",
             rows: [
-                CurrencyConverterWidgetRow(code: "USD", valueText: "1 200", isActive: true),
-                CurrencyConverterWidgetRow(code: "EUR", valueText: "1 104", isActive: false),
-                CurrencyConverterWidgetRow(code: "RUB", valueText: "108 000", isActive: false)
-            ],
-            lastUpdatedAt: Date()
+                CurrencyConverterWidgetRow(code: "USD", valueText: "78,54 ₽"),
+                CurrencyConverterWidgetRow(code: "EUR", valueText: "91,04 ₽"),
+                CurrencyConverterWidgetRow(code: "TRY", valueText: "2,13 ₽")
+            ]
         )
     }
 
@@ -56,131 +49,146 @@ private struct CurrencyConverterWidgetProvider: TimelineProvider {
     private func makeEntry(now: Date) -> CurrencyConverterWidgetEntry {
         let defaults = UserDefaults(suiteName: CurrencyWidgetShared.appGroupID) ?? .standard
         let converter = CurrencyWidgetShared.ConverterSnapshot.load(from: defaults)
-
-        return CurrencyConverterWidgetEntry(
-            date: now,
-            activeCode: converter.activeCode,
-            inputText: converter.inputText,
-            rows: makeRows(converter: converter),
-            lastUpdatedAt: converter.lastUpdatedAt
-        )
+        let rows = makeRows(converter: converter)
+        return CurrencyConverterWidgetEntry(date: now, rows: rows)
     }
 
     private func makeRows(converter: CurrencyWidgetShared.ConverterSnapshot) -> [CurrencyConverterWidgetRow] {
-        let orderedCodes = [converter.activeCode] + converter.selectedCodes.filter { $0 != converter.activeCode }
-        let amount = CurrencyWidgetShared.parseAmount(converter.inputText) ?? 0
-
-        return orderedCodes.map { code in
-            if code == converter.activeCode {
-                let formatted = CurrencyWidgetShared.formatValue(amount, maxFractionDigits: 4)
-                return CurrencyConverterWidgetRow(code: code, valueText: formatted, isActive: true)
-            }
-
-            guard
-                let converted = CurrencyWidgetShared.convert(
-                    amount: amount,
-                    from: converter.activeCode,
-                    to: code,
-                    rates: converter.rates
-                )
-            else {
-                return CurrencyConverterWidgetRow(code: code, valueText: "—", isActive: false)
-            }
-
-            let formatted = CurrencyWidgetShared.formatValue(converted, maxFractionDigits: 4)
-            return CurrencyConverterWidgetRow(code: code, valueText: formatted, isActive: false)
+        let primary = converter.primaryCode
+        var sourceCodes = converter.selectedCodes.filter { $0 != primary }
+        if sourceCodes.isEmpty {
+            sourceCodes = ["USD", "EUR", "TRY", "GBP", "CNY", "JPY"].filter { $0 != primary }
         }
+
+        let suffix = currencySuffix(for: primary)
+
+        return sourceCodes.prefix(3).map { code in
+            guard let converted = CurrencyWidgetShared.convert(amount: 1, from: code, to: primary, rates: converter.rates) else {
+                return CurrencyConverterWidgetRow(code: code, valueText: "—")
+            }
+            let number = CurrencyWidgetShared.formatValue(converted, maxFractionDigits: 2)
+            return CurrencyConverterWidgetRow(code: code, valueText: "\(number) \(suffix)")
+        }
+    }
+
+    private func currencySuffix(for currencyCode: String) -> String {
+        let normalized = currencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let explicitSymbols: [String: String] = [
+            "RUB": "₽",
+            "USD": "$",
+            "EUR": "€",
+            "GBP": "£",
+            "TRY": "₺",
+            "JPY": "¥",
+            "CNY": "¥",
+            "KZT": "₸"
+        ]
+        if let explicitSymbol = explicitSymbols[normalized] {
+            return explicitSymbol
+        }
+        let fallback = normalized
+        guard !normalized.isEmpty else { return fallback }
+
+        for identifier in Locale.availableIdentifiers {
+            let locale = Locale(identifier: identifier)
+            if locale.currency?.identifier.uppercased() == normalized {
+                if let symbol = locale.currencySymbol, !symbol.isEmpty {
+                    return symbol
+                }
+            }
+        }
+
+        return fallback
     }
 }
 
 private struct CurrencyConverterWidgetEntryView: View {
     let entry: CurrencyConverterWidgetEntry
-    @Environment(\.widgetFamily) private var family
-
-    private var maxRows: Int {
-        switch family {
-        case .systemSmall:
-            return 3
-        case .systemMedium:
-            return 5
-        default:
-            return 3
-        }
-    }
 
     var body: some View {
-        premiumView
-        .containerBackground(for: .widget) {
-            LinearGradient(
-                colors: [Color(hex: "101828"), Color(hex: "0B1220")],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        }
-    }
+        VStack(spacing: 0) {
+            ForEach(Array(entry.rows.enumerated()), id: \.element.id) { index, row in
+                HStack {
+                    Spacer(minLength: 0)
 
-    private var premiumView: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(String(localized: "widget.converter.title"))
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
+                    HStack(spacing: 14) {
+                        widgetFlagIcon(for: row.code)
 
-                Spacer(minLength: 8)
-
-                Text(entry.activeCode)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.7))
-            }
-
-            ForEach(entry.rows.prefix(maxRows)) { row in
-                HStack(spacing: 6) {
-                    widgetFlagIcon(for: row.code)
-
-                    Text(row.code)
-                        .font(.system(size: 12, weight: row.isActive ? .semibold : .regular))
-                        .foregroundStyle(row.isActive ? Color.white : Color.white.opacity(0.85))
-                        .frame(width: 32, alignment: .leading)
-
-                    Text(row.valueText)
-                        .font(.system(size: 12, weight: row.isActive ? .semibold : .regular))
-                        .foregroundStyle(row.isActive ? Color(hex: "7DD3FC") : Color.white.opacity(0.85))
-                        .lineLimit(1)
+                        Text(row.valueText)
+                            .font(.system(size: 20, weight: .semibold, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.9)
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
 
                     Spacer(minLength: 0)
                 }
-            }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 11)
 
-            Spacer(minLength: 0)
-
-            if let lastUpdatedAt = entry.lastUpdatedAt {
-                Text(
-                    String(
-                        format: String(localized: "widget.converter.updated_at_format"),
-                        lastUpdatedAt.formatted(date: .omitted, time: .shortened)
-                    )
-                )
-                    .font(.system(size: 10, weight: .regular))
-                    .foregroundStyle(Color.white.opacity(0.55))
+                if index < entry.rows.count - 1 {
+                    Divider()
+                        .overlay(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.02),
+                                    Color.white.opacity(0.12),
+                                    Color.white.opacity(0.02)
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                }
             }
         }
-        .padding(12)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
+        .containerBackground(for: .widget) {
+            ZStack {
+                LinearGradient(
+                    colors: [Color(hex: "404553"), Color(hex: "1A1D26"), Color(hex: "0E1118")],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+
+                RadialGradient(
+                    colors: [Color.white.opacity(0.09), Color.clear],
+                    center: .topLeading,
+                    startRadius: 4,
+                    endRadius: 220
+                )
+
+                LinearGradient(
+                    colors: [Color(hex: "27456B").opacity(0.14), Color.clear, Color.black.opacity(0.18)],
+                    startPoint: .trailing,
+                    endPoint: .leading
+                )
+            }
+        }
+        .widgetURL(CurrencyWidgetShared.deepLinkURL(for: .openConverter))
     }
 
     @ViewBuilder
     private func widgetFlagIcon(for code: String) -> some View {
-        let size: CGFloat = 14
-        let resolvedCode = code.uppercased()
-
-        if let assetName = widgetFlagAssetName(for: resolvedCode) {
+        let size: CGFloat = 32
+        let normalized = code.uppercased()
+        if let assetName = widgetFlagAssetName(for: normalized) {
             Image(assetName)
                 .resizable()
                 .scaledToFill()
                 .frame(width: size, height: size)
                 .clipShape(Circle())
+                .overlay(
+                    Circle()
+                        .stroke(Color.white.opacity(0.16), lineWidth: 0.8)
+                )
+                .shadow(color: .black.opacity(0.18), radius: 4, x: 0, y: 2)
         } else {
-            Text(widgetFlagEmoji(for: resolvedCode))
-                .font(.system(size: 11))
+            Text(widgetFlagEmoji(for: normalized))
+                .font(.system(size: 26))
                 .frame(width: size, height: size)
         }
     }
@@ -205,15 +213,24 @@ private struct CurrencyConverterWidgetEntryView: View {
             return region.lowercased()
         }
 
-        let fallbackByCode = currencyCode.lowercased()
-        if widgetHasAsset(named: fallbackByCode) {
-            return fallbackByCode
-        }
-
         return nil
     }
 
     private func widgetCurrencyRegionCode(for currencyCode: String) -> String? {
+        let explicit: [String: String] = [
+            "USD": "US",
+            "EUR": "EU",
+            "RUB": "RU",
+            "TRY": "TR",
+            "CNY": "CN",
+            "GBP": "GB",
+            "JPY": "JP",
+            "KZT": "KZ"
+        ]
+        if let region = explicit[currencyCode] {
+            return region
+        }
+
         for identifier in Locale.availableIdentifiers {
             let locale = Locale(identifier: identifier)
             if locale.currency?.identifier.uppercased() == currencyCode,
@@ -247,7 +264,6 @@ private struct CurrencyConverterWidgetEntryView: View {
         false
 #endif
     }
-
 }
 
 struct CurrencyConverterWidget: Widget {
@@ -259,7 +275,7 @@ struct CurrencyConverterWidget: Widget {
         }
         .configurationDisplayName(String(localized: "widget.converter.configuration_title"))
         .description(String(localized: "widget.converter.configuration_description"))
-        .supportedFamilies([.systemSmall, .systemMedium])
+        .supportedFamilies([.systemSmall])
     }
 }
 

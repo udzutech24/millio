@@ -11,6 +11,22 @@ import UIKit
 import FirebaseCore
 import OSLog
 
+@MainActor
+enum AppWidgetDeepLinkHandler {
+    static func handle(url: URL, appState: AppState) {
+        guard let action = CurrencyWidgetShared.deepLinkAction(from: url) else { return }
+
+        switch action {
+        case .openConverter:
+            appState.pendingOpenConverterService = true
+        case .addExpense:
+            appState.pendingOpenMainExpenseSheet = true
+        case .addIncome:
+            appState.pendingOpenMainIncomeSheet = true
+        }
+    }
+}
+
 @main
 struct millioApp: App {
     @UIApplicationDelegateAdaptor(FirebaseAppDelegate.self) private var firebaseDelegate
@@ -126,6 +142,9 @@ struct millioApp: App {
                     if isAuthenticated && appState.isGuestModeEnabled {
                         appState.isGuestModeEnabled = false
                     }
+                }
+                .onOpenURL { url in
+                    AppWidgetDeepLinkHandler.handle(url: url, appState: appState)
                 }
             } else {
                 ErrorView(

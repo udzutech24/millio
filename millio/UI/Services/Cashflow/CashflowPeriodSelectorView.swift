@@ -7,6 +7,10 @@
 
 import SwiftUI
 
+/// Legacy selector for `ChartPeriod`.
+/// Сейчас основной экран Cashflow использует только range-выбор через `CalendarRangeMonthView`
+/// (см. `CashflowView.customPeriodSheet`). Оставлено для совместимости, пока проект не
+/// отчищен от ссылок в `.xcodeproj`.
 struct CashflowPeriodSelectorView: View {
     @ObservedObject var viewModel: CashflowViewModel
     @Environment(\.dismiss) private var dismiss
@@ -15,8 +19,8 @@ struct CashflowPeriodSelectorView: View {
     @State private var selectedMonth: Date = Date()
     @State private var selectedQuarter: Date = Date()
     @State private var selectedYear: Date = Date()
-    @State private var customStartDate: Date = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
-    @State private var customEndDate: Date = Date()
+    @State private var customStartDate: Date = CashflowViewModel.defaultPeriodRange(referenceDate: Date()).start
+    @State private var customEndDate: Date = CashflowViewModel.defaultPeriodRange(referenceDate: Date()).end
     
     enum PeriodType {
         case month

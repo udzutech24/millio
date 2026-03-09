@@ -83,28 +83,6 @@ struct FinanceOverviewCardView: View {
         }
     }
 
-    private var expandButton: some View {
-        Button {
-            openExpandedChart(side: nil)
-        } label: {
-            ZStack {
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .frame(width: 28, height: 28)
-                    .overlay(
-                        Circle()
-                            .stroke(Color.white.opacity(0.10), lineWidth: 0.8)
-                    )
-                Image(systemName: "arrow.up.left.and.arrow.down.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-            }
-            .frame(width: 36, height: 36)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: "finances.overview.chart.full"))
-    }
-
     private func openExpandedChart(side: FinanceOverviewLedgerSide?) {
         expandedSheetSide = side
         showExpandedChart = true
@@ -416,54 +394,24 @@ struct FinanceOverviewCardView: View {
     private func compactLedgerOverview(
         presentation: FinanceOverviewLedgerPresentation
     ) -> some View {
-        ZStack(alignment: .topTrailing) {
-            bridgeChart(presentation: presentation)
-
-            expandButton
-                .padding(.top, -8)
-                .padding(.trailing, 2)
-        }
-    }
-
-    private func bridgeChart(
-        presentation: FinanceOverviewLedgerPresentation
-    ) -> some View {
-        HStack(spacing: 10) {
-            Button {
+        HStack(alignment: .top, spacing: 12) {
+            compactSideCard(
+                side: presentation.credit,
+                color: creditColor,
+                totalReference: presentation.maxSideTotal
+            ) {
                 openExpandedChart(side: .credit)
-            } label: {
-                mirroredSideCard(
-                    side: presentation.credit,
-                    isTrailing: true,
-                    color: creditColor,
-                    totalReference: presentation.maxSideTotal
-                )
             }
-            .buttonStyle(.plain)
 
-            Rectangle()
-                .fill(Color.white.opacity(0.12))
-                .frame(width: 1)
-                .overlay {
-                    Circle()
-                        .fill(saldoColor(for: presentation.saldo).opacity(0.22))
-                        .frame(width: 10, height: 10)
-                }
-
-            Button {
+            compactSideCard(
+                side: presentation.debit,
+                color: debitColor,
+                totalReference: presentation.maxSideTotal
+            ) {
                 openExpandedChart(side: .debit)
-            } label: {
-                mirroredSideCard(
-                    side: presentation.debit,
-                    isTrailing: false,
-                    color: debitColor,
-                    totalReference: presentation.maxSideTotal
-                )
             }
-            .buttonStyle(.plain)
         }
-        .frame(height: 82)
-        .padding(.horizontal, 1)
+        .frame(maxWidth: .infinity)
     }
 
     private func sideToggleRow(
@@ -565,84 +513,75 @@ struct FinanceOverviewCardView: View {
         .buttonStyle(.plain)
     }
 
-    private func mirroredSideCard(
+    private func compactSideCard(
         side: FinanceOverviewLedgerSidePresentation,
-        isTrailing: Bool,
         color: Color,
-        totalReference: Double
+        totalReference: Double,
+        onTap: @escaping () -> Void
     ) -> some View {
-        VStack(alignment: isTrailing ? .trailing : .leading, spacing: 9) {
-            HStack(spacing: 8) {
-                if !isTrailing {
-                    sideGlyph(color: color, icon: side.side == .debit ? "arrow.down.left.circle.fill" : "arrow.up.right.circle.fill")
-                }
-
-                VStack(alignment: isTrailing ? .trailing : .leading, spacing: 2) {
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(alignment: .top, spacing: 8) {
                     Text(side.side.title)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary.opacity(0.92))
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+
+                    Spacer(minLength: 8)
+
+                    Circle()
+                        .fill(color)
+                        .frame(width: 26, height: 26)
+                        .overlay {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(Color.black.opacity(0.9))
+                        }
                 }
 
-                Spacer(minLength: 4)
+                Text(amountWithCurrency(side.total))
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(color)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
 
-                if isTrailing {
-                    sideGlyph(color: color, icon: side.side == .debit ? "arrow.down.left.circle.fill" : "arrow.up.right.circle.fill")
-                }
-            }
-
-            Text(amountWithCurrency(side.total))
-                .font(.system(size: 21, weight: .bold))
-                .foregroundStyle(color)
-                .lineLimit(1)
-                .minimumScaleFactor(0.74)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .multilineTextAlignment(.center)
-
-            GeometryReader { proxy in
-                let barWidth = FinanceOverviewLedgerStyle.barWidth(
-                    total: side.total,
-                    reference: totalReference,
-                    availableWidth: proxy.size.width,
-                    minimumWidth: 20
-                )
-
-                ZStack(alignment: isTrailing ? .trailing : .leading) {
-                    Capsule(style: .continuous)
-                        .fill(Color.white.opacity(0.06))
-                        .frame(height: 10)
-                    Capsule(style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [color.opacity(0.92), color.opacity(0.48)],
-                                startPoint: isTrailing ? .trailing : .leading,
-                                endPoint: isTrailing ? .leading : .trailing
-                            )
-                        )
-                        .frame(width: barWidth, height: 10)
-                }
-            }
-            .frame(height: 10)
-        }
-        .frame(maxWidth: .infinity, alignment: isTrailing ? .trailing : .leading)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 11)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.075),
-                            Color.white.opacity(0.028)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+                GeometryReader { proxy in
+                    let barWidth = FinanceOverviewLedgerStyle.barWidth(
+                        total: side.total,
+                        reference: totalReference,
+                        availableWidth: proxy.size.width,
+                        minimumWidth: 20
                     )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .stroke(color.opacity(0.2), lineWidth: 0.8)
-                )
-        )
+
+                    ZStack(alignment: .leading) {
+                        Capsule(style: .continuous)
+                            .fill(Color.white.opacity(0.08))
+                            .frame(height: 9)
+                        Capsule(style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [color.opacity(0.94), color.opacity(0.70)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(width: barWidth, height: 9)
+                    }
+                }
+                .frame(height: 9)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 11)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.clear)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(Color.white.opacity(0.11), lineWidth: 0.9)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private func sideColumns(
@@ -1015,17 +954,6 @@ struct FinanceOverviewCardView: View {
                 }
             }
         )
-    }
-
-    private func sideGlyph(color: Color, icon: String) -> some View {
-        ZStack {
-            Circle()
-                .fill(color.opacity(0.18))
-                .frame(width: 24, height: 24)
-            Image(systemName: icon)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(color)
-        }
     }
 
     private func amountWithCurrency(_ value: Double) -> String {

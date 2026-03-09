@@ -18,7 +18,7 @@ struct SubscriptionManagerTests {
                  (.expired, .some(.expired)):
                 #expect(true)
             default:
-                #expect(false)
+                #expect(Bool(false))
             }
         }
     }
@@ -52,16 +52,16 @@ struct SubscriptionManagerTests {
         
         do {
             try await manager.startTrial()
-            #expect(false)
+            #expect(Bool(false))
         } catch let error as SubscriptionError {
             switch error {
             case .trialAlreadyUsed:
                 #expect(true)
             default:
-                #expect(false)
+                #expect(Bool(false))
             }
         } catch {
-            #expect(false)
+            #expect(Bool(false))
         }
     }
     

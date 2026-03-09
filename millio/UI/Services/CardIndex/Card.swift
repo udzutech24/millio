@@ -66,15 +66,15 @@ enum Bank: String, Codable, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .sberbank: return "Сбербанк"
-        case .vtb: return "ВТБ"
-        case .alfa: return "Альфа-Банк"
-        case .tinkoff: return "Тинькофф"
-        case .raiffeisen: return "Райффайзенбанк"
-        case .gazprombank: return "Газпромбанк"
-        case .otkritie: return "Открытие"
-        case .rosbank: return "Росбанк"
-        case .other: return "Другой"
+        case .sberbank: return String(localized: "finances.bank.sberbank")
+        case .vtb: return String(localized: "finances.bank.vtb")
+        case .alfa: return String(localized: "finances.bank.alfa")
+        case .tinkoff: return String(localized: "finances.bank.tinkoff")
+        case .raiffeisen: return String(localized: "finances.bank.raiffeisen")
+        case .gazprombank: return String(localized: "finances.bank.gazprombank")
+        case .otkritie: return String(localized: "finances.bank.otkritie")
+        case .rosbank: return String(localized: "finances.bank.rosbank")
+        case .other: return String(localized: "finances.bank.other")
         }
     }
     

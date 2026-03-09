@@ -39,6 +39,7 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
     private let launchSplashDisplayModeKey = "launchSplashDisplayMode"
     private let lastLaunchSplashShownAtKey = "lastLaunchSplashShownAt"
     private let guestModeEnabledKey = "guestModeEnabled"
+    private let debugMenuUnlockedKey = "debugMenuUnlocked"
     private static let legacyDefaultProfileDisplayNames: Set<String> = ["Гость", "Guest"]
     private let defaults: UserDefaults
 
@@ -258,6 +259,18 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
             logger.info("Guest mode enabled: \(newValue)")
         }
     }
+
+    /// Controls whether the Profile "Debug" section is visible.
+    /// Hidden by default; can be unlocked via the multi-tap version gesture.
+    var isDebugMenuUnlocked: Bool {
+        get {
+            defaults.object(forKey: debugMenuUnlockedKey) as? Bool ?? false
+        }
+        set {
+            defaults.set(newValue, forKey: debugMenuUnlockedKey)
+            logger.info("Debug menu unlocked: \(newValue)")
+        }
+    }
     
     static func normalizeCurrencyCodes(_ codes: [String]) -> [String] {
         var seen = Set<String>()
@@ -318,6 +331,7 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
         launchSplashDisplayMode = .always
         lastLaunchSplashShownAt = nil
         isGuestModeEnabled = false
+        isDebugMenuUnlocked = false
 
         // Модульные display-валюты и прочие временные UX-флаги.
         defaults.removeObject(forKey: "card_display_currency")

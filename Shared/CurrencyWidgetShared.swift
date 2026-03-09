@@ -9,12 +9,15 @@ import Foundation
 
 enum CurrencyWidgetShared {
     static let appGroupID = "group.com.millio.app"
+    static let deepLinkScheme = "millio"
+    static let deepLinkHost = "widget"
 
     enum Keys {
         static let selectedCodes = "conv_selected_codes"
         static let activeCode = "conv_active_code"
         static let inputText = "conv_input_text"
         static let rateSource = "conv_rate_source"
+        static let primaryCurrencyCode = "primaryCurrencyCode"
 
         static func cachedRates(for sourceRaw: String) -> String {
             "conv_cached_rates_\(sourceRaw)"
@@ -28,6 +31,7 @@ enum CurrencyWidgetShared {
     struct ConverterSnapshot: Equatable {
         let selectedCodes: [String]
         let activeCode: String
+        let primaryCode: String
         let inputText: String
         let rateSourceRaw: String
         let rates: [String: Double]
@@ -51,6 +55,10 @@ enum CurrencyWidgetShared {
             let activeCode = configuredActive.flatMap { code in
                 selectedCodes.contains(code) ? code : nil
             } ?? fallbackActive
+            let primaryCode = defaults.string(forKey: Keys.primaryCurrencyCode)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .uppercased()
+                .nonEmpty ?? activeCode
 
             let lastUpdatedAt: Date?
             let timestamp = defaults.double(forKey: lastRatesKey)
@@ -63,11 +71,50 @@ enum CurrencyWidgetShared {
             return ConverterSnapshot(
                 selectedCodes: selectedCodes,
                 activeCode: activeCode,
+                primaryCode: primaryCode,
                 inputText: inputText,
                 rateSourceRaw: rateSourceRaw,
                 rates: rates,
                 lastUpdatedAt: lastUpdatedAt
             )
+        }
+    }
+
+    enum DeepLinkAction: String, CaseIterable {
+        case openConverter = "open_converter"
+        case addExpense = "add_expense"
+        case addIncome = "add_income"
+    }
+
+    static func deepLinkURL(for action: DeepLinkAction) -> URL? {
+        var components = URLComponents()
+        components.scheme = deepLinkScheme
+        components.host = deepLinkHost
+        components.path = "/action"
+        components.queryItems = [URLQueryItem(name: "type", value: action.rawValue)]
+        return components.url
+    }
+
+    static func deepLinkAction(from url: URL) -> DeepLinkAction? {
+        guard url.scheme?.lowercased() == deepLinkScheme else { return nil }
+        guard url.host?.lowercased() == deepLinkHost else { return nil }
+
+        if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+           let type = components.queryItems?.first(where: { $0.name == "type" })?.value,
+           let action = DeepLinkAction(rawValue: type.lowercased()) {
+            return action
+        }
+
+        let lastPath = url.pathComponents.last?.lowercased() ?? ""
+        switch lastPath {
+        case "open_converter":
+            return .openConverter
+        case "add_expense":
+            return .addExpense
+        case "add_income":
+            return .addIncome
+        default:
+            return nil
         }
     }
 
@@ -177,5 +224,11 @@ enum CurrencyWidgetShared {
         formatter.locale = locale
 
         return formatter.string(from: NSNumber(value: value)) ?? String(value)
+    }
+}
+
+private extension String {
+    var nonEmpty: String? {
+        isEmpty ? nil : self
     }
 }

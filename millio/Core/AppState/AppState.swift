@@ -45,6 +45,7 @@ final class AppState {
             }
             let oldNormalized = oldValue.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
             SettingsManager.shared.primaryCurrencyCode = normalized
+            CurrencyWidgetSyncService.setString(normalized, forKey: CurrencyWidgetShared.Keys.primaryCurrencyCode)
             migrateDisplayCurrenciesIfFollowingPrimary(oldPrimary: oldNormalized, newPrimary: normalized)
         }
     }
@@ -71,6 +72,13 @@ final class AppState {
             SettingsManager.shared.isGuestModeEnabled = isGuestModeEnabled
         }
     }
+
+    /// Controls whether the Profile "Debug" section is visible.
+    var isDebugMenuUnlocked: Bool = false {
+        didSet {
+            SettingsManager.shared.isDebugMenuUnlocked = isDebugMenuUnlocked
+        }
+    }
     
     // Subscription status
     var subscriptionStatus: SubscriptionStatus = .notSubscribed
@@ -89,6 +97,12 @@ final class AppState {
     var profileAvatarPath: String?
     /// One-shot deep-link trigger: open Finance add-product sheet (card by default).
     var pendingOpenFinanceAddCard: Bool = false
+    /// One-shot deep-link trigger from widget to quick expense sheet on Home.
+    var pendingOpenMainExpenseSheet: Bool = false
+    /// One-shot deep-link trigger from widget to quick income sheet on Home.
+    var pendingOpenMainIncomeSheet: Bool = false
+    /// One-shot deep-link trigger from widget to open converter service.
+    var pendingOpenConverterService: Bool = false
     
     init() {
         self.isBackupEnabled = SettingsManager.shared.isBackupEnabled
@@ -102,6 +116,7 @@ final class AppState {
         self.profileAvatarPath = SettingsManager.shared.profileAvatarFilePath
         self.isAppLocked = self.isAppLockEnabled
         self.isGuestModeEnabled = SettingsManager.shared.isGuestModeEnabled
+        self.isDebugMenuUnlocked = SettingsManager.shared.isDebugMenuUnlocked
     }
 
     func applySubscriptionSnapshot(_ snapshot: SubscriptionSnapshot) {

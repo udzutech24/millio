@@ -29,7 +29,7 @@ enum CashflowInsightsGranularity: String, CaseIterable, Identifiable {
         case .month:
             return String(localized: "Month")
         case .week:
-            return "Week"
+            return String(localized: "Week")
         }
     }
 }
@@ -61,6 +61,66 @@ struct CashflowInsightsPresentation: Equatable {
 enum CashflowInsightsChartBuilder {
     private static let epsilon = 0.0000001
     private static let visiblePeriodCount = 4
+
+    /// Строит график и карточки сравнения для выбранного диапазона дат.
+    /// - Cards: показывают сумму за выбранный диапазон и сравнение с предыдущим диапазоном той же длины.
+    /// - Bars: агрегируют значения внутри диапазона по выбранной гранулярности.
+    static func makePresentation(
+        entries: [CashflowConvertedTransaction],
+        dateRange: ClosedRange<Date>,
+        granularity: CashflowInsightsGranularity,
+        calendar: Calendar = .current,
+        locale: Locale = .autoupdatingCurrent
+    ) -> CashflowInsightsPresentation {
+        let startDay = calendar.startOfDay(for: dateRange.lowerBound)
+        let endDay = calendar.startOfDay(for: dateRange.upperBound)
+        let endExclusive = calendar.date(byAdding: .day, value: 1, to: endDay) ?? endDay
+
+        let dayCount = max((calendar.dateComponents([.day], from: startDay, to: endDay).day ?? 0) + 1, 1)
+        let previousEnd = calendar.date(byAdding: .day, value: -1, to: startDay) ?? startDay
+        let previousStart = calendar.date(byAdding: .day, value: -(dayCount - 1), to: previousEnd) ?? previousEnd
+        let previousEndExclusive = calendar.date(byAdding: .day, value: 1, to: previousEnd) ?? previousEnd
+
+        let currentEntries = entries.filter { $0.date >= startDay && $0.date < endExclusive }
+        let previousEntries = entries.filter { $0.date >= previousStart && $0.date < previousEndExclusive }
+
+        let currentIncome = currentEntries.reduce(0) { $0 + $1.income }
+        let currentExpense = currentEntries.reduce(0) { $0 + $1.expense }
+        let previousIncome = previousEntries.reduce(0) { $0 + $1.income }
+        let previousExpense = previousEntries.reduce(0) { $0 + $1.expense }
+        let previousLabel = rangeLabel(start: previousStart, end: previousEnd, calendar: calendar, locale: locale)
+
+        let barPeriodStarts = periodStarts(
+            in: startDay...endDay,
+            granularity: granularity,
+            calendar: calendar
+        )
+        let grouped = groupedEntries(currentEntries, granularity: granularity, calendar: calendar)
+        let bars = barPeriodStarts.map { start in
+            makeBar(for: start, grouped: grouped, granularity: granularity, calendar: calendar, locale: locale)
+        }
+        let selectedPeriodStart = barPeriodStarts.last
+            ?? periodStart(for: endDay, granularity: granularity, calendar: calendar)
+
+        return CashflowInsightsPresentation(
+            selectedPeriodStart: selectedPeriodStart,
+            bars: bars,
+            expenseCard: makeCard(
+                title: String(localized: "Expense"),
+                currentAmount: currentExpense,
+                previousAmount: previousExpense,
+                previousLabel: previousLabel,
+                treatsGrowthAsPositive: false
+            ),
+            incomeCard: makeCard(
+                title: String(localized: "Income"),
+                currentAmount: currentIncome,
+                previousAmount: previousIncome,
+                previousLabel: previousLabel,
+                treatsGrowthAsPositive: true
+            )
+        )
+    }
 
     static func makePresentation(
         entries: [CashflowConvertedTransaction],
@@ -482,5 +542,50 @@ enum CashflowInsightsChartBuilder {
             delta: delta,
             deltaTone: tone
         )
+    }
+
+    private static func periodStarts(
+        in dateRange: ClosedRange<Date>,
+        granularity: CashflowInsightsGranularity,
+        calendar: Calendar
+    ) -> [Date] {
+        let start = periodStart(for: dateRange.lowerBound, granularity: granularity, calendar: calendar)
+        let end = periodStart(for: dateRange.upperBound, granularity: granularity, calendar: calendar)
+        guard start <= end else { return [start] }
+
+        var result: [Date] = []
+        var cursor = start
+        while cursor <= end {
+            result.append(cursor)
+            let next = offsetPeriod(cursor, by: 1, granularity: granularity, calendar: calendar)
+            if next <= cursor { break }
+            cursor = next
+        }
+        return result
+    }
+
+    private static func rangeLabel(
+        start: Date,
+        end: Date,
+        calendar: Calendar,
+        locale: Locale
+    ) -> String {
+        let startDay = calendar.startOfDay(for: start)
+        let endDay = calendar.startOfDay(for: end)
+        let startYear = calendar.component(.year, from: startDay)
+        let endYear = calendar.component(.year, from: endDay)
+
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        if startYear == endYear {
+            formatter.setLocalizedDateFormatFromTemplate("d MMM")
+            let startText = formatter.string(from: startDay)
+            let endText = formatter.string(from: endDay)
+            let yearText = String(endYear)
+            return "\(startText) — \(endText), \(yearText)"
+        }
+
+        formatter.setLocalizedDateFormatFromTemplate("d MMM y")
+        return "\(formatter.string(from: startDay)) — \(formatter.string(from: endDay))"
     }
 }

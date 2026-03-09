@@ -20,6 +20,17 @@ struct ProfileView: View {
     @State private var editedName = ""
     @State private var showQuickSetupSheet = false
     @State private var showContactSheet = false
+    @State private var showDebugUnlockSheet = false
+    @State private var versionTapGate = MultiTapGate(
+        targetCount: DebugMenuAccessPolicy.unlockTapCount,
+        resetInterval: DebugMenuAccessPolicy.unlockTapResetInterval
+    )
+
+    private enum ProfileLayout {
+        static let contentHorizontalInset: CGFloat = 20
+        static let sectionSpacing: CGFloat = 18
+        static let cardCornerRadius: CGFloat = 22
+    }
 
     private var legalLinks: ProfileLegalLinks {
         ProfileLegalLinks.make(for: appState.selectedLanguage)
@@ -42,27 +53,25 @@ struct ProfileView: View {
             GradientBackground()
             
             ScrollView {
-                VStack(spacing: 20) {
-                    // Блок приветствия и аватарки
+                VStack(spacing: ProfileLayout.sectionSpacing) {
                     profileHeaderBlock
-                        .padding(.top, 16)
+                        .padding(.top, 10)
 
                     sectionHeader(ProfileAuthSection.sectionHeaderTitle)
                     card {
                         ProfileAuthSection()
                     }
                     
-                    sectionHeader("profile.section.general")
+                    sectionHeader(displayTitle(for: .general))
                     card {
                         sectionContent(for: .general)
                     }
                     
-            // PRO блок
                     premiumSubscriptionBlock
 
-                    VStack(spacing: 20) {
+                    VStack(spacing: ProfileLayout.sectionSpacing) {
                         ForEach(secondarySections) { section in
-                            sectionHeader(section.id.titleKey)
+                            sectionHeader(displayTitle(for: section.id))
                             card {
                                 sectionContent(for: section.id)
                             }
@@ -96,6 +105,15 @@ struct ProfileView: View {
         }
         .sheet(isPresented: $showContactSheet) {
             SupportContactSheet()
+        }
+        .sheet(isPresented: $showDebugUnlockSheet) {
+            DebugMenuUnlockSheet(onUnlockAttempt: { password in
+                let isValid = DebugMenuAccessPolicy.validate(password: password)
+                if isValid {
+                    appState.isDebugMenuUnlocked = true
+                }
+                return isValid
+            })
         }
         .onChange(of: selectedPhotoItem) { _, newItem in
             Task {
@@ -135,16 +153,16 @@ struct ProfileView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("profile.greeting")
                         .font(.system(size: 15, weight: .regular))
-                        .foregroundStyle(AppColors.textTertiary)
+                        .foregroundStyle(AppColors.textSecondary)
                     Text(appState.profileDisplayName)
-                        .font(.system(size: 28, weight: .bold))
+                        .font(.system(size: 32, weight: .bold))
                         .foregroundStyle(AppColors.textPrimary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, ProfileLayout.contentHorizontalInset)
         .accessibilityIdentifier("profile.header")
     }
     
@@ -176,7 +194,7 @@ struct ProfileView: View {
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
-                    lineWidth: 0
+                    lineWidth: 1
                 )
         }
         
@@ -220,44 +238,51 @@ struct ProfileView: View {
         Button {
             router.push(.subscription)
         } label: {
-            HStack(spacing: 0) {
-                // Фиксируем позицию текста, чтобы она не "плавала" от длины локализации.
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color.white.opacity(0.10))
+
+                    Image("crown")
+                        .resizable()
+                        .scaledToFit()
+                        .padding(8)
+                }
+                .frame(width: 78, height: 78)
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text("profile.premium.title")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 21, weight: .bold))
                         .foregroundStyle(AppColors.textPrimary)
+                        .lineLimit(1)
 
                     Text("profile.premium.subtitle")
-                        .font(.system(size: 12))
+                        .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(AppColors.textSecondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.82)
-                        .allowsTightening(true)
+                        .lineLimit(2)
 
                     Text(premiumStatusLine)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(appState.isPro ? AppColors.brandPrimary : AppColors.textPrimary.opacity(0.7))
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(appState.isPro ? AppColors.textPrimary : AppColors.textSecondary)
                         .lineLimit(1)
 
                     HStack(spacing: 4) {
                         Text("profile.premium.details")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(AppColors.brandPrimary)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
                             .lineLimit(1)
                         Image(systemName: "chevron.right")
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(AppColors.brandPrimary)
+                            .foregroundStyle(AppColors.textPrimary)
                     }
                     .padding(.top, 4)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, 72)
-                .padding(.trailing, 24)
             }
-            .frame(height: 90)
-           
+            .padding(.vertical, 14)
+            .padding(.leading, 14)
+            .padding(.trailing, 16)
             .background {
-                // Градиентный фон
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(
                         LinearGradient(
@@ -269,7 +294,6 @@ struct ProfileView: View {
                     .opacity(0.8)
             }
             .overlay {
-                // Градиентная рамка
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .stroke(
                         LinearGradient(
@@ -281,18 +305,9 @@ struct ProfileView: View {
                     )
             }
             .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .overlay(alignment: .leading) {
-                // Корона выезжает за блок влево
-                Image("crown")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 100, height: 100)
-                    .offset(x: -50)
-            }
         }
         .buttonStyle(.plain)
-        .padding(.leading, 70)
-        .padding(.trailing, 20)
+        .padding(.horizontal, ProfileLayout.contentHorizontalInset)
     }
     
     private var chevron: some View {
@@ -353,16 +368,27 @@ struct ProfileView: View {
     }
 
     private var secondarySections: [ProfileMenuSection] {
-        ProfileMenuStructure.sections.filter { $0.id != .general }
+        ProfileMenuStructure.sections.filter { section in
+            guard section.id != .general else { return false }
+            if section.id == .debug {
+                return appState.isDebugMenuUnlocked
+            }
+            return true
+        }
     }
 
     @ViewBuilder
     private func sectionContent(for sectionID: ProfileMenuSectionID) -> some View {
-        let section = ProfileMenuStructure.sections.first { $0.id == sectionID }
+        let items = ProfileMenuStructure.sections.first { $0.id == sectionID }?.items ?? []
 
-        VStack(spacing: 16) {
-            ForEach(section?.items ?? []) { item in
+        VStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.element) { index, item in
                 profileMenuRow(for: item)
+                    .padding(.vertical, 12)
+
+                if index < items.count - 1 {
+                    FinancesRowDivider(leadingPadding: 34)
+                }
             }
         }
     }
@@ -510,10 +536,15 @@ struct ProfileView: View {
             .accessibilityIdentifier("profile.smartDataResetLink")
 
         case .version:
-            settingsRow(iconSystemName: "info.circle", title: "profile.version") {
-                Text(appVersion)
-                    .foregroundStyle(AppColors.textTertiary)
+            Button {
+                handleVersionTap()
+            } label: {
+                settingsRow(iconSystemName: "info.circle", title: "profile.version") {
+                    Text(appVersion)
+                        .foregroundStyle(AppColors.textTertiary)
+                }
             }
+            .buttonStyle(.plain)
             .accessibilityIdentifier("profile.versionRow")
 
         case .privacy:
@@ -544,17 +575,6 @@ struct ProfileView: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("profile.contactUsLink")
-
-        case .rateApp:
-            Button {
-                openAppStoreReview()
-            } label: {
-                settingsRow(iconSystemName: "star", title: "profile.rate_app") {
-                    chevron
-                }
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("profile.rateAppButton")
 
         case .premiumAccess:
             Toggle(isOn: Binding(
@@ -624,6 +644,16 @@ struct ProfileView: View {
         showContactSheet = true
     }
 
+    private func handleVersionTap() {
+        guard !appState.isDebugMenuUnlocked else { return }
+
+        var gate = versionTapGate
+        if gate.registerTap() {
+            showDebugUnlockSheet = true
+        }
+        versionTapGate = gate
+    }
+
     private func openAppStoreReview() {
         if let url = AppStoreReviewLink.url {
             openURL(url)
@@ -634,26 +664,30 @@ struct ProfileView: View {
     
     private func sectionHeader(_ title: LocalizedStringKey) -> some View {
         Text(title)
-            .font(.system(size: 12, weight: .regular))
-            .foregroundStyle(AppColors.textPrimary.opacity(0.35))
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(AppColors.textPrimary.opacity(0.46))
+            .textCase(.uppercase)
+            .kerning(0.25)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 20)
+            .padding(.horizontal, ProfileLayout.contentHorizontalInset)
     }
 
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
-            .font(.system(size: 12, weight: .regular))
-            .foregroundStyle(AppColors.textPrimary.opacity(0.35))
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(AppColors.textPrimary.opacity(0.46))
+            .textCase(.uppercase)
+            .kerning(0.25)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 20)
+            .padding(.horizontal, ProfileLayout.contentHorizontalInset)
     }
     
     private func card<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         content()
-            .padding(.horizontal, 18)
-            .padding(.vertical, 18)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
             .background {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                RoundedRectangle(cornerRadius: ProfileLayout.cardCornerRadius, style: .continuous)
                     .fill(
                         LinearGradient(
                             colors: AppColors.profileCardBackgroundGradient,
@@ -662,19 +696,20 @@ struct ProfileView: View {
                         )
                     )
                     .overlay {
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        RoundedRectangle(cornerRadius: ProfileLayout.cardCornerRadius, style: .continuous)
                             .stroke(
                                 LinearGradient(
                                     colors: AppColors.profileCardStrokeGradient,
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 ),
-                                lineWidth: 1
+                                lineWidth: 0.8
                             )
                     }
                    
             }
-            .padding(.horizontal, 20)
+            .clipShape(RoundedRectangle(cornerRadius: ProfileLayout.cardCornerRadius, style: .continuous))
+            .padding(.horizontal, ProfileLayout.contentHorizontalInset)
     }
     
     private func settingsRow<Trailing: View>(
@@ -700,7 +735,7 @@ struct ProfileView: View {
                 trailing()
             }
         }
-        .frame(minHeight: 28)
+        .frame(minHeight: 32)
         .contentShape(Rectangle())
     }
 
@@ -725,8 +760,16 @@ struct ProfileView: View {
                 trailing()
             }
         }
-        .frame(minHeight: 28)
+        .frame(minHeight: 32)
         .contentShape(Rectangle())
+    }
+
+    private func displayTitle(for sectionID: ProfileMenuSectionID) -> String {
+        AppLocalization.string(
+            sectionID.localizationKey,
+            locale: appState.selectedLanguage.locale ?? Locale.current,
+            fallback: sectionID.fallbackTitle
+        )
     }
 }
 

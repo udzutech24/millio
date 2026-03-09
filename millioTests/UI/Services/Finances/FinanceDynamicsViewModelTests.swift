@@ -38,6 +38,63 @@ final class MockDynamicsNormalizedCurrencyRateService: CurrencyRateServiceProtoc
     func forceRefreshRates() async {}
 }
 
+final class InMemoryFinanceBalanceAuditStore: FinanceBalanceAuditStoreProtocol {
+    private var days: [String: [String: FinanceBalanceSnapshotValue]] = [:]
+    private var accountCurrency: [String: String] = [:]
+
+    func daySnapshot(for day: FinanceBalanceDayKey) -> [String : FinanceBalanceSnapshotValue] {
+        days[day.rawValue] ?? [:]
+    }
+
+    func setValue(
+        _ value: Double,
+        for accountKey: String,
+        day: FinanceBalanceDayKey,
+        defaultCurrency: String,
+        defaultTitle: String,
+        defaultGroupName: String,
+        accountTypeRaw: String,
+        effectSign: Int,
+        isUnknown: Bool
+    ) {
+        var dayMap = days[day.rawValue] ?? [:]
+        dayMap[accountKey] = FinanceBalanceSnapshotValue(
+            value: value,
+            currencyCode: defaultCurrency,
+            title: defaultTitle,
+            groupName: defaultGroupName,
+            accountTypeRaw: accountTypeRaw,
+            effectSign: effectSign,
+            isUnknown: isUnknown
+        )
+        days[day.rawValue] = dayMap
+        accountCurrency[accountKey] = defaultCurrency
+    }
+
+    func deleteValue(for accountKey: String, day: FinanceBalanceDayKey) {
+        var dayMap = days[day.rawValue] ?? [:]
+        dayMap.removeValue(forKey: accountKey)
+        days[day.rawValue] = dayMap
+    }
+
+    func setCurrency(_ currencyCode: String, for accountKey: String) {
+        accountCurrency[accountKey] = currencyCode
+    }
+
+    func currency(for accountKey: String) -> String? {
+        accountCurrency[accountKey]
+    }
+
+    func deleteAccountEverywhere(_ accountKey: String) {
+        accountCurrency.removeValue(forKey: accountKey)
+        for dayKey in days.keys {
+            var dayMap = days[dayKey] ?? [:]
+            dayMap.removeValue(forKey: accountKey)
+            days[dayKey] = dayMap
+        }
+    }
+}
+
 @Suite(.serialized)
 @MainActor
 struct FinanceDynamicsViewModelTests {
@@ -483,6 +540,48 @@ struct FinanceDynamicsViewModelTests {
         let (start, end) = dynamicsViewModel.getPeriodDates()
         let daysDiff = Calendar.current.dateComponents([.day], from: start, to: end).day ?? 0
         #expect(daysDiff >= 6 && daysDiff <= 8)
+    }
+
+    @Test("Кастомный период нормализуется до конца дня")
+    func testCustomPeriodNormalizesEndToEndOfDay() async throws {
+        let modelContext = try createTestModelContext()
+
+        let card = Card(name: "Тест", cardNumber: "0000", bank: .other, cardType: .debit, currency: "RUB")
+        card.balance = 1000
+        modelContext.insert(card)
+
+        let group = FinanceGroup(name: "Тест", colorHex: "#FFFFFF")
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+
+        let calendar = Calendar.current
+        let yesterdayStart = calendar.startOfDay(
+            for: calendar.date(byAdding: .day, value: -1, to: Date()) ?? Date()
+        )
+
+        dynamicsViewModel.handle(.setCustomPeriod(start: yesterdayStart, end: yesterdayStart))
+        let (_, end) = dynamicsViewModel.getPeriodDates()
+        let endComponents = calendar.dateComponents([.hour, .minute, .second], from: end)
+
+        #expect(endComponents.hour == 23)
+        #expect(endComponents.minute == 59)
+        #expect(endComponents.second == 59)
     }
 
     @Test("График: в пределах одного дня есть минимум две точки (start/end)")
@@ -993,6 +1092,72 @@ struct FinanceDynamicsViewModelTests {
         )
 
         #expect(abs(yesterdayBalance - todayBalance) < 0.01)
+    }
+
+    @Test("Daily snapshot override приоритетнее исторического расчета в динамике за прошлую дату")
+    func testAuditSnapshotOverrideIsUsedForPastDate() async throws {
+        let modelContext = try createTestModelContext()
+
+        let card = Card(name: "My Car", cardNumber: "0000", bank: .other, cardType: .debit, currency: "USD")
+        card.initialBalance = 2_330
+        card.hasInitialBalance = true
+        card.balance = 11_110
+        card.createdAt = Date().addingTimeInterval(-5 * 86_400)
+        card.updatedAt = Date()
+        modelContext.insert(card)
+
+        let group = FinanceGroup(name: "Assets", colorHex: "#FFFFFF")
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let auditStore = InMemoryFinanceBalanceAuditStore()
+
+        let targetDate = Date().addingTimeInterval(-1 * 86_400)
+        let accountKey = "\(FinanceAccountType.card.rawValue):\(card.cardUniqueID)"
+        auditStore.setValue(
+            8_888,
+            for: accountKey,
+            day: FinanceBalanceDayKey(date: targetDate),
+            defaultCurrency: "USD",
+            defaultTitle: card.name,
+            defaultGroupName: group.name,
+            accountTypeRaw: FinanceAccountType.card.rawValue,
+            effectSign: 1,
+            isUnknown: false
+        )
+
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService(),
+            auditStore: auditStore
+        )
+        dynamicsViewModel.handle(.loadData)
+
+        let endOfTargetDay = Calendar.current.date(
+            bySettingHour: 23,
+            minute: 59,
+            second: 59,
+            of: targetDate
+        ) ?? targetDate
+
+        let valueAtTargetDay = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: endOfTargetDay,
+            accountCardIDs: Set([card.cardUniqueID]),
+            debtAsNegative: false
+        )
+
+        #expect(abs(valueAtTargetDay - 8_888) < 0.01)
     }
 
     @Test("Overview chart относит рост активов в debit, а рост долга в credit")

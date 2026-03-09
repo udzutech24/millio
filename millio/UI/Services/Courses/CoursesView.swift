@@ -10,7 +10,7 @@ import SwiftUI
 struct CoursesView: View {
     var body: some View {
         ConverterView()
-            .navigationTitle("Курсы")
+            .navigationTitle(MainLocalization.text(MainLocalization.serviceCourses))
             .navigationBarTitleDisplayMode(.inline)
     }
 }

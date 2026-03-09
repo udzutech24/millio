@@ -18,7 +18,7 @@ enum ProfileMenuSectionID: String, Identifiable {
 
     var id: String { rawValue }
 
-    var titleKey: LocalizedStringKey {
+    var localizationKey: String {
         switch self {
         case .general:
             return "profile.section.general"
@@ -36,6 +36,29 @@ enum ProfileMenuSectionID: String, Identifiable {
             return "profile.section.debug"
         }
     }
+
+    var fallbackTitle: String {
+        switch self {
+        case .general:
+            return "General"
+        case .settings:
+            return "Settings"
+        case .experience:
+            return "Experience"
+        case .support:
+            return "Support & tools"
+        case .about:
+            return "About"
+        case .contacts:
+            return "Contacts"
+        case .debug:
+            return "Debug"
+        }
+    }
+
+    var titleKey: LocalizedStringKey {
+        LocalizedStringKey(localizationKey)
+    }
 }
 
 enum ProfileMenuItemID: String, Identifiable {
@@ -52,7 +75,6 @@ enum ProfileMenuItemID: String, Identifiable {
     case privacy
     case terms
     case contactUs
-    case rateApp
     case premiumAccess
     case trialDisabled
     case premiumDiagnostics
@@ -118,8 +140,7 @@ enum ProfileMenuStructure {
         ProfileMenuSection(
             id: .contacts,
             items: [
-                .contactUs,
-                .rateApp
+                .contactUs
             ]
         )
     ]

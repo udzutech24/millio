@@ -157,7 +157,17 @@ enum CurrencyFlags {
     
     /// Получить флаг для валюты
     static func flag(for currencyCode: String) -> String {
-        let code = currencyCode.uppercased()
+        let code = currencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+
+        // У криптовалют нет ISO-региона => у них не может быть "флага страны".
+        // Вместо этого показываем компактный glyph/emoji (например, ₿ для BTC), чтобы UI не падал в нейтральную заглушку.
+        if CurrencySelectionSupport.isCrypto(code) {
+            let cryptoGlyph = CurrencySelectionSupport.emoji(for: code)
+            if !cryptoGlyph.isEmpty {
+                return cryptoGlyph
+            }
+        }
+
         // Сначала проверяем явный список
         if let explicitFlag = flags[code] {
             return explicitFlag
@@ -173,7 +183,7 @@ enum CurrencyFlags {
     /// Для большинства валют берется регион, связанный с кодом валюты.
     /// Если ассет не найден, возвращает nil — UI должен показать emoji-флаг или нейтральную иконку.
     static func assetName(for currencyCode: String) -> String? {
-        let code = currencyCode.uppercased()
+        let code = currencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         guard !CurrencySelectionSupport.isCrypto(code) else { return nil }
 
         if let explicitFlag = flags[code],

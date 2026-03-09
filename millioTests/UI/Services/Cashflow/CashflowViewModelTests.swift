@@ -15,6 +15,8 @@ import SwiftData
 struct CashflowViewModelTests {
     private static let schema = Schema([
         Card.self,
+        FinanceGroup.self,
+        FinanceAccount.self,
         CashflowTransaction.self,
         CashflowCustomCategory.self,
         CashflowSystemCategoryOverride.self,
@@ -46,6 +48,8 @@ extension CashflowViewModelTests {
         let title = CashflowViewModel.makePeriodHeaderTitle(
             chartPeriod: .month,
             selectedMonth: selectedMonth,
+            selectedQuarter: selectedMonth,
+            selectedYear: selectedMonth,
             customStartDate: selectedMonth,
             customEndDate: selectedMonth,
             calendar: calendar,
@@ -65,6 +69,8 @@ extension CashflowViewModelTests {
         let title = CashflowViewModel.makePeriodHeaderTitle(
             chartPeriod: .custom,
             selectedMonth: start,
+            selectedQuarter: start,
+            selectedYear: start,
             customStartDate: start,
             customEndDate: end,
             calendar: calendar,
@@ -201,31 +207,18 @@ extension CashflowViewModelTests {
         #expect(viewModel.state.transactions.first?.note == "Тест")
     }
 
-    @Test("Стрелки периода переключают месяцы и не уходят в будущее")
-    func testMonthNavigationByArrows() async throws {
+    @Test("Дефолтный период Cashflow — последние 3 календарных месяца (до сегодняшнего дня)")
+    func testDefaultPeriodIsLastThreeCalendarMonthsToToday() throws {
         let modelContext = try createTestModelContext()
-        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 2, day: 13)) ?? Date()
-        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
-
         let calendar = Calendar.current
-        let initialMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: fixedNow)) ?? fixedNow
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 9, hour: 12)) ?? Date()
 
-        #expect(!viewModel.canMovePeriodForward())
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        let expected = CashflowViewModel.defaultPeriodRange(referenceDate: fixedNow, calendar: calendar)
 
-        viewModel.handle(.movePeriodBackward)
-        #expect(viewModel.state.chartPeriod == .specificMonth)
-        #expect(calendar.component(.month, from: viewModel.state.selectedMonth) == 1)
-        #expect(calendar.component(.year, from: viewModel.state.selectedMonth) == 2026)
-        #expect(viewModel.canMovePeriodForward())
-
-        viewModel.handle(.movePeriodForward)
-        #expect(calendar.component(.month, from: viewModel.state.selectedMonth) == calendar.component(.month, from: initialMonth))
-        #expect(calendar.component(.year, from: viewModel.state.selectedMonth) == calendar.component(.year, from: initialMonth))
-        #expect(!viewModel.canMovePeriodForward())
-
-        viewModel.handle(.movePeriodForward)
-        #expect(calendar.component(.month, from: viewModel.state.selectedMonth) == calendar.component(.month, from: initialMonth))
-        #expect(calendar.component(.year, from: viewModel.state.selectedMonth) == calendar.component(.year, from: initialMonth))
+        #expect(viewModel.state.chartPeriod == .custom)
+        #expect(viewModel.state.customStartDate == expected.start)
+        #expect(viewModel.state.customEndDate == expected.end)
     }
 
     @Test("Итог дохода за месяц учитывает только доходы выбранного месяца")
@@ -454,6 +447,53 @@ extension CashflowViewModelTests {
         #expect(abs(viewModel.state.contributedExpense - 100) < 0.01)
         #expect(abs(viewModel.state.assetValueChange + 100) < 0.01) // 300 - 500 + 100 = -100
         #expect(abs(viewModel.state.periodTotalChange - 300) < 0.01)
+    }
+
+    @Test("Сводка активов: счет, созданный в конце периода, не попадает в старт и попадает в конец")
+    func testAssetsSnapshotForAccountCreatedOnPeriodEndDay() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 9, hour: 16, minute: 0)) ?? Date()
+
+        let card = Card(
+            name: "Assets",
+            cardNumber: "0001",
+            bank: .other,
+            cardType: .debit,
+            currency: "USD",
+            balance: 74_000
+        )
+        card.initialBalance = 74_000
+        card.hasInitialBalance = true
+        card.createdAt = fixedNow
+        card.updatedAt = fixedNow
+        modelContext.insert(card)
+
+        let group = FinanceGroup(name: "Assets Group", colorHex: "#00FF00")
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(
+            modelContext: modelContext,
+            now: { fixedNow }
+        )
+
+        viewModel.handle(.loadTransactions)
+
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            abs(viewModel.state.assetsAtPeriodStart) < 0.01 &&
+            abs(viewModel.state.assetsAtPeriodEnd - 74_000) < 0.01 &&
+            abs(viewModel.state.periodTotalChange - 74_000) < 0.01
+        }
+
+        #expect(abs(viewModel.state.assetsAtPeriodStart) < 0.01)
+        #expect(abs(viewModel.state.assetsAtPeriodEnd - 74_000) < 0.01)
+        #expect(abs(viewModel.state.periodTotalChange - 74_000) < 0.01)
+        #expect(abs(viewModel.state.assetValueChange - 74_000) < 0.01)
     }
 
     @Test("Детализация расходов сортируется по убыванию и учитывает доходы отдельно")

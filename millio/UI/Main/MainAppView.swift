@@ -9,6 +9,32 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
+@MainActor
+enum MainWidgetDeepLinkHandler {
+    static func consumePendingActions(
+        appState: AppState,
+        router: AppRouter,
+        showExpenseSheet: inout Bool,
+        showIncomeSheet: inout Bool
+    ) {
+        if appState.pendingOpenConverterService {
+            appState.pendingOpenConverterService = false
+            router.navigationPath = NavigationPath()
+            router.push(.courses)
+        }
+
+        if appState.pendingOpenMainExpenseSheet {
+            appState.pendingOpenMainExpenseSheet = false
+            showExpenseSheet = true
+        }
+
+        if appState.pendingOpenMainIncomeSheet {
+            appState.pendingOpenMainIncomeSheet = false
+            showIncomeSheet = true
+        }
+    }
+}
+
 struct MainAppView: View {
     @Bindable var router: AppRouter
     @Environment(AppState.self) private var appState
@@ -133,12 +159,42 @@ struct MainAppView: View {
                 if cashflowViewModel == nil {
                     cashflowViewModel = CashflowViewModel(modelContext: modelContext)
                 }
+                MainWidgetDeepLinkHandler.consumePendingActions(
+                    appState: appState,
+                    router: router,
+                    showExpenseSheet: &showExpenseSheet,
+                    showIncomeSheet: &showIncomeSheet
+                )
                 
                 // Обновляем статус подписки при открытии главного экрана
                 Task {
                     await SubscriptionManager.shared.checkSubscriptionStatus()
                     appState.applySubscriptionSnapshot(SubscriptionManager.shared.snapshot)
                 }
+            }
+            .onChange(of: appState.pendingOpenConverterService) { _, _ in
+                MainWidgetDeepLinkHandler.consumePendingActions(
+                    appState: appState,
+                    router: router,
+                    showExpenseSheet: &showExpenseSheet,
+                    showIncomeSheet: &showIncomeSheet
+                )
+            }
+            .onChange(of: appState.pendingOpenMainExpenseSheet) { _, _ in
+                MainWidgetDeepLinkHandler.consumePendingActions(
+                    appState: appState,
+                    router: router,
+                    showExpenseSheet: &showExpenseSheet,
+                    showIncomeSheet: &showIncomeSheet
+                )
+            }
+            .onChange(of: appState.pendingOpenMainIncomeSheet) { _, _ in
+                MainWidgetDeepLinkHandler.consumePendingActions(
+                    appState: appState,
+                    router: router,
+                    showExpenseSheet: &showExpenseSheet,
+                    showIncomeSheet: &showIncomeSheet
+                )
             }
         }
     }

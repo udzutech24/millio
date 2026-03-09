@@ -13,7 +13,7 @@
   - Non-Russian system locale: `System`, `English`.
 - Quick setup prioritizes currencies by system locale:
   - Russian system locale: `RUB`, `USD`, `CNY`, `EUR`, `TRY`.
-  - Non-Russian system locale: system currency first, then global fallback currencies.
+  - Non-Russian system locale: system currency first, then `USD`, `GBP`, `JPY`, `CHF`, `CAD`, `AUD` (without `RUB`, `EUR`, `CNY`, `TRY` in recommendations).
 
 2. `expenseCategories`
 - Choose expense categories to keep visible in Cashflow.
