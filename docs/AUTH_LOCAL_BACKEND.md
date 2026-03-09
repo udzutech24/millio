@@ -1,14 +1,18 @@
-# Local Auth Backend
+# Auth Backend Configuration
 
 ## Configuration
 
 - `AUTH_BASE_URL` can be provided directly from environment, but `xcconfig` should use split fields because `http://` is parsed as a comment there.
-- Default debug values are:
+- Default app values are:
+  - `AUTH_BASE_SCHEME = https`
+  - `AUTH_BASE_HOST = api.udzutech.com`
+  - `AUTH_BASE_PORT =`
+  - `AUTH_BASE_PATH = /api/v1`
+- For local backend development, override the values in `millio/Config/Secrets.local`, for example:
   - `AUTH_BASE_SCHEME = http`
   - `AUTH_BASE_HOST = localhost`
   - `AUTH_BASE_PORT = 3000`
   - `AUTH_BASE_PATH = /api/v1`
-- For a physical device, override `AUTH_BASE_HOST` in `millio/Config/Secrets.local.xcconfig` with your machine IP, for example `192.168.1.10`.
 
 ## Architecture
 

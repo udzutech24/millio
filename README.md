@@ -114,13 +114,15 @@ millio/
 
 ```xcconfig
 AUTH_BASE_URL =
-AUTH_BASE_SCHEME = http
-AUTH_BASE_HOST = localhost
-AUTH_BASE_PORT = 3000
+AUTH_BASE_SCHEME = https
+AUTH_BASE_HOST = api.udzutech.com
+AUTH_BASE_PORT =
 AUTH_BASE_PATH = /api/v1
 ```
 
-`Secrets.local` подключается из `Debug.xcconfig` и `Release.xcconfig` через `#include?`, поэтому файл можно не коммитить.
+По умолчанию приложение ходит в прод-бэк `https://api.udzutech.com/api/v1`.
+
+`Secrets.local` подключается из `Debug.xcconfig` и `Release.xcconfig` через `#include?`, поэтому в нём можно переопределить URL для локальной разработки.
 
 ### Ручной backup (из кода)
 

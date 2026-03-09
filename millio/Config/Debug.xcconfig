@@ -1,7 +1,7 @@
 TWELVE_DATA_API_KEY =
 AUTH_BASE_URL =
-AUTH_BASE_SCHEME = http
-AUTH_BASE_HOST = localhost
-AUTH_BASE_PORT = 3000
+AUTH_BASE_SCHEME = https
+AUTH_BASE_HOST = api.udzutech.com
+AUTH_BASE_PORT =
 AUTH_BASE_PATH = /api/v1
 #include? "Secrets.local"

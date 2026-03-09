@@ -199,6 +199,126 @@
         }
       }
     },
+    "auth.error.apple_credentials" : {
+      "comment" : "Invalid Apple credentials toast",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Could not verify your Apple account. Try again."
+          }
+        }
+      }
+    },
+    "auth.error.generic" : {
+      "comment" : "Fallback auth error toast",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Could not complete sign in. Try again."
+          }
+        }
+      }
+    },
+    "auth.error.invalid_response" : {
+      "comment" : "Invalid auth response toast",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Server returned an invalid response. Try again later."
+          }
+        }
+      }
+    },
+    "auth.error.network" : {
+      "comment" : "Generic network auth toast",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Network error. Try again."
+          }
+        }
+      }
+    },
+    "auth.error.offline" : {
+      "comment" : "Offline auth toast",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No internet connection. Check your network and try again."
+          }
+        }
+      }
+    },
+    "auth.error.rate_limited" : {
+      "comment" : "Rate limited auth toast",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Too many attempts. Please wait a bit and try again."
+          }
+        }
+      }
+    },
+    "auth.error.server" : {
+      "comment" : "Server auth toast",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Server error. Try again later."
+          }
+        }
+      }
+    },
+    "auth.error.session_expired" : {
+      "comment" : "Expired auth session toast",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your session expired. Sign in again."
+          }
+        }
+      }
+    },
+    "auth.error.timeout" : {
+      "comment" : "Timed out auth toast",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Server is taking too long to respond. Try again."
+          }
+        }
+      }
+    },
+    "auth.error.unavailable" : {
+      "comment" : "Auth service unavailable toast",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sign in is temporarily unavailable."
+          }
+        }
+      }
+    },
     "auth.welcome.badge.private_access" : {
       "comment" : "Capsule badge above the app name on the auth welcome screen",
       "extractionState" : "manual",
@@ -6387,40 +6507,6 @@
         }
       }
     },
-    "finances.dynamics.pro.subtitle" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Upgrade to access advanced analytics"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Оформите подписку для доступа к расширенной аналитике"
-          }
-        }
-      }
-    },
-    "finances.dynamics.pro.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Chart is available in PRO"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "График доступен в PRO версии"
-          }
-        }
-      }
-    },
     "finances.dynamics.pro.hint.list_available" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6451,6 +6537,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Подсказки"
+          }
+        }
+      }
+    },
+    "finances.dynamics.pro.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Upgrade to access advanced analytics"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Оформите подписку для доступа к расширенной аналитике"
+          }
+        }
+      }
+    },
+    "finances.dynamics.pro.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chart is available in PRO"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "График доступен в PRO версии"
           }
         }
       }

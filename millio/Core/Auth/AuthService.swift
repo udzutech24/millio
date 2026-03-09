@@ -489,20 +489,30 @@ final class AuthManager {
 
     @ObservationIgnored
     private var service: any AuthServiceProtocol
+    @ObservationIgnored
+    private var toastCenter: ToastCenter?
 
-    init(service: any AuthServiceProtocol = UnconfiguredAuthService()) {
+    init(
+        service: any AuthServiceProtocol = UnconfiguredAuthService(),
+        toastCenter: ToastCenter? = nil
+    ) {
         self.service = service
+        self.toastCenter = toastCenter
     }
 
     func configure(service: any AuthServiceProtocol) {
         self.service = service
     }
 
+    func configure(toastCenter: ToastCenter) {
+        self.toastCenter = toastCenter
+    }
+
     func restoreSession() async {
         guard !isBusy else { return }
 
         status = .restoring
-        errorMessage = nil
+        clearFeedback()
         isBusy = true
         defer { isBusy = false }
 
@@ -514,14 +524,14 @@ final class AuthManager {
             apply(session)
         } catch {
             clearState()
-            errorMessage = error.localizedDescription
+            present(error)
         }
     }
 
     func signIn(with authorization: Result<ASAuthorization, Error>) async {
         guard !isBusy else { return }
 
-        errorMessage = nil
+        clearFeedback()
         isBusy = true
         defer { isBusy = false }
 
@@ -529,16 +539,16 @@ final class AuthManager {
             let session = try await session(for: authorization)
             apply(session)
         } catch let error as ASAuthorizationError where error.code == .canceled {
-            errorMessage = nil
+            clearFeedback()
         } catch {
-            errorMessage = error.localizedDescription
+            present(error)
         }
     }
 
     func reloadCurrentUser() async {
         guard isAuthenticated, !isBusy else { return }
 
-        errorMessage = nil
+        clearFeedback()
         isBusy = true
         defer { isBusy = false }
 
@@ -546,7 +556,7 @@ final class AuthManager {
             currentUser = try await service.currentUser()
             accessTokenExpiresAt = await service.accessTokenExpiryDate()
         } catch {
-            errorMessage = error.localizedDescription
+            present(error)
             if case AuthServiceError.unauthorized = error {
                 clearState()
             }
@@ -585,12 +595,120 @@ final class AuthManager {
         currentUser = session.user
         accessTokenExpiresAt = session.accessTokenExpiresAt
         status = .authenticated
-        errorMessage = nil
+        clearFeedback()
     }
 
     private func clearState() {
         currentUser = nil
         accessTokenExpiresAt = nil
         status = .signedOut
+    }
+
+    func dismissToast() {
+        toastCenter?.dismiss()
+        errorMessage = nil
+    }
+
+    private func clearFeedback() {
+        errorMessage = nil
+        dismissToast()
+    }
+
+    private func present(_ error: Error) {
+        let message = userFacingMessage(for: error)
+        errorMessage = message
+        toastCenter?.show(message: message)
+    }
+
+    private func userFacingMessage(for error: Error) -> String {
+        if let authError = error as? AuthServiceError {
+            return userFacingMessage(for: authError)
+        }
+        return String(
+            localized: "auth.error.generic",
+            defaultValue: "Could not complete sign in. Try again.",
+            comment: "Fallback auth error toast"
+        )
+    }
+
+    private func userFacingMessage(for error: AuthServiceError) -> String {
+        switch error {
+        case .invalidConfiguration, .unconfigured:
+            return String(
+                localized: "auth.error.unavailable",
+                defaultValue: "Sign in is temporarily unavailable.",
+                comment: "Auth service unavailable toast"
+            )
+        case .invalidIdentityToken, .unexpectedAuthorizationCredential:
+            return String(
+                localized: "auth.error.apple_credentials",
+                defaultValue: "Could not verify your Apple account. Try again.",
+                comment: "Invalid Apple credentials toast"
+            )
+        case .notAuthenticated, .unauthorized:
+            return String(
+                localized: "auth.error.session_expired",
+                defaultValue: "Your session expired. Sign in again.",
+                comment: "Expired auth session toast"
+            )
+        case .decodingFailed:
+            return String(
+                localized: "auth.error.invalid_response",
+                defaultValue: "Server returned an invalid response. Try again later.",
+                comment: "Invalid auth response toast"
+            )
+        case .transport(let message):
+            let normalized = message.lowercased()
+            if normalized.contains("internet") || normalized.contains("offline") || normalized.contains("network") {
+                return String(
+                    localized: "auth.error.offline",
+                    defaultValue: "No internet connection. Check your network and try again.",
+                    comment: "Offline auth toast"
+                )
+            }
+            if normalized.contains("timed out") || normalized.contains("timeout") {
+                return String(
+                    localized: "auth.error.timeout",
+                    defaultValue: "Server is taking too long to respond. Try again.",
+                    comment: "Timed out auth toast"
+                )
+            }
+            return String(
+                localized: "auth.error.network",
+                defaultValue: "Network error. Try again.",
+                comment: "Generic network auth toast"
+            )
+        case .backend(let statusCode, let message):
+            let normalized = message.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if statusCode == 401 || normalized.contains("invalid apple identity token") {
+                return String(
+                    localized: "auth.error.apple_credentials",
+                    defaultValue: "Could not verify your Apple account. Try again.",
+                    comment: "Invalid Apple credentials toast"
+                )
+            }
+            if statusCode == 429 {
+                return String(
+                    localized: "auth.error.rate_limited",
+                    defaultValue: "Too many attempts. Please wait a bit and try again.",
+                    comment: "Rate limited auth toast"
+                )
+            }
+            if statusCode >= 500 || normalized == "internal server error" {
+                return String(
+                    localized: "auth.error.server",
+                    defaultValue: "Server error. Try again later.",
+                    comment: "Server auth toast"
+                )
+            }
+            if !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return message
+            }
+            return String(
+                localized: "auth.error.generic",
+                defaultValue: "Could not complete sign in. Try again.",
+                comment: "Fallback auth error toast"
+            )
+        }
     }
 }

@@ -19,6 +19,7 @@ struct millioApp: App {
     @State private var lifecycleUseCase: AppLifecycleUseCase?
     @State private var financeStartupWarmupUseCase: FinanceStartupWarmupUseCase?
     @State private var authManager = AuthManager()
+    @State private var toastCenter = ToastCenter()
     @State private var isBiometricUnlockInProgress = false
     private let appLockCoordinator = AppLockLifecycleCoordinator()
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "App")
@@ -82,12 +83,16 @@ struct millioApp: App {
                             }
                             .zIndex(1)
                         }
+
+                        GlobalToastHost()
+                            .zIndex(2)
                     }
                 }
                 .id(appState.languageRefreshToken)
                 .preferredColorScheme(.dark)
                 .environment(appState)
                 .environment(authManager)
+                .environment(toastCenter)
                 .modelContainer(container)
                 .environment(\.diContainer, diContainer)
                 .environment(\.locale, appState.selectedLanguage.locale ?? Locale.current)
@@ -154,6 +159,7 @@ struct millioApp: App {
         )
         self.diContainer = container
         authManager.configure(service: container.authService)
+        authManager.configure(toastCenter: toastCenter)
         await MarketAPIClient.shared.configure(authService: container.authService)
         self.financeStartupWarmupUseCase = FinanceStartupWarmupUseCase(
             modelContext: container.modelContainer.mainContext

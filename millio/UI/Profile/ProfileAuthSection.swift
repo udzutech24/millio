@@ -32,12 +32,6 @@ struct ProfileAuthSection: View {
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(AppColors.textSecondary)
             }
-
-            if let errorMessage = authManager.errorMessage, !errorMessage.isEmpty {
-                Text(errorMessage)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.red.opacity(0.9))
-            }
         }
     }
 
