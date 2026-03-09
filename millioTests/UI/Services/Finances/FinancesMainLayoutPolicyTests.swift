@@ -3,6 +3,7 @@
 //  millioTests
 //
 
+import Foundation
 import Testing
 @testable import millio
 
@@ -24,4 +25,3 @@ struct FinancesMainLayoutPolicyTests {
         #expect(paddingWithoutFAB > 0)
     }
 }
-

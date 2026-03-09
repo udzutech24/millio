@@ -339,6 +339,7 @@ protocol AuthServiceProtocol: Sendable {
     func currentUser() async throws -> AuthUser
     func logout() async
     func accessTokenExpiryDate() async -> Date?
+    func accessToken(forceRefresh: Bool) async throws -> String
 }
 
 actor AuthService: AuthServiceProtocol {
@@ -410,6 +411,13 @@ actor AuthService: AuthServiceProtocol {
         await tokenStore.accessTokenExpiresAt()
     }
 
+    func accessToken(forceRefresh: Bool) async throws -> String {
+        if forceRefresh {
+            return try await refreshAccessToken()
+        }
+        return try await validAccessToken()
+    }
+
     private func validAccessToken() async throws -> String {
         if let token = await tokenStore.accessToken() {
             return token
@@ -459,6 +467,10 @@ struct UnconfiguredAuthService: AuthServiceProtocol {
 
     func accessTokenExpiryDate() async -> Date? {
         nil
+    }
+
+    func accessToken(forceRefresh: Bool) async throws -> String {
+        throw AuthServiceError.unconfigured
     }
 }
 

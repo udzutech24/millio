@@ -106,14 +106,18 @@ millio/
 
 ## Использование
 
-### Локальные секреты (Twelve Data)
+### Локальная backend-конфигурация
 
 - Локальный файл: `millio/Config/Secrets.local`
 - Пример: `millio/Config/Secrets.local.example`
 - Формат:
 
 ```xcconfig
-TWELVE_DATA_API_KEY = your_key_here
+AUTH_BASE_URL =
+AUTH_BASE_SCHEME = http
+AUTH_BASE_HOST = localhost
+AUTH_BASE_PORT = 3000
+AUTH_BASE_PATH = /api/v1
 ```
 
 `Secrets.local` подключается из `Debug.xcconfig` и `Release.xcconfig` через `#include?`, поэтому файл можно не коммитить.

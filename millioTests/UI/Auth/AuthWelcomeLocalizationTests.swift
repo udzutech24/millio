@@ -4,19 +4,19 @@ import Testing
 
 struct AuthWelcomeLocalizationTests {
     private func localized(_ key: String, localeIdentifier: String) -> String {
-        // Use a type from the app module to resolve the bundle that contains Localizable.xcstrings.
         let bundle = Bundle(for: SettingsManager.self)
-        return String(
-            localized: String.LocalizationValue(key),
-            bundle: bundle,
-            locale: Locale(identifier: localeIdentifier)
-        )
+        let languageCode = Locale(identifier: localeIdentifier).language.languageCode?.identifier ?? localeIdentifier
+        guard let localizedPath = bundle.path(forResource: languageCode, ofType: "lproj"),
+              let localizedBundle = Bundle(path: localizedPath) else {
+            return bundle.localizedString(forKey: key, value: nil, table: nil)
+        }
+        return localizedBundle.localizedString(forKey: key, value: nil, table: nil)
     }
 
     private func assertNoTrailingPeriod(_ value: String, _ message: String) {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        #expect(trimmed.isEmpty == false, message)
-        #expect(trimmed.hasSuffix(".") == false, message)
+        #expect(trimmed.isEmpty == false)
+        #expect(trimmed.hasSuffix(".") == false)
     }
 
     @Test("Auth welcome copy is localized and has no trailing periods")
@@ -30,9 +30,8 @@ struct AuthWelcomeLocalizationTests {
 
         for item in cases {
             let value = localized(item.key, localeIdentifier: item.locale)
-            #expect(value == item.expected, "Unexpected localization for \(item.key) (\(item.locale))")
+            #expect(value == item.expected)
             assertNoTrailingPeriod(value, "\(item.key) (\(item.locale)) must not end with a period")
         }
     }
 }
-

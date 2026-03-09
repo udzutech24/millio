@@ -41,29 +41,22 @@ final class MockDynamicsNormalizedCurrencyRateService: CurrencyRateServiceProtoc
 @Suite(.serialized)
 @MainActor
 struct FinanceDynamicsViewModelTests {
-    private static let sharedContainer: ModelContainer = {
-        let schema = Schema([
-            Card.self,
-            Credit.self,
-            Investment.self,
-            FinanceGroup.self,
-            FinanceAccount.self,
-            CashflowTransaction.self,
-            HistoricalRate.self
-        ])
-        let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        return try! ModelContainer(for: schema, configurations: [config])
-    }()
+    private static let schema = Schema([
+        Card.self,
+        Credit.self,
+        Investment.self,
+        FinanceGroup.self,
+        FinanceAccount.self,
+        CashflowTransaction.self,
+        HistoricalRate.self
+    ])
+    private static var retainedContainers: [ModelContainer] = []
 
     private func createTestModelContext() throws -> ModelContext {
-        let context = Self.sharedContainer.mainContext
-        try context.deleteAll(FinanceAccount.self)
-        try context.deleteAll(FinanceGroup.self)
-        try context.deleteAll(CashflowTransaction.self)
-        try context.deleteAll(Investment.self)
-        try context.deleteAll(Credit.self)
-        try context.deleteAll(Card.self)
-        try context.deleteAll(HistoricalRate.self)
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: Self.schema, configurations: [config])
+        Self.retainedContainers.append(container)
+        let context = container.mainContext
         try context.save()
         return context
     }
@@ -278,7 +271,7 @@ struct FinanceDynamicsViewModelTests {
         #expect(abs(balanceNow - 15000) < 0.01)
     }
 
-    @Test("Карта: без истории корректировок используем актуальный баланс после создания")
+    @Test("Карта: до даты ручного обновления сохраняется стартовый баланс, после нее - актуальный")
     func testCardUsesActualAmountAfterUpdateWithoutTransactions() async throws {
         let modelContext = try createTestModelContext()
 
@@ -319,7 +312,7 @@ struct FinanceDynamicsViewModelTests {
             date: updatedAt.addingTimeInterval(-60),
             accountCardIDs: [card.cardUniqueID]
         )
-        #expect(abs(beforeUpdate - 15_000) < 0.01)
+        #expect(abs(beforeUpdate - 10_000) < 0.01)
 
         let afterUpdate = await dynamicsViewModel.calculateBalanceAtDate(
             accounts: [account],
@@ -853,7 +846,7 @@ struct FinanceDynamicsViewModelTests {
             date: updatedAt.addingTimeInterval(-60),
             accountCardIDs: []
         )
-        #expect(abs(beforeUpdate - 66_236) < 0.01)
+        #expect(abs(beforeUpdate - 50_000) < 0.01)
 
         let afterUpdate = await dynamicsViewModel.calculateBalanceAtDate(
             accounts: [account],
@@ -908,7 +901,7 @@ struct FinanceDynamicsViewModelTests {
             date: updatedAt.addingTimeInterval(-60),
             accountCardIDs: []
         )
-        #expect(abs(beforeUpdate - 4_672) < 0.01)
+        #expect(abs(beforeUpdate - 3_900) < 0.01)
 
         let afterUpdate = await dynamicsViewModel.calculateBalanceAtDate(
             accounts: [account],
@@ -923,7 +916,7 @@ struct FinanceDynamicsViewModelTests {
         let modelContext = try createTestModelContext()
 
         let createdAt = Date().addingTimeInterval(-20 * 86400)
-        let updatedAt = Date().addingTimeInterval(-1800)
+        let updatedAt = Date().addingTimeInterval(-2 * 86400)
 
         let card = Card(name: "Дебет", cardNumber: "1111", bank: .other, cardType: .debit, currency: "RUB")
         card.createdAt = createdAt

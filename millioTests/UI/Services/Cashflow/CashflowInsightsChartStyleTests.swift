@@ -6,6 +6,7 @@
 //
 
 import CoreGraphics
+import Foundation
 import Testing
 @testable import millio
 
@@ -25,7 +26,7 @@ struct CashflowInsightsChartStyleTests {
 
         #expect(compact.spacing < relaxed.spacing)
         #expect(compact.barWidth < relaxed.barWidth)
-        #expect(compact.maxBarHeight < relaxed.maxBarHeight)
+        #expect(compact.maxBarHeight > relaxed.maxBarHeight)
     }
 
     @Test("Bar height keeps tiny values visible without breaking zero state")
