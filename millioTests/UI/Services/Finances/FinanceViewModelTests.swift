@@ -127,6 +127,41 @@ struct FinanceViewModelTests {
         #expect(viewModel.state.displayCurrency == "USD")
     }
 
+    @Test("Инвестиции без FinanceAccount привязываются к \"Без группы\" и становятся видимыми")
+    func testMissingInvestmentLinksAreRecoveredIntoUngroupedGroup() async throws {
+        let modelContext = try createTestModelContext()
+        let currencyService = MockCurrencyRateService()
+
+        let investment = Investment(
+            name: "Test ETF",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 100,
+            currency: "USD",
+            includeInTotal: true,
+            priority: .normal,
+            isFavorite: false
+        )
+        modelContext.insert(investment)
+        try modelContext.save()
+
+        _ = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: currencyService,
+            marketDataClient: MockMarketDataClient(),
+            skipInitialLoad: false
+        )
+
+        let accounts = try modelContext.fetch(FetchDescriptor<FinanceAccount>())
+        let groups = try modelContext.fetch(FetchDescriptor<FinanceGroup>())
+
+        #expect(accounts.count == 1)
+        #expect(groups.count == 1)
+        #expect(accounts[0].accountType == .investment)
+        #expect(accounts[0].accountID == investment.investmentUniqueID)
+        #expect(accounts[0].group?.name == String(localized: "finances.group.ungrouped"))
+    }
+
     @Test("FinanceViewModel смена display валюты не меняет primary валюту профиля")
     func testSetDisplayCurrencyDoesNotChangePrimaryCurrency() throws {
         let modelContext = try createTestModelContext()

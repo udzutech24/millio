@@ -8,7 +8,6 @@
 import SwiftUI
 import SwiftData
 import UIKit
-import Charts
 
 enum CashflowValueTone {
     case positive
@@ -134,6 +133,13 @@ private struct CashflowContentView: View {
     @State private var showExpenseBreakdown: Bool = false
     @State private var isEmptyIntroHidden: Bool = CashflowEmptyStateIntroPrefs().isHidden()
     @State private var selectedTopAction: TopToolbarAction = .currency
+    @State private var showExpandedChart: Bool = false
+    @State private var selectedInsightsGranularity: CashflowInsightsGranularity = .month
+    @State private var selectedInsightsPeriods: [CashflowInsightsGranularity: Date] = [:]
+    @State private var fullScreenChartVisiblePeriods: Int = 4
+    @State private var historyInitialFilter: CashflowHistoryTypeFilter = .all
+    @State private var historyInitialStartDate: Date? = nil
+    @State private var historyInitialEndDate: Date? = nil
     private let currentRoute: AppRoute = .cashflow
     
     private let neonCyan = Color(hex: "47D7FF")
@@ -159,8 +165,6 @@ private struct CashflowContentView: View {
             
             ScrollView {
                 VStack(spacing: 16) {
-                    // Выбор периода
-                    periodSelectionSection
                     cashflowChartSection
 
                     if viewModel.state.transactions.isEmpty {
@@ -225,7 +229,12 @@ private struct CashflowContentView: View {
             get: { viewModel.state.showTransactionsHistory },
             set: { if !$0 { viewModel.handle(.hideTransactionsHistory) } }
         )) {
-            CashflowTransactionsHistoryView(viewModel: viewModel)
+            CashflowTransactionsHistoryView(
+                viewModel: viewModel,
+                initialFilter: historyInitialFilter,
+                initialStartDate: historyInitialStartDate,
+                initialEndDate: historyInitialEndDate
+            )
         }
         .sheet(isPresented: Binding(
             get: { viewModel.state.showCurrencySelector },
@@ -235,6 +244,9 @@ private struct CashflowContentView: View {
         }
         .sheet(isPresented: $showAssetChangeInfoSheet) {
             assetChangeInfoSheet
+        }
+        .fullScreenCover(isPresented: $showExpandedChart) {
+            cashflowExpandedChartSheet
         }
         .onAppear {
             hideEmptyIntroIfNeeded()
@@ -381,7 +393,7 @@ private struct CashflowContentView: View {
                     .overlay(innerSeparator)
 
                 HStack {
-                    Text("Total")
+                    Text("Result")
                         .font(.system(size: 19, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                     Spacer()
@@ -543,8 +555,8 @@ private struct CashflowContentView: View {
     }
     
     // MARK: - Period Selection Section
-    
-    private var periodSelectionSection: some View {
+
+    private var periodSelectionHeader: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
                 Button {
@@ -606,8 +618,6 @@ private struct CashflowContentView: View {
                 .foregroundStyle(primarySecondaryText)
                 .contentTransition(.opacity)
         }
-        .padding(16)
-        .background(financeCardBackground(cornerRadius: panelCornerRadius))
         .animation(.easeInOut(duration: 0.2), value: viewModel.state.selectedMonth)
     }
 
@@ -661,8 +671,7 @@ private struct CashflowContentView: View {
         ToolbarItem(placement: .topBarTrailing) {
             Button {
                 selectedTopAction = .history
-                viewModel.handle(.showTransactionsHistory)
-                fireLightImpact()
+                openHistory(filter: .all, periodStart: nil)
             } label: {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.system(size: 18, weight: .regular))
@@ -716,6 +725,24 @@ private struct CashflowContentView: View {
             return code
         }
         return displayCurrencyLabel()
+    }
+
+    private func openHistory(filter: CashflowHistoryTypeFilter, periodStart: Date?) {
+        historyInitialFilter = filter
+        if let periodStart {
+            let range = CashflowInsightsChartBuilder.periodRange(
+                for: periodStart,
+                granularity: selectedInsightsGranularity,
+                calendar: .current
+            )
+            historyInitialStartDate = range.lowerBound
+            historyInitialEndDate = range.upperBound
+        } else {
+            historyInitialStartDate = nil
+            historyInitialEndDate = nil
+        }
+        viewModel.handle(.showTransactionsHistory)
+        fireLightImpact()
     }
 
     private func financeCardBackground(cornerRadius: CGFloat) -> some View {
@@ -790,15 +817,7 @@ private struct CashflowContentView: View {
 
     private var cashflowChartSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("cashflow.chart.title")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-                Spacer()
-                Text(viewModel.currentPeriodHeaderTitle())
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(primarySecondaryText)
-            }
+            periodSelectionHeader
 
             if EntitlementPolicy.canUseCashflowChart(isPro: appState.isPro) {
                 if hasChartData {
@@ -816,32 +835,97 @@ private struct CashflowContentView: View {
     }
 
     private var cashflowChartContent: some View {
-        Chart(viewModel.state.chartPoints) { point in
-            AreaMark(
-                x: .value("Date", point.date),
-                y: .value("Balance", point.balance)
-            )
-            .foregroundStyle(
-                LinearGradient(
-                    colors: [neonCyan.opacity(0.35), neonCyan.opacity(0.02)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+        let presentation = cashflowInsightsPresentation
+
+        return VStack(spacing: 18) {
+            HStack {
+                Text("cashflow.chart.title")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+
+                Spacer()
+
+                Button {
+                    showExpandedChart = true
+                    fireLightImpact()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("Full")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundStyle(AppColors.textPrimary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(periodControlBackground)
+                }
+                .buttonStyle(.plain)
+            }
+
+            cashflowInsightsBars(
+                presentation: presentation,
+                chartHeight: 160,
+                maxBarHeight: 110,
+                minimumGroupWidth: 56,
+                barWidth: 26,
+                labelFontSize: 14
             )
 
-            LineMark(
-                x: .value("Date", point.date),
-                y: .value("Balance", point.balance)
-            )
-            .foregroundStyle(neonCyan)
-            .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+            cashflowInsightsGranularityPicker
         }
-        .chartXAxis(.hidden)
-        .chartYAxis(.hidden)
-        .frame(height: 140)
-        .padding(.horizontal, 4)
-        .padding(.vertical, 8)
-        .background(financeInnerBackground(cornerRadius: rowCornerRadius))
+    }
+
+    private var cashflowExpandedChartSheet: some View {
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 18) {
+                        HStack(spacing: 12) {
+                            cashflowInsightCard(
+                                model: cashflowFullScreenPresentation.expenseCard,
+                                accent: Color(hex: "FF4FA3"),
+                                onTap: {
+                                    openHistory(
+                                        filter: .expense,
+                                        periodStart: cashflowFullScreenPresentation.selectedPeriodStart
+                                    )
+                                }
+                            )
+                            cashflowInsightCard(
+                                model: cashflowFullScreenPresentation.incomeCard,
+                                accent: Color(hex: "5A97FF"),
+                                onTap: {
+                                    openHistory(
+                                        filter: .income,
+                                        periodStart: cashflowFullScreenPresentation.selectedPeriodStart
+                                    )
+                                }
+                            )
+                        }
+
+                        cashflowFullScreenChart
+
+                        fullScreenVisiblePeriodsControl
+
+                        cashflowInsightsGranularityPicker
+                    }
+                    .padding(16)
+                }
+            }
+            .navigationTitle("cashflow.chart.title")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        showExpandedChart = false
+                    }
+                    .foregroundStyle(AppColors.textPrimary)
+                }
+            }
+        }
     }
 
     private var cashflowChartEmptyState: some View {
@@ -892,8 +976,508 @@ private struct CashflowContentView: View {
     }
 
     private var hasChartData: Bool {
-        viewModel.state.chartPoints.contains { point in
-            abs(point.income) > 0.000001 || abs(point.expense) > 0.000001 || abs(point.balance) > 0.000001
+        viewModel.state.convertedTransactions.contains { transaction in
+            abs(transaction.income) > 0.000001 || abs(transaction.expense) > 0.000001
+        }
+    }
+
+    private var cashflowInsightsPresentation: CashflowInsightsPresentation {
+        CashflowInsightsChartBuilder.makePresentation(
+            entries: viewModel.state.convertedTransactions,
+            granularity: selectedInsightsGranularity,
+            selectedPeriodStart: selectedInsightsPeriods[selectedInsightsGranularity],
+            referenceDate: Date(),
+            calendar: .current,
+            locale: .autoupdatingCurrent
+        )
+    }
+
+    private var cashflowFullScreenPresentation: CashflowInsightsPresentation {
+        CashflowInsightsChartBuilder.makeFullScreenPresentation(
+            entries: viewModel.state.convertedTransactions,
+            granularity: selectedInsightsGranularity,
+            selectedPeriodStart: selectedInsightsPeriods[selectedInsightsGranularity],
+            referenceDate: Date(),
+            maxVisiblePeriods: fullScreenChartVisiblePeriods,
+            calendar: .current,
+            locale: .autoupdatingCurrent
+        )
+    }
+
+    private var fullScreenVisiblePeriodsControl: some View {
+        HStack(spacing: 10) {
+            Text("Visible range")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(primarySecondaryText)
+
+            Spacer()
+
+            HStack(spacing: 6) {
+                visibleRangeChip(4)
+                visibleRangeChip(12)
+            }
+            .padding(4)
+            .background(
+                Capsule()
+                    .fill(Color.white.opacity(0.05))
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
+                    )
+            )
+        }
+        .padding(.horizontal, 2)
+    }
+
+    @ViewBuilder
+    private func cashflowInsightCard(
+        model: CashflowInsightsCardModel,
+        accent: Color,
+        onTap: (() -> Void)? = nil
+    ) -> some View {
+        let content = VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 10) {
+                Circle()
+                    .fill(accent)
+                    .frame(width: 12, height: 12)
+
+                Text(model.title)
+                    .font(.system(size: 25, weight: .medium))
+                    .foregroundStyle(primarySecondaryText)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(primarySecondaryText.opacity(0.65))
+            }
+
+            Text(chartAmountText(model.amount))
+                .font(.system(size: 42, weight: .bold))
+                .foregroundStyle(AppColors.textPrimary)
+                .padding(.top, 26)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .contentTransition(.numericText())
+
+            Spacer(minLength: 24)
+
+            Text(model.comparisonText)
+                .font(.system(size: 20, weight: .regular))
+                .foregroundStyle(primarySecondaryText)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(chartSignedAmountText(model.delta))
+                .font(.system(size: 25, weight: .bold))
+                .foregroundStyle(chartDeltaColor(for: model.deltaTone))
+                .padding(.top, 10)
+                .contentTransition(.numericText())
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 18)
+        .frame(maxWidth: .infinity, minHeight: 250, alignment: .topLeading)
+        .background(financeInnerBackground(cornerRadius: 28))
+        if let onTap {
+            Button {
+                onTap()
+                fireLightImpact()
+            } label: {
+                content
+            }
+            .buttonStyle(.plain)
+        } else {
+            content
+        }
+    }
+
+    private func cashflowInsightsBars(
+        presentation: CashflowInsightsPresentation,
+        chartHeight: CGFloat,
+        maxBarHeight: CGFloat,
+        minimumGroupWidth: CGFloat,
+        barWidth: CGFloat,
+        labelFontSize: CGFloat
+    ) -> some View {
+        GeometryReader { proxy in
+            let maxValue = max(
+                presentation.bars.flatMap { [abs($0.expense), abs($0.income)] }.max() ?? 0,
+                1
+            )
+            let groupWidth = CashflowInsightsChartStyle.compactGroupWidth(
+                containerWidth: proxy.size.width,
+                barCount: presentation.bars.count,
+                minimumGroupWidth: minimumGroupWidth
+            )
+
+            HStack(alignment: .bottom, spacing: 8) {
+                ForEach(presentation.bars) { bar in
+                    cashflowInsightsBarGroup(
+                        bar: bar,
+                        selectedPeriodStart: presentation.selectedPeriodStart,
+                        maxValue: maxValue,
+                        groupWidth: groupWidth,
+                        maxBarHeight: maxBarHeight,
+                        barWidth: barWidth,
+                        labelFontSize: labelFontSize
+                    )
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+        }
+        .frame(height: chartHeight)
+    }
+
+    private var cashflowFullScreenChart: some View {
+        let presentation = cashflowFullScreenPresentation
+
+        return GeometryReader { proxy in
+            let metrics = CashflowInsightsChartStyle.fullScreenMetrics(
+                containerWidth: proxy.size.width,
+                barCount: presentation.bars.count,
+                visiblePeriods: fullScreenChartVisiblePeriods
+            )
+            let maxValue = max(
+                presentation.bars.flatMap { [abs($0.expense), abs($0.income)] }.max() ?? 0,
+                1
+            )
+
+            HStack(alignment: .bottom, spacing: metrics.spacing) {
+                ForEach(presentation.bars) { bar in
+                    cashflowInsightsBarGroup(
+                        bar: bar,
+                        selectedPeriodStart: presentation.selectedPeriodStart,
+                        maxValue: maxValue,
+                        groupWidth: metrics.groupWidth,
+                        maxBarHeight: metrics.maxBarHeight,
+                        barWidth: metrics.barWidth,
+                        labelFontSize: metrics.labelFontSize
+                    )
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            .padding(.horizontal, 6)
+        }
+        .frame(height: 360)
+    }
+
+    private func cashflowInsightsBarGroup(
+        bar: CashflowInsightsBar,
+        selectedPeriodStart: Date,
+        maxValue: Double,
+        groupWidth: CGFloat,
+        maxBarHeight: CGFloat,
+        barWidth: CGFloat,
+        labelFontSize: CGFloat
+    ) -> some View {
+        let comparisonGranularity: Calendar.Component = {
+            switch selectedInsightsGranularity {
+            case .year:
+                return .year
+            case .month:
+                return .month
+            case .week:
+                return .weekOfYear
+            }
+        }()
+        let isSelected = Calendar.current.isDate(
+            bar.periodStart,
+            equalTo: selectedPeriodStart,
+            toGranularity: comparisonGranularity
+        )
+
+        return Button {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) {
+                selectedInsightsPeriods[selectedInsightsGranularity] = bar.periodStart
+            }
+            fireLightImpact()
+        } label: {
+            VStack(spacing: 12) {
+                Spacer(minLength: 0)
+
+                HStack(alignment: .bottom, spacing: 8) {
+                    chartColumn(
+                        value: bar.expense,
+                        maxValue: maxValue,
+                        maxBarHeight: maxBarHeight,
+                        barWidth: barWidth,
+                        isSelected: isSelected,
+                        trackTint: Color(hex: "FF4DB2"),
+                        glowColor: Color(hex: "FF4DB2"),
+                        fill: LinearGradient(
+                            colors: [
+                                Color(hex: "FF62BD"),
+                                Color(hex: "D63C96"),
+                                Color(hex: "6B284F")
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+
+                    chartColumn(
+                        value: bar.income,
+                        maxValue: maxValue,
+                        maxBarHeight: maxBarHeight,
+                        barWidth: barWidth,
+                        isSelected: isSelected,
+                        trackTint: Color(hex: "7FB3FF"),
+                        glowColor: Color(hex: "7FB3FF"),
+                        fill: LinearGradient(
+                            colors: [
+                                Color(hex: "96C0FF"),
+                                Color(hex: "6196E8"),
+                                Color(hex: "345A9E")
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                }
+                .padding(.horizontal, 10)
+                .padding(.top, 16)
+                .padding(.bottom, 8)
+
+                Text(bar.label)
+                    .font(.system(size: labelFontSize, weight: .medium))
+                    .foregroundStyle(AppColors.textPrimary.opacity(bar.isPlaceholder ? 0.78 : 0.94))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(
+                        Capsule()
+                            .fill(Color.white.opacity(isSelected ? 0.14 : 0.0))
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.bottom, 12)
+            }
+            .frame(width: groupWidth)
+            .frame(maxHeight: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(isSelected ? 0.13 : (bar.isPlaceholder ? 0.07 : 0.03)),
+                                Color.white.opacity(isSelected ? 0.06 : (bar.isPlaceholder ? 0.03 : 0.0))
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .overlay(alignment: .top) {
+                        RoundedRectangle(cornerRadius: 30, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(isSelected ? 0.08 : 0.03),
+                                        .clear
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .frame(height: max(68, maxBarHeight * 0.3))
+                    }
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 30, style: .continuous)
+                            .stroke(Color.white.opacity(isSelected ? 0.12 : 0.04), lineWidth: 1)
+                    )
+            )
+            .shadow(
+                color: Color.white.opacity(isSelected ? 0.06 : 0.0),
+                radius: isSelected ? 18 : 0,
+                x: 0,
+                y: 10
+            )
+            .offset(y: isSelected ? -4 : 0)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func chartColumn(
+        value: Double,
+        maxValue: Double,
+        maxBarHeight: CGFloat,
+        barWidth: CGFloat,
+        isSelected: Bool,
+        trackTint: Color,
+        glowColor: Color,
+        fill: LinearGradient
+    ) -> some View {
+        ZStack(alignment: .bottom) {
+            Capsule(style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            trackTint.opacity(isSelected ? 0.18 : 0.10),
+                            Color.white.opacity(isSelected ? 0.04 : 0.02)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(Color.white.opacity(isSelected ? 0.10 : 0.04), lineWidth: 0.8)
+                )
+                .frame(width: barWidth, height: maxBarHeight)
+
+            chartBar(
+                value: value,
+                maxValue: maxValue,
+                maxBarHeight: maxBarHeight,
+                barWidth: barWidth,
+                fill: fill,
+                glowColor: glowColor,
+                isSelected: isSelected
+            )
+        }
+    }
+
+    private func chartBar(
+        value: Double,
+        maxValue: Double,
+        maxBarHeight: CGFloat,
+        barWidth: CGFloat,
+        fill: LinearGradient,
+        glowColor: Color,
+        isSelected: Bool
+    ) -> some View {
+        let visibleHeight = CashflowInsightsChartStyle.visibleBarHeight(
+            value: value,
+            maxValue: maxValue,
+            maxBarHeight: maxBarHeight,
+            isSelected: isSelected
+        )
+        let cornerRadius = min(16, barWidth / 2)
+
+        return RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(fill)
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.28),
+                                .clear,
+                                Color.black.opacity(0.08)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+            .overlay(alignment: .top) {
+                Capsule(style: .continuous)
+                    .fill(Color.white.opacity(isSelected ? 0.28 : 0.20))
+                    .frame(width: barWidth * 0.72, height: 6)
+                    .blur(radius: 3)
+                    .padding(.top, 6)
+            }
+            .frame(width: barWidth, height: visibleHeight)
+            .shadow(
+                color: glowColor.opacity(isSelected ? 0.30 : 0.18),
+                radius: isSelected ? 16 : 9,
+                x: 0,
+                y: 6
+            )
+            .opacity(visibleHeight > 0 ? 1 : 0)
+    }
+
+    private var cashflowInsightsGranularityPicker: some View {
+        HStack(spacing: 8) {
+            ForEach(CashflowInsightsGranularity.allCases) { granularity in
+                Button {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+                        selectedInsightsGranularity = granularity
+                    }
+                    fireLightImpact()
+                } label: {
+                    Text(granularity.title)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(
+                            selectedInsightsGranularity == granularity
+                                ? AppColors.textPrimary
+                                : primarySecondaryText
+                        )
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(Color.white.opacity(selectedInsightsGranularity == granularity ? 0.14 : 0.0))
+                                .overlay(
+                                    Capsule(style: .continuous)
+                                        .stroke(
+                                            Color.white.opacity(selectedInsightsGranularity == granularity ? 0.10 : 0.0),
+                                            lineWidth: 0.8
+                                        )
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(6)
+        .background(
+            Capsule(style: .continuous)
+                .fill(Color.white.opacity(0.05))
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                )
+        )
+    }
+
+    private func visibleRangeChip(_ value: Int) -> some View {
+        let isSelected = fullScreenChartVisiblePeriods == value
+
+        return Button {
+            withAnimation(.spring(response: 0.24, dampingFraction: 0.9)) {
+                fullScreenChartVisiblePeriods = value
+            }
+            fireLightImpact()
+        } label: {
+            Text("\(value)")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AppColors.textPrimary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule()
+                        .fill(Color.white.opacity(isSelected ? 0.16 : 0.0))
+                        .overlay(
+                            Capsule()
+                                .stroke(Color.white.opacity(isSelected ? 0.10 : 0.0), lineWidth: 0.8)
+                        )
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func chartAmountText(_ amount: Double) -> String {
+        let currency = displayCurrencyLabel()
+        if currency.count <= 1 {
+            return "\(cashflowAmountText(amount))\(currency)"
+        }
+        return "\(cashflowAmountText(amount)) \(currency)"
+    }
+
+    private func chartSignedAmountText(_ amount: Double) -> String {
+        let currency = displayCurrencyLabel()
+        if currency.count <= 1 {
+            return "\(cashflowSignedAmountText(amount))\(currency)"
+        }
+        return "\(cashflowSignedAmountText(amount)) \(currency)"
+    }
+
+    private func chartDeltaColor(for tone: CashflowValueTone) -> Color {
+        switch tone {
+        case .positive:
+            return neonPositive
+        case .negative:
+            return neonNegative
+        case .neutral:
+            return primarySecondaryText
         }
     }
 

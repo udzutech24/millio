@@ -30,8 +30,8 @@ struct CashflowTransactionsHistoryView: View {
     @State private var selectedFilter: CashflowHistoryTypeFilter
     @State private var isSearchActive = false
     @State private var searchText = ""
-    @State private var selectedStartDate: Date? = nil
-    @State private var selectedEndDate: Date? = nil
+    @State private var selectedStartDate: Date?
+    @State private var selectedEndDate: Date?
     @State private var isDateFilterSheetPresented = false
     @State private var displayedTransactionsLimit = Self.pageSize
     @State private var selectedTransaction: CashflowTransaction?
@@ -41,11 +41,15 @@ struct CashflowTransactionsHistoryView: View {
     init(
         viewModel: CashflowViewModel,
         showsDismissButton: Bool = true,
-        initialFilter: CashflowHistoryTypeFilter = .all
+        initialFilter: CashflowHistoryTypeFilter = .all,
+        initialStartDate: Date? = nil,
+        initialEndDate: Date? = nil
     ) {
         self.viewModel = viewModel
         self.showsDismissButton = showsDismissButton
         _selectedFilter = State(initialValue: initialFilter)
+        _selectedStartDate = State(initialValue: initialStartDate)
+        _selectedEndDate = State(initialValue: initialEndDate)
     }
 
     /// Транзакции с учетом типа, даты и поиска.

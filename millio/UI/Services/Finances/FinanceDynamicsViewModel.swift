@@ -1276,6 +1276,97 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         
         return dataPoints
     }
+
+    func buildOverviewEntries(
+        granularity: FinanceOverviewGranularity,
+        referenceDate: Date = Date(),
+        calendar: Calendar = .current
+    ) async -> [FinanceOverviewPeriodEntry] {
+        let accounts = getAccountsForCalculation()
+        guard !accounts.isEmpty else { return [] }
+
+        let normalizedReferenceDate = calendar.date(
+            bySettingHour: 23,
+            minute: 59,
+            second: 59,
+            of: referenceDate
+        ) ?? referenceDate
+        let firstDate = earliestOverviewDate(
+            for: accounts,
+            referenceDate: normalizedReferenceDate
+        )
+        let firstPeriodStart = FinanceOverviewChartBuilder.periodStart(
+            for: firstDate,
+            granularity: granularity,
+            calendar: calendar
+        )
+        let currentPeriodStart = FinanceOverviewChartBuilder.periodStart(
+            for: normalizedReferenceDate,
+            granularity: granularity,
+            calendar: calendar
+        )
+
+        var entries: [FinanceOverviewPeriodEntry] = []
+        var cursor = firstPeriodStart
+        while cursor <= currentPeriodStart {
+            let nextStart = FinanceOverviewChartBuilder.offsetPeriod(
+                cursor,
+                by: 1,
+                granularity: granularity,
+                calendar: calendar
+            )
+            let periodEnd = min(
+                normalizedReferenceDate,
+                nextStart.addingTimeInterval(-1)
+            )
+            let periodStartBalanceDate = cursor.addingTimeInterval(-1)
+
+            var debit: Double = 0
+            var credit: Double = 0
+
+            for account in accounts {
+                let accountCardIDs = account.accountType == .card ? Set([account.accountID]) : Set<String>()
+                let startBalance = await calculateBalanceAtDate(
+                    accounts: [account],
+                    date: periodStartBalanceDate,
+                    accountCardIDs: accountCardIDs,
+                    debtAsNegative: false,
+                    includeInitialBeforeCreation: false
+                )
+                let endBalance = await calculateBalanceAtDate(
+                    accounts: [account],
+                    date: periodEnd,
+                    accountCardIDs: accountCardIDs,
+                    debtAsNegative: false,
+                    includeInitialBeforeCreation: false
+                )
+
+                let rawDelta = endBalance - startBalance
+                let adjustedDelta = isLiabilityAccount(account) ? -rawDelta : rawDelta
+                if adjustedDelta > 0.01 {
+                    debit += adjustedDelta
+                } else if adjustedDelta < -0.01 {
+                    credit += abs(adjustedDelta)
+                }
+            }
+
+            entries.append(
+                FinanceOverviewPeriodEntry(
+                    id: cursor,
+                    date: cursor,
+                    debit: debit,
+                    credit: credit
+                )
+            )
+
+            if nextStart <= cursor {
+                break
+            }
+            cursor = nextStart
+        }
+
+        return entries
+    }
     
     /// Рассчитать баланс счетов на конкретную дату с учетом транзакций
     func calculateBalanceAtDate(
@@ -1861,6 +1952,64 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
 
         return "USD"
+    }
+
+    private func earliestOverviewDate(
+        for accounts: [FinanceAccount],
+        referenceDate: Date
+    ) -> Date {
+        var earliestDate = referenceDate
+
+        for account in accounts {
+            earliestDate = min(earliestDate, account.createdAt)
+
+            switch account.accountType {
+            case .card:
+                if let card = cardsCache[account.accountID] {
+                    earliestDate = min(earliestDate, card.createdAt)
+                }
+            case .credit:
+                if let credit = creditsCache[account.accountID] {
+                    earliestDate = min(earliestDate, credit.createdAt)
+                }
+            case .investment:
+                if let investment = investmentsCache[account.accountID] {
+                    earliestDate = min(earliestDate, investment.createdAt)
+                }
+            }
+        }
+
+        for transaction in state.cashflowTransactions {
+            if affectsOverviewSelection(transaction: transaction, accounts: accounts) {
+                earliestDate = min(earliestDate, transaction.transactionDate)
+            }
+        }
+
+        return earliestDate
+    }
+
+    private func affectsOverviewSelection(
+        transaction: CashflowTransaction,
+        accounts: [FinanceAccount]
+    ) -> Bool {
+        let cardIDs = Set(accounts.filter { $0.accountType == .card }.map(\.accountID))
+        let creditIDs = Set(accounts.filter { $0.accountType == .credit }.map(\.accountID))
+        let investmentIDs = Set(accounts.filter { $0.accountType == .investment }.map(\.accountID))
+
+        if let cardID = transaction.cardID, cardIDs.contains(cardID) {
+            return true
+        }
+        if let toCardID = transaction.toCardID, cardIDs.contains(toCardID) {
+            return true
+        }
+        if let creditID = transaction.creditID, creditIDs.contains(creditID) {
+            return true
+        }
+        if let investmentID = transaction.investmentID, investmentIDs.contains(investmentID) {
+            return true
+        }
+
+        return false
     }
     
     /// Получить список счетов для выбранных групп

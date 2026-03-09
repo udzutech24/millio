@@ -219,10 +219,14 @@ struct StockBulkImportTests {
 
         let investments = try context.fetch(FetchDescriptor<Investment>())
         let accounts = try context.fetch(FetchDescriptor<FinanceAccount>())
+        let groups = try context.fetch(FetchDescriptor<FinanceGroup>())
 
         #expect(savedCount == 1)
         #expect(investments.count == 1)
         #expect(accounts.count == 1)
+        #expect(groups.count == 1)
+        #expect(accounts[0].group != nil)
+        #expect(accounts[0].group?.name == String(localized: "finances.group.ungrouped"))
         #expect(investments[0].currency == "USD")
         #expect(investments[0].marketCurrency == "USD")
         #expect(investments[0].marketSymbol == "NASDAQ:AAPL")
@@ -230,5 +234,57 @@ struct StockBulkImportTests {
         #expect(investments[0].averagePurchaseUnitPrice == 100)
         #expect(investments[0].lastKnownUnitPrice == 150)
         #expect(investments[0].amount == 300)
+    }
+
+    @Test("Импорт без mergeDuplicates не создаёт дубликаты FinanceAccount")
+    func persistenceWithoutMergeDoesNotDuplicateFinanceAccounts() async throws {
+        let context = try makeContext()
+        let client = StockBulkImportMockMarketDataClient()
+
+        let service = StockBulkImportPersistenceService(modelContext: context, marketDataClient: client)
+        let candidate = StockBulkImportCandidate(
+            symbol: "AAPL",
+            market: "NASDAQ",
+            displayName: "Apple Inc.",
+            currency: "USD",
+            providerRaw: "twelvedata"
+        )
+        let drafts = [
+            StockBulkImportRowDraft(
+                rawLine: "NASDAQ: AAPL 1 @ 100",
+                tickerText: "AAPL",
+                marketText: "NASDAQ",
+                quantityText: "1",
+                buyPriceText: "100",
+                sourceOrderIndex: 0,
+                candidates: [candidate],
+                selectedCandidate: candidate
+            ),
+            StockBulkImportRowDraft(
+                rawLine: "NASDAQ: AAPL 2 @ 110",
+                tickerText: "AAPL",
+                marketText: "NASDAQ",
+                quantityText: "2",
+                buyPriceText: "110",
+                sourceOrderIndex: 1,
+                candidates: [candidate],
+                selectedCandidate: candidate
+            )
+        ]
+
+        let savedCount = try await service.persist(
+            drafts: drafts,
+            includeInTotal: true,
+            priority: .normal,
+            targetGroup: nil,
+            mergeDuplicates: false
+        )
+
+        let investments = try context.fetch(FetchDescriptor<Investment>())
+        let accounts = try context.fetch(FetchDescriptor<FinanceAccount>())
+
+        #expect(savedCount == 2)
+        #expect(investments.count == 1)
+        #expect(accounts.count == 1)
     }
 }

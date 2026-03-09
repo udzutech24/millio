@@ -159,24 +159,31 @@ struct StockBulkImportPersistenceService {
         targetGroup: FinanceGroup?,
         mergeDuplicates: Bool
     ) async throws -> Int {
+        // Если пользователь не выбрал группу — сохраняем в системную "Без группы".
+        // Это важно: `FinanceAccount.group == nil` считается невалидным и будет очищаться нормализатором.
+        let resolvedGroup = targetGroup ?? FinanceSystemGroups.ensureUngroupedGroup(in: modelContext)
+
         let resolvedRows = mergeDuplicates
             ? Self.mergeAddableRows(from: drafts)
             : Self.resolveAddableRows(from: drafts)
         guard !resolvedRows.isEmpty else { return 0 }
 
         let investments = (try? modelContext.fetch(FetchDescriptor<Investment>())) ?? []
-        let financeAccounts = (try? modelContext.fetch(FetchDescriptor<FinanceAccount>())) ?? []
+        var investmentByStoredSymbol: [String: Investment] = [:]
+        investmentByStoredSymbol.reserveCapacity(investments.count)
+        for investment in investments where investment.archivedAt == nil && investment.category == .stocks {
+            let key = normalizedStoredSymbol(investment.marketSymbol)
+            guard !key.isEmpty else { continue }
+            investmentByStoredSymbol[key] = investment
+        }
+        var financeAccounts = (try? modelContext.fetch(FetchDescriptor<FinanceAccount>())) ?? []
 
         for resolvedRow in resolvedRows {
             let latestPrice = (try? await marketDataClient.latestPrice(symbol: resolvedRow.candidate.storedSymbol, forceRefresh: false)) ?? nil
             let effectiveUnitPrice = resolvedRow.currentPrice ?? latestPrice ?? resolvedRow.buyPrice
             let amount = resolvedRow.quantity * effectiveUnitPrice
 
-            if let existing = investments.first(where: { investment in
-                investment.archivedAt == nil &&
-                investment.category == .stocks &&
-                normalizedStoredSymbol(investment.marketSymbol) == resolvedRow.candidate.storedSymbol
-            }) {
+            if let existing = investmentByStoredSymbol[resolvedRow.candidate.storedSymbol] {
                 existing.ensureUniqueID()
                 existing.name = existing.name.isEmpty ? resolvedRow.candidate.displayName : existing.name
                 existing.investmentType = .positive
@@ -196,7 +203,7 @@ struct StockBulkImportPersistenceService {
                     unitPrice: effectiveUnitPrice,
                     fallbackBuyPrice: resolvedRow.buyPrice
                 )
-                updateFinanceAccountLink(for: existing, in: financeAccounts, group: targetGroup)
+                updateFinanceAccountLink(for: existing, in: &financeAccounts, group: resolvedGroup)
                 continue
             }
 
@@ -226,9 +233,11 @@ struct StockBulkImportPersistenceService {
             )
 
             modelContext.insert(investment)
+            investmentByStoredSymbol[resolvedRow.candidate.storedSymbol] = investment
             let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
-            account.group = targetGroup
+            account.group = resolvedGroup
             modelContext.insert(account)
+            financeAccounts.append(account)
         }
 
         try modelContext.save()
@@ -301,8 +310,8 @@ struct StockBulkImportPersistenceService {
 
     private func updateFinanceAccountLink(
         for investment: Investment,
-        in existingAccounts: [FinanceAccount],
-        group: FinanceGroup?
+        in existingAccounts: inout [FinanceAccount],
+        group: FinanceGroup
     ) {
         if let account = existingAccounts.first(where: {
             $0.accountType == .investment && $0.accountID == investment.investmentUniqueID
@@ -312,11 +321,10 @@ struct StockBulkImportPersistenceService {
             return
         }
 
-        guard let group else { return }
-
         let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
         account.group = group
         modelContext.insert(account)
+        existingAccounts.append(account)
     }
 
     private func normalizedStoredSymbol(_ value: String?) -> String {
