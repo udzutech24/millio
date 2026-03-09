@@ -56,7 +56,8 @@ struct CashflowInsightsChartModelsTests {
         #expect(abs(presentation.incomeCard.amount - 500) < 0.01)
         #expect(presentation.expenseCard.comparisonText.contains("Jan'26"))
         #expect(presentation.incomeCard.comparisonText.contains("Jan'26"))
-        #expect(presentation.bars.map { $0.label } == ["Dec'25", "Jan'26", "Feb'26", "Mar'26"])
+        // referenceDate == Feb 1, 2026 → no future bars (Mar'26) should be shown.
+        #expect(presentation.bars.map { $0.label } == ["Nov'25", "Dec'25", "Jan'26", "Feb'26"])
     }
 
     @Test("Рост расходов помечается как негативный delta, падение расходов как позитивный")
@@ -113,7 +114,8 @@ struct CashflowInsightsChartModelsTests {
             locale: locale
         )
 
-        #expect(presentation.bars.map { $0.label } == ["W7", "W8", "W9", "W10"])
+        // referenceDate belongs to week 9 → do not include future week 10.
+        #expect(presentation.bars.map { $0.label } == ["W6", "W7", "W8", "W9"])
         #expect(abs(presentation.expenseCard.amount - 50) < 0.01)
         #expect(abs(presentation.incomeCard.amount - 120) < 0.01)
     }

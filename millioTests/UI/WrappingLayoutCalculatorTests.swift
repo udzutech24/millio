@@ -30,7 +30,7 @@ struct WrappingLayoutCalculatorTests {
         #expect(result.rows[0].indices == [0, 1])
         #expect(result.rows[1].indices == [2])
         #expect(result.contentSize.width == 170)
-        #expect(result.contentSize.height == 10 + 12 + 10)
+        #expect(result.contentSize.height == CGFloat(10 + 12 + 10))
     }
 
     @Test("Compute caps items wider than max width")
@@ -64,4 +64,3 @@ struct WrappingLayoutCalculatorTests {
         #expect(result.contentSize == .zero)
     }
 }
-

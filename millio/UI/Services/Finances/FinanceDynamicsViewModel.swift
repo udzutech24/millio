@@ -1507,7 +1507,13 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 let lastTrackedCardChangeDate = cardTransactions
                     .map(\.transactionDate)
                     .max() ?? card.createdAt
-                if date >= lastTrackedCardChangeDate {
+                // IMPORTANT:
+                // `card.balance` is the *current* model value, not necessarily the historical balance for `date`.
+                // We can only safely "snap" to the live model state starting from the last moment we know
+                // that value was in effect (e.g. after a manual edit of balance that didn't create a
+                // balanceAdjustment transaction). Otherwise we erase history for earlier periods.
+                let liveStateEffectiveDate = max(lastTrackedCardChangeDate, card.updatedAt)
+                if date >= liveStateEffectiveDate {
                     let actualCurrentValue: Double
                     if card.cardType == .credit, let limit = card.creditLimit {
                         actualCurrentValue = max(0, limit - card.balance)
@@ -1609,7 +1615,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     let lastTrackedInvestmentChangeDate = balanceAdjustmentTransactions
                         .map(\.transactionDate)
                         .max() ?? investment.createdAt
-                    if date >= lastTrackedInvestmentChangeDate {
+                    let liveStateEffectiveDate = max(lastTrackedInvestmentChangeDate, investment.updatedAt)
+                    if date >= liveStateEffectiveDate {
                         let deltaToActual = actualSignedAmount - investmentBalance
                         if abs(deltaToActual) > 0.01 {
                             investmentBalance += deltaToActual
@@ -1750,7 +1757,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         let lastTrackedCreditChangeDate = balanceAdjustmentTransactions
             .map(\.transactionDate)
             .max() ?? credit.createdAt
-        if date >= lastTrackedCreditChangeDate {
+        let liveStateEffectiveDate = max(lastTrackedCreditChangeDate, credit.updatedAt)
+        if date >= liveStateEffectiveDate {
             let deltaToActual = credit.remainingAmount - remainingAmount
             if abs(deltaToActual) > 0.01 {
                 remainingAmount = max(0, remainingAmount + deltaToActual)
