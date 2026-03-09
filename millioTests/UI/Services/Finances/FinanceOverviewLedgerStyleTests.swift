@@ -17,6 +17,13 @@ struct FinanceOverviewLedgerStyleTests {
         )
     }
 
+    @Test("Style helper собирает компактную строку для плотной карточки")
+    func compactCountsTextBuildsExpectedCopy() {
+        #expect(
+            FinanceOverviewLedgerStyle.compactCountsText(groups: 3, accounts: 4) == "3 гр. · 4 сч."
+        )
+    }
+
     @Test("Style helper меняет подпись раскрытия по состоянию")
     func disclosureTextReflectsExpandedState() {
         #expect(FinanceOverviewLedgerStyle.disclosureText(isExpanded: false) == "Показать детали")

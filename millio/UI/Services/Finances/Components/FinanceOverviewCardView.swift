@@ -428,15 +428,15 @@ struct FinanceOverviewCardView: View {
             bridgeChart(presentation: presentation)
 
             expandButton
-                .padding(.top, -10)
-                .padding(.trailing, 4)
+                .padding(.top, -8)
+                .padding(.trailing, 2)
         }
     }
 
     private func bridgeChart(
         presentation: FinanceOverviewLedgerPresentation
     ) -> some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 10) {
             Button {
                 openExpandedChart(side: .debit)
             } label: {
@@ -454,8 +454,8 @@ struct FinanceOverviewCardView: View {
                 .frame(width: 1)
                 .overlay {
                     Circle()
-                        .fill(saldoColor(for: presentation.saldo).opacity(0.24))
-                        .frame(width: 12, height: 12)
+                        .fill(saldoColor(for: presentation.saldo).opacity(0.22))
+                        .frame(width: 10, height: 10)
                 }
 
             Button {
@@ -470,8 +470,8 @@ struct FinanceOverviewCardView: View {
             }
             .buttonStyle(.plain)
         }
-        .frame(height: 136)
-        .padding(.horizontal, 2)
+        .frame(height: 82)
+        .padding(.horizontal, 1)
     }
 
     private func sideToggleRow(
@@ -586,41 +586,47 @@ struct FinanceOverviewCardView: View {
         color: Color,
         totalReference: Double
     ) -> some View {
-        VStack(alignment: isTrailing ? .trailing : .leading, spacing: 14) {
-            HStack {
+        VStack(alignment: isTrailing ? .trailing : .leading, spacing: 9) {
+            HStack(spacing: 8) {
                 if !isTrailing {
                     sideGlyph(color: color, icon: side.side == .debit ? "arrow.down.left.circle.fill" : "arrow.up.right.circle.fill")
                 }
 
-                Spacer(minLength: 8)
+                VStack(alignment: isTrailing ? .trailing : .leading, spacing: 2) {
+                    Text(side.side.title)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary.opacity(0.92))
+                    Text(FinanceOverviewLedgerStyle.compactCountsText(groups: side.groups.count, accounts: side.accountCount))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 4)
 
                 if isTrailing {
                     sideGlyph(color: color, icon: side.side == .debit ? "arrow.down.left.circle.fill" : "arrow.up.right.circle.fill")
                 }
             }
 
-            Text(side.side.title)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(AppColors.textSecondary)
-
             Text(amountWithCurrency(side.total))
-                .font(.system(size: 24, weight: .bold))
+                .font(.system(size: 21, weight: .bold))
                 .foregroundStyle(color)
                 .lineLimit(1)
-                .minimumScaleFactor(0.76)
+                .minimumScaleFactor(0.74)
 
             GeometryReader { proxy in
                 let barWidth = FinanceOverviewLedgerStyle.barWidth(
                     total: side.total,
                     reference: totalReference,
                     availableWidth: proxy.size.width,
-                    minimumWidth: 26
+                    minimumWidth: 20
                 )
 
                 ZStack(alignment: isTrailing ? .trailing : .leading) {
                     Capsule(style: .continuous)
-                        .fill(Color.white.opacity(0.05))
-                        .frame(height: 16)
+                        .fill(Color.white.opacity(0.06))
+                        .frame(height: 10)
                     Capsule(style: .continuous)
                         .fill(
                             LinearGradient(
@@ -629,32 +635,29 @@ struct FinanceOverviewCardView: View {
                                 endPoint: isTrailing ? .leading : .trailing
                             )
                         )
-                        .frame(width: barWidth, height: 16)
+                        .frame(width: barWidth, height: 10)
                 }
             }
-            .frame(height: 16)
-
-            Text(FinanceOverviewLedgerStyle.countsText(groups: side.groups.count, accounts: side.accountCount))
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(AppColors.textSecondary)
+            .frame(height: 10)
         }
         .frame(maxWidth: .infinity, alignment: isTrailing ? .trailing : .leading)
-        .padding(16)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 11)
         .background(
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color.white.opacity(0.08),
-                            Color.white.opacity(0.03)
+                            Color.white.opacity(0.075),
+                            Color.white.opacity(0.028)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 26, style: .continuous)
-                        .stroke(color.opacity(0.18), lineWidth: 0.8)
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(color.opacity(0.2), lineWidth: 0.8)
                 )
         )
     }
@@ -1087,9 +1090,9 @@ struct FinanceOverviewCardView: View {
         ZStack {
             Circle()
                 .fill(color.opacity(0.18))
-                .frame(width: 30, height: 30)
+                .frame(width: 24, height: 24)
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(color)
         }
     }

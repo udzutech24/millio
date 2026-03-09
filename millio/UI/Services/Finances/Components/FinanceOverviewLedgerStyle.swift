@@ -13,6 +13,10 @@ enum FinanceOverviewLedgerStyle {
         "\(groups) групп · \(accounts) счетов"
     }
 
+    static func compactCountsText(groups: Int, accounts: Int) -> String {
+        "\(groups) гр. · \(accounts) сч."
+    }
+
     static func disclosureText(isExpanded: Bool) -> String {
         isExpanded ? "Свернуть" : "Показать детали"
     }
