@@ -30,8 +30,11 @@ struct CashflowLocalizationRegressionTests {
     @Test("Period title uses localized quarter format")
     func quarterTitleUsesLocalizedFormat() async {
         let locale = Locale(identifier: "ru_RU")
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+        let calendar: Calendar = {
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+            return calendar
+        }()
 
         let date = DateComponents(calendar: calendar, year: 2026, month: 3, day: 9).date!
         let title = await MainActor.run {
@@ -53,8 +56,11 @@ struct CashflowLocalizationRegressionTests {
     @Test("Custom period title normalizes start and end dates")
     func customTitleNormalizesStartAndEnd() async {
         let locale = Locale(identifier: "ru_RU")
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+        let calendar: Calendar = {
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+            return calendar
+        }()
 
         let later = DateComponents(calendar: calendar, year: 2026, month: 3, day: 9).date!
         let earlier = DateComponents(calendar: calendar, year: 2026, month: 2, day: 7).date!

@@ -803,7 +803,7 @@ struct ConverterView: View {
                     }
                 }
                 ToolbarItem(placement: .principal) {
-                    Text("предусмотр")
+                    Text(ConverterL10n.sharePreviewTitle)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(Color.white.opacity(0.94))
                         .lineLimit(1)

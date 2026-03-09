@@ -19,8 +19,8 @@ struct CashflowPeriodSelectorView: View {
     @State private var selectedMonth: Date = Date()
     @State private var selectedQuarter: Date = Date()
     @State private var selectedYear: Date = Date()
-    @State private var customStartDate: Date = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
-    @State private var customEndDate: Date = Date()
+    @State private var customStartDate: Date = CashflowViewModel.defaultPeriodRange(referenceDate: Date()).start
+    @State private var customEndDate: Date = CashflowViewModel.defaultPeriodRange(referenceDate: Date()).end
     
     enum PeriodType {
         case month
@@ -146,4 +146,3 @@ struct CashflowPeriodSelectorView: View {
         dismiss()
     }
 }
-

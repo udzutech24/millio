@@ -71,6 +71,13 @@ final class AppState {
             SettingsManager.shared.isGuestModeEnabled = isGuestModeEnabled
         }
     }
+
+    /// Controls whether the Profile "Debug" section is visible.
+    var isDebugMenuUnlocked: Bool = false {
+        didSet {
+            SettingsManager.shared.isDebugMenuUnlocked = isDebugMenuUnlocked
+        }
+    }
     
     // Subscription status
     var subscriptionStatus: SubscriptionStatus = .notSubscribed
@@ -102,6 +109,7 @@ final class AppState {
         self.profileAvatarPath = SettingsManager.shared.profileAvatarFilePath
         self.isAppLocked = self.isAppLockEnabled
         self.isGuestModeEnabled = SettingsManager.shared.isGuestModeEnabled
+        self.isDebugMenuUnlocked = SettingsManager.shared.isDebugMenuUnlocked
     }
 
     func applySubscriptionSnapshot(_ snapshot: SubscriptionSnapshot) {

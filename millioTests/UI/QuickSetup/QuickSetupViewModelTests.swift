@@ -138,8 +138,12 @@ final class QuickSetupViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.availableLanguages, [.system, .english])
         XCTAssertEqual(viewModel.primaryCurrencyCode, "USD")
-        XCTAssertEqual(viewModel.favoriteCurrencyCodes, ["EUR", "CNY", "TRY"])
-        XCTAssertEqual(Array(viewModel.recommendedCurrencyCodes.prefix(4)), ["USD", "EUR", "CNY", "TRY"])
+        XCTAssertEqual(viewModel.favoriteCurrencyCodes, ["GBP", "JPY", "CHF", "CAD"])
+        XCTAssertEqual(Array(viewModel.recommendedCurrencyCodes.prefix(5)), ["USD", "GBP", "JPY", "CHF", "CAD"])
+        XCTAssertFalse(viewModel.recommendedCurrencyCodes.contains("RUB"))
+        XCTAssertFalse(viewModel.recommendedCurrencyCodes.contains("EUR"))
+        XCTAssertFalse(viewModel.recommendedCurrencyCodes.contains("CNY"))
+        XCTAssertFalse(viewModel.recommendedCurrencyCodes.contains("TRY"))
     }
 
     func testQuickSetupShowsRussianAndRussianCentricCurrenciesForRussianSystem() {

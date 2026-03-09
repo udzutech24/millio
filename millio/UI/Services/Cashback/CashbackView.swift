@@ -39,7 +39,7 @@ private struct CashbackCategoryEditButton: View {
                 .frame(width: 24, height: 24)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Редактировать категорию")
+        .accessibilityLabel(Text("Редактировать категорию"))
     }
 }
 
@@ -69,9 +69,14 @@ struct CashbackView: View {
 private struct CashbackContentViewInternal: View {
     @ObservedObject var viewModel: CashbackViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppState.self) private var appState
     @Environment(AppRouter.self) private var router
     @State private var showFavoriteCategoriesSheet: Bool = false
     private let currentRoute: AppRoute = .cashback
+
+    private var localizationLocale: Locale {
+        appState.selectedLanguage.locale ?? Locale.current
+    }
 
     var body: some View {
         ZStack {
@@ -260,7 +265,7 @@ private struct CashbackContentViewInternal: View {
                         .frame(width: itemSize, height: itemSize)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Назад")
+                .accessibilityLabel(Text("Назад"))
 
                 Menu {
                     ForEach(MiniAppNavigation.destinations(excluding: currentRoute)) { destination in
@@ -277,7 +282,7 @@ private struct CashbackContentViewInternal: View {
                         .frame(width: itemSize, height: itemSize)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Быстрая навигация по мини-приложениям")
+                .accessibilityLabel(Text("Быстрая навигация по мини-приложениям"))
             }
         }
 
@@ -325,14 +330,14 @@ private struct CashbackContentViewInternal: View {
                     .frame(width: itemSize, height: itemSize)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Избранные категории")
+            .accessibilityLabel(Text("Избранные категории"))
         }
     }
 
     @ViewBuilder
     private func monthStepButton(
         systemName: String,
-        accessibilityLabel: String,
+        accessibilityLabel: LocalizedStringKey,
         isEnabled: Bool,
         action: @escaping () -> Void
     ) -> some View {
@@ -344,21 +349,15 @@ private struct CashbackContentViewInternal: View {
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
-        .accessibilityLabel(accessibilityLabel)
+        .accessibilityLabel(Text(accessibilityLabel))
     }
 
     private var toolbarMonthText: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ru_RU")
-        formatter.dateFormat = "LLLL"
-        return formatter.string(from: viewModel.state.selectedMonth).lowercased(with: Locale(identifier: "ru_RU"))
+        CashbackMonthTitleFormatter.monthText(for: viewModel.state.selectedMonth, locale: localizationLocale)
     }
 
     private var toolbarYearText: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ru_RU")
-        formatter.dateFormat = "yyyy"
-        return formatter.string(from: viewModel.state.selectedMonth)
+        CashbackMonthTitleFormatter.yearText(for: viewModel.state.selectedMonth, locale: localizationLocale)
     }
 }
 
@@ -447,7 +446,7 @@ private struct CashbackFavoriteCategoriesSheet: View {
                                             )
                                     }
                                     .buttonStyle(.plain)
-                                    .accessibilityLabel(isFavorite ? "Убрать из избранного" : "Добавить в избранное")
+                                    .accessibilityLabel(isFavorite ? Text("Убрать из избранного") : Text("Добавить в избранное"))
                                 }
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 14)
@@ -644,7 +643,15 @@ private struct CashbackRowView: View {
             Button {
                 viewModel.handle(.togglePinnedCashback(cashback))
             } label: {
-                Label(isPinned ? "Открепить" : "Закрепить", systemImage: isPinned ? "pin.slash.fill" : "pin.fill")
+                Label {
+                    if isPinned {
+                        Text("Открепить")
+                    } else {
+                        Text("Закрепить")
+                    }
+                } icon: {
+                    Image(systemName: isPinned ? "pin.slash.fill" : "pin.fill")
+                }
             }
             .tint(.orange)
             .disabled(isFavorite)
@@ -682,7 +689,7 @@ private struct CashbackRowView: View {
         let names = viewModel
             .getCardsForCashback(cashback)
             .map(\.name)
-        guard !names.isEmpty else { return "Без привязанной карты" }
+        guard !names.isEmpty else { return String(localized: "Без привязанной карты") }
         let preview = Array(names.prefix(2))
         if names.count <= 2 {
             return preview.joined(separator: ", ")
@@ -815,7 +822,11 @@ private struct CashbackEditorView: View {
                     dismissKeyboard()
                 }
             )
-            .navigationTitle(viewModel.state.editingCashback == nil ? "Новый кешбэк" : "Редактировать кешбэк")
+            .navigationTitle(
+                viewModel.state.editingCashback == nil
+                    ? String(localized: "Новый кешбэк")
+                    : String(localized: "Редактировать кешбэк")
+            )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -913,7 +924,7 @@ private struct CashbackEditorView: View {
 
     private var cardPickerSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Выберите карту")
+            FinancesSectionHeader(title: String(localized: "Выберите карту"))
 
             Button {
                 showCardPicker = true
@@ -1001,7 +1012,7 @@ private struct CashbackEditorView: View {
 
     private var categoriesSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Выбор категорий")
+            FinancesSectionHeader(title: String(localized: "Выбор категорий"))
             HStack {
                 if isScreenshotImportLocked {
                     HStack(spacing: 8) {
@@ -1032,8 +1043,13 @@ private struct CashbackEditorView: View {
                                 Image(systemName: "photo.badge.magnifyingglass")
                                     .font(.system(size: 16, weight: .regular))
                             }
-                            Text(isImportingFromScreenshot ? "cashback.import.screenshot.loading" : "Импорт со скриншота")
-                                .font(.system(size: 14, weight: .medium))
+                            if isImportingFromScreenshot {
+                                Text("cashback.import.screenshot.loading")
+                                    .font(.system(size: 14, weight: .medium))
+                            } else {
+                                Text("Импорт со скриншота")
+                                    .font(.system(size: 14, weight: .medium))
+                            }
                         }
                         .foregroundStyle(AppColors.textPrimary)
                         .padding(.horizontal, 12)
@@ -1134,8 +1150,13 @@ private struct CashbackEditorView: View {
                             isShowingAllCategories.toggle()
                         } label: {
                             HStack(spacing: 8) {
-                                Text(isShowingAllCategories ? "Свернуть" : "Показать ещё")
-                                    .font(.system(size: 15, weight: .regular))
+                                if isShowingAllCategories {
+                                    Text("Свернуть")
+                                        .font(.system(size: 15, weight: .regular))
+                                } else {
+                                    Text("Показать ещё")
+                                        .font(.system(size: 15, weight: .regular))
+                                }
                                 Image(systemName: isShowingAllCategories ? "chevron.up" : "chevron.right")
                                     .font(.system(size: 15, weight: .regular))
                             }
@@ -1175,7 +1196,7 @@ private struct CashbackEditorView: View {
     private var selectedCategoriesSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                FinancesSectionHeader(title: "Выбранные категории")
+                FinancesSectionHeader(title: String(localized: "Выбранные категории"))
                 Spacer()
                 HStack(spacing: 8) {
                     quickFillButton(5)
@@ -1216,7 +1237,7 @@ private struct CashbackEditorView: View {
                                         .foregroundStyle(AppColors.textSecondary)
                                 }
                                 .buttonStyle(.plain)
-                                .accessibilityLabel("Убрать категорию")
+                                .accessibilityLabel(Text("Убрать категорию"))
 
                                 HStack(spacing: 14) {
                                     Button {
@@ -1576,11 +1597,11 @@ private struct CashbackEditorView: View {
 }
 
 private struct CashbackCategoryEditorSheet: View {
-    private enum IconPickerTab: String, CaseIterable, Identifiable {
-        case emoji = "Эмодзи"
-        case symbols = "Иконки"
+    private enum IconPickerTab: CaseIterable, Identifiable {
+        case emoji
+        case symbols
 
-        var id: String { rawValue }
+        var id: Self { self }
     }
 
     let mode: CashbackCategoryEditorMode
@@ -1616,9 +1637,9 @@ private struct CashbackCategoryEditorSheet: View {
     private var title: String {
         switch mode {
         case .create:
-            return "Новая категория"
+            return String(localized: "Новая категория")
         case .edit:
-            return "Категория"
+            return String(localized: "Категория")
         }
     }
 
@@ -1648,7 +1669,7 @@ private struct CashbackCategoryEditorSheet: View {
 
                 ScrollView {
                     VStack(spacing: 18) {
-                        FinancesSectionHeader(title: "Название")
+                        FinancesSectionHeader(title: String(localized: "Название"))
                         FinancesGlassCard(accentColor: CashbackScreenStyle.accent) {
                             TextField("Например: Кофейни", text: $name)
                                 .font(.system(size: 16, weight: .medium))
@@ -1657,13 +1678,14 @@ private struct CashbackCategoryEditorSheet: View {
                                 .padding(16)
                         }
 
-                        FinancesSectionHeader(title: "Иконка")
+                        FinancesSectionHeader(title: String(localized: "Иконка"))
                         FinancesGlassCard(accentColor: CashbackScreenStyle.accent) {
                             VStack(spacing: 12) {
                                 Picker("Тип иконки", selection: $selectedTab) {
-                                    ForEach(IconPickerTab.allCases) { tab in
-                                        Text(tab.rawValue).tag(tab)
-                                    }
+                                    Text("Эмодзи")
+                                        .tag(IconPickerTab.emoji)
+                                    Text("Иконки")
+                                        .tag(IconPickerTab.symbols)
                                 }
                                 .pickerStyle(.segmented)
 
@@ -1740,7 +1762,7 @@ private struct CashbackCategoryEditorSheet: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Отмена")
+                    .accessibilityLabel(Text("Отмена"))
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -1752,7 +1774,7 @@ private struct CashbackCategoryEditorSheet: View {
                                 .font(.system(size: 15, weight: .semibold))
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Удалить")
+                        .accessibilityLabel(Text("Удалить"))
                     }
                 }
 
@@ -1772,7 +1794,7 @@ private struct CashbackCategoryEditorSheet: View {
                         )
                     )
                     .disabled(!isValid)
-                    .accessibilityLabel("Сохранить")
+                    .accessibilityLabel(Text("Сохранить"))
                 }
             }
             .onAppear {
@@ -1887,22 +1909,16 @@ private struct CashbackSingleCardPickerView: View {
                                                 .font(.system(size: 16, weight: .semibold))
                                                 .foregroundStyle(AppColors.textPrimary)
 
-                                            HStack(spacing: 8) {
-                                                Text(card.bank.displayName)
-                                                    .font(.system(size: 14, weight: .regular))
-                                                    .foregroundStyle(AppColors.textSecondary)
-
-                                                if card.isFavorite {
-                                                    Label("Избранная", systemImage: "star.fill")
-                                                        .font(.system(size: 11, weight: .semibold))
-                                                        .foregroundStyle(AppColors.textPrimary)
-                                                        .padding(.horizontal, 8)
-                                                        .padding(.vertical, 3)
-                                                        .background(
-                                                            Capsule()
-                                                                .fill(Color.white.opacity(0.12))
-                                                        )
-                                                }
+                                            if card.isFavorite {
+                                                Label("Избранная", systemImage: "star.fill")
+                                                    .font(.system(size: 11, weight: .semibold))
+                                                    .foregroundStyle(AppColors.textPrimary)
+                                                    .padding(.horizontal, 8)
+                                                    .padding(.vertical, 3)
+                                                    .background(
+                                                        Capsule()
+                                                            .fill(Color.white.opacity(0.12))
+                                                    )
                                             }
 
                                             Text(card.maskedNumber)
@@ -2004,7 +2020,7 @@ private struct CashbackSingleCardPickerView: View {
                 }
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(AppColors.textTertiary)
-                .accessibilityLabel("Скрыть рекомендацию")
+                .accessibilityLabel(Text("Скрыть рекомендацию"))
             }
 
             Text("Добавить новую карту можно в «Финансы» -> «+» -> «Новый продукт» -> «Карта».")

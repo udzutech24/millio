@@ -53,6 +53,14 @@ struct QuickSetupView: View {
         self.onSkipped = onSkipped
     }
 
+    private var quickSetupLocale: Locale {
+        viewModel.selectedLanguage.locale ?? Locale.current
+    }
+
+    private func quickSetupText(ru: String, en: String) -> String {
+        QuickSetupLocalization.text(locale: quickSetupLocale, ru: ru, en: en)
+    }
+
     var body: some View {
         ZStack {
             quickSetupBackground
@@ -100,7 +108,7 @@ struct QuickSetupView: View {
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
-                Button("Готово") { focusedField = nil }
+                Button(quickSetupText(ru: "Готово", en: "Done")) { focusedField = nil }
             }
         }
         .sheet(isPresented: $showLanguageSheet) {
@@ -115,6 +123,7 @@ struct QuickSetupView: View {
             NavigationStack {
                 QuickSetupPrimaryCurrencySheet(
                     primaryCurrencyCode: $viewModel.primaryCurrencyCode,
+                    locale: quickSetupLocale,
                     suggestedCodes: viewModel.recommendedCurrencyCodes
                 )
             }
@@ -122,6 +131,7 @@ struct QuickSetupView: View {
         .sheet(isPresented: $showFavoritesSheet) {
             NavigationStack {
                 QuickSetupFavoriteCurrenciesSheet(
+                    locale: quickSetupLocale,
                     primaryCurrencyCode: viewModel.primaryCurrencyCode,
                     selectedCodes: viewModel.favoriteCurrencyCodes,
                     suggestedCodes: viewModel.recommendedCurrencyCodes,
@@ -140,13 +150,13 @@ struct QuickSetupView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
-        .alert("Не удалось применить настройку", isPresented: Binding(
+        .alert(quickSetupText(ru: "Не удалось применить настройку", en: "Couldn't apply setup"), isPresented: Binding(
             get: { errorMessage != nil },
             set: { newValue in
                 if !newValue { errorMessage = nil }
             }
         )) {
-            Button("Ок", role: .cancel) {}
+            Button(quickSetupText(ru: "Ок", en: "OK"), role: .cancel) {}
         } message: {
             Text(errorMessage ?? "")
         }
@@ -186,7 +196,7 @@ struct QuickSetupView: View {
             Spacer()
 
             if mode == .onboarding {
-                Button("Пропустить") {
+                Button(quickSetupText(ru: "Пропустить", en: "Skip")) {
                     onSkipped?()
                 }
                 .font(.system(size: 15, weight: .semibold))
@@ -226,11 +236,11 @@ struct QuickSetupView: View {
 
     private var stepHero: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(viewModel.currentStep.title)
+            Text(viewModel.currentStep.title(for: quickSetupLocale))
                 .font(.system(size: 30, weight: .bold))
                 .foregroundStyle(AppColors.textPrimary)
 
-            Text(viewModel.currentStep.subtitle)
+            Text(viewModel.currentStep.subtitle(for: quickSetupLocale))
                 .font(.system(size: 15, weight: .regular))
                 .foregroundStyle(AppColors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -254,7 +264,7 @@ struct QuickSetupView: View {
     private var localeAndCurrenciesStep: some View {
         stepSectionCard {
             QuickSetupRowCard(
-                title: "Язык",
+                title: quickSetupText(ru: "Язык", en: "Language"),
                 value: viewModel.selectedLanguage.displayName,
                 icon: "globe",
                 gradient: AppColors.coursesGradient
@@ -263,7 +273,7 @@ struct QuickSetupView: View {
             }
 
             QuickSetupRowCard(
-                title: "Основная валюта",
+                title: quickSetupText(ru: "Основная валюта", en: "Primary currency"),
                 value: viewModel.primaryCurrencyCode,
                 icon: "dollarsign.circle.fill",
                 gradient: AppColors.financesGradient
@@ -272,8 +282,8 @@ struct QuickSetupView: View {
             }
 
             QuickSetupRowCard(
-                title: "Избранные валюты",
-                value: viewModel.favoriteCurrencyCodes.isEmpty ? "Не выбраны" : viewModel.favoriteCurrencyCodes.joined(separator: ", "),
+                title: quickSetupText(ru: "Избранные валюты", en: "Favorite currencies"),
+                value: viewModel.favoriteCurrencyCodes.isEmpty ? quickSetupText(ru: "Не выбраны", en: "Not selected") : viewModel.favoriteCurrencyCodes.joined(separator: ", "),
                 icon: "star.circle.fill",
                 gradient: AppColors.cashbackGradient
             ) {
@@ -281,8 +291,8 @@ struct QuickSetupView: View {
             }
 
             HStack(spacing: 8) {
-                quickSetupTag("Основная: \(viewModel.primaryCurrencyCode)")
-                quickSetupTag("Избранных: \(viewModel.favoriteCurrencyCodes.count)/\(QuickSetupViewModel.maxFavoriteCurrencies)")
+                quickSetupTag(quickSetupText(ru: "Основная: \(viewModel.primaryCurrencyCode)", en: "Primary: \(viewModel.primaryCurrencyCode)"))
+                quickSetupTag(quickSetupText(ru: "Избранных: \(viewModel.favoriteCurrencyCodes.count)/\(QuickSetupViewModel.maxFavoriteCurrencies)", en: "Favorites: \(viewModel.favoriteCurrencyCodes.count)/\(QuickSetupViewModel.maxFavoriteCurrencies)"))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -293,7 +303,7 @@ struct QuickSetupView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
                     quickActionChip(
-                        title: "Рекомендуемые",
+                        title: quickSetupText(ru: "Рекомендуемые", en: "Recommended"),
                         systemImage: "sparkles",
                         prominence: .accent
                     ) {
@@ -303,7 +313,7 @@ struct QuickSetupView: View {
                     }
 
                     quickActionChip(
-                        title: "Очистить",
+                        title: quickSetupText(ru: "Очистить", en: "Clear"),
                         systemImage: "xmark",
                         prominence: .secondary
                     ) {
@@ -353,7 +363,7 @@ struct QuickSetupView: View {
                 Spacer()
                 Image(systemName: "info.circle")
                     .foregroundStyle(AppColors.textSecondary)
-                Text("Категории можно изменить позже")
+                Text(quickSetupText(ru: "Категории можно изменить позже", en: "Categories can be changed later"))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(AppColors.textSecondary)
             }
@@ -381,7 +391,7 @@ struct QuickSetupView: View {
                         fireSuccessHaptic()
                     }
                 } label: {
-                    Text("Добавить")
+                    Text(quickSetupText(ru: "Добавить", en: "Add"))
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                         .frame(maxWidth: .infinity)
@@ -434,7 +444,7 @@ struct QuickSetupView: View {
                 }
             }
 
-            Text("Можно добавить позже")
+            Text(quickSetupText(ru: "Можно добавить позже", en: "Can be added later"))
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary.opacity(0.9))
         }
@@ -463,11 +473,11 @@ struct QuickSetupView: View {
                                     Circle()
                                         .fill(selected ? AppColors.brandPrimary.opacity(0.26) : .white.opacity(0.06))
                                 )
-                            Text(type.title)
+                            Text(type.title(for: quickSetupLocale))
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(AppColors.textPrimary)
                                 .lineLimit(1)
-                            Text(type.subtitle)
+                            Text(type.subtitle(for: quickSetupLocale))
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(AppColors.textSecondary)
                                 .lineLimit(1)
@@ -507,7 +517,7 @@ struct QuickSetupView: View {
         let selection = viewModel.makeSelection()
         return stepSectionCard {
             if showCelebrate {
-                QuickSetupCelebrateBadge()
+                QuickSetupCelebrateBadge(locale: quickSetupLocale)
                     .transition(.scale(scale: 0.9).combined(with: .opacity))
             }
 
@@ -524,16 +534,16 @@ struct QuickSetupView: View {
                             HStack(spacing: 10) {
                                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                                     .font(.system(size: 20, weight: .semibold))
-                                Text(preference.title)
+                                Text(preference.title(for: quickSetupLocale))
                                     .font(.system(size: 16, weight: .semibold))
                             }
                             .foregroundStyle(AppColors.textPrimary)
 
-                            Text(preference.subtitle)
+                            Text(preference.subtitle(for: quickSetupLocale))
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundStyle(AppColors.textSecondary)
 
-                            Text(preference.details)
+                            Text(preference.details(for: quickSetupLocale))
                                 .font(.system(size: 12, weight: .regular))
                                 .foregroundStyle(AppColors.textSecondary.opacity(0.9))
                         }
@@ -553,18 +563,18 @@ struct QuickSetupView: View {
             }
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("Ваш выбор")
+                Text(quickSetupText(ru: "Ваш выбор", en: "Your selection"))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppColors.brandPrimary)
 
-                summaryRow(title: "Язык", value: selection.language.displayName)
-                summaryRow(title: "Основная валюта", value: selection.primaryCurrencyCode)
+                summaryRow(title: quickSetupText(ru: "Язык", en: "Language"), value: selection.language.displayName(for: quickSetupLocale))
+                summaryRow(title: quickSetupText(ru: "Основная валюта", en: "Primary currency"), value: selection.primaryCurrencyCode)
                 summaryRow(
-                    title: "Избранные валюты",
-                    value: selection.favoriteCurrencyCodes.isEmpty ? "Не выбраны" : selection.favoriteCurrencyCodes.joined(separator: ", ")
+                    title: quickSetupText(ru: "Избранные валюты", en: "Favorite currencies"),
+                    value: selection.favoriteCurrencyCodes.isEmpty ? quickSetupText(ru: "Не выбраны", en: "Not selected") : selection.favoriteCurrencyCodes.joined(separator: ", ")
                 )
-                summaryRow(title: "Категории трат", value: "\(selection.selectedExpenseCategoryIDs.count)")
-                summaryRow(title: "Продукты", value: "\(selection.products.count)")
+                summaryRow(title: quickSetupText(ru: "Категории трат", en: "Expense categories"), value: "\(selection.selectedExpenseCategoryIDs.count)")
+                summaryRow(title: quickSetupText(ru: "Продукты", en: "Products"), value: "\(selection.products.count)")
             }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.78), value: showCelebrate)
@@ -602,7 +612,7 @@ struct QuickSetupView: View {
                     }
                     fireSelectionHaptic()
                 } label: {
-                    Text("Назад")
+                    Text(quickSetupText(ru: "Назад", en: "Back"))
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(AppColors.textSecondary)
                         .frame(maxWidth: .infinity)
@@ -636,7 +646,7 @@ struct QuickSetupView: View {
                         ProgressView()
                             .tint(AppColors.textPrimary)
                     }
-                    Text(viewModel.currentStep == .summary ? "Завершить" : viewModel.continueTitle)
+                    Text(viewModel.currentStep == .summary ? quickSetupText(ru: "Завершить", en: "Finish") : viewModel.continueTitle)
                         .font(.system(size: 16, weight: .semibold))
                 }
                 .foregroundStyle(AppColors.textPrimary)
@@ -671,7 +681,7 @@ struct QuickSetupView: View {
             format: String(localized: "quick_setup.step_progress_format"),
             viewModel.currentStep.rawValue + 1,
             QuickSetupStep.allCases.count,
-            viewModel.currentStep.title
+            viewModel.currentStep.title(for: quickSetupLocale)
         )
     }
 
@@ -690,12 +700,13 @@ struct QuickSetupView: View {
     }
 
     private func productSummaryText(_ product: QuickSetupProductDraft) -> String {
+        let productTypeTitle = product.type.title(for: quickSetupLocale)
         if let marketSnapshot = product.marketSnapshot {
             let quantityText = AmountInputFormatter.display(AmountInputFormatter.plainString(from: marketSnapshot.quantity))
-            return "\(product.type.title) • \(quantityText) × \(marketSnapshot.purchaseUnitPrice.formatted(.number.precision(.fractionLength(0...4)))) • \(moneyText(product.amount, currencyCode: product.currencyCode))"
+            return "\(productTypeTitle) • \(quantityText) × \(marketSnapshot.purchaseUnitPrice.formatted(.number.precision(.fractionLength(0...4)))) • \(moneyText(product.amount, currencyCode: product.currencyCode))"
         }
         let amountText = moneyText(product.amount, currencyCode: product.currencyCode)
-        return String(format: String(localized: "quick_setup.product_summary_format"), product.type.title, amountText)
+        return String(format: String(localized: "quick_setup.product_summary_format"), productTypeTitle, amountText)
     }
 
     private var expenseCategoryPresets: [QuickSetupExpenseCategoryPreset] {
@@ -804,7 +815,7 @@ struct QuickSetupView: View {
 
     private var standardDraftFields: some View {
         VStack(spacing: 8) {
-            TextField("Название", text: $viewModel.productNameInput)
+            TextField(quickSetupText(ru: "Название", en: "Name"), text: $viewModel.productNameInput)
                 .textInputAutocapitalization(.words)
                 .autocorrectionDisabled(false)
                 .focused($focusedField, equals: .productName)
@@ -844,7 +855,7 @@ struct QuickSetupView: View {
                         Text(viewModel.productMarketSearchTitle)
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(AppColors.textSecondary)
-                        Text(viewModel.productSymbolInput.isEmpty ? "Не выбран" : viewModel.productSymbolInput)
+                        Text(viewModel.productSymbolInput.isEmpty ? quickSetupText(ru: "Не выбран", en: "Not selected") : viewModel.productSymbolInput)
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
                     }
@@ -893,7 +904,7 @@ struct QuickSetupView: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("Текущая цена")
+                    Text(quickSetupText(ru: "Текущая цена", en: "Current price"))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(AppColors.textSecondary)
                     Spacer()
@@ -921,7 +932,7 @@ struct QuickSetupView: View {
 
                 if let total = viewModel.productPositionTotal {
                     HStack {
-                        Text("Позиция")
+                        Text(quickSetupText(ru: "Позиция", en: "Position"))
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(AppColors.textSecondary)
                         Spacer()
@@ -933,7 +944,7 @@ struct QuickSetupView: View {
 
                 if let growth = viewModel.productPositionGrowthAbsolute {
                     HStack {
-                        Text("Рост/убыток")
+                        Text(quickSetupText(ru: "Рост/убыток", en: "Gain/loss"))
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(AppColors.textSecondary)
                         Spacer()
@@ -1025,13 +1036,14 @@ struct QuickSetupView: View {
 }
 
 private struct QuickSetupCelebrateBadge: View {
+    let locale: Locale
     @State private var glow = false
 
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "sparkles")
                 .font(.system(size: 18, weight: .bold))
-            Text("Отлично! Настройка почти готова")
+            Text(QuickSetupLocalization.text(locale: locale, ru: "Отлично! Настройка почти готова", en: "Great! Setup is almost complete"))
                 .font(.system(size: 14, weight: .semibold))
         }
         .foregroundStyle(AppColors.textPrimary)
@@ -1116,6 +1128,7 @@ private struct QuickSetupRowCard: View {
 private struct QuickSetupFavoriteCurrenciesSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
+    let locale: Locale
 
     let primaryCurrencyCode: String
     let selectedCodes: [String]
@@ -1132,7 +1145,7 @@ private struct QuickSetupFavoriteCurrenciesSheet: View {
             favoriteCodes: Set(selectedCodes),
             currentSelection: nil,
             primaryPinnedCode: primaryCurrencyCode,
-            primaryPinnedTitle: "Основная",
+            primaryPinnedTitle: QuickSetupLocalization.text(locale: locale, ru: "Основная", en: "Primary"),
             onToggleFavorite: { code in
                 onToggle(code)
             },
@@ -1140,11 +1153,11 @@ private struct QuickSetupFavoriteCurrenciesSheet: View {
                 onToggle(code)
             }
         )
-        .navigationTitle("Избранные валюты")
+        .navigationTitle(QuickSetupLocalization.text(locale: locale, ru: "Избранные валюты", en: "Favorite currencies"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Готово") {
+                Button(QuickSetupLocalization.text(locale: locale, ru: "Готово", en: "Done")) {
                     dismiss()
                 }
             }
@@ -1163,6 +1176,7 @@ private struct QuickSetupFavoriteCurrenciesSheet: View {
 private struct QuickSetupPrimaryCurrencySheet: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var primaryCurrencyCode: String
+    let locale: Locale
     let suggestedCodes: [String]
     @State private var searchText = ""
 
@@ -1175,18 +1189,18 @@ private struct QuickSetupPrimaryCurrencySheet: View {
             favoriteCodes: [],
             currentSelection: primaryCurrencyCode,
             primaryPinnedCode: primaryCurrencyCode,
-            primaryPinnedTitle: "Основная",
+            primaryPinnedTitle: QuickSetupLocalization.text(locale: locale, ru: "Основная", en: "Primary"),
             onToggleFavorite: nil,
             onSelect: { code in
                 primaryCurrencyCode = code
                 dismiss()
             }
         )
-        .navigationTitle("Основная валюта")
+        .navigationTitle(QuickSetupLocalization.text(locale: locale, ru: "Основная валюта", en: "Primary currency"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Готово") {
+                Button(QuickSetupLocalization.text(locale: locale, ru: "Готово", en: "Done")) {
                     dismiss()
                 }
             }

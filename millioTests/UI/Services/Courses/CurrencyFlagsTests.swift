@@ -16,6 +16,12 @@ struct CurrencyFlagsTests {
         #expect(CurrencyFlags.assetName(for: "BTC") == nil)
     }
 
+    @Test("flag возвращает glyph для криптовалют вместо заглушки")
+    func cryptoGlyphFallback() {
+        #expect(CurrencyFlags.flag(for: "BTC") == "₿")
+        #expect(CurrencyFlags.flag(for: "  bch  ") == "🟧")
+    }
+
     @Test("assetName возвращает nil если иконка флага отсутствует")
     func assetNameReturnsNilForUnknownCurrency() {
         #expect(CurrencyFlags.assetName(for: "ZZZ") == nil)

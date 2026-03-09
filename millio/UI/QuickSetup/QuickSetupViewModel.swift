@@ -27,14 +27,19 @@ struct QuickSetupSystemContext {
             return ["RUB", "USD", "CNY", "EUR", "TRY"]
         }
 
-        return uniqueCurrencyCodes([
+        let nonRussianDenied = Set(["RUB", "EUR", "CNY", "TRY"])
+        let defaults = uniqueCurrencyCodes([
             systemCurrencyCode,
             fallbackCurrencyCodeForPrimaryLanguage,
             "USD",
-            "EUR",
-            "CNY",
-            "TRY"
+            "GBP",
+            "JPY",
+            "CHF",
+            "CAD",
+            "AUD"
         ])
+
+        return defaults.filter { !nonRussianDenied.contains($0) }
     }
 
     func recommendedPrimaryCurrency(fallback fallbackCode: String) -> String {
@@ -52,10 +57,8 @@ struct QuickSetupSystemContext {
     }
 
     private var systemCurrencyCode: String? {
-        if #available(iOS 16.0, *) {
-            return locale.currency?.identifier.uppercased()
-        }
-        return locale.currencyCode?.uppercased()
+        // Project target is iOS 16+, so prefer the non-deprecated API.
+        locale.currency?.identifier.uppercased()
     }
 
     private var fallbackCurrencyCodeForPrimaryLanguage: String? {
@@ -193,26 +196,33 @@ final class QuickSetupViewModel: ObservableObject {
     }
 
     var productAmountFieldTitle: String {
+        let locale = selectedLanguage.locale ?? Locale.current
         switch productTypeForCreation {
         case .card:
-            return "Баланс в \(primaryCurrencyCode)"
+            return QuickSetupLocalization.text(locale: locale, ru: "Баланс в \(primaryCurrencyCode)", en: "Balance in \(primaryCurrencyCode)")
         case .realEstate:
-            return "Стоимость в \(primaryCurrencyCode)"
+            return QuickSetupLocalization.text(locale: locale, ru: "Стоимость в \(primaryCurrencyCode)", en: "Value in \(primaryCurrencyCode)")
         case .debt:
-            return "Сумма долга в \(primaryCurrencyCode)"
+            return QuickSetupLocalization.text(locale: locale, ru: "Сумма долга в \(primaryCurrencyCode)", en: "Debt amount in \(primaryCurrencyCode)")
         case .credit:
-            return "Остаток долга в \(primaryCurrencyCode)"
+            return QuickSetupLocalization.text(locale: locale, ru: "Остаток долга в \(primaryCurrencyCode)", en: "Outstanding debt in \(primaryCurrencyCode)")
         case .crypto, .ticker:
-            return "Количество"
+            return QuickSetupLocalization.text(locale: locale, ru: "Количество", en: "Quantity")
         }
     }
 
     var productPurchasePriceTitle: String {
-        productTypeForCreation == .crypto ? "Цена покупки за монету" : "Цена покупки за 1 шт."
+        let locale = selectedLanguage.locale ?? Locale.current
+        return productTypeForCreation == .crypto
+            ? QuickSetupLocalization.text(locale: locale, ru: "Цена покупки за монету", en: "Buy price per coin")
+            : QuickSetupLocalization.text(locale: locale, ru: "Цена покупки за 1 шт.", en: "Buy price per share")
     }
 
     var productMarketSearchTitle: String {
-        productTypeForCreation == .crypto ? "Найти пару" : "Найти тикер"
+        let locale = selectedLanguage.locale ?? Locale.current
+        return productTypeForCreation == .crypto
+            ? QuickSetupLocalization.text(locale: locale, ru: "Найти пару", en: "Find pair")
+            : QuickSetupLocalization.text(locale: locale, ru: "Найти тикер", en: "Find ticker")
     }
 
     var productResolvedCurrencyCode: String {
@@ -265,11 +275,12 @@ final class QuickSetupViewModel: ObservableObject {
     }
 
     var continueTitle: String {
+        let locale = selectedLanguage.locale ?? Locale.current
         switch currentStep {
         case .summary:
-            return "Завершить"
+            return QuickSetupLocalization.text(locale: locale, ru: "Завершить", en: "Finish")
         default:
-            return "Продолжить"
+            return QuickSetupLocalization.text(locale: locale, ru: "Продолжить", en: "Continue")
         }
     }
 
@@ -375,11 +386,13 @@ final class QuickSetupViewModel: ObservableObject {
                 return false
             }
             guard let quantity = parsedDecimal(productQuantityInput), quantity > 0 else {
-                lastAddDraftError = "Укажи количество позиции"
+                let locale = selectedLanguage.locale ?? Locale.current
+                lastAddDraftError = QuickSetupLocalization.text(locale: locale, ru: "Укажи количество позиции", en: "Enter position quantity")
                 return false
             }
             guard let purchaseUnitPrice = parsedDecimal(productPurchasePriceInput), purchaseUnitPrice > 0 else {
-                lastAddDraftError = "Укажи цену покупки"
+                let locale = selectedLanguage.locale ?? Locale.current
+                lastAddDraftError = QuickSetupLocalization.text(locale: locale, ru: "Укажи цену покупки", en: "Enter buy price")
                 return false
             }
             let currentTickerDraftCount = products.reduce(into: 0) { partialResult, item in

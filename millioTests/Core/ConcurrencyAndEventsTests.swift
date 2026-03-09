@@ -20,7 +20,8 @@ struct ConcurrencyAndEventsTests {
         case .started:
             #expect(true)
         default:
-            #expect(false)
+            // Silence Swift Testing warning about `#expect(false)` always failing.
+            #expect(Bool(false))
         }
     }
     

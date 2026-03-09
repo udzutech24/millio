@@ -85,43 +85,45 @@ struct BackupManagementView: View {
 
     private var createSliderSubtitle: String {
         if isBusy {
-            return "Операция уже выполняется"
+            return BackupL10n.tr("backup.actions.create.subtitle.busy", fallback: "Operation is already running")
         }
         if !isBackupOperational {
-            return "Нужно включить backup и iCloud"
+            return BackupL10n.tr("backup.actions.create.subtitle.requirements", fallback: "Turn on backup and iCloud")
         }
-        return "Защита от случайного запуска"
+        return BackupL10n.tr("backup.actions.create.subtitle.safety", fallback: "Protection from accidental trigger")
     }
 
     private var restoreSliderTitle: String {
-        selectedRestoreVersion == nil ? "Выберите версию для восстановления" : "Сдвиньте, чтобы восстановить выбранную версию"
+        selectedRestoreVersion == nil
+            ? BackupL10n.tr("backup.actions.restore.title.select", fallback: "Select a version to restore")
+            : BackupL10n.tr("backup.actions.restore.title.slide", fallback: "Slide to restore selected version")
     }
 
     private var restoreSliderSubtitle: String {
         guard let selectedRestoreVersion else {
-            return "Сначала выберите версию в списке ниже"
+            return BackupL10n.tr("backup.actions.restore.subtitle.select_first", fallback: "Select a version in the list below first")
         }
         return selectedRestoreVersion.date.formatted(date: .abbreviated, time: .shortened)
     }
 
     private var primaryActionHint: String? {
         guard appState.isBackupEnabled else {
-            return "Включите резервное копирование."
+            return BackupL10n.tr("backup.hint.enable_backup", fallback: "Enable backup.")
         }
         guard appState.isICloudAvailable else {
-            return "Нужен доступ к iCloud."
+            return BackupL10n.tr("backup.hint.enable_icloud", fallback: "iCloud access is required.")
         }
         guard encryptionMode != .passphrase || !trimmedPassphrase.isEmpty else {
-            return "Введите кодовую фразу."
+            return BackupL10n.tr("backup.hint.enter_passphrase", fallback: "Enter a passphrase.")
         }
         guard encryptionMode != .passphrase || trimmedPassphrase == trimmedConfirmation else {
-            return "Кодовые фразы не совпадают."
+            return BackupL10n.tr("backup.hint.passphrase_mismatch", fallback: "Passphrases do not match.")
         }
         guard encryptionMode != .passphrase || isPassphraseConfirmed else {
-            return "Нажмите «Готово», чтобы подтвердить фразу."
+            return BackupL10n.tr("backup.hint.confirm_passphrase", fallback: "Tap Done to confirm the passphrase.")
         }
         guard selectedRestoreRecordName != nil else {
-            return "Выберите версию для восстановления."
+            return BackupL10n.tr("backup.hint.select_restore_version", fallback: "Select a version to restore.")
         }
         return nil
     }
@@ -156,16 +158,16 @@ struct BackupManagementView: View {
             }
         }
         .confirmationDialog(
-            "Восстановить эту версию?",
+            BackupL10n.tr("backup.restore.confirm.title", fallback: "Restore this version?"),
             isPresented: $showRestoreConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Да, восстановить", role: .destructive) {
+            Button(BackupL10n.tr("backup.restore.confirm.action", fallback: "Yes, restore"), role: .destructive) {
                 Task { await restoreSelectedVersion() }
             }
-            Button("Отмена", role: .cancel) {}
+            Button(BackupL10n.tr("common.cancel", fallback: "Cancel"), role: .cancel) {}
         } message: {
-            Text("Текущие локальные данные будут полностью заменены выбранной копией.")
+            Text(BackupL10n.tr("backup.restore.confirm.message", fallback: "Current local data will be fully replaced by the selected backup."))
         }
         .onAppear {
             let isDeviceKeyEnabled = SettingsManager.shared.isEncryptionEnabled
@@ -183,7 +185,7 @@ struct BackupManagementView: View {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 if encryptionMode == .passphrase {
-                    Button("Готово") {
+                    Button(BackupL10n.tr("common.done", fallback: "Done")) {
                         confirmPassphraseIfPossible()
                     }
                 }
@@ -199,10 +201,10 @@ struct BackupManagementView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Резервная копия")
+            Text(BackupL10n.tr("backup.screen.title", fallback: "Backup"))
                 .font(.system(size: 26, weight: .bold, design: .rounded))
                 .foregroundStyle(AppColors.textPrimary)
-            Text("Включите backup, задайте защиту, затем создавайте и восстанавливайте копии.")
+            Text(BackupL10n.tr("backup.screen.subtitle", fallback: "Turn on backup, configure protection, then create and restore backups."))
                 .font(.system(size: 13, weight: .regular))
                 .foregroundStyle(AppColors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -221,7 +223,11 @@ struct BackupManagementView: View {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 8) {
                         statusPill(
-                            title: isBackupOperational ? "Включено" : (appState.isBackupEnabled ? "Не готово" : "Выключено"),
+                            title: isBackupOperational
+                                ? BackupL10n.tr("backup.status.on", fallback: "On")
+                                : (appState.isBackupEnabled
+                                    ? BackupL10n.tr("backup.status.not_ready", fallback: "Not ready")
+                                    : BackupL10n.tr("backup.status.off", fallback: "Off")),
                             icon: isBackupOperational ? "checkmark.circle.fill" : (appState.isBackupEnabled ? "icloud.slash.fill" : "pause.circle.fill"),
                             color: isBackupOperational ? AppColors.toggleOnGreen : AppColors.warning
                         )
@@ -263,12 +269,16 @@ struct BackupManagementView: View {
 
                 HStack(spacing: 10) {
                     metricTile(
-                        title: "Хранение",
-                        value: appState.isBackupEnabled ? (appState.isICloudAvailable ? "iCloud" : "Недоступно") : "Локально"
+                        title: BackupL10n.tr("backup.metrics.storage", fallback: "Storage"),
+                        value: appState.isBackupEnabled
+                            ? (appState.isICloudAvailable
+                                ? BackupL10n.tr("backup.storage.icloud", fallback: "iCloud")
+                                : BackupL10n.tr("backup.storage.unavailable", fallback: "Unavailable"))
+                            : BackupL10n.tr("backup.storage.local", fallback: "Local")
                     )
                     metricTile(
-                        title: "Последняя",
-                        value: formattedBackupDate(appState.lastBackupDate) ?? "Еще нет"
+                        title: BackupL10n.tr("backup.metrics.last", fallback: "Last"),
+                        value: formattedBackupDate(appState.lastBackupDate) ?? BackupL10n.tr("backup.metrics.last.none", fallback: "None yet")
                     )
                 }
             }
@@ -297,7 +307,7 @@ struct BackupManagementView: View {
                         }
                     }
 
-                    Picker("Способ защиты", selection: $encryptionMode) {
+                    Picker(BackupL10n.tr("backup.protection.picker.label", fallback: "Protection method"), selection: $encryptionMode) {
                         ForEach(BackupEncryptionMode.allCases) { mode in
                             Text(mode.shortTitle).tag(mode)
                         }
@@ -306,10 +316,12 @@ struct BackupManagementView: View {
                     .disabled(!appState.isBackupEnabled || isBusy)
 
                     subtleCallout(
-                        title: encryptionMode == .passphrase ? "Важно" : "Ограничение",
+                        title: encryptionMode == .passphrase
+                            ? BackupL10n.tr("backup.protection.callout.important", fallback: "Important")
+                            : BackupL10n.tr("backup.protection.callout.limitation", fallback: "Limitation"),
                         text: encryptionMode == .passphrase
-                            ? "Без фразы восстановление невозможно."
-                            : "Ключ привязан к этому устройству."
+                            ? BackupL10n.tr("backup.protection.callout.important.text", fallback: "Without the passphrase, restore is impossible.")
+                            : BackupL10n.tr("backup.protection.callout.limitation.text", fallback: "The key is tied to this device.")
                     )
                 }
                 .padding(.vertical, 14)
@@ -331,10 +343,14 @@ struct BackupManagementView: View {
                     VStack(spacing: 0) {
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Кодовая фраза")
+                                Text(BackupL10n.tr("backup.passphrase.section.title", fallback: "Passphrase"))
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundStyle(AppColors.textPrimary)
-                                Text(isPassphraseConfirmed ? "Фраза подтверждена" : "Введите и подтвердите")
+                                Text(
+                                    isPassphraseConfirmed
+                                        ? BackupL10n.tr("backup.passphrase.section.subtitle.confirmed", fallback: "Passphrase confirmed")
+                                        : BackupL10n.tr("backup.passphrase.section.subtitle.input", fallback: "Enter and confirm")
+                                )
                                     .font(.system(size: 12, weight: .regular))
                                     .foregroundStyle(AppColors.textSecondary)
                                     .fixedSize(horizontal: false, vertical: true)
@@ -343,7 +359,7 @@ struct BackupManagementView: View {
                             Spacer()
 
                             if isPassphraseConfirmed {
-                                Button("Изменить") {
+                                Button(BackupL10n.tr("backup.passphrase.edit", fallback: "Edit")) {
                                     isPassphraseConfirmed = false
                                     focusedField = .passphrase
                                 }
@@ -366,9 +382,9 @@ struct BackupManagementView: View {
 
                                 Group {
                                     if isPassphraseVisible {
-                                        TextField("Кодовая фраза", text: $passphrase)
+                                        TextField(BackupL10n.tr("backup.passphrase.placeholder", fallback: "Passphrase"), text: $passphrase)
                                     } else {
-                                        SecureField("Кодовая фраза", text: $passphrase)
+                                        SecureField(BackupL10n.tr("backup.passphrase.placeholder", fallback: "Passphrase"), text: $passphrase)
                                             .textContentType(.newPassword)
                                             .privacySensitive()
                                     }
@@ -396,7 +412,7 @@ struct BackupManagementView: View {
                             HStack(spacing: 12) {
                                 Image(systemName: "checkmark.shield.fill")
                                     .foregroundStyle(AppColors.textTertiary)
-                                SecureField("Повторите кодовую фразу", text: $passphraseConfirmation)
+                                SecureField(BackupL10n.tr("backup.passphrase.confirm_placeholder", fallback: "Repeat passphrase"), text: $passphraseConfirmation)
                                     .textContentType(.newPassword)
                                     .privacySensitive()
                                     .disabled(!appState.isBackupEnabled || isBusy)
@@ -414,7 +430,7 @@ struct BackupManagementView: View {
                                 Button {
                                     confirmPassphraseIfPossible()
                                 } label: {
-                                    Text("Готово")
+                                    Text(BackupL10n.tr("common.done", fallback: "Done"))
                                         .font(.system(size: 14, weight: .semibold))
                                         .foregroundStyle(AppColors.textPrimary)
                                         .padding(.horizontal, 14)
@@ -427,7 +443,11 @@ struct BackupManagementView: View {
                                 .buttonStyle(.plain)
 
                                 if !trimmedPassphrase.isEmpty || !trimmedConfirmation.isEmpty {
-                                    Text(isPassphraseValid ? "Фраза будет сохранена и можно будет менять." : "Введите одинаковую фразу в оба поля.")
+                                    Text(
+                                        isPassphraseValid
+                                            ? BackupL10n.tr("backup.passphrase.hint.valid", fallback: "Passphrase will be saved and can be changed later.")
+                                            : BackupL10n.tr("backup.passphrase.hint.invalid", fallback: "Enter the same passphrase in both fields.")
+                                    )
                                         .font(.system(size: 12, weight: .regular))
                                         .foregroundStyle(isPassphraseValid ? AppColors.textSecondary : AppColors.error)
                                         .fixedSize(horizontal: false, vertical: true)
@@ -447,12 +467,12 @@ struct BackupManagementView: View {
     private var actionsCard: some View {
         FinancesGlassCard(accentColor: AppColors.brandPrimary, cornerRadius: 22, contentPadding: EdgeInsets(top: 14, leading: 14, bottom: 14, trailing: 14)) {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Действия")
+                Text(BackupL10n.tr("backup.actions.title", fallback: "Actions"))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppColors.textSecondary)
 
                 SlideToConfirmControl(
-                    title: "Сдвиньте, чтобы создать копию",
+                    title: BackupL10n.tr("backup.actions.create.title", fallback: "Slide to create backup"),
                     subtitle: createSliderSubtitle,
                     icon: "arrow.up",
                     gradientColors: AppColors.financesGradient,
@@ -476,7 +496,7 @@ struct BackupManagementView: View {
                 if let primaryActionHint {
                     Text(primaryActionHint)
                         .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(primaryActionHint == "Кодовые фразы не совпадают." ? AppColors.error : AppColors.textSecondary)
+                        .foregroundStyle(primaryActionHint == BackupL10n.tr("backup.hint.passphrase_mismatch", fallback: "Passphrases do not match.") ? AppColors.error : AppColors.textSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
@@ -493,10 +513,13 @@ struct BackupManagementView: View {
                 } label: {
                     HStack(spacing: 10) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Сохраненные версии")
+                            Text(BackupL10n.tr("backup.versions.title", fallback: "Saved versions"))
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(AppColors.textPrimary)
-                            Text(backupVersions.isEmpty ? "Пока нет" : "\(backupVersions.count) шт.")
+                            Text(backupVersions.isEmpty
+                                ? BackupL10n.tr("backup.versions.empty.short", fallback: "None yet")
+                                : BackupL10n.format("backup.versions.count_format", fallback: "%lld", backupVersions.count)
+                            )
                                 .font(.system(size: 12, weight: .regular))
                                 .foregroundStyle(AppColors.textSecondary)
                         }
@@ -513,7 +536,7 @@ struct BackupManagementView: View {
 
                 if isVersionsExpanded {
                     if backupVersions.isEmpty {
-                        Text("Сохраненных версий пока нет.")
+                        Text(BackupL10n.tr("backup.versions.empty.full", fallback: "No saved versions yet."))
                             .font(.system(size: 12, weight: .regular))
                             .foregroundStyle(AppColors.textTertiary)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -549,7 +572,7 @@ struct BackupManagementView: View {
                                     Spacer()
 
                                     if version.isPinned {
-                                        Text("Закреплено")
+                                        Text(BackupL10n.tr("backup.versions.pinned", fallback: "Pinned"))
                                             .font(.system(size: 10, weight: .semibold))
                                             .foregroundStyle(AppColors.textPrimary)
                                             .padding(.horizontal, 8)
@@ -635,7 +658,7 @@ struct BackupManagementView: View {
     @MainActor
     private func restoreSelectedVersion() async {
         guard let backupManager, let selectedRestoreRecordName else {
-            backupError = .restoreFailed("Выберите версию для восстановления")
+            backupError = .restoreFailed(BackupL10n.tr("backup.hint.select_restore_version", fallback: "Select a version to restore."))
             return
         }
 
@@ -704,7 +727,7 @@ struct BackupManagementView: View {
     @ViewBuilder
     private func metricTile(title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(title.uppercased())
+            Text(title.localizedUppercase)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(AppColors.textTertiary)
             Text(value)
@@ -741,10 +764,10 @@ struct BackupManagementView: View {
                 .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
             VStack(alignment: .leading, spacing: 3) {
-                Text("Кодовая фраза готова")
+                Text(BackupL10n.tr("backup.passphrase.summary.title", fallback: "Passphrase is ready"))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
-                Text("Фраза сохранена. Можно изменить в любой момент.")
+                Text(BackupL10n.tr("backup.passphrase.summary.subtitle", fallback: "Passphrase is saved. You can change it anytime."))
                     .font(.system(size: 11, weight: .regular))
                     .foregroundStyle(AppColors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)

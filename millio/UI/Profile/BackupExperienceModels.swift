@@ -16,36 +16,39 @@ enum BackupEncryptionMode: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .deviceKey:
-            "На этом устройстве"
+            BackupL10n.tr("backup.encryption.mode.device.title", fallback: "On this device")
         case .passphrase:
-            "Кодовая фраза"
+            BackupL10n.tr("backup.encryption.mode.passphrase.title", fallback: "Passphrase")
         }
     }
 
     var shortTitle: String {
         switch self {
         case .deviceKey:
-            "Устройство"
+            BackupL10n.tr("backup.encryption.mode.device.short", fallback: "Device")
         case .passphrase:
-            "Фраза"
+            BackupL10n.tr("backup.encryption.mode.passphrase.short", fallback: "Phrase")
         }
     }
 
     var summary: String {
         switch self {
         case .deviceKey:
-            "Ключ хранится в защищенном хранилище iOS на этом устройстве."
+            BackupL10n.tr("backup.encryption.mode.device.summary", fallback: "The key is stored in secure iOS storage on this device.")
         case .passphrase:
-            "Копию можно восстановить на новом устройстве по кодовой фразе."
+            BackupL10n.tr("backup.encryption.mode.passphrase.summary", fallback: "You can restore on a new device using the passphrase.")
         }
     }
 
     var restoreRisk: String {
         switch self {
         case .deviceKey:
-            "После удаления приложения или смены устройства восстановление может быть недоступно."
+            BackupL10n.tr(
+                "backup.encryption.mode.device.risk",
+                fallback: "After deleting the app or switching devices, restore may not be available."
+            )
         case .passphrase:
-            "Если потерять кодовую фразу, восстановление будет невозможно."
+            BackupL10n.tr("backup.encryption.mode.passphrase.risk", fallback: "If you lose the passphrase, restore is impossible.")
         }
     }
 }
@@ -80,41 +83,60 @@ enum BackupExperiencePresenter {
         let subtitle: String
 
         if !isBackupEnabled {
-            title = "Резервное копирование выключено"
-            subtitle = "Данные остаются на устройстве."
+            title = BackupL10n.tr("backup.dashboard.title.off", fallback: "Backup is off")
+            subtitle = BackupL10n.tr("backup.dashboard.subtitle.off", fallback: "Data stays on this device.")
         } else if !isICloudAvailable {
-            title = "Нужен iCloud"
-            subtitle = "Включите iCloud для Millio."
+            title = BackupL10n.tr("backup.dashboard.title.need_icloud", fallback: "iCloud required")
+            subtitle = BackupL10n.tr("backup.dashboard.subtitle.need_icloud", fallback: "Enable iCloud for Millio.")
         } else if let lastBackupDate {
-            title = "Копирование настроено"
-            subtitle = "Последняя копия: \(relativeBackupDate(lastBackupDate))."
+            title = BackupL10n.tr("backup.dashboard.title.ready", fallback: "Backup is configured")
+            subtitle = BackupL10n.format(
+                "backup.dashboard.subtitle.last_backup_format",
+                fallback: "Last backup: %@.",
+                relativeBackupDate(lastBackupDate)
+            )
         } else {
-            title = "Почти готово"
-            subtitle = "Осталось создать первую копию."
+            title = BackupL10n.tr("backup.dashboard.title.almost", fallback: "Almost done")
+            subtitle = BackupL10n.tr("backup.dashboard.subtitle.almost", fallback: "Create your first backup.")
         }
 
         let storageTitle: String
         let storageDetail: String
         if isBackupEnabled, isICloudAvailable {
-            storageTitle = "Хранение в iCloud"
-            storageDetail = "Копии лежат в вашем приватном CloudKit-контейнере."
+            storageTitle = BackupL10n.tr("backup.dashboard.storage.title.icloud", fallback: "Stored in iCloud")
+            storageDetail = BackupL10n.tr(
+                "backup.dashboard.storage.detail.icloud",
+                fallback: "Backups are saved in your private CloudKit container."
+            )
         } else if isBackupEnabled {
-            storageTitle = "Хранение недоступно"
-            storageDetail = "Пока iCloud недоступен, новые копии не создаются."
+            storageTitle = BackupL10n.tr("backup.dashboard.storage.title.unavailable", fallback: "Storage unavailable")
+            storageDetail = BackupL10n.tr(
+                "backup.dashboard.storage.detail.unavailable",
+                fallback: "While iCloud is unavailable, new backups cannot be created."
+            )
         } else {
-            storageTitle = "Только на устройстве"
-            storageDetail = "Пока копирование выключено, данные остаются локально."
+            storageTitle = BackupL10n.tr("backup.dashboard.storage.title.local", fallback: "On-device only")
+            storageDetail = BackupL10n.tr(
+                "backup.dashboard.storage.detail.local",
+                fallback: "While backup is off, data remains local."
+            )
         }
 
         let trustTitle: String
         let trustDetail: String
         switch encryptionMode {
         case .deviceKey:
-            trustTitle = "Защита: ключ на устройстве"
-            trustDetail = "Ключ хранится в Keychain этого устройства. Перенос может не сработать."
+            trustTitle = BackupL10n.tr("backup.dashboard.trust.title.device", fallback: "Protection: device key")
+            trustDetail = BackupL10n.tr(
+                "backup.dashboard.trust.detail.device",
+                fallback: "The key is kept in this device's Keychain. Migration may fail."
+            )
         case .passphrase:
-            trustTitle = "Защита: кодовая фраза"
-            trustDetail = "Фраза известна только вам. Millio ее не хранит и не восстанавливает."
+            trustTitle = BackupL10n.tr("backup.dashboard.trust.title.passphrase", fallback: "Protection: passphrase")
+            trustDetail = BackupL10n.tr(
+                "backup.dashboard.trust.detail.passphrase",
+                fallback: "Only you know the passphrase. Millio does not store or recover it."
+            )
         }
 
         return BackupDashboardContent(
@@ -135,14 +157,22 @@ enum BackupExperiencePresenter {
     }
 
     static func restoreEmptyStateTitle(isICloudAvailable: Bool) -> String {
-        isICloudAvailable ? "Резервная копия не найдена" : "iCloud сейчас недоступен"
+        isICloudAvailable
+            ? BackupL10n.tr("backup.restore.empty.title.not_found", fallback: "Backup not found")
+            : BackupL10n.tr("backup.restore.empty.title.icloud_unavailable", fallback: "iCloud is unavailable")
     }
 
     static func restoreEmptyStateMessage(isICloudAvailable: Bool) -> String {
         if isICloudAvailable {
-            return "Мы не нашли сохраненные копии в вашем приватном CloudKit контейнере для этого Apple ID."
+            return BackupL10n.tr(
+                "backup.restore.empty.message.not_found",
+                fallback: "No saved backups were found in your private CloudKit container for this Apple ID."
+            )
         }
-        return "Без доступа к iCloud Millio не сможет проверить наличие резервных копий и восстановить данные."
+        return BackupL10n.tr(
+            "backup.restore.empty.message.icloud_unavailable",
+            fallback: "Without iCloud access, Millio cannot check backups or restore data."
+        )
     }
 
     private static func readiness(
@@ -154,28 +184,38 @@ enum BackupExperiencePresenter {
     ) -> [BackupReadinessItem] {
         [
             BackupReadinessItem(
-                title: "Резервное копирование включено",
-                detail: isBackupEnabled ? "Автокопия создается при уходе в фон." : "Нужно включить резервное копирование.",
+                title: BackupL10n.tr("backup.readiness.backup_enabled.title", fallback: "Backup is enabled"),
+                detail: isBackupEnabled
+                    ? BackupL10n.tr("backup.readiness.backup_enabled.detail.on", fallback: "Auto backup runs when the app goes to background.")
+                    : BackupL10n.tr("backup.readiness.backup_enabled.detail.off", fallback: "Turn on backup."),
                 isComplete: isBackupEnabled
             ),
             BackupReadinessItem(
-                title: "iCloud доступен",
-                detail: isICloudAvailable ? "Можно сохранять и восстанавливать." : "Проверьте вход в iCloud и доступ Millio.",
+                title: BackupL10n.tr("backup.readiness.icloud.title", fallback: "iCloud is available"),
+                detail: isICloudAvailable
+                    ? BackupL10n.tr("backup.readiness.icloud.detail.on", fallback: "Saving and restoring are available.")
+                    : BackupL10n.tr("backup.readiness.icloud.detail.off", fallback: "Check iCloud sign-in and Millio access."),
                 isComplete: isICloudAvailable
             ),
             BackupReadinessItem(
-                title: "Защита настроена",
-                detail: encryptionMode == .passphrase ? "Есть перенос по кодовой фразе." : "Ключ привязан к устройству.",
+                title: BackupL10n.tr("backup.readiness.protection.title", fallback: "Protection is configured"),
+                detail: encryptionMode == .passphrase
+                    ? BackupL10n.tr("backup.readiness.protection.detail.passphrase", fallback: "Cross-device restore via passphrase is available.")
+                    : BackupL10n.tr("backup.readiness.protection.detail.device", fallback: "Key is tied to this device."),
                 isComplete: true
             ),
             BackupReadinessItem(
-                title: "Есть актуальная копия",
-                detail: lastBackupDate != nil ? "Есть копия для восстановления." : "Создайте первую копию вручную.",
+                title: BackupL10n.tr("backup.readiness.has_recent.title", fallback: "Recent backup exists"),
+                detail: lastBackupDate != nil
+                    ? BackupL10n.tr("backup.readiness.has_recent.detail.on", fallback: "A backup is ready for restore.")
+                    : BackupL10n.tr("backup.readiness.has_recent.detail.off", fallback: "Create your first backup manually."),
                 isComplete: lastBackupDate != nil
             ),
             BackupReadinessItem(
-                title: "Есть сохраненная версия",
-                detail: hasPinnedVersions ? "Хотя бы одна версия закреплена." : "При необходимости сохраните отдельную версию.",
+                title: BackupL10n.tr("backup.readiness.has_pinned.title", fallback: "Saved version exists"),
+                detail: hasPinnedVersions
+                    ? BackupL10n.tr("backup.readiness.has_pinned.detail.on", fallback: "At least one version is pinned.")
+                    : BackupL10n.tr("backup.readiness.has_pinned.detail.off", fallback: "Pin a dedicated version when needed."),
                 isComplete: hasPinnedVersions
             )
         ]

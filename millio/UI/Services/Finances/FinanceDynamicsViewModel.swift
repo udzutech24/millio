@@ -198,6 +198,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     let financeViewModel: FinanceViewModel
     let currencyService: CurrencyRateServiceProtocol
     private let historicalRateStore: HistoricalRateStore
+    private let auditStore: FinanceBalanceAuditStoreProtocol
     
     let defaults = UserDefaults.standard
     private var eventSubscriptionID: UUID?
@@ -212,6 +213,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     var transactionsByInvestmentCache: [String: [CashflowTransaction]] = [:]
     var initialBalancesCache: [String: Double] = [:]
     var balanceCache: [String: Double] = [:] // Кэш для calculateBalanceAtDate: "accountID_date" -> balance
+    var dailyAuditSnapshotCache: [String: [String: FinanceBalanceSnapshotValue]] = [:]
     
     init(
         modelContext: ModelContext,
@@ -220,12 +222,14 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         initialGroupCurrency: String? = nil,
         initialAccountID: String? = nil,
         initialAccountCurrency: String? = nil,
-        currencyService: CurrencyRateServiceProtocol
+        currencyService: CurrencyRateServiceProtocol,
+        auditStore: FinanceBalanceAuditStoreProtocol = FinanceBalanceAuditStore()
     ) {
         self.modelContext = modelContext
         self.financeViewModel = financeViewModel
         self.currencyService = currencyService
         self.historicalRateStore = HistoricalRateStore(modelContext: modelContext, currencyService: currencyService)
+        self.auditStore = auditStore
         
         // Если передан initialAccountID, устанавливаем его как выбранный счет и включаем режим одного счета
         if let accountID = initialAccountID {
@@ -335,7 +339,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             
         case .setCustomPeriod(let start, let end):
             state.period = .custom
-            state.customPeriod = (start, end)
+            state.customPeriod = normalizedCustomPeriod(start: start, end: end)
             updateChartData()
             
         case .selectDateOnChart(let date):
@@ -489,6 +493,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         transactionsByCardCache.removeAll()
         transactionsByCreditCache.removeAll()
         transactionsByInvestmentCache.removeAll()
+        dailyAuditSnapshotCache.removeAll()
     }
     
     func loadCashflowTransactions() {
@@ -608,6 +613,24 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
         
         return (startDate, endDate)
+    }
+
+    private func normalizedCustomPeriod(start: Date, end: Date, now: Date = Date()) -> (start: Date, end: Date) {
+        let calendar = Calendar.current
+        let startDate = min(start, end)
+        let endDate = max(start, end)
+
+        let normalizedStart = calendar.startOfDay(for: startDate)
+        let endOfSelectedDay = calendar.date(
+            bySettingHour: 23,
+            minute: 59,
+            second: 59,
+            of: endDate
+        ) ?? endDate
+        let normalizedEnd = min(endOfSelectedDay, now)
+
+        let safeStart = min(normalizedStart, normalizedEnd)
+        return (safeStart, normalizedEnd)
     }
     
     /// Обновить текущий баланс и дельту
@@ -1411,6 +1434,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
         
         var totalBalance: Double = 0.0
+        let daySnapshot = snapshotValues(for: date)
         
         for account in accounts {
             var accountBalance: Double = 0.0
@@ -1651,6 +1675,14 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     
                     accountBalance = investmentBalance
                 }
+            }
+
+            if let snapshotValue = snapshotValue(for: account, in: daySnapshot) {
+                accountBalance = snapshotValue.value
+                accountCurrency = normalizedAuditCurrency(
+                    snapshotValue.currencyCode,
+                    fallback: accountCurrency
+                )
             }
             
             if shouldInclude {
@@ -2044,6 +2076,33 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
 
         return false
+    }
+
+    private func snapshotValues(for date: Date) -> [String: FinanceBalanceSnapshotValue] {
+        let dayKey = FinanceBalanceDayKey(date: date).rawValue
+        if let cached = dailyAuditSnapshotCache[dayKey] {
+            return cached
+        }
+
+        let snapshot = auditStore.daySnapshot(for: FinanceBalanceDayKey(date: date))
+        dailyAuditSnapshotCache[dayKey] = snapshot
+        return snapshot
+    }
+
+    private func snapshotValue(
+        for account: FinanceAccount,
+        in daySnapshot: [String: FinanceBalanceSnapshotValue]
+    ) -> FinanceBalanceSnapshotValue? {
+        daySnapshot[accountKey(for: account)]
+    }
+
+    private func accountKey(for account: FinanceAccount) -> String {
+        "\(account.accountTypeRaw):\(account.accountID)"
+    }
+
+    private func normalizedAuditCurrency(_ code: String, fallback: String) -> String {
+        let normalized = code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        return normalized.isEmpty ? fallback : normalized
     }
     
     /// Получить список счетов для выбранных групп

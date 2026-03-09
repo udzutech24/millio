@@ -2171,7 +2171,7 @@ private struct FinanceDynamicsContentView: View {
                     Button {
                         let start = min(draftStartDate, draftEndDate)
                         let end = max(draftStartDate, draftEndDate)
-                        let clampedEnd = min(end, Calendar.current.startOfDay(for: Date()))
+                        let clampedEnd = min(end, Date())
                         let clampedStart = min(start, clampedEnd)
                         customStartDate = clampedStart
                         customEndDate = clampedEnd

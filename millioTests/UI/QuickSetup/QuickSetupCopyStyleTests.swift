@@ -27,6 +27,7 @@ final class QuickSetupCopyStyleTests: XCTestCase {
 
     func testAddDraftProductValidationErrorsDoNotEndWithPeriod() {
         let appState = AppState()
+        appState.selectedLanguage = .russian
         let viewModel = QuickSetupViewModel(appState: appState)
 
         viewModel.productTypeForCreation = .ticker
@@ -43,5 +44,24 @@ final class QuickSetupCopyStyleTests: XCTestCase {
         XCTAssertFalse(viewModel.addDraftProduct())
         XCTAssertEqual(viewModel.lastAddDraftError, "Укажи цену покупки")
         XCTAssertFalse((viewModel.lastAddDraftError ?? "").hasSuffix("."))
+    }
+
+    func testAddDraftProductValidationErrorsAreEnglishForEnglishLanguage() {
+        let appState = AppState()
+        appState.selectedLanguage = .english
+        let viewModel = QuickSetupViewModel(appState: appState)
+
+        viewModel.productTypeForCreation = .ticker
+        viewModel.productSymbolInput = "AAPL"
+        viewModel.productQuantityInput = ""
+        viewModel.productPurchasePriceInput = "100"
+        XCTAssertFalse(viewModel.addDraftProduct())
+        XCTAssertEqual(viewModel.lastAddDraftError, "Enter position quantity")
+
+        viewModel.productSymbolInput = "AAPL"
+        viewModel.productQuantityInput = "2"
+        viewModel.productPurchasePriceInput = ""
+        XCTAssertFalse(viewModel.addDraftProduct())
+        XCTAssertEqual(viewModel.lastAddDraftError, "Enter buy price")
     }
 }

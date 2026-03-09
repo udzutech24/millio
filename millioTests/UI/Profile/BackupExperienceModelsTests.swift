@@ -13,11 +13,11 @@ struct BackupExperienceModelsTests {
             hasPinnedVersions: false
         )
 
-        #expect(content.title == "Почти готово")
-        #expect(content.storageTitle == "Хранение в iCloud")
-        #expect(content.trustTitle == "Защита: кодовая фраза")
-        #expect(content.trustDetail.contains("Millio ее не хранит"))
-        #expect(content.readiness.contains(where: { $0.title == "Есть актуальная копия" && $0.isComplete == false }))
+        #expect(content.title == BackupL10n.tr("backup.dashboard.title.almost", fallback: "Almost done"))
+        #expect(content.storageTitle == BackupL10n.tr("backup.dashboard.storage.title.icloud", fallback: "Stored in iCloud"))
+        #expect(content.trustTitle == BackupL10n.tr("backup.dashboard.trust.title.passphrase", fallback: "Protection: passphrase"))
+        #expect(content.trustDetail.contains("Millio"))
+        #expect(content.readiness.contains(where: { $0.title == BackupL10n.tr("backup.readiness.has_recent.title", fallback: "Recent backup exists") && $0.isComplete == false }))
     }
 
     @Test("Dashboard copy explains local-only state when backup is disabled")
@@ -30,16 +30,16 @@ struct BackupExperienceModelsTests {
             hasPinnedVersions: false
         )
 
-        #expect(content.title == "Резервное копирование выключено")
-        #expect(content.subtitle == "Данные остаются на устройстве.")
-        #expect(content.storageTitle == "Только на устройстве")
+        #expect(content.title == BackupL10n.tr("backup.dashboard.title.off", fallback: "Backup is off"))
+        #expect(content.subtitle == BackupL10n.tr("backup.dashboard.subtitle.off", fallback: "Data stays on this device."))
+        #expect(content.storageTitle == BackupL10n.tr("backup.dashboard.storage.title.local", fallback: "On-device only"))
         #expect(content.readiness.first?.isComplete == false)
     }
 
     @Test("Restore empty state changes reason depending on iCloud availability")
     func testRestoreEmptyStateCopy() {
-        #expect(BackupExperiencePresenter.restoreEmptyStateTitle(isICloudAvailable: true) == "Резервная копия не найдена")
-        #expect(BackupExperiencePresenter.restoreEmptyStateTitle(isICloudAvailable: false) == "iCloud сейчас недоступен")
+        #expect(BackupExperiencePresenter.restoreEmptyStateTitle(isICloudAvailable: true) == BackupL10n.tr("backup.restore.empty.title.not_found", fallback: "Backup not found"))
+        #expect(BackupExperiencePresenter.restoreEmptyStateTitle(isICloudAvailable: false) == BackupL10n.tr("backup.restore.empty.title.icloud_unavailable", fallback: "iCloud is unavailable"))
     }
 
     @Test("Dashboard keeps compact checklist and short action-oriented copy")
@@ -55,6 +55,6 @@ struct BackupExperienceModelsTests {
         #expect(content.readiness.count == 5)
         #expect(content.title.count <= 24)
         #expect(content.subtitle.contains("iCloud"))
-        #expect(content.storageTitle == "Хранение недоступно")
+        #expect(content.storageTitle == BackupL10n.tr("backup.dashboard.storage.title.unavailable", fallback: "Storage unavailable"))
     }
 }

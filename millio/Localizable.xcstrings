@@ -69,9 +69,6 @@
     "%lld счетов" : {
 
     },
-    "%lld шт." : {
-
-    },
     "%lld." : {
 
     },
@@ -5362,6 +5359,159 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Удалить дату"
+          }
+        }
+      }
+    },
+    "finances.bank.alfa" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alfa-Bank"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Альфа-Банк"
+          }
+        }
+      }
+    },
+    "finances.bank.gazprombank" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gazprombank"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Газпромбанк"
+          }
+        }
+      }
+    },
+    "finances.bank.other" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Other"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Другой"
+          }
+        }
+      }
+    },
+    "finances.bank.otkritie" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Otkritie"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Открытие"
+          }
+        }
+      }
+    },
+    "finances.bank.raiffeisen" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Raiffeisenbank"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Райффайзенбанк"
+          }
+        }
+      }
+    },
+    "finances.bank.rosbank" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rosbank"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Росбанк"
+          }
+        }
+      }
+    },
+    "finances.bank.sberbank" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sberbank"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сбербанк"
+          }
+        }
+      }
+    },
+    "finances.bank.tinkoff" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tinkoff"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тинькофф"
+          }
+        }
+      }
+    },
+    "finances.bank.vtb" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VTB"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ВТБ"
           }
         }
       }
@@ -12352,6 +12502,108 @@
         }
       }
     },
+    "profile.debug.unlock.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Debug access"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доступ к Debug"
+          }
+        }
+      }
+    },
+    "profile.debug.unlock.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter password to show Debug in Profile."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Введите пароль, чтобы показать Debug в профиле."
+          }
+        }
+      }
+    },
+    "profile.debug.unlock.password.placeholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Password"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пароль"
+          }
+        }
+      }
+    },
+    "profile.debug.unlock.action.unlock" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unlock"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Открыть"
+          }
+        }
+      }
+    },
+    "profile.debug.unlock.action.cancel" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отмена"
+          }
+        }
+      }
+    },
+    "profile.debug.unlock.error" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wrong password"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Неверный пароль"
+          }
+        }
+      }
+    },
     "Quarter" : {
       "localizations" : {
         "en" : {
@@ -14161,7 +14413,6 @@
       }
     },
     "Без привязанной карты" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14212,9 +14463,6 @@
         }
       }
     },
-    "Ваш выбор" : {
-
-    },
     "Введите PIN-код" : {
       "comment" : "A prompt instructing the user to enter their PIN code.",
       "isCommentAutoGenerated" : true,
@@ -14233,19 +14481,7 @@
         }
       }
     },
-    "Введите и подтвердите" : {
-
-    },
-    "Введите одинаковую фразу в оба поля." : {
-
-    },
-    "Включите backup, задайте защиту, затем создавайте и восстанавливайте копии." : {
-
-    },
     "Восстанавливаем данные" : {
-
-    },
-    "Восстановить эту версию?" : {
 
     },
     "Восстановление" : {
@@ -14312,7 +14548,6 @@
       }
     },
     "Выберите карту" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14385,7 +14620,6 @@
       }
     },
     "Выбор категорий" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14402,7 +14636,6 @@
       }
     },
     "Выбранные категории" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14483,12 +14716,6 @@
         }
       }
     },
-    "Да, восстановить" : {
-
-    },
-    "Действия" : {
-
-    },
     "Диагностика Premium" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -14524,6 +14751,7 @@
       }
     },
     "Добавить" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14656,9 +14884,6 @@
         }
       }
     },
-    "Закреплено" : {
-
-    },
     "Избранная" : {
       "comment" : "A toggle switch label that indicates whether a card is marked as favorite.",
       "isCommentAutoGenerated" : true,
@@ -14678,6 +14903,7 @@
       }
     },
     "Избранные валюты" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14711,11 +14937,7 @@
         }
       }
     },
-    "Изменить" : {
-
-    },
     "Иконка" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14732,7 +14954,6 @@
       }
     },
     "Иконки" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14845,11 +15066,7 @@
         }
       }
     },
-    "Категории можно изменить позже" : {
-
-    },
     "Категория" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14865,13 +15082,7 @@
         }
       }
     },
-    "Кодовая фраза" : {
-
-    },
     "Кодовая фраза (если есть)" : {
-
-    },
-    "Кодовая фраза готова" : {
 
     },
     "Криптовалюты доступны в PRO" : {
@@ -14891,24 +15102,6 @@
         }
       }
     },
-    "Курсы" : {
-      "comment" : "The main title of the view.",
-      "isCommentAutoGenerated" : true,
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Rates"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Курсы"
-          }
-        }
-      }
-    },
     "Локальные данные будут полностью заменены." : {
 
     },
@@ -14916,6 +15109,7 @@
 
     },
     "Можно добавить позже" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -15028,6 +15222,7 @@
       }
     },
     "Не удалось применить настройку" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -15116,7 +15311,6 @@
     },
     "Новая категория" : {
       "comment" : "A title for a sheet used to create a new cashflow category.",
-      "extractionState" : "stale",
       "isCommentAutoGenerated" : true,
       "localizations" : {
         "en" : {
@@ -15186,6 +15380,7 @@
       }
     },
     "Ок" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -15203,6 +15398,7 @@
     },
     "Основная валюта" : {
       "comment" : "A section header in the Onboarding view",
+      "extractionState" : "stale",
       "isCommentAutoGenerated" : true,
       "localizations" : {
         "en" : {
@@ -15307,6 +15503,7 @@
       }
     },
     "Отлично! Настройка почти готова" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -15340,9 +15537,6 @@
         }
       }
     },
-    "Повторите кодовую фразу" : {
-
-    },
     "Подождите, база будет заменена выбранной копией." : {
 
     },
@@ -15356,9 +15550,6 @@
           }
         }
       }
-    },
-    "Позиция" : {
-
     },
     "Поиск иконки (например: car, cart, heart)" : {
       "localizations" : {
@@ -15412,9 +15603,6 @@
         }
       }
     },
-    "Пока нет" : {
-
-    },
     "Показать ещё" : {
       "comment" : "A button label that expands the list of cashback categories.",
       "isCommentAutoGenerated" : true,
@@ -15433,11 +15621,7 @@
         }
       }
     },
-    "предусмотр" : {
-
-    },
     "Предыдущий месяц" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -15500,6 +15684,7 @@
       }
     },
     "Пропустить" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -15639,13 +15824,7 @@
         }
       }
     },
-    "Резервная копия" : {
-
-    },
     "Рекомендуемые" : {
-
-    },
-    "Рост/убыток" : {
 
     },
     "Свернуть" : {
@@ -15715,7 +15894,6 @@
       }
     },
     "Следующий месяц" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -15749,12 +15927,6 @@
         }
       }
     },
-    "Сохраненные версии" : {
-
-    },
-    "Сохраненных версий пока нет." : {
-
-    },
     "Сохранить" : {
       "comment" : "A button that saves user settings.",
       "isCommentAutoGenerated" : true,
@@ -15772,9 +15944,6 @@
           }
         }
       }
-    },
-    "Способ защиты" : {
-
     },
     "Текущая сумма: %@ %@" : {
       "comment" : "A label showing the current accumulated amount towards the savings goal, along with the currency symbol",
@@ -15794,12 +15963,6 @@
           }
         }
       }
-    },
-    "Текущая цена" : {
-
-    },
-    "Текущие локальные данные будут полностью заменены выбранной копией." : {
-
     },
     "Тип иконки" : {
       "localizations" : {
@@ -15881,17 +16044,7 @@
         }
       }
     },
-    "Фраза будет сохранена и можно будет менять." : {
-
-    },
-    "Фраза подтверждена" : {
-
-    },
-    "Фраза сохранена. Можно изменить в любой момент." : {
-
-    },
     "Эмодзи" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
