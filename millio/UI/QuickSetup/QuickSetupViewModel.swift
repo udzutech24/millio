@@ -149,7 +149,7 @@ final class QuickSetupViewModel: ObservableObject {
     init(
         appState: AppState,
         systemContext: QuickSetupSystemContext = .current,
-        marketDataClient: MarketDataClientProtocol = TwelveDataClient.shared,
+        marketDataClient: MarketDataClientProtocol = MarketAPIClient.shared,
         defaults: UserDefaults = .standard
     ) {
         isProUser = appState.isPro
@@ -410,7 +410,7 @@ final class QuickSetupViewModel: ObservableObject {
                 purchaseUnitPrice: purchaseUnitPrice,
                 currentUnitPrice: productLatestUnitPrice,
                 priceUpdatedAt: productLastPriceUpdatedAt,
-                providerRaw: productLatestUnitPrice == nil ? nil : "twelvedata"
+                providerRaw: productLatestUnitPrice == nil ? nil : "market-backend"
             )
         } else {
             guard !trimmedName.isEmpty else {

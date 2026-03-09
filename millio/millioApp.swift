@@ -154,6 +154,7 @@ struct millioApp: App {
         )
         self.diContainer = container
         authManager.configure(service: container.authService)
+        await MarketAPIClient.shared.configure(authService: container.authService)
         self.financeStartupWarmupUseCase = FinanceStartupWarmupUseCase(
             modelContext: container.modelContainer.mainContext
         )

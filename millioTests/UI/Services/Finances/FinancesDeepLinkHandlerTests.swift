@@ -12,27 +12,21 @@ import Testing
 @Suite(.serialized)
 @MainActor
 struct FinancesDeepLinkHandlerTests {
-    private static let sharedContainer: ModelContainer = {
-        let schema = Schema([
-            Card.self,
-            Credit.self,
-            Investment.self,
-            FinanceGroup.self,
-            FinanceAccount.self,
-            CashflowTransaction.self
-        ])
-        let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        return try! ModelContainer(for: schema, configurations: [config])
-    }()
+    private static let schema = Schema([
+        Card.self,
+        Credit.self,
+        Investment.self,
+        FinanceGroup.self,
+        FinanceAccount.self,
+        CashflowTransaction.self
+    ])
+    private static var retainedContainers: [ModelContainer] = []
 
     private func createTestModelContext() throws -> ModelContext {
-        let context = Self.sharedContainer.mainContext
-        try context.deleteAll(FinanceAccount.self)
-        try context.deleteAll(FinanceGroup.self)
-        try context.deleteAll(Card.self)
-        try context.deleteAll(Credit.self)
-        try context.deleteAll(Investment.self)
-        try context.deleteAll(CashflowTransaction.self)
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: Self.schema, configurations: [config])
+        Self.retainedContainers.append(container)
+        let context = container.mainContext
         try context.save()
         return context
     }

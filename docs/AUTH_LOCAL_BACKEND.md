@@ -15,6 +15,7 @@
 - `AuthAPIClient` talks to NestJS endpoints.
 - `AuthService` owns token lifecycle, refresh, and logout.
 - `AuthManager` is the SwiftUI-facing state holder injected through the app environment.
+- `MarketAPIClient` reuses the same backend base URL and gets Bearer tokens from `AuthService`.
 - `refreshToken` is stored in Keychain only.
 - `accessToken` is kept in memory and renewed through `/auth/refresh`.
 

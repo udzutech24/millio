@@ -3,27 +3,24 @@ import Testing
 @testable import millio
 
 struct TwelveDataClientTests {
-    @Test("TwelveData search response декодируется из реального JSON")
+    @Test("Backend market search декодируется в совместимую символ-модель")
     func testSearchResponseDecoding() throws {
         let json = """
-        {
-          "data": [
-            {
-              "symbol": "AAPL",
-              "instrument_name": "Apple Inc",
-              "exchange": "NASDAQ",
-              "mic_code": "XNAS",
-              "instrument_type": "Common Stock",
-              "country": "United States",
-              "currency": "USD"
-            }
-          ],
-          "status": "ok"
-        }
+        [
+          {
+            "symbol": "AAPL",
+            "name": "Apple Inc",
+            "exchange": "NASDAQ",
+            "micCode": "XNAS",
+            "instrumentType": "Common Stock",
+            "country": "United States",
+            "currency": "USD"
+          }
+        ]
         """
 
-        let decoded = try JSONDecoder().decode(TwelveDataSearchResponse.self, from: Data(json.utf8))
-        let item = try #require(decoded.data?.first)
+        let decoded = try JSONDecoder().decode([MarketSearchResult].self, from: Data(json.utf8))
+        let item = try #require(decoded.first?.asSymbol)
 
         #expect(item.symbol == "AAPL")
         #expect(item.instrumentName == "Apple Inc")
@@ -34,38 +31,39 @@ struct TwelveDataClientTests {
         #expect(item.currency == "USD")
     }
 
-    @Test("TwelveData price response декодирует success и error")
-    func testPriceResponseDecoding() throws {
-        let successJSON = """
+    @Test("AssetSummary декодирует snapshot backend quote")
+    func testAssetSummaryDecoding() throws {
+        let json = """
         {
-          "price": "45123.55"
+          "symbol": "AAPL",
+          "name": "Apple Inc.",
+          "exchange": "NASDAQ",
+          "micCode": "XNAS",
+          "currency": "USD",
+          "price": 213.55,
+          "previousClose": 210.12,
+          "change": 3.43,
+          "percentChange": 1.63,
+          "isMarketOpen": true,
+          "updatedAt": "2026-03-08T12:00:00.000Z",
+          "isStale": false
         }
         """
 
-        let errorJSON = """
-        {
-          "status": "error",
-          "code": 400,
-          "message": "**symbol** parameter is required."
-        }
-        """
+        let decoded = try JSONDecoder().decode(AssetSummary.self, from: Data(json.utf8))
 
-        let success = try JSONDecoder().decode(TwelveDataPriceResponse.self, from: Data(successJSON.utf8))
-        let error = try JSONDecoder().decode(TwelveDataPriceResponse.self, from: Data(errorJSON.utf8))
-
-        #expect(success.price == "45123.55")
-        #expect(success.status == nil)
-
-        #expect(error.status == "error")
-        #expect(error.code == 400)
-        #expect(error.message == "**symbol** parameter is required.")
+        #expect(decoded.symbol == "AAPL")
+        #expect(decoded.price == 213.55)
+        #expect(decoded.updatedAt == "2026-03-08T12:00:00.000Z")
+        #expect(decoded.isStale == false)
     }
 
-    @Test("TwelveDataClient возвращает soft error при отсутствии API ключа")
-    func testMissingAPIKeyError() async {
-        let client = TwelveDataClient(apiKeyProvider: { nil })
+    @Test("MarketAPIClient требует configured auth service")
+    func testUnconfiguredClientFails() async {
+        let configuration = AuthConfiguration(baseURL: URL(string: "http://localhost:3000/api/v1")!)
+        let client = MarketAPIClient(configurationProvider: { configuration })
 
-        await #expect(throws: TwelveDataClientError.missingAPIKey) {
+        await #expect(throws: MarketAPIClientError.unconfigured) {
             _ = try await client.searchSymbols(query: "AAPL")
         }
     }

@@ -330,7 +330,7 @@ struct InvestmentViewModelTests {
                 quantity: 0.25,
                 unitPrice: 45000,
                 priceUpdatedAt: Date(),
-                providerRaw: "twelvedata"
+                providerRaw: "market-backend"
             ),
             createCashflowTransaction: false,
             uniqueID: investment.investmentUniqueID
@@ -391,7 +391,7 @@ struct InvestmentViewModelTests {
                 quantity: 0.25,
                 unitPrice: 50000,
                 priceUpdatedAt: Date(),
-                providerRaw: "twelvedata"
+                providerRaw: "market-backend"
             ),
             createCashflowTransaction: true,
             uniqueID: investment.investmentUniqueID

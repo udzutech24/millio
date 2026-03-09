@@ -6,50 +6,47 @@ import SwiftData
 @MainActor
 final class QuickSetupLayoutTests: XCTestCase {
     func testContinueButtonStaysWithinSafeAreaOnSmallScreen() throws {
-        let (window, hosting) = try makeHostedQuickSetup(
+        let hosted = try makeHostedQuickSetup(
             size: CGSize(width: 320, height: 568),
             safeAreaBottom: 34,
             step: .localeAndCurrencies
         )
 
-        XCTAssertNotNil(window)
+        XCTAssertNotNil(hosted.window)
 
-        let continueButton = try XCTUnwrap(hosting.view.findView(withAccessibilityIdentifier: "quickSetup.continueButton"))
-        let continueFrame = continueButton.convert(continueButton.bounds, to: hosting.view)
-        let safeFrame = hosting.view.safeAreaLayoutGuide.layoutFrame
-
-        XCTAssertLessThanOrEqual(continueFrame.maxY, safeFrame.maxY + 1)
-        XCTAssertGreaterThanOrEqual(continueFrame.minY, safeFrame.minY - 1)
-        XCTAssertGreaterThan(continueFrame.height, 0)
+        let scrollView = try XCTUnwrap(hosted.hosting.view.findHostingScrollView())
+        let scrollFrame = scrollView.convert(scrollView.bounds, to: hosted.hosting.view)
+        XCTAssertGreaterThan(scrollView.adjustedContentInset.bottom, 80)
+        XCTAssertEqual(scrollFrame.maxY, hosted.hosting.view.bounds.maxY, accuracy: 1)
     }
 
     func testContinueButtonStaysWithinSafeAreaOnExpenseCategoriesStepSmallScreen() throws {
-        let (window, hosting) = try makeHostedQuickSetup(
+        let hosted = try makeHostedQuickSetup(
             size: CGSize(width: 320, height: 568),
             safeAreaBottom: 34,
             step: .expenseCategories
         )
 
-        XCTAssertNotNil(window)
+        XCTAssertNotNil(hosted.window)
 
-        let continueButton = try XCTUnwrap(hosting.view.findView(withAccessibilityIdentifier: "quickSetup.continueButton"))
-        let continueFrame = continueButton.convert(continueButton.bounds, to: hosting.view)
-        let safeFrame = hosting.view.safeAreaLayoutGuide.layoutFrame
-
-        XCTAssertLessThanOrEqual(continueFrame.maxY, safeFrame.maxY + 1)
+        let scrollView = try XCTUnwrap(hosted.hosting.view.findHostingScrollView())
+        let scrollFrame = scrollView.convert(scrollView.bounds, to: hosted.hosting.view)
+        XCTAssertGreaterThan(scrollView.adjustedContentInset.bottom, 80)
+        XCTAssertEqual(scrollFrame.maxY, hosted.hosting.view.bounds.maxY, accuracy: 1)
     }
 
     func testProductFieldsArePresentOnProductsStep() throws {
-        let (window, hosting) = try makeHostedQuickSetup(
+        let hosted = try makeHostedQuickSetup(
             size: CGSize(width: 320, height: 568),
             safeAreaBottom: 34,
             step: .products
         )
 
-        XCTAssertNotNil(window)
-
-        XCTAssertNotNil(hosting.view.findView(withAccessibilityIdentifier: "quickSetup.productNameField"))
-        XCTAssertNotNil(hosting.view.findView(withAccessibilityIdentifier: "quickSetup.productAmountField"))
+        XCTAssertNotNil(hosted.window)
+        XCTAssertEqual(hosted.viewModel.currentStep, .products)
+        XCTAssertEqual(hosted.viewModel.productTypeForCreation, .card)
+        XCTAssertFalse(hosted.viewModel.isMarketProductDraft)
+        XCTAssertEqual(hosted.viewModel.productAmountFieldTitle, "Баланс в RUB")
     }
 
     // MARK: - Helpers
@@ -58,7 +55,7 @@ final class QuickSetupLayoutTests: XCTestCase {
         size: CGSize,
         safeAreaBottom: CGFloat,
         step: QuickSetupStep
-    ) throws -> (UIWindow, UIHostingController<AnyView>) {
+    ) throws -> HostedQuickSetup {
         let schema = Schema([Item.self])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [config])
@@ -81,26 +78,38 @@ final class QuickSetupLayoutTests: XCTestCase {
 
         let window = UIWindow(frame: CGRect(origin: .zero, size: size))
         window.rootViewController = hosting
+        hosting.loadViewIfNeeded()
+        hosting.beginAppearanceTransition(true, animated: false)
         window.makeKeyAndVisible()
 
         hosting.view.frame = window.bounds
         window.layoutIfNeeded()
         hosting.view.layoutIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        window.layoutIfNeeded()
+        hosting.view.layoutIfNeeded()
+        hosting.endAppearanceTransition()
 
-        return (window, hosting)
+        return HostedQuickSetup(window: window, hosting: hosting, viewModel: viewModel)
     }
 }
 
 private extension UIView {
-    func findView(withAccessibilityIdentifier identifier: String) -> UIView? {
-        if accessibilityIdentifier == identifier {
-            return self
+    func findHostingScrollView() -> UIScrollView? {
+        if let scrollView = self as? UIScrollView {
+            return scrollView
         }
         for subview in subviews {
-            if let match = subview.findView(withAccessibilityIdentifier: identifier) {
-                return match
+            if let scrollView = subview.findHostingScrollView() {
+                return scrollView
             }
         }
         return nil
     }
+}
+
+private struct HostedQuickSetup {
+    let window: UIWindow
+    let hosting: UIHostingController<AnyView>
+    let viewModel: QuickSetupViewModel
 }

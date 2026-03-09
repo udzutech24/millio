@@ -40,6 +40,12 @@ final class FinanceBalanceAuditViewModel: ObservableObject {
         reload()
     }
 
+    deinit {
+        MainActor.assumeIsolated {
+            reloadTask?.cancel()
+        }
+    }
+
     var filteredRows: [FinanceBalanceAuditRow] {
         let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return rows }

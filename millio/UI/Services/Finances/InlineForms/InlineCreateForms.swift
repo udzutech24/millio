@@ -1083,7 +1083,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
         name: Binding<String>,
         selectedCategory: Binding<InvestmentCategory>,
         onInvestmentDataChanged: @escaping ((name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)?) -> Void,
-        marketDataClient: MarketDataClientProtocol = TwelveDataClient.shared,
+        marketDataClient: MarketDataClientProtocol = MarketAPIClient.shared,
         @ViewBuilder groupSection: () -> GroupSection
     ) {
         self.viewModel = viewModel
@@ -1614,16 +1614,16 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
             }
             
             do {
-                let latestPrice = try await marketDataClient.latestPrice(
+                let latestQuote = try await marketDataClient.latestQuote(
                     symbol: marketSymbol,
                     forceRefresh: forceRefresh
                 )
                 
                 await MainActor.run {
-                    lastKnownUnitPrice = latestPrice
-                    lastKnownPriceUpdatedAt = latestPrice == nil ? nil : Date()
-                    marketProviderRaw = latestPrice == nil ? nil : "twelvedata"
-                    if let latestPrice, purchaseUnitPriceText.isEmpty {
+                    lastKnownUnitPrice = latestQuote?.price
+                    lastKnownPriceUpdatedAt = latestQuote?.updatedAtDate ?? (latestQuote == nil ? nil : Date())
+                    marketProviderRaw = latestQuote == nil ? nil : "market-backend"
+                    if let latestPrice = latestQuote?.price, purchaseUnitPriceText.isEmpty {
                         purchaseUnitPriceText = String(latestPrice)
                     }
                     if let positionTotal {
@@ -1644,7 +1644,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
         marketExchange = symbol.exchange
         marketCurrency = symbol.currency
         selectedCurrency = symbol.currency ?? selectedCurrency
-        marketProviderRaw = "twelvedata"
+        marketProviderRaw = "market-backend"
         
         // В MVP используем тикер как название актива для единообразия.
         name = symbol.symbol

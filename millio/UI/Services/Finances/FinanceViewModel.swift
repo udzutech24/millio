@@ -223,6 +223,7 @@ final class FinanceViewModel: ViewModelProtocol {
     private let defaults = UserDefaults.standard
     private var ungroupedGroupName: String { FinanceSystemGroups.ungroupedName }
     private var financeEventsSubscriptionID: UUID?
+    private var backgroundTasks: [UUID: Task<Void, Never>] = [:]
 
     /// Быстрые словари для поиска счетов по ID (O(1) вместо O(n))
     private var cardByID: [String: Card] = [:]
@@ -262,7 +263,7 @@ final class FinanceViewModel: ViewModelProtocol {
     init(
         modelContext: ModelContext,
         currencyService: CurrencyRateServiceProtocol? = nil,
-        marketDataClient: MarketDataClientProtocol = TwelveDataClient.shared,
+        marketDataClient: MarketDataClientProtocol = MarketAPIClient.shared,
         skipInitialLoad: Bool = false
     ) {
         self.modelContext = modelContext
@@ -279,14 +280,15 @@ final class FinanceViewModel: ViewModelProtocol {
             loadGroups()
             loadAccounts()
         }
-        Task {
-            await convertSavingsGoalAmountIfNeeded(from: storedGoalCurrency, to: state.displayCurrency)
+        scheduleBackgroundTask { viewModel in
+            await viewModel.convertSavingsGoalAmountIfNeeded(from: storedGoalCurrency, to: viewModel.state.displayCurrency)
         }
     }
 
     deinit {
-        if let subscriptionID = financeEventsSubscriptionID {
-            Task { @MainActor in
+        MainActor.assumeIsolated {
+            cancelBackgroundTasks()
+            if let subscriptionID = financeEventsSubscriptionID {
                 EventBus.shared.unsubscribe(subscriptionID)
             }
         }
@@ -372,10 +374,10 @@ final class FinanceViewModel: ViewModelProtocol {
             let newDisplayCurrency = normalizedCurrencyCode(currency)
             guard !newDisplayCurrency.isEmpty else { return }
             state.displayCurrency = newDisplayCurrency
-            Task {
-                await convertSavingsGoalAmountIfNeeded(from: oldDisplayCurrency, to: newDisplayCurrency)
-                await refreshRates()
-                await calculateTotalAmountAsync()
+            scheduleBackgroundTask { viewModel in
+                await viewModel.convertSavingsGoalAmountIfNeeded(from: oldDisplayCurrency, to: newDisplayCurrency)
+                await viewModel.refreshRates()
+                await viewModel.calculateTotalAmountAsync()
             }
 
         case .syncPrimaryCurrencyChange(let old, let new):
@@ -384,19 +386,19 @@ final class FinanceViewModel: ViewModelProtocol {
             guard !oldNormalized.isEmpty, !newNormalized.isEmpty else { return }
             guard normalizedCurrencyCode(state.displayCurrency) == oldNormalized else { return }
             state.displayCurrency = newNormalized
-            Task {
-                await convertSavingsGoalAmountIfNeeded(from: oldNormalized, to: newNormalized)
-                await refreshRates()
-                await calculateTotalAmountAsync()
+            scheduleBackgroundTask { viewModel in
+                await viewModel.convertSavingsGoalAmountIfNeeded(from: oldNormalized, to: newNormalized)
+                await viewModel.refreshRates()
+                await viewModel.calculateTotalAmountAsync()
             }
             
         case .setSecondaryDisplayCurrency(let currency):
             state.secondaryDisplayCurrency = currency?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .uppercased()
-            Task {
-                await refreshRates()
-                await calculateTotalAmountAsync()
+            scheduleBackgroundTask { viewModel in
+                await viewModel.refreshRates()
+                await viewModel.calculateTotalAmountAsync()
             }
             
         case .toggleGroupExpanded(let groupID):
@@ -516,6 +518,27 @@ final class FinanceViewModel: ViewModelProtocol {
         let normalizedPrimary = normalizedCurrencyCode(primary)
         let firstFavorite = SettingsManager.shared.favoriteCurrencyCodes.first(where: { $0 != normalizedPrimary })
         return firstFavorite ?? "USD"
+    }
+
+    private func scheduleBackgroundTask(_ operation: @escaping @MainActor (FinanceViewModel) async -> Void) {
+        let taskID = UUID()
+        backgroundTasks[taskID] = Task { [weak self] in
+            guard let self else { return }
+            await operation(self)
+            self.finishBackgroundTask(taskID)
+        }
+    }
+
+    private func finishBackgroundTask(_ taskID: UUID) {
+        backgroundTasks.removeValue(forKey: taskID)
+    }
+
+    private func cancelBackgroundTasks() {
+        let tasks = backgroundTasks.values
+        backgroundTasks.removeAll()
+        for task in tasks {
+            task.cancel()
+        }
     }
 
     private func normalizedCurrencyCode(_ currency: String) -> String {
@@ -669,20 +692,20 @@ final class FinanceViewModel: ViewModelProtocol {
                 self.handleCreditsUpdated()
             case FinanceEvent.cardsUpdated:
                 self.loadAccounts()
-                Task {
-                    await self.refreshGroupTotalsAndAmounts()
+                self.scheduleBackgroundTask { viewModel in
+                    await viewModel.refreshGroupTotalsAndAmounts()
                 }
             case FinanceEvent.auditSnapshotsUpdated:
                 self.loadGroups()
                 self.loadAccounts()
-                Task {
-                    await self.refreshGroupTotalsAndAmounts()
+                self.scheduleBackgroundTask { viewModel in
+                    await viewModel.refreshGroupTotalsAndAmounts()
                 }
             case BackupEvent.restoreCompleted:
                 self.loadGroups()
                 self.loadAccounts()
-                Task {
-                    await self.refreshGroupTotalsAndAmounts()
+                self.scheduleBackgroundTask { viewModel in
+                    await viewModel.refreshGroupTotalsAndAmounts()
                 }
             default:
                 break
@@ -693,8 +716,8 @@ final class FinanceViewModel: ViewModelProtocol {
     private func handleCreditsUpdated() {
         loadGroups()
         loadAccounts()
-        Task { @MainActor in
-            await self.refreshGroupTotalsAndAmounts()
+        scheduleBackgroundTask { viewModel in
+            await viewModel.refreshGroupTotalsAndAmounts()
         }
     }
 
@@ -828,8 +851,8 @@ final class FinanceViewModel: ViewModelProtocol {
     }
     
     private func calculateTotalAmount() {
-        Task {
-            await calculateTotalAmountAsync()
+        scheduleBackgroundTask { viewModel in
+            await viewModel.calculateTotalAmountAsync()
         }
     }
     
@@ -1106,6 +1129,18 @@ final class FinanceViewModel: ViewModelProtocol {
         (group.accounts ?? []).filter { getAccountInfo(account: $0) != nil }
     }
 
+    private func scheduleGroupTotalRefresh(for groupUniqueID: String, fallbackCurrency: String? = nil) {
+        scheduleBackgroundTask { viewModel in
+            guard let group = viewModel.state.groups.first(where: { $0.groupUniqueID == groupUniqueID }) else {
+                viewModel.state.groupTotals.removeValue(forKey: groupUniqueID)
+                return
+            }
+            let currency = fallbackCurrency ?? group.displayCurrency ?? viewModel.state.displayCurrency
+            let total = await viewModel.calculateGroupTotal(group: group, in: currency)
+            viewModel.state.groupTotals[groupUniqueID] = total
+        }
+    }
+
     func getInvestmentPositionSubtitle(account: FinanceAccount) -> String? {
         guard account.accountType == .investment,
               let investment = investmentByID[account.accountID],
@@ -1303,14 +1338,10 @@ final class FinanceViewModel: ViewModelProtocol {
             loadAccounts()
             calculateTotalAmount()
 
-            if let accountGroup = state.groups.first(where: { group in
+            if let accountGroupID = state.groups.first(where: { group in
                 group.accounts?.contains(where: { $0.id == account.id }) == true
-            }) {
-                Task {
-                    let currency = accountGroup.displayCurrency ?? state.displayCurrency
-                    let total = await calculateGroupTotal(group: accountGroup, in: currency)
-                    state.groupTotals[accountGroup.groupUniqueID] = total
-                }
+            })?.groupUniqueID {
+                scheduleGroupTotalRefresh(for: accountGroupID)
             }
 
             if didCreateTransaction {
@@ -1377,14 +1408,10 @@ final class FinanceViewModel: ViewModelProtocol {
             loadAccounts()
             calculateTotalAmount()
 
-            if let accountGroup = state.groups.first(where: { group in
+            if let accountGroupID = state.groups.first(where: { group in
                 group.accounts?.contains(where: { $0.id == account.id }) == true
-            }) {
-                Task {
-                    let currency = accountGroup.displayCurrency ?? state.displayCurrency
-                    let total = await calculateGroupTotal(group: accountGroup, in: currency)
-                    state.groupTotals[accountGroup.groupUniqueID] = total
-                }
+            })?.groupUniqueID {
+                scheduleGroupTotalRefresh(for: accountGroupID)
             }
 
             if didCreateTransaction {
@@ -1550,12 +1577,10 @@ final class FinanceViewModel: ViewModelProtocol {
             state.showGroupEditor = false
             state.editingGroup = nil
             // Пересчитываем сумму группы если изменилась валюта
-            let groupID = groupToUpdate.groupUniqueID
-            Task {
-                let currency = displayCurrency ?? state.displayCurrency
-                let total = await calculateGroupTotal(group: groupToUpdate, in: currency)
-                state.groupTotals[groupID] = total
-            }
+            scheduleGroupTotalRefresh(
+                for: groupToUpdate.groupUniqueID,
+                fallbackCurrency: displayCurrency ?? state.displayCurrency
+            )
         } catch {
             AppLogger.log(.error, category: "Finance", "Failed to save group: \(error.localizedDescription)")
         }
@@ -1596,11 +1621,7 @@ final class FinanceViewModel: ViewModelProtocol {
             calculateTotalAmount() // Пересчитываем общую сумму
             
             // Пересчитываем сумму группы, в которую был добавлен счет
-            Task {
-                let currency = targetGroup.displayCurrency ?? state.displayCurrency
-                let total = await calculateGroupTotal(group: targetGroup, in: currency)
-                state.groupTotals[targetGroup.groupUniqueID] = total
-            }
+            scheduleGroupTotalRefresh(for: targetGroup.groupUniqueID)
             
             state.showAddAccountSheet = false
             state.selectedGroupForAccount = nil
@@ -1626,12 +1647,8 @@ final class FinanceViewModel: ViewModelProtocol {
             calculateTotalAmount() // Пересчитываем общую сумму
             
             // Пересчитываем сумму группы, из которой был удален счет
-            if let group = accountGroup {
-                Task {
-                    let currency = group.displayCurrency ?? state.displayCurrency
-                    let total = await calculateGroupTotal(group: group, in: currency)
-                    state.groupTotals[group.groupUniqueID] = total
-                }
+            if let groupID = accountGroup?.groupUniqueID {
+                scheduleGroupTotalRefresh(for: groupID)
             }
             if kind == .card {
                 EventBus.shared.publish(FinanceEvent.cardsUpdated)
@@ -1657,12 +1674,8 @@ final class FinanceViewModel: ViewModelProtocol {
             updateUnattachedItems()
             calculateTotalAmount()
 
-            if let group = accountGroup {
-                Task {
-                    let currency = group.displayCurrency ?? state.displayCurrency
-                    let total = await calculateGroupTotal(group: group, in: currency)
-                    state.groupTotals[group.groupUniqueID] = total
-                }
+            if let groupID = accountGroup?.groupUniqueID {
+                scheduleGroupTotalRefresh(for: groupID)
             }
             if kind == .card {
                 EventBus.shared.publish(FinanceEvent.cardsUpdated)
@@ -1821,12 +1834,8 @@ final class FinanceViewModel: ViewModelProtocol {
                     calculateTotalAmount()
                     
                     // Пересчитываем сумму группы, к которой принадлежит счет
-                    if let group = accountGroup {
-                        Task {
-                            let currency = group.displayCurrency ?? state.displayCurrency
-                            let total = await calculateGroupTotal(group: group, in: currency)
-                            state.groupTotals[group.groupUniqueID] = total
-                        }
+                    if let groupID = accountGroup?.groupUniqueID {
+                        scheduleGroupTotalRefresh(for: groupID)
                     }
                     if didCreateTransaction {
                         EventBus.shared.publish(FinanceEvent.transactionsUpdated)
@@ -1880,12 +1889,8 @@ final class FinanceViewModel: ViewModelProtocol {
                     calculateTotalAmount()
                     
                     // Пересчитываем сумму группы, к которой принадлежит счет
-                    if let group = accountGroup {
-                        Task {
-                            let currency = group.displayCurrency ?? state.displayCurrency
-                            let total = await calculateGroupTotal(group: group, in: currency)
-                            state.groupTotals[group.groupUniqueID] = total
-                        }
+                    if let groupID = accountGroup?.groupUniqueID {
+                        scheduleGroupTotalRefresh(for: groupID)
                     }
                     if didCreateTransaction {
                         EventBus.shared.publish(FinanceEvent.transactionsUpdated)
@@ -1939,12 +1944,8 @@ final class FinanceViewModel: ViewModelProtocol {
                         loadAccounts()
                         calculateTotalAmount()
 
-                        if let group = accountGroup {
-                            Task {
-                                let currency = group.displayCurrency ?? state.displayCurrency
-                                let total = await calculateGroupTotal(group: group, in: currency)
-                                state.groupTotals[group.groupUniqueID] = total
-                            }
+                        if let groupID = accountGroup?.groupUniqueID {
+                            scheduleGroupTotalRefresh(for: groupID)
                         }
                         if didCreateTransaction {
                             EventBus.shared.publish(FinanceEvent.transactionsUpdated)
@@ -1981,12 +1982,8 @@ final class FinanceViewModel: ViewModelProtocol {
                         calculateTotalAmount()
                         
                         // Пересчитываем сумму группы, к которой принадлежит счет
-                        if let group = accountGroup {
-                            Task {
-                                let currency = group.displayCurrency ?? state.displayCurrency
-                                let total = await calculateGroupTotal(group: group, in: currency)
-                                state.groupTotals[group.groupUniqueID] = total
-                            }
+                        if let groupID = accountGroup?.groupUniqueID {
+                            scheduleGroupTotalRefresh(for: groupID)
                         }
                         if didCreateTransaction {
                             EventBus.shared.publish(FinanceEvent.transactionsUpdated)
@@ -2045,12 +2042,8 @@ final class FinanceViewModel: ViewModelProtocol {
             loadAccounts()
             calculateTotalAmount()
 
-            if let group = accountGroup {
-                Task {
-                    let currency = group.displayCurrency ?? state.displayCurrency
-                    let total = await calculateGroupTotal(group: group, in: currency)
-                    state.groupTotals[group.groupUniqueID] = total
-                }
+            if let groupID = accountGroup?.groupUniqueID {
+                scheduleGroupTotalRefresh(for: groupID)
             }
             if didCreateTransaction {
                 EventBus.shared.publish(FinanceEvent.transactionsUpdated)
