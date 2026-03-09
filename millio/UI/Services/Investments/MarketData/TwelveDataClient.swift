@@ -9,9 +9,30 @@ extension MarketDataClientProtocol {
     func searchSymbols(query: String) async throws -> [TwelveDataSymbol] {
         try await searchSymbols(query: query, outputSize: 20)
     }
+
+    func latestQuote(symbol: String, forceRefresh: Bool) async throws -> AssetSummary? {
+        guard let price = try await latestPrice(symbol: symbol, forceRefresh: forceRefresh) else {
+            return nil
+        }
+
+        return AssetSummary(
+            symbol: symbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased(),
+            name: nil,
+            exchange: nil,
+            micCode: nil,
+            currency: nil,
+            price: price,
+            previousClose: nil,
+            change: nil,
+            percentChange: nil,
+            isMarketOpen: nil,
+            updatedAt: MarketAPIClient.iso8601Formatter.string(from: Date()),
+            isStale: false
+        )
+    }
 }
 
-struct TwelveDataSymbol: Decodable, Identifiable, Equatable, Sendable {
+struct TwelveDataSymbol: Codable, Identifiable, Equatable, Sendable {
     let symbol: String
     let instrumentName: String?
     let exchange: String?
@@ -33,49 +54,209 @@ struct TwelveDataSymbol: Decodable, Identifiable, Equatable, Sendable {
         return trimmed.isEmpty ? symbol : trimmed
     }
 
-    enum CodingKeys: String, CodingKey {
-        case symbol
-        case instrumentName = "instrument_name"
-        case exchange
-        case micCode = "mic_code"
-        case instrumentType = "instrument_type"
-        case country
-        case currency
+    init(
+        symbol: String,
+        instrumentName: String?,
+        exchange: String?,
+        micCode: String?,
+        instrumentType: String?,
+        country: String?,
+        currency: String?
+    ) {
+        self.symbol = symbol
+        self.instrumentName = instrumentName
+        self.exchange = exchange
+        self.micCode = micCode
+        self.instrumentType = instrumentType
+        self.country = country
+        self.currency = currency
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: DynamicCodingKey.self)
+        symbol = try container.decode(String.self, forKey: DynamicCodingKey("symbol"))
+        instrumentName = try container.decodeIfPresent(String.self, forKeys: ["name", "instrument_name"])
+        exchange = try container.decodeIfPresent(String.self, forKey: DynamicCodingKey("exchange"))
+        micCode = try container.decodeIfPresent(String.self, forKeys: ["micCode", "mic_code"])
+        instrumentType = try container.decodeIfPresent(String.self, forKeys: ["instrumentType", "instrument_type"])
+        country = try container.decodeIfPresent(String.self, forKey: DynamicCodingKey("country"))
+        currency = try container.decodeIfPresent(String.self, forKey: DynamicCodingKey("currency"))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: DynamicCodingKey.self)
+        try container.encode(symbol, forKey: DynamicCodingKey("symbol"))
+        try container.encodeIfPresent(instrumentName, forKey: DynamicCodingKey("name"))
+        try container.encodeIfPresent(exchange, forKey: DynamicCodingKey("exchange"))
+        try container.encodeIfPresent(micCode, forKey: DynamicCodingKey("micCode"))
+        try container.encodeIfPresent(instrumentType, forKey: DynamicCodingKey("instrumentType"))
+        try container.encodeIfPresent(country, forKey: DynamicCodingKey("country"))
+        try container.encodeIfPresent(currency, forKey: DynamicCodingKey("currency"))
     }
 }
 
-struct TwelveDataSearchResponse: Decodable, Sendable {
-    let data: [TwelveDataSymbol]?
-    let status: String?
-    let code: Int?
-    let message: String?
+struct MarketSearchResult: Codable, Equatable, Sendable {
+    let symbol: String
+    let name: String?
+    let exchange: String?
+    let micCode: String?
+    let currency: String?
+    let country: String?
+    let instrumentType: String?
+
+    var asSymbol: TwelveDataSymbol {
+        TwelveDataSymbol(
+            symbol: symbol,
+            instrumentName: name,
+            exchange: exchange,
+            micCode: micCode,
+            instrumentType: instrumentType,
+            country: country,
+            currency: currency
+        )
+    }
 }
 
-struct TwelveDataPriceResponse: Decodable, Sendable {
-    let price: String?
-    let status: String?
-    let code: Int?
-    let message: String?
+struct AssetSummary: Codable, Equatable, Sendable {
+    let symbol: String
+    let name: String?
+    let exchange: String?
+    let micCode: String?
+    let currency: String?
+    let price: Double?
+    let previousClose: Double?
+    let change: Double?
+    let percentChange: Double?
+    let isMarketOpen: Bool?
+    let updatedAt: String
+    let isStale: Bool
+
+    var updatedAtDate: Date? {
+        MarketAPIClient.date(from: updatedAt)
+    }
 }
 
-enum TwelveDataClientError: LocalizedError, Equatable, Sendable {
-    case missingAPIKey
-    case apiError(code: Int?, message: String)
-    case invalidResponse
+struct ChartPoint: Codable, Equatable, Sendable {
+    let datetime: String
+    let open: Double?
+    let high: Double?
+    let low: Double?
+    let close: Double?
+    let volume: Double?
+}
+
+struct ChartResponse: Codable, Equatable, Sendable {
+    let symbol: String
+    let interval: String
+    let currency: String?
+    let points: [ChartPoint]
+    let updatedAt: String
+    let isStale: Bool
+
+    var updatedAtDate: Date? {
+        MarketAPIClient.date(from: updatedAt)
+    }
+}
+
+struct AssetDetailsSnapshot: Codable, Equatable, Sendable {
+    let symbol: String
+    let selectedInterval: String
+    let summary: AssetSummary
+    let chart: ChartResponse
+    let hasStaleData: Bool
+    let updatedAt: String
+}
+
+struct WatchlistResponse: Codable, Equatable, Sendable {
+    let items: [AssetSummary]
+}
+
+struct WatchlistItemMetadata: Codable, Equatable, Sendable {
+    let id: String
+    let symbol: String
+    let createdAt: String
+}
+
+struct WatchlistSnapshotItem: Codable, Equatable, Sendable {
+    let watchlistItem: WatchlistItemMetadata
+    let market: AssetSummary
+}
+
+struct WatchlistSnapshot: Codable, Equatable, Sendable {
+    let items: [WatchlistSnapshotItem]
+    let total: Int
+    let isEmpty: Bool
+    let hasStaleItems: Bool
+    let updatedAt: String
+}
+
+struct WatchlistMutationResponse: Codable, Equatable, Sendable {
+    let success: Bool
+    let item: WatchlistItemMetadata?
+}
+
+struct AddToWatchlistRequest: Encodable, Sendable {
+    let symbol: String
+}
+
+enum MarketAPIClientError: LocalizedError, Equatable, Sendable {
+    case invalidConfiguration
+    case unconfigured
+    case unauthorized
+    case backend(statusCode: Int, message: String)
+    case transport(String)
+    case decodingFailed
 
     var errorDescription: String? {
         switch self {
-        case .missingAPIKey:
-            return String(localized: "finances.market.error_missing_api_key")
-        case .apiError(_, let message):
+        case .invalidConfiguration:
+            return "AUTH_BASE_URL is missing or invalid."
+        case .unconfigured:
+            return "Market API client is not configured yet."
+        case .unauthorized:
+            return "Session expired. Please sign in again."
+        case .backend(_, let message):
             return message
-        case .invalidResponse:
-            return String(localized: "finances.market.error_invalid_response")
+        case .transport(let message):
+            return message
+        case .decodingFailed:
+            return String(localized: "finances.market.error_generic")
         }
     }
 }
 
-actor TwelveDataCacheStore {
+private struct DynamicCodingKey: CodingKey {
+    let stringValue: String
+    let intValue: Int?
+
+    init(_ stringValue: String) {
+        self.stringValue = stringValue
+        intValue = nil
+    }
+
+    init?(stringValue: String) {
+        self.init(stringValue)
+    }
+
+    init?(intValue: Int) {
+        stringValue = String(intValue)
+        self.intValue = intValue
+    }
+}
+
+private extension KeyedDecodingContainer where Key == DynamicCodingKey {
+    func decodeIfPresent<T: Decodable>(_ type: T.Type, forKeys keys: [String]) throws -> T? {
+        for rawKey in keys {
+            let key = DynamicCodingKey(rawKey)
+            if contains(key) {
+                return try decodeIfPresent(type, forKey: key)
+            }
+        }
+        return nil
+    }
+}
+
+actor MarketQuoteCacheStore {
     private struct CacheEntry<Value: Sendable>: Sendable {
         let createdAt: Date
         let value: Value
@@ -83,13 +264,13 @@ actor TwelveDataCacheStore {
 
     private let ttl: TimeInterval
     private var searchCache: [String: CacheEntry<[TwelveDataSymbol]>] = [:]
-    private var priceCache: [String: CacheEntry<Double>] = [:]
+    private var quoteCache: [String: CacheEntry<AssetSummary>] = [:]
 
     init(ttl: TimeInterval) {
         self.ttl = ttl
     }
 
-    func getSearch(for key: String) -> [TwelveDataSymbol]? {
+    func search(for key: String) -> [TwelveDataSymbol]? {
         guard let entry = searchCache[key], Date().timeIntervalSince(entry.createdAt) < ttl else {
             searchCache[key] = nil
             return nil
@@ -101,40 +282,96 @@ actor TwelveDataCacheStore {
         searchCache[key] = CacheEntry(createdAt: Date(), value: value)
     }
 
-    func getPrice(for key: String) -> Double? {
-        guard let entry = priceCache[key], Date().timeIntervalSince(entry.createdAt) < ttl else {
-            priceCache[key] = nil
+    func quote(for key: String) -> AssetSummary? {
+        guard let entry = quoteCache[key], Date().timeIntervalSince(entry.createdAt) < ttl else {
+            quoteCache[key] = nil
             return nil
         }
         return entry.value
     }
 
-    func setPrice(_ value: Double, for key: String) {
-        priceCache[key] = CacheEntry(createdAt: Date(), value: value)
+    func setQuote(_ value: AssetSummary, for key: String) {
+        quoteCache[key] = CacheEntry(createdAt: Date(), value: value)
     }
 }
 
-final class TwelveDataClient: MarketDataClientProtocol {
-    static let shared: MarketDataClientProtocol = TwelveDataClient()
+private actor MarketAPIAuthContext {
+    private var authService: (any AuthServiceProtocol)?
+
+    func configure(authService: any AuthServiceProtocol) {
+        self.authService = authService
+    }
+
+    func resolve() -> (any AuthServiceProtocol)? {
+        authService
+    }
+}
+
+final class MarketAPIClient: MarketDataClientProtocol, @unchecked Sendable {
+    static let shared = MarketAPIClient()
+
+    fileprivate static let iso8601Formatter = ISO8601DateFormatter()
 
     private struct ErrorEnvelope: Decodable {
-        let status: String?
-        let code: Int?
-        let message: String?
+        let message: MessageValue?
+        let error: String?
+
+        enum MessageValue: Decodable {
+            case string(String)
+            case array([String])
+
+            init(from decoder: Decoder) throws {
+                let container = try decoder.singleValueContainer()
+                if let value = try? container.decode(String.self) {
+                    self = .string(value)
+                    return
+                }
+                if let value = try? container.decode([String].self) {
+                    self = .array(value)
+                    return
+                }
+                throw DecodingError.typeMismatch(
+                    MessageValue.self,
+                    DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Unsupported market error format")
+                )
+            }
+        }
+
+        var resolvedMessage: String {
+            switch message {
+            case .string(let value):
+                return value
+            case .array(let values):
+                return values.joined(separator: ", ")
+            case nil:
+                return error ?? String(localized: "finances.market.error_generic")
+            }
+        }
     }
 
     private let session: URLSession
-    private let apiKeyProvider: @Sendable () -> String?
-    private let cacheStore: TwelveDataCacheStore
+    private let configurationProvider: @Sendable () throws -> AuthConfiguration
+    private let cacheStore: MarketQuoteCacheStore
+    private let authContext = MarketAPIAuthContext()
+    private let decoder: JSONDecoder
+    private let encoder: JSONEncoder
 
     init(
         session: URLSession = .shared,
-        cacheTTL: TimeInterval = 3600,
-        apiKeyProvider: @escaping @Sendable () -> String? = TwelveDataClient.loadAPIKeyFromInfoPlist
+        cacheTTL: TimeInterval = 30,
+        configurationProvider: @escaping @Sendable () throws -> AuthConfiguration = { try AuthConfiguration.live() }
     ) {
         self.session = session
-        self.apiKeyProvider = apiKeyProvider
-        self.cacheStore = TwelveDataCacheStore(ttl: cacheTTL)
+        self.configurationProvider = configurationProvider
+        self.cacheStore = MarketQuoteCacheStore(ttl: cacheTTL)
+        decoder = JSONDecoder()
+        encoder = JSONEncoder()
+
+        Self.iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    }
+
+    func configure(authService: any AuthServiceProtocol) async {
+        await authContext.configure(authService: authService)
     }
 
     func searchSymbols(query: String, outputSize: Int = 20) async throws -> [TwelveDataSymbol] {
@@ -146,139 +383,258 @@ final class TwelveDataClient: MarketDataClientProtocol {
             return []
         }
 
-        if let cached = await cacheStore.getSearch(for: normalizedQuery) {
-            return cached
+        if let cached = await cacheStore.search(for: normalizedQuery) {
+            return Array(cached.prefix(max(1, outputSize)))
         }
 
-        let apiKey = try resolvedAPIKey()
+        let results: [MarketSearchResult] = try await authorizedRequest(
+            path: "market/search",
+            method: "GET",
+            queryItems: [URLQueryItem(name: "q", value: normalizedQuery)]
+        )
 
-        var components = URLComponents(string: "https://api.twelvedata.com/symbol_search")
-        components?.queryItems = [
-            URLQueryItem(name: "symbol", value: normalizedQuery),
-            URLQueryItem(name: "outputsize", value: String(max(1, outputSize))),
-            URLQueryItem(name: "apikey", value: apiKey)
-        ]
-
-        guard let url = components?.url else {
-            throw URLError(.badURL)
-        }
-
-        let (data, response) = try await session.data(from: url)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw TwelveDataClientError.invalidResponse
-        }
-
-        if !(200..<300).contains(httpResponse.statusCode) {
-            throw parseAPIError(from: data) ?? URLError(.badServerResponse)
-        }
-
-        let decoded = try JSONDecoder().decode(TwelveDataSearchResponse.self, from: data)
-
-        if let status = decoded.status?.lowercased(),
-           status == "error" {
-            throw TwelveDataClientError.apiError(
-                code: decoded.code,
-                message: decoded.message ?? String(localized: "finances.market.error_generic")
-            )
-        }
-
-        let results = decoded.data ?? []
-        await cacheStore.setSearch(results, for: normalizedQuery)
-        return results
+        let mapped = results.map(\.asSymbol)
+        await cacheStore.setSearch(mapped, for: normalizedQuery)
+        return Array(mapped.prefix(max(1, outputSize)))
     }
 
     func latestPrice(symbol: String, forceRefresh: Bool = false) async throws -> Double? {
-        let normalizedSymbol = symbol
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .uppercased()
+        try await latestQuote(symbol: symbol, forceRefresh: forceRefresh)?.price
+    }
 
+    func latestQuote(symbol: String, forceRefresh: Bool = false) async throws -> AssetSummary? {
+        let normalizedSymbol = normalizedSymbol(symbol)
         guard !normalizedSymbol.isEmpty else {
             return nil
         }
 
-        if !forceRefresh,
-           let cachedPrice = await cacheStore.getPrice(for: normalizedSymbol) {
-            return cachedPrice
+        if !forceRefresh, let cached = await cacheStore.quote(for: normalizedSymbol) {
+            return cached
         }
 
-        let apiKey = try resolvedAPIKey()
-
-        var components = URLComponents(string: "https://api.twelvedata.com/price")
-        components?.queryItems = [
-            URLQueryItem(name: "symbol", value: normalizedSymbol),
-            URLQueryItem(name: "apikey", value: apiKey)
-        ]
-
-        guard let url = components?.url else {
-            throw URLError(.badURL)
+        let quotes = try await fetchQuotes(symbols: [normalizedSymbol])
+        let quote = quotes.first
+        if let quote {
+            await cacheStore.setQuote(quote, for: normalizedSymbol)
         }
-
-        let (data, response) = try await session.data(from: url)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw TwelveDataClientError.invalidResponse
-        }
-
-        if !(200..<300).contains(httpResponse.statusCode) {
-            throw parseAPIError(from: data) ?? URLError(.badServerResponse)
-        }
-
-        let decoded = try JSONDecoder().decode(TwelveDataPriceResponse.self, from: data)
-
-        // TwelveData может вернуть ошибку JSON при HTTP 200.
-        if let status = decoded.status?.lowercased(),
-           status == "error" {
-            throw TwelveDataClientError.apiError(
-                code: decoded.code,
-                message: decoded.message ?? String(localized: "finances.market.error_generic")
-            )
-        }
-
-        guard let priceString = decoded.price,
-              let price = Double(priceString) else {
-            return nil
-        }
-
-        await cacheStore.setPrice(price, for: normalizedSymbol)
-        return price
+        return quote
     }
 
-    private func resolvedAPIKey() throws -> String {
-        guard let apiKey = apiKeyProvider() else {
-            throw TwelveDataClientError.missingAPIKey
-        }
-        return apiKey
-    }
+    func fetchQuotes(symbols: [String]) async throws -> [AssetSummary] {
+        let normalizedSymbols = symbols
+            .map(normalizedSymbol)
+            .filter { !$0.isEmpty }
 
-    private func parseAPIError(from data: Data) -> TwelveDataClientError? {
-        guard let envelope = try? JSONDecoder().decode(ErrorEnvelope.self, from: data) else {
-            return nil
+        guard !normalizedSymbols.isEmpty else {
+            return []
         }
 
-        let status = envelope.status?.lowercased() ?? ""
-        guard status == "error" || envelope.message != nil else {
-            return nil
-        }
-
-        return TwelveDataClientError.apiError(
-            code: envelope.code,
-            message: envelope.message ?? String(localized: "finances.market.error_generic")
+        return try await authorizedRequest(
+            path: "market/quotes",
+            method: "GET",
+            queryItems: [URLQueryItem(name: "symbols", value: normalizedSymbols.joined(separator: ","))]
         )
     }
 
-    private static func loadAPIKeyFromInfoPlist() -> String? {
-        guard let rawKey = Bundle.main.object(forInfoDictionaryKey: "TWELVE_DATA_API_KEY") as? String else {
-            return nil
+    func assetSummary(symbol: String) async throws -> AssetSummary {
+        try await authorizedRequest(
+            path: "market/assets/\(encodedPathComponent(normalizedSymbol(symbol)))/summary",
+            method: "GET"
+        )
+    }
+
+    func assetChart(symbol: String, interval: String = "1day", outputSize: Int = 30) async throws -> ChartResponse {
+        try await authorizedRequest(
+            path: "market/assets/\(encodedPathComponent(normalizedSymbol(symbol)))/chart",
+            method: "GET",
+            queryItems: [
+                URLQueryItem(name: "interval", value: interval),
+                URLQueryItem(name: "outputsize", value: String(outputSize))
+            ]
+        )
+    }
+
+    func assetDetails(symbol: String, interval: String = "1day") async throws -> AssetDetailsSnapshot {
+        try await authorizedRequest(
+            path: "market/assets/\(encodedPathComponent(normalizedSymbol(symbol)))/details",
+            method: "GET",
+            queryItems: [URLQueryItem(name: "interval", value: interval)]
+        )
+    }
+
+    func watchlist() async throws -> WatchlistResponse {
+        try await authorizedRequest(path: "market/watchlist", method: "GET")
+    }
+
+    func watchlistSnapshot() async throws -> WatchlistSnapshot {
+        try await authorizedRequest(path: "market/watchlist/snapshot", method: "GET")
+    }
+
+    func addToWatchlist(symbol: String) async throws -> WatchlistMutationResponse {
+        try await authorizedRequest(
+            path: "market/watchlist",
+            method: "POST",
+            body: AddToWatchlistRequest(symbol: normalizedSymbol(symbol))
+        )
+    }
+
+    func removeFromWatchlist(symbol: String) async throws -> WatchlistMutationResponse {
+        try await authorizedRequest(
+            path: "market/watchlist/\(encodedPathComponent(normalizedSymbol(symbol)))",
+            method: "DELETE"
+        )
+    }
+
+    fileprivate static func date(from value: String) -> Date? {
+        iso8601Formatter.date(from: value) ?? {
+            let fallback = ISO8601DateFormatter()
+            fallback.formatOptions = [.withInternetDateTime]
+            return fallback.date(from: value)
+        }()
+    }
+
+    private func authorizedRequest<Response: Decodable, Body: Encodable>(
+        path: String,
+        method: String,
+        queryItems: [URLQueryItem] = [],
+        body: Body? = nil
+    ) async throws -> Response {
+        let authService = try await resolvedAuthService()
+        do {
+            let accessToken = try await authService.accessToken(forceRefresh: false)
+            return try await request(
+                path: path,
+                method: method,
+                accessToken: accessToken,
+                queryItems: queryItems,
+                body: body
+            )
+        } catch MarketAPIClientError.unauthorized {
+            let refreshedToken = try await authService.accessToken(forceRefresh: true)
+            return try await request(
+                path: path,
+                method: method,
+                accessToken: refreshedToken,
+                queryItems: queryItems,
+                body: body
+            )
+        }
+    }
+
+    private func authorizedRequest<Response: Decodable>(
+        path: String,
+        method: String,
+        queryItems: [URLQueryItem] = []
+    ) async throws -> Response {
+        try await authorizedRequest(
+            path: path,
+            method: method,
+            queryItems: queryItems,
+            body: Optional<String>.none
+        )
+    }
+
+    private func request<Response: Decodable, Body: Encodable>(
+        path: String,
+        method: String,
+        accessToken: String,
+        queryItems: [URLQueryItem],
+        body: Body?
+    ) async throws -> Response {
+        let configuration: AuthConfiguration
+        do {
+            configuration = try configurationProvider()
+        } catch {
+            throw MarketAPIClientError.invalidConfiguration
         }
 
-        let trimmed = rawKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty,
-              !trimmed.hasPrefix("$("),
-              !trimmed.hasSuffix(")") else {
-            return nil
+        guard var components = URLComponents(url: configuration.baseURL, resolvingAgainstBaseURL: false) else {
+            throw MarketAPIClientError.invalidConfiguration
         }
 
-        return trimmed
+        let normalizedPath = path.hasPrefix("/") ? path : "/" + path
+        components.path += normalizedPath
+        if !queryItems.isEmpty {
+            components.queryItems = queryItems
+        }
+
+        guard let url = components.url else {
+            throw MarketAPIClientError.invalidConfiguration
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+
+        if let body {
+            request.httpBody = try encoder.encode(body)
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
+
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw MarketAPIClientError.transport("Invalid market response.")
+            }
+
+            if httpResponse.statusCode == 401 {
+                throw MarketAPIClientError.unauthorized
+            }
+
+            guard (200..<300).contains(httpResponse.statusCode) else {
+                if let envelope = try? decoder.decode(ErrorEnvelope.self, from: data) {
+                    throw MarketAPIClientError.backend(
+                        statusCode: httpResponse.statusCode,
+                        message: envelope.resolvedMessage
+                    )
+                }
+                throw MarketAPIClientError.backend(
+                    statusCode: httpResponse.statusCode,
+                    message: HTTPURLResponse.localizedString(forStatusCode: httpResponse.statusCode)
+                )
+            }
+
+            do {
+                return try decoder.decode(Response.self, from: data)
+            } catch {
+                throw MarketAPIClientError.decodingFailed
+            }
+        } catch let error as MarketAPIClientError {
+            throw error
+        } catch {
+            throw MarketAPIClientError.transport(error.localizedDescription)
+        }
+    }
+
+    private func request<Response: Decodable>(
+        path: String,
+        method: String,
+        accessToken: String,
+        queryItems: [URLQueryItem]
+    ) async throws -> Response {
+        try await request(
+            path: path,
+            method: method,
+            accessToken: accessToken,
+            queryItems: queryItems,
+            body: Optional<String>.none
+        )
+    }
+
+    private func resolvedAuthService() async throws -> any AuthServiceProtocol {
+        guard let authService = await authContext.resolve() else {
+            throw MarketAPIClientError.unconfigured
+        }
+        return authService
+    }
+
+    private func normalizedSymbol(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+    }
+
+    private func encodedPathComponent(_ value: String) -> String {
+        let allowed = CharacterSet.urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
     }
 }

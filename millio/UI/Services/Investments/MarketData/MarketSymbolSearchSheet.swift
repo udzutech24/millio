@@ -106,7 +106,7 @@ struct MarketSymbolSearchSheet: View {
 
     init(
         filter: MarketSymbolFilter,
-        client: MarketDataClientProtocol = TwelveDataClient.shared,
+        client: MarketDataClientProtocol = MarketAPIClient.shared,
         onSelect: @escaping (TwelveDataSymbol) -> Void
     ) {
         self.filter = filter

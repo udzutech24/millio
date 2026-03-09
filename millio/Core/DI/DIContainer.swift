@@ -35,6 +35,7 @@ final class DIContainer {
         appState: AppState,
         modelContainer: ModelContainer
     ) -> DIContainer {
+        let isUnitTesting = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
         let modelContext = modelContainer.mainContext
         do {
             try DataIntegrityCleaner.runIfNeeded(modelContext: modelContext)
@@ -46,13 +47,18 @@ final class DIContainer {
             modelContainer: modelContainer
         )
         
-        let enabledBackupManager: BackupManagerProtocol = BackupManager(dataRepository: dataRepository)
         let disabledBackupManager: BackupManagerProtocol = MockBackupManager()
-        let backupManager: BackupManagerProtocol = SwitchingBackupManager(
-            appState: appState,
-            enabled: enabledBackupManager,
-            disabled: disabledBackupManager
-        )
+        let backupManager: BackupManagerProtocol
+        if isUnitTesting {
+            backupManager = disabledBackupManager
+        } else {
+            let enabledBackupManager: BackupManagerProtocol = BackupManager(dataRepository: dataRepository)
+            backupManager = SwitchingBackupManager(
+                appState: appState,
+                enabled: enabledBackupManager,
+                disabled: disabledBackupManager
+            )
+        }
         let authService: any AuthServiceProtocol
         do {
             let authConfiguration = try AuthConfiguration.live()

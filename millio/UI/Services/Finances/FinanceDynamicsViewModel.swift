@@ -203,6 +203,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     let defaults = UserDefaults.standard
     private var eventSubscriptionID: UUID?
     private var selectionUpdateTask: Task<Void, Never>?
+    private var backgroundTasks: [UUID: Task<Void, Never>] = [:]
     
     // Кэши для оптимизации производительности
     var cardsCache: [String: Card] = [:]
@@ -281,11 +282,33 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     }
     
     deinit {
-        selectionUpdateTask?.cancel()
-        if let id = eventSubscriptionID {
-            Task { @MainActor in
+        MainActor.assumeIsolated {
+            selectionUpdateTask?.cancel()
+            cancelBackgroundTasks()
+            if let id = eventSubscriptionID {
                 EventBus.shared.unsubscribe(id)
             }
+        }
+    }
+
+    private func scheduleBackgroundTask(_ operation: @escaping @MainActor (FinanceDynamicsViewModel) async -> Void) {
+        let taskID = UUID()
+        backgroundTasks[taskID] = Task { [weak self] in
+            guard let self else { return }
+            await operation(self)
+            self.finishBackgroundTask(taskID)
+        }
+    }
+
+    private func finishBackgroundTask(_ taskID: UUID) {
+        backgroundTasks.removeValue(forKey: taskID)
+    }
+
+    private func cancelBackgroundTasks() {
+        let tasks = backgroundTasks.values
+        backgroundTasks.removeAll()
+        for task in tasks {
+            task.cancel()
         }
     }
     
@@ -357,8 +380,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             
         case .setViewMode(let mode):
             state.viewMode = mode
-            Task {
-                await updateDynamicsBreakdown()
+            scheduleBackgroundTask { viewModel in
+                await viewModel.updateDynamicsBreakdown()
             }
             
         case .showFilterSheet:
@@ -529,7 +552,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     }
     
     func loadAvailableCurrencies() {
-        Task {
+        scheduleBackgroundTask { viewModel in
             // Загружаем курсы для получения списка валют
             _ = await CurrencyRateService.shared.getRate(from: "USD", to: "RUB")
             
@@ -537,30 +560,34 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             
             // Собираем валюты из всех счетов
             var currencies = Set<String>()
-            for card in state.availableCards {
+            for card in viewModel.state.availableCards {
                 currencies.insert(card.currency)
             }
-            for credit in state.availableCredits {
+            for credit in viewModel.state.availableCredits {
                 currencies.insert(credit.currency)
             }
-            for investment in state.availableInvestments {
+            for investment in viewModel.state.availableInvestments {
                 currencies.insert(investment.currency)
             }
             
             // Объединяем с валютами из источника курсов
             currencies = currencies.union(fromRateSource)
             
-            state.availableCurrencies = Array(currencies).sorted()
+            if Task.isCancelled { return }
+            viewModel.state.availableCurrencies = Array(currencies).sorted()
         }
     }
     
     func updateChartData() {
         state.currencyConversionWarning = nil
-        Task {
-            await prefetchHistoricalRatesForCurrentSelection()
-            await updateChartDataAsync()
-            await updateCurrentBalanceAndDelta()
-            await updateDynamicsBreakdown()
+        scheduleBackgroundTask { viewModel in
+            await viewModel.prefetchHistoricalRatesForCurrentSelection()
+            if Task.isCancelled { return }
+            await viewModel.updateChartDataAsync()
+            if Task.isCancelled { return }
+            await viewModel.updateCurrentBalanceAndDelta()
+            if Task.isCancelled { return }
+            await viewModel.updateDynamicsBreakdown()
         }
     }
     
@@ -1964,18 +1991,25 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     }
 
     private func prefetchHistoricalRatesForCurrentSelection() async {
-        let accounts = getAccountsForCalculation()
-        guard !accounts.isEmpty else { return }
-
         let displayCurrency = normalizedConversionCurrency(state.displayCurrency)
 
         var sourceCurrencies: Set<String> = []
-        for account in accounts {
-            if let info = getAccountInfoForDynamics(account: account) {
-                let currency = normalizedConversionCurrency(info.currency)
-                if currency != displayCurrency {
-                    sourceCurrencies.insert(currency)
-                }
+        for card in state.availableCards {
+            let currency = normalizedConversionCurrency(card.currency)
+            if currency != displayCurrency {
+                sourceCurrencies.insert(currency)
+            }
+        }
+        for credit in state.availableCredits {
+            let currency = normalizedConversionCurrency(credit.currency)
+            if currency != displayCurrency {
+                sourceCurrencies.insert(currency)
+            }
+        }
+        for investment in state.availableInvestments {
+            let currency = normalizedConversionCurrency(resolvedInvestmentCurrency(investment))
+            if currency != displayCurrency {
+                sourceCurrencies.insert(currency)
             }
         }
         guard !sourceCurrencies.isEmpty else { return }

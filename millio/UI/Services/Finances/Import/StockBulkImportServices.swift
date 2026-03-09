@@ -6,7 +6,7 @@ final class StockBulkImportMatcher {
     private let modelContext: ModelContext
     private let marketDataClient: MarketDataClientProtocol
 
-    init(modelContext: ModelContext, marketDataClient: MarketDataClientProtocol = TwelveDataClient.shared) {
+    init(modelContext: ModelContext, marketDataClient: MarketDataClientProtocol = MarketAPIClient.shared) {
         self.modelContext = modelContext
         self.marketDataClient = marketDataClient
     }
@@ -73,7 +73,7 @@ final class StockBulkImportMatcher {
                         market: symbol.exchange,
                         displayName: symbol.displayName,
                         currency: "USD",
-                        providerRaw: "twelvedata"
+                        providerRaw: "market-backend"
                     )
                 }
                 remoteCatalog[ticker] = Array(Set(exactCandidates))
@@ -147,7 +147,7 @@ struct StockBulkImportPersistenceService {
     let modelContext: ModelContext
     let marketDataClient: MarketDataClientProtocol
 
-    init(modelContext: ModelContext, marketDataClient: MarketDataClientProtocol = TwelveDataClient.shared) {
+    init(modelContext: ModelContext, marketDataClient: MarketDataClientProtocol = MarketAPIClient.shared) {
         self.modelContext = modelContext
         self.marketDataClient = marketDataClient
     }
@@ -192,7 +192,7 @@ struct StockBulkImportPersistenceService {
                 existing.marketCurrency = "USD"
                 existing.marketExchange = resolvedRow.candidate.normalizedMarket
                 existing.marketSymbol = resolvedRow.candidate.storedSymbol
-                existing.marketProviderRaw = resolvedRow.candidate.providerRaw ?? existing.marketProviderRaw ?? "twelvedata"
+                existing.marketProviderRaw = resolvedRow.candidate.providerRaw ?? existing.marketProviderRaw ?? "market-backend"
                 existing.includeInTotal = includeInTotal
                 existing.priority = priority
                 _ = existing.applyBuy(quantity: resolvedRow.quantity, unitPrice: resolvedRow.buyPrice)
@@ -225,7 +225,7 @@ struct StockBulkImportPersistenceService {
             investment.totalPurchaseCost = resolvedRow.quantity * resolvedRow.buyPrice
             investment.lastKnownUnitPrice = effectiveUnitPrice
             investment.lastKnownPriceUpdatedAt = Date()
-            investment.marketProviderRaw = resolvedRow.candidate.providerRaw ?? "twelvedata"
+            investment.marketProviderRaw = resolvedRow.candidate.providerRaw ?? "market-backend"
             investment.amount = amountFor(
                 quantity: resolvedRow.quantity,
                 unitPrice: effectiveUnitPrice,

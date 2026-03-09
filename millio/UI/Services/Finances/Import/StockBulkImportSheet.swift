@@ -25,7 +25,7 @@ final class StockBulkImportViewModel: ObservableObject {
 
     init(
         modelContext: ModelContext,
-        marketDataClient: MarketDataClientProtocol = TwelveDataClient.shared,
+        marketDataClient: MarketDataClientProtocol = MarketAPIClient.shared,
         parser: StockBulkImportParser = StockBulkImportParser()
     ) {
         self.parser = parser
@@ -189,7 +189,7 @@ final class StockBulkImportViewModel: ObservableObject {
             market: symbol.exchange,
             displayName: symbol.displayName,
             currency: "USD",
-            providerRaw: "twelvedata"
+            providerRaw: "market-backend"
         )
 
         applyCandidateSelection(candidate, at: index)
@@ -264,7 +264,7 @@ struct StockBulkImportSheet: View {
     init(
         financeViewModel: FinanceViewModel,
         modelContext: ModelContext,
-        marketDataClient: MarketDataClientProtocol = TwelveDataClient.shared
+        marketDataClient: MarketDataClientProtocol = MarketAPIClient.shared
     ) {
         self.financeViewModel = financeViewModel
         _viewModel = StateObject(

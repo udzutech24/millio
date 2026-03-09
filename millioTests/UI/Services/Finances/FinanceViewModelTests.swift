@@ -66,22 +66,18 @@ actor MockMarketDataClient: MarketDataClientProtocol {
 @Suite(.serialized)
 @MainActor
 struct FinanceViewModelTests {
+    private static let schema = Schema([
+        Card.self,
+        Credit.self,
+        Investment.self,
+        FinanceGroup.self,
+        FinanceAccount.self,
+        CashflowTransaction.self,
+    ])
+    private static var retainedContainers: [ModelContainer] = []
 
-    /// Общий контейнер для всех тестов (SwiftData крашится при создании нескольких контейнеров)
-    private static let sharedContainer: ModelContainer = {
-        let schema = Schema([
-            Card.self,
-            Credit.self,
-            Investment.self,
-            FinanceGroup.self,
-            FinanceAccount.self,
-            CashflowTransaction.self,
-        ])
-        let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        return try! ModelContainer(for: schema, configurations: [config])
-    }()
-
-    /// Получить чистый контекст (очищаем данные от предыдущих тестов)
+    /// Получить изолированный контекст на тест.
+    /// Повторное использование одного mainContext между кейсами приводит к use-after-reset в SwiftData.
     private func createTestModelContext() throws -> ModelContext {
         let defaults = UserDefaults.standard
         defaults.set("RUB", forKey: "primaryCurrencyCode")
@@ -89,14 +85,10 @@ struct FinanceViewModelTests {
         defaults.set(0, forKey: "finance_savings_goal_amount")
         defaults.removeObject(forKey: "finance_savings_goal_currency")
 
-        let context = Self.sharedContainer.mainContext
-        // Очищаем все данные от предыдущих тестов
-        try context.deleteAll(FinanceAccount.self)
-        try context.deleteAll(FinanceGroup.self)
-        try context.deleteAll(Card.self)
-        try context.deleteAll(Credit.self)
-        try context.deleteAll(Investment.self)
-        try context.deleteAll(CashflowTransaction.self)
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: Self.schema, configurations: [config])
+        Self.retainedContainers.append(container)
+        let context = container.mainContext
         try context.save()
         return context
     }

@@ -46,7 +46,7 @@ struct InvestmentEditorView: View {
 
     init(
         viewModel: InvestmentViewModel,
-        marketDataClient: MarketDataClientProtocol = TwelveDataClient.shared,
+        marketDataClient: MarketDataClientProtocol = MarketAPIClient.shared,
         onClose: (() -> Void)? = nil,
         onDelete: (() -> Void)? = nil
     ) {
@@ -575,16 +575,16 @@ struct InvestmentEditorView: View {
             }
 
             do {
-                let latestPrice = try await marketDataClient.latestPrice(
+                let latestQuote = try await marketDataClient.latestQuote(
                     symbol: marketSymbol,
                     forceRefresh: forceRefresh
                 )
 
                 await MainActor.run {
-                    lastKnownUnitPrice = latestPrice
-                    lastKnownPriceUpdatedAt = latestPrice == nil ? nil : Date()
-                    marketProviderRaw = latestPrice == nil ? nil : "twelvedata"
-                    if let latestPrice, purchaseUnitPriceText.isEmpty {
+                    lastKnownUnitPrice = latestQuote?.price
+                    lastKnownPriceUpdatedAt = latestQuote?.updatedAtDate ?? (latestQuote == nil ? nil : Date())
+                    marketProviderRaw = latestQuote == nil ? nil : "market-backend"
+                    if let latestPrice = latestQuote?.price, purchaseUnitPriceText.isEmpty {
                         purchaseUnitPriceText = String(latestPrice)
                     }
                     if let positionTotal {
@@ -604,7 +604,7 @@ struct InvestmentEditorView: View {
         marketExchange = symbol.exchange
         marketCurrency = symbol.currency
         selectedCurrency = symbol.currency ?? selectedCurrency
-        marketProviderRaw = "twelvedata"
+        marketProviderRaw = "market-backend"
 
         // В MVP используем тикер как название актива, чтобы не усложнять UX.
         name = symbol.symbol

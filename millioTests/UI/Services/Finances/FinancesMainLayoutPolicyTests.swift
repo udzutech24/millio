@@ -3,7 +3,6 @@
 //  millioTests
 //
 
-import CoreGraphics
 import Testing
 @testable import millio
 

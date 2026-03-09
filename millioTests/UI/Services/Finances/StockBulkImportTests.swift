@@ -28,21 +28,18 @@ struct StockBulkImportTests {
         func recognizeLines(in image: CGImage) async throws -> [String] { [] }
     }
 
-    private static let sharedContainer: ModelContainer = {
-        let schema = Schema([
-            Investment.self,
-            FinanceGroup.self,
-            FinanceAccount.self,
-        ])
-        let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        return try! ModelContainer(for: schema, configurations: [config])
-    }()
+    private static let schema = Schema([
+        Investment.self,
+        FinanceGroup.self,
+        FinanceAccount.self,
+    ])
+    private static var retainedContainers: [ModelContainer] = []
 
     private func makeContext() throws -> ModelContext {
-        let context = Self.sharedContainer.mainContext
-        try context.deleteAll(FinanceAccount.self)
-        try context.deleteAll(FinanceGroup.self)
-        try context.deleteAll(Investment.self)
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: Self.schema, configurations: [config])
+        Self.retainedContainers.append(container)
+        let context = container.mainContext
         try context.save()
         return context
     }
@@ -109,7 +106,7 @@ struct StockBulkImportTests {
             market: "NASDAQ",
             displayName: "Apple",
             currency: "USD",
-            providerRaw: "twelvedata"
+            providerRaw: "market-backend"
         )
         let drafts = [
             StockBulkImportRowDraft(
@@ -199,7 +196,7 @@ struct StockBulkImportTests {
             market: "NASDAQ",
             displayName: "Apple Inc.",
             currency: "USD",
-            providerRaw: "twelvedata"
+            providerRaw: "market-backend"
         )
         let drafts = [
             StockBulkImportRowDraft(
@@ -252,7 +249,7 @@ struct StockBulkImportTests {
             market: "NASDAQ",
             displayName: "Apple Inc.",
             currency: "USD",
-            providerRaw: "twelvedata"
+            providerRaw: "market-backend"
         )
         let drafts = [
             StockBulkImportRowDraft(
@@ -323,7 +320,7 @@ struct StockBulkImportTests {
             market: "NASDAQ",
             displayName: "Apple Inc.",
             currency: "USD",
-            providerRaw: "twelvedata"
+            providerRaw: "market-backend"
         )
 
         viewModel.selectCandidate(candidate, for: rowID)
@@ -383,7 +380,7 @@ struct StockBulkImportTests {
             market: "NASDAQ",
             displayName: "Apple Inc.",
             currency: "USD",
-            providerRaw: "twelvedata"
+            providerRaw: "market-backend"
         )
 
         let row = StockBulkImportRowDraft(
