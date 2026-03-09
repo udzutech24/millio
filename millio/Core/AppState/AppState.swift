@@ -45,6 +45,7 @@ final class AppState {
             }
             let oldNormalized = oldValue.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
             SettingsManager.shared.primaryCurrencyCode = normalized
+            CurrencyWidgetSyncService.setString(normalized, forKey: CurrencyWidgetShared.Keys.primaryCurrencyCode)
             migrateDisplayCurrenciesIfFollowingPrimary(oldPrimary: oldNormalized, newPrimary: normalized)
         }
     }
@@ -96,6 +97,12 @@ final class AppState {
     var profileAvatarPath: String?
     /// One-shot deep-link trigger: open Finance add-product sheet (card by default).
     var pendingOpenFinanceAddCard: Bool = false
+    /// One-shot deep-link trigger from widget to quick expense sheet on Home.
+    var pendingOpenMainExpenseSheet: Bool = false
+    /// One-shot deep-link trigger from widget to quick income sheet on Home.
+    var pendingOpenMainIncomeSheet: Bool = false
+    /// One-shot deep-link trigger from widget to open converter service.
+    var pendingOpenConverterService: Bool = false
     
     init() {
         self.isBackupEnabled = SettingsManager.shared.isBackupEnabled

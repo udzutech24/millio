@@ -27,6 +27,7 @@ enum CurrencyWidgetSyncService {
         set(defaults.object(forKey: CurrencyWidgetShared.Keys.activeCode), forKey: CurrencyWidgetShared.Keys.activeCode, in: sharedDefaults)
         set(defaults.object(forKey: CurrencyWidgetShared.Keys.inputText), forKey: CurrencyWidgetShared.Keys.inputText, in: sharedDefaults)
         set(defaults.object(forKey: CurrencyWidgetShared.Keys.rateSource), forKey: CurrencyWidgetShared.Keys.rateSource, in: sharedDefaults)
+        set(defaults.object(forKey: CurrencyWidgetShared.Keys.primaryCurrencyCode), forKey: CurrencyWidgetShared.Keys.primaryCurrencyCode, in: sharedDefaults)
 
         for source in knownRateSources {
             let ratesKey = CurrencyWidgetShared.Keys.cachedRates(for: source)

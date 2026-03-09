@@ -14,6 +14,7 @@ struct CurrencyWidgetSharedTests {
         defaults.set("usd", forKey: CurrencyWidgetShared.Keys.activeCode)
         defaults.set("99,5", forKey: CurrencyWidgetShared.Keys.inputText)
         defaults.set("erapi", forKey: CurrencyWidgetShared.Keys.rateSource)
+        defaults.set("eur", forKey: CurrencyWidgetShared.Keys.primaryCurrencyCode)
         defaults.set(["RUB": 90.0, "EUR": 0.92], forKey: CurrencyWidgetShared.Keys.cachedRates(for: "erapi"))
         defaults.set(3_600.0, forKey: CurrencyWidgetShared.Keys.lastRatesTimestamp(for: "erapi"))
 
@@ -21,6 +22,7 @@ struct CurrencyWidgetSharedTests {
 
         #expect(snapshot.selectedCodes == ["RUB", "USD", "EUR"])
         #expect(snapshot.activeCode == "USD")
+        #expect(snapshot.primaryCode == "EUR")
         #expect(snapshot.inputText == "99,5")
         #expect(snapshot.rateSourceRaw == "erapi")
         #expect(snapshot.rates["USD"] == 1.0)
@@ -38,6 +40,7 @@ struct CurrencyWidgetSharedTests {
 
         #expect(snapshot.selectedCodes == ["RUB", "USD", "EUR", "TRY", "GBP", "KZT"])
         #expect(snapshot.activeCode == "RUB")
+        #expect(snapshot.primaryCode == "RUB")
         #expect(snapshot.inputText == "1200")
         #expect(snapshot.rateSourceRaw == "erapi")
         #expect(snapshot.rates == ["USD": 1.0])
@@ -54,5 +57,20 @@ struct CurrencyWidgetSharedTests {
         let eurToRub = CurrencyWidgetShared.convert(amount: 10, from: "EUR", to: "RUB", rates: rates)
         #expect(eurToRub != nil)
         #expect(abs((eurToRub ?? 0) - 1_000) < 0.0001)
+    }
+
+    @Test("Deep-link URL для виджета создается и парсится")
+    func testWidgetDeepLinkBuildAndParse() {
+        let url = CurrencyWidgetShared.deepLinkURL(for: .addExpense)
+        #expect(url != nil)
+        if let url {
+            #expect(CurrencyWidgetShared.deepLinkAction(from: url) == .addExpense)
+        }
+    }
+
+    @Test("Deep-link parser игнорирует URL c чужой схемой")
+    func testWidgetDeepLinkRejectsUnknownScheme() {
+        let url = URL(string: "https://example.com/action?type=add_income")!
+        #expect(CurrencyWidgetShared.deepLinkAction(from: url) == nil)
     }
 }

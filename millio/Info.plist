@@ -31,6 +31,19 @@
 	<string>Use Face ID to unlock the app</string>
 	<key>TWELVE_DATA_API_KEY</key>
 	<string>$(TWELVE_DATA_API_KEY)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.millio.app.widget</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>millio</string>
+			</array>
+		</dict>
+	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

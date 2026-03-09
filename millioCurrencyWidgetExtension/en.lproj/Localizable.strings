@@ -1,2 +1,8 @@
 "widget.converter.title" = "Converter";
 "widget.converter.updated_at_format" = "Updated: %@";
+"widget.converter.add_expense" = "Add expense";
+"widget.converter.add_income" = "Add income";
+"widget.converter.ruble_short" = "r";
+"widget.converter.add_spend" = "Spend";
+"widget.converter.expense" = "Expense";
+"widget.converter.income" = "Income";
