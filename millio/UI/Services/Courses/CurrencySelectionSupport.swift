@@ -239,6 +239,7 @@ public struct CurrencyPickerView: View {
     /// Заголовок для отдельной верхней секции.
     public let primaryPinnedTitle: String
     public let onToggleFavorite: ((String) -> Void)?
+    public let badgeForCode: ((String) -> CurrencyPickerBadge?)?
     public let onSelect: (String) -> Void
 
     public init(
@@ -251,6 +252,7 @@ public struct CurrencyPickerView: View {
         primaryPinnedCode: String? = nil,
         primaryPinnedTitle: String? = nil,
         onToggleFavorite: ((String) -> Void)? = nil,
+        badgeForCode: ((String) -> CurrencyPickerBadge?)? = nil,
         onSelect: @escaping (String) -> Void
     ) {
         self.allCodes = allCodes.map { $0.uppercased() }
@@ -262,6 +264,7 @@ public struct CurrencyPickerView: View {
         self.primaryPinnedCode = primaryPinnedCode?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         self.primaryPinnedTitle = primaryPinnedTitle ?? ConverterL10n.primaryCurrencySection
         self.onToggleFavorite = onToggleFavorite
+        self.badgeForCode = badgeForCode
         self.onSelect = onSelect
     }
 
@@ -497,6 +500,7 @@ public struct CurrencyPickerView: View {
     ) -> some View {
         let c = code.uppercased()
         let ruName = CurrencySelectionSupport.nameRu(for: c) ?? ""
+        let badge = badgeForCode?(c)
 
         SelectionItemRow(
             title: c,
@@ -509,27 +513,71 @@ public struct CurrencyPickerView: View {
                 currencyIcon(for: c)
             },
             trailing: {
-                if let onToggleFavorite {
-                    Button {
-                        onToggleFavorite(c)
-                    } label: {
-                        Image(systemName: isFavorite ? "star.fill" : "star")
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: AppColors.coursesGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .opacity(isFavorite ? 1 : 0.55)
+                HStack(spacing: 10) {
+                    if let badge {
+                        CurrencyPickerBadgeView(badge: badge)
+                            .accessibilityIdentifier("currencyPicker.badge.\(badge.kind.rawValue).\(c)")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("currencyPicker.favorite.\(c)")
-                } else {
-                    EmptyView()
+
+                    if let onToggleFavorite {
+                        Button {
+                            onToggleFavorite(c)
+                        } label: {
+                            Image(systemName: isFavorite ? "star.fill" : "star")
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: AppColors.coursesGradient,
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .opacity(isFavorite ? 1 : 0.55)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("currencyPicker.favorite.\(c)")
+                    }
                 }
             }
         )
+    }
+}
+
+// MARK: - Picker badge
+
+public struct CurrencyPickerBadge: Equatable {
+    public enum Kind: String, Equatable {
+        case pro
+    }
+
+    public let kind: Kind
+    public let text: String
+
+    public init(kind: Kind, text: String) {
+        self.kind = kind
+        self.text = text
+    }
+
+    public static let pro = CurrencyPickerBadge(kind: .pro, text: "PRO")
+}
+
+private struct CurrencyPickerBadgeView: View {
+    let badge: CurrencyPickerBadge
+
+    var body: some View {
+        Text(badge.text)
+            .font(.system(size: 12, weight: .bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background {
+                LinearGradient(
+                    colors: AppColors.premiumGradient,
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            }
+            .clipShape(Capsule())
+            .accessibilityLabel(Text(badge.text))
     }
 }
 

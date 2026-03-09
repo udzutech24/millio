@@ -53,8 +53,6 @@ struct FinanceOverviewCardView: View {
     @ViewBuilder
     private var content: some View {
         let section = VStack(alignment: .leading, spacing: 16) {
-            header
-
             if !EntitlementPolicy.canUseFinanceCharts(isPro: appState.isPro) {
                 blockedState
             } else if isLoading {
@@ -83,40 +81,31 @@ struct FinanceOverviewCardView: View {
         }
     }
 
-    private var header: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(String(localized: "finances.overview.chart.title"))
-                    .font(.system(size: 18, weight: .semibold))
+    private var expandButton: some View {
+        Button {
+            openExpandedChart(side: nil)
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 28, height: 28)
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white.opacity(0.10), lineWidth: 0.8)
+                    )
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
-                Text("T-account overview")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(AppColors.textSecondary)
             }
-
-            Spacer()
-
-            Button {
-                expandedSheetSide = nil
-                showExpandedChart = true
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 11, weight: .semibold))
-                    Text(String(localized: "finances.overview.chart.full"))
-                        .font(.system(size: 12, weight: .semibold))
-                }
-                .foregroundStyle(AppColors.textPrimary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(.ultraThinMaterial, in: Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(Color.white.opacity(0.10), lineWidth: 0.8)
-                )
-            }
-            .buttonStyle(.plain)
+            .frame(width: 36, height: 36)
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel(String(localized: "finances.overview.chart.full"))
+    }
+
+    private func openExpandedChart(side: FinanceOverviewLedgerSide?) {
+        expandedSheetSide = side
+        showExpandedChart = true
     }
 
     private func ensureViewModel() {
@@ -383,38 +372,50 @@ struct FinanceOverviewCardView: View {
     private func saldoHero(
         presentation: FinanceOverviewLedgerPresentation
     ) -> some View {
-        VStack(spacing: 10) {
-            Text(String(localized: "finances.overview.chart.saldo"))
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(AppColors.textSecondary)
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(String(localized: "finances.overview.chart.saldo"))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .textCase(.uppercase)
 
-            Text(signedAmount(presentation.saldo))
-                .font(.system(size: 28, weight: .bold))
-                .foregroundStyle(saldoColor(for: presentation.saldo))
-                .minimumScaleFactor(0.78)
-                .lineLimit(1)
+                    Text(signedAmount(presentation.saldo))
+                        .font(.system(size: 34, weight: .bold))
+                        .foregroundStyle(saldoColor(for: presentation.saldo))
+                        .minimumScaleFactor(0.78)
+                        .lineLimit(1)
 
-            HStack(spacing: 10) {
-                badge(title: "Дебит", value: amountWithCurrency(presentation.debit.total), color: debitColor)
-                badge(title: "Кредит", value: amountWithCurrency(presentation.credit.total), color: creditColor)
+                    Text("Разница между активами и обязательствами в \(financeViewModel.state.displayCurrency.uppercased()).")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(AppColors.textSecondary)
+                }
+
+                Spacer(minLength: 12)
+
+                VStack(alignment: .trailing, spacing: 10) {
+                    sideMetricPill(title: "Debit", value: amountWithCurrency(presentation.debit.total), color: debitColor)
+                    sideMetricPill(title: "Credit", value: amountWithCurrency(presentation.credit.total), color: creditColor)
+                }
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(16)
+        .padding(20)
         .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color.white.opacity(0.08),
-                            Color.white.opacity(0.04)
+                            Color.white.opacity(0.10),
+                            Color.white.opacity(0.05),
+                            Color.white.opacity(0.03)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
                         .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
                 )
         )
@@ -423,8 +424,12 @@ struct FinanceOverviewCardView: View {
     private func compactLedgerOverview(
         presentation: FinanceOverviewLedgerPresentation
     ) -> some View {
-        VStack(spacing: 0) {
+        ZStack(alignment: .topTrailing) {
             bridgeChart(presentation: presentation)
+
+            expandButton
+                .padding(.top, -10)
+                .padding(.trailing, 4)
         }
     }
 
@@ -432,12 +437,17 @@ struct FinanceOverviewCardView: View {
         presentation: FinanceOverviewLedgerPresentation
     ) -> some View {
         HStack(spacing: 14) {
-            mirroredSideCard(
-                side: presentation.debit,
-                isTrailing: true,
-                color: debitColor,
-                totalReference: presentation.maxSideTotal
-            )
+            Button {
+                openExpandedChart(side: .debit)
+            } label: {
+                mirroredSideCard(
+                    side: presentation.debit,
+                    isTrailing: true,
+                    color: debitColor,
+                    totalReference: presentation.maxSideTotal
+                )
+            }
+            .buttonStyle(.plain)
 
             Rectangle()
                 .fill(Color.white.opacity(0.12))
@@ -448,12 +458,17 @@ struct FinanceOverviewCardView: View {
                         .frame(width: 12, height: 12)
                 }
 
-            mirroredSideCard(
-                side: presentation.credit,
-                isTrailing: false,
-                color: creditColor,
-                totalReference: presentation.maxSideTotal
-            )
+            Button {
+                openExpandedChart(side: .credit)
+            } label: {
+                mirroredSideCard(
+                    side: presentation.credit,
+                    isTrailing: false,
+                    color: creditColor,
+                    totalReference: presentation.maxSideTotal
+                )
+            }
+            .buttonStyle(.plain)
         }
         .frame(height: 136)
         .padding(.horizontal, 2)
@@ -495,7 +510,7 @@ struct FinanceOverviewCardView: View {
                         Text(side.side.title)
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
-                        Text("\(side.groups.count) групп · \(side.accountCount) счетов")
+                        Text(FinanceOverviewLedgerStyle.countsText(groups: side.groups.count, accounts: side.accountCount))
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(AppColors.textSecondary)
                     }
@@ -508,9 +523,12 @@ struct FinanceOverviewCardView: View {
                 }
 
                 GeometryReader { proxy in
-                    let fullWidth = proxy.size.width
-                    let ratio = CGFloat(side.total / max(totalReference, 1))
-                    let barWidth = max(28, fullWidth * ratio)
+                    let barWidth = FinanceOverviewLedgerStyle.barWidth(
+                        total: side.total,
+                        reference: totalReference,
+                        availableWidth: proxy.size.width,
+                        minimumWidth: 28
+                    )
 
                     ZStack(alignment: .leading) {
                         Capsule(style: .continuous)
@@ -519,7 +537,7 @@ struct FinanceOverviewCardView: View {
                         Capsule(style: .continuous)
                             .fill(
                                 LinearGradient(
-                                    colors: [color.opacity(0.92), color.opacity(0.48)],
+                                    colors: [color.opacity(0.95), color.opacity(0.52)],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
@@ -533,7 +551,7 @@ struct FinanceOverviewCardView: View {
                     Circle()
                         .fill(color)
                         .frame(width: 8, height: 8)
-                    Text(isExpanded ? String(localized: "Свернуть") : String(localized: "Показать ещё"))
+                    Text(FinanceOverviewLedgerStyle.disclosureText(isExpanded: isExpanded))
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(color)
                     Spacer()
@@ -542,11 +560,20 @@ struct FinanceOverviewCardView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(16)
             .background(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(Color.white.opacity(0.04))
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(isExpanded ? 0.09 : 0.06),
+                                Color.white.opacity(0.03)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .stroke(isExpanded ? color.opacity(0.55) : Color.white.opacity(0.08), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .stroke(isExpanded ? color.opacity(0.34) : Color.white.opacity(0.08), lineWidth: 0.9)
                     )
             )
         }
@@ -559,21 +586,36 @@ struct FinanceOverviewCardView: View {
         color: Color,
         totalReference: Double
     ) -> some View {
-        VStack(alignment: isTrailing ? .trailing : .leading, spacing: 10) {
+        VStack(alignment: isTrailing ? .trailing : .leading, spacing: 14) {
+            HStack {
+                if !isTrailing {
+                    sideGlyph(color: color, icon: side.side == .debit ? "arrow.down.left.circle.fill" : "arrow.up.right.circle.fill")
+                }
+
+                Spacer(minLength: 8)
+
+                if isTrailing {
+                    sideGlyph(color: color, icon: side.side == .debit ? "arrow.down.left.circle.fill" : "arrow.up.right.circle.fill")
+                }
+            }
+
             Text(side.side.title)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(AppColors.textPrimary)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(AppColors.textSecondary)
 
             Text(amountWithCurrency(side.total))
-                .font(.system(size: 18, weight: .bold))
+                .font(.system(size: 24, weight: .bold))
                 .foregroundStyle(color)
                 .lineLimit(1)
                 .minimumScaleFactor(0.76)
 
             GeometryReader { proxy in
-                let fullWidth = proxy.size.width
-                let ratio = CGFloat(side.total / max(totalReference, 1))
-                let barWidth = max(24, fullWidth * ratio)
+                let barWidth = FinanceOverviewLedgerStyle.barWidth(
+                    total: side.total,
+                    reference: totalReference,
+                    availableWidth: proxy.size.width,
+                    minimumWidth: 26
+                )
 
                 ZStack(alignment: isTrailing ? .trailing : .leading) {
                     Capsule(style: .continuous)
@@ -592,17 +634,26 @@ struct FinanceOverviewCardView: View {
             }
             .frame(height: 16)
 
-            Text("\(side.groups.count) групп · \(side.accountCount) счетов")
-                .font(.system(size: 11, weight: .medium))
+            Text(FinanceOverviewLedgerStyle.countsText(groups: side.groups.count, accounts: side.accountCount))
+                .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary)
         }
         .frame(maxWidth: .infinity, alignment: isTrailing ? .trailing : .leading)
-        .padding(14)
+        .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.white.opacity(0.04))
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.08),
+                            Color.white.opacity(0.03)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    RoundedRectangle(cornerRadius: 26, style: .continuous)
                         .stroke(color.opacity(0.18), lineWidth: 0.8)
                 )
         )
@@ -644,9 +695,9 @@ struct FinanceOverviewCardView: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
                 Spacer()
-                Text(amountWithCurrency(side.total))
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(color)
+                    Text(amountWithCurrency(side.total))
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(color)
             }
 
             if displayedGroups.isEmpty {
@@ -671,19 +722,19 @@ struct FinanceOverviewCardView: View {
                 }
 
                 if hiddenCount > 0 {
-                    Text("Еще групп: \(hiddenCount)")
+                    Text(FinanceOverviewLedgerStyle.hiddenGroupsText(hiddenCount))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(AppColors.textSecondary)
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .padding(14)
+        .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(Color.white.opacity(0.04))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
                         .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
                 )
         )
@@ -697,13 +748,16 @@ struct FinanceOverviewCardView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(side.side.title)
-                        .font(.system(size: 22, weight: .bold))
+                        .font(.system(size: 28, weight: .bold))
                         .foregroundStyle(AppColors.textPrimary)
                     Text(amountWithCurrency(side.total))
-                        .font(.system(size: 26, weight: .bold))
+                        .font(.system(size: 30, weight: .bold))
                         .foregroundStyle(color)
                         .lineLimit(1)
                         .minimumScaleFactor(0.78)
+                    Text(FinanceOverviewLedgerStyle.countsText(groups: side.groups.count, accounts: side.accountCount))
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(AppColors.textSecondary)
                 }
 
                 Spacer()
@@ -734,10 +788,15 @@ struct FinanceOverviewCardView: View {
         color: Color
     ) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 10) {
-                Circle()
-                    .fill(groupColor(for: group, fallback: color))
-                    .frame(width: 10, height: 10)
+            HStack(alignment: .top, spacing: 12) {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(groupColor(for: group, fallback: color).opacity(0.18))
+                    .frame(width: 36, height: 36)
+                    .overlay {
+                        Circle()
+                            .fill(groupColor(for: group, fallback: color))
+                            .frame(width: 10, height: 10)
+                    }
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(group.name)
@@ -765,12 +824,21 @@ struct FinanceOverviewCardView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .padding(16)
+        .padding(18)
         .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color.white.opacity(0.04))
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.07),
+                            Color.white.opacity(0.03)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
                         .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
                 )
         )
@@ -781,6 +849,12 @@ struct FinanceOverviewCardView: View {
             .font(.system(size: 12, weight: .medium))
             .foregroundStyle(AppColors.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.white.opacity(0.04))
+            )
     }
 
     private func groupRow(_ group: FinanceOverviewLedgerGroup, color: Color) -> some View {
@@ -811,37 +885,52 @@ struct FinanceOverviewCardView: View {
 
     private func accountRow(_ account: FinanceOverviewLedgerAccount, color: Color) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: account.icon)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(color)
-                .frame(width: 18)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(color.opacity(0.16))
+                .frame(width: 32, height: 32)
+                .overlay {
+                    Image(systemName: account.icon)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(color)
+                }
 
             Text(account.name)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(AppColors.textPrimary)
                 .lineLimit(2)
 
             Spacer(minLength: 8)
 
             Text(amountWithCurrency(account.amount))
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(AppColors.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.76)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 9)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white.opacity(0.04))
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white.opacity(0.045))
         )
     }
 
     private var helperNote: some View {
-        Text("Дебит и кредит здесь показаны как левая и правая стороны раскладки. Кредитные карты и кредиты попадают справа как обязательства.")
-            .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(AppColors.textSecondary)
-            .fixedSize(horizontal: false, vertical: true)
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "info.circle.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.48))
+
+            Text("Дебит и кредит здесь показаны как левая и правая стороны раскладки. Кредитные карты и кредиты попадают справа как обязательства.")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(AppColors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.white.opacity(0.035))
+        )
     }
 
     private var expandedSheet: some View {
@@ -968,6 +1057,41 @@ struct FinanceOverviewCardView: View {
             Capsule(style: .continuous)
                 .fill(Color.white.opacity(0.05))
         )
+    }
+
+    private func sideMetricPill(title: String, value: String, color: Color) -> some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppColors.textSecondary)
+                Text(value)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            Capsule(style: .continuous)
+                .fill(Color.white.opacity(0.06))
+        )
+    }
+
+    private func sideGlyph(color: Color, icon: String) -> some View {
+        ZStack {
+            Circle()
+                .fill(color.opacity(0.18))
+                .frame(width: 30, height: 30)
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(color)
+        }
     }
 
     private func amountWithCurrency(_ value: Double) -> String {

@@ -130,19 +130,23 @@ struct SheetsModifier: ViewModifier {
 
 struct DisplayCurrencySheet: View {
     @ObservedObject var viewModel: FinanceViewModel
+    @Environment(AppState.self) private var appState
+    @Environment(AppRouter.self) private var router
     @Environment(\.dismiss) private var dismiss
     @AppStorage("finance_display_currency_hint_seen") private var hasSeenDisplayCurrencyHint: Bool = false
     var isSecondary: Bool = false
     @State private var searchText: String = ""
     @State private var showInfoBanner: Bool = false
     @State private var showInfoAlert: Bool = false
+    @State private var showCryptoProAlert: Bool = false
     
     // Используем полный список валют из CurrencySelectionSupport
-    private let allCurrencies = CurrencySelectionSupport.allCodes(includeCrypto: false)
+    private let allCurrencies = CurrencySelectionSupport.allCodes(includeCrypto: true)
     
     var body: some View {
         let favoriteCodes = SettingsManager.shared.favoriteCurrencyCodes
-        NavigationStack {
+        let canUseCrypto = EntitlementPolicy.canUseFinanceCrypto(isPro: appState.isPro)
+        return NavigationStack {
             CurrencyPickerView(
                 allCodes: allCurrencies,
                 searchText: $searchText,
@@ -151,7 +155,15 @@ struct DisplayCurrencySheet: View {
                 currentSelection: isSecondary ? viewModel.state.secondaryDisplayCurrency : viewModel.state.displayCurrency,
                 primaryPinnedCode: SettingsManager.shared.primaryCurrencyCode,
                 onToggleFavorite: nil,
+                badgeForCode: { code in
+                    guard CurrencySelectionSupport.isCrypto(code), !canUseCrypto else { return nil }
+                    return .pro
+                },
                 onSelect: { currency in
+                    if CurrencySelectionSupport.isCrypto(currency), !canUseCrypto {
+                        showCryptoProAlert = true
+                        return
+                    }
                     if isSecondary {
                         viewModel.handle(.setSecondaryDisplayCurrency(currency))
                     } else {
@@ -199,6 +211,12 @@ struct DisplayCurrencySheet: View {
             } message: {
                 Text(infoMessage)
             }
+            .premiumUpsellAlert(
+                isPresented: $showCryptoProAlert,
+                titleKey: "monetization.crypto.pro_title",
+                message: String(localized: "monetization.crypto.pro_message"),
+                onSubscribe: { router.push(.subscription) }
+            )
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)

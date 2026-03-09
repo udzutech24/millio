@@ -9,18 +9,22 @@ import SwiftUI
 
 struct CashflowCurrencySelectorView: View {
     @ObservedObject var viewModel: CashflowViewModel
+    @Environment(AppState.self) private var appState
+    @Environment(AppRouter.self) private var router
     @Environment(\.dismiss) private var dismiss
     @AppStorage("cashflow_display_currency_hint_seen") private var hasSeenDisplayCurrencyHint: Bool = false
     @State private var searchText: String = ""
     @State private var showInfoBanner: Bool = false
     @State private var showInfoAlert: Bool = false
+    @State private var showCryptoProAlert: Bool = false
     
     // Используем полный список валют
     private let allCurrencies = CurrencySelectionSupport.allCodes(includeCrypto: true)
     
     var body: some View {
         let favoriteCodes = SettingsManager.shared.favoriteCurrencyCodes
-        NavigationStack {
+        let canUseCrypto = EntitlementPolicy.canUseFinanceCrypto(isPro: appState.isPro)
+        return NavigationStack {
             CurrencyPickerView(
                 allCodes: allCurrencies,
                 searchText: $searchText,
@@ -29,10 +33,24 @@ struct CashflowCurrencySelectorView: View {
                 currentSelection: viewModel.state.displayCurrency,
                 primaryPinnedCode: SettingsManager.shared.primaryCurrencyCode,
                 onToggleFavorite: nil,
+                badgeForCode: { code in
+                    guard CurrencySelectionSupport.isCrypto(code), !canUseCrypto else { return nil }
+                    return .pro
+                },
                 onSelect: { currency in
+                    if CurrencySelectionSupport.isCrypto(currency), !canUseCrypto {
+                        showCryptoProAlert = true
+                        return
+                    }
                     viewModel.handle(.setDisplayCurrency(currency))
                     dismiss()
                 }
+            )
+            .premiumUpsellAlert(
+                isPresented: $showCryptoProAlert,
+                titleKey: "monetization.crypto.pro_title",
+                message: String(localized: "monetization.crypto.pro_message"),
+                onSubscribe: { router.push(.subscription) }
             )
             .safeAreaInset(edge: .top) {
                 if showInfoBanner {

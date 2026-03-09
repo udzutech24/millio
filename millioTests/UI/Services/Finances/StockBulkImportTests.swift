@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import Testing
+import UIKit
 @testable import millio
 
 actor StockBulkImportMockMarketDataClient: MarketDataClientProtocol {
@@ -23,6 +24,10 @@ actor StockBulkImportMockMarketDataClient: MarketDataClientProtocol {
 @Suite(.serialized)
 @MainActor
 struct StockBulkImportTests {
+    private struct StubTextRecognizer: StockBulkImportTextRecognizing {
+        func recognizeLines(in image: CGImage) async throws -> [String] { [] }
+    }
+
     private static let sharedContainer: ModelContainer = {
         let schema = Schema([
             Investment.self,
@@ -286,5 +291,114 @@ struct StockBulkImportTests {
         #expect(savedCount == 2)
         #expect(investments.count == 1)
         #expect(accounts.count == 1)
+    }
+
+    @Test("selectCandidate проставляет тикер и рынок в строке")
+    func selectCandidateBackfillsTickerAndMarket() async throws {
+        let context = try makeContext()
+        let client = StockBulkImportMockMarketDataClient()
+        let viewModel = StockBulkImportViewModel(
+            modelContext: context,
+            marketDataClient: client,
+            parser: StockBulkImportParser(textRecognizer: StubTextRecognizer())
+        )
+
+        let rowID = UUID()
+        viewModel.rows = [
+            StockBulkImportRowDraft(
+                id: rowID,
+                rawLine: "apple",
+                tickerText: "APPLE",
+                marketText: "",
+                quantityText: "1",
+                buyPriceText: "100",
+                sourceOrderIndex: 0,
+                candidates: [],
+                selectedCandidate: nil
+            )
+        ]
+
+        let candidate = StockBulkImportCandidate(
+            symbol: "AAPL",
+            market: "NASDAQ",
+            displayName: "Apple Inc.",
+            currency: "USD",
+            providerRaw: "twelvedata"
+        )
+
+        viewModel.selectCandidate(candidate, for: rowID)
+
+        #expect(viewModel.rows[0].tickerText == "AAPL")
+        #expect(viewModel.rows[0].marketText == "NASDAQ")
+        #expect(viewModel.rows[0].selectedCandidate == candidate)
+        #expect(viewModel.rows[0].candidates == [candidate])
+    }
+
+    @Test("applySearchResult не переносит name в ticker")
+    func applySearchResultUsesSymbolAsTickerText() async throws {
+        let context = try makeContext()
+        let client = StockBulkImportMockMarketDataClient()
+        let viewModel = StockBulkImportViewModel(
+            modelContext: context,
+            marketDataClient: client,
+            parser: StockBulkImportParser(textRecognizer: StubTextRecognizer())
+        )
+
+        let rowID = UUID()
+        viewModel.rows = [
+            StockBulkImportRowDraft(
+                id: rowID,
+                rawLine: "",
+                tickerText: "",
+                marketText: "",
+                quantityText: "1",
+                buyPriceText: "100",
+                sourceOrderIndex: 0,
+                candidates: [],
+                selectedCandidate: nil
+            )
+        ]
+
+        let symbol = TwelveDataSymbol(
+            symbol: "AAPL",
+            instrumentName: "Apple Inc.",
+            exchange: "NASDAQ",
+            micCode: nil,
+            instrumentType: "Common Stock",
+            country: "United States",
+            currency: "USD"
+        )
+
+        await viewModel.applySearchResult(symbol, for: rowID)
+
+        #expect(viewModel.rows[0].tickerText == "AAPL")
+        #expect(viewModel.rows[0].marketText == "NASDAQ")
+        #expect(viewModel.rows[0].selectedCandidate?.displayName == "Apple Inc.")
+    }
+
+    @Test("displayHeaderSymbol показывает market:symbol, а имя — отдельно")
+    func rowDisplaySplitsSymbolAndName() {
+        let candidate = StockBulkImportCandidate(
+            symbol: "AAPL",
+            market: "NASDAQ",
+            displayName: "Apple Inc.",
+            currency: "USD",
+            providerRaw: "twelvedata"
+        )
+
+        let row = StockBulkImportRowDraft(
+            rawLine: "AAPL Apple Inc.",
+            tickerText: "AAPL",
+            marketText: "NASDAQ",
+            quantityText: "1",
+            buyPriceText: "100",
+            sourceOrderIndex: 0,
+            candidates: [candidate],
+            selectedCandidate: candidate
+        )
+
+        #expect(row.displayHeaderSymbol == "NASDAQ:AAPL")
+        #expect(row.displaySecondaryText == "Apple Inc.")
+        #expect(row.shouldShowRawLineAsSecondaryText == false)
     }
 }
