@@ -41,9 +41,16 @@ enum FinanceDynamicsTopBarStyle {
     static let containerStrokeWidth: CGFloat = 0.7
     static let containerHorizontalPadding: CGFloat = 6
     static let containerVerticalPadding: CGFloat = 4
+    static let singleAccountTitleClearanceTopPadding: CGFloat = 18
 
     static func inlineEditorSymbol(isEditing: Bool) -> String {
         isEditing ? "checkmark" : "square.and.pencil"
+    }
+
+    /// В single-account режиме `NavigationTitle` пустой, а bar-кнопки могут визуально "лежать" поверх контента.
+    /// Для кредитных карт верхняя строка (баланс) скрыта, поэтому длинное название счета попадает под bar-кнопки.
+    static func singleAccountTitleTopPadding(needsClearance: Bool) -> CGFloat {
+        needsClearance ? singleAccountTitleClearanceTopPadding : 0
     }
 }
 
@@ -1489,6 +1496,7 @@ private struct FinanceDynamicsContentView: View {
                case .singleAccount(let accountID) = viewModel.state.dynamicsMode,
                let account = viewModel.getAccountsForSelectedGroups().first(where: { $0.accountUniqueID == accountID }),
                let accountInfo = viewModel.getAccountInfoForDynamics(account: account) {
+                let needsTitleClearance = shouldShowSingleAccountActionBar && isCreditCardAccount && viewModel.state.isSingleAccountMode
                 HStack(spacing: 8) {
                     Image(systemName: accountInfo.icon)
                         .font(.system(size: 18, weight: .semibold))
@@ -1497,6 +1505,7 @@ private struct FinanceDynamicsContentView: View {
                         .lineLimit(2)
                         .minimumScaleFactor(0.8)
                 }
+                .padding(.top, FinanceDynamicsTopBarStyle.singleAccountTitleTopPadding(needsClearance: needsTitleClearance))
                 .padding(.horizontal, 2)
                 .padding(.vertical, 2)
                 .foregroundStyle(AppColors.textPrimary.opacity(0.92))

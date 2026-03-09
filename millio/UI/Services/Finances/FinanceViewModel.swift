@@ -1072,6 +1072,40 @@ final class FinanceViewModel: ViewModelProtocol {
         return nil
     }
 
+    /// Возвращает true, если продукт является обязательством и должен подсвечиваться как "кредитный" в списке.
+    /// Важно: UI часто показывает сумму обязательства как положительную (долг), поэтому подсветка не может опираться на знак.
+    func isAccountLiabilityForTotals(account: FinanceAccount) -> Bool {
+        switch account.accountType {
+        case .card:
+            guard let card = cardByID[account.accountID], card.includeInTotal else { return false }
+            guard card.cardType == .credit, let limit = card.creditLimit else { return false }
+            let debt = max(0, limit - card.balance)
+            return debt > 0.01
+        case .credit:
+            guard let credit = creditByID[account.accountID] else { return false }
+            guard credit.archivedAt == nil else { return false }
+            return credit.remainingAmount > 0.01
+        case .investment:
+            guard let investment = investmentByID[account.accountID], investment.includeInTotal else { return false }
+            return investment.investmentType == .negative && investment.amount > 0.01
+        }
+    }
+
+    /// Группы, которые нужно показывать в списке финансов.
+    /// Системная "Без группы" скрывается, если в ней нет видимых счетов.
+    func visibleGroupsForList() -> [FinanceGroup] {
+        state.groups.filter { !shouldHideGroupInList($0) }
+    }
+
+    private func shouldHideGroupInList(_ group: FinanceGroup) -> Bool {
+        guard group.name == ungroupedGroupName else { return false }
+        return visibleAccountsForGroup(group).isEmpty
+    }
+
+    private func visibleAccountsForGroup(_ group: FinanceGroup) -> [FinanceAccount] {
+        (group.accounts ?? []).filter { getAccountInfo(account: $0) != nil }
+    }
+
     func getInvestmentPositionSubtitle(account: FinanceAccount) -> String? {
         guard account.accountType == .investment,
               let investment = investmentByID[account.accountID],

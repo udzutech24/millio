@@ -375,11 +375,11 @@ final class QuickSetupViewModel: ObservableObject {
                 return false
             }
             guard let quantity = parsedDecimal(productQuantityInput), quantity > 0 else {
-                lastAddDraftError = "Укажи количество позиции."
+                lastAddDraftError = "Укажи количество позиции"
                 return false
             }
             guard let purchaseUnitPrice = parsedDecimal(productPurchasePriceInput), purchaseUnitPrice > 0 else {
-                lastAddDraftError = "Укажи цену покупки."
+                lastAddDraftError = "Укажи цену покупки"
                 return false
             }
             let currentTickerDraftCount = products.reduce(into: 0) { partialResult, item in

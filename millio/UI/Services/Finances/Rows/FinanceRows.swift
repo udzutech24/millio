@@ -428,7 +428,9 @@ private struct FinanceAccountRow: View {
 
     private var marketInvestmentRow: some View {
         HStack(spacing: 12) {
-            iconBadge(colors: AppColors.financesGradient)
+            iconBadge(
+                colors: isDebtHighlighted ? [AppColors.error, AppColors.error] : AppColors.financesGradient
+            )
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(name)
@@ -470,7 +472,7 @@ private struct FinanceAccountRow: View {
     }
 
     private var isDebtHighlighted: Bool {
-        accountType == .credit || isCreditCardDebt
+        accountType == .credit || isCreditCardDebt || viewModel.isAccountLiabilityForTotals(account: account)
     }
 
     @ViewBuilder
@@ -497,6 +499,7 @@ private struct FinanceAccountRow: View {
         currencyFont: Font,
         maximumFractionDigits: Int
     ) -> some View {
+        let amountColor = isDebtHighlighted ? AppColors.error : (amount >= 0 ? AppColors.textPrimary : AppColors.error)
         Button {
             onQuickEditAmount()
         } label: {
@@ -504,13 +507,13 @@ private struct FinanceAccountRow: View {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(formatBalance(amount, isHidden: viewModel.state.isAmountHidden, maximumFractionDigits: maximumFractionDigits))
                         .font(amountFont)
-                        .foregroundStyle(isDebtHighlighted ? AppColors.error : (amount >= 0 ? AppColors.textPrimary : AppColors.error))
+                        .foregroundStyle(amountColor)
                         .lineLimit(1)
                         .minimumScaleFactor(0.78)
 
                     Text(MonetaCurrency(rawValue: currency)?.symbol ?? currency)
                         .font(currencyFont)
-                        .foregroundStyle(AppColors.textPrimary)
+                        .foregroundStyle(amountColor)
                         .lineLimit(1)
                 }
             }

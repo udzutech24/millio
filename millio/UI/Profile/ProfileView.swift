@@ -7,11 +7,14 @@
 
 import SwiftUI
 import PhotosUI
+import StoreKit
 
 struct ProfileView: View {
     @Bindable var router: AppRouter
     @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var authManager
+    @Environment(\.requestReview) private var requestReview
+    @Environment(\.openURL) private var openURL
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var showNameEditSheet = false
     @State private var editedName = ""
@@ -62,6 +65,16 @@ struct ProfileView: View {
                             sectionHeader(section.id.titleKey)
                             card {
                                 sectionContent(for: section.id)
+                            }
+
+                            if section.id == .contacts {
+                                card {
+                                    RateAppBlock(
+                                        canOpenAppStoreReview: AppStoreReviewLink.url != nil,
+                                        onRateInAppStore: openAppStoreReview,
+                                        onSendFeedback: sendFeedback
+                                    )
+                                }
                             }
                         }
                     }
@@ -532,6 +545,17 @@ struct ProfileView: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("profile.contactUsLink")
 
+        case .rateApp:
+            Button {
+                openAppStoreReview()
+            } label: {
+                settingsRow(iconSystemName: "star", title: "profile.rate_app") {
+                    chevron
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("profile.rateAppButton")
+
         case .premiumAccess:
             Toggle(isOn: Binding(
                 get: { appState.hasDebugPremiumOverride },
@@ -594,6 +618,18 @@ struct ProfileView: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("profile.debugOnboardingButton")
         }
+    }
+
+    private func sendFeedback() {
+        showContactSheet = true
+    }
+
+    private func openAppStoreReview() {
+        if let url = AppStoreReviewLink.url {
+            openURL(url)
+            return
+        }
+        requestReview()
     }
     
     private func sectionHeader(_ title: LocalizedStringKey) -> some View {
@@ -707,6 +743,8 @@ private struct SupportContactSheet: View {
                 GradientBackground()
 
                 VStack(spacing: 16) {
+                    SupportContactHeaderView()
+
                     FinancesGlassCard(contentPadding: EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16)) {
                         VStack(spacing: 0) {
                             ForEach(channels) { channel in
@@ -726,6 +764,8 @@ private struct SupportContactSheet: View {
                             }
                         }
                     }
+
+                    Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 24)
@@ -759,6 +799,40 @@ private struct SupportContactSheet: View {
         }
         .padding(.vertical, 10)
         .contentShape(Rectangle())
+    }
+}
+
+private struct SupportContactHeaderView: View {
+    var body: some View {
+        VStack(spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(AppColors.brandPrimary.opacity(0.16))
+
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(AppColors.brandPrimary.opacity(0.35), lineWidth: 1)
+
+                Image(systemName: "message.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(AppColors.brandPrimary)
+            }
+            .frame(width: 56, height: 56)
+            .shadow(color: AppColors.profileCardGlow, radius: 18, x: 0, y: 10)
+
+            Text("profile.contact.header.title")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(AppColors.textPrimary)
+                .multilineTextAlignment(.center)
+
+            Text("profile.contact.feedback_message")
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(AppColors.textSecondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 8)
+        }
+        .padding(.top, 6)
+        .padding(.bottom, 6)
     }
 }
 

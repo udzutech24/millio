@@ -32,4 +32,11 @@ struct ProfileMenuStructureTests {
 
         #expect(order == [.general, .settings, .experience, .support, .about, .debug, .contacts])
     }
+
+    @Test("Contacts section includes support and rating")
+    func testContactsSectionItems() throws {
+        let contactsSection = try #require(ProfileMenuStructure.sections.first { $0.id == .contacts })
+
+        #expect(contactsSection.items == [.contactUs, .rateApp])
+    }
 }

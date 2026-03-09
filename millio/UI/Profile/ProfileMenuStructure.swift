@@ -52,6 +52,7 @@ enum ProfileMenuItemID: String, Identifiable {
     case privacy
     case terms
     case contactUs
+    case rateApp
     case premiumAccess
     case trialDisabled
     case premiumDiagnostics
@@ -117,7 +118,8 @@ enum ProfileMenuStructure {
         ProfileMenuSection(
             id: .contacts,
             items: [
-                .contactUs
+                .contactUs,
+                .rateApp
             ]
         )
     ]

@@ -492,6 +492,54 @@ struct FinanceDynamicsViewModelTests {
         #expect(daysDiff >= 6 && daysDiff <= 8)
     }
 
+    @Test("График: в пределах одного дня есть минимум две точки (start/end)")
+    func testTimeSeriesContainsStartAndEndWhenSameDay() async throws {
+        let modelContext = try createTestModelContext()
+
+        let now = Date()
+        let start = now.addingTimeInterval(-2 * 3600)
+
+        let card = Card(name: "Same day", cardNumber: "3333", bank: .other, cardType: .debit, currency: "RUB")
+        card.createdAt = start.addingTimeInterval(-60)
+        card.updatedAt = now
+        card.initialBalance = 1000
+        card.hasInitialBalance = true
+        card.balance = 1000
+        modelContext.insert(card)
+
+        let group = FinanceGroup(name: "Same day group", colorHex: "#FFFFFF")
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+
+        let points = await dynamicsViewModel.buildTimeSeriesData(
+            accounts: [account],
+            startDate: start,
+            endDate: now,
+            label: "Total",
+            debtAsNegative: false
+        )
+
+        #expect(points.count >= 2)
+        #expect(points.first?.date == start)
+        #expect(points.last?.date == now)
+    }
+
     @Test("Транзакция расхода уменьшает баланс на историческую дату")
     func testExpenseTransactionReducesBalance() async throws {
         let modelContext = try createTestModelContext()

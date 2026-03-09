@@ -48,7 +48,7 @@ struct QuickSetupView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
-                    .padding(.bottom, 132)
+                    .padding(.bottom, 28)
                 }
 
                 bottomActions
@@ -139,11 +139,7 @@ struct QuickSetupView: View {
             .buttonStyle(.plain)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Quick setup")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(AppColors.textSecondary)
-                    .textCase(.uppercase)
-                Text("Быстрая настройка")
+                Text("profile.quick_setup")
                     .font(.system(size: 28, weight: .bold))
                     .foregroundStyle(AppColors.textPrimary)
             }
@@ -317,7 +313,7 @@ struct QuickSetupView: View {
                 Spacer()
                 Image(systemName: "info.circle")
                     .foregroundStyle(AppColors.textSecondary)
-                Text("Категории можно изменить позже.")
+                Text("Категории можно изменить позже")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(AppColors.textSecondary)
             }
@@ -327,28 +323,6 @@ struct QuickSetupView: View {
     private var productsStep: some View {
         stepSectionCard {
             productTypeIconSelector
-
-            if viewModel.products.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Необязательно")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(AppColors.brandPrimary)
-                    Text("Добавьте только те продукты, которые хотите сразу увидеть в Финансах. Остальное можно создать позже.")
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundStyle(AppColors.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(14)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(.white.opacity(0.04))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .stroke(.white.opacity(0.08), lineWidth: 1)
-                        )
-                )
-            }
 
             VStack(spacing: 8) {
                 if viewModel.isMarketProductDraft {

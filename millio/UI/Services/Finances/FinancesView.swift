@@ -622,18 +622,24 @@ private struct FinancesMainTabView: View {
     // MARK: - Groups List Section
     
     private var groupsListSection: some View {
-        VStack(spacing: 12) {
-            if viewModel.state.groups.isEmpty {
+        let visibleGroups = viewModel.visibleGroupsForList()
+        return VStack(alignment: .leading, spacing: 10) {
+            if visibleGroups.isEmpty {
                 emptyGroupsOnboardingState
             } else {
-                groupsListView
+                Text("finances.main.accounts_section.title")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppColors.textTertiary.opacity(0.90))
+                    .accessibilityAddTraits(.isHeader)
+
+                groupsListView(visibleGroups)
             }
         }
     }
 
-    private var groupsListView: some View {
+    private func groupsListView(_ groups: [FinanceGroup]) -> some View {
         VStack(spacing: 12) {
-            ForEach(viewModel.state.groups) { group in
+            ForEach(groups) { group in
                 FinanceGroupRow(
                     group: group,
                     viewModel: viewModel

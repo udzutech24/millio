@@ -162,6 +162,38 @@ struct FinanceViewModelTests {
         #expect(accounts[0].group?.name == String(localized: "finances.group.ungrouped"))
     }
 
+    @Test("Негативные инвестиции подсвечиваются как обязательства")
+    func testNegativeInvestmentsAreDetectedAsLiabilities() async throws {
+        let modelContext = try createTestModelContext()
+        let currencyService = MockCurrencyRateService()
+
+        let investment = Investment(
+            name: "Test Debt",
+            investmentType: .negative,
+            category: .debt,
+            amount: 1000,
+            currency: "RUB",
+            includeInTotal: true,
+            priority: .normal,
+            isFavorite: false
+        )
+        modelContext.insert(investment)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: currencyService,
+            marketDataClient: MockMarketDataClient(),
+            skipInitialLoad: false
+        )
+
+        _ = await waitForAsyncStatePropagation(until: { !viewModel.state.groups.isEmpty })
+
+        let accounts = try modelContext.fetch(FetchDescriptor<FinanceAccount>())
+        #expect(accounts.count == 1)
+        #expect(viewModel.isAccountLiabilityForTotals(account: accounts[0]) == true)
+    }
+
     @Test("FinanceViewModel смена display валюты не меняет primary валюту профиля")
     func testSetDisplayCurrencyDoesNotChangePrimaryCurrency() throws {
         let modelContext = try createTestModelContext()
@@ -1476,6 +1508,43 @@ struct FinanceViewModelTests {
 
         #expect(viewModel.state.groups.contains(where: { $0.name == "Основная" }))
         #expect(!viewModel.state.groups.contains(where: { $0.name == ungroupedName }))
+    }
+
+    @Test("Группа 'Без группы' скрывается, если в ней только архивные счета")
+    func testVisibleGroupsHidesUngroupedWithArchivedAccounts() throws {
+        let modelContext = try createTestModelContext()
+
+        let ungroupedName = String(localized: "finances.group.ungrouped")
+        let ungroupedGroup = FinanceGroup(name: ungroupedName, colorHex: "#3C4B5E")
+        modelContext.insert(ungroupedGroup)
+
+        let archivedCard = Card(
+            name: "Архивная карта",
+            cardNumber: "0000",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 100
+        )
+        archivedCard.archivedAt = Date()
+        modelContext.insert(archivedCard)
+
+        let link = FinanceAccount(accountType: .card, accountID: archivedCard.cardUniqueID)
+        link.group = ungroupedGroup
+        modelContext.insert(link)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+
+        viewModel.handle(.loadGroups)
+        viewModel.handle(.loadAccounts)
+
+        let visibleGroups = viewModel.visibleGroupsForList()
+        #expect(!visibleGroups.contains(where: { $0.name == ungroupedName }))
     }
 
     @Test("Добавление счета без выбранной группы создает и использует системную группу")

@@ -17,12 +17,18 @@ enum FinanceOverviewLedgerStyle {
         "\(groups) гр. · \(accounts) сч."
     }
 
-    static func disclosureText(isExpanded: Bool) -> String {
-        isExpanded ? "Свернуть" : "Показать детали"
-    }
-
     static func hiddenGroupsText(_ count: Int) -> String {
         "Еще групп: \(count)"
+    }
+
+    static func normalizeAmount(
+        _ amount: Double,
+        defaultSide: FinanceOverviewLedgerSide,
+        epsilon: Double = 0.01
+    ) -> (side: FinanceOverviewLedgerSide, amount: Double)? {
+        guard abs(amount) > epsilon else { return nil }
+        let side: FinanceOverviewLedgerSide = amount < 0 ? .credit : defaultSide
+        return (side: side, amount: abs(amount))
     }
 
     static func barWidth(

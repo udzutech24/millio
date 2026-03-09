@@ -24,13 +24,13 @@ enum QuickSetupStep: Int, CaseIterable, Identifiable {
     var subtitle: String {
         switch self {
         case .localeAndCurrencies:
-            return "Выберите язык приложения и основные валюты."
+            return "Выберите язык приложения и основные валюты"
         case .expenseCategories:
-            return "Оставьте только те категории, которые нужны с первого дня."
+            return "Оставьте только те категории, которые нужны с первого дня"
         case .products:
-            return "Добавьте счета и активы, если хотите увидеть их сразу в Финансах."
+            return "Добавьте счета и активы, если хотите увидеть их сразу в Финансах"
         case .summary:
-            return "Выберите, как хранить данные и резервные копии."
+            return "Выберите, как хранить данные и резервные копии"
         }
     }
 }
@@ -153,18 +153,18 @@ enum QuickSetupBackupPreference: String, CaseIterable, Identifiable {
     var subtitle: String {
         switch self {
         case .localOnly:
-            return "Данные останутся локально в SwiftData. Выгрузка выключена."
+            return "Данные останутся локально в SwiftData, выгрузка выключена"
         case .cloudBackup:
-            return "Снимки хранятся в Private CloudKit вашего Apple ID."
+            return "Снимки хранятся в Private CloudKit вашего Apple ID"
         }
     }
 
     var details: String {
         switch self {
         case .localOnly:
-            return "В любой момент можно включить выгрузку в Профиль -> Backup."
+            return "В любой момент можно включить выгрузку в Профиль -> Backup"
         case .cloudBackup:
-            return "Шифрование backup: AES-GCM (ключ устройства) или парольная фраза в Backup."
+            return "Шифрование backup: AES-GCM (ключ устройства) или парольная фраза в Backup"
         }
     }
 

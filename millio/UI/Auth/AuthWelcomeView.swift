@@ -5,6 +5,12 @@ struct AuthWelcomeView: View {
     @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var authManager
 
+    private let featureItems: [(icon: String, title: LocalizedStringKey)] = [
+        ("person.crop.circle.badge.checkmark", "Apple sign in"),
+        ("lock.fill", "Private session"),
+        ("sparkles", "Guest access")
+    ]
+
     private var backendHost: String? {
         let host = Bundle.main.object(forInfoDictionaryKey: "AUTH_BASE_HOST") as? String
         let port = Bundle.main.object(forInfoDictionaryKey: "AUTH_BASE_PORT") as? String
@@ -30,18 +36,12 @@ struct AuthWelcomeView: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack {
-                Color.black.ignoresSafeArea()
-
-                LinearGradient(
-                    colors: [
-                        Color(hex: "07111B"),
-                        Color(hex: "04070D"),
-                        Color.black
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
+                GradientBackground(
+                    topGradientColor: "153A7A",
+                    topGradientFadeColor: "07111B",
+                    bottomGradientColor: "6B93FF",
+                    bottomGradientFadeColor: "04070D"
                 )
-                .ignoresSafeArea()
 
                 Circle()
                     .fill(Color(hex: "6B93FF").opacity(0.24))
@@ -55,40 +55,30 @@ struct AuthWelcomeView: View {
                     .blur(radius: 48)
                     .offset(x: 120, y: -110)
 
-                VStack(alignment: .leading, spacing: 0) {
-                    Spacer(minLength: 36)
-
-                    header
-
-                    Spacer(minLength: 28)
-
+                ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 28) {
-                        hero
-                        valueRow
-                        actionBlock
+                        Spacer(minLength: 36)
+
+                        header
+
+                        Spacer(minLength: 12)
+
+                        FinancesGlassCard(
+                            accentColor: AppColors.brandPrimary,
+                            cornerRadius: 34,
+                            contentPadding: EdgeInsets(top: 28, leading: 24, bottom: 22, trailing: 24)
+                        ) {
+                            VStack(alignment: .leading, spacing: 28) {
+                                hero
+                                featureList
+                                actionBlock
+                            }
+                        }
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 28)
-                    .padding(.bottom, 22)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background {
-                        RoundedRectangle(cornerRadius: 34, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.08),
-                                        Color.white.opacity(0.03)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 34, style: .continuous)
-                                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                            )
-                            .shadow(color: Color.black.opacity(0.35), radius: 36, y: 24)
-                    }
+                    .frame(
+                        minHeight: proxy.size.height - max(proxy.safeAreaInsets.bottom, 18),
+                        alignment: .bottom
+                    )
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, max(proxy.safeAreaInsets.bottom, 18))
@@ -134,29 +124,34 @@ struct AuthWelcomeView: View {
         }
     }
 
-    private var valueRow: some View {
-        HStack(spacing: 12) {
-            premiumPill(icon: "person.crop.circle.badge.checkmark", title: "Apple sign in")
-            premiumPill(icon: "lock.fill", title: "Private session")
-            premiumPill(icon: "sparkles", title: "Guest access")
+    private var featureList: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(featureItems, id: \.icon) { item in
+                premiumPill(icon: item.icon, title: item.title)
+            }
         }
     }
 
-    private func premiumPill(icon: String, title: String) -> some View {
+    private func premiumPill(icon: String, title: LocalizedStringKey) -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .semibold))
+                .frame(width: 18)
             Text(title)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .lineLimit(1)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
         }
         .foregroundStyle(Color.white.opacity(0.8))
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white.opacity(0.06))
+                .fill(Color.white.opacity(0.05))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
         )
     }
 

@@ -1026,6 +1026,35 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     ) async -> [ChartDataPoint] {
         var dataPoints: [ChartDataPoint] = []
         let calendar = Calendar.current
+
+        guard !accounts.isEmpty else { return [] }
+        guard startDate <= endDate else { return [] }
+        
+        // ВАЖНО: даже если период укладывается в 1 день, график должен иметь минимум 2 точки (start/end),
+        // иначе Charts не рисует линию (получается "пустой" график с осями).
+        // Для этого всегда добавляем точки на начало и конец периода с расчетом баланса на эти даты.
+        let accountCardIDs: Set<String> = Set(accounts.compactMap { account -> String? in
+            guard account.accountType == .card else { return nil }
+            return account.accountID
+        })
+        let startBalance = await calculateBalanceAtDate(
+            accounts: accounts,
+            date: startDate,
+            accountCardIDs: accountCardIDs,
+            debtAsNegative: debtAsNegative,
+            includeInitialBeforeCreation: true
+        )
+        let endBalance = await calculateBalanceAtDate(
+            accounts: accounts,
+            date: endDate,
+            accountCardIDs: accountCardIDs,
+            debtAsNegative: debtAsNegative,
+            includeInitialBeforeCreation: false
+        )
+        var allBalances: [Date: Double] = [
+            startDate: startBalance,
+            endDate: endBalance
+        ]
         
         // Собираем все уникальные даты событий (создание/обновление счетов и транзакции)
         var eventDates: Set<Date> = [startDate, endDate]
@@ -1038,12 +1067,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         
         // Добавляем даты обновления самих карт/кредитов/инвестиций
         // Это важно для отслеживания ручных изменений баланса (быстрое редактирование)
-        let accountCardIDs = Set(accounts.compactMap { account -> String? in
-            if account.accountType == .card {
-                return account.accountID
-            }
-            return nil
-        })
+        // accountCardIDs уже построен выше.
         
         // Добавляем даты обновления карт (используем кэш)
         for cardID in accountCardIDs {
@@ -1169,18 +1193,20 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             for dayStart in importantDays {
                 group.addTask {
                     let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: dayStart) ?? dayStart
+                    // Для "текущего дня" конец дня может быть в будущем, поэтому клэмпим к endDate периода.
+                    let evaluationDate = min(endOfDay, endDate)
                     let balance = await self.calculateBalanceAtDate(
                         accounts: accounts,
-                        date: endOfDay,
+                        date: evaluationDate,
                         accountCardIDs: accountCardIDs,
                         debtAsNegative: debtAsNegative
                     )
-                    return (dayStart, balance)
+                    return (evaluationDate, balance)
                 }
             }
             
-            for await (dayStart, balance) in group {
-                eventBalances[dayStart] = balance
+            for await (evaluationDate, balance) in group {
+                eventBalances[evaluationDate] = balance
             }
         }
         
@@ -1189,20 +1215,20 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         await withTaskGroup(of: (Date, Double).self) { group in
             for intermediateDate in intermediateDates {
                 group.addTask {
-                    let dayStart = calendar.startOfDay(for: intermediateDate)
                     let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: intermediateDate) ?? intermediateDate
+                    let evaluationDate = min(endOfDay, endDate)
                     let balance = await self.calculateBalanceAtDate(
                         accounts: accounts,
-                        date: endOfDay,
+                        date: evaluationDate,
                         accountCardIDs: accountCardIDs,
                         debtAsNegative: debtAsNegative
                     )
-                    return (dayStart, balance)
+                    return (evaluationDate, balance)
                 }
             }
             
-            for await (dayStart, balance) in group {
-                intermediateBalances[dayStart] = balance
+            for await (evaluationDate, balance) in group {
+                intermediateBalances[evaluationDate] = balance
             }
         }
         
@@ -1236,26 +1262,26 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             await withTaskGroup(of: (Date, Double).self) { group in
                 for intermediateDate in additionalIntermediateDates {
                     group.addTask {
-                        let dayStart = calendar.startOfDay(for: intermediateDate)
                         let endOfDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: intermediateDate) ?? intermediateDate
+                        let evaluationDate = min(endOfDay, endDate)
                         let balance = await self.calculateBalanceAtDate(
                             accounts: accounts,
-                            date: endOfDay,
+                            date: evaluationDate,
                             accountCardIDs: accountCardIDs,
                             debtAsNegative: debtAsNegative
                         )
-                        return (dayStart, balance)
+                        return (evaluationDate, balance)
                     }
                 }
                 
-                for await (dayStart, balance) in group {
-                    additionalBalances[dayStart] = balance
+                for await (evaluationDate, balance) in group {
+                    additionalBalances[evaluationDate] = balance
                 }
             }
         }
         
         // Объединяем все балансы (важные события имеют приоритет над промежуточными точками)
-        var allBalances = intermediateBalances
+        allBalances.merge(intermediateBalances, uniquingKeysWith: { _, new in new })
         // Добавляем дополнительные промежуточные точки
         for (day, balance) in additionalBalances {
             allBalances[day] = balance

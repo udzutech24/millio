@@ -27,6 +27,7 @@ struct FinanceOverviewCardView: View {
     @State private var showExpandedChart: Bool = false
     @State private var ledgerPresentation: FinanceOverviewLedgerPresentation?
     @State private var expandedSheetSide: FinanceOverviewLedgerSide?
+    @State private var expandedDetailGroupIDs: Set<String> = []
 
     init(
         financeViewModel: FinanceViewModel,
@@ -162,6 +163,10 @@ struct FinanceOverviewCardView: View {
         var items: [FinanceOverviewLedgerSourceItem] = []
         var attachedKeys: Set<String> = []
 
+        let cardsByID = Dictionary(uniqueKeysWithValues: financeViewModel.state.availableCards.map { ($0.cardUniqueID, $0) })
+        let creditsByID = Dictionary(uniqueKeysWithValues: financeViewModel.state.availableCredits.map { ($0.creditUniqueID, $0) })
+        let investmentsByID = Dictionary(uniqueKeysWithValues: financeViewModel.state.availableInvestments.map { ($0.investmentUniqueID, $0) })
+
         let groups = financeViewModel.state.groups.sorted {
             if $0.order != $1.order {
                 return $0.order < $1.order
@@ -170,16 +175,19 @@ struct FinanceOverviewCardView: View {
         }
 
         for group in groups {
-            for account in sortedAccounts(group.accounts ?? [], using: dynamicsViewModel) {
+            for account in sortedAccounts(group.accounts ?? []) {
+                attachedKeys.insert(accountKey(type: account.accountType, id: account.accountID))
                 if let item = await makeLedgerItem(
                     account: account,
                     groupID: group.groupUniqueID,
                     groupName: group.name,
                     groupColorHex: group.colorHex,
+                    cardsByID: cardsByID,
+                    creditsByID: creditsByID,
+                    investmentsByID: investmentsByID,
                     dynamicsViewModel: dynamicsViewModel
                 ) {
                     items.append(item)
-                    attachedKeys.insert(accountKey(type: account.accountType, id: account.accountID))
                 }
             }
         }
@@ -206,12 +214,11 @@ struct FinanceOverviewCardView: View {
     }
 
     private func sortedAccounts(
-        _ accounts: [FinanceAccount],
-        using dynamicsViewModel: FinanceDynamicsViewModel
+        _ accounts: [FinanceAccount]
     ) -> [FinanceAccount] {
         accounts.sorted { lhs, rhs in
-            let lhsName = dynamicsViewModel.getAccountInfoForDynamics(account: lhs)?.name ?? lhs.accountID
-            let rhsName = dynamicsViewModel.getAccountInfoForDynamics(account: rhs)?.name ?? rhs.accountID
+            let lhsName = financeViewModel.getAccountInfo(account: lhs)?.name ?? lhs.accountID
+            let rhsName = financeViewModel.getAccountInfo(account: rhs)?.name ?? rhs.accountID
             return lhsName.localizedCaseInsensitiveCompare(rhsName) == .orderedAscending
         }
     }
@@ -221,18 +228,28 @@ struct FinanceOverviewCardView: View {
         groupID: String,
         groupName: String,
         groupColorHex: String?,
+        cardsByID: [String: Card],
+        creditsByID: [String: Credit],
+        investmentsByID: [String: Investment],
         dynamicsViewModel: FinanceDynamicsViewModel
     ) async -> FinanceOverviewLedgerSourceItem? {
-        guard let info = dynamicsViewModel.getAccountInfoForDynamics(account: account) else {
-            return nil
-        }
+        guard let info = financeViewModel.getAccountInfo(account: account) else { return nil }
+        guard let signedValue = FinanceNetWorthSignedAmount.signedValue(
+            for: account,
+            cardsByID: cardsByID,
+            creditsByID: creditsByID,
+            investmentsByID: investmentsByID
+        ) else { return nil }
 
         let convertedAmount = await dynamicsViewModel.convertAmount(
-            value: info.amount,
+            value: signedValue,
             from: info.currency,
             to: financeViewModel.state.displayCurrency
         )
-        guard convertedAmount > 0.01 else { return nil }
+        guard let normalized = FinanceOverviewLedgerStyle.normalizeAmount(
+            convertedAmount,
+            defaultSide: .debit
+        ) else { return nil }
 
         return FinanceOverviewLedgerSourceItem(
             groupID: groupID,
@@ -241,8 +258,8 @@ struct FinanceOverviewCardView: View {
             accountID: account.accountID,
             accountName: info.name,
             accountIcon: info.icon,
-            amount: convertedAmount,
-            side: side(for: account, using: dynamicsViewModel)
+            amount: normalized.amount,
+            side: normalized.side
         )
     }
 
@@ -250,35 +267,27 @@ struct FinanceOverviewCardView: View {
         card: Card,
         dynamicsViewModel: FinanceDynamicsViewModel
     ) async -> FinanceOverviewLedgerSourceItem? {
-        guard card.archivedAt == nil else { return nil }
-
-        let rawAmount: Double
-        let side: FinanceOverviewLedgerSide
-        if card.cardType == .credit, let limit = card.creditLimit {
-            rawAmount = max(0, limit - card.balance)
-            side = .credit
-        } else {
-            rawAmount = card.balance
-            side = .debit
-        }
-        guard rawAmount > 0.01 else { return nil }
+        guard let rawAmount = FinanceNetWorthSignedAmount.signedValue(for: card) else { return nil }
 
         let convertedAmount = await dynamicsViewModel.convertAmount(
             value: rawAmount,
             from: card.currency,
             to: financeViewModel.state.displayCurrency
         )
-        guard convertedAmount > 0.01 else { return nil }
+        guard let normalized = FinanceOverviewLedgerStyle.normalizeAmount(
+            convertedAmount,
+            defaultSide: .debit
+        ) else { return nil }
 
         return FinanceOverviewLedgerSourceItem(
-            groupID: "ungrouped-\(side.rawValue)",
+            groupID: "ungrouped-\(normalized.side.rawValue)",
             groupName: "Без группы",
             groupColorHex: nil,
             accountID: card.cardUniqueID,
             accountName: card.name,
             accountIcon: card.cardType.icon,
-            amount: convertedAmount,
-            side: side
+            amount: normalized.amount,
+            side: normalized.side
         )
     }
 
@@ -286,25 +295,27 @@ struct FinanceOverviewCardView: View {
         credit: Credit,
         dynamicsViewModel: FinanceDynamicsViewModel
     ) async -> FinanceOverviewLedgerSourceItem? {
-        guard credit.archivedAt == nil else { return nil }
-        guard credit.remainingAmount > 0.01 else { return nil }
+        guard let rawAmount = FinanceNetWorthSignedAmount.signedValue(for: credit) else { return nil }
 
         let convertedAmount = await dynamicsViewModel.convertAmount(
-            value: credit.remainingAmount,
+            value: rawAmount,
             from: credit.currency,
             to: financeViewModel.state.displayCurrency
         )
-        guard convertedAmount > 0.01 else { return nil }
+        guard let normalized = FinanceOverviewLedgerStyle.normalizeAmount(
+            convertedAmount,
+            defaultSide: .debit
+        ) else { return nil }
 
         return FinanceOverviewLedgerSourceItem(
-            groupID: "ungrouped-credit",
+            groupID: "ungrouped-\(normalized.side.rawValue)",
             groupName: "Без группы",
             groupColorHex: nil,
             accountID: credit.creditUniqueID,
             accountName: credit.name,
             accountIcon: credit.creditType.icon,
-            amount: convertedAmount,
-            side: .credit
+            amount: normalized.amount,
+            side: normalized.side
         )
     }
 
@@ -312,25 +323,27 @@ struct FinanceOverviewCardView: View {
         investment: Investment,
         dynamicsViewModel: FinanceDynamicsViewModel
     ) async -> FinanceOverviewLedgerSourceItem? {
-        guard investment.archivedAt == nil else { return nil }
-        guard investment.amount > 0.01 else { return nil }
+        guard let rawAmount = FinanceNetWorthSignedAmount.signedValue(for: investment) else { return nil }
 
         let convertedAmount = await dynamicsViewModel.convertAmount(
-            value: investment.amount,
+            value: rawAmount,
             from: resolvedInvestmentCurrency(investment),
             to: financeViewModel.state.displayCurrency
         )
-        guard convertedAmount > 0.01 else { return nil }
+        guard let normalized = FinanceOverviewLedgerStyle.normalizeAmount(
+            convertedAmount,
+            defaultSide: .debit
+        ) else { return nil }
 
         return FinanceOverviewLedgerSourceItem(
-            groupID: "ungrouped-debit",
+            groupID: "ungrouped-\(normalized.side.rawValue)",
             groupName: "Без группы",
             groupColorHex: nil,
             accountID: investment.investmentUniqueID,
             accountName: investment.name,
             accountIcon: investment.category.icon,
-            amount: convertedAmount,
-            side: .debit
+            amount: normalized.amount,
+            side: normalized.side
         )
     }
 
@@ -350,23 +363,6 @@ struct FinanceOverviewCardView: View {
 
     private func accountKey(type: FinanceAccountType, id: String) -> String {
         "\(type.rawValue):\(id)"
-    }
-
-    private func side(
-        for account: FinanceAccount,
-        using dynamicsViewModel: FinanceDynamicsViewModel
-    ) -> FinanceOverviewLedgerSide {
-        switch account.accountType {
-        case .credit:
-            return .credit
-        case .investment:
-            return .debit
-        case .card:
-            if dynamicsViewModel.cardsCache[account.accountID]?.cardType == .credit {
-                return .credit
-            }
-            return .debit
-        }
     }
 
     private func saldoHero(
@@ -392,11 +388,6 @@ struct FinanceOverviewCardView: View {
                 }
 
                 Spacer(minLength: 12)
-
-                VStack(alignment: .trailing, spacing: 10) {
-                    sideMetricPill(title: "Debit", value: amountWithCurrency(presentation.debit.total), color: debitColor)
-                    sideMetricPill(title: "Credit", value: amountWithCurrency(presentation.credit.total), color: creditColor)
-                }
             }
         }
         .frame(maxWidth: .infinity)
@@ -438,12 +429,12 @@ struct FinanceOverviewCardView: View {
     ) -> some View {
         HStack(spacing: 10) {
             Button {
-                openExpandedChart(side: .debit)
+                openExpandedChart(side: .credit)
             } label: {
                 mirroredSideCard(
-                    side: presentation.debit,
+                    side: presentation.credit,
                     isTrailing: true,
-                    color: debitColor,
+                    color: creditColor,
                     totalReference: presentation.maxSideTotal
                 )
             }
@@ -459,12 +450,12 @@ struct FinanceOverviewCardView: View {
                 }
 
             Button {
-                openExpandedChart(side: .credit)
+                openExpandedChart(side: .debit)
             } label: {
                 mirroredSideCard(
-                    side: presentation.credit,
+                    side: presentation.debit,
                     isTrailing: false,
-                    color: creditColor,
+                    color: debitColor,
                     totalReference: presentation.maxSideTotal
                 )
             }
@@ -479,13 +470,13 @@ struct FinanceOverviewCardView: View {
     ) -> some View {
         HStack(alignment: .top, spacing: 12) {
             sideToggleCard(
-                side: presentation.debit,
-                color: debitColor,
+                side: presentation.credit,
+                color: creditColor,
                 totalReference: presentation.maxSideTotal
             )
             sideToggleCard(
-                side: presentation.credit,
-                color: creditColor,
+                side: presentation.debit,
+                color: debitColor,
                 totalReference: presentation.maxSideTotal
             )
         }
@@ -510,9 +501,12 @@ struct FinanceOverviewCardView: View {
                         Text(side.side.title)
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
-                        Text(FinanceOverviewLedgerStyle.countsText(groups: side.groups.count, accounts: side.accountCount))
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(AppColors.textSecondary)
+
+                        Text(amountWithCurrency(side.total))
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(color)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.78)
                     }
 
                     Spacer(minLength: 8)
@@ -546,16 +540,6 @@ struct FinanceOverviewCardView: View {
                     }
                 }
                 .frame(height: 12)
-
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(color)
-                        .frame(width: 8, height: 8)
-                    Text(FinanceOverviewLedgerStyle.disclosureText(isExpanded: isExpanded))
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(color)
-                    Spacer()
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(16)
@@ -596,10 +580,6 @@ struct FinanceOverviewCardView: View {
                     Text(side.side.title)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary.opacity(0.92))
-                    Text(FinanceOverviewLedgerStyle.compactCountsText(groups: side.groups.count, accounts: side.accountCount))
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(AppColors.textSecondary)
-                        .lineLimit(1)
                 }
 
                 Spacer(minLength: 4)
@@ -614,6 +594,8 @@ struct FinanceOverviewCardView: View {
                 .foregroundStyle(color)
                 .lineLimit(1)
                 .minimumScaleFactor(0.74)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .multilineTextAlignment(.center)
 
             GeometryReader { proxy in
                 let barWidth = FinanceOverviewLedgerStyle.barWidth(
@@ -669,16 +651,16 @@ struct FinanceOverviewCardView: View {
     ) -> some View {
         HStack(alignment: .top, spacing: 12) {
             sideDisclosureSection(
-                side: presentation.debit,
-                expandedGroupIDs: expandedGroupIDs,
-                groupLimit: groupLimit,
-                color: debitColor
-            )
-            sideDisclosureSection(
                 side: presentation.credit,
                 expandedGroupIDs: expandedGroupIDs,
                 groupLimit: groupLimit,
                 color: creditColor
+            )
+            sideDisclosureSection(
+                side: presentation.debit,
+                expandedGroupIDs: expandedGroupIDs,
+                groupLimit: groupLimit,
+                color: debitColor
             )
         }
     }
@@ -747,103 +729,104 @@ struct FinanceOverviewCardView: View {
         side: FinanceOverviewLedgerSidePresentation,
         color: Color
     ) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(side.side.title)
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundStyle(AppColors.textPrimary)
-                    Text(amountWithCurrency(side.total))
-                        .font(.system(size: 30, weight: .bold))
-                        .foregroundStyle(color)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.78)
-                    Text(FinanceOverviewLedgerStyle.countsText(groups: side.groups.count, accounts: side.accountCount))
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(AppColors.textSecondary)
-                }
-
-                Spacer()
-            }
-
+        VStack(alignment: .leading, spacing: 12) {
             if side.groups.isEmpty {
                 Text("Нет счетов")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(AppColors.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(18)
+                    .padding(14)
                     .background(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
                             .fill(Color.white.opacity(0.04))
                     )
             } else {
-                VStack(spacing: 12) {
+                VStack(spacing: 10) {
                     ForEach(side.groups) { group in
-                        expandedGroupCard(group: group, color: color)
+                        DisclosureGroup(
+                            isExpanded: binding(for: group.id, expandedGroupIDs: $expandedDetailGroupIDs)
+                        ) {
+                            VStack(spacing: 8) {
+                                ForEach(group.accounts) { account in
+                                    compactAccountRow(account, color: color)
+                                }
+                            }
+                            .padding(.top, 10)
+                        } label: {
+                            expandedGroupHeaderRow(group: group, color: color)
+                        }
+                        .tint(AppColors.textPrimary)
+                        .padding(14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .fill(Color.white.opacity(0.04))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                        .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
+                                )
+                        )
                     }
                 }
             }
         }
     }
 
-    private func expandedGroupCard(
+    private func expandedGroupHeaderRow(
         group: FinanceOverviewLedgerGroup,
         color: Color
     ) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 12) {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(groupColor(for: group, fallback: color).opacity(0.18))
-                    .frame(width: 36, height: 36)
-                    .overlay {
-                        Circle()
-                            .fill(groupColor(for: group, fallback: color))
-                            .frame(width: 10, height: 10)
-                    }
+        HStack(spacing: 10) {
+            Circle()
+                .fill(groupColor(for: group, fallback: color))
+                .frame(width: 10, height: 10)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(group.name)
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(AppColors.textPrimary)
-                        .lineLimit(2)
-                    Text("\(group.accounts.count) счетов")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(AppColors.textSecondary)
-                }
+            Text(group.name)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(AppColors.textPrimary)
+                .lineLimit(2)
 
-                Spacer(minLength: 8)
-            }
+            Spacer(minLength: 8)
 
             Text(amountWithCurrency(group.total))
-                .font(.system(size: 20, weight: .bold))
+                .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(color)
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
-
-            VStack(spacing: 10) {
-                ForEach(group.accounts) { account in
-                    accountRow(account, color: color)
-                }
-            }
+                .minimumScaleFactor(0.78)
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .padding(18)
+    }
+
+    private func compactAccountRow(
+        _ account: FinanceOverviewLedgerAccount,
+        color: Color
+    ) -> some View {
+        HStack(spacing: 10) {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(color.opacity(0.14))
+                .frame(width: 28, height: 28)
+                .overlay {
+                    Image(systemName: account.icon)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(color)
+                }
+
+            Text(account.name)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(AppColors.textPrimary)
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            Text(amountWithCurrency(account.amount))
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
         .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.07),
-                            Color.white.opacity(0.03)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
-                )
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white.opacity(0.035))
         )
     }
 
@@ -906,7 +889,7 @@ struct FinanceOverviewCardView: View {
 
             Text(amountWithCurrency(account.amount))
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(AppColors.textPrimary)
+                .foregroundStyle(color)
                 .lineLimit(1)
                 .minimumScaleFactor(0.76)
         }
@@ -919,20 +902,17 @@ struct FinanceOverviewCardView: View {
     }
 
     private var helperNote: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "info.circle.fill")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.48))
-
-            Text("Дебит и кредит здесь показаны как левая и правая стороны раскладки. Кредитные карты и кредиты попадают справа как обязательства.")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(AppColors.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.white.opacity(0.035))
+        FinancesHintsPanel(
+            title: "Hints",
+            prefsKey: "finances.overview.ledger",
+            items: [
+                .init(
+                    id: "ledger-sides",
+                    kind: .info,
+                    text: "Кредит и дебит показаны как левая и правая стороны: кредит слева, дебит справа. Кредитные карты и кредиты — слева как обязательства."
+                )
+            ],
+            accentColor: Color.white.opacity(0.18)
         )
     }
 
@@ -1041,51 +1021,6 @@ struct FinanceOverviewCardView: View {
         )
     }
 
-    private func badge(title: String, value: String, color: Color) -> some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(color)
-                .frame(width: 8, height: 8)
-            Text(title)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(AppColors.textSecondary)
-            Text(value)
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(AppColors.textPrimary)
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .background(
-            Capsule(style: .continuous)
-                .fill(Color.white.opacity(0.05))
-        )
-    }
-
-    private func sideMetricPill(title: String, value: String, color: Color) -> some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(color)
-                .frame(width: 8, height: 8)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AppColors.textSecondary)
-                Text(value)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(AppColors.textPrimary)
-                    .lineLimit(1)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            Capsule(style: .continuous)
-                .fill(Color.white.opacity(0.06))
-        )
-    }
-
     private func sideGlyph(color: Color, icon: String) -> some View {
         ZStack {
             Circle()
@@ -1098,24 +1033,21 @@ struct FinanceOverviewCardView: View {
     }
 
     private func amountWithCurrency(_ value: Double) -> String {
-        "\(formatAmount(value)) \(currencySymbol)"
+        FinanceAmountText.withCurrency(
+            value: value,
+            currencySymbol: currencySymbol,
+            isHidden: financeViewModel.state.isAmountHidden
+        )
     }
 
     private func signedAmount(_ value: Double) -> String {
         let amount = amountWithCurrency(abs(value))
+        if financeViewModel.state.isAmountHidden {
+            return amount
+        }
         if value > 0.01 { return "+\(amount)" }
         if value < -0.01 { return "-\(amount)" }
         return amount
-    }
-
-    private func formatAmount(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.groupingSeparator = " "
-        formatter.usesGroupingSeparator = true
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: value)) ?? "0"
     }
 
     private var currencySymbol: String {

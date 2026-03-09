@@ -24,10 +24,24 @@ struct FinanceOverviewLedgerStyleTests {
         )
     }
 
-    @Test("Style helper меняет подпись раскрытия по состоянию")
-    func disclosureTextReflectsExpandedState() {
-        #expect(FinanceOverviewLedgerStyle.disclosureText(isExpanded: false) == "Показать детали")
-        #expect(FinanceOverviewLedgerStyle.disclosureText(isExpanded: true) == "Свернуть")
+    @Test("Style helper нормализует отрицательные суммы в кредит")
+    func normalizeAmountMovesNegativeToCredit() {
+        let normalized = FinanceOverviewLedgerStyle.normalizeAmount(-1200, defaultSide: .debit)
+        #expect(normalized?.side == .credit)
+        #expect(normalized?.amount == 1200)
+    }
+
+    @Test("Style helper нормализует положительные суммы без смены стороны")
+    func normalizeAmountKeepsPositiveDefaultSide() {
+        let normalized = FinanceOverviewLedgerStyle.normalizeAmount(1200, defaultSide: .debit)
+        #expect(normalized?.side == .debit)
+        #expect(normalized?.amount == 1200)
+    }
+
+    @Test("Style helper отбрасывает почти нулевые значения")
+    func normalizeAmountDropsNearZero() {
+        #expect(FinanceOverviewLedgerStyle.normalizeAmount(0.001, defaultSide: .debit) == nil)
+        #expect(FinanceOverviewLedgerStyle.normalizeAmount(-0.001, defaultSide: .debit) == nil)
     }
 
     @Test("Style helper ограничивает ширину прогресс-бара минимальным значением")
