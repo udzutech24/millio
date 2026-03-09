@@ -12,30 +12,26 @@ import UIKit
 #endif
 
 private struct CurrencyConverterWidgetRow: Identifiable, Equatable {
-    let sourceCode: String
+    let code: String
     let valueText: String
 
-    var id: String { sourceCode }
+    var id: String { code }
 }
 
 private struct CurrencyConverterWidgetEntry: TimelineEntry {
     let date: Date
-    let primaryCode: String
     let rows: [CurrencyConverterWidgetRow]
-    let lastUpdatedAt: Date?
 }
 
 private struct CurrencyConverterWidgetProvider: TimelineProvider {
     func placeholder(in context: Context) -> CurrencyConverterWidgetEntry {
         CurrencyConverterWidgetEntry(
             date: Date(),
-            primaryCode: "RUB",
             rows: [
-                CurrencyConverterWidgetRow(sourceCode: "USD", valueText: "78,54 р"),
-                CurrencyConverterWidgetRow(sourceCode: "EUR", valueText: "91,04 р"),
-                CurrencyConverterWidgetRow(sourceCode: "TRY", valueText: "2,13 р")
-            ],
-            lastUpdatedAt: Date()
+                CurrencyConverterWidgetRow(code: "USD", valueText: "78,54 ₽"),
+                CurrencyConverterWidgetRow(code: "EUR", valueText: "91,04 ₽"),
+                CurrencyConverterWidgetRow(code: "TRY", valueText: "2,13 ₽")
+            ]
         )
     }
 
@@ -53,196 +49,146 @@ private struct CurrencyConverterWidgetProvider: TimelineProvider {
     private func makeEntry(now: Date) -> CurrencyConverterWidgetEntry {
         let defaults = UserDefaults(suiteName: CurrencyWidgetShared.appGroupID) ?? .standard
         let converter = CurrencyWidgetShared.ConverterSnapshot.load(from: defaults)
-
-        return CurrencyConverterWidgetEntry(
-            date: now,
-            primaryCode: converter.primaryCode,
-            rows: makeRows(converter: converter),
-            lastUpdatedAt: converter.lastUpdatedAt
-        )
+        let rows = makeRows(converter: converter)
+        return CurrencyConverterWidgetEntry(date: now, rows: rows)
     }
 
     private func makeRows(converter: CurrencyWidgetShared.ConverterSnapshot) -> [CurrencyConverterWidgetRow] {
-        var preferredSources = converter.selectedCodes.filter { $0 != converter.primaryCode }
-        if preferredSources.isEmpty {
-            preferredSources = ["USD", "EUR", "TRY", "GBP", "JPY", "CNY", "KZT", "RUB"]
-                .filter { $0 != converter.primaryCode }
+        let primary = converter.primaryCode
+        var sourceCodes = converter.selectedCodes.filter { $0 != primary }
+        if sourceCodes.isEmpty {
+            sourceCodes = ["USD", "EUR", "TRY", "GBP", "CNY", "JPY"].filter { $0 != primary }
         }
 
-        return preferredSources.prefix(6).map { sourceCode in
-            guard
-                let converted = CurrencyWidgetShared.convert(
-                    amount: 1,
-                    from: sourceCode,
-                    to: converter.primaryCode,
-                    rates: converter.rates
-                )
-            else {
-                return CurrencyConverterWidgetRow(sourceCode: sourceCode, valueText: "—")
+        let suffix = currencySuffix(for: primary)
+
+        return sourceCodes.prefix(3).map { code in
+            guard let converted = CurrencyWidgetShared.convert(amount: 1, from: code, to: primary, rates: converter.rates) else {
+                return CurrencyConverterWidgetRow(code: code, valueText: "—")
             }
-
-            let value = CurrencyWidgetShared.formatValue(converted, maxFractionDigits: 2)
-            return CurrencyConverterWidgetRow(
-                sourceCode: sourceCode,
-                valueText: "\(value) \(String(localized: "widget.converter.ruble_short"))"
-            )
+            let number = CurrencyWidgetShared.formatValue(converted, maxFractionDigits: 2)
+            return CurrencyConverterWidgetRow(code: code, valueText: "\(number) \(suffix)")
         }
+    }
+
+    private func currencySuffix(for currencyCode: String) -> String {
+        let normalized = currencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let explicitSymbols: [String: String] = [
+            "RUB": "₽",
+            "USD": "$",
+            "EUR": "€",
+            "GBP": "£",
+            "TRY": "₺",
+            "JPY": "¥",
+            "CNY": "¥",
+            "KZT": "₸"
+        ]
+        if let explicitSymbol = explicitSymbols[normalized] {
+            return explicitSymbol
+        }
+        let fallback = normalized
+        guard !normalized.isEmpty else { return fallback }
+
+        for identifier in Locale.availableIdentifiers {
+            let locale = Locale(identifier: identifier)
+            if locale.currency?.identifier.uppercased() == normalized {
+                if let symbol = locale.currencySymbol, !symbol.isEmpty {
+                    return symbol
+                }
+            }
+        }
+
+        return fallback
     }
 }
 
 private struct CurrencyConverterWidgetEntryView: View {
     let entry: CurrencyConverterWidgetEntry
-    @Environment(\.widgetFamily) private var family
-
-    private var openConverterURL: URL? {
-        CurrencyWidgetShared.deepLinkURL(for: .openConverter)
-    }
 
     var body: some View {
-        content
-            .widgetURL(openConverterURL)
-            .containerBackground(for: .widget) {
-                LinearGradient(
-                    colors: [Color(hex: "1C253A"), Color(hex: "081332"), Color(hex: "04102B")],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            }
-    }
+        VStack(spacing: 0) {
+            ForEach(Array(entry.rows.enumerated()), id: \.element.id) { index, row in
+                HStack {
+                    Spacer(minLength: 0)
 
-    @ViewBuilder
-    private var content: some View {
-        switch family {
-        case .systemSmall:
-            compactWidgetContent(maxRows: 3, rowFontSize: 14, valueFontSize: 15, rowSpacing: 6, padding: 10)
-        case .systemMedium:
-            compactWidgetContent(maxRows: 3, rowFontSize: 16, valueFontSize: 17, rowSpacing: 7, padding: 12)
-        case .systemLarge:
-            largeWidgetContent
-        default:
-            compactWidgetContent(maxRows: 3, rowFontSize: 14, valueFontSize: 15, rowSpacing: 6, padding: 10)
-        }
-    }
+                    HStack(spacing: 14) {
+                        widgetFlagIcon(for: row.code)
 
-    private func compactWidgetContent(
-        maxRows: Int,
-        rowFontSize: CGFloat,
-        valueFontSize: CGFloat,
-        rowSpacing: CGFloat,
-        padding: CGFloat
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            rowsView(maxRows: maxRows, rowFontSize: rowFontSize, valueFontSize: valueFontSize, rowSpacing: rowSpacing)
-            Spacer(minLength: 0)
-            widgetActionLink(
-                title: String(localized: "widget.converter.add_spend"),
-                iconSystemName: "minus.circle.fill",
-                colors: [Color(hex: "F43F5E"), Color(hex: "FB7185")],
-                action: .addExpense,
-                compact: true
-            )
-        }
-        .padding(padding)
-    }
-
-    private var largeWidgetContent: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            rowsView(maxRows: 6, rowFontSize: 16, valueFontSize: 17, rowSpacing: 5)
-            Spacer(minLength: 4)
-            HStack(spacing: 10) {
-                widgetActionLink(
-                    title: String(localized: "widget.converter.expense"),
-                    iconSystemName: "minus.circle.fill",
-                    colors: [Color(hex: "F43F5E"), Color(hex: "FB7185")],
-                    action: .addExpense,
-                    compact: true
-                )
-                widgetActionLink(
-                    title: String(localized: "widget.converter.income"),
-                    iconSystemName: "plus.circle.fill",
-                    colors: [Color(hex: "22C55E"), Color(hex: "4ADE80")],
-                    action: .addIncome,
-                    compact: true
-                )
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-    }
-
-    private func rowsView(maxRows: Int, rowFontSize: CGFloat, valueFontSize: CGFloat, rowSpacing: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: rowSpacing) {
-            ForEach(entry.rows.prefix(maxRows)) { row in
-                HStack(spacing: 8) {
-                    widgetFlagIcon(for: row.sourceCode)
-
-                    Text(row.sourceCode)
-                        .font(.system(size: rowFontSize, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.95))
-                        .frame(width: family == .systemLarge ? 64 : 52, alignment: .leading)
-
-                    Text(row.valueText)
-                        .font(.system(size: valueFontSize, weight: .bold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                        Text(row.valueText)
+                            .font(.system(size: 20, weight: .semibold, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.9)
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
 
                     Spacer(minLength: 0)
                 }
-            }
-        }
-    }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 11)
 
-    private func widgetActionLink(
-        title: String,
-        iconSystemName: String,
-        colors: [Color],
-        action: CurrencyWidgetShared.DeepLinkAction,
-        compact: Bool
-    ) -> some View {
-        Group {
-            if let destination = CurrencyWidgetShared.deepLinkURL(for: action) {
-                Link(destination: destination) {
-                    HStack(spacing: 6) {
-                        Image(systemName: iconSystemName)
-                            .font(.system(size: compact ? 12 : 14, weight: .bold))
-                        Text(title)
-                            .font(.system(size: compact ? 12 : 14, weight: .bold))
-                            .lineLimit(1)
-                    }
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, compact ? 7 : 11)
-                    .background(
-                        RoundedRectangle(cornerRadius: compact ? 10 : 12, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: colors,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
+                if index < entry.rows.count - 1 {
+                    Divider()
+                        .overlay(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.02),
+                                    Color.white.opacity(0.12),
+                                    Color.white.opacity(0.02)
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
                             )
-                    )
+                        )
                 }
             }
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
+        .containerBackground(for: .widget) {
+            ZStack {
+                LinearGradient(
+                    colors: [Color(hex: "404553"), Color(hex: "1A1D26"), Color(hex: "0E1118")],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+
+                RadialGradient(
+                    colors: [Color.white.opacity(0.09), Color.clear],
+                    center: .topLeading,
+                    startRadius: 4,
+                    endRadius: 220
+                )
+
+                LinearGradient(
+                    colors: [Color(hex: "27456B").opacity(0.14), Color.clear, Color.black.opacity(0.18)],
+                    startPoint: .trailing,
+                    endPoint: .leading
+                )
+            }
+        }
+        .widgetURL(CurrencyWidgetShared.deepLinkURL(for: .openConverter))
     }
 
     @ViewBuilder
     private func widgetFlagIcon(for code: String) -> some View {
-        let size: CGFloat = family == .systemLarge ? 16 : 15
-        let resolvedCode = code.uppercased()
-
-        if let assetName = widgetFlagAssetName(for: resolvedCode) {
+        let size: CGFloat = 32
+        let normalized = code.uppercased()
+        if let assetName = widgetFlagAssetName(for: normalized) {
             Image(assetName)
                 .resizable()
                 .scaledToFill()
                 .frame(width: size, height: size)
                 .clipShape(Circle())
+                .overlay(
+                    Circle()
+                        .stroke(Color.white.opacity(0.16), lineWidth: 0.8)
+                )
+                .shadow(color: .black.opacity(0.18), radius: 4, x: 0, y: 2)
         } else {
-            Text(widgetFlagEmoji(for: resolvedCode))
-                .font(.system(size: family == .systemLarge ? 16 : 13))
+            Text(widgetFlagEmoji(for: normalized))
+                .font(.system(size: 26))
                 .frame(width: size, height: size)
         }
     }
@@ -329,7 +275,7 @@ struct CurrencyConverterWidget: Widget {
         }
         .configurationDisplayName(String(localized: "widget.converter.configuration_title"))
         .description(String(localized: "widget.converter.configuration_description"))
-        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+        .supportedFamilies([.systemSmall])
     }
 }
 
