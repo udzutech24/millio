@@ -219,8 +219,8 @@ struct ConverterView: View {
         .toolbar { topToolbar }
         .premiumUpsellAlert(
             isPresented: $showCryptoProAlert,
-            titleKey: "Криптовалюты доступны в PRO",
-            message: String(localized: "Обычные валюты доступны бесплатно, криптовалюты доступны по подписке PRO."),
+            titleKey: "monetization.crypto.pro_title",
+            message: String(localized: "monetization.crypto.pro_message"),
             onSubscribe: { router.push(.subscription) }
         )
     }
@@ -275,17 +275,22 @@ struct ConverterView: View {
     }
     
     private var pickerSheet: some View {
-        NavigationStack {
+        let canUseCrypto = EntitlementPolicy.canUseConverterCrypto(isPro: appState.isPro)
+        return NavigationStack {
             CurrencyPickerView(
-                allCodes: availablePickerCodes,
+                allCodes: viewModel.allAvailableCodes,
                 searchText: Binding(
                     get: { viewModel.state.searchText },
                     set: { viewModel.handle(.updateSearchText($0)) }
                 ),
                 selectedCodes: viewModel.state.selectedCurrencies,
+                badgeForCode: { code in
+                    guard CurrencySelectionSupport.isCrypto(code), !canUseCrypto else { return nil }
+                    return .pro
+                },
                 onSelect: { code in
                     if CurrencySelectionSupport.isCrypto(code),
-                       !EntitlementPolicy.canUseConverterCrypto(isPro: appState.isPro) {
+                       !canUseCrypto {
                         viewModel.handle(.hidePicker)
                         showCryptoProAlert = true
                         return
@@ -308,14 +313,6 @@ struct ConverterView: View {
         .presentationDragIndicator(.visible)
     }
 
-    private var availablePickerCodes: [String] {
-        if EntitlementPolicy.canUseConverterCrypto(isPro: appState.isPro) {
-            return viewModel.allAvailableCodes
-        }
-        return viewModel.allAvailableCodes.filter { !CurrencySelectionSupport.isCrypto($0) }
-    }
-    
-    
     private var settingsSheet: some View {
         NavigationStack {
             ZStack {

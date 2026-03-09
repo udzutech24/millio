@@ -142,6 +142,36 @@ struct StockBulkImportRowDraft: Identifiable, Equatable, Sendable {
     }
 }
 
+extension StockBulkImportRowDraft {
+    /// Символ для превью: показываем тикер (и рынок, если известен), а имя инструмента — отдельно.
+    var displayHeaderSymbol: String {
+        if let selectedCandidate {
+            return selectedCandidate.storedSymbol
+        }
+
+        if let normalizedMarket = StockBulkImportMarketNormalizer.normalize(market) {
+            return "\(normalizedMarket):\(ticker)"
+        }
+
+        return ticker
+    }
+
+    /// Вторичная строка для превью: имя инструмента, либо сырой распознанный текст (когда нет матча).
+    var displaySecondaryText: String? {
+        if let selectedCandidate {
+            return selectedCandidate.displayName
+        }
+
+        let trimmed = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// Сырой текст полезен только до выбора инструмента (иначе это часто дублирует имя).
+    var shouldShowRawLineAsSecondaryText: Bool {
+        selectedCandidate == nil
+    }
+}
+
 struct StockBulkImportResolvedRow: Equatable, Sendable {
     let candidate: StockBulkImportCandidate
     let quantity: Double

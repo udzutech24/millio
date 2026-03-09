@@ -103,7 +103,7 @@ final class StockBulkImportViewModel: ObservableObject {
 
     func selectCandidate(_ candidate: StockBulkImportCandidate, for rowID: UUID) {
         guard let index = rows.firstIndex(where: { $0.id == rowID }) else { return }
-        rows[index].selectedCandidate = candidate
+        applyCandidateSelection(candidate, at: index)
     }
 
     func persistRows() async -> Int {
@@ -192,14 +192,20 @@ final class StockBulkImportViewModel: ObservableObject {
             providerRaw: "twelvedata"
         )
 
-        rows[index].tickerText = symbol.symbol.uppercased()
-        rows[index].marketText = candidate.normalizedMarket ?? ""
-        rows[index].candidates = [candidate]
-        rows[index].selectedCandidate = candidate
+        applyCandidateSelection(candidate, at: index)
         if rows[index].currentPriceText.isEmpty,
            let marketPrice = try? await persistenceService.marketDataClient.latestPrice(symbol: candidate.storedSymbol, forceRefresh: false) {
             rows[index].currentPriceText = formatNumber(marketPrice)
         }
+    }
+
+    private func applyCandidateSelection(_ candidate: StockBulkImportCandidate, at index: Int) {
+        // Важно: после выбора инструмента синхронизируем input-поля (тикер/рынок),
+        // иначе пользователю кажется, что тикер "нашёлся, но не вставился".
+        rows[index].tickerText = candidate.normalizedSymbol
+        rows[index].marketText = candidate.normalizedMarket ?? ""
+        rows[index].candidates = [candidate]
+        rows[index].selectedCandidate = candidate
     }
 
     private func fillCurrentPricesForMatchedRows() async {
@@ -242,6 +248,10 @@ final class StockBulkImportViewModel: ObservableObject {
 }
 
 struct StockBulkImportSheet: View {
+    private enum FocusField: Hashable {
+        case ticker(UUID)
+    }
+
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var financeViewModel: FinanceViewModel
     @StateObject private var viewModel: StockBulkImportViewModel
@@ -249,6 +259,7 @@ struct StockBulkImportSheet: View {
     @State private var searchRequest: StockBulkImportSearchRequest?
     @State private var showGroupCreator: Bool = false
     @State private var previousGroupIDs: Set<String> = []
+    @FocusState private var focusedField: FocusField?
 
     init(
         financeViewModel: FinanceViewModel,
@@ -317,6 +328,7 @@ struct StockBulkImportSheet: View {
         .presentationDragIndicator(.visible)
         .sheet(item: $searchRequest) { request in
             MarketSymbolSearchSheet(filter: .stocks) { symbol in
+                focusedField = nil
                 Task {
                     await viewModel.applySearchResult(symbol, for: request.id)
                 }
@@ -325,6 +337,15 @@ struct StockBulkImportSheet: View {
         .sheet(isPresented: $showGroupCreator, onDismiss: applyCreatedGroupIfNeeded) {
             FinanceGroupEditorView(viewModel: financeViewModel)
         }
+    }
+
+    private func tickerTextBinding(for rowID: UUID) -> Binding<String> {
+        Binding(
+            get: { viewModel.rows.first(where: { $0.id == rowID })?.tickerText ?? "" },
+            set: { newValue in
+                Task { await viewModel.updateTicker(newValue, for: rowID) }
+            }
+        )
     }
 
     private var modePicker: some View {
@@ -589,15 +610,15 @@ struct StockBulkImportSheet: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top, spacing: 10) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(row.selectedCandidate?.displayName ?? row.ticker)
+                        Text(row.displayHeaderSymbol)
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
 
-                        if !row.rawLine.isEmpty {
-                            Text(row.rawLine)
-                                .font(.system(size: 12, weight: .regular))
-                                .foregroundStyle(AppColors.textSecondary)
-                                .lineLimit(2)
+                        if let secondary = row.displaySecondaryText {
+                            Text(secondary)
+                                .font(.system(size: row.shouldShowRawLineAsSecondaryText ? 12 : 13, weight: .regular))
+                                .foregroundStyle(row.shouldShowRawLineAsSecondaryText ? AppColors.textSecondary : AppColors.textTertiary)
+                                .lineLimit(row.shouldShowRawLineAsSecondaryText ? 2 : 1)
                         }
                     }
 
@@ -630,21 +651,18 @@ struct StockBulkImportSheet: View {
             HStack(spacing: 8) {
                 TextField(
                     String(localized: "finances.mass_import.field_ticker"),
-                    text: Binding(
-                        get: { row.tickerText },
-                        set: { newValue in
-                            Task { await viewModel.updateTicker(newValue, for: row.id) }
-                        }
-                    )
+                    text: tickerTextBinding(for: row.id)
                 )
                 .textInputAutocapitalization(.characters)
                 .autocorrectionDisabled()
+                .focused($focusedField, equals: .ticker(row.id))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
                 .background(Color.white.opacity(0.06))
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                 Button {
+                    focusedField = nil
                     searchRequest = StockBulkImportSearchRequest(id: row.id)
                 } label: {
                     Image(systemName: "magnifyingglass")
@@ -709,6 +727,7 @@ struct StockBulkImportSheet: View {
                 Menu {
                     ForEach(row.candidates) { candidate in
                         Button(candidate.storedSymbol) {
+                            focusedField = nil
                             viewModel.selectCandidate(candidate, for: row.id)
                         }
                     }

@@ -48,6 +48,7 @@ struct CashflowTransactionEditorView: View {
     @State private var showCurrencyPicker: Bool = false
     @State private var currencySearchText: String = ""
     @State private var showCategorySheet: Bool = false
+    @State private var showCryptoProAlert: Bool = false
     @FocusState private var isAmountFieldFocused: Bool
 
     private let primarySecondaryText = Color.white.opacity(0.78)
@@ -254,6 +255,7 @@ struct CashflowTransactionEditorView: View {
         .sheet(isPresented: $showCurrencyPicker) {
             NavigationStack {
                 let favoriteCodes = SettingsManager.shared.favoriteCurrencyCodes
+                let canUseCrypto = EntitlementPolicy.canUseFinanceCrypto(isPro: appState.isPro)
                 CurrencyPickerView(
                     allCodes: CurrencySelectionSupport.allCodes(includeCrypto: true),
                     searchText: $currencySearchText,
@@ -264,7 +266,15 @@ struct CashflowTransactionEditorView: View {
                         from: SettingsManager.shared.primaryCurrencyCode
                     ),
                     onToggleFavorite: nil,
+                    badgeForCode: { code in
+                        guard CurrencySelectionSupport.isCrypto(code), !canUseCrypto else { return nil }
+                        return .pro
+                    },
                     onSelect: { currency in
+                        if CurrencySelectionSupport.isCrypto(currency), !canUseCrypto {
+                            showCryptoProAlert = true
+                            return
+                        }
                         selectedCurrency = currency
                         showCurrencyPicker = false
                     }
@@ -279,6 +289,12 @@ struct CashflowTransactionEditorView: View {
                         .foregroundStyle(AppColors.textPrimary)
                     }
                 }
+                .premiumUpsellAlert(
+                    isPresented: $showCryptoProAlert,
+                    titleKey: "monetization.crypto.pro_title",
+                    message: String(localized: "monetization.crypto.pro_message"),
+                    onSubscribe: { router.push(.subscription) }
+                )
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
