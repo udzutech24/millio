@@ -83,8 +83,8 @@ struct millioApp: App {
                             .zIndex(1)
                         }
                     }
-                    .id(appState.languageRefreshToken)
                 }
+                .id(appState.languageRefreshToken)
                 .preferredColorScheme(.dark)
                 .environment(appState)
                 .environment(authManager)
