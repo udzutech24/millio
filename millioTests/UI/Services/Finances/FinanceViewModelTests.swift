@@ -1582,4 +1582,116 @@ struct FinanceViewModelTests {
         let ungroupedName = String(localized: "finances.group.ungrouped")
         #expect(createdLink.group?.name == ungroupedName)
     }
+
+    @Test("Удаление карты из финансов архивирует Card и удаляет FinanceAccount")
+    func testRemoveCardAccountFromGroupArchivesUnderlyingAndDeletesLink() async throws {
+        let modelContext = try createTestModelContext()
+        let currencyService = MockCurrencyRateService()
+
+        let group = FinanceGroup(name: "Test Group")
+        let card = Card(name: "Test Card", cardNumber: "1234", cardType: .debit, currency: "RUB", balance: 10)
+        let accountLink = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        accountLink.group = group
+
+        modelContext.insert(group)
+        modelContext.insert(card)
+        modelContext.insert(accountLink)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: currencyService,
+            marketDataClient: MockMarketDataClient(),
+            skipInitialLoad: false
+        )
+        _ = await waitForAsyncStatePropagation(until: { !viewModel.state.groups.isEmpty })
+
+        let linksBefore = try modelContext.fetch(FetchDescriptor<FinanceAccount>())
+        #expect(linksBefore.count == 1)
+
+        viewModel.handle(.removeAccountFromGroup(accountLink))
+
+        let linksAfter = try modelContext.fetch(FetchDescriptor<FinanceAccount>())
+        #expect(linksAfter.isEmpty)
+
+        let cards = try modelContext.fetch(FetchDescriptor<Card>())
+        let updatedCard = try #require(cards.first)
+        #expect(updatedCard.archivedAt != nil)
+    }
+
+    @Test("Удаление кредита из финансов архивирует Credit и удаляет FinanceAccount")
+    func testRemoveCreditAccountFromGroupArchivesUnderlyingAndDeletesLink() async throws {
+        let modelContext = try createTestModelContext()
+        let currencyService = MockCurrencyRateService()
+
+        let group = FinanceGroup(name: "Test Group")
+        let credit = Credit(
+            name: "Test Credit",
+            amount: 1000,
+            interestRate: 10,
+            monthlyPayment: 100,
+            startDate: Date(),
+            termMonths: 12,
+            currency: "RUB",
+            bank: .other,
+            creditType: .consumer
+        )
+        let accountLink = FinanceAccount(accountType: .credit, accountID: credit.creditUniqueID)
+        accountLink.group = group
+
+        modelContext.insert(group)
+        modelContext.insert(credit)
+        modelContext.insert(accountLink)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: currencyService,
+            marketDataClient: MockMarketDataClient(),
+            skipInitialLoad: false
+        )
+        _ = await waitForAsyncStatePropagation(until: { !viewModel.state.groups.isEmpty })
+
+        viewModel.handle(.removeAccountFromGroup(accountLink))
+
+        let linksAfter = try modelContext.fetch(FetchDescriptor<FinanceAccount>())
+        #expect(linksAfter.isEmpty)
+
+        let credits = try modelContext.fetch(FetchDescriptor<Credit>())
+        let updatedCredit = try #require(credits.first)
+        #expect(updatedCredit.archivedAt != nil)
+    }
+
+    @Test("Удаление инвестиции из финансов архивирует Investment и удаляет FinanceAccount")
+    func testRemoveInvestmentAccountFromGroupArchivesUnderlyingAndDeletesLink() async throws {
+        let modelContext = try createTestModelContext()
+        let currencyService = MockCurrencyRateService()
+
+        let group = FinanceGroup(name: "Test Group")
+        let investment = Investment(name: "Test Investment", category: .other, amount: 50, currency: "USD")
+        let accountLink = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+        accountLink.group = group
+
+        modelContext.insert(group)
+        modelContext.insert(investment)
+        modelContext.insert(accountLink)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: currencyService,
+            marketDataClient: MockMarketDataClient(),
+            skipInitialLoad: false
+        )
+        _ = await waitForAsyncStatePropagation(until: { !viewModel.state.groups.isEmpty })
+
+        viewModel.handle(.removeAccountFromGroup(accountLink))
+
+        let linksAfter = try modelContext.fetch(FetchDescriptor<FinanceAccount>())
+        #expect(linksAfter.isEmpty)
+
+        let investments = try modelContext.fetch(FetchDescriptor<Investment>())
+        let updatedInvestment = try #require(investments.first)
+        #expect(updatedInvestment.archivedAt != nil)
+    }
 }

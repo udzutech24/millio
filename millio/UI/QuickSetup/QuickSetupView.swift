@@ -7,6 +7,7 @@ struct QuickSetupView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
+    @FocusState private var focusedField: FocusField?
     @StateObject private var viewModel: QuickSetupViewModel
     @State private var showLanguageSheet = false
     @State private var showPrimaryCurrencySheet = false
@@ -21,6 +22,13 @@ struct QuickSetupView: View {
     private let onCompleted: (() -> Void)?
     private let onSkipped: (() -> Void)?
 
+    private enum FocusField: Hashable {
+        case productName
+        case productAmount
+        case productQuantity
+        case productPurchasePrice
+    }
+
     init(
         appState: AppState,
         mode: QuickSetupFlowMode,
@@ -33,6 +41,18 @@ struct QuickSetupView: View {
         self.onSkipped = onSkipped
     }
 
+    init(
+        viewModel: QuickSetupViewModel,
+        mode: QuickSetupFlowMode,
+        onCompleted: (() -> Void)? = nil,
+        onSkipped: (() -> Void)? = nil
+    ) {
+        _viewModel = StateObject(wrappedValue: viewModel)
+        self.mode = mode
+        self.onCompleted = onCompleted
+        self.onSkipped = onSkipped
+    }
+
     var body: some View {
         ZStack {
             quickSetupBackground
@@ -40,32 +60,49 @@ struct QuickSetupView: View {
             VStack(spacing: 0) {
                 header
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        progressBar
-                        stepHero
-                        stepContent
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 18) {
+                            progressBar
+                            stepHero
+                            stepContent
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 12)
+                        .padding(.bottom, focusedField == nil ? 20 : 320)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 12)
-                    .padding(.bottom, 28)
-                }
-
-                bottomActions
-                    .padding(.top, 14)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 22)
+                    .scrollDismissesKeyboard(.interactively)
                     .background(
-                        LinearGradient(
-                            colors: [Color.clear, Color.black.opacity(0.9), Color.black],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture { focusedField = nil }
                     )
+                    .onChange(of: focusedField) { _, newValue in
+                        guard let newValue else { return }
+                        DispatchQueue.main.async {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) {
+                                proxy.scrollTo(newValue, anchor: .center)
+                            }
+                        }
+                    }
+                }
             }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            bottomActions
+                .padding(.top, 14)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 12)
+                .background(bottomBarBackground)
         }
         .navigationBarBackButtonHidden(mode == .onboarding)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Готово") { focusedField = nil }
+            }
+        }
         .sheet(isPresented: $showLanguageSheet) {
             NavigationStack {
                 LanguageSelectionView(
@@ -114,6 +151,7 @@ struct QuickSetupView: View {
             Text(errorMessage ?? "")
         }
         .onChange(of: viewModel.currentStep) { _, newStep in
+            focusedField = nil
             if newStep == .summary {
                 triggerSummaryCelebration()
             }
@@ -137,6 +175,7 @@ struct QuickSetupView: View {
                     .overlay(Circle().stroke(.white.opacity(0.1), lineWidth: 1))
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("quickSetup.headerBackButton")
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("profile.quick_setup")
@@ -152,6 +191,7 @@ struct QuickSetupView: View {
                 }
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(AppColors.brandPrimary)
+                .accessibilityIdentifier("quickSetup.skipButton")
             }
         }
         .padding(.horizontal, 20)
@@ -332,6 +372,7 @@ struct QuickSetupView: View {
                 }
 
                 Button {
+                    focusedField = nil
                     let added = viewModel.addDraftProduct()
                     if !added {
                         fireWarningHaptic()
@@ -406,6 +447,7 @@ struct QuickSetupView: View {
                 ForEach(QuickSetupProductType.allCases) { type in
                     let selected = viewModel.productTypeForCreation == type
                     Button {
+                        focusedField = nil
                         withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
                             viewModel.selectProductType(type)
                         }
@@ -554,6 +596,7 @@ struct QuickSetupView: View {
         HStack(spacing: 12) {
             if viewModel.currentStep != .localeAndCurrencies {
                 Button {
+                    focusedField = nil
                     withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
                         viewModel.goBackStep()
                     }
@@ -574,9 +617,11 @@ struct QuickSetupView: View {
                         )
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("quickSetup.backButton")
             }
 
             Button {
+                focusedField = nil
                 if viewModel.currentStep == .summary {
                     saveSelection()
                 } else {
@@ -600,9 +645,19 @@ struct QuickSetupView: View {
                 .background(primaryButtonBackground)
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("quickSetup.continueButton")
             .disabled(!viewModel.canContinue || isSaving)
             .opacity((!viewModel.canContinue || isSaving) ? 0.55 : 1)
         }
+    }
+
+    private var bottomBarBackground: some View {
+        LinearGradient(
+            colors: [Color.clear, Color.black.opacity(0.9), Color.black],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea(edges: .bottom)
     }
 
     private func moneyText(_ amount: Double, currencyCode: String) -> String {
@@ -752,8 +807,13 @@ struct QuickSetupView: View {
             TextField("Название", text: $viewModel.productNameInput)
                 .textInputAutocapitalization(.words)
                 .autocorrectionDisabled(false)
+                .focused($focusedField, equals: .productName)
+                .submitLabel(.next)
+                .onSubmit { focusedField = .productAmount }
                 .padding(12)
                 .background(RoundedRectangle(cornerRadius: 14).fill(.white.opacity(0.05)))
+                .id(FocusField.productName)
+                .accessibilityIdentifier("quickSetup.productNameField")
 
             TextField(
                 viewModel.productAmountFieldTitle,
@@ -763,14 +823,18 @@ struct QuickSetupView: View {
                 )
             )
             .keyboardType(.decimalPad)
+            .focused($focusedField, equals: .productAmount)
             .padding(12)
             .background(RoundedRectangle(cornerRadius: 14).fill(.white.opacity(0.05)))
+            .id(FocusField.productAmount)
+            .accessibilityIdentifier("quickSetup.productAmountField")
         }
     }
 
     private var marketDraftFields: some View {
         VStack(spacing: 10) {
             Button {
+                focusedField = nil
                 showMarketSearchSheet = true
             } label: {
                 HStack(spacing: 12) {
@@ -807,8 +871,11 @@ struct QuickSetupView: View {
                 )
             )
             .keyboardType(.decimalPad)
+            .focused($focusedField, equals: .productQuantity)
             .padding(12)
             .background(RoundedRectangle(cornerRadius: 14).fill(.white.opacity(0.05)))
+            .id(FocusField.productQuantity)
+            .accessibilityIdentifier("quickSetup.productQuantityField")
 
             TextField(
                 viewModel.productPurchasePriceTitle,
@@ -818,8 +885,11 @@ struct QuickSetupView: View {
                 )
             )
             .keyboardType(.decimalPad)
+            .focused($focusedField, equals: .productPurchasePrice)
             .padding(12)
             .background(RoundedRectangle(cornerRadius: 14).fill(.white.opacity(0.05)))
+            .id(FocusField.productPurchasePrice)
+            .accessibilityIdentifier("quickSetup.productPurchasePriceField")
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack {

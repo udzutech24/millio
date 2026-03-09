@@ -3,7 +3,7 @@ import Testing
 @testable import millio
 
 struct BackupExperienceModelsTests {
-    @Test("Dashboard copy explains CloudKit storage and passphrase trust model")
+    @Test("Dashboard copy stays concise for iCloud and passphrase mode")
     func testDashboardCopyForPortableMode() {
         let content = BackupExperiencePresenter.dashboard(
             isBackupEnabled: true,
@@ -13,9 +13,10 @@ struct BackupExperienceModelsTests {
             hasPinnedVersions: false
         )
 
-        #expect(content.storageTitle == "Хранение: приватная база iCloud")
+        #expect(content.title == "Почти готово")
+        #expect(content.storageTitle == "Хранение в iCloud")
         #expect(content.trustTitle == "Защита: кодовая фраза")
-        #expect(content.trustDetail.contains("не хранит вашу кодовую фразу"))
+        #expect(content.trustDetail.contains("Millio ее не хранит"))
         #expect(content.readiness.contains(where: { $0.title == "Есть актуальная копия" && $0.isComplete == false }))
     }
 
@@ -30,7 +31,8 @@ struct BackupExperienceModelsTests {
         )
 
         #expect(content.title == "Резервное копирование выключено")
-        #expect(content.storageTitle == "Хранение: только на устройстве")
+        #expect(content.subtitle == "Данные остаются на устройстве.")
+        #expect(content.storageTitle == "Только на устройстве")
         #expect(content.readiness.first?.isComplete == false)
     }
 

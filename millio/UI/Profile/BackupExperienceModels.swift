@@ -81,29 +81,29 @@ enum BackupExperiencePresenter {
 
         if !isBackupEnabled {
             title = "Резервное копирование выключено"
-            subtitle = "Данные остаются локально на устройстве, автоматические копии не создаются."
+            subtitle = "Данные остаются на устройстве."
         } else if !isICloudAvailable {
-            title = "Резервное копирование требует iCloud"
-            subtitle = "Включите iCloud для Millio, чтобы копии сохранялись в вашем облачном аккаунте."
+            title = "Нужен iCloud"
+            subtitle = "Включите iCloud для Millio."
         } else if let lastBackupDate {
-            title = "Резервное копирование настроено"
-            subtitle = "Последняя копия создана \(relativeBackupDate(lastBackupDate))."
+            title = "Копирование настроено"
+            subtitle = "Последняя копия: \(relativeBackupDate(lastBackupDate))."
         } else {
-            title = "Резервное копирование почти готово"
-            subtitle = "Защита уже настроена. Осталось создать первую копию."
+            title = "Почти готово"
+            subtitle = "Осталось создать первую копию."
         }
 
         let storageTitle: String
         let storageDetail: String
         if isBackupEnabled, isICloudAvailable {
-            storageTitle = "Хранение: приватная база iCloud"
-            storageDetail = "Снимки сохраняются в вашем private CloudKit container. Они привязаны к вашему Apple ID, а не к публичному хранилищу Millio."
+            storageTitle = "Хранение в iCloud"
+            storageDetail = "Копии лежат в вашем приватном CloudKit-контейнере."
         } else if isBackupEnabled {
             storageTitle = "Хранение недоступно"
-            storageDetail = "Пока iCloud недоступен, новые облачные копии не будут создаваться."
+            storageDetail = "Пока iCloud недоступен, новые копии не создаются."
         } else {
-            storageTitle = "Хранение: только на устройстве"
-            storageDetail = "Пока резервное копирование выключено, данные хранятся локально в SwiftData на этом устройстве."
+            storageTitle = "Только на устройстве"
+            storageDetail = "Пока копирование выключено, данные остаются локально."
         }
 
         let trustTitle: String
@@ -111,10 +111,10 @@ enum BackupExperiencePresenter {
         switch encryptionMode {
         case .deviceKey:
             trustTitle = "Защита: ключ на устройстве"
-            trustDetail = "Копия шифруется, а ключ остается в iOS Keychain на этом устройстве. Это удобно, но перенос на новое устройство может не сработать."
+            trustDetail = "Ключ хранится в Keychain этого устройства. Перенос может не сработать."
         case .passphrase:
             trustTitle = "Защита: кодовая фраза"
-            trustDetail = "Копия шифруется до отправки в iCloud. Millio не хранит вашу кодовую фразу и не сможет восстановить ее за вас."
+            trustDetail = "Фраза известна только вам. Millio ее не хранит и не восстанавливает."
         }
 
         return BackupDashboardContent(
@@ -155,27 +155,27 @@ enum BackupExperiencePresenter {
         [
             BackupReadinessItem(
                 title: "Резервное копирование включено",
-                detail: isBackupEnabled ? "Автоматическая копия будет создаваться при уходе приложения в фон." : "Включите резервное копирование, чтобы Millio начал создавать копии.",
+                detail: isBackupEnabled ? "Автокопия создается при уходе в фон." : "Нужно включить резервное копирование.",
                 isComplete: isBackupEnabled
             ),
             BackupReadinessItem(
                 title: "iCloud доступен",
-                detail: isICloudAvailable ? "CloudKit Private Database доступна для сохранения и восстановления." : "Проверьте вход в iCloud и доступ Millio к облаку.",
+                detail: isICloudAvailable ? "Можно сохранять и восстанавливать." : "Проверьте вход в iCloud и доступ Millio.",
                 isComplete: isICloudAvailable
             ),
             BackupReadinessItem(
                 title: "Защита настроена",
-                detail: encryptionMode.summary + " " + encryptionMode.restoreRisk,
+                detail: encryptionMode == .passphrase ? "Есть перенос по кодовой фразе." : "Ключ привязан к устройству.",
                 isComplete: true
             ),
             BackupReadinessItem(
                 title: "Есть актуальная копия",
-                detail: lastBackupDate != nil ? "Можно восстановить состояние из последней облачной копии." : "Создайте первую копию вручную, чтобы убедиться, что восстановление будет доступно.",
+                detail: lastBackupDate != nil ? "Есть копия для восстановления." : "Создайте первую копию вручную.",
                 isComplete: lastBackupDate != nil
             ),
             BackupReadinessItem(
-                title: "Сохраненные копии",
-                detail: hasPinnedVersions ? "Есть хотя бы одна закрепленная копия, которая не удаляется автоматически." : "При необходимости сохраните дополнительную копию как версию.",
+                title: "Есть сохраненная версия",
+                detail: hasPinnedVersions ? "Хотя бы одна версия закреплена." : "При необходимости сохраните отдельную версию.",
                 isComplete: hasPinnedVersions
             )
         ]

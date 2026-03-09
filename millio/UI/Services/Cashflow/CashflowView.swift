@@ -865,14 +865,14 @@ private struct CashflowContentView: View {
 
             cashflowInsightsBars(
                 presentation: presentation,
-                chartHeight: 160,
+                chartHeight: CashflowInsightsControlsStyle.compactBarsHeight,
                 maxBarHeight: 110,
                 minimumGroupWidth: 56,
                 barWidth: 26,
                 labelFontSize: 14
             )
 
-            cashflowInsightsGranularityPicker
+            cashflowInsightsGranularityPicker(isFullScreen: false)
         }
     }
 
@@ -886,7 +886,7 @@ private struct CashflowContentView: View {
                         HStack(spacing: 12) {
                             cashflowInsightCard(
                                 model: cashflowFullScreenPresentation.expenseCard,
-                                accent: Color(hex: "FF4FA3"),
+                                accent: neonNegative,
                                 onTap: {
                                     openHistory(
                                         filter: .expense,
@@ -896,7 +896,7 @@ private struct CashflowContentView: View {
                             )
                             cashflowInsightCard(
                                 model: cashflowFullScreenPresentation.incomeCard,
-                                accent: Color(hex: "5A97FF"),
+                                accent: neonPositive,
                                 onTap: {
                                     openHistory(
                                         filter: .income,
@@ -907,12 +907,27 @@ private struct CashflowContentView: View {
                         }
 
                         cashflowFullScreenChart
-
-                        fullScreenVisiblePeriodsControl
-
-                        cashflowInsightsGranularityPicker
                     }
                     .padding(16)
+                }
+                .safeAreaInset(edge: .bottom, alignment: .center, spacing: 0) {
+                    VStack(spacing: 12) {
+                        fullScreenVisiblePeriodsControl
+                        cashflowInsightsGranularityPicker(isFullScreen: true)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(Color.black.opacity(0.55))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .stroke(Color.white.opacity(0.10), lineWidth: 0.8)
+                            )
+                    )
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 10)
                 }
             }
             .navigationTitle("cashflow.chart.title")
@@ -942,35 +957,13 @@ private struct CashflowContentView: View {
     }
 
     private var cashflowChartProLocked: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "lock.fill")
-                .font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(primarySecondaryText)
-
-            Text("cashflow.chart.pro.title")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(AppColors.textPrimary)
-
-            Text("cashflow.chart.pro.subtitle")
-                .font(.system(size: 12, weight: .regular))
-                .foregroundStyle(primarySecondaryText)
-                .multilineTextAlignment(.center)
-
-            Button {
-                router.push(.subscription)
-            } label: {
-                Text("finances.dynamics.pro.cta")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(
-                        Capsule()
-                            .fill(LinearGradient(colors: [neonCyan, neonViolet], startPoint: .leading, endPoint: .trailing))
-                    )
-            }
-            .buttonStyle(.plain)
-        }
+        ProChartUpsellView(
+            titleKey: "cashflow.chart.pro.title",
+            subtitleKey: "cashflow.chart.pro.subtitle",
+            ctaKey: "finances.dynamics.pro.cta",
+            size: .compact,
+            onTapCTA: { router.push(.subscription) }
+        )
         .frame(maxWidth: .infinity, minHeight: 140)
         .background(financeInnerBackground(cornerRadius: rowCornerRadius))
     }
@@ -1112,6 +1105,7 @@ private struct CashflowContentView: View {
                 ForEach(presentation.bars) { bar in
                     cashflowInsightsBarGroup(
                         bar: bar,
+                        granularity: selectedInsightsGranularity,
                         selectedPeriodStart: presentation.selectedPeriodStart,
                         maxValue: maxValue,
                         groupWidth: groupWidth,
@@ -1144,6 +1138,7 @@ private struct CashflowContentView: View {
                 ForEach(presentation.bars) { bar in
                     cashflowInsightsBarGroup(
                         bar: bar,
+                        granularity: selectedInsightsGranularity,
                         selectedPeriodStart: presentation.selectedPeriodStart,
                         maxValue: maxValue,
                         groupWidth: metrics.groupWidth,
@@ -1153,14 +1148,17 @@ private struct CashflowContentView: View {
                     )
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-            .padding(.horizontal, 6)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .padding(.horizontal, 10)
+            .padding(.top, 12)
+            .padding(.bottom, 14)
         }
-        .frame(height: 360)
+        .frame(height: 332)
     }
 
     private func cashflowInsightsBarGroup(
         bar: CashflowInsightsBar,
+        granularity: CashflowInsightsGranularity,
         selectedPeriodStart: Date,
         maxValue: Double,
         groupWidth: CGFloat,
@@ -1200,13 +1198,13 @@ private struct CashflowContentView: View {
                         maxBarHeight: maxBarHeight,
                         barWidth: barWidth,
                         isSelected: isSelected,
-                        trackTint: Color(hex: "FF4DB2"),
-                        glowColor: Color(hex: "FF4DB2"),
+                        trackTint: neonNegative,
+                        glowColor: neonNegative,
                         fill: LinearGradient(
                             colors: [
-                                Color(hex: "FF62BD"),
-                                Color(hex: "D63C96"),
-                                Color(hex: "6B284F")
+                                Color(hex: "FF7A7A"),
+                                Color(hex: "FF6666"),
+                                Color(hex: "4A1414")
                             ],
                             startPoint: .top,
                             endPoint: .bottom
@@ -1219,13 +1217,13 @@ private struct CashflowContentView: View {
                         maxBarHeight: maxBarHeight,
                         barWidth: barWidth,
                         isSelected: isSelected,
-                        trackTint: Color(hex: "7FB3FF"),
-                        glowColor: Color(hex: "7FB3FF"),
+                        trackTint: neonPositive,
+                        glowColor: neonPositive,
                         fill: LinearGradient(
                             colors: [
-                                Color(hex: "96C0FF"),
-                                Color(hex: "6196E8"),
-                                Color(hex: "345A9E")
+                                Color(hex: "7BFFD0"),
+                                Color(hex: "30D6A8"),
+                                Color(hex: "0B3A2A")
                             ],
                             startPoint: .top,
                             endPoint: .bottom
@@ -1236,13 +1234,18 @@ private struct CashflowContentView: View {
                 .padding(.top, 16)
                 .padding(.bottom, 8)
 
-                Text(bar.label)
+                Text(
+                    CashflowInsightsChartStyle.barLabel(
+                        for: bar.periodStart,
+                        granularity: granularity
+                    )
+                )
                     .font(.system(size: labelFontSize, weight: .medium))
                     .foregroundStyle(AppColors.textPrimary.opacity(bar.isPlaceholder ? 0.78 : 0.94))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
+                    .minimumScaleFactor(0.6)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
                     .background(
                         Capsule()
                             .fill(Color.white.opacity(isSelected ? 0.14 : 0.0))
@@ -1289,7 +1292,7 @@ private struct CashflowContentView: View {
                 x: 0,
                 y: 10
             )
-            .offset(y: isSelected ? -4 : 0)
+            .offset(y: isSelected ? -2 : 0)
         }
         .buttonStyle(.plain)
     }
@@ -1320,7 +1323,6 @@ private struct CashflowContentView: View {
                     Capsule(style: .continuous)
                         .stroke(Color.white.opacity(isSelected ? 0.10 : 0.04), lineWidth: 0.8)
                 )
-                .frame(width: barWidth, height: maxBarHeight)
 
             chartBar(
                 value: value,
@@ -1332,6 +1334,7 @@ private struct CashflowContentView: View {
                 isSelected: isSelected
             )
         }
+        .frame(width: barWidth, height: maxBarHeight)
     }
 
     private func chartBar(
@@ -1384,8 +1387,9 @@ private struct CashflowContentView: View {
             .opacity(visibleHeight > 0 ? 1 : 0)
     }
 
-    private var cashflowInsightsGranularityPicker: some View {
-        HStack(spacing: 8) {
+    private func cashflowInsightsGranularityPicker(isFullScreen: Bool) -> some View {
+        let metrics = CashflowInsightsControlsStyle.granularityPickerMetrics(isFullScreen: isFullScreen)
+        return HStack(spacing: 6) {
             ForEach(CashflowInsightsGranularity.allCases) { granularity in
                 Button {
                     withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
@@ -1394,14 +1398,14 @@ private struct CashflowContentView: View {
                     fireLightImpact()
                 } label: {
                     Text(granularity.title)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.system(size: metrics.fontSize, weight: .medium))
                         .foregroundStyle(
                             selectedInsightsGranularity == granularity
                                 ? AppColors.textPrimary
                                 : primarySecondaryText
                         )
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
+                        .padding(.vertical, metrics.itemVerticalPadding)
                         .background(
                             Capsule(style: .continuous)
                                 .fill(Color.white.opacity(selectedInsightsGranularity == granularity ? 0.14 : 0.0))
@@ -1409,7 +1413,7 @@ private struct CashflowContentView: View {
                                     Capsule(style: .continuous)
                                         .stroke(
                                             Color.white.opacity(selectedInsightsGranularity == granularity ? 0.10 : 0.0),
-                                            lineWidth: 0.8
+                                            lineWidth: 0.6
                                         )
                                 )
                         )
@@ -1417,15 +1421,16 @@ private struct CashflowContentView: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(6)
+        .padding(metrics.containerPadding)
         .background(
             Capsule(style: .continuous)
                 .fill(Color.white.opacity(0.05))
                 .overlay(
                     Capsule(style: .continuous)
-                        .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                        .stroke(Color.white.opacity(0.06), lineWidth: 0.8)
                 )
         )
+        .padding(metrics.outerPadding)
     }
 
     private func visibleRangeChip(_ value: Int) -> some View {

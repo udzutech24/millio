@@ -147,9 +147,6 @@
         }
       }
     },
-    "Apple sign in" : {
-
-    },
     "Apply" : {
       "localizations" : {
         "en" : {
@@ -198,6 +195,186 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Изменение стоимости активов"
+          }
+        }
+      }
+    },
+    "auth.welcome.badge.private_access" : {
+      "comment" : "Capsule badge above the app name on the auth welcome screen",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Private access"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Частный доступ"
+          }
+        }
+      }
+    },
+    "auth.welcome.brand" : {
+      "comment" : "App name on the auth welcome screen",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Millio"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Millio"
+          }
+        }
+      }
+    },
+    "auth.welcome.cta.continue_without_account" : {
+      "comment" : "Secondary CTA on the auth welcome screen",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue without account"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Продолжить без аккаунта"
+          }
+        }
+      }
+    },
+    "auth.welcome.debug.local_backend_fallback" : {
+      "comment" : "Fallback debug label when local backend host is not available",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Local backend auth"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Локальный backend auth"
+          }
+        }
+      }
+    },
+    "auth.welcome.debug.local_backend_prefix" : {
+      "comment" : "Debug prefix for local backend host label",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Local backend:"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Локальный backend:"
+          }
+        }
+      }
+    },
+    "auth.welcome.feature.apple_sign_in" : {
+      "comment" : "Feature list item on the auth welcome screen",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in with Apple"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вход с Apple"
+          }
+        }
+      }
+    },
+    "auth.welcome.feature.guest_access" : {
+      "comment" : "Feature list item on the auth welcome screen",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guest access"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Гостевой режим"
+          }
+        }
+      }
+    },
+    "auth.welcome.feature.private_session" : {
+      "comment" : "Feature list item on the auth welcome screen",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Private session"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Частная сессия"
+          }
+        }
+      }
+    },
+    "auth.welcome.subtitle" : {
+      "comment" : "Description below the main title on the auth welcome screen",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use your Apple account for a full session, or enter as a guest and decide later"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Войдите с Apple для полной сессии или продолжите как гость и решите позже"
+          }
+        }
+      }
+    },
+    "auth.welcome.title" : {
+      "comment" : "Headline on the auth welcome screen",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finance, without friction"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Финансы без лишних усилий"
           }
         }
       }
@@ -2135,10 +2312,6 @@
         }
       }
     },
-    "Continue without account" : {
-      "comment" : "A button label that allows a user to continue using the app without creating an account.",
-      "isCommentAutoGenerated" : true
-    },
     "converter.accessibility.add_currency" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3272,10 +3445,6 @@
           }
         }
       }
-    },
-    "Finance, without friction." : {
-      "comment" : "A headline describing the main feature of the app.",
-      "isCommentAutoGenerated" : true
     },
     "finances.account.credit_limit_remaining" : {
       "extractionState" : "manual",
@@ -5742,6 +5911,57 @@
         }
       }
     },
+    "finances.dynamics.delete_account" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete account"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить аккаунт"
+          }
+        }
+      }
+    },
+    "finances.dynamics.delete_account.confirm.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This action can’t be undone."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Это действие нельзя отменить."
+          }
+        }
+      }
+    },
+    "finances.dynamics.delete_account.confirm.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete “%@”?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить «%@»?"
+          }
+        }
+      }
+    },
     "finances.dynamics.empty.chart" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6197,6 +6417,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "График доступен в PRO версии"
+          }
+        }
+      }
+    },
+    "finances.dynamics.pro.hint.list_available" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The breakdown list below is available without PRO. Upgrade to unlock the chart."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Список изменений баланса ниже доступен без PRO. Оформите подписку, чтобы открыть график."
+          }
+        }
+      }
+    },
+    "finances.dynamics.pro.hints.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hints"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подсказки"
           }
         }
       }
@@ -9319,9 +9573,6 @@
     "Full reset (all data types)" : {
 
     },
-    "Guest access" : {
-
-    },
     "Hide details" : {
 
     },
@@ -9565,14 +9816,6 @@
           }
         }
       }
-    },
-    "Local backend auth" : {
-      "comment" : "A label describing the local authentication flow.",
-      "isCommentAutoGenerated" : true
-    },
-    "Local backend: %@" : {
-      "comment" : "A label displaying the hostname of the local backend used for authentication.",
-      "isCommentAutoGenerated" : true
     },
     "Main info" : {
       "extractionState" : "stale",
@@ -10280,13 +10523,6 @@
           }
         }
       }
-    },
-    "PRIVATE ACCESS" : {
-      "comment" : "The title of a user interface element that indicates a level of privacy or security.",
-      "isCommentAutoGenerated" : true
-    },
-    "Private session" : {
-
     },
     "profile.auth.access_expires" : {
       "comment" : "Access token expiration prefix",
@@ -13607,10 +13843,6 @@
         }
       }
     },
-    "Use your Apple account for a full session, or enter as a guest and decide later." : {
-      "comment" : "A description below the main title of the view, explaining the user's options.",
-      "isCommentAutoGenerated" : true
-    },
     "Visible range" : {
 
     },
@@ -13752,6 +13984,9 @@
         }
       }
     },
+    "Будет использована для этой копии. Millio ее не сохраняет." : {
+
+    },
     "Бухгалтерская раскладка" : {
 
     },
@@ -13809,6 +14044,12 @@
       }
     },
     "Введите кодовую фразу" : {
+
+    },
+    "Введите одинаковую фразу в оба поля." : {
+
+    },
+    "Введите фразу и нажмите «Готово»." : {
 
     },
     "Восстанавливаем данные" : {
@@ -13911,7 +14152,7 @@
         }
       }
     },
-    "Выберите нужную копию и замените локальные данные." : {
+    "Выберите копию и замените локальные данные." : {
 
     },
     "Выберите нужный снимок. Восстановление полностью заменит локальные данные." : {
@@ -14018,6 +14259,9 @@
           }
         }
       }
+    },
+    "Где лежат данные и можно ли их восстановить." : {
+
     },
     "Гость" : {
       "comment" : "Default display name in profile when user has not set a name.",
@@ -14764,9 +15008,6 @@
         }
       }
     },
-    "Она будет использована для создания этой резервной копии. Millio ее не сохраняет." : {
-
-    },
     "Основная валюта" : {
       "comment" : "A section header in the Onboarding view",
       "isCommentAutoGenerated" : true,
@@ -14999,10 +15240,7 @@
         }
       }
     },
-    "После «Готово» поля свернутся." : {
-
-    },
-    "После ввода нажмите «Готово», чтобы скрыть клавиатуру и подтвердить фразу." : {
+    "После подтверждения поля свернутся." : {
 
     },
     "предусмотр" : {
@@ -15070,9 +15308,6 @@
           }
         }
       }
-    },
-    "Прозрачный контроль за тем, где лежат данные и как они восстанавливаются." : {
-
     },
     "Пропустить" : {
       "localizations" : {
@@ -15309,9 +15544,6 @@
         }
       }
     },
-    "Сначала введите одинаковую фразу в оба поля." : {
-
-    },
     "Создать категорию" : {
       "comment" : "A button label that allows users to create new cashback categories.",
       "isCommentAutoGenerated" : true,
@@ -15459,7 +15691,7 @@
         }
       }
     },
-    "Фраза подтверждена для этой сессии. Можно создавать резервную копию." : {
+    "Фраза подтверждена. Можно создавать копию." : {
 
     },
     "Эмодзи" : {

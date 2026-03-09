@@ -13,24 +13,6 @@ enum FinancesTab: String {
     case dynamics = "dynamics"
 }
 
-struct FinancesEmptyStateIntroPrefs {
-    static let hiddenKey = "finances_main_empty_intro_hidden"
-
-    private let defaults: UserDefaults
-
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
-    }
-
-    func isHidden() -> Bool {
-        defaults.bool(forKey: Self.hiddenKey)
-    }
-
-    func setHidden(_ hidden: Bool) {
-        defaults.set(hidden, forKey: Self.hiddenKey)
-    }
-}
-
 @MainActor
 enum FinancesDeepLinkHandler {
     static func openAddCardIfRequested(appState: AppState, viewModel: FinanceViewModel?) {
@@ -180,8 +162,7 @@ private struct FinancesContentViewInternal: View {
         TabView(selection: $selectedTab) {
             // Вкладка 1: Основной экран
             FinancesMainTabView(
-                viewModel: viewModel,
-                selectedTab: $selectedTab
+                viewModel: viewModel
             )
                 .tabItem {
                     Label("finances.main.title", systemImage: "creditcard")
@@ -316,8 +297,6 @@ private struct FinancesSettingsSheet: View {
 
 private struct FinancesMainTabView: View {
     @ObservedObject var viewModel: FinanceViewModel
-    @Binding var selectedTab: FinancesTab
-    @State private var isEmptyIntroHidden: Bool = FinancesEmptyStateIntroPrefs().isHidden()
     
     var body: some View {
         mainContent
@@ -328,66 +307,72 @@ private struct FinancesMainTabView: View {
         ZStack {
             GradientBackground()
             
+            let visibleGroups = viewModel.visibleGroupsForList()
+            let showsAddFAB = FinancesMainLayoutPolicy.showsAddFAB(visibleGroupsCount: visibleGroups.count)
+
             ScrollView {
                 VStack(spacing: 20) {
                     overviewHeroModule
-                    
+
                     // Список групп
-                    groupsListSection
+                    groupsListSection(visibleGroups)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 4)
-                .padding(.bottom, 100) // Дополнительный отступ снизу для FAB
+                // Отступ снизу оставляем только когда FAB реально отображается, чтобы пустой state не "падал" вниз.
+                .padding(.bottom, FinancesMainLayoutPolicy.scrollContentBottomPadding(showsAddFAB: showsAddFAB))
             }
-            
-            // Floating Action Button (FAB) внизу справа
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    Button {
-                        viewModel.handle(.showAddAccountSheet(nil))
-                    } label: {
-                        let accentColor = AppColors.financesGradient.first ?? .cyan
-                        let fillGradient = LinearGradient(
-                            colors: [
-                                Color(red: 0.03, green: 0.07, blue: 0.11),
-                                Color(red: 0.02, green: 0.04, blue: 0.06),
-                                Color.black
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                        let glowGradient = LinearGradient(
-                            colors: [
-                                accentColor.opacity(0.18),
-                                Color.clear
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
 
-                        Image(systemName: "plus")
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 56, height: 56)
-                            .background(
-                                Circle()
-                                    .fill(fillGradient)
-                                    .overlay(
-                                        Circle()
-                                            .fill(glowGradient)
-                                            .opacity(0.6)
-                                    )
-                                    .overlay(
-                                        Circle()
-                                            .stroke(accentColor.opacity(0.55), lineWidth: 1)
-                                    )
+            if showsAddFAB {
+                // Floating Action Button (FAB) внизу справа
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Button {
+                            viewModel.handle(.showAddAccountSheet(nil))
+                        } label: {
+                            let accentColor = AppColors.financesGradient.first ?? .cyan
+                            let fillGradient = LinearGradient(
+                                colors: [
+                                    Color(red: 0.03, green: 0.07, blue: 0.11),
+                                    Color(red: 0.02, green: 0.04, blue: 0.06),
+                                    Color.black
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
                             )
-                        
+                            let glowGradient = LinearGradient(
+                                colors: [
+                                    accentColor.opacity(0.18),
+                                    Color.clear
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+
+                            Image(systemName: "plus")
+                                .font(.system(size: 24, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(width: 56, height: 56)
+                                .background(
+                                    Circle()
+                                        .fill(fillGradient)
+                                        .overlay(
+                                            Circle()
+                                                .fill(glowGradient)
+                                                .opacity(0.6)
+                                        )
+                                        .overlay(
+                                            Circle()
+                                                .stroke(accentColor.opacity(0.55), lineWidth: 1)
+                                        )
+                                )
+
+                        }
+                        .padding(.trailing, 24)
+                        .padding(.bottom, 24)
                     }
-                    .padding(.trailing, 24)
-                    .padding(.bottom, 24)
                 }
             }
         }
@@ -621,11 +606,10 @@ private struct FinancesMainTabView: View {
     
     // MARK: - Groups List Section
     
-    private var groupsListSection: some View {
-        let visibleGroups = viewModel.visibleGroupsForList()
+    private func groupsListSection(_ visibleGroups: [FinanceGroup]) -> some View {
         return VStack(alignment: .leading, spacing: 10) {
             if visibleGroups.isEmpty {
-                emptyGroupsOnboardingState
+                emptyGroupsCallToAction
             } else {
                 Text("finances.main.accounts_section.title")
                     .font(.system(size: 13, weight: .semibold))
@@ -687,52 +671,8 @@ private struct FinancesMainTabView: View {
         .frame(height: 10)
     }
 
-    private var emptyGroupsOnboardingState: some View {
+    private var emptyGroupsCallToAction: some View {
         VStack(spacing: 14) {
-            HStack {
-                Spacer()
-
-                if !isEmptyIntroHidden {
-                    Button {
-                        isEmptyIntroHidden = true
-                        FinancesEmptyStateIntroPrefs().setHidden(true)
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(AppColors.textSecondary)
-                            .frame(width: 24, height: 24)
-                            .background(Color.white.opacity(0.08))
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(String(localized: "finances.main.empty_intro.dismiss"))
-                }
-            }
-
-            Image(systemName: "sparkles.rectangle.stack.fill")
-                .font(.system(size: 42))
-                .foregroundStyle(AppColors.textTertiary)
-
-            Text("finances.main.empty_intro.title")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(AppColors.textPrimary)
-                .multilineTextAlignment(.center)
-
-            if !isEmptyIntroHidden {
-                FinancesGlassCard(
-                    accentColor: emptyIntroAccentColor,
-                    contentPadding: EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12)
-                ) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        emptyIntroHintRow(
-                            text: String(localized: "finances.main.empty_intro.description"),
-                            systemImage: "sparkles",
-                            accentColor: emptyIntroAccentColor
-                        )
-                    }
-                }
-            }
-
             Button {
                 viewModel.handle(.showAddAccountSheet(nil))
             } label: {
@@ -753,74 +693,8 @@ private struct FinancesMainTabView: View {
                     )
             }
             .buttonStyle(.plain)
-
-            if !isEmptyIntroHidden {
-                Button {
-                    selectedTab = .dynamics
-                } label: {
-                    Text("finances.main.empty_intro.open_dynamics")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.white.opacity(0.08))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .stroke(Color.white.opacity(0.18), lineWidth: 1)
-                                )
-                        )
-                }
-                .buttonStyle(.plain)
-            }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 18)
-        .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.white.opacity(0.04))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                )
-        )
         .padding(.top, 8)
-        .padding(.bottom, 40)
-    }
-
-    private var emptyIntroAccentColor: Color {
-        AppColors.financesGradient.first ?? AppColors.brandPrimary
-    }
-
-    private func emptyIntroHintRow(
-        text: String,
-        systemImage: String,
-        accentColor: Color
-    ) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: systemImage)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(accentColor)
-                .frame(width: 14)
-
-            Text(text)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(AppColors.textPrimary)
-                .multilineTextAlignment(.leading)
-                .lineSpacing(2)
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.black.opacity(0.28))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(accentColor.opacity(0.65), lineWidth: 1)
-                )
-        )
     }
 }
 

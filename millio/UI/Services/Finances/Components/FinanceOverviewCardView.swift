@@ -18,6 +18,7 @@ enum FinanceOverviewCardChrome {
 struct FinanceOverviewCardView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
+    @Environment(AppRouter.self) private var router
 
     @ObservedObject var financeViewModel: FinanceViewModel
     let chrome: FinanceOverviewCardChrome
@@ -975,18 +976,13 @@ struct FinanceOverviewCardView: View {
     }
 
     private var blockedState: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "lock.fill")
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(AppColors.textSecondary)
-            Text(String(localized: "finances.dynamics.pro.title"))
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(AppColors.textPrimary)
-            Text(String(localized: "finances.dynamics.pro.subtitle"))
-                .font(.system(size: 12, weight: .regular))
-                .foregroundStyle(AppColors.textSecondary)
-                .multilineTextAlignment(.center)
-        }
+        ProChartUpsellView(
+            titleKey: "finances.dynamics.pro.title",
+            subtitleKey: "finances.dynamics.pro.subtitle",
+            ctaKey: "finances.dynamics.pro.cta",
+            size: .compact,
+            onTapCTA: { router.push(.subscription) }
+        )
         .frame(maxWidth: .infinity, minHeight: 160)
     }
 

@@ -41,16 +41,21 @@ enum FinanceDynamicsTopBarStyle {
     static let containerStrokeWidth: CGFloat = 0.7
     static let containerHorizontalPadding: CGFloat = 6
     static let containerVerticalPadding: CGFloat = 4
-    static let singleAccountTitleClearanceTopPadding: CGFloat = 18
+    static let baseScrollContentTopPadding: CGFloat = 8
+    static let singleAccountCreditCardScrollContentClearanceTopPadding: CGFloat = 24
+    static let periodSelectorTopPadding: CGFloat = 10
 
     static func inlineEditorSymbol(isEditing: Bool) -> String {
         isEditing ? "checkmark" : "square.and.pencil"
     }
 
-    /// В single-account режиме `NavigationTitle` пустой, а bar-кнопки могут визуально "лежать" поверх контента.
-    /// Для кредитных карт верхняя строка (баланс) скрыта, поэтому длинное название счета попадает под bar-кнопки.
-    static func singleAccountTitleTopPadding(needsClearance: Bool) -> CGFloat {
-        needsClearance ? singleAccountTitleClearanceTopPadding : 0
+    /// В single-account режиме (детали продукта) navigation bar становится визуально "прозрачным",
+    /// и его trailing-кнопки могут пересекаться с самым верхом ScrollView.
+    /// Для кредитных карт мы добавляем дополнительный отступ сверху, чтобы:
+    /// - название продукта не пересекалось с navigation bar,
+    /// - блок лимита/долга начинался ниже.
+    static func scrollContentTopPadding(needsClearance: Bool) -> CGFloat {
+        baseScrollContentTopPadding + (needsClearance ? singleAccountCreditCardScrollContentClearanceTopPadding : 0)
     }
 }
 
@@ -189,6 +194,7 @@ private struct FinanceDynamicsContentView: View {
     @State private var selectedOverviewPeriods: [FinanceOverviewGranularity: Date] = [:]
     @State private var overviewEntriesByGranularity: [FinanceOverviewGranularity: [FinanceOverviewPeriodEntry]] = [:]
     @State private var isOverviewChartLoading: Bool = false
+    @State private var showDeleteAccountConfirmation: Bool = false
 
     // Кэшированные значения для графика
     @State private var cachedSelectedPoint: (date: Date, value: Double)? = nil
@@ -205,6 +211,10 @@ private struct FinanceDynamicsContentView: View {
             if let marketInvestment = marketInvestment {
                 marketInvestmentDetailsView(marketInvestment)
             } else {
+                let isCreditCardAccount = initialAccount.map { inlineCreditCard(for: $0) != nil } ?? false
+                let needsTopClearance = viewModel.state.isSingleAccountMode && isCreditCardAccount && shouldShowSingleAccountActionBar
+                let scrollTopPadding = FinanceDynamicsTopBarStyle.scrollContentTopPadding(needsClearance: needsTopClearance)
+
                 ScrollView {
                     VStack(spacing: 16) {
                         // Якорь для измерения скролла
@@ -231,10 +241,14 @@ private struct FinanceDynamicsContentView: View {
 
                         // Список динамики
                         dynamicsListCard
+
+                        if shouldShowDeleteAccountFooter, let account = initialAccount {
+                            deleteAccountFooterButton(account: account)
+                        }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .padding(.bottom, 32)
+                    .padding(.top, scrollTopPadding)
+                    .padding(.bottom, shouldShowDeleteAccountFooter ? 44 : 32)
                 }
                 .coordinateSpace(name: "dynScroll")
                 .onPreferenceChange(ScrollOffsetKey.self) { y in
@@ -247,6 +261,20 @@ private struct FinanceDynamicsContentView: View {
                     }
                 }
             }
+        }
+        .confirmationDialog(
+            deleteAccountConfirmationTitle,
+            isPresented: $showDeleteAccountConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(String(localized: "finances.common.delete"), role: .destructive) {
+                guard let account = initialAccount else { return }
+                financeViewModel.handle(.removeAccountFromGroup(account))
+                dismiss()
+            }
+            Button(String(localized: "finances.common.cancel"), role: .cancel) {}
+        } message: {
+            Text(String(localized: "finances.dynamics.delete_account.confirm.message"))
         }
         .navigationTitle(viewModel.state.isSingleAccountMode ? "" : String(localized: "finances.dynamics.title"))
         .navigationBarTitleDisplayMode(.inline)
@@ -1006,7 +1034,7 @@ private struct FinanceDynamicsContentView: View {
             }
 
             if !EntitlementPolicy.canUseFinanceCharts(isPro: appState.isPro) {
-                proBlockedView
+                proBlockedView(size: .compact)
             } else if isOverviewChartLoading {
                 ProgressView()
                     .tint(AppColors.textPrimary)
@@ -1371,7 +1399,8 @@ private struct FinanceDynamicsContentView: View {
 
                 // График
                 if !EntitlementPolicy.canUseFinanceCharts(isPro: appState.isPro) {
-                    proBlockedView
+                    proBlockedView(size: .regular)
+                        .frame(height: max(0, currentHeight - 64))
                 } else if viewModel.state.isLoading {
                     ProgressView()
                         .tint(AppColors.textPrimary)
@@ -1390,6 +1419,7 @@ private struct FinanceDynamicsContentView: View {
 
                 // Селектор периодов
                 periodSelector
+                    .padding(.top, FinanceDynamicsTopBarStyle.periodSelectorTopPadding)
             }
             .scaleEffect(x: 1, y: max(CGFloat(0.6), CGFloat(1) - effectiveCollapse * CGFloat(0.6)), anchor: .top)
             .clipped()
@@ -1413,7 +1443,7 @@ private struct FinanceDynamicsContentView: View {
                 .fill(Color.black.opacity(0.3))
         }
         .clipped()
-        .frame(height: currentHeight + 100)
+        .frame(height: currentHeight + 100 + FinanceDynamicsTopBarStyle.periodSelectorTopPadding)
     }
 
     // MARK: - Chart Header
@@ -1496,7 +1526,6 @@ private struct FinanceDynamicsContentView: View {
                case .singleAccount(let accountID) = viewModel.state.dynamicsMode,
                let account = viewModel.getAccountsForSelectedGroups().first(where: { $0.accountUniqueID == accountID }),
                let accountInfo = viewModel.getAccountInfoForDynamics(account: account) {
-                let needsTitleClearance = shouldShowSingleAccountActionBar && isCreditCardAccount && viewModel.state.isSingleAccountMode
                 HStack(spacing: 8) {
                     Image(systemName: accountInfo.icon)
                         .font(.system(size: 18, weight: .semibold))
@@ -1505,7 +1534,6 @@ private struct FinanceDynamicsContentView: View {
                         .lineLimit(2)
                         .minimumScaleFactor(0.8)
                 }
-                .padding(.top, FinanceDynamicsTopBarStyle.singleAccountTitleTopPadding(needsClearance: needsTitleClearance))
                 .padding(.horizontal, 2)
                 .padding(.vertical, 2)
                 .foregroundStyle(AppColors.textPrimary.opacity(0.92))
@@ -1575,6 +1603,41 @@ private struct FinanceDynamicsContentView: View {
 
     private var shouldShowSingleAccountActionBar: Bool {
         viewModel.state.isSingleAccountMode && initialAccount != nil && marketInvestment == nil
+    }
+
+    private var shouldShowDeleteAccountFooter: Bool {
+        viewModel.state.isSingleAccountMode && initialAccount != nil && marketInvestment == nil
+    }
+
+    private var deleteAccountConfirmationTitle: String {
+        guard let account = initialAccount else {
+            return String(localized: "finances.dynamics.delete_account")
+        }
+        let name = financeViewModel.getAccountInfo(account: account)?.name
+            ?? String(localized: "finances.dynamics.chart.account_fallback")
+        return FinancesL10n.format("finances.dynamics.delete_account.confirm.title", name)
+    }
+
+    private func deleteAccountFooterButton(account: FinanceAccount) -> some View {
+        Button(role: .destructive) {
+            showDeleteAccountConfirmation = true
+        } label: {
+            Text(String(localized: "finances.dynamics.delete_account"))
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(AppColors.error.opacity(0.9))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+        }
+        .buttonStyle(.plain)
+        .background {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 0.8)
+                )
+        }
+        .accessibilityIdentifier("finances.delete_account.button")
     }
 
     private func singleAccountActionBar(account: FinanceAccount) -> some View {
@@ -2463,53 +2526,17 @@ private struct FinanceDynamicsContentView: View {
 
     // MARK: - Blocked/Empty Views
 
-    private var proBlockedView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "lock.fill")
-                .font(.system(size: 48))
-                .foregroundStyle(AppColors.textTertiary)
-
-            Text(String(localized: "finances.dynamics.pro.title"))
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(AppColors.textPrimary)
-
-            Text(String(localized: "finances.dynamics.pro.subtitle"))
-                .font(.system(size: 14))
-                .foregroundStyle(AppColors.textSecondary)
-                .multilineTextAlignment(.center)
-
-            Button {
-                showSubscriptionSheet = true
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "star.fill")
-                        .font(.system(size: 14))
-                    Text(String(localized: "finances.dynamics.pro.cta"))
-                        .font(.system(size: 16, weight: .semibold))
-                }
-                .foregroundStyle(AppColors.textPrimary)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .background {
-                    Capsule()
-                        .fill(.ultraThinMaterial)
-                        .overlay {
-                            Capsule().stroke(
-                                LinearGradient(
-                                    colors: AppColors.incomeGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ),
-                                lineWidth: 2
-                            )
-                        }
-                }
-            }
-            .buttonStyle(.plain)
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: 200)
-        .padding(24)
+    /// Единая заглушка для PRO-блокировки графика (без "подсказок"/вспомогательных карточек),
+    /// чтобы внешний вид был консистентным во всех местах приложения.
+    private func proBlockedView(size: ProChartUpsellMetrics.Size) -> some View {
+        ProChartUpsellView(
+            titleKey: "finances.dynamics.pro.title",
+            subtitleKey: "finances.dynamics.pro.subtitle",
+            ctaKey: "finances.dynamics.pro.cta",
+            size: size,
+            onTapCTA: { showSubscriptionSheet = true }
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var emptyChartView: some View {

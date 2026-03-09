@@ -58,25 +58,32 @@ struct BackupManagementView: View {
         appState.isBackupEnabled && appState.isICloudAvailable && !isBusy && deletingRecordName == nil && isPassphraseReadyForBackup
     }
 
+    private var readinessColumns: [GridItem] {
+        [
+            GridItem(.flexible(), spacing: 10, alignment: .top),
+            GridItem(.flexible(), spacing: 10, alignment: .top)
+        ]
+    }
+
     private var isPassphraseReadyForBackup: Bool {
         encryptionMode != .passphrase || (isPassphraseValid && isPassphraseConfirmed)
     }
 
     private var primaryActionHint: String? {
         guard appState.isBackupEnabled else {
-            return "Включите резервное копирование, чтобы Millio начал создавать облачные снимки."
+            return "Включите резервное копирование."
         }
         guard appState.isICloudAvailable else {
-            return "Без iCloud новые облачные копии не будут создаваться."
+            return "Без iCloud новые копии не создаются."
         }
         guard encryptionMode != .passphrase || !trimmedPassphrase.isEmpty else {
-            return "Задайте кодовую фразу и подтвердите ее, иначе переносимое восстановление не будет доступно."
+            return "Задайте кодовую фразу для переноса."
         }
         guard encryptionMode != .passphrase || trimmedPassphrase == trimmedConfirmation else {
             return "Кодовые фразы не совпадают."
         }
         guard encryptionMode != .passphrase || isPassphraseConfirmed else {
-            return "Нажмите «Готово», чтобы подтвердить кодовую фразу для этой сессии."
+            return "Нажмите «Готово», чтобы подтвердить фразу."
         }
         return nil
     }
@@ -86,10 +93,9 @@ struct BackupManagementView: View {
             GradientBackground()
 
             ScrollView {
-                VStack(spacing: 22) {
+                VStack(spacing: 16) {
                     header
                     heroCard
-                    trustCard
                     protectionCard
                     actionsCard
                     readinessCard
@@ -103,8 +109,8 @@ struct BackupManagementView: View {
                             .padding(.horizontal, 24)
                     }
                 }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 40)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 32)
             }
             .scrollDismissesKeyboard(.immediately)
             .dismissKeyboardOnTap()
@@ -136,40 +142,28 @@ struct BackupManagementView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Image(systemName: "internaldrive.fill.badge.icloud")
-                .font(.system(size: 44, weight: .semibold))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.95)] + AppColors.financesGradient,
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Резервная копия")
-                    .font(.system(size: 34, weight: .bold, design: .rounded))
-                    .foregroundStyle(AppColors.textPrimary)
-                Text("Прозрачный контроль за тем, где лежат данные и как они восстанавливаются.")
-                    .font(.system(size: 15, weight: .regular))
-                    .foregroundStyle(AppColors.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Резервная копия")
+                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .foregroundStyle(AppColors.textPrimary)
+            Text("Где лежат данные и можно ли их восстановить.")
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(AppColors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, 26)
+        .padding(.top, 18)
     }
 
     private var heroCard: some View {
         FinancesGlassCard(
             accentColor: AppColors.brandPrimary,
-            cornerRadius: 28,
-            contentPadding: EdgeInsets(top: 22, leading: 22, bottom: 22, trailing: 22)
+            cornerRadius: 24,
+            contentPadding: EdgeInsets(top: 18, leading: 18, bottom: 18, trailing: 18)
         ) {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 8) {
                         statusPill(
                             title: appState.isBackupEnabled ? "Включено" : "Выключено",
                             icon: appState.isBackupEnabled ? "checkmark.circle.fill" : "pause.circle.fill",
@@ -177,11 +171,11 @@ struct BackupManagementView: View {
                         )
 
                         Text(dashboardContent.title)
-                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
                             .foregroundStyle(AppColors.textPrimary)
 
                         Text(dashboardContent.subtitle)
-                            .font(.system(size: 14, weight: .regular))
+                            .font(.system(size: 13, weight: .regular))
                             .foregroundStyle(AppColors.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -219,12 +213,12 @@ struct BackupManagementView: View {
                     )
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(dashboardContent.storageTitle)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                     Text(dashboardContent.storageDetail)
-                        .font(.system(size: 13, weight: .regular))
+                        .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppColors.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -232,59 +226,33 @@ struct BackupManagementView: View {
         }
     }
 
-    private var trustCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Доверие и хранение")
-
-            FinancesGlassCard(
-                accentColor: AppColors.toggleOnGreen,
-                cornerRadius: 24,
-                contentPadding: EdgeInsets(top: 18, leading: 18, bottom: 18, trailing: 18)
-            ) {
-                VStack(alignment: .leading, spacing: 14) {
-                    HStack(alignment: .top, spacing: 12) {
-                        Image(systemName: "lock.shield.fill")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(AppColors.toggleOnGreen)
-                            .frame(width: 34, height: 34)
-                            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(dashboardContent.trustTitle)
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundStyle(AppColors.textPrimary)
-                            Text(dashboardContent.trustDetail)
-                                .font(.system(size: 13, weight: .regular))
-                                .foregroundStyle(AppColors.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-
-                    if encryptionMode == .passphrase {
-                        subtleCallout(
-                            title: "Важно",
-                            text: "Кодовая фраза не хранится в Millio. Держите ее отдельно, иначе восстановление станет невозможным."
-                        )
-                    } else {
-                        subtleCallout(
-                            title: "Ограничение",
-                            text: "Если ключ остается только на устройстве, перенос резервной копии на новый iPhone может не сработать."
-                        )
-                    }
-                }
-            }
-        }
-    }
-
     private var protectionCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Защита и перенос")
+            FinancesSectionHeader(title: "Защита")
 
             FinancesGlassCard(accentColor: AppColors.financesGradient.first ?? .cyan, cornerRadius: 24) {
                 VStack(spacing: 0) {
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: "lock.shield.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(AppColors.toggleOnGreen)
+                                .frame(width: 30, height: 30)
+                                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(dashboardContent.trustTitle)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(AppColors.textPrimary)
+                                Text(dashboardContent.trustDetail)
+                                    .font(.system(size: 12, weight: .regular))
+                                    .foregroundStyle(AppColors.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+
                         Text("Способ защиты")
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
 
                         Picker("Способ защиты", selection: $encryptionMode) {
@@ -295,13 +263,20 @@ struct BackupManagementView: View {
                         .pickerStyle(.segmented)
                         .disabled(!appState.isBackupEnabled || isBusy)
 
+                        subtleCallout(
+                            title: encryptionMode == .passphrase ? "Важно" : "Ограничение",
+                            text: encryptionMode == .passphrase
+                                ? "Фраза хранится только у вас. Потеряете ее, восстановление будет недоступно."
+                                : "Ключ остается на этом устройстве. Перенос на новый iPhone может не сработать."
+                        )
+
                         Text(encryptionMode.summary + " " + encryptionMode.restoreRisk)
-                            .font(.system(size: 13, weight: .regular))
+                            .font(.system(size: 12, weight: .regular))
                             .foregroundStyle(AppColors.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    .padding(.vertical, 18)
-                    .padding(.horizontal, 18)
+                    .padding(.vertical, 16)
+                    .padding(.horizontal, 16)
                     .onChange(of: encryptionMode) { _, newValue in
                         switch newValue {
                         case .deviceKey:
@@ -322,7 +297,7 @@ struct BackupManagementView: View {
                                     Text("Кодовая фраза для восстановления")
                                         .font(.system(size: 14, weight: .semibold))
                                         .foregroundStyle(AppColors.textPrimary)
-                                    Text(isPassphraseConfirmed ? "Фраза подтверждена для этой сессии. Можно создавать резервную копию." : "После ввода нажмите «Готово», чтобы скрыть клавиатуру и подтвердить фразу.")
+                                    Text(isPassphraseConfirmed ? "Фраза подтверждена. Можно создавать копию." : "Введите фразу и нажмите «Готово».")
                                         .font(.system(size: 12, weight: .regular))
                                         .foregroundStyle(AppColors.textSecondary)
                                         .fixedSize(horizontal: false, vertical: true)
@@ -339,14 +314,14 @@ struct BackupManagementView: View {
                                     .foregroundStyle(AppColors.brandPrimary)
                                 }
                             }
-                            .padding(.horizontal, 18)
-                            .padding(.top, 16)
-                            .padding(.bottom, 12)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 14)
+                            .padding(.bottom, 10)
 
                             if isPassphraseConfirmed {
                                 passphraseConfirmedSummary
-                                    .padding(.horizontal, 18)
-                                    .padding(.bottom, 16)
+                                    .padding(.horizontal, 16)
+                                    .padding(.bottom, 14)
                             } else {
                                 HStack(spacing: 12) {
                                     Image(systemName: "key.fill")
@@ -376,10 +351,10 @@ struct BackupManagementView: View {
                                     }
                                 }
                                 .disabled(!appState.isBackupEnabled || isBusy)
-                                .padding(.vertical, 15)
-                                .padding(.horizontal, 18)
+                                .padding(.vertical, 13)
+                                .padding(.horizontal, 16)
 
-                                FinancesRowDivider(leadingPadding: 18)
+                                FinancesRowDivider(leadingPadding: 16)
 
                                 HStack(spacing: 12) {
                                     Image(systemName: "checkmark.shield.fill")
@@ -395,8 +370,8 @@ struct BackupManagementView: View {
                                             confirmPassphraseIfPossible()
                                         }
                                 }
-                                .padding(.vertical, 15)
-                                .padding(.horizontal, 18)
+                                .padding(.vertical, 13)
+                                .padding(.horizontal, 16)
 
                                 HStack(spacing: 10) {
                                     Button {
@@ -415,7 +390,7 @@ struct BackupManagementView: View {
                                     .buttonStyle(.plain)
 
                                     if !trimmedPassphrase.isEmpty || !trimmedConfirmation.isEmpty {
-                                        Text(isPassphraseValid ? "После «Готово» поля свернутся." : "Сначала введите одинаковую фразу в оба поля.")
+                                        Text(isPassphraseValid ? "После подтверждения поля свернутся." : "Введите одинаковую фразу в оба поля.")
                                             .font(.system(size: 12, weight: .regular))
                                             .foregroundStyle(isPassphraseValid ? AppColors.textSecondary : AppColors.error)
                                             .fixedSize(horizontal: false, vertical: true)
@@ -423,8 +398,8 @@ struct BackupManagementView: View {
 
                                     Spacer()
                                 }
-                                .padding(.horizontal, 18)
-                                .padding(.bottom, 16)
+                                .padding(.horizontal, 16)
+                                .padding(.bottom, 14)
                             }
                         }
                     }
@@ -437,9 +412,9 @@ struct BackupManagementView: View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: "Действия")
 
-            VStack(spacing: 14) {
+            VStack(spacing: 10) {
                 SlideToConfirmControl(
-                    title: "Проведите вправо, чтобы создать копию",
+                    title: "Сдвиньте, чтобы создать копию",
                     subtitle: isBusy ? "Создание уже запущено" : "Защита от случайного запуска",
                     icon: "arrow.right",
                     gradientColors: AppColors.financesGradient,
@@ -456,7 +431,7 @@ struct BackupManagementView: View {
                         compactActionTile(
                             icon: isBusy ? "hourglass" : "pin.fill",
                             title: "Сохранить копию",
-                            subtitle: "Не удаляется автоматически"
+                            subtitle: "Оставить как версию"
                         )
                     }
                     .buttonStyle(.plain)
@@ -468,8 +443,8 @@ struct BackupManagementView: View {
                     } label: {
                         compactActionTile(
                             icon: "arrow.clockwise",
-                            title: "Проверить доступность",
-                            subtitle: "Обновить статус iCloud"
+                            title: "Проверить iCloud",
+                            subtitle: "Обновить статус"
                         )
                     }
                     .buttonStyle(.plain)
@@ -486,9 +461,9 @@ struct BackupManagementView: View {
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Восстановить данные")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(AppColors.textPrimary)
-                            Text("Выберите нужную копию и замените локальные данные.")
+                            Text("Выберите копию и замените локальные данные.")
                                 .font(.system(size: 12, weight: .regular))
                                 .foregroundStyle(AppColors.textSecondary)
                         }
@@ -499,9 +474,9 @@ struct BackupManagementView: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(AppColors.textTertiary)
                     }
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 18)
-                    .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                    .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .disabled(isBusy)
@@ -518,35 +493,29 @@ struct BackupManagementView: View {
 
     private var readinessCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Готовность к восстановлению")
+            FinancesSectionHeader(title: "Готовность")
 
-            FinancesGlassCard(accentColor: AppColors.brandPrimary, cornerRadius: 24) {
-                VStack(spacing: 0) {
-                    ForEach(Array(dashboardContent.readiness.enumerated()), id: \.element.id) { index, item in
-                        if index > 0 {
-                            FinancesRowDivider(leadingPadding: 52)
-                        }
-
-                        HStack(alignment: .top, spacing: 14) {
+            LazyVGrid(columns: readinessColumns, spacing: 10) {
+                ForEach(dashboardContent.readiness) { item in
+                    FinancesGlassCard(accentColor: item.isComplete ? AppColors.toggleOnGreen : AppColors.brandPrimary, cornerRadius: 20) {
+                        VStack(alignment: .leading, spacing: 8) {
                             Image(systemName: item.isComplete ? "checkmark.circle.fill" : "circle.dashed")
-                                .font(.system(size: 18, weight: .semibold))
+                                .font(.system(size: 16, weight: .semibold))
                                 .foregroundStyle(item.isComplete ? AppColors.toggleOnGreen : AppColors.textTertiary)
-                                .padding(.top, 2)
 
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(item.title)
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(AppColors.textPrimary)
-                                Text(item.detail)
-                                    .font(.system(size: 12, weight: .regular))
-                                    .foregroundStyle(AppColors.textSecondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
+                            Text(item.title)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(AppColors.textPrimary)
+                                .fixedSize(horizontal: false, vertical: true)
 
-                            Spacer(minLength: 0)
+                            Text(item.detail)
+                                .font(.system(size: 11, weight: .regular))
+                                .foregroundStyle(AppColors.textSecondary)
+                                .lineLimit(3)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 15)
+                        .frame(maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
+                        .padding(14)
                     }
                 }
             }
@@ -727,10 +696,10 @@ struct BackupManagementView: View {
             Image(systemName: icon)
             Text(title)
         }
-        .font(.system(size: 12, weight: .semibold))
+        .font(.system(size: 11, weight: .semibold))
         .foregroundStyle(color)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
         .background(color.opacity(0.14), in: Capsule())
     }
 
@@ -738,16 +707,16 @@ struct BackupManagementView: View {
     private func metricTile(title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title.uppercased())
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(AppColors.textTertiary)
             Text(value)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(AppColors.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .padding(12)
+        .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     @ViewBuilder
@@ -757,27 +726,27 @@ struct BackupManagementView: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(AppColors.textPrimary)
             Text(text)
-                .font(.system(size: 12, weight: .regular))
+                .font(.system(size: 11, weight: .regular))
                 .foregroundStyle(AppColors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(14)
-        .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .padding(12)
+        .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var passphraseConfirmedSummary: some View {
         HStack(spacing: 12) {
             Image(systemName: "checkmark.shield.fill")
-                .font(.system(size: 18, weight: .semibold))
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(AppColors.toggleOnGreen)
-                .frame(width: 34, height: 34)
-                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .frame(width: 30, height: 30)
+                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Кодовая фраза готова")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
-                Text("Она будет использована для создания этой резервной копии. Millio ее не сохраняет.")
+                Text("Будет использована для этой копии. Millio ее не сохраняет.")
                     .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(AppColors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -785,31 +754,31 @@ struct BackupManagementView: View {
 
             Spacer()
         }
-        .padding(14)
-        .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .padding(12)
+        .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     @ViewBuilder
     private func compactActionTile(icon: String, title: String, subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(AppColors.brandPrimary)
-                .frame(width: 34, height: 34)
-                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .frame(width: 30, height: 30)
+                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
                 Text(subtitle)
-                    .font(.system(size: 12, weight: .regular))
+                    .font(.system(size: 11, weight: .regular))
                     .foregroundStyle(AppColors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 120, alignment: .leading)
-        .padding(16)
-        .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
+        .padding(14)
+        .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }

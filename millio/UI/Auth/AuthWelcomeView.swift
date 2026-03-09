@@ -5,10 +5,45 @@ struct AuthWelcomeView: View {
     @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var authManager
 
+    @ScaledMetric(relativeTo: .body) private var screenHorizontalPadding: CGFloat = 20
+    @ScaledMetric(relativeTo: .body) private var screenBottomPadding: CGFloat = 18
+    @ScaledMetric(relativeTo: .body) private var headerTopSpacer: CGFloat = 36
+    @ScaledMetric(relativeTo: .body) private var headerToCardSpacer: CGFloat = 12
+    @ScaledMetric(relativeTo: .body) private var sectionSpacing: CGFloat = 24
+
+    @ScaledMetric(relativeTo: .body) private var cardCornerRadius: CGFloat = 28
+    @ScaledMetric(relativeTo: .body) private var cardPaddingTop: CGFloat = 24
+    @ScaledMetric(relativeTo: .body) private var cardPaddingHorizontal: CGFloat = 22
+    @ScaledMetric(relativeTo: .body) private var cardPaddingBottom: CGFloat = 20
+
+    @ScaledMetric(relativeTo: .body) private var pillCornerRadius: CGFloat = 14
+    @ScaledMetric(relativeTo: .footnote) private var pillVerticalPadding: CGFloat = 10
+
+    @ScaledMetric(relativeTo: .largeTitle) private var heroTitleSize: CGFloat = 36
+    @ScaledMetric(relativeTo: .title3) private var brandTitleSize: CGFloat = 20
+
+    @ScaledMetric(relativeTo: .body) private var primaryButtonHeight: CGFloat = 52
+    @ScaledMetric(relativeTo: .body) private var secondaryButtonHeight: CGFloat = 50
+    @ScaledMetric(relativeTo: .body) private var buttonCornerRadius: CGFloat = 14
+
+    private enum L10n {
+        static let badgePrivateAccess: LocalizedStringKey = "auth.welcome.badge.private_access"
+        static let brand: LocalizedStringKey = "auth.welcome.brand"
+        static let title: LocalizedStringKey = "auth.welcome.title"
+        static let subtitle: LocalizedStringKey = "auth.welcome.subtitle"
+        static let continueWithoutAccount: LocalizedStringKey = "auth.welcome.cta.continue_without_account"
+        static let featureAppleSignIn: LocalizedStringKey = "auth.welcome.feature.apple_sign_in"
+        static let featurePrivateSession: LocalizedStringKey = "auth.welcome.feature.private_session"
+        static let featureGuestAccess: LocalizedStringKey = "auth.welcome.feature.guest_access"
+
+        static let debugLocalBackendPrefix: LocalizedStringKey = "auth.welcome.debug.local_backend_prefix"
+        static let debugLocalBackendFallback: LocalizedStringKey = "auth.welcome.debug.local_backend_fallback"
+    }
+
     private let featureItems: [(icon: String, title: LocalizedStringKey)] = [
-        ("person.crop.circle.badge.checkmark", "Apple sign in"),
-        ("lock.fill", "Private session"),
-        ("sparkles", "Guest access")
+        ("person.crop.circle.badge.checkmark", L10n.featureAppleSignIn),
+        ("lock.fill", L10n.featurePrivateSession),
+        ("sparkles", L10n.featureGuestAccess)
     ]
 
     private var backendHost: String? {
@@ -56,19 +91,24 @@ struct AuthWelcomeView: View {
                     .offset(x: 120, y: -110)
 
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 28) {
-                        Spacer(minLength: 36)
+                    VStack(alignment: .leading, spacing: sectionSpacing) {
+                        Spacer(minLength: headerTopSpacer)
 
                         header
 
-                        Spacer(minLength: 12)
+                        Spacer(minLength: headerToCardSpacer)
 
                         FinancesGlassCard(
                             accentColor: AppColors.brandPrimary,
-                            cornerRadius: 34,
-                            contentPadding: EdgeInsets(top: 28, leading: 24, bottom: 22, trailing: 24)
+                            cornerRadius: cardCornerRadius,
+                            contentPadding: EdgeInsets(
+                                top: cardPaddingTop,
+                                leading: cardPaddingHorizontal,
+                                bottom: cardPaddingBottom,
+                                trailing: cardPaddingHorizontal
+                            )
                         ) {
-                            VStack(alignment: .leading, spacing: 28) {
+                            VStack(alignment: .leading, spacing: sectionSpacing) {
                                 hero
                                 featureList
                                 actionBlock
@@ -80,8 +120,8 @@ struct AuthWelcomeView: View {
                         alignment: .bottom
                     )
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, max(proxy.safeAreaInsets.bottom, 18))
+                .padding(.horizontal, screenHorizontalPadding)
+                .padding(.bottom, max(proxy.safeAreaInsets.bottom, screenBottomPadding))
             }
         }
     }
@@ -91,9 +131,10 @@ struct AuthWelcomeView: View {
             HStack(spacing: 10) {
                 Image(systemName: "apple.logo")
                     .font(.system(size: 14, weight: .semibold))
-                Text("PRIVATE ACCESS")
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .tracking(1.8)
+                Text(L10n.badgePrivateAccess)
+                    .font(.caption.weight(.semibold))
+                    .textCase(.uppercase)
+                    .tracking(1.6)
             }
             .foregroundStyle(Color.white.opacity(0.82))
             .padding(.horizontal, 14)
@@ -103,23 +144,25 @@ struct AuthWelcomeView: View {
                     .fill(Color.white.opacity(0.08))
             )
 
-            Text("Millio")
-                .font(.system(size: 22, weight: .medium, design: .rounded))
+            Text(L10n.brand)
+                .font(.system(size: brandTitleSize, weight: .semibold, design: .default))
                 .foregroundStyle(Color.white.opacity(0.88))
         }
     }
 
     private var hero: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Finance, without friction.")
-                .font(.system(size: 40, weight: .bold, design: .serif))
+            Text(L10n.title)
+                .font(.system(size: heroTitleSize, weight: .semibold, design: .default))
                 .foregroundStyle(Color.white)
-                .lineSpacing(3)
+                .kerning(-0.4)
+                .lineLimit(3)
+                .minimumScaleFactor(0.86)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text("Use your Apple account for a full session, or enter as a guest and decide later.")
-                .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(Color.white.opacity(0.68))
+            Text(L10n.subtitle)
+                .font(.body)
+                .foregroundStyle(Color.white.opacity(0.72))
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -135,21 +178,21 @@ struct AuthWelcomeView: View {
     private func premiumPill(icon: String, title: LocalizedStringKey) -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.footnote.weight(.semibold))
                 .frame(width: 18)
             Text(title)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .font(.footnote.weight(.semibold))
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
         .foregroundStyle(Color.white.opacity(0.8))
         .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .padding(.vertical, pillVerticalPadding)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: pillCornerRadius, style: .continuous)
                 .fill(Color.white.opacity(0.05))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    RoundedRectangle(cornerRadius: pillCornerRadius, style: .continuous)
                         .stroke(Color.white.opacity(0.08), lineWidth: 1)
                 )
         )
@@ -163,23 +206,23 @@ struct AuthWelcomeView: View {
                 Task { await authManager.signIn(with: result) }
             }
             .signInWithAppleButtonStyle(.white)
-            .frame(height: 56)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .frame(height: primaryButtonHeight)
+            .clipShape(RoundedRectangle(cornerRadius: buttonCornerRadius, style: .continuous))
             .disabled(authManager.isBusy)
 
             Button {
                 appState.isGuestModeEnabled = true
             } label: {
-                Text("Continue without account")
-                    .font(.system(size: 16, weight: .semibold))
+                Text(L10n.continueWithoutAccount)
+                    .font(.headline.weight(.semibold))
                     .foregroundStyle(Color.white.opacity(0.92))
                     .frame(maxWidth: .infinity)
-                    .frame(height: 52)
+                    .frame(height: secondaryButtonHeight)
                     .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        RoundedRectangle(cornerRadius: buttonCornerRadius, style: .continuous)
                             .fill(Color.white.opacity(0.07))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                RoundedRectangle(cornerRadius: buttonCornerRadius, style: .continuous)
                                     .stroke(Color.white.opacity(0.1), lineWidth: 1)
                             )
                     )
@@ -187,11 +230,12 @@ struct AuthWelcomeView: View {
             .buttonStyle(.plain)
             .disabled(authManager.isBusy)
 
+            #if DEBUG
             HStack {
                 if let backendHost {
-                    Text("Local backend: \(backendHost)")
+                    Text(L10n.debugLocalBackendPrefix) + Text(verbatim: " \(backendHost)")
                 } else {
-                    Text("Local backend auth")
+                    Text(L10n.debugLocalBackendFallback)
                 }
 
                 Spacer()
@@ -201,8 +245,9 @@ struct AuthWelcomeView: View {
                         .tint(.white)
                 }
             }
-            .font(.system(size: 12, weight: .medium, design: .rounded))
+            .font(.caption.weight(.medium))
             .foregroundStyle(Color.white.opacity(0.55))
+            #endif
 
             if let errorMessage = authManager.errorMessage, !errorMessage.isEmpty {
                 Text(errorMessage)

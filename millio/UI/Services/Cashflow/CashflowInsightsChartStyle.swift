@@ -2,8 +2,9 @@
 //  CashflowInsightsChartStyle.swift
 //  millio
 //
-//  Визуальные метрики графика cashflow:
-//  выносим расчеты размеров отдельно, чтобы стиль оставался предсказуемым
+//  Визуальные метрики и подписи графика cashflow:
+//  выносим расчеты размеров и форматирование label отдельно,
+//  чтобы full-screen график не расползался по вертикали
 //  и его можно было покрыть unit-тестами.
 //
 
@@ -30,19 +31,20 @@ enum CashflowInsightsChartStyle {
     ) -> CashflowInsightsChartMetrics {
         let count = max(barCount, 1)
         let compactMode = visiblePeriods > 4
-        let spacing: CGFloat = compactMode ? 6 : 12
+        let spacing: CGFloat = compactMode ? 6 : 10
         let availableWidth = max(containerWidth - 12, 0)
-        let groupWidth = max(
+        let rawGroupWidth = max(
             (availableWidth - spacing * CGFloat(count - 1)) / CGFloat(count),
             1
         )
+        let groupWidth = min(rawGroupWidth, compactMode ? 64 : 78)
 
         return CashflowInsightsChartMetrics(
             spacing: spacing,
             groupWidth: groupWidth,
-            barWidth: min(max(compactMode ? 8 : 10, groupWidth * (compactMode ? 0.22 : 0.26)), compactMode ? 18 : 24),
-            labelFontSize: max(10, min(16, groupWidth * (compactMode ? 0.22 : 0.25))),
-            maxBarHeight: compactMode ? 188 : 228,
+            barWidth: min(max(compactMode ? 7 : 9, groupWidth * (compactMode ? 0.18 : 0.20)), compactMode ? 16 : 18),
+            labelFontSize: max(10, min(compactMode ? 12 : 13, groupWidth * (compactMode ? 0.18 : 0.20))),
+            maxBarHeight: compactMode ? 180 : 168,
             columnPadding: compactMode ? 8 : 12,
             barSpacing: compactMode ? 6 : 8
         )
@@ -62,9 +64,43 @@ enum CashflowInsightsChartStyle {
         maxBarHeight: CGFloat,
         isSelected: Bool
     ) -> CGFloat {
-        guard value > epsilon else { return 0 }
-        let normalizedHeight = maxValue > epsilon ? CGFloat(value / maxValue) : 0
+        let magnitude = abs(value)
+        guard magnitude > epsilon else { return 0 }
+        let normalizedHeight = maxValue > epsilon ? CGFloat(magnitude / maxValue) : 0
         let minimumHeight: CGFloat = isSelected ? 20 : 16
         return max(minimumHeight, normalizedHeight * maxBarHeight)
+    }
+
+    static func barLabel(
+        for date: Date,
+        granularity: CashflowInsightsGranularity,
+        calendar: Calendar = .current,
+        locale: Locale = .autoupdatingCurrent
+    ) -> String {
+        switch granularity {
+        case .year:
+            return String(calendar.component(.year, from: date))
+        case .month:
+            let monthFormatter = DateFormatter()
+            monthFormatter.locale = locale
+            let monthIndex = calendar.component(.month, from: date) - 1
+            let monthSymbols = monthFormatter.shortStandaloneMonthSymbols ?? monthFormatter.shortMonthSymbols ?? []
+            let fallbackSymbols = monthFormatter.shortMonthSymbols ?? []
+            let month: String
+            if monthSymbols.indices.contains(monthIndex) {
+                month = monthSymbols[monthIndex]
+            } else if fallbackSymbols.indices.contains(monthIndex) {
+                month = fallbackSymbols[monthIndex]
+            } else {
+                month = monthFormatter.string(from: date)
+            }
+
+            let yearFormatter = DateFormatter()
+            yearFormatter.locale = locale
+            yearFormatter.dateFormat = "yy"
+            return "\(month.capitalized(with: locale)) \(yearFormatter.string(from: date))"
+        case .week:
+            return "W\(calendar.component(.weekOfYear, from: date))"
+        }
     }
 }

@@ -13,16 +13,25 @@ struct FinanceDynamicsTopBarStyleTests {
         #expect(FinanceDynamicsTopBarStyle.inlineEditorSymbol(isEditing: true) == "checkmark")
     }
 
-    @Test("Название счета не смещается, если clearance не нужен")
-    func singleAccountTitleTopPaddingIsZeroWhenNotNeeded() {
-        #expect(FinanceDynamicsTopBarStyle.singleAccountTitleTopPadding(needsClearance: false) == CGFloat.zero)
+    @Test("ScrollView не получает лишний отступ сверху, если clearance не нужен")
+    func scrollContentTopPaddingUsesBaseWhenNotNeeded() {
+        #expect(
+            FinanceDynamicsTopBarStyle.scrollContentTopPadding(needsClearance: false) ==
+                FinanceDynamicsTopBarStyle.baseScrollContentTopPadding
+        )
     }
 
-    @Test("Название счета получает вертикальный отступ, если нужно уйти из-под bar-кнопок")
-    func singleAccountTitleTopPaddingUsesConfiguredClearance() {
+    @Test("ScrollView получает дополнительный отступ сверху, если нужно уйти из-под navigation bar в деталях кредитной карты")
+    func scrollContentTopPaddingAddsConfiguredClearance() {
         #expect(
-            FinanceDynamicsTopBarStyle.singleAccountTitleTopPadding(needsClearance: true) ==
-                FinanceDynamicsTopBarStyle.singleAccountTitleClearanceTopPadding
+            FinanceDynamicsTopBarStyle.scrollContentTopPadding(needsClearance: true) ==
+                FinanceDynamicsTopBarStyle.baseScrollContentTopPadding +
+                FinanceDynamicsTopBarStyle.singleAccountCreditCardScrollContentClearanceTopPadding
         )
+    }
+
+    @Test("Селектор периода опускается ниже, чтобы не пересекаться с графиком")
+    func periodSelectorTopPaddingIsStable() {
+        #expect(FinanceDynamicsTopBarStyle.periodSelectorTopPadding >= 6)
     }
 }

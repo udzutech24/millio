@@ -48,6 +48,51 @@ struct FinancesHintItem: Identifiable, Equatable {
     }
 }
 
+/// Карточка-панель с подсказками (без возможности скрыть).
+/// Используется там, где подсказки критичны для понимания состояния экрана (например, заблокировано в Free-плане).
+struct FinancesHintPillsCard: View {
+    private let title: String?
+    private let items: [FinancesHintItem]
+    private let accentColor: Color
+
+    init(
+        title: String? = nil,
+        items: [FinancesHintItem],
+        accentColor: Color = AppColors.textSecondary
+    ) {
+        self.title = title
+        self.items = items
+        self.accentColor = accentColor
+    }
+
+    var body: some View {
+        if !items.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                if let title {
+                    Text(title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppColors.textSecondary)
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(items) { item in
+                        FinancesHintPill(item: item)
+                    }
+                }
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(Color.white.opacity(0.04))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .stroke(accentColor.opacity(0.55), lineWidth: 1)
+                    )
+            )
+        }
+    }
+}
+
 struct FinancesHintsPanel: View {
     private let title: String
     private let prefs: HintsVisibilityPrefs
@@ -118,7 +163,7 @@ struct FinancesHintsPanel: View {
     }
 }
 
-private struct FinancesHintPill: View {
+struct FinancesHintPill: View {
     let item: FinancesHintItem
 
     var body: some View {
@@ -149,4 +194,3 @@ private struct FinancesHintPill: View {
         )
     }
 }
-
