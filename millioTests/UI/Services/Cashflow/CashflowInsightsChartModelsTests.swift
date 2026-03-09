@@ -10,7 +10,7 @@ import Testing
 @testable import millio
 
 struct CashflowInsightsChartModelsTests {
-    @Test("График по диапазону агрегирует суммы и строит бары в пределах диапазона")
+    @Test("График по диапазону сравнивает карточки с предыдущим диапазоном той же длины")
     func presentationAggregatesSelectedDateRange() {
         let calendar = Calendar(identifier: .gregorian)
         let locale = Locale(identifier: "en_US")
@@ -35,8 +35,8 @@ struct CashflowInsightsChartModelsTests {
         #expect(presentation.bars.map(\.label) == ["Feb'26", "Mar'26"])
         #expect(abs(presentation.expenseCard.amount - 150) < 0.01)
         #expect(abs(presentation.incomeCard.amount - 300) < 0.01)
-        #expect(abs(presentation.expenseCard.delta - (150 - 70)) < 0.01)
-        #expect(presentation.expenseCard.deltaTone == .negative)
+        #expect(abs(presentation.expenseCard.delta - (150 - 1_069)) < 0.01)
+        #expect(presentation.expenseCard.deltaTone == .positive)
         #expect(abs(presentation.incomeCard.delta - (300 - 200)) < 0.01)
         #expect(presentation.incomeCard.deltaTone == .positive)
     }

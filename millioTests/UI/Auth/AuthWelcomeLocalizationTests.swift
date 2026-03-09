@@ -15,8 +15,9 @@ struct AuthWelcomeLocalizationTests {
 
     private func assertNoTrailingPeriod(_ value: String, key: String, locale: String) {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        #expect(trimmed.isEmpty == false, message)
-        #expect(trimmed.hasSuffix(".") == false, message)
+        let message = "\(key) (\(locale)) must be non-empty and must not end with a period"
+        #expect(trimmed.isEmpty == false, "\(message). Actual value: \(value)")
+        #expect(trimmed.hasSuffix(".") == false, "\(message). Actual value: \(value)")
     }
 
     @Test("Auth welcome copy is localized and has no trailing periods")
@@ -31,7 +32,7 @@ struct AuthWelcomeLocalizationTests {
         for item in cases {
             let value = localized(item.key, localeIdentifier: item.locale)
             #expect(value == item.expected, "Unexpected localization for \(item.key) (\(item.locale))")
-            assertNoTrailingPeriod(value, "\(item.key) (\(item.locale)) must not end with a period")
+            assertNoTrailingPeriod(value, key: item.key, locale: item.locale)
         }
     }
 }

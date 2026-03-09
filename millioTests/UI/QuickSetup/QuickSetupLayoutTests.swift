@@ -65,7 +65,16 @@ final class QuickSetupLayoutTests: XCTestCase {
         defaults.removePersistentDomain(forName: suiteName)
 
         let appState = AppState()
-        let viewModel = QuickSetupViewModel(appState: appState, defaults: defaults)
+        appState.selectedLanguage = .russian
+        let systemContext = QuickSetupSystemContext(
+            preferredLanguageIdentifiers: ["ru-RU"],
+            locale: Locale(identifier: "ru_RU")
+        )
+        let viewModel = QuickSetupViewModel(
+            appState: appState,
+            systemContext: systemContext,
+            defaults: defaults
+        )
         viewModel.currentStep = step
 
         let rootView = QuickSetupView(viewModel: viewModel, mode: .settings)

@@ -75,9 +75,16 @@ final class QuickSetupViewModelTests: XCTestCase {
 
     func testMakeSelectionNormalizesFavoriteCurrencies() {
         let appState = AppState()
-        appState.primaryCurrencyCode = "RUB"
         appState.isBackupEnabled = false
-        let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)
+        let systemContext = QuickSetupSystemContext(
+            preferredLanguageIdentifiers: ["ru-RU"],
+            locale: Locale(identifier: "ru_RU")
+        )
+        let viewModel = QuickSetupViewModel(
+            appState: appState,
+            systemContext: systemContext,
+            defaults: isolatedDefaults
+        )
 
         viewModel.favoriteCurrencyCodes = ["usd", "EUR", "RUB", "usd"]
         let selection = viewModel.makeSelection()

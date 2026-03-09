@@ -3,6 +3,7 @@
 //  millioTests
 //
 
+import CoreGraphics
 import Testing
 @testable import millio
 
@@ -21,6 +22,6 @@ struct FinancesMainLayoutPolicyTests {
         let paddingWithoutFAB = FinancesMainLayoutPolicy.scrollContentBottomPadding(showsAddFAB: false)
 
         #expect(paddingWithFAB > paddingWithoutFAB)
-        #expect(paddingWithoutFAB > 0)
+        #expect(paddingWithoutFAB > CGFloat.zero)
     }
 }

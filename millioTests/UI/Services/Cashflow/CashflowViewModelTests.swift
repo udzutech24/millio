@@ -454,6 +454,17 @@ extension CashflowViewModelTests {
         let modelContext = try createTestModelContext()
         let calendar = Calendar.current
         let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 9, hour: 16, minute: 0)) ?? Date()
+        let defaults = UserDefaults.standard
+        let primaryKey = "primaryCurrencyCode"
+        let previousPrimary = defaults.string(forKey: primaryKey)
+        defaults.set("USD", forKey: primaryKey)
+        defer {
+            if let previousPrimary {
+                defaults.set(previousPrimary, forKey: primaryKey)
+            } else {
+                defaults.removeObject(forKey: primaryKey)
+            }
+        }
 
         let card = Card(
             name: "Assets",

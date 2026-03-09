@@ -1329,17 +1329,20 @@ final class CashflowViewModel: ViewModelProtocol {
 
         let accounts = dynamicsViewModel.getAccountsForCalculation()
         let accountCardIDs = Set(accounts.compactMap { $0.accountType == .card ? $0.accountID : nil })
+        let calendar = Calendar.current
+        let normalizedStartDate = calendar.startOfDay(for: startDate)
+        let normalizedEndDate = Self.endOfDay(for: endDate, calendar: calendar)
 
         let start = await dynamicsViewModel.calculateBalanceAtDate(
             accounts: accounts,
-            date: startDate,
+            date: normalizedStartDate,
             accountCardIDs: accountCardIDs,
             debtAsNegative: true,
             includeInitialBeforeCreation: false
         )
         let end = await dynamicsViewModel.calculateBalanceAtDate(
             accounts: accounts,
-            date: endDate,
+            date: normalizedEndDate,
             accountCardIDs: accountCardIDs,
             debtAsNegative: true,
             includeInitialBeforeCreation: false
@@ -1482,6 +1485,14 @@ final class CashflowViewModel: ViewModelProtocol {
 
     private static func monthStart(for date: Date, calendar: Calendar) -> Date {
         calendar.date(from: calendar.dateComponents([.year, .month], from: date)) ?? date
+    }
+
+    private static func endOfDay(for date: Date, calendar: Calendar) -> Date {
+        let startOfDay = calendar.startOfDay(for: date)
+        guard let nextDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else {
+            return date
+        }
+        return nextDay.addingTimeInterval(-0.001)
     }
 
     private static func isSameMonth(_ lhs: Date, _ rhs: Date, calendar: Calendar) -> Bool {
