@@ -47,6 +47,7 @@ struct ProfileAuthSection: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             SignInWithAppleButton(.continue) { request in
+                authManager.markAppleSignInStarted()
                 request.requestedScopes = [.fullName, .email]
             } onCompletion: { result in
                 Task { await authManager.signIn(with: result) }

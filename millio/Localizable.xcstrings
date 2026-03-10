@@ -211,6 +211,18 @@
         }
       }
     },
+    "auth.error.forbidden" : {
+      "comment" : "Forbidden auth toast",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This account cannot sign in here."
+          }
+        }
+      }
+    },
     "auth.error.generic" : {
       "comment" : "Fallback auth error toast",
       "extractionState" : "extracted_with_value",
@@ -303,6 +315,30 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Server is taking too long to respond. Try again."
+          }
+        }
+      }
+    },
+    "auth.error.tls" : {
+      "comment" : "TLS auth toast",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Secure connection failed. Check your network and try again."
+          }
+        }
+      }
+    },
+    "auth.error.token_persistence" : {
+      "comment" : "Token persistence failure toast",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Signed in, but failed to save your session. Try again."
           }
         }
       }

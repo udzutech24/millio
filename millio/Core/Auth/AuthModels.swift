@@ -33,9 +33,37 @@ struct RefreshTokenRequest: Encodable, Sendable {
     let refreshToken: String
 }
 
+enum AuthSessionSource: String, Equatable, Sendable {
+    case appleSignIn = "apple_sign_in"
+    case refresh
+
+    var operation: AuthRequestOperation {
+        switch self {
+        case .appleSignIn:
+            return .appleSignIn
+        case .refresh:
+            return .refresh
+        }
+    }
+}
+
 struct AuthSession: Equatable, Sendable {
     let user: AuthUser
     let accessTokenExpiresAt: Date
+    let requestId: String?
+    let source: AuthSessionSource
+
+    init(
+        user: AuthUser,
+        accessTokenExpiresAt: Date,
+        requestId: String? = nil,
+        source: AuthSessionSource = .appleSignIn
+    ) {
+        self.user = user
+        self.accessTokenExpiresAt = accessTokenExpiresAt
+        self.requestId = requestId
+        self.source = source
+    }
 }
 
 enum AuthManagerStatus: Equatable {

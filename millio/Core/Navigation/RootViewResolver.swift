@@ -50,13 +50,15 @@ struct RootViewResolver: View {
     }
     
     var body: some View {
-        Group {
-            switch Self.route(
-                for: appState.lifecycle,
-                authStatus: authManager.status,
-                isAuthenticated: authManager.isAuthenticated,
-                isGuestModeEnabled: appState.isGuestModeEnabled
-            ) {
+        let route = Self.route(
+            for: appState.lifecycle,
+            authStatus: authManager.status,
+            isAuthenticated: authManager.isAuthenticated,
+            isGuestModeEnabled: appState.isGuestModeEnabled
+        )
+
+        return Group {
+            switch route {
             case .launching:
                 LaunchingView()
             case .auth:
@@ -74,6 +76,12 @@ struct RootViewResolver: View {
                     EmptyView()
                 }
             }
+        }
+        .task {
+            authManager.logResolvedRoute(route)
+        }
+        .onChange(of: route) { _, newRoute in
+            authManager.logResolvedRoute(newRoute)
         }
         .environment(router)
     }

@@ -19,6 +19,8 @@
 - `AuthAPIClient` talks to NestJS endpoints.
 - `AuthService` owns token lifecycle, refresh, and logout.
 - `AuthManager` is the SwiftUI-facing state holder injected through the app environment.
+- `AuthDiagnosticsLogger` writes a safe client-side trace for the full auth flow.
+- `AuthErrorMapper` converts typed auth failures into user-facing messages without collapsing everything into one generic toast.
 - `MarketAPIClient` reuses the same backend base URL and gets Bearer tokens from `AuthService`.
 - `refreshToken` is stored in Keychain only.
 - `accessToken` is kept in memory and renewed through `/auth/refresh`.
@@ -27,6 +29,43 @@
 
 1. Open Profile.
 2. Tap `Sign in with Apple`.
-3. The app sends `identityToken`, plus optional Apple name/email, to `/auth/apple`.
-4. The backend response is persisted in memory plus Keychain.
-5. `GET /auth/me` refreshes the current authenticated user.
+3. `AuthManager` logs the start of the Apple Sign In attempt and blocks duplicate in-flight auth actions.
+4. After Apple returns a credential, the app logs only safe metadata:
+   - token presence and length
+   - email/name presence
+   - no raw `identityToken`, `accessToken`, or `refreshToken`
+5. `AuthAPIClient` sends every `/auth/*` request with:
+   - `x-request-id: <UUID>`
+   - `x-platform: ios`
+   - `x-app-version: <app version>`
+6. `AuthAPIClient` logs request start, HTTP status, response `x-request-id`, duration, and typed failure category.
+7. The backend response is persisted in memory plus Keychain.
+8. `AuthService` explicitly logs:
+   - access token received
+   - refresh token received
+   - token persistence success or failure
+9. `AuthManager` explicitly logs:
+   - session state updated
+   - authorized navigation route resolved
+10. `GET /auth/me` refreshes the current authenticated user with the same request diagnostics headers.
+
+## Error Categories
+
+- `noInternet`
+- `timeout`
+- `requestCancelled`
+- `tls`
+- `transport`
+- `unauthorized`
+- `forbidden`
+- `rateLimited`
+- `serverUnavailable`
+- `invalidResponse`
+- `tokenPersistence`
+- `business`
+
+## Notes
+
+- `x-request-id` from the client and `x-request-id` returned by the backend are both logged, so one failed attempt can be matched across iOS and NestJS logs.
+- Transport cancellation is logged but does not show a toast, which avoids noisy UI when a request is cancelled intentionally.
+- Auth diagnostics live in the auth/networking layer, not in SwiftUI views.

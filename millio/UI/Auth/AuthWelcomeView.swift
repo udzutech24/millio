@@ -166,6 +166,7 @@ struct AuthWelcomeView: View {
     private var actionBlock: some View {
         VStack(alignment: .leading, spacing: 12) {
             SignInWithAppleButton(.continue) { request in
+                authManager.markAppleSignInStarted()
                 request.requestedScopes = [.fullName, .email]
             } onCompletion: { result in
                 Task { await authManager.signIn(with: result) }
