@@ -9479,6 +9479,12 @@
       "comment" : "Warning shown when mass import cannot fetch current market prices for specific tickers",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Failed to load quotes: %@. Check your account sign-in and backend settings."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "new",
@@ -9797,6 +9803,12 @@
       "comment" : "Mass import status when ticker is found but current price is unavailable",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Price unavailable"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "new",

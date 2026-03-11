@@ -37,7 +37,7 @@ actor StockBulkImportMockMarketDataClient: MarketDataClientProtocol {
         if let error = latestPriceErrors[symbol.uppercased()] {
             throw error
         }
-        latestPrices[symbol.uppercased()] ?? nil
+        return latestPrices[symbol.uppercased()] ?? nil
     }
 
     func lastLatestPriceRequest() -> (symbol: String, forceRefresh: Bool)? {
@@ -70,6 +70,14 @@ struct StockBulkImportTests {
         let context = container.mainContext
         try context.save()
         return context
+    }
+
+    private func assertCurrentPrice(
+        _ text: String,
+        equals expected: Double
+    ) {
+        #expect(!text.isEmpty)
+        #expect(StockBulkImportNumberParser.parse(text) == expected)
     }
 
     @Test("Парсер поддерживает все основные форматы тикеров")
@@ -339,7 +347,7 @@ struct StockBulkImportTests {
 
         await viewModel.refreshCurrentPrice(for: rowID)
 
-        #expect(viewModel.rows[0].currentPriceText == "677.03")
+        assertCurrentPrice(viewModel.rows[0].currentPriceText, equals: 677.03)
         let request = await client.lastLatestPriceRequest()
         #expect(request?.symbol == "SPY.US")
         #expect(request?.forceRefresh == true)
@@ -404,7 +412,7 @@ struct StockBulkImportTests {
         await viewModel.refreshCurrentPrice(for: spyRowID)
         await viewModel.refreshCurrentPrice(for: sivrRowID)
 
-        #expect(viewModel.rows[0].currentPriceText == "677.03")
+        assertCurrentPrice(viewModel.rows[0].currentPriceText, equals: 677.03)
         #expect(viewModel.rows[1].currentPriceText.isEmpty)
         #expect(viewModel.marketDataWarning?.contains("SIVR") == true)
         #expect(viewModel.marketDataWarning?.contains("SPY") == false)
@@ -686,7 +694,7 @@ struct StockBulkImportTests {
 
         await viewModel.refreshCurrentPrice(for: rowID)
 
-        #expect(viewModel.rows[0].currentPriceText == "677.03")
+        assertCurrentPrice(viewModel.rows[0].currentPriceText, equals: 677.03)
         let requests = await client.allLatestPriceRequests()
         #expect(requests.map(\.symbol) == ["SPY", "SPY.US"])
     }

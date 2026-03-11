@@ -362,7 +362,22 @@ struct NotificationManagerTests {
         ))
 
         let request = try #require(fakeCenter.addedRequests.first)
-        #expect(request.content.body == "Time to log today's spending.")
+        let expectedBody = DailyReminderSettings(
+            isEnabled: true,
+            enabledKinds: [.expense],
+            cadence: .daily,
+            hour: 10,
+            minute: 0,
+            dayOfMonth: 1,
+            selectedDate: self.makeDate(day: 1),
+            customText: ""
+        ).notificationBody(
+            for: .expense,
+            language: .english,
+            calendar: calendar,
+            now: self.makeDate(day: 1)
+        )
+        #expect(request.content.body == expectedBody)
     }
 
     @Test("Текст напоминания использует русский язык приложения")
@@ -388,7 +403,22 @@ struct NotificationManagerTests {
         ))
 
         let request = try #require(fakeCenter.addedRequests.first)
-        #expect(request.content.body == "Запиши новые поступления, если они были.")
+        let expectedBody = DailyReminderSettings(
+            isEnabled: true,
+            enabledKinds: [.income],
+            cadence: .daily,
+            hour: 10,
+            minute: 0,
+            dayOfMonth: 1,
+            selectedDate: self.makeDate(day: 1),
+            customText: ""
+        ).notificationBody(
+            for: .income,
+            language: .russian,
+            calendar: calendar,
+            now: self.makeDate(day: 1)
+        )
+        #expect(request.content.body == expectedBody)
     }
 
     @Test("Можно включить несколько типов напоминаний одновременно")

@@ -69,10 +69,12 @@ struct FinanceBalanceAuditViewModelTests {
             currencyService: MockDynamicsCurrencyRateService(),
             skipInitialLoad: false
         )
+        let auditStore = InMemoryFinanceBalanceAuditStore()
 
         let auditViewModel = FinanceBalanceAuditViewModel(
             modelContext: modelContext,
             financeViewModel: financeViewModel,
+            store: auditStore,
             selectedDate: targetDate
         )
 
@@ -128,10 +130,12 @@ struct FinanceBalanceAuditViewModelTests {
             currencyService: MockDynamicsCurrencyRateService(),
             skipInitialLoad: false
         )
+        let auditStore = InMemoryFinanceBalanceAuditStore()
 
         let auditViewModel = FinanceBalanceAuditViewModel(
             modelContext: modelContext,
             financeViewModel: financeViewModel,
+            store: auditStore,
             selectedDate: targetDate
         )
 
