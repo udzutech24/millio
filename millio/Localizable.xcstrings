@@ -508,42 +508,6 @@
         }
       }
     },
-    "auth.welcome.debug.local_backend_fallback" : {
-      "comment" : "Fallback debug label when local backend host is not available",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Local backend auth"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Локальный backend auth"
-          }
-        }
-      }
-    },
-    "auth.welcome.debug.local_backend_prefix" : {
-      "comment" : "Debug prefix for local backend host label",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Local backend:"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Локальный backend:"
-          }
-        }
-      }
-    },
     "auth.welcome.feature.apple_sign_in" : {
       "comment" : "Feature list item on the auth welcome screen",
       "extractionState" : "manual",
