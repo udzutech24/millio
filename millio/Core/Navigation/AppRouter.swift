@@ -32,10 +32,15 @@ final class AppRouter {
     
     func navigate(to route: AppRoute) {
         currentRoute = route
-        navigationPath = NavigationPath()
+        popToRoot()
     }
     
     func push(_ route: AppRoute) {
         navigationPath.append(route)
+    }
+
+    /// Clears pushed screens and returns to the current root container.
+    func popToRoot() {
+        navigationPath = NavigationPath()
     }
 }

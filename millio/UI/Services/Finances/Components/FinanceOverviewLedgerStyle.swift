@@ -9,6 +9,19 @@
 import CoreGraphics
 
 enum FinanceOverviewLedgerStyle {
+    struct CompactCardMetrics: Equatable {
+        let titleFontSize: CGFloat
+        let amountFontSize: CGFloat
+        let iconSize: CGFloat
+        let iconFontSize: CGFloat
+        let progressHeight: CGFloat
+        let minProgressWidth: CGFloat
+        let horizontalPadding: CGFloat
+        let verticalPadding: CGFloat
+        let cornerRadius: CGFloat
+        let contentSpacing: CGFloat
+    }
+
     static func countsText(groups: Int, accounts: Int) -> String {
         "\(groups) групп · \(accounts) счетов"
     }
@@ -41,5 +54,20 @@ enum FinanceOverviewLedgerStyle {
         guard reference > 0 else { return minimumWidth }
         let ratio = max(0, min(1, total / reference))
         return max(minimumWidth, availableWidth * ratio)
+    }
+
+    static var compactCardMetrics: CompactCardMetrics {
+        CompactCardMetrics(
+            titleFontSize: 18,
+            amountFontSize: 17,
+            iconSize: 40,
+            iconFontSize: 14,
+            progressHeight: 12,
+            minProgressWidth: 28,
+            horizontalPadding: 16,
+            verticalPadding: 14,
+            cornerRadius: 24,
+            contentSpacing: 12
+        )
     }
 }

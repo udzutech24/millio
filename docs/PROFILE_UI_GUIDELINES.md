@@ -16,3 +16,9 @@
   - `localizationKey` for localized lookup.
   - `fallbackTitle` for guaranteed readable text.
 - Resolve section headers via `AppLocalization.string(..., fallback: ...)`.
+
+## Header Name Source
+- Resolve profile header name with explicit priority:
+  - user-edited profile name (if not guest default);
+  - Apple account name (`fullName`, then `firstName + lastName`);
+  - localized guest default (`profile.default_guest`).

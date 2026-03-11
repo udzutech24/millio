@@ -188,7 +188,7 @@ struct StockBulkImportTests {
     func persistenceStoresUsdAndComputesBalanceFromCurrentPrice() async throws {
         let context = try makeContext()
         let client = StockBulkImportMockMarketDataClient()
-        await client.setLatestPrice(150, for: "NASDAQ:AAPL")
+        await client.setLatestPrice(150, for: "AAPL")
 
         let service = StockBulkImportPersistenceService(modelContext: context, marketDataClient: client)
         let candidate = StockBulkImportCandidate(
@@ -394,8 +394,98 @@ struct StockBulkImportTests {
             selectedCandidate: candidate
         )
 
-        #expect(row.displayHeaderSymbol == "NASDAQ:AAPL")
+        #expect(row.displayHeaderSymbol == "AAPL")
         #expect(row.displaySecondaryText == "Apple Inc.")
         #expect(row.shouldShowRawLineAsSecondaryText == false)
+    }
+
+    @Test("quoteLookupSymbol нормализует legacy US format для backend котировок")
+    func quoteLookupSymbolNormalizesLegacyUsFormat() {
+        let usCandidate = StockBulkImportCandidate(
+            symbol: "SPY",
+            market: "US",
+            displayName: "SPDR S&P 500 ETF Trust",
+            currency: "USD",
+            providerRaw: "market-backend"
+        )
+        let nasdaqCandidate = StockBulkImportCandidate(
+            symbol: "AAPL",
+            market: "NASDAQ",
+            displayName: "Apple Inc.",
+            currency: "USD",
+            providerRaw: "market-backend"
+        )
+
+        #expect(usCandidate.quoteLookupSymbol == "SPY.US")
+        #expect(nasdaqCandidate.quoteLookupSymbol == "AAPL")
+    }
+
+    @Test("Импорт US тикера мерджится с уже существующей позицией из обычного редактора")
+    func persistenceMergesWithExistingPlainSymbolAndExchange() async throws {
+        let context = try makeContext()
+        let client = StockBulkImportMockMarketDataClient()
+        await client.setLatestPrice(677.03, for: "SPY.US")
+
+        let existing = Investment(
+            name: "SPY",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 1000,
+            currency: "USD",
+            includeInTotal: true,
+            priority: .normal,
+            isFavorite: false
+        )
+        existing.marketSymbol = "SPY"
+        existing.marketExchange = "US"
+        existing.marketCurrency = "USD"
+        existing.marketQuantity = 10
+        existing.averagePurchaseUnitPrice = 600
+        existing.totalPurchaseCost = 6000
+        existing.lastKnownUnitPrice = 650
+        context.insert(existing)
+
+        let account = FinanceAccount(accountType: .investment, accountID: existing.investmentUniqueID)
+        context.insert(account)
+        try context.save()
+
+        let service = StockBulkImportPersistenceService(modelContext: context, marketDataClient: client)
+        let candidate = StockBulkImportCandidate(
+            symbol: "SPY",
+            market: "US",
+            displayName: "SPDR S&P 500 ETF Trust",
+            currency: "USD",
+            providerRaw: "market-backend"
+        )
+        let drafts = [
+            StockBulkImportRowDraft(
+                rawLine: "SPY.US 17 @ 623.55",
+                tickerText: "SPY",
+                marketText: "US",
+                quantityText: "17",
+                buyPriceText: "623.55",
+                sourceOrderIndex: 0,
+                candidates: [candidate],
+                selectedCandidate: candidate
+            )
+        ]
+
+        let savedCount = try await service.persist(
+            drafts: drafts,
+            includeInTotal: true,
+            priority: .normal,
+            targetGroup: nil,
+            mergeDuplicates: true
+        )
+
+        let investments = try context.fetch(FetchDescriptor<Investment>())
+        let accounts = try context.fetch(FetchDescriptor<FinanceAccount>())
+
+        #expect(savedCount == 1)
+        #expect(investments.count == 1)
+        #expect(accounts.count == 1)
+        #expect(investments[0].marketSymbol == "US:SPY")
+        #expect(abs((investments[0].lastKnownUnitPrice ?? 0) - 677.03) < 0.0001)
+        #expect(abs((investments[0].marketQuantity ?? 0) - 27) < 0.0001)
     }
 }

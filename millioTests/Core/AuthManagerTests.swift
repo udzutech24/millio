@@ -79,6 +79,25 @@ struct AuthManagerTests {
         let restoreCalls = await service.restoreCalls
         #expect(restoreCalls == 1)
     }
+
+    @Test("logout triggers session changed callback with nil")
+    func testLogoutTriggersSessionChangedCallback() async {
+        let service = LogoutTrackingAuthService()
+        let manager = AuthManager(service: service, toastCenter: ToastCenter())
+        var callbackArgument: AuthUser?
+        var callbackCalls = 0
+
+        manager.configure(onSessionChanged: { user in
+            callbackCalls += 1
+            callbackArgument = user
+        })
+
+        await manager.logout()
+
+        #expect(await service.logoutCalls == 1)
+        #expect(callbackCalls == 1)
+        #expect(callbackArgument == nil)
+    }
 }
 
 private struct FailingAuthService: AuthServiceProtocol {
@@ -159,5 +178,33 @@ private actor SuspendedRestoreAuthService: AuthServiceProtocol {
     func finishRestore() {
         restoreFinishContinuation?.resume()
         restoreFinishContinuation = nil
+    }
+}
+
+private actor LogoutTrackingAuthService: AuthServiceProtocol {
+    private(set) var logoutCalls = 0
+
+    func signInWithApple(identityToken: String, email: String?, firstName: String?, lastName: String?) async throws -> AuthSession {
+        throw AuthServiceError.unconfigured
+    }
+
+    func restoreSession() async throws -> AuthSession? {
+        nil
+    }
+
+    func currentUser() async throws -> AuthUser {
+        throw AuthServiceError.unconfigured
+    }
+
+    func logout() async {
+        logoutCalls += 1
+    }
+
+    func accessTokenExpiryDate() async -> Date? {
+        nil
+    }
+
+    func accessToken(forceRefresh: Bool) async throws -> String {
+        throw AuthServiceError.unconfigured
     }
 }

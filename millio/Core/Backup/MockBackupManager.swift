@@ -24,6 +24,14 @@ final class MockBackupManager: BackupManagerProtocol {
     func saveVersionNow(passphrase: String?) async throws {
         // Ничего не делаем, backup отключен
     }
+
+    func exportVersion(recordName: String) async throws -> BackupTransferPayload {
+        throw AppError.iCloudUnavailable
+    }
+
+    func importVersion(from data: Data) async throws -> BackupVersionInfo {
+        throw AppError.iCloudUnavailable
+    }
     
     func restoreLatest() async throws {
         // Ничего не делаем, backup отключен

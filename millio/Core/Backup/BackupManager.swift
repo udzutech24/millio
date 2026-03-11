@@ -14,6 +14,8 @@ protocol BackupManagerProtocol {
     func backupNow() async throws
     func backupNow(passphrase: String?) async throws
     func saveVersionNow(passphrase: String?) async throws
+    func exportVersion(recordName: String) async throws -> BackupTransferPayload
+    func importVersion(from data: Data) async throws -> BackupVersionInfo
     func restoreLatest() async throws
     func restoreLatest(passphrase: String?) async throws
     func restoreVersion(recordName: String, passphrase: String?) async throws
@@ -78,6 +80,34 @@ actor BackupManager: BackupManagerProtocol {
 
     func saveVersionNow(passphrase: String?) async throws {
         try await performBackup(passphrase: passphrase, isPinned: true)
+    }
+
+    func exportVersion(recordName: String) async throws -> BackupTransferPayload {
+        guard await isAvailable() else {
+            throw AppError.iCloudUnavailable
+        }
+        guard let data = try await cloudStore.downloadBackup(recordName: recordName) else {
+            throw restoreFailure(.backupNotFound)
+        }
+
+        let versionInfo = try await exportVersionInfo(recordName: recordName, data: data)
+        return BackupTransferPayload(
+            fileName: exportFileName(for: versionInfo),
+            data: data,
+            versionInfo: versionInfo
+        )
+    }
+
+    func importVersion(from data: Data) async throws -> BackupVersionInfo {
+        guard await isAvailable() else {
+            throw AppError.iCloudUnavailable
+        }
+        guard !data.isEmpty else {
+            throw AppError.backupCorrupted
+        }
+
+        let info = try inspectPortableBackupInfo(data)
+        return try await cloudStore.importBackup(data, info: info, isPinned: true)
     }
 
     private func performBackup(passphrase: String?, isPinned: Bool) async throws {
@@ -646,6 +676,82 @@ actor BackupManager: BackupManagerProtocol {
     
     private func decompressLZFSE(_ data: Data) throws -> Data {
         try processCompressionStream(data, operation: COMPRESSION_STREAM_DECODE)
+    }
+
+    private func exportVersionInfo(recordName: String, data: Data) async throws -> BackupVersionInfo {
+        let listedVersion = try await cloudStore.listBackupVersions()
+            .first(where: { $0.recordName == recordName })
+        if let listedVersion {
+            return listedVersion
+        }
+
+        if let inspectedInfo = try inspectPortableBackupInfo(data) {
+            return BackupVersionInfo(
+                recordName: recordName,
+                date: inspectedInfo.date,
+                size: Int64(data.count),
+                version: inspectedInfo.version,
+                isPinned: true
+            )
+        }
+
+        return BackupVersionInfo(
+            recordName: recordName,
+            date: Date(),
+            size: Int64(data.count),
+            version: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
+            isPinned: true
+        )
+    }
+
+    private func inspectPortableBackupInfo(_ data: Data) throws -> BackupInfo? {
+        guard BackupEnvelope.looksLikeEnvelope(data) else {
+            return nil
+        }
+
+        let header: BackupEnvelopeHeader
+        do {
+            (header, _) = try BackupEnvelope.unpack(data)
+        } catch {
+            throw AppError.backupCorrupted
+        }
+
+        guard BackupEnvelopeHeader.isSupportedFormatVersion(header.formatVersion) else {
+            throw AppError.incompatibleSchemaVersion
+        }
+
+        if let encryptionInfo = header.encryption {
+            switch encryptionInfo.algorithm {
+            case "aesgcm-passphrase":
+                guard encryptionInfo.kdf != nil else {
+                    throw AppError.backupCorrupted
+                }
+            case "aesgcm-keychain":
+                break
+            default:
+                throw AppError.backupCorrupted
+            }
+        }
+
+        if let compression = header.compression, compression.algorithm != "lzfse" {
+            throw AppError.backupCorrupted
+        }
+
+        return BackupInfo(
+            date: header.metadata.timestamp,
+            size: Int64(data.count),
+            version: header.metadata.version.stringValue
+        )
+    }
+
+    private func exportFileName(for versionInfo: BackupVersionInfo) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd_HH-mm"
+        let datePart = formatter.string(from: versionInfo.date)
+        let sanitizedVersion = versionInfo.version.replacingOccurrences(of: "/", with: "-")
+        return "millio-backup-\(datePart)-v\(sanitizedVersion).milliobackup"
     }
 
     private func resolvedEncryption() -> BackupEncryptionProtocol? {

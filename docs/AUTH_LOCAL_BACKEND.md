@@ -24,6 +24,10 @@
 - `MarketAPIClient` reuses the same backend base URL and gets Bearer tokens from `AuthService`.
 - `refreshToken` is stored in Keychain only.
 - `accessToken` is kept in memory and renewed through `/auth/refresh`.
+- SwiftData is isolated by session scope:
+  - guest mode uses `millio_guest` persistent store
+  - authenticated mode uses `millio_user_<sha256(userId)>` persistent store
+  - switching auth session swaps `ModelContainer`, so guest cannot read signed-in user data
 
 ## Flow
 

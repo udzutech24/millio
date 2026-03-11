@@ -811,6 +811,8 @@ final class AuthManager {
     private var lastAuthRequestId: String?
     @ObservationIgnored
     private var lastResolvedRoute: RootViewRoute?
+    @ObservationIgnored
+    private var onSessionChanged: (@MainActor @Sendable (AuthUser?) async -> Void)?
 
     init(
         service: any AuthServiceProtocol = UnconfiguredAuthService(),
@@ -830,6 +832,10 @@ final class AuthManager {
 
     func configure(toastCenter: ToastCenter) {
         self.toastCenter = toastCenter
+    }
+
+    func configure(onSessionChanged: @escaping @MainActor @Sendable (AuthUser?) async -> Void) {
+        self.onSessionChanged = onSessionChanged
     }
 
     func markAppleSignInStarted() {
@@ -942,6 +948,7 @@ final class AuthManager {
 
         await service.logout()
         clearState()
+        await onSessionChanged?(nil)
     }
 
     func logResolvedRoute(_ route: RootViewRoute) {
@@ -984,6 +991,10 @@ final class AuthManager {
                 "source": session.source.rawValue
             ]
         )
+
+        Task { @MainActor [onSessionChanged, user = session.user] in
+            await onSessionChanged?(user)
+        }
     }
 
     private func clearState() {

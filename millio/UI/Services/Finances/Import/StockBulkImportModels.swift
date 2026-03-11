@@ -37,8 +37,43 @@ struct StockBulkImportCandidate: Identifiable, Equatable, Hashable, Sendable {
         return "\(normalizedMarket):\(normalizedSymbol)"
     }
 
+    /// Символ для market API. Импорт хранит legacy-формат `MARKET:TICKER`,
+    /// но backend для США ожидает `TICKER.US`, а для основных US бирж — просто тикер.
+    var quoteLookupSymbol: String {
+        guard let normalizedMarket, !normalizedMarket.isEmpty else {
+            return normalizedSymbol
+        }
+
+        switch normalizedMarket {
+        case "US":
+            return "\(normalizedSymbol).US"
+        case "NASDAQ", "NYSE", "AMEX", "BATS", "IEX":
+            return normalizedSymbol
+        default:
+            return storedSymbol
+        }
+    }
+
+    /// Ключ идентичности нужен для merge с уже существующими позициями,
+    /// даже если они были созданы через другой UI и хранят symbol/exchange раздельно.
+    var identityKey: String {
+        let marketKey = Self.identityMarketKey(for: normalizedMarket)
+        return "\(marketKey)|\(normalizedSymbol)"
+    }
+
     var mergeKey: String {
         "\(normalizedMarket ?? "")|\(normalizedSymbol)"
+    }
+
+    static func identityMarketKey(for market: String?) -> String {
+        switch market {
+        case "US", "NASDAQ", "NYSE", "AMEX", "BATS", "IEX":
+            return "US"
+        case let market?:
+            return market
+        case nil:
+            return ""
+        }
     }
 }
 
@@ -143,16 +178,11 @@ struct StockBulkImportRowDraft: Identifiable, Equatable, Sendable {
 }
 
 extension StockBulkImportRowDraft {
-    /// Символ для превью: показываем тикер (и рынок, если известен), а имя инструмента — отдельно.
+    /// Символ для превью: в header оставляем только тикер без технического market-prefix.
     var displayHeaderSymbol: String {
         if let selectedCandidate {
-            return selectedCandidate.storedSymbol
+            return selectedCandidate.normalizedSymbol
         }
-
-        if let normalizedMarket = StockBulkImportMarketNormalizer.normalize(market) {
-            return "\(normalizedMarket):\(ticker)"
-        }
-
         return ticker
     }
 

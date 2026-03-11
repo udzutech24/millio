@@ -67,4 +67,17 @@ struct FinanceOverviewLedgerStyleTests {
 
         #expect(width == CGFloat(120))
     }
+
+    @Test("Компактная карточка использует увеличенные метрики для overview")
+    func compactCardMetricsMatchExpandedDesign() {
+        let metrics = FinanceOverviewLedgerStyle.compactCardMetrics
+
+        #expect(metrics.titleFontSize == 18)
+        #expect(metrics.amountFontSize == 17)
+        #expect(metrics.iconSize == 40)
+        #expect(metrics.progressHeight == 12)
+        #expect(metrics.horizontalPadding == 16)
+        #expect(metrics.verticalPadding == 14)
+        #expect(metrics.cornerRadius == 24)
+    }
 }

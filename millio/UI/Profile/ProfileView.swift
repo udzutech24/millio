@@ -32,6 +32,8 @@ struct ProfileView: View {
         static let cardCornerRadius: CGFloat = 22
     }
 
+    private let accountDetailsTitle = String(localized: "profile.auth.details", defaultValue: "Details", comment: "Account details entry button title")
+
     private var legalLinks: ProfileLegalLinks {
         ProfileLegalLinks.make(for: appState.selectedLanguage)
     }
@@ -47,6 +49,13 @@ struct ProfileView: View {
               FileManager.default.fileExists(atPath: path) else { return nil }
         return UIImage(contentsOfFile: path)
     }
+
+    private var profileHeaderDisplayName: String {
+        ProfileDisplayNameResolver.headerDisplayName(
+            storedDisplayName: appState.profileDisplayName,
+            authUser: authManager.currentUser
+        )
+    }
     
     var body: some View {
         ZStack {
@@ -57,9 +66,10 @@ struct ProfileView: View {
                     profileHeaderBlock
                         .padding(.top, 10)
 
-                    sectionHeader(ProfileAuthSection.sectionHeaderTitle)
-                    card {
-                        ProfileAuthSection()
+                    if !authManager.isAuthenticated {
+                        card {
+                            ProfileAuthSection()
+                        }
                     }
                     
                     sectionHeader(displayTitle(for: .general))
@@ -146,21 +156,49 @@ struct ProfileView: View {
             }
             .buttonStyle(.plain)
             
-            Button {
-                editedName = appState.profileDisplayName
-                showNameEditSheet = true
-            } label: {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("profile.greeting")
-                        .font(.system(size: 15, weight: .regular))
-                        .foregroundStyle(AppColors.textSecondary)
-                    Text(appState.profileDisplayName)
-                        .font(.system(size: 32, weight: .bold))
-                        .foregroundStyle(AppColors.textPrimary)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("profile.greeting")
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundStyle(AppColors.textSecondary)
+
+                HStack(alignment: .center, spacing: 12) {
+                    Button {
+                        editedName = profileHeaderDisplayName
+                        showNameEditSheet = true
+                    } label: {
+                        Text(profileHeaderDisplayName)
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
+
+                    Spacer(minLength: 8)
+
+                    if authManager.isAuthenticated {
+                        NavigationLink {
+                            ProfileAccountDetailsView()
+                        } label: {
+                            Text(accountDetailsTitle)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(AppColors.profileValueAccent)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(
+                                    Capsule(style: .continuous)
+                                        .fill(AppColors.accentDarkBlue.opacity(0.32))
+                                )
+                                .overlay(
+                                    Capsule(style: .continuous)
+                                        .stroke(AppColors.textTertiary.opacity(0.28), lineWidth: 0.8)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("profile.headerAccountDetailsLink")
+                    }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, ProfileLayout.contentHorizontalInset)
         .accessibilityIdentifier("profile.header")

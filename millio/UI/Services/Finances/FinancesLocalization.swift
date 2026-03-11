@@ -13,5 +13,12 @@ enum FinancesL10n {
     static func format(_ key: String, _ args: CVarArg...) -> String {
         String(format: tr(key), locale: Locale.current, arguments: args)
     }
-}
 
+    static func text(locale: Locale, ru: String, en: String) -> String {
+        let languageCode = locale.identifier
+            .split(whereSeparator: { $0 == "-" || $0 == "_" })
+            .first?
+            .lowercased() ?? ""
+        return languageCode == "ru" ? ru : en
+    }
+}

@@ -42,6 +42,14 @@ final class SwitchingBackupManager: BackupManagerProtocol {
             try await disabledManager.saveVersionNow(passphrase: passphrase)
         }
     }
+
+    func exportVersion(recordName: String) async throws -> BackupTransferPayload {
+        try await enabledManager.exportVersion(recordName: recordName)
+    }
+
+    func importVersion(from data: Data) async throws -> BackupVersionInfo {
+        try await enabledManager.importVersion(from: data)
+    }
     
     func restoreLatest() async throws {
         // Восстановление не зависит от тумблера автосоздания backup.

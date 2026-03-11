@@ -131,6 +131,7 @@ struct CKDatabaseAdapter: CloudBackupDatabaseProtocol {
 protocol CloudBackupStoreProtocol {
     func isAvailable() async -> Bool
     func uploadBackup(_ data: Data, isPinned: Bool) async throws
+    func importBackup(_ data: Data, info: BackupInfo?, isPinned: Bool) async throws -> BackupVersionInfo
     func downloadLatestBackup() async throws -> Data?
     func listBackupRecordNamesForRestore() async throws -> [String]
     func downloadBackup(recordName: String) async throws -> Data?
@@ -218,9 +219,30 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
     }
     
     func uploadBackup(_ data: Data, isPinned: Bool) async throws {
+        _ = try await storeBackup(
+            data,
+            isPinned: isPinned,
+            backupDate: now(),
+            backupVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        )
+    }
+
+    func importBackup(_ data: Data, info: BackupInfo?, isPinned: Bool) async throws -> BackupVersionInfo {
+        try await storeBackup(
+            data,
+            isPinned: isPinned,
+            backupDate: info?.date ?? now(),
+            backupVersion: info?.version ?? (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")
+        )
+    }
+
+    private func storeBackup(
+        _ data: Data,
+        isPinned: Bool,
+        backupDate: Date,
+        backupVersion: String
+    ) async throws -> BackupVersionInfo {
         let privateDB = container.privateCloudDatabase
-        let backupDate = now()
-        let backupVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         
         // Создаём временный файл для CKAsset
         let tempURL = FileManager.default.temporaryDirectory
@@ -276,11 +298,18 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
                 // Legacy latest используется только как fallback/совместимость.
                 logger.warning("Failed to update legacy latest backup record: \(self.descriptiveCloudKitError(error), privacy: .public)")
             }
+
+            logger.info("Backup uploaded successfully")
+            return BackupVersionInfo(
+                recordName: snapshotRecordID.recordName,
+                date: backupDate,
+                size: Int64(data.count),
+                version: backupVersion,
+                isPinned: isPinned
+            )
         } catch {
             throw mapCloudKitError(error)
         }
-        
-        logger.info("Backup uploaded successfully")
     }
     
     func downloadLatestBackup() async throws -> Data? {

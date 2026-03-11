@@ -169,21 +169,21 @@ struct StockBulkImportPersistenceService {
         guard !resolvedRows.isEmpty else { return 0 }
 
         let investments = (try? modelContext.fetch(FetchDescriptor<Investment>())) ?? []
-        var investmentByStoredSymbol: [String: Investment] = [:]
-        investmentByStoredSymbol.reserveCapacity(investments.count)
+        var investmentByIdentityKey: [String: Investment] = [:]
+        investmentByIdentityKey.reserveCapacity(investments.count)
         for investment in investments where investment.archivedAt == nil && investment.category == .stocks {
-            let key = normalizedStoredSymbol(investment.marketSymbol)
+            let key = normalizedIdentityKey(symbol: investment.marketSymbol, exchange: investment.marketExchange)
             guard !key.isEmpty else { continue }
-            investmentByStoredSymbol[key] = investment
+            investmentByIdentityKey[key] = investment
         }
         var financeAccounts = (try? modelContext.fetch(FetchDescriptor<FinanceAccount>())) ?? []
 
         for resolvedRow in resolvedRows {
-            let latestPrice = (try? await marketDataClient.latestPrice(symbol: resolvedRow.candidate.storedSymbol, forceRefresh: false)) ?? nil
+            let latestPrice = (try? await marketDataClient.latestPrice(symbol: resolvedRow.candidate.quoteLookupSymbol, forceRefresh: false)) ?? nil
             let effectiveUnitPrice = resolvedRow.currentPrice ?? latestPrice ?? resolvedRow.buyPrice
             let amount = resolvedRow.quantity * effectiveUnitPrice
 
-            if let existing = investmentByStoredSymbol[resolvedRow.candidate.storedSymbol] {
+            if let existing = investmentByIdentityKey[resolvedRow.candidate.identityKey] {
                 existing.ensureUniqueID()
                 existing.name = existing.name.isEmpty ? resolvedRow.candidate.displayName : existing.name
                 existing.investmentType = .positive
@@ -233,7 +233,7 @@ struct StockBulkImportPersistenceService {
             )
 
             modelContext.insert(investment)
-            investmentByStoredSymbol[resolvedRow.candidate.storedSymbol] = investment
+            investmentByIdentityKey[resolvedRow.candidate.identityKey] = investment
             let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
             account.group = resolvedGroup
             modelContext.insert(account)
@@ -329,5 +329,25 @@ struct StockBulkImportPersistenceService {
 
     private func normalizedStoredSymbol(_ value: String?) -> String {
         value?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() ?? ""
+    }
+
+    private func normalizedIdentityKey(symbol: String?, exchange: String?) -> String {
+        let normalizedSymbol = normalizedStoredSymbol(symbol)
+        guard !normalizedSymbol.isEmpty else { return "" }
+
+        if normalizedSymbol.contains(":") {
+            let parts = normalizedSymbol.split(separator: ":", maxSplits: 1).map(String.init)
+            if parts.count == 2 {
+                let marketKey = StockBulkImportCandidate.identityMarketKey(
+                    for: StockBulkImportMarketNormalizer.normalize(parts[0])
+                )
+                return "\(marketKey)|\(parts[1])"
+            }
+        }
+
+        let marketKey = StockBulkImportCandidate.identityMarketKey(
+            for: StockBulkImportMarketNormalizer.normalize(exchange)
+        )
+        return "\(marketKey)|\(normalizedSymbol)"
     }
 }

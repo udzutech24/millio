@@ -10,6 +10,7 @@ import SwiftData
 import UIKit
 import FirebaseCore
 import OSLog
+import CryptoKit
 
 @MainActor
 enum AppWidgetDeepLinkHandler {
@@ -27,6 +28,40 @@ enum AppWidgetDeepLinkHandler {
     }
 }
 
+private enum DataScope: Equatable {
+    case guest
+    case user(id: String)
+
+    var storeConfigurationName: String {
+        switch self {
+        case .guest:
+            return "millio_guest"
+        case .user(let id):
+            return "millio_user_\(Self.hash(id))"
+        }
+    }
+
+    var storeFileName: String {
+        "\(storeConfigurationName).store"
+    }
+
+    static func current(isAuthenticated: Bool, user: AuthUser?) -> DataScope {
+        guard
+            isAuthenticated,
+            let rawUserID = user?.id.trimmingCharacters(in: .whitespacesAndNewlines),
+            !rawUserID.isEmpty
+        else {
+            return .guest
+        }
+        return .user(id: rawUserID)
+    }
+
+    private static func hash(_ value: String) -> String {
+        let digest = SHA256.hash(data: Data(value.utf8))
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
+}
+
 @main
 struct millioApp: App {
     @UIApplicationDelegateAdaptor(FirebaseAppDelegate.self) private var firebaseDelegate
@@ -37,57 +72,22 @@ struct millioApp: App {
     @State private var authManager = AuthManager()
     @State private var toastCenter = ToastCenter()
     @State private var isBiometricUnlockInProgress = false
+    @State private var activeDataScope: DataScope = .guest
+    @State private var activeModelContainer: ModelContainer?
+    @State private var didRestoreAuthSession = false
     private let appLockCoordinator = AppLockLifecycleCoordinator()
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "App")
-    
-    var sharedModelContainer: ModelContainer? = {
-        // Регистрируем фичи ДО создания схемы
-        CurrencyFeatureRegistration.register()
-        CardFeatureRegistration.register()
-        CashbackFeatureRegistration.register()
-        CreditFeatureRegistration.register()
-        InvestmentFeatureRegistration.register()
-        FinanceFeatureRegistration.register()
-        CashflowFeatureRegistration.register()
-        
-        let schema = AppSchema.create()
-        
-        // Убеждаемся, что директория Application Support существует
-        let fileManager = FileManager.default
-        if let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-            do {
-                try fileManager.createDirectory(at: appSupportURL, withIntermediateDirectories: true, attributes: nil)
-            } catch {
-                AppLogger.log(.error, category: "App", "Failed to create Application Support directory: \(error.localizedDescription)")
-            }
-        }
-        
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            AppLogger.log(.error, category: "App", "Failed to create ModelContainer: \(error)")
-            // Fallback: создаем in-memory контейнер
-            do {
-                let fallbackConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-                return try ModelContainer(for: schema, configurations: [fallbackConfig])
-            } catch {
-                AppLogger.log(.error, category: "App", "Failed to create fallback ModelContainer: \(error)")
-                // Последний fallback - пустая схема
-                do {
-                    return try ModelContainer(for: Schema([]), configurations: [])
-                } catch {
-                    AppLogger.log(.error, category: "App", "Failed to create empty schema ModelContainer: \(error)")
-                    return nil
-                }
-            }
-        }
-    }()
+    init() {
+        Self.registerFeatures()
+        let initialScope = DataScope.guest
+        _activeDataScope = State(initialValue: initialScope)
+        _activeModelContainer = State(initialValue: Self.makeModelContainer(for: initialScope))
+    }
 
     var body: some Scene {
         WindowGroup {
-            if let container = sharedModelContainer {
+            if let container = activeModelContainer {
                 ZStack {
                     Group {
                         RootViewResolver(appState: appState)
@@ -112,8 +112,15 @@ struct millioApp: App {
                 .modelContainer(container)
                 .environment(\.diContainer, diContainer)
                 .environment(\.locale, appState.selectedLanguage.locale ?? Locale.current)
-                .task {
-                    await initializeApp(container: container)
+                .task(id: activeDataScope) {
+                    await initializeApp(
+                        container: container,
+                        restoreSession: !didRestoreAuthSession
+                    )
+
+                    if !didRestoreAuthSession {
+                        didRestoreAuthSession = true
+                    }
 
                     // Восстанавливаем расписание уведомлений, если они включены
                     if appState.isDailyReminderEnabled {
@@ -142,6 +149,14 @@ struct millioApp: App {
                     if isAuthenticated && appState.isGuestModeEnabled {
                         appState.isGuestModeEnabled = false
                     }
+                    Task { @MainActor in
+                        await switchToDataScopeIfNeeded(for: authManager.currentUser)
+                    }
+                }
+                .onChange(of: authManager.currentUser?.id) { _, _ in
+                    Task { @MainActor in
+                        await switchToDataScopeIfNeeded(for: authManager.currentUser)
+                    }
                 }
                 .onOpenURL { url in
                     AppWidgetDeepLinkHandler.handle(url: url, appState: appState)
@@ -163,7 +178,7 @@ struct millioApp: App {
     }
     
     @MainActor
-    private func initializeApp(container: ModelContainer) async {
+    private func initializeApp(container: ModelContainer, restoreSession: Bool) async {
         let start = DispatchTime.now()
 
         appLockCoordinator.enforceLockStateOnLaunch(appState: appState, hasPin: AppLockPinStore.shared.hasPin())
@@ -179,6 +194,9 @@ struct millioApp: App {
         self.diContainer = container
         authManager.configure(service: container.authService)
         authManager.configure(toastCenter: toastCenter)
+        authManager.configure(onSessionChanged: { user in
+            await switchToDataScopeIfNeeded(for: user)
+        })
         await MarketAPIClient.shared.configure(authService: container.authService)
         self.financeStartupWarmupUseCase = FinanceStartupWarmupUseCase(
             modelContext: container.modelContainer.mainContext
@@ -194,7 +212,9 @@ struct millioApp: App {
         self.lifecycleUseCase = useCase
         let initStart = DispatchTime.now()
         await useCase.initialize()
-        await authManager.restoreSession()
+        if restoreSession {
+            await authManager.restoreSession()
+        }
         logger.info("AppLifecycleUseCase.initialize finished in \(Double(DispatchTime.now().uptimeNanoseconds - initStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
         logger.info("initializeApp finished in \(Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
         
@@ -210,6 +230,147 @@ struct millioApp: App {
 
             await financeStartupWarmupUseCase?.warmupIfNeeded()
         }
+    }
+
+    @MainActor
+    private func switchToDataScopeIfNeeded(for user: AuthUser?) async {
+        let targetScope = DataScope.current(
+            isAuthenticated: authManager.isAuthenticated,
+            user: user
+        )
+        guard targetScope != activeDataScope else { return }
+
+        let targetContainer = Self.makeModelContainer(for: targetScope)
+        if let targetContainer {
+            migrateLegacyStoreIfNeeded(
+                into: targetContainer,
+                targetScope: targetScope
+            )
+        }
+
+        activeDataScope = targetScope
+        activeModelContainer = targetContainer
+    }
+
+    private static func registerFeatures() {
+        CurrencyFeatureRegistration.register()
+        CardFeatureRegistration.register()
+        CashbackFeatureRegistration.register()
+        CreditFeatureRegistration.register()
+        InvestmentFeatureRegistration.register()
+        FinanceFeatureRegistration.register()
+        CashflowFeatureRegistration.register()
+    }
+
+    private static func makeModelContainer(for scope: DataScope) -> ModelContainer? {
+        let schema = AppSchema.create()
+
+        let fileManager = FileManager.default
+        if let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            do {
+                try fileManager.createDirectory(at: appSupportURL, withIntermediateDirectories: true, attributes: nil)
+            } catch {
+                AppLogger.log(.error, category: "App", "Failed to create Application Support directory: \(error.localizedDescription)")
+            }
+        }
+
+        guard let storeURL = storeURL(for: scope) else {
+            AppLogger.log(.error, category: "App", "Failed to resolve scoped SwiftData store URL")
+            return nil
+        }
+
+        let modelConfiguration = ModelConfiguration(
+            scope.storeConfigurationName,
+            schema: schema,
+            url: storeURL
+        )
+
+        do {
+            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+        } catch {
+            AppLogger.log(.error, category: "App", "Failed to create ModelContainer: \(error)")
+            do {
+                let fallbackConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+                return try ModelContainer(for: schema, configurations: [fallbackConfig])
+            } catch {
+                AppLogger.log(.error, category: "App", "Failed to create fallback ModelContainer: \(error)")
+                do {
+                    return try ModelContainer(for: Schema([]), configurations: [])
+                } catch {
+                    AppLogger.log(.error, category: "App", "Failed to create empty schema ModelContainer: \(error)")
+                    return nil
+                }
+            }
+        }
+    }
+
+    private static func storeURL(for scope: DataScope) -> URL? {
+        guard let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        let storageDirectoryURL = appSupportURL.appendingPathComponent("SwiftDataScopes", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(
+                at: storageDirectoryURL,
+                withIntermediateDirectories: true,
+                attributes: nil
+            )
+        } catch {
+            AppLogger.log(.error, category: "App", "Failed to create scoped SwiftData directory: \(error.localizedDescription)")
+            return nil
+        }
+        return storageDirectoryURL.appendingPathComponent(scope.storeFileName, isDirectory: false)
+    }
+
+    private static func makeLegacyDefaultModelContainer() -> ModelContainer? {
+        let schema = AppSchema.create()
+        let legacyConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        do {
+            return try ModelContainer(for: schema, configurations: [legacyConfiguration])
+        } catch {
+            AppLogger.log(.warning, category: "App", "Legacy SwiftData container unavailable: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    @MainActor
+    private func migrateLegacyStoreIfNeeded(into targetContainer: ModelContainer, targetScope: DataScope) {
+        guard case .user = targetScope else { return }
+        guard Self.exportedModelCount(in: targetContainer) == 0 else { return }
+        guard let legacyContainer = Self.makeLegacyDefaultModelContainer() else { return }
+        guard Self.exportedModelCount(in: legacyContainer) > 0 else { return }
+
+        let legacyRepository = DataRepository(
+            modelContext: legacyContainer.mainContext,
+            modelContainer: legacyContainer
+        )
+        let targetRepository = DataRepository(
+            modelContext: targetContainer.mainContext,
+            modelContainer: targetContainer
+        )
+
+        do {
+            let payload = try legacyRepository.exportAllData()
+            try targetRepository.importAllData(payload)
+            logger.info("Migrated legacy SwiftData store to user-scoped store")
+        } catch {
+            logger.error("Failed to migrate legacy SwiftData store: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private static func exportedModelCount(in container: ModelContainer) -> Int {
+        let repository = DataRepository(
+            modelContext: container.mainContext,
+            modelContainer: container
+        )
+        guard
+            let payload = try? repository.exportAllData(),
+            let json = try? JSONSerialization.jsonObject(with: payload) as? [String: Any],
+            let models = json["models"] as? [[String: Any]]
+        else {
+            return 0
+        }
+        return models.count
     }
     
     private func triggerBackgroundBackup() {

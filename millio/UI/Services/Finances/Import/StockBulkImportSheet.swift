@@ -194,7 +194,7 @@ final class StockBulkImportViewModel: ObservableObject {
 
         applyCandidateSelection(candidate, at: index)
         if rows[index].currentPriceText.isEmpty,
-           let marketPrice = try? await persistenceService.marketDataClient.latestPrice(symbol: candidate.storedSymbol, forceRefresh: false) {
+           let marketPrice = try? await persistenceService.marketDataClient.latestPrice(symbol: candidate.quoteLookupSymbol, forceRefresh: false) {
             rows[index].currentPriceText = formatNumber(marketPrice)
         }
     }
@@ -212,7 +212,7 @@ final class StockBulkImportViewModel: ObservableObject {
         for index in rows.indices {
             guard rows[index].currentPriceText.isEmpty,
                   let candidate = rows[index].selectedCandidate,
-                  let marketPrice = try? await persistenceService.marketDataClient.latestPrice(symbol: candidate.storedSymbol, forceRefresh: false) else {
+                  let marketPrice = try? await persistenceService.marketDataClient.latestPrice(symbol: candidate.quoteLookupSymbol, forceRefresh: false) else {
                 continue
             }
             rows[index].currentPriceText = formatNumber(marketPrice)
@@ -726,7 +726,7 @@ struct StockBulkImportSheet: View {
             if !row.candidates.isEmpty && row.selectedCandidate == nil {
                 Menu {
                     ForEach(row.candidates) { candidate in
-                        Button(candidate.storedSymbol) {
+                        Button(candidate.normalizedSymbol) {
                             focusedField = nil
                             viewModel.selectCandidate(candidate, for: row.id)
                         }

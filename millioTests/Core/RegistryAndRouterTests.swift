@@ -79,6 +79,18 @@ struct AppRouterTests {
         router.push(.profile)
         #expect(router.navigationPath.count == 2)
     }
+
+    @Test("popToRoot сбрасывает стек, не меняя текущий маршрут")
+    func testPopToRootKeepsCurrentRoute() {
+        let router = AppRouter()
+        router.currentRoute = .main
+        router.push(.profile)
+        #expect(router.navigationPath.count == 1)
+
+        router.popToRoot()
+        #expect(router.currentRoute == .main)
+        #expect(router.navigationPath.count == 0)
+    }
 }
 
 @Suite(.serialized)

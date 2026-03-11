@@ -72,6 +72,10 @@ Offline-first поведение:
   - `Investment.marketCurrency = USD`;
   - `Investment.marketSymbol = MARKET:TICKER`, если рынок известен;
   - `Investment.amount = quantity * currentPrice`, fallback `quantity * buyPrice`.
+- Для запроса котировок legacy-символы из импорта дополнительно нормализуются:
+  - `US:SPY` -> `SPY.US`;
+  - `NASDAQ:AAPL` -> `AAPL`.
+- В превью массового импорта header показывает только тикер, а имя инструмента выводится отдельной строкой.
 - Если такая stock-позиция уже существует в активных инвестициях, импорт не создает дубль, а
   увеличивает существующую позицию и обновляет cost basis.
 

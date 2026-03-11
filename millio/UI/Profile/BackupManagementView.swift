@@ -7,6 +7,7 @@
 
 import Security
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct BackupManagementView: View {
     @Bindable var router: AppRouter
@@ -25,6 +26,10 @@ struct BackupManagementView: View {
     @State private var isVersionsExpanded = false
     @State private var selectedRestoreRecordName: String?
     @State private var showRestoreConfirmation = false
+    @State private var isImportingVersion = false
+    @State private var isExportingVersion = false
+    @State private var exportDocument: BackupTransferFileDocument?
+    @State private var exportFilename = "millio-backup.milliobackup"
     @FocusState private var focusedField: PassphraseField?
 
     private enum PassphraseField {
@@ -76,6 +81,19 @@ struct BackupManagementView: View {
             && !isBusy
             && deletingRecordName == nil
             && (encryptionMode != .passphrase || !trimmedPassphrase.isEmpty)
+    }
+
+    private var canExportSelectedVersion: Bool {
+        isBackupOperational
+            && selectedRestoreRecordName != nil
+            && !isBusy
+            && deletingRecordName == nil
+    }
+
+    private var canImportVersion: Bool {
+        isBackupOperational
+            && !isBusy
+            && deletingRecordName == nil
     }
 
     private var selectedRestoreVersion: BackupVersionInfo? {
@@ -168,6 +186,29 @@ struct BackupManagementView: View {
             Button(BackupL10n.tr("common.cancel", fallback: "Cancel"), role: .cancel) {}
         } message: {
             Text(BackupL10n.tr("backup.restore.confirm.message", fallback: "Current local data will be fully replaced by the selected backup."))
+        }
+        .fileExporter(
+            isPresented: $isExportingVersion,
+            document: exportDocument,
+            contentType: .millioBackup,
+            defaultFilename: exportFilename
+        ) { result in
+            if case .failure(let error) = result {
+                backupError = .backupFailed(error.localizedDescription)
+            }
+        }
+        .fileImporter(
+            isPresented: $isImportingVersion,
+            allowedContentTypes: BackupTransferFileDocument.readableContentTypes,
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let url = urls.first else { return }
+                Task { await importBackupFile(from: url) }
+            case .failure(let error):
+                backupError = .backupFailed(error.localizedDescription)
+            }
         }
         .onAppear {
             let isDeviceKeyEnabled = SettingsManager.shared.isEncryptionEnabled
@@ -493,6 +534,24 @@ struct BackupManagementView: View {
                     showRestoreConfirmation = true
                 }
 
+                HStack(spacing: 10) {
+                    compactActionButton(
+                        title: BackupL10n.tr("backup.actions.export.title", fallback: "Export selected"),
+                        icon: "square.and.arrow.up",
+                        isEnabled: canExportSelectedVersion
+                    ) {
+                        Task { await exportSelectedVersion() }
+                    }
+
+                    compactActionButton(
+                        title: BackupL10n.tr("backup.actions.import.title", fallback: "Import file"),
+                        icon: "square.and.arrow.down",
+                        isEnabled: canImportVersion
+                    ) {
+                        isImportingVersion = true
+                    }
+                }
+
                 if let primaryActionHint {
                     Text(primaryActionHint)
                         .font(.system(size: 12, weight: .regular))
@@ -699,6 +758,62 @@ struct BackupManagementView: View {
         }
     }
 
+    @MainActor
+    private func exportSelectedVersion() async {
+        guard let backupManager, let selectedRestoreRecordName else {
+            backupError = .backupFailed(BackupL10n.tr("backup.hint.select_restore_version", fallback: "Select a version to restore."))
+            return
+        }
+
+        isBusy = true
+        backupError = nil
+
+        do {
+            let payload = try await backupManager.exportVersion(recordName: selectedRestoreRecordName)
+            exportDocument = BackupTransferFileDocument(data: payload.data)
+            exportFilename = payload.fileName
+            isBusy = false
+            isExportingVersion = true
+        } catch let appError as AppError {
+            isBusy = false
+            backupError = appError
+        } catch {
+            isBusy = false
+            backupError = .unknown(error)
+        }
+    }
+
+    @MainActor
+    private func importBackupFile(from url: URL) async {
+        guard let backupManager else {
+            backupError = .iCloudUnavailable
+            return
+        }
+
+        isBusy = true
+        backupError = nil
+        defer { isBusy = false }
+
+        let didAccessScope = url.startAccessingSecurityScopedResource()
+        defer {
+            if didAccessScope {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        do {
+            let data = try Data(contentsOf: url)
+            let importedVersion = try await backupManager.importVersion(from: data)
+            selectedRestoreRecordName = importedVersion.recordName
+            isVersionsExpanded = true
+            await refreshStatusIfNeeded(force: true)
+        } catch let appError as AppError {
+            backupError = appError
+        } catch {
+            backupError = .backupFailed(error.localizedDescription)
+        }
+    }
+
     private func formattedBackupDate(_ date: Date?) -> String? {
         guard let date else { return nil }
         return date.formatted(date: .abbreviated, time: .shortened)
@@ -753,6 +868,27 @@ struct BackupManagementView: View {
         }
         .padding(10)
         .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func compactActionButton(title: String, icon: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .foregroundStyle(isEnabled ? AppColors.textPrimary : AppColors.textTertiary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(isEnabled ? 0.08 : 0.04))
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
     }
 
     private var passphraseConfirmedSummary: some View {

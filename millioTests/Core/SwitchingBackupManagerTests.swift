@@ -30,6 +30,30 @@ actor SpyBackupManager: BackupManagerProtocol {
     func saveVersionNow(passphrase: String?) async throws {
         backupCalls += 1
     }
+
+    func exportVersion(recordName: String) async throws -> BackupTransferPayload {
+        BackupTransferPayload(
+            fileName: "backup.milliobackup",
+            data: Data(),
+            versionInfo: BackupVersionInfo(
+                recordName: recordName,
+                date: Date(timeIntervalSince1970: 0),
+                size: 0,
+                version: "1.0",
+                isPinned: true
+            )
+        )
+    }
+
+    func importVersion(from data: Data) async throws -> BackupVersionInfo {
+        BackupVersionInfo(
+            recordName: "snapshot-imported",
+            date: Date(timeIntervalSince1970: 0),
+            size: Int64(data.count),
+            version: "1.0",
+            isPinned: true
+        )
+    }
     
     func restoreLatest() async throws {
         restoreCalls += 1

@@ -80,6 +80,28 @@ struct AuthServiceTests {
             )
         }
     }
+
+    @Test("access token expiry uses backend ttl")
+    func testAccessTokenExpiryUsesBackendTTL() async throws {
+        let service = AuthService(
+            apiClient: FakeAuthAPIClient(),
+            tokenStore: AuthTokenStore(refreshTokenStore: InMemoryRefreshTokenStore())
+        )
+
+        let session = try await service.signInWithApple(
+            identityToken: "identity-token",
+            email: "sid@example.com",
+            firstName: "Sid",
+            lastName: "Orkin"
+        )
+
+        let storedExpiry = await service.accessTokenExpiryDate()
+
+        #expect(storedExpiry != nil)
+        #expect(abs((storedExpiry ?? .distantPast).timeIntervalSince(session.accessTokenExpiresAt)) < 1)
+        #expect(session.accessTokenExpiresAt.timeIntervalSinceNow > 850)
+        #expect(session.accessTokenExpiresAt.timeIntervalSinceNow < 950)
+    }
 }
 
 private actor FakeAuthAPIClient: AuthAPIClientProtocol {

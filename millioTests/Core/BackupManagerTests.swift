@@ -59,6 +59,93 @@ struct BackupManagerTests {
         #expect(mockCloudStore.uploadCalled == true)
         #expect(mockCloudStore.uploadedIsPinned == true)
     }
+
+    @Test("Export selected version returns raw backup data with portable filename")
+    func testExportVersionReturnsPortablePayload() async throws {
+        let backupDate = Date(timeIntervalSince1970: 1_762_000_000)
+        let payload = Data("export-me".utf8)
+        let version = BackupVersionInfo(
+            recordName: "snapshot-export",
+            date: backupDate,
+            size: Int64(payload.count),
+            version: "2.0.0",
+            isPinned: true
+        )
+        let mockCloudStore = MockCloudBackupStore()
+        mockCloudStore.isAvailableResult = true
+        mockCloudStore.downloadDataByRecordName["snapshot-export"] = payload
+        mockCloudStore.listedVersions = [version]
+
+        let backupManager = BackupManager(
+            cloudStore: mockCloudStore,
+            dataRepository: MockDataRepository()
+        )
+
+        let exported = try await backupManager.exportVersion(recordName: "snapshot-export")
+
+        #expect(exported.data == payload)
+        #expect(exported.versionInfo == version)
+        #expect(exported.fileName.contains("millio-backup-"))
+        #expect(exported.fileName.hasSuffix(".milliobackup"))
+    }
+
+    @Test("Import version keeps original metadata and stores backup as pinned")
+    func testImportVersionKeepsOriginalMetadata() async throws {
+        let originalDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let header = BackupEnvelopeHeader(
+            formatVersion: BackupEnvelopeHeader.currentFormatVersion,
+            metadata: BackupMetadata(version: .current, timestamp: originalDate, schemaVersion: "2.0", modelCount: 0),
+            compression: nil,
+            encryption: nil
+        )
+        let rawData = try BackupEnvelope.pack(header: header, payload: Data("portable".utf8))
+
+        let expectedImported = BackupVersionInfo(
+            recordName: "snapshot-imported",
+            date: originalDate,
+            size: Int64(rawData.count),
+            version: BackupVersion.current.stringValue,
+            isPinned: true
+        )
+
+        let mockCloudStore = MockCloudBackupStore()
+        mockCloudStore.isAvailableResult = true
+        mockCloudStore.importResult = expectedImported
+
+        let backupManager = BackupManager(
+            cloudStore: mockCloudStore,
+            dataRepository: MockDataRepository()
+        )
+
+        let imported = try await backupManager.importVersion(from: rawData)
+
+        #expect(imported == expectedImported)
+        #expect(mockCloudStore.importedData == rawData)
+        #expect(mockCloudStore.importedInfo?.date == originalDate)
+        #expect(mockCloudStore.importedInfo?.version == BackupVersion.current.stringValue)
+        #expect(mockCloudStore.importedIsPinned == true)
+    }
+
+    @Test("Import version rejects corrupted envelope")
+    func testImportVersionRejectsCorruptedEnvelope() async {
+        let mockCloudStore = MockCloudBackupStore()
+        mockCloudStore.isAvailableResult = true
+
+        let backupManager = BackupManager(
+            cloudStore: mockCloudStore,
+            dataRepository: MockDataRepository()
+        )
+
+        var corrupted = Data()
+        var headerLength = UInt32(2).bigEndian
+        withUnsafeBytes(of: &headerLength) { corrupted.append(contentsOf: $0) }
+        corrupted.append(Data("{x".utf8))
+        corrupted.append(Data("payload".utf8))
+
+        await #expect(throws: AppError.backupCorrupted) {
+            try await backupManager.importVersion(from: corrupted)
+        }
+    }
     
     @Test("Backup now supports passphrase encryption (envelope header + decryptable payload)")
     func testBackupNowPassphraseEncryption() async throws {
@@ -585,6 +672,10 @@ final class MockCloudBackupStore: CloudBackupStoreProtocol {
     var backupInfo: BackupInfo?
     var uploadedData: Data?
     var uploadedIsPinned: Bool?
+    var importedData: Data?
+    var importedInfo: BackupInfo?
+    var importedIsPinned: Bool?
+    var importResult: BackupVersionInfo?
     var listedVersions: [BackupVersionInfo] = []
     var deletedRecordNames: [String] = []
     
@@ -596,6 +687,19 @@ final class MockCloudBackupStore: CloudBackupStoreProtocol {
         uploadCalled = true
         uploadedData = data
         uploadedIsPinned = isPinned
+    }
+
+    func importBackup(_ data: Data, info: BackupInfo?, isPinned: Bool) async throws -> BackupVersionInfo {
+        importedData = data
+        importedInfo = info
+        importedIsPinned = isPinned
+        return importResult ?? BackupVersionInfo(
+            recordName: "snapshot-imported",
+            date: info?.date ?? Date(),
+            size: Int64(data.count),
+            version: info?.version ?? "1.0",
+            isPinned: isPinned
+        )
     }
     
     func downloadLatestBackup() async throws -> Data? {
@@ -877,6 +981,33 @@ struct CloudBackupStoreTests {
 
         let latest = try await store.downloadLatestBackup()
         #expect(latest == Data("payload-4".utf8))
+    }
+
+    @Test("importBackup stores pinned snapshot with provided original metadata")
+    func testImportBackupStoresPinnedSnapshotWithProvidedMetadata() async throws {
+        let db = FakeCloudBackupDatabase()
+        let store = CloudBackupStore(
+            container: FakeCloudBackupContainer(accountStatusResult: .available, database: db)
+        )
+        let payload = Data("imported-payload".utf8)
+        let originalDate = Date(timeIntervalSince1970: 1_700_000_100)
+
+        let imported = try await store.importBackup(
+            payload,
+            info: BackupInfo(date: originalDate, size: Int64(payload.count), version: "2.0.0"),
+            isPinned: true
+        )
+
+        #expect(imported.date == originalDate)
+        #expect(imported.version == "2.0.0")
+        #expect(imported.isPinned == true)
+
+        let saved = db.savedRecords.first {
+            $0.recordType == "AppBackup" && $0.recordID.recordName == imported.recordName
+        }
+        #expect(saved?["backupDate"] as? Date == originalDate)
+        #expect(saved?["backupVersion"] as? String == "2.0.0")
+        #expect(saved?["isPinned"] as? Int == 1)
     }
 
     @Test("uploadBackup не удаляет закрепленные версии при retention авто-бэкапов")

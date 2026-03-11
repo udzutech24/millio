@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct BackupInfo: Codable {
+struct BackupInfo: Codable, Equatable {
     let date: Date
     let size: Int64
     let version: String
@@ -17,7 +17,7 @@ struct BackupInfo: Codable {
     }
 }
 
-struct BackupVersionInfo: Codable, Identifiable {
+struct BackupVersionInfo: Codable, Identifiable, Equatable {
     let recordName: String
     let date: Date
     let size: Int64

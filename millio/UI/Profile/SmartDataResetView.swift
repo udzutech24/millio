@@ -59,15 +59,14 @@ struct SmartDataResetView: View {
         .navigationTitle("Smart reset")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
-        .confirmationDialog(
+        .alert(
             "Confirm reset",
-            isPresented: $showConfirmation,
-            titleVisibility: .visible
+            isPresented: $showConfirmation
         ) {
+            Button("Cancel", role: .cancel) {}
             Button("Delete selected data", role: .destructive) {
                 applyReset()
             }
-            Button("Cancel", role: .cancel) {}
         } message: {
             Text("This action cannot be undone. Creating a backup first is recommended.")
         }
@@ -238,6 +237,18 @@ struct SmartDataResetView: View {
     private var actionCard: some View {
         FinancesGlassCard {
             VStack(spacing: 12) {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "externaldrive.badge.checkmark")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppColors.brandPrimary)
+
+                    Text("Recommended: create a backup before applying reset.")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(AppColors.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
                 Button {
                     showConfirmation = true
                 } label: {

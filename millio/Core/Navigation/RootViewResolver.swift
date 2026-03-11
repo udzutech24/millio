@@ -83,6 +83,10 @@ struct RootViewResolver: View {
         .onChange(of: route) { _, newRoute in
             authManager.logResolvedRoute(newRoute)
         }
+        .onChange(of: authManager.isAuthenticated) { wasAuthenticated, isAuthenticated in
+            guard !wasAuthenticated, isAuthenticated else { return }
+            router.popToRoot()
+        }
         .environment(router)
     }
 }

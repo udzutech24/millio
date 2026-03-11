@@ -70,6 +70,16 @@ struct FinanceLocalizationTests {
         #expect(subtitle.contains("$"))
     }
 
+    @Test("Финансовая fallback-локализация переключает ru/en по выбранной локали")
+    func fallbackLocalizationRespectsLocale() {
+        #expect(
+            FinancesL10n.text(locale: Locale(identifier: "ru"), ru: "Подсказки", en: "Hints") == "Подсказки"
+        )
+        #expect(
+            FinancesL10n.text(locale: Locale(identifier: "en"), ru: "Подсказки", en: "Hints") == "Hints"
+        )
+    }
+
     @Test("DisplayName enum-ов в создании продукта приходят из локализации")
     func addAccountDisplayNamesAreLocalized() {
         #expect(CardType.debit.displayName != "finances.card.type.debit")
