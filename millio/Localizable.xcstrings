@@ -82,7 +82,24 @@
     "0" : {
 
     },
+    "Account balance adjustment" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Account balance adjustment"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Корректировка баланса счета"
+          }
+        }
+      }
+    },
     "Add card in Finances" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -163,7 +180,6 @@
       }
     },
     "Additional" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -180,6 +196,7 @@
       }
     },
     "Amount" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -212,6 +229,7 @@
       }
     },
     "Apply" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -247,22 +265,6 @@
         }
       }
     },
-    "Asset value change" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Asset value change"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Изменение стоимости активов"
-          }
-        }
-      }
-    },
     "Asset value adjustment" : {
       "localizations" : {
         "en" : {
@@ -275,6 +277,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Корректировка стоимости активов"
+          }
+        }
+      }
+    },
+    "Asset value change" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Asset value change"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Изменение стоимости активов"
           }
         }
       }
@@ -631,6 +650,57 @@
         }
       }
     },
+    "Backup" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backup"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Резервная копия"
+          }
+        }
+      }
+    },
+    "Backup found" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backup found"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Резервная копия найдена"
+          }
+        }
+      }
+    },
+    "Balance check:" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Balance check:"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проверка баланса:"
+          }
+        }
+      }
+    },
     "Bills" : {
       "localizations" : {
         "en" : {
@@ -679,56 +749,6 @@
         }
       }
     },
-    "Backup" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Backup"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Резервная копия"
-          }
-        }
-      }
-    },
-    "Backup found" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Backup found"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Резервная копия найдена"
-          }
-        }
-      }
-    },
-    "Balance check:" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Balance check:"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Проверка баланса:"
-          }
-        }
-      }
-    },
     "Cancel" : {
       "localizations" : {
         "en" : {
@@ -746,6 +766,7 @@
       }
     },
     "Card" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1619,6 +1640,7 @@
       }
     },
     "Cashflow" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1633,6 +1655,10 @@
           }
         }
       }
+    },
+    "cashflow.asset_change.balance_check" : {
+      "comment" : "A title for a section that checks if the total assets match the sum of income, expenses, and asset changes.",
+      "isCommentAutoGenerated" : true
     },
     "cashflow.asset_change.change_format" : {
       "localizations" : {
@@ -1682,6 +1708,10 @@
         }
       }
     },
+    "cashflow.asset_change.explanation" : {
+      "comment" : "A description of how the cashflow and asset values are related.",
+      "isCommentAutoGenerated" : true
+    },
     "cashflow.asset_change.formula" : {
       "localizations" : {
         "en" : {
@@ -1714,6 +1744,17 @@
         }
       }
     },
+    "cashflow.asset_change.info_title" : {
+
+    },
+    "cashflow.asset_change.matches" : {
+      "comment" : "A message indicating that the total assets at the start and end of the period match.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.asset_change.mismatch" : {
+      "comment" : "A description of a financial statement error.",
+      "isCommentAutoGenerated" : true
+    },
     "cashflow.asset_change.start_total_format" : {
       "localizations" : {
         "en" : {
@@ -1729,6 +1770,9 @@
           }
         }
       }
+    },
+    "cashflow.asset_change.substitution" : {
+
     },
     "cashflow.breakdown.empty.no_cards.cta" : {
       "extractionState" : "manual",
@@ -2418,6 +2462,27 @@
         }
       }
     },
+    "cashflow.chart.visible_range" : {
+      "comment" : "A label describing the visible range of periods in the cashflow chart.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.chart.hint_format" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Visible range %lld helps focus on recent periods."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Диапазон %lld помогает сфокусироваться на последних периодах."
+          }
+        }
+      }
+    },
     "cashflow.common.apply" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2485,6 +2550,97 @@
           }
         }
       }
+    },
+    "cashflow.custom_period.calendar_hint" : {
+      "comment" : "A hint explaining how to use the calendar to select a custom date range.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.custom_period.show" : {
+      "comment" : "A button label that, when tapped, will display the user's cashflow for the selected date range.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.editor.add_card_in_finances" : {
+      "comment" : "A button label that allows a user to add a bank card in the Finances app.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.editor.amount" : {
+      "comment" : "A label describing the amount field in the cash flow editor.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.editor.card" : {
+      "comment" : "A label displayed above the picker for selecting a bank card.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.editor.currency" : {
+      "comment" : "A label describing the currency field in the cash flow editor.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.editor.date" : {
+      "comment" : "A label describing the date field in the cash flow transaction editor.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.editor.edit_category" : {
+      "comment" : "The title of the sheet that appears when editing a cashflow category.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.editor.expense_category" : {
+      "comment" : "A label describing the category of an expense.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.editor.frequency" : {
+      "comment" : "A label displayed next to the picker for selecting the frequency of a",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.editor.from_card" : {
+      "comment" : "A label displayed before the picker for selecting a card.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.editor.income_category" : {
+      "comment" : "A label describing the income category field in the cash flow transaction editor.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.editor.insufficient_funds" : {
+      "comment" : "An error message displayed when the user tries to add a transaction with an amount greater than the available balance in a selected bank account.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.editor.new_category" : {
+      "comment" : "The title of a sheet for creating a new cashflow category.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.editor.no_available_cards" : {
+      "comment" : "A message indicating that the user has no bank cards to transfer money from.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.editor.no_cards_in_currency" : {
+      "comment" : "A message displayed when a user has no bank cards linked to their account that can be used for a transaction.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.editor.section.category" : {
+      "comment" : "A label displayed above the section for selecting a transaction category.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.editor.section.main_info" : {
+
+    },
+    "cashflow.editor.section.recurrence" : {
+      "comment" : "A label displayed above the section that allows the user to select the recurrence of a transaction.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.editor.section.transaction_type" : {
+      "comment" : "A label displayed above the section that allows the user to select the type of transaction.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.editor.select_card" : {
+      "comment" : "A placeholder text for the picker that allows the user to select a bank card.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.editor.to_card" : {
+      "comment" : "A heading displayed above the name of a destination card.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.editor.transaction_type" : {
+      "comment" : "A label displayed alongside a picker for selecting the type of a transaction.",
+      "isCommentAutoGenerated" : true
     },
     "cashflow.history.date_filter.title" : {
       "extractionState" : "manual",
@@ -3063,6 +3219,72 @@
         }
       }
     },
+    "cashflow.main.empty.no_transactions" : {
+
+    },
+    "cashflow.operation.delete_category.message" : {
+      "comment" : "The message displayed in an alert when a user attempts to delete a category.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.operation.delete_category.title" : {
+      "comment" : "The title of an alert that appears when a user attempts to delete a category.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.operation.history_accessibility" : {
+      "comment" : "An accessibility label for a button that shows the user a history of their transactions.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.operation.management" : {
+      "comment" : "The title of the section that allows users to manage their cashflow categories.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.operation.search_category" : {
+      "comment" : "A placeholder text for a text field in a sheet used to search for a category in the cashflow.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.operation.total" : {
+      "comment" : "The title of the total amount displayed in the cashflow operation sheet.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.period_selector.custom" : {
+      "comment" : "A period type option for selecting a custom date range.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.period_selector.month" : {
+      "comment" : "A period type option in the cashflow period selector.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.period_selector.quarter" : {
+      "comment" : "A caption displayed in the picker view, describing a \"quarter\" period.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.period_selector.select_month" : {
+      "comment" : "A label displayed above the date picker for selecting a month.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.period_selector.select_period" : {
+      "comment" : "A title for the section in the cashflow period selector view that allows the user to select a custom date range.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.period_selector.select_quarter" : {
+      "comment" : "A label in the cashflow period selector view that instructs the user to select a quarter.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.period_selector.select_year" : {
+
+    },
+    "cashflow.period_selector.title" : {
+      "comment" : "The title of the period selector screen in the Cashflow app.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.period_selector.type" : {
+      "comment" : "A picker that lets the user select the type of period they want to view.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.period_selector.year" : {
+      "comment" : "A caption displayed under the \"Year\" option in the cashflow period selector.",
+      "isCommentAutoGenerated" : true
+    },
     "cashflow.period.quarter_title_format" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3112,6 +3334,26 @@
           }
         }
       }
+    },
+    "cashflow.scheduled.delete_transaction.message" : {
+      "comment" : "A message displayed in an alert when a user attempts to delete a scheduled transaction.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.scheduled.delete_transaction.title" : {
+      "comment" : "The title of an alert that appears when a user attempts to delete a scheduled transaction.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.scheduled.monthly_badge" : {
+      "comment" : "A badge that appears next to a transaction title when it's a recurring monthly payment.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.scheduled.search_transaction" : {
+      "comment" : "A placeholder text for a text field used to filter transactions in the \"Scheduled Transactions\" view.",
+      "isCommentAutoGenerated" : true
+    },
+    "cashflow.stats.asset_value_change" : {
+      "comment" : "A label describing the change in the value of the user's assets over a period of time.",
+      "isCommentAutoGenerated" : true
     },
     "cashflow.stats.assets_end" : {
       "extractionState" : "manual",
@@ -3163,6 +3405,10 @@
           }
         }
       }
+    },
+    "cashflow.stats.result" : {
+      "comment" : "A heading displayed below the total change in assets.",
+      "isCommentAutoGenerated" : true
     },
     "Category" : {
       "extractionState" : "stale",
@@ -4240,6 +4486,7 @@
       }
     },
     "Date" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4251,6 +4498,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Дата"
+          }
+        }
+      }
+    },
+    "Debt adjustment" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Debt adjustment"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Корректировка долга"
           }
         }
       }
@@ -4304,6 +4567,7 @@
       }
     },
     "Delete transaction?" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4402,6 +4666,22 @@
         }
       }
     },
+    "Education" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Education"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Образование"
+          }
+        }
+      }
+    },
     "Enable backup" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4469,6 +4749,22 @@
         }
       }
     },
+    "Entertainment" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entertainment"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Развлечения"
+          }
+        }
+      }
+    },
     "error" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4502,42 +4798,8 @@
         }
       }
     },
-    "Education" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Education"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Образование"
-          }
-        }
-      }
-    },
-    "Entertainment" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Entertainment"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Развлечения"
-          }
-        }
-      }
-    },
-    "Expense category" : {
-
-    },
     "Explanation: this is asset revaluation/movement for the period after explicit inflows (income) and recorded expenses are accounted for." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -11065,6 +11327,7 @@
       }
     },
     "Frequency" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -11079,6 +11342,29 @@
           }
         }
       }
+    },
+    "From" : {
+
+    },
+    "From card" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "From card"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "С карты"
+          }
+        }
+      }
+    },
+    "Full reset (all data types)" : {
+
     },
     "Gift" : {
       "localizations" : {
@@ -11127,28 +11413,6 @@
           }
         }
       }
-    },
-    "From" : {
-
-    },
-    "From card" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "From card"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "С карты"
-          }
-        }
-      }
-    },
-    "Full reset (all data types)" : {
-
     },
     "Hide details" : {
       "localizations" : {
@@ -11215,6 +11479,7 @@
       }
     },
     "How is asset value change calculated?" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -11313,10 +11578,8 @@
         }
       }
     },
-    "Income category" : {
-
-    },
     "Insufficient funds" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -11585,9 +11848,6 @@
         }
       }
     },
-    "Matches" : {
-
-    },
     "Millio" : {
       "localizations" : {
         "en" : {
@@ -11603,9 +11863,6 @@
           }
         }
       }
-    },
-    "Mismatch" : {
-
     },
     "monetization.cashback.categories.limit.hard_format" : {
       "localizations" : {
@@ -11929,6 +12186,7 @@
       }
     },
     "No available cards" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -11962,6 +12220,7 @@
       }
     },
     "No cards in selected currency" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -12009,70 +12268,6 @@
         }
       }
     },
-    "Other" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Other"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Другое"
-          }
-        }
-      }
-    },
-    "Planned expense" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Planned expense"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Запланированный расход"
-          }
-        }
-      }
-    },
-    "Planned expenses" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Planned expenses"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Запланированные расходы"
-          }
-        }
-      }
-    },
-    "Planned income" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Planned income"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Запланированные доходы"
-          }
-        }
-      }
-    },
     "No saved versions yet" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -12091,6 +12286,7 @@
       }
     },
     "No transactions" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -12137,6 +12333,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ОК"
+          }
+        }
+      }
+    },
+    "Other" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Other"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Другое"
           }
         }
       }
@@ -12225,6 +12437,7 @@
       }
     },
     "Period selection" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -12241,6 +12454,7 @@
       }
     },
     "Period type" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -12289,6 +12503,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Закрепленная версия"
+          }
+        }
+      }
+    },
+    "Planned expense" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Planned expense"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запланированный расход"
+          }
+        }
+      }
+    },
+    "Planned expenses" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Planned expenses"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запланированные расходы"
+          }
+        }
+      }
+    },
+    "Planned income" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Planned income"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запланированные доходы"
           }
         }
       }
@@ -14373,6 +14635,86 @@
         }
       }
     },
+    "Recurring expense" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recurring expense"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Регулярный расход"
+          }
+        }
+      }
+    },
+    "Recurring expenses" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recurring expenses"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Регулярные расходы"
+          }
+        }
+      }
+    },
+    "Recurring expenses have not been added yet" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recurring expenses have not been added yet"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Регулярные расходы еще не добавлены"
+          }
+        }
+      }
+    },
+    "Recurring income" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recurring income"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Регулярные доходы"
+          }
+        }
+      }
+    },
+    "Recurring income has not been added yet" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recurring income has not been added yet"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Регулярные доходы еще не добавлены"
+          }
+        }
+      }
+    },
     "Refresh status" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -14391,6 +14733,7 @@
       }
     },
     "Reset" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14527,6 +14870,7 @@
       }
     },
     "Result" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14538,86 +14882,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Результат"
-          }
-        }
-      }
-    },
-    "Recurring expense" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recurring expense"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Регулярный расход"
-          }
-        }
-      }
-    },
-    "Recurring expenses" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recurring expenses"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Регулярные расходы"
-          }
-        }
-      }
-    },
-    "Recurring expenses have not been added yet" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recurring expenses have not been added yet"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Регулярные расходы еще не добавлены"
-          }
-        }
-      }
-    },
-    "Recurring income" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recurring income"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Регулярные доходы"
-          }
-        }
-      }
-    },
-    "Recurring income has not been added yet" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recurring income has not been added yet"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Регулярные доходы еще не добавлены"
           }
         }
       }
@@ -14671,6 +14935,7 @@
       }
     },
     "Search transaction" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14687,6 +14952,7 @@
       }
     },
     "Select card" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14702,23 +14968,8 @@
         }
       }
     },
-    "Shopping" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Shopping"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Покупки"
-          }
-        }
-      }
-    },
     "Select month" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14751,6 +15002,7 @@
       }
     },
     "Select quarter" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14767,6 +15019,7 @@
       }
     },
     "Select start and end dates on the calendar" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14783,6 +15036,7 @@
       }
     },
     "Select year" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14798,7 +15052,24 @@
         }
       }
     },
+    "Shopping" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shopping"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Покупки"
+          }
+        }
+      }
+    },
     "Show" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -15771,6 +16042,7 @@
       }
     },
     "Substitution:" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -15787,6 +16059,7 @@
       }
     },
     "The transaction will be deleted permanently." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -15838,6 +16111,7 @@
 
     },
     "To card" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -15854,6 +16128,7 @@
       }
     },
     "Total" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -15881,54 +16156,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Всего изменений"
-          }
-        }
-      }
-    },
-    "Transaction currency" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Transaction currency"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Валюта транзакции"
-          }
-        }
-      }
-    },
-    "Transaction history" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Transaction history"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "История транзакций"
-          }
-        }
-      }
-    },
-    "Transfer" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Transfer"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Перевод"
           }
         }
       }
@@ -15965,7 +16192,40 @@
         }
       }
     },
+    "Transaction currency" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transaction currency"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Валюта транзакции"
+          }
+        }
+      }
+    },
+    "Transaction history" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transaction history"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "История транзакций"
+          }
+        }
+      }
+    },
     "Transaction management" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -15982,6 +16242,7 @@
       }
     },
     "Transaction type" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -15993,6 +16254,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Тип транзакции"
+          }
+        }
+      }
+    },
+    "Transfer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transfer"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перевод"
+          }
+        }
+      }
+    },
+    "Transport" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transport"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Транспорт"
           }
         }
       }
@@ -16014,7 +16307,24 @@
         }
       }
     },
+    "Uncategorized" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uncategorized"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Без категории"
+          }
+        }
+      }
+    },
     "Visible range" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -16042,38 +16352,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Неделя"
-          }
-        }
-      }
-    },
-    "Transport" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Transport"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Транспорт"
-          }
-        }
-      }
-    },
-    "Uncategorized" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Uncategorized"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Без категории"
           }
         }
       }
@@ -16192,38 +16470,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Год"
-          }
-        }
-      }
-    },
-    "Account balance adjustment" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Account balance adjustment"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Корректировка баланса счета"
-          }
-        }
-      }
-    },
-    "Debt adjustment" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Debt adjustment"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Корректировка долга"
           }
         }
       }

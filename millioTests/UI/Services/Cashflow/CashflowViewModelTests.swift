@@ -1275,11 +1275,14 @@ extension CashflowViewModelTests {
         viewModel.handle(.updateTransaction(replacement))
 
         try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
-            abs(card.balance - 750) < 0.01
-            && abs(viewModel.state.transactions.first?.amount ?? 0 - 250) < 0.01
+            return abs(card.balance - 750) < 0.01
+                && abs(existing.amount - 250) < 0.01
+                && existing.cardID == card.cardUniqueID
         }
 
         #expect(abs(card.balance - 750) < 0.01)
+        #expect(abs(existing.amount - 250) < 0.01)
+        #expect(existing.cardID == card.cardUniqueID)
     }
 
     @Test("Полное удаление операции откатывает влияние на баланс карты")

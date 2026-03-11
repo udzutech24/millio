@@ -31,6 +31,43 @@ struct AuthServiceTests {
         #expect(meTokens == ["new-access"])
     }
 
+    @Test("restoreSession clears refresh token after 401 on refresh")
+    func testRestoreSessionClearsTokenOnUnauthorizedRefresh() async throws {
+        let refreshStore = InMemoryRefreshTokenStore(refreshToken: "refresh-1")
+        let apiClient = FakeAuthAPIClient(refreshError: AuthServiceError.unauthorized())
+        let service = AuthService(
+            apiClient: apiClient,
+            tokenStore: AuthTokenStore(refreshTokenStore: refreshStore)
+        )
+
+        let restored = try await service.restoreSession()
+
+        #expect(restored == nil)
+        #expect(try refreshStore.refreshToken() == nil)
+        let refreshCalls = await apiClient.refreshCallCount
+        #expect(refreshCalls == 1)
+    }
+
+    @Test("currentUser stops after single unauthorized refresh and clears session")
+    func testCurrentUserDoesNotLoopWhenRefreshUnauthorized() async throws {
+        let refreshStore = InMemoryRefreshTokenStore(refreshToken: "refresh-1")
+        let apiClient = FakeAuthAPIClient(refreshError: AuthServiceError.unauthorized())
+        let service = AuthService(
+            apiClient: apiClient,
+            tokenStore: AuthTokenStore(refreshTokenStore: refreshStore)
+        )
+
+        await #expect(throws: AuthServiceError.unauthorized()) {
+            _ = try await service.currentUser()
+        }
+
+        #expect(try refreshStore.refreshToken() == nil)
+        let refreshCalls = await apiClient.refreshCallCount
+        let meTokens = await apiClient.meTokens
+        #expect(refreshCalls == 1)
+        #expect(meTokens.isEmpty)
+    }
+
     @Test("logout clears refresh token even if backend request fails")
     func testLogoutAlwaysClearsRefreshToken() async throws {
         let apiClient = FakeAuthAPIClient(logoutError: AuthServiceError.transport(.noInternet))
@@ -106,11 +143,18 @@ struct AuthServiceTests {
 
 private actor FakeAuthAPIClient: AuthAPIClientProtocol {
     let logoutError: Error?
+    let refreshError: Error?
     let signInRequestId: String?
     var meTokens: [String] = []
+    var refreshCallCount: Int = 0
 
-    init(logoutError: Error? = nil, signInRequestId: String? = "backend-auth-1") {
+    init(
+        logoutError: Error? = nil,
+        refreshError: Error? = nil,
+        signInRequestId: String? = "backend-auth-1"
+    ) {
         self.logoutError = logoutError
+        self.refreshError = refreshError
         self.signInRequestId = signInRequestId
     }
 
@@ -132,6 +176,10 @@ private actor FakeAuthAPIClient: AuthAPIClientProtocol {
     }
 
     func refresh(refreshToken: String) async throws -> AuthNetworkResult<AuthResponse> {
+        refreshCallCount += 1
+        if let refreshError {
+            throw refreshError
+        }
         AuthNetworkResult(
             value: AuthResponse(
                 accessToken: "new-access",

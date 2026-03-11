@@ -8,7 +8,17 @@ struct AuthConfiguration: Sendable {
     }
 
     static func live(bundle: Bundle = .main, processInfo: ProcessInfo = .processInfo) throws -> AuthConfiguration {
-        let environmentURL = processInfo.environment["AUTH_BASE_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        try live(
+            environment: processInfo.environment,
+            infoDictionary: bundle.infoDictionary ?? [:]
+        )
+    }
+
+    static func live(
+        environment: [String: String],
+        infoDictionary: [String: Any]
+    ) throws -> AuthConfiguration {
+        let environmentURL = environment["AUTH_BASE_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let environmentURL,
            !environmentURL.isEmpty,
            let url = URL(string: environmentURL),
@@ -17,26 +27,26 @@ struct AuthConfiguration: Sendable {
         }
 
         let scheme = (
-            processInfo.environment["AUTH_BASE_SCHEME"] ??
-            bundle.object(forInfoDictionaryKey: "AUTH_BASE_SCHEME") as? String ??
+            environment["AUTH_BASE_SCHEME"] ??
+            infoDictionary["AUTH_BASE_SCHEME"] as? String ??
             ""
         ).trimmingCharacters(in: .whitespacesAndNewlines)
 
         let host = (
-            processInfo.environment["AUTH_BASE_HOST"] ??
-            bundle.object(forInfoDictionaryKey: "AUTH_BASE_HOST") as? String ??
+            environment["AUTH_BASE_HOST"] ??
+            infoDictionary["AUTH_BASE_HOST"] as? String ??
             ""
         ).trimmingCharacters(in: .whitespacesAndNewlines)
 
         let portRaw = (
-            processInfo.environment["AUTH_BASE_PORT"] ??
-            bundle.object(forInfoDictionaryKey: "AUTH_BASE_PORT") as? String ??
+            environment["AUTH_BASE_PORT"] ??
+            infoDictionary["AUTH_BASE_PORT"] as? String ??
             ""
         ).trimmingCharacters(in: .whitespacesAndNewlines)
 
         let path = (
-            processInfo.environment["AUTH_BASE_PATH"] ??
-            bundle.object(forInfoDictionaryKey: "AUTH_BASE_PATH") as? String ??
+            environment["AUTH_BASE_PATH"] ??
+            infoDictionary["AUTH_BASE_PATH"] as? String ??
             ""
         ).trimmingCharacters(in: .whitespacesAndNewlines)
 
