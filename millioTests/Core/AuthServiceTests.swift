@@ -118,6 +118,81 @@ struct AuthServiceTests {
         }
     }
 
+    @Test("refresh applies cooldown after 429 and does not hammer backend")
+    func testRefreshRateLimitBackoffPreventsFlood() async {
+        let refreshStore = InMemoryRefreshTokenStore(refreshToken: "refresh-1")
+        let apiClient = FakeAuthAPIClient(
+            refreshResults: [
+                .failure(AuthServiceError.rateLimited(requestId: "backend-429", message: "Too many attempts", retryAfter: 5))
+            ]
+        )
+        let service = AuthService(
+            apiClient: apiClient,
+            tokenStore: AuthTokenStore(refreshTokenStore: refreshStore)
+        )
+
+        await #expect(throws: AuthServiceError.rateLimited(requestId: "backend-429", message: "Too many attempts", retryAfter: 5)) {
+            _ = try await service.accessToken(forceRefresh: true)
+        }
+
+        do {
+            _ = try await service.accessToken(forceRefresh: true)
+            #expect(Bool(false))
+        } catch let AuthServiceError.rateLimited(requestId, message, retryAfter) {
+            #expect(requestId == "backend-429")
+            #expect(message == "Too many attempts")
+            #expect((retryAfter ?? 0) > 0)
+            #expect((retryAfter ?? 0) <= 5)
+        } catch {
+            #expect(Bool(false))
+        }
+
+        let refreshCalls = await apiClient.refreshCallCount
+        #expect(refreshCalls == 1)
+    }
+
+    @Test("signIn applies cooldown after 429 and fails fast on repeated attempts")
+    func testSignInRateLimitBackoffPreventsFlood() async {
+        let apiClient = FakeAuthAPIClient(
+            signInResults: [
+                .failure(AuthServiceError.rateLimited(requestId: "backend-signin-429", message: "Too many attempts", retryAfter: 4))
+            ]
+        )
+        let service = AuthService(
+            apiClient: apiClient,
+            tokenStore: AuthTokenStore(refreshTokenStore: InMemoryRefreshTokenStore())
+        )
+
+        await #expect(throws: AuthServiceError.rateLimited(requestId: "backend-signin-429", message: "Too many attempts", retryAfter: 4)) {
+            _ = try await service.signInWithApple(
+                identityToken: "identity-token",
+                email: nil,
+                firstName: nil,
+                lastName: nil
+            )
+        }
+
+        do {
+            _ = try await service.signInWithApple(
+                identityToken: "identity-token",
+                email: nil,
+                firstName: nil,
+                lastName: nil
+            )
+            #expect(Bool(false))
+        } catch let AuthServiceError.rateLimited(requestId, message, retryAfter) {
+            #expect(requestId == "backend-signin-429")
+            #expect(message == "Too many attempts")
+            #expect((retryAfter ?? 0) > 0)
+            #expect((retryAfter ?? 0) <= 4)
+        } catch {
+            #expect(Bool(false))
+        }
+
+        let signInCalls = await apiClient.signInCallCount
+        #expect(signInCalls == 1)
+    }
+
     @Test("access token expiry uses backend ttl")
     func testAccessTokenExpiryUsesBackendTTL() async throws {
         let service = AuthService(
@@ -145,27 +220,46 @@ private actor FakeAuthAPIClient: AuthAPIClientProtocol {
     let logoutError: Error?
     let refreshError: Error?
     let signInRequestId: String?
+    private var queuedSignInResults: [Result<AuthNetworkResult<AuthResponse>, Error>]
+    private var queuedRefreshResults: [Result<AuthNetworkResult<AuthResponse>, Error>]
     var meTokens: [String] = []
     var refreshCallCount: Int = 0
+    var signInCallCount: Int = 0
 
     init(
         logoutError: Error? = nil,
         refreshError: Error? = nil,
-        signInRequestId: String? = "backend-auth-1"
+        signInRequestId: String? = "backend-auth-1",
+        signInResults: [Result<AuthNetworkResult<AuthResponse>, Error>] = [],
+        refreshResults: [Result<AuthNetworkResult<AuthResponse>, Error>] = []
     ) {
         self.logoutError = logoutError
         self.refreshError = refreshError
         self.signInRequestId = signInRequestId
+        self.queuedSignInResults = signInResults
+        self.queuedRefreshResults = refreshResults
     }
 
     func signInWithApple(request: AppleAuthRequest) async throws -> AuthNetworkResult<AuthResponse> {
-        AuthNetworkResult(
+        signInCallCount += 1
+        if !queuedSignInResults.isEmpty {
+            let result = queuedSignInResults.removeFirst()
+            switch result {
+            case .success(let response):
+                return response
+            case .failure(let error):
+                throw error
+            }
+        }
+
+        return AuthNetworkResult(
             value: AuthResponse(
                 accessToken: "access-1",
                 refreshToken: "refresh-1",
                 accessTokenExpiresInSeconds: 900,
                 user: .fixture
-            ),
+            )
+            ,
             metadata: AuthResponseMetadata(
                 statusCode: 200,
                 requestId: signInRequestId,
@@ -177,10 +271,19 @@ private actor FakeAuthAPIClient: AuthAPIClientProtocol {
 
     func refresh(refreshToken: String) async throws -> AuthNetworkResult<AuthResponse> {
         refreshCallCount += 1
+        if !queuedRefreshResults.isEmpty {
+            let result = queuedRefreshResults.removeFirst()
+            switch result {
+            case .success(let response):
+                return response
+            case .failure(let error):
+                throw error
+            }
+        }
         if let refreshError {
             throw refreshError
         }
-        AuthNetworkResult(
+        return AuthNetworkResult(
             value: AuthResponse(
                 accessToken: "new-access",
                 refreshToken: refreshToken,

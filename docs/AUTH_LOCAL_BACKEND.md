@@ -43,15 +43,19 @@
    - `x-platform: ios`
    - `x-app-version: <app version>`
 6. `AuthAPIClient` logs request start, HTTP status, response `x-request-id`, duration, and typed failure category.
-7. The backend response is persisted in memory plus Keychain.
-8. `AuthService` explicitly logs:
+7. `429 Too Many Requests` on `/auth/apple` and `/auth/refresh` starts a local cooldown:
+   - the client respects backend `Retry-After` when present
+   - otherwise it applies exponential backoff locally
+   - repeated auth attempts during cooldown fail fast on the client instead of sending more requests
+8. The backend response is persisted in memory plus Keychain.
+9. `AuthService` explicitly logs:
    - access token received
    - refresh token received
    - token persistence success or failure
-9. `AuthManager` explicitly logs:
+10. `AuthManager` explicitly logs:
    - session state updated
    - authorized navigation route resolved
-10. `GET /auth/me` refreshes the current authenticated user with the same request diagnostics headers.
+11. `GET /auth/me` refreshes the current authenticated user with the same request diagnostics headers.
 
 ## Error Categories
 

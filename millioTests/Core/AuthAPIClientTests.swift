@@ -72,14 +72,17 @@ struct AuthAPIClientTests {
         #expect(tokens.details.values.contains("refresh-67890") == false)
     }
 
-    @Test("429 response maps to rate limited auth error")
+    @Test("429 response maps to rate limited auth error with retry-after")
     func testRateLimitedResponseMapping() async {
         URLProtocolStub.setHandler { request in
             let response = HTTPURLResponse(
                 url: try #require(request.url),
                 statusCode: 429,
                 httpVersion: nil,
-                headerFields: ["x-request-id": "backend-429"]
+                headerFields: [
+                    "x-request-id": "backend-429",
+                    "Retry-After": "7"
+                ]
             )!
             let data = Data(#"{"message":"Too many attempts"}"#.utf8)
             return (response, data)
@@ -88,7 +91,7 @@ struct AuthAPIClientTests {
 
         let client = makeClient()
 
-        await #expect(throws: AuthServiceError.rateLimited(requestId: "backend-429", message: "Too many attempts")) {
+        await #expect(throws: AuthServiceError.rateLimited(requestId: "backend-429", message: "Too many attempts", retryAfter: 7)) {
             _ = try await client.refresh(refreshToken: "refresh-token")
         }
     }

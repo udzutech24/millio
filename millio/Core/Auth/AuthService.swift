@@ -62,7 +62,7 @@ enum AuthServiceError: LocalizedError, Equatable, Sendable {
     case notAuthenticated
     case unauthorized(requestId: String? = nil)
     case forbidden(requestId: String? = nil, message: String)
-    case rateLimited(requestId: String? = nil, message: String)
+    case rateLimited(requestId: String? = nil, message: String, retryAfter: TimeInterval? = nil)
     case server(statusCode: Int, message: String, requestId: String? = nil)
     case backend(statusCode: Int, message: String, requestId: String? = nil)
     case transport(AuthTransportError)
@@ -84,7 +84,7 @@ enum AuthServiceError: LocalizedError, Equatable, Sendable {
         case .unauthorized:
             return "Session expired. Please sign in again."
         case .forbidden(_, let message),
-             .rateLimited(_, let message),
+             .rateLimited(_, let message, _),
              .server(_, let message, _),
              .backend(_, let message, _):
             return message
@@ -105,7 +105,7 @@ enum AuthServiceError: LocalizedError, Equatable, Sendable {
         switch self {
         case .unauthorized(let requestId),
              .forbidden(let requestId, _),
-             .rateLimited(let requestId, _),
+             .rateLimited(let requestId, _, _),
              .server(_, _, let requestId),
              .backend(_, _, let requestId),
              .invalidResponse(let requestId),
@@ -265,6 +265,65 @@ actor AuthTokenStore {
     }
 }
 
+private struct AuthRateLimitBackoffState: Sendable {
+    private static let baseDelay: TimeInterval = 1
+    private static let maxDelay: TimeInterval = 32
+
+    private(set) var consecutiveFailures = 0
+    private var nextAllowedAttemptAt: Date?
+    private var lastMessage = "Too many attempts. Please wait a bit and try again."
+    private var lastRequestId: String?
+
+    mutating func failFastError(now: Date = Date()) -> AuthServiceError? {
+        guard let nextAllowedAttemptAt else {
+            return nil
+        }
+
+        let remainingDelay = nextAllowedAttemptAt.timeIntervalSince(now)
+        guard remainingDelay > 0 else {
+            self.nextAllowedAttemptAt = nil
+            return nil
+        }
+
+        return .rateLimited(
+            requestId: lastRequestId,
+            message: lastMessage,
+            retryAfter: remainingDelay
+        )
+    }
+
+    mutating func registerRateLimit(
+        requestId: String?,
+        message: String,
+        retryAfter: TimeInterval?,
+        now: Date = Date()
+    ) -> AuthServiceError {
+        consecutiveFailures += 1
+
+        let exponentialDelay = min(
+            Self.baseDelay * pow(2, Double(max(consecutiveFailures - 1, 0))),
+            Self.maxDelay
+        )
+        let resolvedDelay = max(retryAfter ?? 0, exponentialDelay)
+
+        nextAllowedAttemptAt = now.addingTimeInterval(resolvedDelay)
+        lastMessage = message
+        lastRequestId = requestId
+
+        return .rateLimited(
+            requestId: requestId,
+            message: message,
+            retryAfter: resolvedDelay
+        )
+    }
+
+    mutating func reset() {
+        consecutiveFailures = 0
+        nextAllowedAttemptAt = nil
+        lastRequestId = nil
+    }
+}
+
 protocol AuthAPIClientProtocol: Sendable {
     func signInWithApple(request: AppleAuthRequest) async throws -> AuthNetworkResult<AuthResponse>
     func refresh(refreshToken: String) async throws -> AuthNetworkResult<AuthResponse>
@@ -316,6 +375,7 @@ struct AuthAPIClient: AuthAPIClientProtocol {
     private let decoder: JSONDecoder
     private let clientMetadata: AuthClientMetadata
     private let diagnostics: any AuthDiagnosticsLogging
+    private let httpDateFormatter: DateFormatter
 
     init(
         configuration: AuthConfiguration,
@@ -329,6 +389,7 @@ struct AuthAPIClient: AuthAPIClientProtocol {
         self.decoder = Self.makeDecoder()
         self.clientMetadata = clientMetadata
         self.diagnostics = diagnostics
+        self.httpDateFormatter = Self.makeHTTPDateFormatter()
     }
 
     func signInWithApple(request: AppleAuthRequest) async throws -> AuthNetworkResult<AuthResponse> {
@@ -403,7 +464,8 @@ struct AuthAPIClient: AuthAPIClientProtocol {
             if let serviceError = mapHTTPError(
                 statusCode: httpResponse.statusCode,
                 responseData: data,
-                requestId: responseRequestId
+                requestId: responseRequestId,
+                retryAfterHeader: httpResponse.value(forHTTPHeaderField: "Retry-After")
             ) {
                 diagnostics.log(
                     .warning,
@@ -544,7 +606,12 @@ struct AuthAPIClient: AuthAPIClientProtocol {
         return details
     }
 
-    private func mapHTTPError(statusCode: Int, responseData: Data, requestId: String?) -> AuthServiceError? {
+    private func mapHTTPError(
+        statusCode: Int,
+        responseData: Data,
+        requestId: String?,
+        retryAfterHeader: String?
+    ) -> AuthServiceError? {
         guard !(200..<300).contains(statusCode) else {
             return nil
         }
@@ -554,6 +621,7 @@ struct AuthAPIClient: AuthAPIClientProtocol {
         let resolvedMessage = (message?.isEmpty == false)
             ? message!
             : HTTPURLResponse.localizedString(forStatusCode: statusCode)
+        let retryAfter = resolveRetryAfter(from: retryAfterHeader)
 
         switch statusCode {
         case 401:
@@ -561,7 +629,7 @@ struct AuthAPIClient: AuthAPIClientProtocol {
         case 403:
             return .forbidden(requestId: requestId, message: resolvedMessage)
         case 429:
-            return .rateLimited(requestId: requestId, message: resolvedMessage)
+            return .rateLimited(requestId: requestId, message: resolvedMessage, retryAfter: retryAfter)
         case 500...599:
             return .server(statusCode: statusCode, message: resolvedMessage, requestId: requestId)
         default:
@@ -597,6 +665,30 @@ struct AuthAPIClient: AuthAPIClientProtocol {
         }
         return decoder
     }
+
+    private static func makeHTTPDateFormatter() -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "EEE',' dd MMM yyyy HH':'mm':'ss z"
+        return formatter
+    }
+
+    private func resolveRetryAfter(from header: String?) -> TimeInterval? {
+        guard let rawHeader = header?.trimmingCharacters(in: .whitespacesAndNewlines), !rawHeader.isEmpty else {
+            return nil
+        }
+
+        if let seconds = TimeInterval(rawHeader), seconds > 0 {
+            return seconds
+        }
+
+        guard let date = httpDateFormatter.date(from: rawHeader) else {
+            return nil
+        }
+
+        return max(date.timeIntervalSinceNow, 0)
+    }
 }
 
 protocol AuthServiceProtocol: Sendable {
@@ -612,6 +704,8 @@ actor AuthService: AuthServiceProtocol {
     private let apiClient: any AuthAPIClientProtocol
     private let tokenStore: AuthTokenStore
     private let diagnostics: any AuthDiagnosticsLogging
+    private var signInBackoffState = AuthRateLimitBackoffState()
+    private var refreshBackoffState = AuthRateLimitBackoffState()
 
     init(
         apiClient: any AuthAPIClientProtocol,
@@ -629,15 +723,28 @@ actor AuthService: AuthServiceProtocol {
             throw AuthServiceError.invalidIdentityToken
         }
 
-        let response = try await apiClient.signInWithApple(
-            request: AppleAuthRequest(
-                identityToken: trimmedToken,
-                email: sanitize(email),
-                firstName: sanitize(firstName),
-                lastName: sanitize(lastName)
+        try throwIfRateLimited(&signInBackoffState)
+
+        do {
+            let response = try await apiClient.signInWithApple(
+                request: AppleAuthRequest(
+                    identityToken: trimmedToken,
+                    email: sanitize(email),
+                    firstName: sanitize(firstName),
+                    lastName: sanitize(lastName)
+                )
             )
-        )
-        return try await persist(response, source: .appleSignIn)
+            signInBackoffState.reset()
+            return try await persist(response, source: .appleSignIn)
+        } catch let AuthServiceError.rateLimited(requestId, message, retryAfter) {
+            throw registerRateLimit(
+                &signInBackoffState,
+                requestId: requestId,
+                message: message,
+                retryAfter: retryAfter,
+                operation: .appleSignIn
+            )
+        }
     }
 
     func restoreSession() async throws -> AuthSession? {
@@ -648,11 +755,20 @@ actor AuthService: AuthServiceProtocol {
 
         do {
             let response = try await apiClient.refresh(refreshToken: refreshToken)
+            refreshBackoffState.reset()
             return try await persist(response, source: .refresh)
         } catch AuthServiceError.unauthorized {
             diagnostics.log(.warning, phase: "auth.session.restore.cleared", operation: .refresh, requestId: nil, backendRequestId: nil, details: ["reason": "unauthorized"])
             try await tokenStore.clear()
             return nil
+        } catch let AuthServiceError.rateLimited(requestId, message, retryAfter) {
+            throw registerRateLimit(
+                &refreshBackoffState,
+                requestId: requestId,
+                message: message,
+                retryAfter: retryAfter,
+                operation: .refresh
+            )
         }
     }
 
@@ -705,8 +821,11 @@ actor AuthService: AuthServiceProtocol {
             throw AuthServiceError.notAuthenticated
         }
 
+        try throwIfRateLimited(&refreshBackoffState)
+
         do {
             let response = try await apiClient.refresh(refreshToken: refreshToken)
+            refreshBackoffState.reset()
             _ = try await persist(response, source: .refresh)
             guard let token = await tokenStore.accessToken() else {
                 throw AuthServiceError.notAuthenticated
@@ -715,6 +834,14 @@ actor AuthService: AuthServiceProtocol {
         } catch AuthServiceError.unauthorized {
             try await tokenStore.clear()
             throw AuthServiceError.unauthorized()
+        } catch let AuthServiceError.rateLimited(requestId, message, retryAfter) {
+            throw registerRateLimit(
+                &refreshBackoffState,
+                requestId: requestId,
+                message: message,
+                retryAfter: retryAfter,
+                operation: .refresh
+            )
         }
     }
 
@@ -759,6 +886,37 @@ actor AuthService: AuthServiceProtocol {
         guard let value else { return nil }
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func throwIfRateLimited(_ state: inout AuthRateLimitBackoffState) throws {
+        if let error = state.failFastError() {
+            throw error
+        }
+    }
+
+    private func registerRateLimit(
+        _ state: inout AuthRateLimitBackoffState,
+        requestId: String?,
+        message: String,
+        retryAfter: TimeInterval?,
+        operation: AuthRequestOperation
+    ) -> AuthServiceError {
+        let error = state.registerRateLimit(
+            requestId: requestId,
+            message: message,
+            retryAfter: retryAfter
+        )
+        if case let .rateLimited(_, _, effectiveRetryAfter) = error {
+            diagnostics.log(
+                .warning,
+                phase: "auth.rate_limit.backoff_started",
+                operation: operation,
+                requestId: nil,
+                backendRequestId: requestId,
+                details: ["retryAfterSeconds": String(format: "%.3f", effectiveRetryAfter ?? 0)]
+            )
+        }
+        return error
     }
 }
 
