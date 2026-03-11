@@ -1165,6 +1165,27 @@ struct CloudBackupStoreTests {
         }
     }
 
+    @Test("uploadBackup maps direct missing record type message to actionable AppError")
+    func testUploadBackupMapsDirectMissingRecordTypeMessage() async {
+        let db = FakeCloudBackupDatabase()
+        db.saveErrorByRecordName["__default__"] = NSError(
+            domain: CKError.errorDomain,
+            code: CKError.serverRejectedRequest.rawValue,
+            userInfo: [
+                NSLocalizedDescriptionKey: "Unknown error",
+                NSLocalizedFailureReasonErrorKey: "CloudKit production schema is missing record type 'AppBackup'. Deploy the latest schema to production before using TestFlight or App Store builds."
+            ]
+        )
+
+        let store = CloudBackupStore(
+            container: FakeCloudBackupContainer(accountStatusResult: .available, database: db)
+        )
+
+        await #expect(throws: AppError.backupFailed("CloudKit backup operation failed: CloudKit production schema is missing record type 'AppBackup'. Deploy the latest schema to production before using TestFlight or App Store builds.")) {
+            try await store.uploadBackup(Data("payload".utf8), isPinned: false)
+        }
+    }
+
     @Test("deleteBackup removes snapshot even when backup_index cache resync fails")
     func testDeleteBackupSucceedsWhenIndexCacheResyncFails() async throws {
         let db = FakeCloudBackupDatabase()

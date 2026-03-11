@@ -78,9 +78,7 @@ struct FinanceBalanceAuditViewModelTests {
             selectedDate: targetDate
         )
 
-        try await waitUntil(timeout: 1.0) {
-            auditViewModel.rows.contains(where: { $0.title == "Фридом $" })
-        }
+        await auditViewModel.reloadNow()
 
         let freedomRow = auditViewModel.rows.first(where: { $0.title == "Фридом $" })
         #expect(freedomRow != nil)
@@ -139,9 +137,7 @@ struct FinanceBalanceAuditViewModelTests {
             selectedDate: targetDate
         )
 
-        try await waitUntil(timeout: 1.0) {
-            auditViewModel.rows.contains(where: { $0.title == "Фридом $" })
-        }
+        await auditViewModel.reloadNow()
 
         guard let row = auditViewModel.rows.first(where: { $0.title == "Фридом $" }) else {
             Issue.record("Row not found")
@@ -159,20 +155,11 @@ struct FinanceBalanceAuditViewModelTests {
             auditViewModel.deleteValue(for: overriddenRow)
         }
 
-        try await waitUntil(timeout: 1.0) {
-            guard let refreshed = auditViewModel.rows.first(where: { $0.id == row.id }) else { return false }
-            return abs(refreshed.value - 1000.0) < 0.01
+        await auditViewModel.reloadNow()
+        guard let refreshed = auditViewModel.rows.first(where: { $0.id == row.id }) else {
+            Issue.record("Refreshed row not found")
+            return
         }
-    }
-
-    private func waitUntil(timeout: TimeInterval, condition: @escaping () -> Bool) async throws {
-        let started = Date()
-        while Date().timeIntervalSince(started) < timeout {
-            if condition() {
-                return
-            }
-            try await Task.sleep(nanoseconds: 20_000_000)
-        }
-        Issue.record("Timed out while waiting for condition")
+        #expect(abs(refreshed.value - 1000.0) < 0.01)
     }
 }

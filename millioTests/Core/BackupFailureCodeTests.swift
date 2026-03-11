@@ -44,5 +44,13 @@ struct BackupFailureCodeTests {
                     "CloudKit backup operation failed: CloudKit production schema is missing record type 'AppBackup'. Deploy the latest schema to production before using TestFlight or App Store builds."
                 )
         )
+        #expect(
+            BackupFailureCode.cloudKitOperationFailed(
+                "CloudKit production schema is missing record type 'AppBackup'. Deploy the latest schema to production before using TestFlight or App Store builds."
+            ).appError
+                == .backupFailed(
+                    "CloudKit backup operation failed: CloudKit production schema is missing record type 'AppBackup'. Deploy the latest schema to production before using TestFlight or App Store builds."
+                )
+        )
     }
 }

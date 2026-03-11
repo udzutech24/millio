@@ -159,6 +159,11 @@ final class FinanceBalanceAuditViewModel: ObservableObject {
         }
     }
 
+    func reloadNow() async {
+        reloadTask?.cancel()
+        await reloadAsync(for: selectedDate)
+    }
+
     private func reloadAsync(for date: Date) async {
         financeViewModel.handle(.loadGroups)
         financeViewModel.handle(.loadAccounts)

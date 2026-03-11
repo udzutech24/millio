@@ -65,9 +65,19 @@ enum BackupFailureCode {
         }
 
         let lowercaseDetail = trimmedDetail.lowercased()
+        if lowercaseDetail.contains("production schema"),
+           let recordType = missingProductionRecordType(in: trimmedDetail) {
+            return "CloudKit production schema is missing record type '\(recordType)'. Deploy the latest schema to production before using TestFlight or App Store builds."
+        }
+
         if lowercaseDetail.contains("cannot create new type"),
            lowercaseDetail.contains("production schema") {
-            if let recordType = missingProductionRecordType(in: trimmedDetail) {
+            return "CloudKit production schema is missing a required record type. Deploy the latest schema to production before using TestFlight or App Store builds."
+        }
+
+        if lowercaseDetail.contains("missing record type"),
+           lowercaseDetail.contains("production schema") {
+            if let recordType = missingQuotedRecordType(in: trimmedDetail) {
                 return "CloudKit production schema is missing record type '\(recordType)'. Deploy the latest schema to production before using TestFlight or App Store builds."
             }
             return "CloudKit production schema is missing a required record type. Deploy the latest schema to production before using TestFlight or App Store builds."
@@ -84,16 +94,32 @@ enum BackupFailureCode {
         let marker = "Cannot create new type "
         let suffix = " in production schema"
 
-        guard let markerRange = detail.range(of: marker) else {
+        if let markerRange = detail.range(of: marker),
+           let suffixRange = detail.range(of: suffix, range: markerRange.upperBound..<detail.endIndex) {
+            let recordType = detail[markerRange.upperBound..<suffixRange.lowerBound]
+                .trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+            return recordType.isEmpty ? nil : recordType
+        }
+
+        return missingQuotedRecordType(in: detail)
+    }
+
+    private static func missingQuotedRecordType(in detail: String) -> String? {
+        let marker = "record type"
+        guard let markerRange = detail.range(of: marker, options: [.caseInsensitive]) else {
             return nil
         }
 
-        let typeStart = markerRange.upperBound
-        guard let suffixRange = detail.range(of: suffix, range: typeStart..<detail.endIndex) else {
+        let suffix = detail[markerRange.upperBound...]
+        guard let openingQuote = suffix.firstIndex(where: { $0 == "'" || $0 == "\"" }) else {
+            return nil
+        }
+        let searchStart = detail.index(after: openingQuote)
+        guard let closingQuote = detail[searchStart...].firstIndex(where: { $0 == detail[openingQuote] }) else {
             return nil
         }
 
-        let recordType = detail[typeStart..<suffixRange.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
+        let recordType = detail[searchStart..<closingQuote].trimmingCharacters(in: .whitespacesAndNewlines)
         return recordType.isEmpty ? nil : recordType
     }
 }

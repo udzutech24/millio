@@ -24,7 +24,7 @@
 - Локальная debug-разработка обычно бьёт в CloudKit Development schema.
 - TestFlight и App Store используют CloudKit Production schema.
 - Любой новый record type / field для backup (`AppBackup`, `AppBackupIndex`, новые поля snapshot-а) обязан быть задеплоен в Production до релиза.
-- Если schema не выкачена, backup в production-сборках падает с серверной ошибкой вида `Cannot create new type AppBackup in production schema`.
+- Если schema не выкачена, backup в production-сборках падает с серверной ошибкой вида `Cannot create new type AppBackup in production schema` или `CloudKit production schema is missing record type 'AppBackup'`.
 
 ### 2.1. Записи
 
