@@ -493,6 +493,28 @@ final class FakeBackupManager: BackupManagerProtocol {
     func backupNow() async throws {}
     func backupNow(passphrase: String?) async throws {}
     func saveVersionNow(passphrase: String?) async throws {}
+    func exportVersion(recordName: String) async throws -> BackupTransferPayload {
+        BackupTransferPayload(
+            fileName: "backup.milliobackup",
+            data: Data(),
+            versionInfo: BackupVersionInfo(
+                recordName: recordName,
+                date: Date(timeIntervalSince1970: 0),
+                size: 0,
+                version: "1.0",
+                isPinned: true
+            )
+        )
+    }
+    func importVersion(from data: Data) async throws -> BackupVersionInfo {
+        BackupVersionInfo(
+            recordName: "imported-test-backup",
+            date: Date(timeIntervalSince1970: 0),
+            size: Int64(data.count),
+            version: "1.0",
+            isPinned: true
+        )
+    }
     func restoreLatest() async throws {}
     func restoreLatest(passphrase: String?) async throws {}
     func restoreVersion(recordName: String, passphrase: String?) async throws {}
