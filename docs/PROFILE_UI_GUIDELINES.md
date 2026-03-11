@@ -10,6 +10,7 @@
 - Keep section spacing consistent (`sectionSpacing`).
 - Keep card horizontal insets consistent (`contentHorizontalInset`).
 - Build profile menu rows as a compact list with row dividers.
+- Keep the PRO upsell card as a distinct hero surface with layered highlights, not a flat banner.
 
 ## Localization Safety
 - Section IDs expose:

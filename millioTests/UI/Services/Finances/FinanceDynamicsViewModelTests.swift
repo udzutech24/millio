@@ -508,6 +508,56 @@ struct FinanceDynamicsViewModelTests {
         #expect(dynamicsViewModel.state.displayCurrency != initialCurrency || initialCurrency == "EUR")
     }
 
+    @Test("Смена валюты не переиспользует кэш баланса из другой валюты")
+    func testDisplayCurrencyChangeInvalidatesBalanceCache() async throws {
+        let modelContext = try createTestModelContext()
+
+        let card = Card(name: "Рублевая карта", cardNumber: "2222", bank: .other, cardType: .debit, currency: "RUB")
+        card.balance = 10_000
+        card.initialBalance = 10_000
+        card.hasInitialBalance = true
+        modelContext.insert(card)
+
+        let group = FinanceGroup(name: "Тест", colorHex: "#00FF00")
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsNormalizedCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsNormalizedCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+
+        let evaluationDate = Date()
+
+        dynamicsViewModel.handle(.setDisplayCurrency("RUB"))
+        let rubBalance = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: evaluationDate,
+            accountCardIDs: [card.cardUniqueID]
+        )
+
+        dynamicsViewModel.handle(.setDisplayCurrency("USD"))
+        let usdBalance = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: evaluationDate,
+            accountCardIDs: [card.cardUniqueID]
+        )
+
+        #expect(abs(rubBalance - 10_000) < 0.01)
+        #expect(abs(usdBalance - 100) < 0.01)
+    }
+
     @Test("Период week корректно рассчитывает диапазон дат")
     func testWeekPeriodDateRange() async throws {
         let modelContext = try createTestModelContext()

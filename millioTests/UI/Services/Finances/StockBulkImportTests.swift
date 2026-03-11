@@ -5,11 +5,27 @@ import UIKit
 @testable import millio
 
 actor StockBulkImportMockMarketDataClient: MarketDataClientProtocol {
+    enum MockError: Error {
+        case latestPriceUnavailable
+    }
+
     var searchResults: [String: [TwelveDataSymbol]] = [:]
     var latestPrices: [String: Double?] = [:]
+    var latestPriceErrors: [String: Error] = [:]
+    var latestPriceRequests: [(symbol: String, forceRefresh: Bool)] = []
+
+    func setSearchResults(_ results: [TwelveDataSymbol], for query: String) {
+        searchResults[query.uppercased()] = results
+    }
 
     func setLatestPrice(_ price: Double?, for symbol: String) {
         latestPrices[symbol.uppercased()] = price
+        latestPriceErrors.removeValue(forKey: symbol.uppercased())
+    }
+
+    func setLatestPriceError(_ error: Error, for symbol: String) {
+        latestPriceErrors[symbol.uppercased()] = error
+        latestPrices.removeValue(forKey: symbol.uppercased())
     }
 
     func searchSymbols(query: String, outputSize: Int) async throws -> [TwelveDataSymbol] {
@@ -17,7 +33,19 @@ actor StockBulkImportMockMarketDataClient: MarketDataClientProtocol {
     }
 
     func latestPrice(symbol: String, forceRefresh: Bool) async throws -> Double? {
+        latestPriceRequests.append((symbol.uppercased(), forceRefresh))
+        if let error = latestPriceErrors[symbol.uppercased()] {
+            throw error
+        }
         latestPrices[symbol.uppercased()] ?? nil
+    }
+
+    func lastLatestPriceRequest() -> (symbol: String, forceRefresh: Bool)? {
+        latestPriceRequests.last
+    }
+
+    func allLatestPriceRequests() -> [(symbol: String, forceRefresh: Bool)] {
+        latestPriceRequests
     }
 }
 
@@ -59,6 +87,24 @@ struct StockBulkImportTests {
         #expect(rows.contains { $0.ticker == "SBER" && $0.market == "MOEX" })
     }
 
+    @Test("OCR alias USR нормализуется как US")
+    func marketNormalizerHandlesUsrAlias() {
+        #expect(StockBulkImportMarketNormalizer.normalize("USR") == "US")
+    }
+
+    @Test("Mass import по умолчанию открывается в режиме скриншота")
+    func defaultModeIsScreenshot() throws {
+        let context = try makeContext()
+        let client = StockBulkImportMockMarketDataClient()
+        let viewModel = StockBulkImportViewModel(
+            modelContext: context,
+            marketDataClient: client,
+            parser: StockBulkImportParser(textRecognizer: StubTextRecognizer())
+        )
+
+        #expect(viewModel.mode == .screenshot)
+    }
+
     @Test("Парсер извлекает quantity и price из соседних строк")
     func parserExtractsAdjacentQuantityAndPrice() {
         let rows = StockBulkImportParser.parseRecognizedLines([
@@ -97,6 +143,22 @@ struct StockBulkImportTests {
         #expect(gld?.market == "US")
         #expect(gld?.quantity == 19)
         #expect(abs((gld?.buyPrice ?? 0) - 344.24) < 0.0001)
+    }
+
+    @Test("Парсер отбрасывает короткие и служебные OCR токены")
+    func parserSkipsShortAndServiceNoiseTokens() {
+        let rows = StockBulkImportParser.parseRecognizedLines([
+            "ETFs PPLT.US 201.16",
+            "X",
+            "iShares IBIT.US 40.10",
+            "IS"
+        ])
+
+        #expect(rows.contains(where: { $0.ticker == "PPLT" }))
+        #expect(rows.contains(where: { $0.ticker == "IBIT" }))
+        #expect(rows.contains(where: { $0.ticker == "ETFS" }) == false)
+        #expect(rows.contains(where: { $0.ticker == "X" }) == false)
+        #expect(rows.contains(where: { $0.ticker == "IS" }) == false)
     }
 
     @Test("mergeDuplicates объединяет строки по market|ticker")
@@ -182,6 +244,170 @@ struct StockBulkImportTests {
         #expect(valid.isAddable)
         #expect(!missingPrice.isAddable)
         #expect(!ambiguous.isAddable)
+    }
+
+    @Test("Статус priceMissing показывает найденный тикер без текущей цены")
+    func rowStatusHighlightsMissingPrice() {
+        let candidate = StockBulkImportCandidate(
+            symbol: "VXUS",
+            market: "US",
+            displayName: "Vanguard Total International Stock ETF",
+            currency: "USD",
+            providerRaw: "market-backend"
+        )
+        let row = StockBulkImportRowDraft(
+            rawLine: "VXUS.US",
+            tickerText: "VXUS",
+            marketText: "US",
+            quantityText: "12",
+            buyPriceText: "76.01",
+            currentPriceText: "",
+            sourceOrderIndex: 0,
+            candidates: [candidate],
+            selectedCandidate: candidate
+        )
+
+        #expect(row.status == .priceMissing)
+        #expect(row.requiresAttention)
+    }
+
+    @Test("Remote matcher принимает backend symbol с market suffix")
+    func matcherAcceptsBackendSuffixSymbol() async throws {
+        let context = try makeContext()
+        let client = StockBulkImportMockMarketDataClient()
+        await client.setSearchResults([
+            TwelveDataSymbol(
+                symbol: "VXUS.US",
+                instrumentName: "Vanguard Total International Stock ETF",
+                exchange: "US",
+                micCode: nil,
+                instrumentType: "ETF",
+                country: "United States",
+                currency: "USD"
+            )
+        ], for: "VXUS")
+
+        let matcher = StockBulkImportMatcher(modelContext: context, marketDataClient: client)
+        let rows = await matcher.buildDraftRows(from: [
+            StockBulkImportParsedRow(
+                rawLine: "VXUS.US",
+                ticker: "VXUS",
+                market: "US",
+                quantity: 12,
+                buyPrice: 76.01,
+                sourceOrderIndex: 0
+            )
+        ])
+
+        #expect(rows.count == 1)
+        #expect(rows[0].selectedCandidate?.normalizedSymbol == "VXUS")
+    }
+
+    @Test("Ручной refresh строки форсирует обновление котировки")
+    func refreshCurrentPriceForcesQuoteReload() async throws {
+        let context = try makeContext()
+        let client = StockBulkImportMockMarketDataClient()
+        await client.setLatestPrice(677.03, for: "SPY.US")
+        let viewModel = StockBulkImportViewModel(
+            modelContext: context,
+            marketDataClient: client,
+            parser: StockBulkImportParser(textRecognizer: StubTextRecognizer())
+        )
+
+        let candidate = StockBulkImportCandidate(
+            symbol: "SPY",
+            market: "US",
+            displayName: "SPDR S&P 500 ETF Trust",
+            currency: "USD",
+            providerRaw: "market-backend"
+        )
+        let rowID = UUID()
+        viewModel.rows = [
+            StockBulkImportRowDraft(
+                id: rowID,
+                rawLine: "SPY.US",
+                tickerText: "SPY",
+                marketText: "US",
+                quantityText: "17",
+                buyPriceText: "623.55",
+                currentPriceText: "",
+                sourceOrderIndex: 0,
+                candidates: [candidate],
+                selectedCandidate: candidate
+            )
+        ]
+
+        await viewModel.refreshCurrentPrice(for: rowID)
+
+        #expect(viewModel.rows[0].currentPriceText == "677.03")
+        let request = await client.lastLatestPriceRequest()
+        #expect(request?.symbol == "SPY.US")
+        #expect(request?.forceRefresh == true)
+    }
+
+    @Test("Частичный провал котировок показывает только проблемные тикеры")
+    func warningListsOnlyFailedQuoteSymbols() async throws {
+        let context = try makeContext()
+        let client = StockBulkImportMockMarketDataClient()
+        await client.setLatestPrice(677.03, for: "SPY.US")
+        await client.setLatestPriceError(StockBulkImportMockMarketDataClient.MockError.latestPriceUnavailable, for: "SIVR.US")
+
+        let viewModel = StockBulkImportViewModel(
+            modelContext: context,
+            marketDataClient: client,
+            parser: StockBulkImportParser(textRecognizer: StubTextRecognizer())
+        )
+
+        let spy = StockBulkImportCandidate(
+            symbol: "SPY",
+            market: "US",
+            displayName: "SPDR S&P 500 ETF Trust",
+            currency: "USD",
+            providerRaw: "market-backend"
+        )
+        let sivr = StockBulkImportCandidate(
+            symbol: "SIVR",
+            market: "US",
+            displayName: "abrdn Physical Silver Shares ETF",
+            currency: "USD",
+            providerRaw: "market-backend"
+        )
+        let spyRowID = UUID()
+        let sivrRowID = UUID()
+        viewModel.rows = [
+            StockBulkImportRowDraft(
+                id: spyRowID,
+                rawLine: "SPY.US",
+                tickerText: "SPY",
+                marketText: "US",
+                quantityText: "17",
+                buyPriceText: "623.55",
+                currentPriceText: "",
+                sourceOrderIndex: 0,
+                candidates: [spy],
+                selectedCandidate: spy
+            ),
+            StockBulkImportRowDraft(
+                id: sivrRowID,
+                rawLine: "SIVR.US",
+                tickerText: "SIVR",
+                marketText: "US",
+                quantityText: "67",
+                buyPriceText: "59.02",
+                currentPriceText: "",
+                sourceOrderIndex: 1,
+                candidates: [sivr],
+                selectedCandidate: sivr
+            )
+        ]
+
+        await viewModel.refreshCurrentPrice(for: spyRowID)
+        await viewModel.refreshCurrentPrice(for: sivrRowID)
+
+        #expect(viewModel.rows[0].currentPriceText == "677.03")
+        #expect(viewModel.rows[1].currentPriceText.isEmpty)
+        #expect(viewModel.marketDataWarning?.contains("SIVR") == true)
+        #expect(viewModel.marketDataWarning?.contains("SPY") == false)
     }
 
     @Test("Сохранение акций фиксирует USD и корректный баланс")
@@ -418,6 +644,51 @@ struct StockBulkImportTests {
 
         #expect(usCandidate.quoteLookupSymbol == "SPY.US")
         #expect(nasdaqCandidate.quoteLookupSymbol == "AAPL")
+        #expect(usCandidate.quoteLookupSymbols == ["SPY.US", "SPY", "US:SPY"])
+        #expect(nasdaqCandidate.quoteLookupSymbols == ["AAPL", "AAPL.US", "NASDAQ:AAPL"])
+    }
+
+    @Test("Refresh цены пробует fallback форматы market symbol")
+    func refreshCurrentPriceFallsBackToAlternateSymbols() async throws {
+        let context = try makeContext()
+        let client = StockBulkImportMockMarketDataClient()
+        await client.setLatestPrice(nil, for: "SPY")
+        await client.setLatestPrice(677.03, for: "SPY.US")
+
+        let viewModel = StockBulkImportViewModel(
+            modelContext: context,
+            marketDataClient: client,
+            parser: StockBulkImportParser(textRecognizer: StubTextRecognizer())
+        )
+
+        let candidate = StockBulkImportCandidate(
+            symbol: "SPY",
+            market: "NYSE",
+            displayName: "SPDR S&P 500 ETF Trust",
+            currency: "USD",
+            providerRaw: "market-backend"
+        )
+        let rowID = UUID()
+        viewModel.rows = [
+            StockBulkImportRowDraft(
+                id: rowID,
+                rawLine: "SPY",
+                tickerText: "SPY",
+                marketText: "NYSE",
+                quantityText: "17",
+                buyPriceText: "623.55",
+                currentPriceText: "",
+                sourceOrderIndex: 0,
+                candidates: [candidate],
+                selectedCandidate: candidate
+            )
+        ]
+
+        await viewModel.refreshCurrentPrice(for: rowID)
+
+        #expect(viewModel.rows[0].currentPriceText == "677.03")
+        let requests = await client.allLatestPriceRequests()
+        #expect(requests.map(\.symbol) == ["SPY", "SPY.US"])
     }
 
     @Test("Импорт US тикера мерджится с уже существующей позицией из обычного редактора")

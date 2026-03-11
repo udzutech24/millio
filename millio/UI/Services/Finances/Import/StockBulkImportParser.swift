@@ -241,6 +241,10 @@ struct StockBulkImportParser {
         return results
             .map { nsLine.substring(with: $0.range) }
             .map(sanitizeTicker)
+            .filter { token in
+                // Короткие standalone-токены слишком шумные для OCR (`X`, `IS` из логотипов/брендов).
+                token.count >= 3
+            }
             .filter(isValidTickerToken)
     }
 
@@ -385,6 +389,7 @@ struct StockBulkImportParser {
     private static let noiseWords: Set<String> = [
         "USD", "RUB", "EUR", "TOTAL", "PRICE", "OPEN", "CLOSE", "BUY", "SELL", "LIMIT",
         "VALUE", "PORTFOLIO", "POSITIONS", "POSITION", "BALANCE", "TODAY", "SHARES", "QTY",
-        "ACCOUNT", "WATCH", "WATCHLIST", "DAY", "GAIN", "LOSS", "COST", "AVG", "AVERAGE"
+        "ACCOUNT", "WATCH", "WATCHLIST", "DAY", "GAIN", "LOSS", "COST", "AVG", "AVERAGE",
+        "ETFS", "ETF", "ISHARES", "ABRDN", "XTRACKERS", "PHYSICAL", "TRUST"
     ]
 }

@@ -781,6 +781,74 @@ final class CashflowViewModel: ViewModelProtocol {
         await monthlyTotal(for: .expense, month: month, in: currency)
     }
 
+    func persistBulkExpenseImport(_ request: CashflowBulkExpensePersistRequest) async throws -> Int {
+        guard !request.entries.isEmpty else {
+            throw CashflowBulkExpenseImportError.noRowsToSave
+        }
+        guard let card = state.availableCards.first(where: { $0.cardUniqueID == request.cardID }) else {
+            throw CashflowBulkExpenseImportError.cardNotFound
+        }
+
+        let sortedEntries = request.entries.sorted { $0.sourceOrderIndex < $1.sourceOrderIndex }
+        let transactionDates = Self.bulkExpenseTransactionDates(
+            for: request.month,
+            count: sortedEntries.count,
+            referenceDate: now(),
+            calendar: Calendar.current
+        )
+
+        var totalInCardCurrency: Double = 0
+        if request.shouldAffectCardBalance {
+            for entry in sortedEntries {
+                totalInCardCurrency += await convertAmount(
+                    value: entry.amount,
+                    from: card.currency,
+                    to: card.currency
+                )
+            }
+
+            if totalInCardCurrency - card.balance > 0.0000001 {
+                throw CashflowBulkExpenseImportError.insufficientFunds(
+                    required: totalInCardCurrency,
+                    available: card.balance,
+                    currency: card.currency
+                )
+            }
+        }
+
+        for (index, entry) in sortedEntries.enumerated() {
+            let transaction = CashflowTransaction(
+                transactionType: .expense,
+                amount: entry.amount,
+                currency: card.currency,
+                transactionDate: transactionDates[index],
+                cardID: request.cardID,
+                expenseCategoryRaw: entry.expenseCategoryRaw,
+                note: entry.note
+            )
+            let exchangeInfo = await resolveExchangeInfo(for: transaction)
+            transaction.exchangeRate = exchangeInfo.rate
+            transaction.exchangeRateDate = exchangeInfo.rateDate
+            transaction.exchangeRateCurrency = exchangeInfo.rateCurrency
+            modelContext.insert(transaction)
+        }
+
+        if request.shouldAffectCardBalance {
+            card.balance = max(0, card.balance - totalInCardCurrency)
+            card.updatedAt = Date()
+        }
+
+        do {
+            try modelContext.save()
+            loadCards()
+            loadTransactions()
+            return sortedEntries.count
+        } catch {
+            AppLogger.log(.error, category: "Cashflow", "Failed to save bulk expenses: \(error.localizedDescription)")
+            throw error
+        }
+    }
+
     /// Возвращает суммы по категориям за выбранный месяц для типа операции.
     /// Ключ словаря — `rawValue` категории (`IncomeCategory` / `ExpenseCategory` / `custom:*`).
     func monthlyCategoryTotals(
@@ -919,6 +987,24 @@ final class CashflowViewModel: ViewModelProtocol {
             && transaction.transactionDate >= monthStart
             && transaction.transactionDate <= monthEnd
         }
+    }
+
+    static func bulkExpenseTransactionDates(
+        for month: Date,
+        count: Int,
+        referenceDate: Date,
+        calendar: Calendar
+    ) -> [Date] {
+        guard count > 0 else { return [] }
+
+        let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: month)) ?? month
+        let monthEnd = calendar.date(byAdding: DateComponents(month: 1, second: -1), to: monthStart) ?? monthStart
+        let isCurrentMonth = calendar.isDate(monthStart, equalTo: referenceDate, toGranularity: .month)
+        let anchor = isCurrentMonth ? min(referenceDate, monthEnd) : monthEnd
+
+        return (0..<count).map { offset in
+            calendar.date(byAdding: .minute, value: -offset, to: anchor) ?? anchor
+        }.sorted()
     }
 
     // MARK: - Categories

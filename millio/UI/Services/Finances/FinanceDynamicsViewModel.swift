@@ -350,7 +350,12 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             }
             
         case .setDisplayCurrency(let currency):
+            let normalizedNewCurrency = normalizedConversionCurrency(currency)
+            let normalizedCurrentCurrency = normalizedConversionCurrency(state.displayCurrency)
             state.displayCurrency = currency
+            if normalizedNewCurrency != normalizedCurrentCurrency {
+                balanceCache.removeAll()
+            }
             updateChartData()
             
         case .setPeriod(let period):
@@ -1455,7 +1460,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         // Проверяем кэш
         let sortedIDs = accounts.map { $0.accountUniqueID }.sorted()
         let idsHash = sortedIDs.joined().hashValue
-        let cacheKey = "balance_\(idsHash)_\(date.timeIntervalSince1970)_\(debtAsNegative ? "net" : "raw")_\(includeInitialBeforeCreation ? "init" : "strict")"
+        let displayCurrencyKey = normalizedConversionCurrency(state.displayCurrency)
+        let cacheKey = "balance_\(idsHash)_\(date.timeIntervalSince1970)_\(displayCurrencyKey)_\(debtAsNegative ? "net" : "raw")_\(includeInitialBeforeCreation ? "init" : "strict")"
         if let cached = balanceCache[cacheKey] {
             return cached
         }

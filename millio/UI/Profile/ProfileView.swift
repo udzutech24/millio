@@ -161,7 +161,7 @@ struct ProfileView: View {
                     .font(.system(size: 15, weight: .regular))
                     .foregroundStyle(AppColors.textSecondary)
 
-                HStack(alignment: .center, spacing: 12) {
+                HStack(alignment: .center, spacing: 10) {
                     Button {
                         editedName = profileHeaderDisplayName
                         showNameEditSheet = true
@@ -172,8 +172,6 @@ struct ProfileView: View {
                             .lineLimit(1)
                     }
                     .buttonStyle(.plain)
-
-                    Spacer(minLength: 8)
 
                     if authManager.isAuthenticated {
                         NavigationLink {
@@ -195,7 +193,10 @@ struct ProfileView: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("profile.headerAccountDetailsLink")
+                        .padding(.leading, 6)
                     }
+
+                    Spacer(minLength: 0)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -273,78 +274,11 @@ struct ProfileView: View {
     // MARK: - PRO Subscription Block
 
     private var premiumSubscriptionBlock: some View {
-        Button {
+        ProfilePremiumCard(
+            titleKey: "profile.premium.title"
+        ) {
             router.push(.subscription)
-        } label: {
-            HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color.white.opacity(0.10))
-
-                    Image("crown")
-                        .resizable()
-                        .scaledToFit()
-                        .padding(8)
-                }
-                .frame(width: 78, height: 78)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("profile.premium.title")
-                        .font(.system(size: 21, weight: .bold))
-                        .foregroundStyle(AppColors.textPrimary)
-                        .lineLimit(1)
-
-                    Text("profile.premium.subtitle")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(AppColors.textSecondary)
-                        .lineLimit(2)
-
-                    Text(premiumStatusLine)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(appState.isPro ? AppColors.textPrimary : AppColors.textSecondary)
-                        .lineLimit(1)
-
-                    HStack(spacing: 4) {
-                        Text("profile.premium.details")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary)
-                            .lineLimit(1)
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary)
-                    }
-                    .padding(.top, 4)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(.vertical, 14)
-            .padding(.leading, 14)
-            .padding(.trailing, 16)
-            .background {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: AppColors.premiumGradient,
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .opacity(0.8)
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(
-                        LinearGradient(
-                            colors: AppColors.premiumGradient,
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        ),
-                        lineWidth: 1
-                    )
-            }
-            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
-        .buttonStyle(.plain)
         .padding(.horizontal, ProfileLayout.contentHorizontalInset)
     }
     

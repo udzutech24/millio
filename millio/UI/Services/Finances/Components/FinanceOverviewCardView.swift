@@ -354,25 +354,28 @@ struct FinanceOverviewCardView: View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(String(localized: "finances.overview.chart.saldo"))
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(AppColors.textSecondary)
-                        .textCase(.uppercase)
+                    HStack(spacing: 6) {
+                        Text(String(localized: "finances.overview.chart.saldo"))
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AppColors.textSecondary)
+                            .textCase(.uppercase)
+
+                        Image(systemName: "questionmark.circle")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(AppColors.textSecondary.opacity(0.9))
+                            .accessibilityLabel(
+                                financesText(
+                                    ru: "Разница между активами и обязательствами в \(financeViewModel.state.displayCurrency.uppercased()).",
+                                    en: "Difference between assets and liabilities in \(financeViewModel.state.displayCurrency.uppercased())."
+                                )
+                            )
+                    }
 
                     Text(signedAmount(presentation.saldo))
                         .font(.system(size: 34, weight: .bold))
                         .foregroundStyle(saldoColor(for: presentation.saldo))
                         .minimumScaleFactor(0.78)
                         .lineLimit(1)
-
-                    Text(
-                        financesText(
-                            ru: "Разница между активами и обязательствами в \(financeViewModel.state.displayCurrency.uppercased()).",
-                            en: "Difference between assets and liabilities in \(financeViewModel.state.displayCurrency.uppercased())."
-                        )
-                    )
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(AppColors.textSecondary)
                 }
 
                 Spacer(minLength: 12)
@@ -403,7 +406,7 @@ struct FinanceOverviewCardView: View {
     private func compactLedgerOverview(
         presentation: FinanceOverviewLedgerPresentation
     ) -> some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: 8) {
             compactSideCard(
                 side: presentation.credit,
                 color: creditColor,
@@ -540,12 +543,12 @@ struct FinanceOverviewCardView: View {
                     Spacer(minLength: 8)
 
                     Circle()
-                        .fill(color)
+                        .stroke(color.opacity(0.9), lineWidth: 1.6)
                         .frame(width: metrics.iconSize, height: metrics.iconSize)
                         .overlay {
                             Image(systemName: "chevron.down")
                                 .font(.system(size: metrics.iconFontSize, weight: .bold))
-                                .foregroundStyle(Color.black.opacity(0.9))
+                                .foregroundStyle(color)
                         }
                 }
 
@@ -565,12 +568,12 @@ struct FinanceOverviewCardView: View {
 
                     ZStack(alignment: .leading) {
                         Capsule(style: .continuous)
-                            .fill(Color.white.opacity(0.08))
+                            .fill(Color.white.opacity(0.05))
                             .frame(height: metrics.progressHeight)
                         Capsule(style: .continuous)
                             .fill(
                                 LinearGradient(
-                                    colors: [color.opacity(0.94), color.opacity(0.70)],
+                                    colors: [color.opacity(0.88), color.opacity(0.56)],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
@@ -903,10 +906,25 @@ struct FinanceOverviewCardView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(String(localized: "cashflow.common.dismiss")) {
+                    Button {
                         showExpandedChart = false
                     }
-                    .foregroundStyle(AppColors.textPrimary)
+                    label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .frame(width: 30, height: 30)
+                            .background(
+                                Circle()
+                                    .fill(Color.white.opacity(0.10))
+                            )
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.white.opacity(0.10), lineWidth: 0.8)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(String(localized: "cashflow.common.dismiss"))
                 }
             }
         }

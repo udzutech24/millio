@@ -9,7 +9,7 @@ private struct StockBulkImportSearchRequest: Identifiable {
 
 @MainActor
 final class StockBulkImportViewModel: ObservableObject {
-    @Published var mode: StockBulkImportMode = .manual
+    @Published var mode: StockBulkImportMode = .screenshot
     @Published var rows: [StockBulkImportRowDraft] = []
     @Published var isProcessing: Bool = false
     @Published var errorMessage: String?
@@ -18,7 +18,10 @@ final class StockBulkImportViewModel: ObservableObject {
     @Published var importedCount: Int = 0
     @Published var mergeDuplicates: Bool = true
     @Published var showProblemsOnly: Bool = false
+    @Published var marketDataWarning: String?
+    @Published private(set) var refreshingRowIDs: Set<UUID> = []
 
+    private var failedQuoteSymbolsByRowID: [UUID: String] = [:]
     private let parser: StockBulkImportParser
     private let matcher: StockBulkImportMatcher
     private let persistenceService: StockBulkImportPersistenceService
@@ -41,7 +44,7 @@ final class StockBulkImportViewModel: ObservableObject {
 
     var visibleRows: [StockBulkImportRowDraft] {
         let sourceRows = showProblemsOnly
-            ? rows.filter { $0.status != .found }
+            ? rows.filter(\.requiresAttention)
             : rows
 
         guard mergeDuplicates else {
@@ -78,6 +81,7 @@ final class StockBulkImportViewModel: ObservableObject {
     func analyzePhotos(items: [PhotosPickerItem]) async {
         isProcessing = true
         errorMessage = nil
+        clearQuoteWarnings()
         defer { isProcessing = false }
 
         let limitedItems = Array(items.prefix(8))
@@ -147,6 +151,8 @@ final class StockBulkImportViewModel: ObservableObject {
 
     func removeRow(_ rowID: UUID) {
         rows.removeAll { $0.id == rowID }
+        failedQuoteSymbolsByRowID.removeValue(forKey: rowID)
+        syncMarketDataWarning()
     }
 
     func updateTicker(_ value: String, for rowID: UUID) async {
@@ -179,6 +185,7 @@ final class StockBulkImportViewModel: ObservableObject {
     func clearAll() {
         rows = []
         errorMessage = nil
+        clearQuoteWarnings()
     }
 
     func applySearchResult(_ symbol: TwelveDataSymbol, for rowID: UUID) async {
@@ -194,14 +201,37 @@ final class StockBulkImportViewModel: ObservableObject {
 
         applyCandidateSelection(candidate, at: index)
         if rows[index].currentPriceText.isEmpty,
-           let marketPrice = try? await persistenceService.marketDataClient.latestPrice(symbol: candidate.quoteLookupSymbol, forceRefresh: false) {
+           let marketPrice = await fetchLatestPrice(for: candidate, rowID: rowID, forceRefresh: false) {
             rows[index].currentPriceText = formatNumber(marketPrice)
         }
+    }
+
+    func refreshCurrentPrice(for rowID: UUID) async {
+        guard let index = rows.firstIndex(where: { $0.id == rowID }),
+              let candidate = rows[index].selectedCandidate,
+              !refreshingRowIDs.contains(rowID) else {
+            return
+        }
+
+        refreshingRowIDs.insert(rowID)
+        defer { refreshingRowIDs.remove(rowID) }
+
+        if let marketPrice = await fetchLatestPrice(for: candidate, rowID: rowID, forceRefresh: true) {
+            rows[index].currentPriceText = formatNumber(marketPrice)
+        } else {
+            rows[index].currentPriceText = ""
+        }
+    }
+
+    func isRefreshingPrice(for rowID: UUID) -> Bool {
+        refreshingRowIDs.contains(rowID)
     }
 
     private func applyCandidateSelection(_ candidate: StockBulkImportCandidate, at index: Int) {
         // Важно: после выбора инструмента синхронизируем input-поля (тикер/рынок),
         // иначе пользователю кажется, что тикер "нашёлся, но не вставился".
+        failedQuoteSymbolsByRowID.removeValue(forKey: rows[index].id)
+        syncMarketDataWarning()
         rows[index].tickerText = candidate.normalizedSymbol
         rows[index].marketText = candidate.normalizedMarket ?? ""
         rows[index].candidates = [candidate]
@@ -212,11 +242,32 @@ final class StockBulkImportViewModel: ObservableObject {
         for index in rows.indices {
             guard rows[index].currentPriceText.isEmpty,
                   let candidate = rows[index].selectedCandidate,
-                  let marketPrice = try? await persistenceService.marketDataClient.latestPrice(symbol: candidate.quoteLookupSymbol, forceRefresh: false) else {
+                  let marketPrice = await fetchLatestPrice(for: candidate, rowID: rows[index].id, forceRefresh: false) else {
                 continue
             }
             rows[index].currentPriceText = formatNumber(marketPrice)
         }
+    }
+
+    private func fetchLatestPrice(for candidate: StockBulkImportCandidate, rowID: UUID, forceRefresh: Bool) async -> Double? {
+        for symbol in candidate.quoteLookupSymbols {
+            do {
+                if let latestPrice = try await persistenceService.marketDataClient.latestPrice(
+                    symbol: symbol,
+                    forceRefresh: forceRefresh
+                ) {
+                    failedQuoteSymbolsByRowID.removeValue(forKey: rowID)
+                    syncMarketDataWarning()
+                    return latestPrice
+                }
+            } catch {
+                continue
+            }
+        }
+
+        failedQuoteSymbolsByRowID[rowID] = candidate.normalizedSymbol
+        syncMarketDataWarning()
+        return nil
     }
 
     private func rematchRow(at index: Int) async {
@@ -230,8 +281,30 @@ final class StockBulkImportViewModel: ObservableObject {
         )
         let matched = await matcher.buildDraftRows(from: [parsed])
         guard let matchedRow = matched.first else { return }
+        failedQuoteSymbolsByRowID.removeValue(forKey: rows[index].id)
+        syncMarketDataWarning()
         rows[index].candidates = matchedRow.candidates
         rows[index].selectedCandidate = matchedRow.selectedCandidate
+    }
+
+    private func clearQuoteWarnings() {
+        failedQuoteSymbolsByRowID = [:]
+        marketDataWarning = nil
+    }
+
+    private func syncMarketDataWarning() {
+        let failedSymbols = Array(Set(failedQuoteSymbolsByRowID.values)).sorted()
+        guard !failedSymbols.isEmpty else {
+            marketDataWarning = nil
+            return
+        }
+
+        let template = String(
+            localized: "finances.mass_import.market_warning",
+            defaultValue: "Не удалось загрузить котировки: %@. Проверь вход в аккаунт и настройки backend.",
+            comment: "Warning shown when mass import cannot fetch current market prices for specific tickers"
+        )
+        marketDataWarning = String.localizedStringWithFormat(template, failedSymbols.joined(separator: ", "))
     }
 
     private func sanitizeTicker(_ value: String) -> String {
@@ -297,14 +370,19 @@ struct StockBulkImportSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(String(localized: "finances.common.cancel")) {
+                    Button {
                         dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 15, weight: .semibold))
+                            .frame(width: 30, height: 30)
                     }
                     .foregroundStyle(AppColors.textPrimary)
+                    .accessibilityLabel(Text(String(localized: "finances.common.cancel")))
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(String(localized: "finances.mass_import.add_button")) {
+                    Button {
                         Task {
                             let imported = await viewModel.persistRows()
                             guard imported > 0 else { return }
@@ -312,9 +390,14 @@ struct StockBulkImportSheet: View {
                             financeViewModel.handle(.loadGroups)
                             dismiss()
                         }
+                    } label: {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 17, weight: .bold))
+                            .frame(width: 30, height: 30)
                     }
-                    .foregroundStyle(AppColors.textPrimary)
+                    .foregroundStyle(viewModel.addableCount > 0 ? Color.green : AppColors.textSecondary)
                     .disabled(viewModel.addableCount == 0 || viewModel.isProcessing)
+                    .accessibilityLabel(Text(String(localized: "finances.mass_import.add_button")))
                 }
             }
             .onChange(of: selectedPhotoItems) { _, newItems in
@@ -419,23 +502,6 @@ struct StockBulkImportSheet: View {
                             .foregroundStyle(AppColors.textPrimary)
                     }
                     .tint(AppColors.brandPrimary)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
-
-                    FinancesRowDivider()
-
-                    HStack {
-                        Text(String(localized: "finances.mass_import.priority"))
-                            .foregroundStyle(AppColors.textPrimary)
-                        Spacer()
-                        Picker("", selection: $viewModel.priorityOption) {
-                            ForEach(StockBulkImportPriorityOption.allCases) { option in
-                                Text("\(option.rawValue)").tag(option)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .frame(width: 120)
-                    }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 14)
                 }
@@ -587,6 +653,9 @@ struct StockBulkImportSheet: View {
                 placeholderCard(text: FinancesL10n.tr("finances.mass_import.preview_empty"))
             } else {
                 VStack(spacing: 10) {
+                    if let marketDataWarning = viewModel.marketDataWarning {
+                        placeholderCard(text: marketDataWarning)
+                    }
                     ForEach(viewModel.visibleRows) { row in
                         editableImportedRow(row)
                     }
@@ -624,7 +693,7 @@ struct StockBulkImportSheet: View {
 
                     Spacer()
 
-                    Text(FinancesL10n.tr(row.status.localizationKey))
+                    Text(row.status.localizedLabel)
                         .font(.system(size: 11, weight: .semibold))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
@@ -661,18 +730,44 @@ struct StockBulkImportSheet: View {
                 .background(Color.white.opacity(0.06))
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-                Button {
-                    focusedField = nil
-                    searchRequest = StockBulkImportSearchRequest(id: row.id)
-                } label: {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(AppColors.brandPrimary)
-                        .frame(width: 40, height: 40)
-                        .background(Color.white.opacity(0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                if row.selectedCandidate != nil {
+                    Button {
+                        focusedField = nil
+                        Task {
+                            await viewModel.refreshCurrentPrice(for: row.id)
+                        }
+                    } label: {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.white.opacity(0.08))
+                                .frame(width: 40, height: 40)
+
+                            if viewModel.isRefreshingPrice(for: row.id) {
+                                ProgressView()
+                                    .tint(AppColors.brandPrimary)
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(AppColors.brandPrimary)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(viewModel.isRefreshingPrice(for: row.id))
+                } else {
+                    Button {
+                        focusedField = nil
+                        searchRequest = StockBulkImportSearchRequest(id: row.id)
+                    } label: {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(AppColors.brandPrimary)
+                            .frame(width: 40, height: 40)
+                            .background(Color.white.opacity(0.08))
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
 
                 if showsDelete {
                     Button(role: .destructive) {
@@ -782,6 +877,8 @@ struct StockBulkImportSheet: View {
         switch status {
         case .found:
             return .green
+        case .priceMissing:
+            return .red
         case .ambiguous:
             return .orange
         case .notFound:

@@ -38,16 +38,6 @@
         }
       }
     },
-    "%@, %@" : {
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@, %2$@"
-          }
-        }
-      }
-    },
     "%@: %@" : {
       "localizations" : {
         "ru" : {
@@ -1629,6 +1619,558 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Нет добавленных карт"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.affect_balance" : {
+      "comment" : "Toggle title for applying card balance changes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Update card balance"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.affect_balance.subtitle" : {
+      "comment" : "Toggle subtitle for applying card balance changes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Turn off if you only want history without touching the current balance."
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.card_title" : {
+      "comment" : "Card picker title in bulk expense import",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Card"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.confidence.high" : {
+      "comment" : "High confidence match badge",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Auto"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.confidence.low" : {
+      "comment" : "Low confidence match badge",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Check"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.confidence.medium" : {
+      "comment" : "Medium confidence match badge",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Good"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.entry.subtitle" : {
+      "comment" : "Entry card subtitle for bulk expense import",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Paste lines or parse a bank screenshot and distribute everything at once."
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.entry.title" : {
+      "comment" : "Entry card title for bulk expense import",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mass import"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.error.card_not_found" : {
+      "comment" : "Bulk expense import save error without card",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Select an active card before saving."
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.error.insufficient_funds" : {
+      "comment" : "Bulk expense import insufficient funds error",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Not enough funds: %1$@ %2$@ needed, %3$@ %4$@ available."
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.error.invalid_image" : {
+      "comment" : "Bulk expense screenshot import invalid image error",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The image could not be read."
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.error.no_rows" : {
+      "comment" : "Bulk expense screenshot import no rows error",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No expense rows were recognized."
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.error.no_rows_to_save" : {
+      "comment" : "Bulk expense import save error without rows",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Add at least one valid expense row."
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.error.no_text" : {
+      "comment" : "Bulk expense screenshot import no text error",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No text was found on the screenshot."
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.hero.subtitle" : {
+      "comment" : "Hero subtitle for bulk expense import",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Choose a card, paste lines or load a bank screenshot, review categories, then save everything in one pass."
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.hero.title" : {
+      "comment" : "Hero title for bulk expense import",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Import a whole month at once"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.manual.empty_parse" : {
+      "comment" : "Error when manual input parsing finds nothing",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Nothing usable was found in the pasted lines."
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.manual.hint" : {
+      "comment" : "Manual import input hint",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "One line per expense: `supermarket 5 200`, `taxi 870`, `pharmacy 1 140`."
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.manual.parse" : {
+      "comment" : "Parse manual bulk expense input button",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Parse lines"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.manual.placeholder" : {
+      "comment" : "Placeholder for manual bulk expense input",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "supermarket 12 480\nrestaurant 5 300\ninternet 890"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.mode.manual" : {
+      "comment" : "Mode title for manual bulk expense import",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Manual"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.mode.screenshot" : {
+      "comment" : "Mode title for screenshot bulk expense import",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Screenshot"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.no_card" : {
+      "comment" : "Placeholder for no selected card",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No card"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.pick_card" : {
+      "comment" : "Placeholder text for picking a card",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Choose card"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.remainder.note" : {
+      "comment" : "Auto-generated note for statement remainder row",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Auto-filled from statement total"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.remainder.title" : {
+      "comment" : "Auto-generated title for statement remainder row",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Statement remainder"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.row.amount_placeholder" : {
+      "comment" : "Placeholder for bulk expense row amount",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Amount"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.row.attention" : {
+      "comment" : "Attention label for problematic bulk expense row",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Review category or amount"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.row.note_placeholder" : {
+      "comment" : "Placeholder for bulk expense row note",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Optional note"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.row.ready" : {
+      "comment" : "Ready label for valid bulk expense row",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ready to save"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.row.title_placeholder" : {
+      "comment" : "Placeholder for bulk expense row title",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Merchant or category"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.rows.empty" : {
+      "comment" : "Empty state for bulk expense rows",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No rows yet. Paste expenses or import screenshots first."
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.rows.title" : {
+      "comment" : "Bulk expense rows card title",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Expense rows"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.save" : {
+      "comment" : "Bulk expense import save button",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Save"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.saved" : {
+      "comment" : "Success message after saving bulk expense import",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Saved %lld expenses."
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.screenshot.hint" : {
+      "comment" : "Screenshot import hint",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Load one or several screenshots from your bank. The parser will extract merchant lines and amounts."
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.screenshot.pick" : {
+      "comment" : "Choose screenshot button label",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Choose screenshots"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.screenshot.processing" : {
+      "comment" : "Processing screenshots button label",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Analyzing screenshots…"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.summary.balance_warning" : {
+      "comment" : "Warning for bulk expense import when amount exceeds card balance",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This import exceeds the selected card balance by %1$@ %2$@."
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.summary.remainder_to_other" : {
+      "comment" : "Button to append remainder to Other category",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Send remainder to Other"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.summary.remaining" : {
+      "comment" : "Remaining amount label",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Remaining"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.summary.rows" : {
+      "comment" : "Summary title for row count",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rows"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.summary.statement_total" : {
+      "comment" : "Optional statement total field title",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Statement total (optional)"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.summary.statement_total.placeholder" : {
+      "comment" : "Placeholder for statement total field",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "For example 101 552"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.summary.total" : {
+      "comment" : "Summary title for total amount",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Total"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.title" : {
+      "comment" : "Navigation title for bulk expense import sheet",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mass expense import"
           }
         }
       }
@@ -8933,6 +9475,18 @@
         }
       }
     },
+    "finances.mass_import.market_warning" : {
+      "comment" : "Warning shown when mass import cannot fetch current market prices for specific tickers",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Не удалось загрузить котировки: %@. Проверь вход в аккаунт и настройки backend."
+          }
+        }
+      }
+    },
     "finances.mass_import.merge_duplicates" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -9235,6 +9789,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Не найдено"
+          }
+        }
+      }
+    },
+    "finances.mass_import.status.price_missing" : {
+      "comment" : "Mass import status when ticker is found but current price is unavailable",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Нет цены"
           }
         }
       }

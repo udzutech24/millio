@@ -41,6 +41,7 @@ private struct CashflowCategoryTransactionSheet: View {
     @State private var showPlannedManagement: Bool = false
     @State private var showTransactionsHistory: Bool = false
     @State private var showHelpSheet: Bool = false
+    @State private var showBulkExpenseImportSheet: Bool = false
 
     @State private var showCreateCategorySheet: Bool = false
     @State private var newCategoryName: String = ""
@@ -86,6 +87,9 @@ private struct CashflowCategoryTransactionSheet: View {
                         headerSection
                         monthSelectorSection
                         monthlyTotalSection
+                        if kind.categoryKind == .expense {
+                            bulkImportEntrySection
+                        }
                         managementSection
                         searchSection
                         categoriesSection
@@ -144,6 +148,13 @@ private struct CashflowCategoryTransactionSheet: View {
             }
             .sheet(isPresented: $showHelpSheet) {
                 CashflowCategoryHelpSheet(kind: kind)
+            }
+            .sheet(isPresented: $showBulkExpenseImportSheet) {
+                CashflowBulkExpenseImportSheet(
+                    viewModel: viewModel,
+                    month: selectedMonth,
+                    onComplete: reloadMonthlyTotal
+                )
             }
             .fullScreenCover(isPresented: $showCategoryEditorSheet) {
                 CashflowCategoryEditorSheet(
@@ -331,6 +342,61 @@ private struct CashflowCategoryTransactionSheet: View {
         }
         .padding(12)
         .background(outerPanelBackground)
+    }
+
+    @ViewBuilder
+    private var bulkImportEntrySection: some View {
+        Button {
+            showBulkExpenseImportSheet = true
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(kind.strokeGradient.opacity(0.18))
+                        .frame(width: 48, height: 48)
+
+                    Image(systemName: "square.stack.3d.down.right.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(kind.strokeGradient)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(
+                        String(
+                            localized: "cashflow.bulk_expense.entry.title",
+                            defaultValue: "Mass import",
+                            comment: "Entry card title for bulk expense import"
+                        )
+                    )
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+
+                    Text(
+                        String(
+                            localized: "cashflow.bulk_expense.entry.subtitle",
+                            defaultValue: "Paste lines or parse a bank screenshot and distribute everything at once.",
+                            comment: "Entry card subtitle for bulk expense import"
+                        )
+                    )
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppColors.textSecondary)
+                    .multilineTextAlignment(.leading)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(AppColors.textSecondary.opacity(0.72))
+            }
+            .padding(14)
+            .background(innerPanelBackground)
+            .overlay(
+                RoundedRectangle(cornerRadius: innerCornerRadius, style: .continuous)
+                    .stroke(kind.strokeGradient.opacity(0.34), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private var searchSection: some View {

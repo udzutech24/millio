@@ -70,35 +70,35 @@ struct FinancesView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                HStack(spacing: 6) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary.opacity(0.96))
-                            .frame(width: 28, height: 28)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(String(localized: "finances.common.back"))
-
-                    Menu {
-                        ForEach(MiniAppNavigation.destinations(excluding: currentRoute)) { destination in
-                            Button {
-                                MiniAppNavigation.navigate(to: destination.route, from: currentRoute, router: router)
-                            } label: {
-                                Label(destination.title, systemImage: destination.systemImage)
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "square.grid.2x2")
-                            .font(.system(size: 16, weight: .regular))
-                            .foregroundStyle(AppColors.textPrimary.opacity(0.90))
-                            .frame(width: 28, height: 28)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(String(localized: "finances.common.quick_navigation"))
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary.opacity(0.96))
+                        .frame(width: 28, height: 28)
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "finances.common.back"))
+            }
+
+            ToolbarItem(placement: .topBarLeading) {
+                Menu {
+                    ForEach(MiniAppNavigation.destinations(excluding: currentRoute)) { destination in
+                        Button {
+                            MiniAppNavigation.navigate(to: destination.route, from: currentRoute, router: router)
+                        } label: {
+                            Label(destination.title, systemImage: destination.systemImage)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "square.grid.2x2")
+                        .font(.system(size: 16, weight: .regular))
+                        .foregroundStyle(AppColors.textPrimary.opacity(0.90))
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "finances.common.quick_navigation"))
             }
 
             if viewModel != nil {
@@ -417,7 +417,7 @@ private struct FinancesMainTabView: View {
     private var totalAmountSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center, spacing: 12) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(formatBalance(viewModel.state.totalAmount, isHidden: viewModel.state.isAmountHidden))
                         .font(.system(size: 28, weight: .bold))
                         .foregroundStyle(AppColors.textPrimary)
@@ -427,10 +427,11 @@ private struct FinancesMainTabView: View {
                     Button {
                         viewModel.handle(.showDisplayCurrencySheet)
                     } label: {
-                        Text(MonetaCurrency(rawValue: viewModel.state.displayCurrency)?.symbol ?? viewModel.state.displayCurrency)
-                            .font(.system(size: 28, weight: .bold))
-                            .foregroundStyle(AppColors.textPrimary.opacity(0.9))
-                            .lineLimit(1)
+                        currencyPickerLabel(
+                            symbol: MonetaCurrency(rawValue: viewModel.state.displayCurrency)?.symbol ?? viewModel.state.displayCurrency,
+                            amountFontSize: 28,
+                            color: AppColors.textSecondary.opacity(0.82)
+                        )
                     }
                     .buttonStyle(.plain)
                 }
@@ -454,7 +455,7 @@ private struct FinancesMainTabView: View {
             }
 
             if let secondaryCurrency = viewModel.state.secondaryDisplayCurrency {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(formatBalance(viewModel.state.secondaryTotalAmount, isHidden: viewModel.state.isAmountHidden))
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(AppColors.textTertiary)
@@ -462,9 +463,11 @@ private struct FinancesMainTabView: View {
                     Button {
                         viewModel.handle(.showSecondaryDisplayCurrencySheet)
                     } label: {
-                        Text(MonetaCurrency(rawValue: secondaryCurrency)?.symbol ?? secondaryCurrency)
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(AppColors.textTertiary)
+                        currencyPickerLabel(
+                            symbol: MonetaCurrency(rawValue: secondaryCurrency)?.symbol ?? secondaryCurrency,
+                            amountFontSize: 15,
+                            color: AppColors.textTertiary.opacity(0.82)
+                        )
                     }
                     .buttonStyle(.plain)
                 }
@@ -650,6 +653,27 @@ private struct FinancesMainTabView: View {
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: balance)) ?? "0"
+    }
+
+    private func currencyPickerLabel(
+        symbol: String,
+        amountFontSize: CGFloat,
+        color: Color
+    ) -> some View {
+        let currencyFontSize = max(11, amountFontSize * 0.75)
+        let chevronFontSize = max(7, amountFontSize * 0.28)
+
+        return HStack(alignment: .firstTextBaseline, spacing: 3) {
+            Text(symbol)
+                .font(.system(size: currencyFontSize, weight: .medium))
+                .foregroundStyle(color)
+                .lineLimit(1)
+
+            Image(systemName: "chevron.down")
+                .font(.system(size: chevronFontSize, weight: .bold))
+                .foregroundStyle(color.opacity(0.9))
+                .offset(y: -1)
+        }
     }
     
     private func goalProgressBar(progress: Double) -> some View {

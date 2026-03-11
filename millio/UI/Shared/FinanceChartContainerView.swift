@@ -11,6 +11,21 @@ import Charts
 
 // MARK: - Структура данных для шкалы Y
 
+enum FinanceChartAxisDateFormatter {
+    static func xAxisLabel(for date: Date) -> String {
+        formatter.string(from: date)
+    }
+
+    private static let formatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = .current
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "dd.MM"
+        return formatter
+    }()
+}
+
 /// Параметры для расчета "красивой" шкалы Y
 struct NiceYScale {
     let lower: Double
@@ -178,7 +193,7 @@ struct FinanceChartContainerView: View {
                     .foregroundStyle(gridColor.opacity(0.8))
                 AxisValueLabel {
                     if let d = value.as(Date.self) {
-                        Text(d.formatted(.dateTime.day().month(.abbreviated)))
+                        Text(FinanceChartAxisDateFormatter.xAxisLabel(for: d))
                             .font(.caption2)
                             .foregroundStyle(AppColors.textSecondary)
                     }

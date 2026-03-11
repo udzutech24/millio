@@ -5,6 +5,27 @@
 
 import SwiftUI
 
+private func financeAmountLabel(
+    amountText: String,
+    currencySymbol: String,
+    amountFontSize: CGFloat,
+    amountColor: Color,
+    currencyColor: Color
+) -> some View {
+    HStack(alignment: .firstTextBaseline, spacing: 3) {
+        Text(amountText)
+            .font(.system(size: amountFontSize, weight: .semibold))
+            .foregroundStyle(amountColor)
+            .lineLimit(1)
+            .minimumScaleFactor(0.78)
+
+        Text(currencySymbol)
+            .font(.system(size: max(11, amountFontSize * 0.82), weight: .medium))
+            .foregroundStyle(currencyColor)
+            .lineLimit(1)
+    }
+}
+
 // MARK: - Finance Group Row
 
 struct FinanceGroupRow: View {
@@ -132,18 +153,13 @@ struct FinanceGroupRow: View {
     }
     
     private var groupAmountSection: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(formatBalance(groupTotal, isHidden: viewModel.state.isAmountHidden))
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(AppColors.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            
-            Text(MonetaCurrency(rawValue: groupDisplayCurrency)?.symbol ?? groupDisplayCurrency)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(AppColors.textSecondary)
-                .lineLimit(1)
-        }
+        financeAmountLabel(
+            amountText: formatBalance(groupTotal, isHidden: viewModel.state.isAmountHidden),
+            currencySymbol: MonetaCurrency(rawValue: groupDisplayCurrency)?.symbol ?? groupDisplayCurrency,
+            amountFontSize: 15,
+            amountColor: AppColors.textPrimary,
+            currencyColor: AppColors.textSecondary.opacity(0.78)
+        )
     }
     
     private var accountsAccordion: some View {
@@ -414,7 +430,7 @@ private struct FinanceAccountRow: View {
             
             trailingAmountSection(
                 amountFont: .system(size: 16, weight: .semibold),
-                currencyFont: .system(size: 16, weight: .semibold),
+                amountFontSize: 16,
                 maximumFractionDigits: 0
             )
         }
@@ -459,7 +475,7 @@ private struct FinanceAccountRow: View {
 
             trailingAmountSection(
                 amountFont: .system(size: 17, weight: .semibold),
-                currencyFont: .system(size: 17, weight: .semibold),
+                amountFontSize: 17,
                 maximumFractionDigits: 2
             )
         }
@@ -496,7 +512,7 @@ private struct FinanceAccountRow: View {
     @ViewBuilder
     private func trailingAmountSection(
         amountFont: Font,
-        currencyFont: Font,
+        amountFontSize: CGFloat,
         maximumFractionDigits: Int
     ) -> some View {
         let amountColor = isDebtHighlighted ? AppColors.error : (amount >= 0 ? AppColors.textPrimary : AppColors.error)
@@ -504,18 +520,13 @@ private struct FinanceAccountRow: View {
             onQuickEditAmount()
         } label: {
             VStack(alignment: .trailing, spacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(formatBalance(amount, isHidden: viewModel.state.isAmountHidden, maximumFractionDigits: maximumFractionDigits))
-                        .font(amountFont)
-                        .foregroundStyle(amountColor)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.78)
-
-                    Text(MonetaCurrency(rawValue: currency)?.symbol ?? currency)
-                        .font(currencyFont)
-                        .foregroundStyle(amountColor)
-                        .lineLimit(1)
-                }
+                financeAmountLabel(
+                    amountText: formatBalance(amount, isHidden: viewModel.state.isAmountHidden, maximumFractionDigits: maximumFractionDigits),
+                    currencySymbol: MonetaCurrency(rawValue: currency)?.symbol ?? currency,
+                    amountFontSize: amountFontSize,
+                    amountColor: amountColor,
+                    currencyColor: amountColor.opacity(0.76)
+                )
             }
         }
         .buttonStyle(.plain)
@@ -547,5 +558,5 @@ private struct FinanceAccountRow: View {
         formatter.maximumFractionDigits = maximumFractionDigits
         return formatter.string(from: NSNumber(value: balance)) ?? "0"
     }
-    
+
 }

@@ -1463,7 +1463,7 @@ private struct FinanceDynamicsContentView: View {
                             get: { AmountInputFormatter.display(inlineAmountText) },
                             set: { inlineAmountText = AmountInputFormatter.sanitize($0) }
                         )
-                        HStack(spacing: 6) {
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
                             TextField("0", text: editText)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.leading)
@@ -1471,19 +1471,32 @@ private struct FinanceDynamicsContentView: View {
                             .foregroundStyle(AppColors.textPrimary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.72)
-                            Text(symbol)
-                                .font(.system(size: 30, weight: .semibold))
-                                .foregroundStyle(AppColors.textPrimary)
+
+                            dynamicsCurrencySuffix(
+                                symbol: symbol,
+                                amountFontSize: 30,
+                                color: AppColors.textSecondary.opacity(0.82),
+                                showsChevron: false
+                            )
                         }
                     } else {
                         Button {
                             showDisplayCurrencySheet = true
                         } label: {
-                            Text("\(formatBalance(viewModel.state.currentBalance)) \(symbol)")
-                                .font(.system(size: 30, weight: .semibold))
-                                .foregroundStyle(AppColors.textPrimary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.72)
+                            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                Text(formatBalance(viewModel.state.currentBalance))
+                                    .font(.system(size: 30, weight: .semibold))
+                                    .foregroundStyle(AppColors.textPrimary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.72)
+
+                                dynamicsCurrencySuffix(
+                                    symbol: symbol,
+                                    amountFontSize: 30,
+                                    color: AppColors.textSecondary.opacity(0.82),
+                                    showsChevron: true
+                                )
+                            }
                         }
                         .buttonStyle(.plain)
                     }
@@ -1584,21 +1597,60 @@ private struct FinanceDynamicsContentView: View {
             )
             .overlay {
                 VStack(spacing: 5) {
-                    Text("\(accountName), \(symbol)")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(AppColors.textSecondary)
-                        .lineLimit(1)
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(accountName + ",")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(AppColors.textSecondary)
+                            .lineLimit(1)
 
-                    Text("\(formatBalance(viewModel.state.currentBalance)) \(symbol)")
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.78)
+                        dynamicsCurrencySuffix(
+                            symbol: symbol,
+                            amountFontSize: 12,
+                            color: AppColors.textSecondary.opacity(0.82),
+                            showsChevron: false
+                        )
+                    }
+
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(formatBalance(viewModel.state.currentBalance))
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.78)
+
+                        dynamicsCurrencySuffix(
+                            symbol: symbol,
+                            amountFontSize: 24,
+                            color: AppColors.textSecondary.opacity(0.82),
+                            showsChevron: false
+                        )
+                    }
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 12)
             }
         .frame(height: 88)
+    }
+
+    private func dynamicsCurrencySuffix(
+        symbol: String,
+        amountFontSize: CGFloat,
+        color: Color,
+        showsChevron: Bool
+    ) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: showsChevron ? 3 : 0) {
+            Text(symbol)
+                .font(.system(size: max(11, amountFontSize * 0.75), weight: .medium))
+                .foregroundStyle(color)
+                .lineLimit(1)
+
+            if showsChevron {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: max(7, amountFontSize * 0.28), weight: .bold))
+                    .foregroundStyle(color.opacity(0.9))
+                    .offset(y: -1)
+            }
+        }
     }
 
     private var shouldShowSingleAccountActionBar: Bool {

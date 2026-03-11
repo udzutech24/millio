@@ -58,16 +58,16 @@ enum FinanceOverviewLedgerStyle {
 
     static var compactCardMetrics: CompactCardMetrics {
         CompactCardMetrics(
-            titleFontSize: 18,
-            amountFontSize: 17,
-            iconSize: 40,
-            iconFontSize: 14,
-            progressHeight: 12,
-            minProgressWidth: 28,
-            horizontalPadding: 16,
-            verticalPadding: 14,
-            cornerRadius: 24,
-            contentSpacing: 12
+            titleFontSize: 16,
+            amountFontSize: 15,
+            iconSize: 28,
+            iconFontSize: 11,
+            progressHeight: 10,
+            minProgressWidth: 24,
+            horizontalPadding: 14,
+            verticalPadding: 12,
+            cornerRadius: 22,
+            contentSpacing: 10
         )
     }
 }

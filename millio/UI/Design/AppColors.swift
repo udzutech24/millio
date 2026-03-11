@@ -133,6 +133,13 @@ enum AppColors {
 
     /// Градиент для блока Premium
     static let premiumGradient = [Color(hex: "0081e7"), Color(hex: "bd00e7")]
+    static let premiumSurfaceStart = Color(hex: "0D1632")
+    static let premiumSurfaceEnd = Color(hex: "2B0F49")
+    static let premiumOrbBlue = Color(hex: "4DB2FF")
+    static let premiumOrbViolet = Color(hex: "A855F7")
+    static let premiumHighlight = Color.white.opacity(0.18)
+    static let premiumBorder = Color.white.opacity(0.16)
+    static let premiumShadow = Color(hex: "5B8CFF").opacity(0.22)
 
     // MARK: - UI Elements
 

@@ -23,7 +23,7 @@ struct StockBulkImportCandidate: Identifiable, Equatable, Hashable, Sendable {
     }
 
     var normalizedSymbol: String {
-        symbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        Self.canonicalTicker(from: symbol)
     }
 
     var normalizedMarket: String? {
@@ -40,17 +40,34 @@ struct StockBulkImportCandidate: Identifiable, Equatable, Hashable, Sendable {
     /// Символ для market API. Импорт хранит legacy-формат `MARKET:TICKER`,
     /// но backend для США ожидает `TICKER.US`, а для основных US бирж — просто тикер.
     var quoteLookupSymbol: String {
+        quoteLookupSymbols.first ?? normalizedSymbol
+    }
+
+    /// Backend market API исторически принимает разные формы одного и того же US-инструмента.
+    /// Не делаем вид, что формат один: пробуем безопасные fallback-варианты по приоритету.
+    var quoteLookupSymbols: [String] {
         guard let normalizedMarket, !normalizedMarket.isEmpty else {
-            return normalizedSymbol
+            return [normalizedSymbol]
         }
 
         switch normalizedMarket {
         case "US":
-            return "\(normalizedSymbol).US"
+            return uniqueQuoteSymbols([
+                "\(normalizedSymbol).US",
+                normalizedSymbol,
+                storedSymbol
+            ])
         case "NASDAQ", "NYSE", "AMEX", "BATS", "IEX":
-            return normalizedSymbol
+            return uniqueQuoteSymbols([
+                normalizedSymbol,
+                "\(normalizedSymbol).US",
+                storedSymbol
+            ])
         default:
-            return storedSymbol
+            return uniqueQuoteSymbols([
+                storedSymbol,
+                normalizedSymbol
+            ])
         }
     }
 
@@ -75,6 +92,32 @@ struct StockBulkImportCandidate: Identifiable, Equatable, Hashable, Sendable {
             return ""
         }
     }
+
+    static func canonicalTicker(from rawSymbol: String) -> String {
+        let trimmed = rawSymbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !trimmed.isEmpty else { return "" }
+
+        if trimmed.contains(":"),
+           let last = trimmed.split(separator: ":", maxSplits: 1).last {
+            return String(last)
+        }
+
+        if trimmed.contains("."),
+           let first = trimmed.split(separator: ".", maxSplits: 1).first {
+            return String(first)
+        }
+
+        return trimmed
+    }
+
+    private func uniqueQuoteSymbols(_ values: [String]) -> [String] {
+        var seen: Set<String> = []
+        return values.filter { value in
+            let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            guard !normalized.isEmpty else { return false }
+            return seen.insert(normalized).inserted
+        }
+    }
 }
 
 struct StockBulkImportParsedRow: Equatable, Sendable {
@@ -88,17 +131,36 @@ struct StockBulkImportParsedRow: Equatable, Sendable {
 
 enum StockBulkImportRowStatus: String, Sendable {
     case found
+    case priceMissing
     case ambiguous
     case notFound
 
-    var localizationKey: String {
+    var localizedLabel: String {
         switch self {
         case .found:
-            return "finances.mass_import.status.found"
+            return String(
+                localized: "finances.mass_import.status.found",
+                defaultValue: "Найдено",
+                comment: "Mass import status when ticker and price are ready"
+            )
+        case .priceMissing:
+            return String(
+                localized: "finances.mass_import.status.price_missing",
+                defaultValue: "Нет цены",
+                comment: "Mass import status when ticker is found but current price is unavailable"
+            )
         case .ambiguous:
-            return "finances.mass_import.status.ambiguous"
+            return String(
+                localized: "finances.mass_import.status.ambiguous",
+                defaultValue: "Уточнить",
+                comment: "Mass import status when multiple instruments match"
+            )
         case .notFound:
-            return "finances.mass_import.status.not_found"
+            return String(
+                localized: "finances.mass_import.status.not_found",
+                defaultValue: "Не найдено",
+                comment: "Mass import status when no instrument match exists"
+            )
         }
     }
 }
@@ -162,12 +224,16 @@ struct StockBulkImportRowDraft: Identifiable, Equatable, Sendable {
 
     var status: StockBulkImportRowStatus {
         if selectedCandidate != nil {
-            return .found
+            return currentPrice != nil ? .found : .priceMissing
         }
         if candidates.isEmpty {
             return .notFound
         }
         return .ambiguous
+    }
+
+    var requiresAttention: Bool {
+        status != .found
     }
 
     var isAddable: Bool {
@@ -262,7 +328,8 @@ enum StockBulkImportMarketNormalizer {
         "SPBX": "SPBX",
         "LSE": "LSE",
         "LON": "LSE",
-        "US": "US"
+        "US": "US",
+        "USR": "US"
     ]
 
     static func normalize(_ rawValue: String?) -> String? {

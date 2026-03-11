@@ -63,7 +63,7 @@ final class StockBulkImportMatcher {
             do {
                 let symbols = try await marketDataClient.searchSymbols(query: ticker, outputSize: 30)
                 let exactCandidates = symbols.compactMap { symbol -> StockBulkImportCandidate? in
-                    guard symbol.symbol.uppercased() == ticker.uppercased() else { return nil }
+                    guard matchesTicker(symbol.symbol, expectedTicker: ticker) else { return nil }
                     let type = symbol.normalizedInstrumentType ?? ""
                     guard type.contains("stock") || type.contains("equity") || type.contains("etf") || type.isEmpty else {
                         return nil
@@ -119,7 +119,31 @@ final class StockBulkImportMatcher {
         if let lastSegment = trimmed.split(separator: ":").last {
             return String(lastSegment).uppercased()
         }
+        if let firstSegment = trimmed.split(separator: ".").first {
+            return String(firstSegment).uppercased()
+        }
         return trimmed.uppercased()
+    }
+
+    private func matchesTicker(_ providerSymbol: String, expectedTicker: String) -> Bool {
+        let normalizedExpected = expectedTicker.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let normalizedProvider = providerSymbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !normalizedExpected.isEmpty, !normalizedProvider.isEmpty else { return false }
+
+        if normalizedProvider == normalizedExpected {
+            return true
+        }
+
+        if resolvedTickerSymbol(from: normalizedProvider) == normalizedExpected {
+            return true
+        }
+
+        if let suffixTicker = normalizedProvider.split(separator: ".").first.map(String.init),
+           suffixTicker == normalizedExpected {
+            return true
+        }
+
+        return false
     }
 
     private var candidateSort: (StockBulkImportCandidate, StockBulkImportCandidate) -> Bool {
@@ -179,7 +203,7 @@ struct StockBulkImportPersistenceService {
         var financeAccounts = (try? modelContext.fetch(FetchDescriptor<FinanceAccount>())) ?? []
 
         for resolvedRow in resolvedRows {
-            let latestPrice = (try? await marketDataClient.latestPrice(symbol: resolvedRow.candidate.quoteLookupSymbol, forceRefresh: false)) ?? nil
+            let latestPrice = await fetchLatestPrice(for: resolvedRow.candidate)
             let effectiveUnitPrice = resolvedRow.currentPrice ?? latestPrice ?? resolvedRow.buyPrice
             let amount = resolvedRow.quantity * effectiveUnitPrice
 
@@ -242,6 +266,19 @@ struct StockBulkImportPersistenceService {
 
         try modelContext.save()
         return resolvedRows.count
+    }
+
+    private func fetchLatestPrice(for candidate: StockBulkImportCandidate) async -> Double? {
+        for symbol in candidate.quoteLookupSymbols {
+            do {
+                if let latestPrice = try await marketDataClient.latestPrice(symbol: symbol, forceRefresh: false) {
+                    return latestPrice
+                }
+            } catch {
+                continue
+            }
+        }
+        return nil
     }
 
     static func mergeAddableRows(from drafts: [StockBulkImportRowDraft]) -> [StockBulkImportResolvedRow] {
