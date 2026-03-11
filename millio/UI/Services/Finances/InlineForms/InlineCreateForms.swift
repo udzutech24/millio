@@ -9,6 +9,8 @@ import SwiftUI
 
 struct InlineCardCreateForm<GroupSection: View>: View {
     @ObservedObject var viewModel: CardViewModel
+    @Environment(AppState.self) private var appState
+    @Environment(AppRouter.self) private var router
     @Binding var name: String
     let allowsTypeSwitching: Bool
     let selectedProductType: FinanceAccountType
@@ -30,6 +32,7 @@ struct InlineCardCreateForm<GroupSection: View>: View {
     @State private var showCurrencyPicker: Bool = false
     @State private var currencySearchText: String = ""
     @State private var didPrefillFromEditing: Bool = false
+    @State private var showCryptoProAlert: Bool = false
     
     init(
         viewModel: CardViewModel,
@@ -124,14 +127,24 @@ struct InlineCardCreateForm<GroupSection: View>: View {
         .sheet(isPresented: $showCurrencyPicker) {
             NavigationStack {
                 let favoriteCodes = SettingsManager.shared.favoriteCurrencyCodes
+                let canUseCrypto = EntitlementPolicy.canUseFinanceCrypto(isPro: appState.isPro)
                 CurrencyPickerView(
                     allCodes: availableCurrencies,
                     searchText: $currencySearchText,
                     selectedCodes: favoriteCodes,
                     favoriteCodes: Set(favoriteCodes),
                     currentSelection: card.currency,
+                    primaryPinnedCode: SettingsManager.shared.primaryCurrencyCode,
                     onToggleFavorite: nil,
+                    badgeForCode: { code in
+                        guard CurrencySelectionSupport.isCrypto(code), !canUseCrypto else { return nil }
+                        return .pro
+                    },
                     onSelect: { currency in
+                        if CurrencySelectionSupport.isCrypto(currency), !canUseCrypto {
+                            showCryptoProAlert = true
+                            return
+                        }
                         card.currency = currency
                         showCurrencyPicker = false
                     }
@@ -147,6 +160,12 @@ struct InlineCardCreateForm<GroupSection: View>: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
+        .premiumUpsellAlert(
+            isPresented: $showCryptoProAlert,
+            titleKey: "monetization.crypto.pro_title",
+            message: String(localized: "monetization.crypto.pro_message"),
+            onSubscribe: { router.push(.subscription) }
+        )
     }
     
     private var accentColor: Color { AppColors.financesGradient.first ?? AppColors.brandPrimary }
@@ -525,12 +544,8 @@ struct InlineCardCreateForm<GroupSection: View>: View {
         Task {
             isLoadingCurrencies = true
             defer { isLoadingCurrencies = false }
-            
-            _ = await CurrencyRateService.shared.getRate(from: "USD", to: "RUB")
-            let fromRateSource = Set(CurrencyRateService.shared.getAvailableCurrencies())
-            var currencies = Array(fromRateSource)
-            if !currencies.contains(card.currency) { currencies.append(card.currency) }
-            availableCurrencies = currencies.sorted()
+
+            availableCurrencies = CurrencySelectionSupport.pickerCodes(extraCodes: [card.currency])
         }
     }
 
@@ -543,6 +558,8 @@ struct InlineCardCreateForm<GroupSection: View>: View {
 
 struct InlineCreditCreateForm<GroupSection: View>: View {
     @ObservedObject var viewModel: CreditViewModel
+    @Environment(AppState.self) private var appState
+    @Environment(AppRouter.self) private var router
     @Binding var name: String
     let onCreditDataChanged: ((name: String, amount: Double, monthlyPayment: Double, endDate: Date, remainingAmount: Double, currency: String, bank: Bank, creditType: CreditType, isFavorite: Bool, paymentMode: CreditPaymentMode, paymentDayOfMonth: Int?, nextPaymentDate: Date?, reminderEnabled: Bool, reminderDaysBefore: Int?, reminderTime: Date?, includeInTotal: Bool)?) -> Void
     let groupSection: GroupSection
@@ -567,6 +584,7 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
     @State private var showCurrencyPicker: Bool = false
     @State private var currencySearchText: String = ""
     @State private var didPrefillFromEditing: Bool = false
+    @State private var showCryptoProAlert: Bool = false
     
     init(
         viewModel: CreditViewModel,
@@ -678,14 +696,24 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
         .sheet(isPresented: $showCurrencyPicker) {
             NavigationStack {
                 let favoriteCodes = SettingsManager.shared.favoriteCurrencyCodes
+                let canUseCrypto = EntitlementPolicy.canUseFinanceCrypto(isPro: appState.isPro)
                 CurrencyPickerView(
                     allCodes: availableCurrencies,
                     searchText: $currencySearchText,
                     selectedCodes: favoriteCodes,
                     favoriteCodes: Set(favoriteCodes),
                     currentSelection: selectedCurrency,
+                    primaryPinnedCode: SettingsManager.shared.primaryCurrencyCode,
                     onToggleFavorite: nil,
+                    badgeForCode: { code in
+                        guard CurrencySelectionSupport.isCrypto(code), !canUseCrypto else { return nil }
+                        return .pro
+                    },
                     onSelect: { currency in
+                        if CurrencySelectionSupport.isCrypto(currency), !canUseCrypto {
+                            showCryptoProAlert = true
+                            return
+                        }
                         selectedCurrency = currency
                         showCurrencyPicker = false
                     }
@@ -701,6 +729,12 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
+        .premiumUpsellAlert(
+            isPresented: $showCryptoProAlert,
+            titleKey: "monetization.crypto.pro_title",
+            message: String(localized: "monetization.crypto.pro_message"),
+            onSubscribe: { router.push(.subscription) }
+        )
     }
 
     private func populateCreditFromEditingIfNeeded() {
@@ -966,12 +1000,8 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
         Task {
             isLoadingCurrencies = true
             defer { isLoadingCurrencies = false }
-            
-            _ = await CurrencyRateService.shared.getRate(from: "USD", to: "RUB")
-            let fromRateSource = Set(CurrencyRateService.shared.getAvailableCurrencies())
-            var currencies = Array(fromRateSource)
-            if !currencies.contains(selectedCurrency) { currencies.append(selectedCurrency) }
-            availableCurrencies = currencies.sorted()
+
+            availableCurrencies = CurrencySelectionSupport.pickerCodes(extraCodes: [selectedCurrency])
         }
     }
     
@@ -1046,6 +1076,8 @@ struct InlineCreditCreateForm<GroupSection: View>: View {
 
 struct InlineInvestmentCreateForm<GroupSection: View>: View {
     @ObservedObject var viewModel: InvestmentViewModel
+    @Environment(AppState.self) private var appState
+    @Environment(AppRouter.self) private var router
     @Binding var name: String
     @Binding var selectedCategory: InvestmentCategory
     let onInvestmentDataChanged: ((name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)?) -> Void
@@ -1075,6 +1107,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     @State private var isRefreshingPrice: Bool = false
     @State private var marketErrorMessage: String?
     @State private var didPrefillFromEditing: Bool = false
+    @State private var showCryptoProAlert: Bool = false
     
     private let marketDataClient: MarketDataClientProtocol
     
@@ -1244,14 +1277,24 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
         .sheet(isPresented: $showCurrencyPicker) {
             NavigationStack {
                 let favoriteCodes = SettingsManager.shared.favoriteCurrencyCodes
+                let canUseCrypto = EntitlementPolicy.canUseFinanceCrypto(isPro: appState.isPro)
                 CurrencyPickerView(
                     allCodes: availableCurrencies,
                     searchText: $currencySearchText,
                     selectedCodes: favoriteCodes,
                     favoriteCodes: Set(favoriteCodes),
                     currentSelection: selectedCurrency,
+                    primaryPinnedCode: SettingsManager.shared.primaryCurrencyCode,
                     onToggleFavorite: nil,
+                    badgeForCode: { code in
+                        guard CurrencySelectionSupport.isCrypto(code), !canUseCrypto else { return nil }
+                        return .pro
+                    },
                     onSelect: { currency in
+                        if CurrencySelectionSupport.isCrypto(currency), !canUseCrypto {
+                            showCryptoProAlert = true
+                            return
+                        }
                         selectedCurrency = currency
                         showCurrencyPicker = false
                     }
@@ -1267,6 +1310,12 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
+        .premiumUpsellAlert(
+            isPresented: $showCryptoProAlert,
+            titleKey: "monetization.crypto.pro_title",
+            message: String(localized: "monetization.crypto.pro_message"),
+            onSubscribe: { router.push(.subscription) }
+        )
         .sheet(isPresented: $showMarketSearchSheet) {
             MarketSymbolSearchSheet(filter: marketFilter) { symbol in
                 applySelectedMarketSymbol(symbol)
@@ -1557,12 +1606,8 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
         Task {
             isLoadingCurrencies = true
             defer { isLoadingCurrencies = false }
-            
-            _ = await CurrencyRateService.shared.getRate(from: "USD", to: "RUB")
-            let fromRateSource = Set(CurrencyRateService.shared.getAvailableCurrencies())
-            var currencies = Array(fromRateSource)
-            if !currencies.contains(selectedCurrency) { currencies.append(selectedCurrency) }
-            availableCurrencies = currencies.sorted()
+
+            availableCurrencies = CurrencySelectionSupport.pickerCodes(extraCodes: [selectedCurrency])
         }
     }
 

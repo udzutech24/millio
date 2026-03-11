@@ -558,28 +558,19 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     
     func loadAvailableCurrencies() {
         scheduleBackgroundTask { viewModel in
-            // Загружаем курсы для получения списка валют
-            _ = await CurrencyRateService.shared.getRate(from: "USD", to: "RUB")
-            
-            let fromRateSource = Set(CurrencyRateService.shared.getAvailableCurrencies())
-            
-            // Собираем валюты из всех счетов
-            var currencies = Set<String>()
+            var extraCodes = Set<String>()
             for card in viewModel.state.availableCards {
-                currencies.insert(card.currency)
+                extraCodes.insert(card.currency)
             }
             for credit in viewModel.state.availableCredits {
-                currencies.insert(credit.currency)
+                extraCodes.insert(credit.currency)
             }
             for investment in viewModel.state.availableInvestments {
-                currencies.insert(investment.currency)
+                extraCodes.insert(investment.currency)
             }
-            
-            // Объединяем с валютами из источника курсов
-            currencies = currencies.union(fromRateSource)
-            
+
             if Task.isCancelled { return }
-            viewModel.state.availableCurrencies = Array(currencies).sorted()
+            viewModel.state.availableCurrencies = CurrencySelectionSupport.pickerCodes(extraCodes: Array(extraCodes))
         }
     }
     
@@ -1902,7 +1893,13 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             }
         case .investment:
             if let investment = investmentsCache[account.accountID] {
-                return (investment.name, investment.amount, resolvedInvestmentCurrency(investment), investment.category.icon, false)
+                return (
+                    financeViewModel.investmentDisplayName(investment),
+                    investment.amount,
+                    resolvedInvestmentCurrency(investment),
+                    investment.category.icon,
+                    false
+                )
             }
         }
         

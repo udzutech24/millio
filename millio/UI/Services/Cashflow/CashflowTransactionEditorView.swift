@@ -915,14 +915,7 @@ struct CashflowTransactionEditorView: View {
             isLoadingCurrencies = true
             defer { isLoadingCurrencies = false }
 
-            _ = await CurrencyRateService.shared.getRate(from: "USD", to: "RUB")
-            let fromRateSource = Set(CurrencyRateService.shared.getAvailableCurrencies())
-
-            var currencies = Array(fromRateSource)
-            if !currencies.contains(selectedCurrency) {
-                currencies.append(selectedCurrency)
-            }
-            availableCurrencies = currencies.sorted()
+            availableCurrencies = CurrencySelectionSupport.pickerCodes(extraCodes: [selectedCurrency])
         }
     }
 

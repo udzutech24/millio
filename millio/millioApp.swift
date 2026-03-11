@@ -282,7 +282,8 @@ struct millioApp: App {
         let modelConfiguration = ModelConfiguration(
             scope.storeConfigurationName,
             schema: schema,
-            url: storeURL
+            url: storeURL,
+            cloudKitDatabase: .none
         )
 
         do {
@@ -290,7 +291,11 @@ struct millioApp: App {
         } catch {
             AppLogger.log(.error, category: "App", "Failed to create ModelContainer: \(error)")
             do {
-                let fallbackConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+                let fallbackConfig = ModelConfiguration(
+                    schema: schema,
+                    isStoredInMemoryOnly: true,
+                    cloudKitDatabase: .none
+                )
                 return try ModelContainer(for: schema, configurations: [fallbackConfig])
             } catch {
                 AppLogger.log(.error, category: "App", "Failed to create fallback ModelContainer: \(error)")
@@ -324,7 +329,11 @@ struct millioApp: App {
 
     private static func makeLegacyDefaultModelContainer() -> ModelContainer? {
         let schema = AppSchema.create()
-        let legacyConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        let legacyConfiguration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: false,
+            cloudKitDatabase: .none
+        )
         do {
             return try ModelContainer(for: schema, configurations: [legacyConfiguration])
         } catch {

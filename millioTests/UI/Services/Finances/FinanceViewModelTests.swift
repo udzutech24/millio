@@ -208,6 +208,124 @@ struct FinanceViewModelTests {
         #expect(SettingsManager.shared.primaryCurrencyCode == "USD")
     }
 
+    @Test("FinanceViewModel раскрывает и сворачивает группу по groupUniqueID")
+    func testToggleGroupExpandedTracksGroupUniqueID() throws {
+        let modelContext = try createTestModelContext()
+        let viewModel = FinanceViewModel(modelContext: modelContext, skipInitialLoad: true)
+
+        let group = FinanceGroup(name: "Основная", colorHex: "#FFFFFF", order: 0)
+        let groupID = group.groupUniqueID
+
+        #expect(viewModel.state.expandedGroupIDs.contains(groupID) == false)
+
+        viewModel.handle(.toggleGroupExpanded(groupID))
+        #expect(viewModel.state.expandedGroupIDs.contains(groupID))
+
+        viewModel.handle(.toggleGroupExpanded(groupID))
+        #expect(viewModel.state.expandedGroupIDs.contains(groupID) == false)
+    }
+
+    @Test("FinanceViewModel сохраняет ручной порядок групп после перетаскивания")
+    func testMoveGroupReordersVisibleGroups() throws {
+        let modelContext = try createTestModelContext()
+
+        let first = FinanceGroup(name: "Первая", colorHex: "#111111", order: 0)
+        let second = FinanceGroup(name: "Вторая", colorHex: "#222222", order: 1)
+        let third = FinanceGroup(name: "Третья", colorHex: "#333333", order: 2)
+        modelContext.insert(first)
+        modelContext.insert(second)
+        modelContext.insert(third)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(modelContext: modelContext, skipInitialLoad: true)
+        viewModel.handle(.loadGroups)
+
+        viewModel.handle(.moveGroup(sourceGroupID: third.groupUniqueID, destinationIndex: 0))
+
+        #expect(viewModel.visibleGroupsForList().map(\.name) == ["Третья", "Первая", "Вторая"])
+        #expect(viewModel.state.groups.map(\.order) == [0, 1, 2])
+    }
+
+    @Test("FinanceViewModel по умолчанию сортирует счета в группе по сумме по убыванию и сохраняет ручной порядок")
+    func testOrderedAccountsUseAmountThenManualOrder() throws {
+        let modelContext = try createTestModelContext()
+
+        let group = FinanceGroup(name: "Основная", colorHex: "#FFFFFF", order: 0)
+        modelContext.insert(group)
+
+        let small = Card(
+            name: "Small",
+            cardNumber: "1111",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 100
+        )
+        let large = Card(
+            name: "Large",
+            cardNumber: "2222",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 300
+        )
+        let medium = Credit(
+            name: "Medium debt",
+            amount: 1_000,
+            interestRate: 10,
+            monthlyPayment: 100,
+            startDate: Date(),
+            termMonths: 12,
+            currency: "RUB",
+            bank: .other,
+            creditType: .consumer
+        )
+        medium.remainingAmount = 200
+
+        modelContext.insert(small)
+        modelContext.insert(large)
+        modelContext.insert(medium)
+
+        let smallAccount = FinanceAccount(accountType: .card, accountID: small.cardUniqueID)
+        smallAccount.group = group
+        let largeAccount = FinanceAccount(accountType: .card, accountID: large.cardUniqueID)
+        largeAccount.group = group
+        let mediumAccount = FinanceAccount(accountType: .credit, accountID: medium.creditUniqueID)
+        mediumAccount.group = group
+
+        modelContext.insert(smallAccount)
+        modelContext.insert(largeAccount)
+        modelContext.insert(mediumAccount)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(modelContext: modelContext, skipInitialLoad: true)
+        viewModel.handle(.loadGroups)
+        viewModel.handle(.loadAccounts)
+
+        let loadedGroup = try #require(viewModel.state.groups.first)
+        #expect(viewModel.orderedAccounts(for: loadedGroup).map(\.accountID) == [
+            large.cardUniqueID,
+            medium.creditUniqueID,
+            small.cardUniqueID,
+        ])
+
+        viewModel.handle(
+            .moveAccount(
+                sourceAccountID: smallAccount.accountUniqueID,
+                destinationIndex: 0,
+                groupID: loadedGroup.groupUniqueID
+            )
+        )
+
+        let reorderedGroup = try #require(viewModel.state.groups.first)
+        #expect(reorderedGroup.usesManualAccountOrdering)
+        #expect(viewModel.orderedAccounts(for: reorderedGroup).map(\.accountID) == [
+            small.cardUniqueID,
+            large.cardUniqueID,
+            medium.creditUniqueID,
+        ])
+    }
+
     @Test("FinanceViewModel пересчитывает сумму цели накопления при смене display валюты")
     func testSetDisplayCurrencyConvertsSavingsGoalAmount() async throws {
         let modelContext = try createTestModelContext()
@@ -697,6 +815,40 @@ struct FinanceViewModelTests {
             "$"
         )
         #expect(subtitle == expectedSubtitle)
+    }
+
+    @Test("Для акций в финансах показывается короткий тикер без market prefix")
+    func testInvestmentDisplayNameUsesShortTickerForStocks() throws {
+        let modelContext = try createTestModelContext()
+
+        let group = FinanceGroup(name: "Акции", colorHex: "#33AA44")
+        modelContext.insert(group)
+
+        let investment = Investment(
+            name: "SPDR Gold Shares",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 1500,
+            currency: "USD"
+        )
+        investment.marketSymbol = "US:SIVR"
+        investment.includeInTotal = true
+        modelContext.insert(investment)
+
+        let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+        account.group = group
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadAccounts)
+
+        let info = viewModel.getAccountInfo(account: account)
+        #expect(info?.name == "SIVR")
     }
 
     @Test("Для рыночной инвестиции показывается строка покупки и прироста")

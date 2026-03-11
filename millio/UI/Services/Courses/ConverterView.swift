@@ -468,6 +468,30 @@ struct ConverterView: View {
                                 .foregroundStyle(AppColors.textPrimary)
                             }
                         }
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            FinancesSectionHeader(title: ConverterL10n.sectionWidget)
+                            FinancesGlassCard(
+                                accentColor: AppColors.financesGradient.first ?? AppColors.brandPrimary,
+                                contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)
+                            ) {
+                                VStack(alignment: .leading, spacing: 18) {
+                                    ConverterWidgetSettingsPreview()
+
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text(ConverterL10n.widgetHowToTitle)
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundStyle(AppColors.textPrimary)
+
+                                        VStack(alignment: .leading, spacing: 10) {
+                                            ConverterWidgetInstructionRow(number: 1, text: ConverterL10n.widgetStepOpenJiggle)
+                                            ConverterWidgetInstructionRow(number: 2, text: ConverterL10n.widgetStepFindMillio)
+                                            ConverterWidgetInstructionRow(number: 3, text: ConverterL10n.widgetStepAddWidget)
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 20)
@@ -1345,6 +1369,113 @@ struct ConverterView_Previews: PreviewProvider {
         NavigationStack {
             ConverterView()
                 .navigationTitle("")
+        }
+    }
+}
+
+private struct ConverterWidgetSettingsPreview: View {
+    private let previewRows: [(flag: String, title: String, value: String)] = [
+        ("🇺🇸", "USD", "78.54 ₽"),
+        ("🇪🇺", "EUR", "91.04 ₽"),
+        ("🇹🇷", "TRY", "2.13 ₽")
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(ConverterL10n.widgetPreviewTitle)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+
+                Text(ConverterL10n.widgetPreviewSubtitle)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(AppColors.textTertiary)
+            }
+
+            VStack(spacing: 0) {
+                ForEach(Array(previewRows.enumerated()), id: \.offset) { index, row in
+                    HStack(spacing: 12) {
+                        Text(row.flag)
+                            .font(.system(size: 22))
+                            .frame(width: 30, height: 30)
+
+                        Text(row.title)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Color.white.opacity(0.92))
+
+                        Spacer(minLength: 12)
+
+                        Text(row.value)
+                            .font(.system(size: 17, weight: .semibold, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 13)
+
+                    if index < previewRows.count - 1 {
+                        Rectangle()
+                            .fill(Color.white.opacity(0.08))
+                            .frame(height: 1)
+                            .padding(.horizontal, 14)
+                    }
+                }
+            }
+            .background(widgetCardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(Color(hex: "1CA8FF").opacity(0.55), lineWidth: 1)
+            )
+            .shadow(color: Color(hex: "1CA8FF").opacity(0.18), radius: 18, x: 0, y: 10)
+        }
+    }
+
+    private var widgetCardBackground: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color(hex: "404553"), Color(hex: "1A1D26"), Color(hex: "0E1118")],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            RadialGradient(
+                colors: [Color.white.opacity(0.1), Color.clear],
+                center: .topLeading,
+                startRadius: 8,
+                endRadius: 160
+            )
+
+            LinearGradient(
+                colors: [Color(hex: "27456B").opacity(0.18), Color.clear, Color.black.opacity(0.22)],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        }
+    }
+}
+
+private struct ConverterWidgetInstructionRow: View {
+    let number: Int
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("\(number)")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(Color.black.opacity(0.88))
+                .frame(width: 22, height: 22)
+                .background(
+                    Circle()
+                        .fill(AppColors.financesGradient.first ?? AppColors.brandPrimary)
+                )
+
+            Text(text)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(AppColors.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 0)
         }
     }
 }

@@ -58,6 +58,7 @@ struct FinanceGroupImporter: ModelImporter {
         }
         
         let order = dict["order"] as? Int ?? 0
+        let usesManualAccountOrdering = dict["usesManualAccountOrdering"] as? Bool ?? false
         
         let createdAtDate = Date(timeIntervalSince1970: createdAt)
         
@@ -74,6 +75,7 @@ struct FinanceGroupImporter: ModelImporter {
             // Обновляем существующую группу
             existingGroup.colorHex = colorHex
             existingGroup.order = order
+            existingGroup.usesManualAccountOrdering = usesManualAccountOrdering
             existingGroup.displayCurrency = displayCurrency
             if let isFavorite = dict["isFavorite"] as? Bool {
                 existingGroup.isFavorite = isFavorite
@@ -94,6 +96,7 @@ struct FinanceGroupImporter: ModelImporter {
         let group = FinanceGroup(name: name, colorHex: colorHex, order: order, isFavorite: isFavorite, priority: priority)
         group.createdAt = createdAtDate
         group.updatedAt = Date(timeIntervalSince1970: updatedAt)
+        group.usesManualAccountOrdering = usesManualAccountOrdering
         group.displayCurrency = displayCurrency
         
         context.insert(group)
@@ -116,6 +119,8 @@ struct FinanceAccountImporter: ModelImporter {
               let updatedAt = dict["updatedAt"] as? TimeInterval else {
             throw AppError.backupCorrupted
         }
+
+        let order = dict["order"] as? Int ?? 0
         
         // Проверяем, не существует ли уже такой счет
         let accountDescriptor = FetchDescriptor<FinanceAccount>(
@@ -126,6 +131,7 @@ struct FinanceAccountImporter: ModelImporter {
         
         if let existingAccount = try? context.fetch(accountDescriptor).first {
             // Обновляем существующий счет
+            existingAccount.order = order
             existingAccount.updatedAt = Date(timeIntervalSince1970: updatedAt)
             return
         }
@@ -137,6 +143,7 @@ struct FinanceAccountImporter: ModelImporter {
         )
         account.createdAt = Date(timeIntervalSince1970: createdAt)
         account.updatedAt = Date(timeIntervalSince1970: updatedAt)
+        account.order = order
         
         if let groupUniqueID = dict["groupUniqueID"] as? String {
             let groupDescriptor = FetchDescriptor<FinanceGroup>()

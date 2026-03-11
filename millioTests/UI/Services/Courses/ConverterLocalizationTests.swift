@@ -24,4 +24,21 @@ struct ConverterLocalizationTests {
             #expect(!source.subtitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
     }
+
+    @Test("Widget settings copy is localized and non-empty")
+    func widgetSettingsCopyIsPresent() {
+        let values = [
+            ConverterL10n.sectionWidget,
+            ConverterL10n.widgetPreviewTitle,
+            ConverterL10n.widgetPreviewSubtitle,
+            ConverterL10n.widgetHowToTitle,
+            ConverterL10n.widgetStepOpenJiggle,
+            ConverterL10n.widgetStepFindMillio,
+            ConverterL10n.widgetStepAddWidget
+        ]
+
+        for value in values {
+            #expect(!value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+    }
 }

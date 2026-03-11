@@ -297,6 +297,7 @@ private struct FinancesSettingsSheet: View {
 
 private struct FinancesMainTabView: View {
     @ObservedObject var viewModel: FinanceViewModel
+    @State private var draggedGroupID: String?
     
     var body: some View {
         mainContent
@@ -629,7 +630,8 @@ private struct FinancesMainTabView: View {
             ForEach(groups) { group in
                 FinanceGroupRow(
                     group: group,
-                    viewModel: viewModel
+                    viewModel: viewModel,
+                    draggedGroupID: $draggedGroupID
                 )
             }
         }

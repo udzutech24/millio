@@ -477,24 +477,12 @@ final class CashflowViewModel: ViewModelProtocol {
     private func loadAvailableCurrencies() {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            _ = await CurrencyRateService.shared.getRate(from: "USD", to: "RUB")
-            let fromRateSource = Set(CurrencyRateService.shared.getAvailableCurrencies())
-            
-            // Собираем валюты из всех транзакций
-            var currencies = Set<String>()
+            var extraCodes = Set<String>()
             for transaction in state.transactions {
-                currencies.insert(transaction.currency)
+                extraCodes.insert(transaction.currency)
             }
-            
-            // Объединяем с валютами из источника курсов
-            currencies = currencies.union(fromRateSource)
-            
-            // Добавляем текущую валюту отображения, если её нет
-            if !currencies.contains(state.displayCurrency) {
-                currencies.insert(state.displayCurrency)
-            }
-            
-            state.availableCurrencies = Array(currencies).sorted()
+            extraCodes.insert(state.displayCurrency)
+            state.availableCurrencies = CurrencySelectionSupport.pickerCodes(extraCodes: Array(extraCodes))
         }
     }
     

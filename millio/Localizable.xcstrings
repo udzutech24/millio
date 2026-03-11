@@ -654,6 +654,23 @@
         }
       }
     },
+    "cashback.category.all_purchases" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All purchases"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Все покупки"
+          }
+        }
+      }
+    },
     "cashback.category.auto_services" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3653,6 +3670,23 @@
         }
       }
     },
+    "converter.settings.section_widget" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Widget"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Виджет"
+          }
+        }
+      }
+    },
     "converter.settings.section_precision" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3683,6 +3717,108 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Курс"
+          }
+        }
+      }
+    },
+    "converter.settings.widget.how_to_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How to add"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Как добавить"
+          }
+        }
+      }
+    },
+    "converter.settings.widget.preview_subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows your selected currencies on the Home Screen"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показывает выбранные валюты прямо на домашнем экране"
+          }
+        }
+      }
+    },
+    "converter.settings.widget.preview_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Converter widget"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Виджет конвертера"
+          }
+        }
+      }
+    },
+    "converter.settings.widget.step_add_widget" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose Currency Converter and tap Add Widget"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выбери Currency Converter и нажми «Добавить виджет»"
+          }
+        }
+      }
+    },
+    "converter.settings.widget.step_find_millio" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open the widget gallery and find Millio"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Открой галерею виджетов и найди Millio"
+          }
+        }
+      }
+    },
+    "converter.settings.widget.step_open_jiggle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Touch and hold the Home Screen, then tap Edit"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Зажми домашний экран, затем нажми «Изменить»"
           }
         }
       }

@@ -19,5 +19,14 @@ struct CurrencySelectionSupportCryptoTests {
         #expect(CurrencySelectionSupport.isCrypto("eth"))
         #expect(!CurrencySelectionSupport.isCrypto("USD"))
     }
-}
 
+    @Test("CurrencySelectionSupport.pickerCodes keeps crypto and extra legacy codes")
+    func testPickerCodesIncludesCryptoAndExtras() {
+        let codes = CurrencySelectionSupport.pickerCodes(extraCodes: ["btc", " custom ", "USD"])
+
+        #expect(codes.contains("BTC"))
+        #expect(codes.contains("ETH"))
+        #expect(codes.contains("CUSTOM"))
+        #expect(codes.contains("USD"))
+    }
+}

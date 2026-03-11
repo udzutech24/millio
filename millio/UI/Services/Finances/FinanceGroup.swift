@@ -26,6 +26,9 @@ final class FinanceGroup: Persistable {
     
     /// Порядок сортировки
     var order: Int = 0
+
+    /// Включен ли для счетов внутри группы ручной порядок
+    var usesManualAccountOrdering: Bool = false
     
     /// Избранная группа
     var isFavorite: Bool = false
@@ -72,6 +75,7 @@ final class FinanceGroup: Persistable {
             "createdAt": createdAt.timeIntervalSince1970,
             "updatedAt": updatedAt.timeIntervalSince1970,
             "order": order,
+            "usesManualAccountOrdering": usesManualAccountOrdering,
             "isFavorite": isFavorite,
             "priorityRaw": priorityRaw,
             "groupUniqueID": groupUniqueID

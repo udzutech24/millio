@@ -30,12 +30,9 @@ enum FinanceSystemGroups {
         let group = FinanceGroup(
             name: name,
             colorHex: ungroupedColorHex,
-            order: maxOrder + 1,
-            isFavorite: false,
-            priority: .low
+            order: maxOrder + 1
         )
         modelContext.insert(group)
         return group
     }
 }
-

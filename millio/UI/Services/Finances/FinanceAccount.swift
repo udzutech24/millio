@@ -48,6 +48,9 @@ final class FinanceAccount: Persistable {
     
     /// Дата последнего обновления
     var updatedAt: Date = Date()
+
+    /// Порядок внутри группы
+    var order: Int = 0
     
     var accountType: FinanceAccountType {
         get { FinanceAccountType(rawValue: accountTypeRaw) ?? .card }
@@ -74,6 +77,7 @@ final class FinanceAccount: Persistable {
             "accountID": accountID,
             "createdAt": createdAt.timeIntervalSince1970,
             "updatedAt": updatedAt.timeIntervalSince1970,
+            "order": order,
             "accountUniqueID": accountUniqueID
         ]
         

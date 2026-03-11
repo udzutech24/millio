@@ -11,6 +11,7 @@ import SwiftData
 /// Категория кешбэка.
 /// Держим расширенный системный каталог (35-40 категорий) под базовые сценарии РФ.
 enum CashbackCategory: String, Codable, CaseIterable {
+    case allPurchases = "all_purchases"
     case gasStation = "gas_station"
     case supermarket = "supermarket"
     case restaurant = "restaurant"
@@ -58,6 +59,7 @@ enum CashbackCategory: String, Codable, CaseIterable {
 
     private var localizationKey: String {
         switch self {
+        case .allPurchases: return "cashback.category.all_purchases"
         case .gasStation: return "cashback.category.gas_station"
         case .supermarket: return "cashback.category.supermarket"
         case .restaurant: return "cashback.category.restaurant"
@@ -103,6 +105,7 @@ enum CashbackCategory: String, Codable, CaseIterable {
     
     var icon: String {
         switch self {
+        case .allPurchases: return "square"
         case .gasStation: return "⛽️"
         case .supermarket: return "🛒"
         case .restaurant: return "🍽️"

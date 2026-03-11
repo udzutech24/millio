@@ -27,6 +27,8 @@ struct InvestmentEditorView: View {
     @State private var isFavorite: Bool = false
     @State private var availableCurrencies: [String] = ["RUB", "USD", "EUR"]
     @State private var isLoadingCurrencies: Bool = false
+    @State private var showCurrencyPicker: Bool = false
+    @State private var currencySearchText: String = ""
 
     @State private var marketSymbol: String = ""
     @State private var marketExchange: String?
@@ -41,6 +43,7 @@ struct InvestmentEditorView: View {
     @State private var marketErrorMessage: String?
     @State private var showPaywallAlert = false
     @State private var paywallMessage = ""
+    @State private var showCryptoProAlert = false
 
     private let marketDataClient: MarketDataClientProtocol
 
@@ -197,10 +200,55 @@ struct InvestmentEditorView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
+            .sheet(isPresented: $showCurrencyPicker) {
+                NavigationStack {
+                    let favoriteCodes = SettingsManager.shared.favoriteCurrencyCodes
+                    let canUseCrypto = EntitlementPolicy.canUseFinanceCrypto(isPro: appState.isPro)
+                    CurrencyPickerView(
+                        allCodes: availableCurrencies,
+                        searchText: $currencySearchText,
+                        selectedCodes: favoriteCodes,
+                        favoriteCodes: Set(favoriteCodes),
+                        currentSelection: selectedCurrency,
+                        primaryPinnedCode: SettingsManager.shared.primaryCurrencyCode,
+                        onToggleFavorite: nil,
+                        badgeForCode: { code in
+                            guard CurrencySelectionSupport.isCrypto(code), !canUseCrypto else { return nil }
+                            return .pro
+                        },
+                        onSelect: { currency in
+                            if CurrencySelectionSupport.isCrypto(currency), !canUseCrypto {
+                                showCryptoProAlert = true
+                                return
+                            }
+                            selectedCurrency = currency
+                            showCurrencyPicker = false
+                        }
+                    )
+                    .navigationTitle(String(localized: "finances.add_account.currency_picker.title"))
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button(String(localized: "finances.common.cancel")) {
+                                showCurrencyPicker = false
+                            }
+                            .foregroundStyle(AppColors.textPrimary)
+                        }
+                    }
+                }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+            }
             .premiumUpsellAlert(
                 isPresented: $showPaywallAlert,
                 titleKey: "Ограничение Free-плана",
                 message: paywallMessage,
+                onSubscribe: { router.push(.subscription) }
+            )
+            .premiumUpsellAlert(
+                isPresented: $showCryptoProAlert,
+                titleKey: "monetization.crypto.pro_title",
+                message: String(localized: "monetization.crypto.pro_message"),
                 onSubscribe: { router.push(.subscription) }
             )
         }
@@ -449,12 +497,18 @@ struct InvestmentEditorView: View {
                         .scaleEffect(0.8)
                         .tint(AppColors.textTertiary)
                 } else {
-                    Picker(String(localized: "finances.add_account.field.currency"), selection: $selectedCurrency) {
-                        ForEach(availableCurrencies, id: \.self) { currency in
-                            Text(currency).tag(currency)
+                    Button {
+                        showCurrencyPicker = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(selectedCurrency)
+                                .foregroundStyle(AppColors.textPrimary)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(AppColors.textTertiary)
                         }
                     }
-                    .tint(AppColors.textTertiary)
+                    .buttonStyle(.plain)
                 }
             }
             .padding(.vertical, 8)
@@ -541,17 +595,8 @@ struct InvestmentEditorView: View {
                 isLoadingCurrencies = true
             }
 
-            _ = await CurrencyRateService.shared.getRate(from: "USD", to: "RUB")
-
-            let fromRateSource = Set(CurrencyRateService.shared.getAvailableCurrencies())
-            var currencies = Array(fromRateSource)
-
-            if !currencies.contains(selectedCurrency) {
-                currencies.append(selectedCurrency)
-            }
-
             await MainActor.run {
-                availableCurrencies = currencies.sorted()
+                availableCurrencies = CurrencySelectionSupport.pickerCodes(extraCodes: [selectedCurrency])
                 isLoadingCurrencies = false
             }
         }

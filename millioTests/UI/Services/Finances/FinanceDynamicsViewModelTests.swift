@@ -265,6 +265,39 @@ struct FinanceDynamicsViewModelTests {
         #expect(allAccounts.count == 2)
     }
 
+    @Test("Динамика для акций показывает короткий тикер вместо длинного имени")
+    func testGetAccountInfoForDynamicsUsesShortTickerForStocks() throws {
+        let modelContext = try createTestModelContext()
+
+        let investment = Investment(
+            name: "SPDR S&P 500 ETF Trust",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 908_319,
+            currency: "USD"
+        )
+        investment.marketSymbol = "SPY.US"
+        modelContext.insert(investment)
+
+        let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: false
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+
+        let info = dynamicsViewModel.getAccountInfoForDynamics(account: account)
+        #expect(info?.name == "SPY")
+    }
+
     // MARK: - Новые тесты
 
     @Test("Баланс карты на прошлую дату с учётом транзакций")

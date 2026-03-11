@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 private func financeAmountLabel(
     amountText: String,
@@ -31,6 +32,7 @@ private func financeAmountLabel(
 struct FinanceGroupRow: View {
     let group: FinanceGroup
     @ObservedObject var viewModel: FinanceViewModel
+    @Binding var draggedGroupID: String?
     
     private var groupID: String {
         group.groupUniqueID
@@ -44,31 +46,6 @@ struct FinanceGroupRow: View {
         viewModel.state.groupTotals[groupID] ?? 0.0
     }
     
-    private var priorityIcon: String {
-        switch group.priority {
-        case .high: return "arrow.up"
-        case .normal: return "minus"
-        case .low: return "arrow.down"
-        }
-    }
-    
-    private var priorityDisplayName: String {
-        switch group.priority {
-        case .high: return String(localized: "finances.priority.high")
-        case .normal: return String(localized: "finances.priority.normal")
-        case .low: return String(localized: "finances.priority.low")
-        }
-    }
-    
-    private var nextPriority: GroupPriority {
-        // Циклически переключаем приоритет: normal -> high -> low -> normal
-        switch group.priority {
-        case .normal: return .high
-        case .high: return .low
-        case .low: return .normal
-        }
-    }
-    
     var body: some View {
         groupContent
             .background(groupBackground)
@@ -76,6 +53,14 @@ struct FinanceGroupRow: View {
             .contextMenu {
                 contextMenuContent
             }
+            .onDrop(
+                of: [UTType.text],
+                delegate: FinanceGroupIndexDropDelegate(
+                    destinationIndex: viewModel.visibleGroupsForList().firstIndex(where: { $0.groupUniqueID == groupID }) ?? 0,
+                    draggedGroupID: $draggedGroupID,
+                    viewModel: viewModel
+                )
+            )
             .modifier(GroupRowModifiers(
                 isExpanded: isExpanded,
                 group: group,
@@ -104,7 +89,13 @@ struct FinanceGroupRow: View {
                 headerContent
             }
             .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+
+            dragChevron
         }
+        .padding(.vertical, 18)
+        .padding(.horizontal, 18)
     }
     
     private var headerContent: some View {
@@ -119,30 +110,13 @@ struct FinanceGroupRow: View {
             
             // Сумма группы
             groupAmountSection
-            
-            // Иконка раскрытия
-            Image(systemName: "chevron.right")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(AppColors.textTertiary)
-                .rotationEffect(.degrees(isExpanded ? 90 : 0))
         }
-        .padding(.vertical, 18)
-        .padding(.horizontal, 18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
     
     private var groupNameSection: some View {
         HStack(spacing: 6) {
-//            if group.isFavorite {
-//                Image(systemName: "star.fill")
-//                    .font(.system(size: 12, weight: .semibold))
-//                    .foregroundStyle(
-//                        LinearGradient(
-//                            colors: AppColors.incomeGradient,
-//                            startPoint: .leading,
-//                            endPoint: .trailing
-//                        )
-//                    )
-//            }
             Text(group.name)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(AppColors.textPrimary)
@@ -160,11 +134,13 @@ struct FinanceGroupRow: View {
             amountColor: AppColors.textPrimary,
             currencyColor: AppColors.textSecondary.opacity(0.78)
         )
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.leading, 28)
     }
     
     private var accountsAccordion: some View {
         VStack(spacing: 0) {
-            let displayAccounts: [(account: FinanceAccount, info: (name: String, amount: Double, currency: String, icon: String, isCreditCardDebt: Bool))] = (group.accounts ?? []).compactMap { account in
+            let displayAccounts: [(account: FinanceAccount, info: (name: String, amount: Double, currency: String, icon: String, isCreditCardDebt: Bool))] = viewModel.orderedAccounts(for: group).compactMap { account in
                 guard let info = viewModel.getAccountInfo(account: account) else {
                     return nil
                 }
@@ -208,6 +184,26 @@ struct FinanceGroupRow: View {
         }
         .padding(.bottom, 14)
     }
+
+    private var dragChevron: some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                viewModel.handle(.toggleGroupExpanded(groupID))
+            }
+        } label: {
+            Image(systemName: "chevron.right")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(AppColors.textTertiary.opacity(0.9))
+                .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                .frame(width: 24, height: 24)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onDrag {
+            draggedGroupID = groupID
+            return NSItemProvider(object: groupID as NSString)
+        }
+    }
     
     private var groupBackground: some View {
         let accentColor = group.color
@@ -245,41 +241,18 @@ struct FinanceGroupRow: View {
     
     @ViewBuilder
     private var contextMenuContent: some View {
-        // Открыть группу (динамика)
         Button {
             viewModel.handle(.showGroupDynamics(group))
         } label: {
             Label("finances.group.menu.open", systemImage: "chart.line.uptrend.xyaxis")
         }
-        
-        // Избранное
-        Button {
-            viewModel.handle(.toggleGroupFavorite(group))
-        } label: {
-            Label(
-                group.isFavorite ? String(localized: "finances.group.menu.unfavorite") : String(localized: "finances.group.menu.favorite"),
-                systemImage: group.isFavorite ? "star.fill" : "star"
-            )
-        }
-        
-        // Приоритет
-        Button {
-            viewModel.handle(.setGroupPriority(group, nextPriority))
-        } label: {
-            Label(
-                FinancesL10n.format("finances.group.menu.priority", priorityDisplayName),
-                systemImage: priorityIcon
-            )
-        }
-        
-        // Редактирование
+
         Button {
             viewModel.handle(.editGroup(group))
         } label: {
             Label("finances.common.edit", systemImage: "pencil")
         }
-        
-        // Удаление
+
         Button(role: .destructive) {
             viewModel.handle(.deleteGroup(group))
         } label: {
@@ -559,4 +532,22 @@ private struct FinanceAccountRow: View {
         return formatter.string(from: NSNumber(value: balance)) ?? "0"
     }
 
+}
+
+struct FinanceGroupIndexDropDelegate: DropDelegate {
+    let destinationIndex: Int
+    @Binding var draggedGroupID: String?
+    let viewModel: FinanceViewModel
+
+    func performDrop(info: DropInfo) -> Bool {
+        if let sourceGroupID = draggedGroupID {
+            viewModel.handle(.moveGroup(sourceGroupID: sourceGroupID, destinationIndex: destinationIndex))
+        }
+        draggedGroupID = nil
+        return true
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
 }

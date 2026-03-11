@@ -112,8 +112,7 @@ final class FinanceGroup {
     var createdAt: Date
     var updatedAt: Date
     var order: Int
-    var isFavorite: Bool
-    var priorityRaw: String
+    var usesManualAccountOrdering: Bool
     var displayCurrency: String?
     @Relationship var accounts: [FinanceAccount]?
 }
@@ -124,14 +123,12 @@ final class FinanceGroup {
 - `colorHex` — цвет группы в hex, например "#FF5733"
 - `createdAt` — дата создания
 - `updatedAt` — дата обновления
-- `order` — порядок сортировки
-- `isFavorite` — избранная группа
-- `priorityRaw` — приоритет ("normal", "high", "low")
+- `order` — ручной порядок групп в списке
+- `usesManualAccountOrdering` — включён ли ручной порядок счетов внутри группы
 - `displayCurrency` — валюта отображения (опционально)
 - `accounts` — связанные счета (`@Relationship(deleteRule: .nullify)`)
 
 **Вычисляемые свойства:**
-- `priority` — `GroupPriority` на основе `priorityRaw`
 - `color` — `Color` из `colorHex`
 - `groupUniqueID` — уникальный ID группы: `"\(name)|\(colorHex)|\(createdAt.timeIntervalSince1970)"`
 
@@ -145,6 +142,7 @@ final class FinanceAccount {
     var group: FinanceGroup?
     var createdAt: Date
     var updatedAt: Date
+    var order: Int
 }
 ```
 
@@ -154,6 +152,7 @@ final class FinanceAccount {
 - `group` — ссылка на группу
 - `createdAt` — дата создания
 - `updatedAt` — дата обновления
+- `order` — ручной порядок внутри группы
 
 **Вычисляемые свойства:**
 - `accountType` — `FinanceAccountType`
@@ -168,15 +167,16 @@ private func loadGroups() {
     let descriptor = FetchDescriptor<FinanceGroup>()
     if let groups = try? modelContext.fetch(descriptor) {
         state.groups = groups.sorted { group1, group2 in
-            if group1.isFavorite != group2.isFavorite { return group1.isFavorite }
-            if group1.priority.sortOrder != group2.priority.sortOrder {
-                return group1.priority.sortOrder < group2.priority.sortOrder
+            if group1.order != group2.order {
+                return group1.order < group2.order
             }
             return group1.createdAt < group2.createdAt
         }
     }
 }
 ```
+
+По умолчанию счета внутри группы сортируются по сумме по убыванию. После первого ручного drag-and-drop группа переключается на сохранённый пользовательский порядок.
 
 ```swift
 private func loadAccounts() {

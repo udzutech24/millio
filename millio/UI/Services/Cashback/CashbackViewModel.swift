@@ -231,12 +231,22 @@ final class CashbackViewModel: ViewModelProtocol {
             return CashbackCategoryOption(
                 rawValue: raw,
                 displayName: custom.name,
-                icon: custom.icon,
+                icon: resolvedIcon(for: custom.name, storedIcon: custom.icon),
                 isCustom: true
             )
         }
 
         let safeFallbackName = fallbackName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let resolvedSystemRaw = importedCategoryResolver.resolveSystemCategoryRaw(for: safeFallbackName),
+           let resolvedSystem = CashbackCategory(rawValue: resolvedSystemRaw) {
+            return CashbackCategoryOption(
+                rawValue: raw,
+                displayName: safeFallbackName.isEmpty ? resolvedSystem.displayName : safeFallbackName,
+                icon: resolvedSystem.icon,
+                isCustom: true
+            )
+        }
+
         return CashbackCategoryOption(
             rawValue: raw,
             displayName: safeFallbackName.isEmpty ? CashbackCategory.other.displayName : safeFallbackName,
@@ -754,10 +764,20 @@ final class CashbackViewModel: ViewModelProtocol {
             CashbackCategoryOption(
                 rawValue: Self.customRawValue(from: $0.categoryID),
                 displayName: $0.name,
-                icon: $0.icon,
+                icon: resolvedIcon(for: $0.name, storedIcon: $0.icon),
                 isCustom: true
             )
         }
+    }
+
+    private func resolvedIcon(for categoryName: String, storedIcon: String) -> String {
+        let normalizedStoredIcon = CashbackCustomCategory.normalizeIcon(storedIcon)
+        guard normalizedStoredIcon == CashbackCustomCategory.defaultIcon,
+              let resolvedSystemRaw = importedCategoryResolver.resolveSystemCategoryRaw(for: categoryName),
+              let resolvedSystem = CashbackCategory(rawValue: resolvedSystemRaw) else {
+            return normalizedStoredIcon
+        }
+        return resolvedSystem.icon
     }
 
     private func updateCashbacksForCard(

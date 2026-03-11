@@ -9,6 +9,8 @@ import SwiftUI
 
 struct FinanceGroupEditorView: View {
     @ObservedObject var viewModel: FinanceViewModel
+    @Environment(AppState.self) private var appState
+    @Environment(AppRouter.self) private var router
     @Environment(\.dismiss) private var dismiss
     
     @State private var name: String = ""
@@ -17,11 +19,10 @@ struct FinanceGroupEditorView: View {
     @State private var selectedCurrency: String? = nil
     @State private var availableCurrencies: [String] = []
     @State private var isLoadingCurrencies = true
-    @State private var isFavorite: Bool = false
-    @State private var selectedPriority: GroupPriority = .normal
     
     @State private var showCurrencyPicker: Bool = false
     @State private var currencySearchText: String = ""
+    @State private var showCryptoProAlert: Bool = false
     
     private let predefinedColors: [Color] = [
         .blue, .cyan, .green, .mint, .purple, .pink,
@@ -38,12 +39,12 @@ struct FinanceGroupEditorView: View {
                         nameSection
                         colorSection
                         currencySection
-                        prioritySection
                         
-                        if let editingGroup = viewModel.state.editingGroup,
-                           let accounts = editingGroup.accounts,
-                           !accounts.isEmpty {
-                            accountsSection(accounts)
+                        if let editingGroup = viewModel.state.editingGroup {
+                            let orderedAccounts = viewModel.orderedAccounts(for: editingGroup)
+                            if !orderedAccounts.isEmpty {
+                                accountsSection(orderedAccounts)
+                            }
                         }
                     }
                     .padding(.top, 20)
@@ -112,8 +113,6 @@ struct FinanceGroupEditorView: View {
                 if let editing = viewModel.state.editingGroup {
                     name = editing.name
                     selectedCurrency = editing.displayCurrency
-                    isFavorite = editing.isFavorite
-                    selectedPriority = editing.priority
                     // Находим соответствующий цвет из predefinedColors по hex-значению
                     let editingColorHex = editing.colorHex.uppercased()
                     if let matchingColor = predefinedColors.first(where: { color in
@@ -132,14 +131,24 @@ struct FinanceGroupEditorView: View {
             .sheet(isPresented: $showCurrencyPicker) {
                 NavigationStack {
                     let favoriteCodes = SettingsManager.shared.favoriteCurrencyCodes
+                    let canUseCrypto = EntitlementPolicy.canUseFinanceCrypto(isPro: appState.isPro)
                     CurrencyPickerView(
                         allCodes: availableCurrencies,
                         searchText: $currencySearchText,
                         selectedCodes: favoriteCodes,
                         favoriteCodes: Set(favoriteCodes),
                         currentSelection: selectedCurrency,
+                        primaryPinnedCode: SettingsManager.shared.primaryCurrencyCode,
                         onToggleFavorite: nil,
+                        badgeForCode: { code in
+                            guard CurrencySelectionSupport.isCrypto(code), !canUseCrypto else { return nil }
+                            return .pro
+                        },
                         onSelect: { currency in
+                            if CurrencySelectionSupport.isCrypto(currency), !canUseCrypto {
+                                showCryptoProAlert = true
+                                return
+                            }
                             selectedCurrency = currency
                             showCurrencyPicker = false
                         }
@@ -155,6 +164,12 @@ struct FinanceGroupEditorView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
+            .premiumUpsellAlert(
+                isPresented: $showCryptoProAlert,
+                titleKey: "monetization.crypto.pro_title",
+                message: String(localized: "monetization.crypto.pro_message"),
+                onSubscribe: { router.push(.subscription) }
+            )
         }
     }
     
@@ -273,31 +288,6 @@ struct FinanceGroupEditorView: View {
         }
     }
     
-    private var prioritySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: String(localized: "finances.add_account.section.priority"))
-            FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 12, bottom: 14, trailing: 12)) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Toggle(String(localized: "finances.add_account.favorite"), isOn: $isFavorite)
-                        .tint(AppColors.toggleOnGreen)
-                        .foregroundStyle(AppColors.textPrimary)
-                    
-                    FinancesRowDivider(leadingPadding: 0)
-                    
-                    HStack(spacing: 12) {
-                        FinancesRadioOption(title: String(localized: "finances.priority.low"), isSelected: selectedPriority == .low) { selectedPriority = .low }
-                        FinancesRadioOption(title: String(localized: "finances.priority.normal"), isSelected: selectedPriority == .normal) { selectedPriority = .normal }
-                        FinancesRadioOption(title: String(localized: "finances.priority.high"), isSelected: selectedPriority == .high) { selectedPriority = .high }
-                    }
-                    
-                    Text(String(localized: "finances.add_account.priority.hint"))
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(AppColors.textPrimary.opacity(0.35))
-                }
-            }
-        }
-    }
-    
     private func accountsSection(_ accounts: [FinanceAccount]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: String(localized: "finances.group_editor.section.accounts"))
@@ -366,7 +356,7 @@ struct FinanceGroupEditorView: View {
     
     private func saveGroup() {
         let colorHex = selectedColor.toHex()
-        viewModel.handle(.updateGroup(name: name, colorHex: colorHex, displayCurrency: selectedCurrency, isFavorite: isFavorite, priority: selectedPriority))
+        viewModel.handle(.updateGroup(name: name, colorHex: colorHex, displayCurrency: selectedCurrency))
         dismiss()
     }
 
@@ -384,11 +374,9 @@ struct FinanceGroupEditorView: View {
     private func loadAvailableCurrencies() async {
         isLoadingCurrencies = true
         defer { isLoadingCurrencies = false }
-        
-        _ = await CurrencyRateService.shared.getRate(from: "USD", to: "RUB")
-        
-        let fromRateSource = Set(CurrencyRateService.shared.getAvailableCurrencies())
-        availableCurrencies = Array(fromRateSource).sorted()
+
+        let currentCurrency = viewModel.state.editingGroup?.displayCurrency ?? SettingsManager.shared.primaryCurrencyCode
+        availableCurrencies = CurrencySelectionSupport.pickerCodes(extraCodes: [currentCurrency])
     }
     
     private func formatAmount(_ amount: Double, isHidden: Bool = false) -> String {

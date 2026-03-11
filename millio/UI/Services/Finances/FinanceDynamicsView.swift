@@ -374,7 +374,7 @@ private struct FinanceDynamicsContentView: View {
                 ) {
                     VStack(alignment: .leading, spacing: compactLayout ? 8 : 12) {
                         HStack {
-                            Text(investment.marketSymbol ?? investment.name)
+                            Text(financeViewModel.investmentDisplayName(investment))
                                 .font(.system(size: compactLayout ? 30 : 34, weight: .semibold))
                                 .foregroundStyle(AppColors.textPrimary)
                                 .lineLimit(1)
@@ -1984,10 +1984,11 @@ private struct FinanceDynamicsContentView: View {
 
     private var displayCurrencySheet: some View {
         let favoriteCodes = SettingsManager.shared.favoriteCurrencyCodes
+        let canUseCrypto = EntitlementPolicy.canUseFinanceCrypto(isPro: appState.isPro)
         return NavigationStack {
             CurrencyPickerView(
                 allCodes: viewModel.state.availableCurrencies.isEmpty
-                    ? CurrencySelectionSupport.allCurrencyCodesForPicker
+                    ? CurrencySelectionSupport.pickerCodes()
                     : viewModel.state.availableCurrencies,
                 searchText: $displayCurrencySearchText,
                 selectedCodes: favoriteCodes,
@@ -1995,7 +1996,15 @@ private struct FinanceDynamicsContentView: View {
                 currentSelection: viewModel.state.displayCurrency,
                 primaryPinnedCode: SettingsManager.shared.primaryCurrencyCode,
                 onToggleFavorite: nil,
+                badgeForCode: { code in
+                    guard CurrencySelectionSupport.isCrypto(code), !canUseCrypto else { return nil }
+                    return .pro
+                },
                 onSelect: { code in
+                    if CurrencySelectionSupport.isCrypto(code), !canUseCrypto {
+                        showSubscriptionSheet = true
+                        return
+                    }
                     viewModel.handle(.setDisplayCurrency(code))
                     displayCurrencySearchText = ""
                     showDisplayCurrencySheet = false

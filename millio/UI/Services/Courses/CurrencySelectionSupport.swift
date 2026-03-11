@@ -142,6 +142,22 @@ public struct CurrencySelectionSupport {
         return set.sorted()
     }
 
+    /// Единый список кодов для UI-пикеров в финансах и cashflow.
+    /// Не зависит от загруженных курсов и дополнительно сохраняет любые legacy/пользовательские коды.
+    public static func pickerCodes(
+        includeCrypto: Bool = true,
+        extraCodes: [String] = []
+    ) -> [String] {
+        var codes = Set(allCodes(includeCrypto: includeCrypto))
+        for code in extraCodes {
+            let normalized = code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            if !normalized.isEmpty {
+                codes.insert(normalized)
+            }
+        }
+        return codes.sorted()
+    }
+
     // MARK: Names / Emoji
 
     public static func nameRu(for code: String) -> String? {

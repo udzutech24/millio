@@ -323,7 +323,7 @@ struct FinanceOverviewCardView: View {
             groupName: financesText(ru: "Без группы", en: "Ungrouped"),
             groupColorHex: nil,
             accountID: investment.investmentUniqueID,
-            accountName: investment.name,
+            accountName: financeViewModel.investmentDisplayName(investment),
             accountIcon: investment.category.icon,
             amount: normalized.amount,
             side: normalized.side

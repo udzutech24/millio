@@ -48,6 +48,13 @@ final class LocalizableXcstringsTests: XCTestCase {
         try assertLocalized(strings: strings, key: "profile.rate_app.dialog.feedback.action")
 
         try assertLocalized(strings: strings, key: "profile.contact.header.title")
+        try assertLocalized(strings: strings, key: "converter.settings.section_widget")
+        try assertLocalized(strings: strings, key: "converter.settings.widget.preview_title")
+        try assertLocalized(strings: strings, key: "converter.settings.widget.preview_subtitle")
+        try assertLocalized(strings: strings, key: "converter.settings.widget.how_to_title")
+        try assertLocalized(strings: strings, key: "converter.settings.widget.step_open_jiggle")
+        try assertLocalized(strings: strings, key: "converter.settings.widget.step_find_millio")
+        try assertLocalized(strings: strings, key: "converter.settings.widget.step_add_widget")
     }
 
     private static func localizableXcstringsURL() throws -> URL {

@@ -24,12 +24,19 @@ enum ConverterL10n {
     static var sectionRate: String { String(localized: "converter.settings.section_rate") }
     static var sectionPrecision: String { String(localized: "converter.settings.section_precision") }
     static var sectionFeel: String { String(localized: "converter.settings.section_feel") }
+    static var sectionWidget: String { String(localized: "converter.settings.section_widget") }
     static var rateSource: String { String(localized: "converter.settings.rate_source") }
     static var lastUpdate: String { String(localized: "converter.settings.last_update") }
     static var refreshRates: String { String(localized: "converter.settings.refresh_rates") }
     static var refreshingRates: String { String(localized: "converter.settings.refreshing_rates") }
     static var fractionDigits: String { String(localized: "converter.settings.fraction_digits") }
     static var haptics: String { String(localized: "converter.settings.haptics") }
+    static var widgetPreviewTitle: String { String(localized: "converter.settings.widget.preview_title") }
+    static var widgetPreviewSubtitle: String { String(localized: "converter.settings.widget.preview_subtitle") }
+    static var widgetHowToTitle: String { String(localized: "converter.settings.widget.how_to_title") }
+    static var widgetStepOpenJiggle: String { String(localized: "converter.settings.widget.step_open_jiggle") }
+    static var widgetStepFindMillio: String { String(localized: "converter.settings.widget.step_find_millio") }
+    static var widgetStepAddWidget: String { String(localized: "converter.settings.widget.step_add_widget") }
 
     static var cancel: String { String(localized: "converter.common.cancel") }
     static var close: String { String(localized: "converter.common.close") }
