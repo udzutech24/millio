@@ -1,5 +1,99 @@
 import Foundation
 
+enum MarketInstrumentIdentity {
+    static func canonicalQuoteLookupKey(symbol: String, exchange: String?) -> String {
+        let ticker = canonicalTicker(from: symbol)
+        guard !ticker.isEmpty else { return "" }
+
+        switch normalizedMarket(exchange: exchange, symbol: symbol) {
+        case "US":
+            return "\(ticker).US"
+        case "NASDAQ", "NYSE", "AMEX", "BATS", "IEX":
+            return ticker
+        case let market?:
+            return "\(market):\(ticker)"
+        case nil:
+            return ticker
+        }
+    }
+
+    static func fallbackQuoteLookupKeys(symbol: String, exchange: String?) -> [String] {
+        let ticker = canonicalTicker(from: symbol)
+        guard !ticker.isEmpty else { return [] }
+
+        switch normalizedMarket(exchange: exchange, symbol: symbol) {
+        case "US":
+            return unique([
+                "\(ticker).US",
+                ticker,
+                "US:\(ticker)"
+            ])
+        case "NASDAQ", "NYSE", "AMEX", "BATS", "IEX":
+            let market = normalizedMarket(exchange: exchange, symbol: symbol) ?? ""
+            return unique([
+                ticker,
+                "\(ticker).US",
+                "\(market):\(ticker)"
+            ])
+        case let market?:
+            return unique([
+                "\(market):\(ticker)",
+                ticker
+            ])
+        case nil:
+            return unique([ticker])
+        }
+    }
+
+    private static func canonicalTicker(from rawSymbol: String) -> String {
+        let trimmed = rawSymbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !trimmed.isEmpty else { return "" }
+
+        if trimmed.contains(":"),
+           let last = trimmed.split(separator: ":", maxSplits: 1).last {
+            return String(last)
+        }
+
+        if trimmed.contains("."),
+           let first = trimmed.split(separator: ".", maxSplits: 1).first {
+            return String(first)
+        }
+
+        return trimmed
+    }
+
+    private static func normalizedMarket(exchange: String?, symbol: String) -> String? {
+        if let exchange = exchange?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased(),
+           !exchange.isEmpty {
+            return exchange
+        }
+
+        let rawSymbol = symbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if rawSymbol.contains(":"),
+           let market = rawSymbol.split(separator: ":", maxSplits: 1).first {
+            let normalized = String(market).trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            return normalized.isEmpty ? nil : normalized
+        }
+
+        if rawSymbol.hasSuffix(".US") {
+            return "US"
+        }
+
+        return nil
+    }
+
+    private static func unique(_ values: [String]) -> [String] {
+        var seen: Set<String> = []
+        return values.filter { value in
+            let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            guard !normalized.isEmpty else { return false }
+            return seen.insert(normalized).inserted
+        }
+    }
+}
+
 protocol MarketDataClientProtocol: Sendable {
     func searchSymbols(query: String, outputSize: Int) async throws -> [TwelveDataSymbol]
     func latestPrice(symbol: String, forceRefresh: Bool) async throws -> Double?
@@ -52,6 +146,10 @@ struct TwelveDataSymbol: Codable, Identifiable, Equatable, Sendable {
     var displayName: String {
         let trimmed = instrumentName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmed.isEmpty ? symbol : trimmed
+    }
+
+    var canonicalQuoteLookupKey: String {
+        MarketInstrumentIdentity.canonicalQuoteLookupKey(symbol: symbol, exchange: exchange)
     }
 
     init(
@@ -133,6 +231,10 @@ struct AssetSummary: Codable, Equatable, Sendable {
 
     var updatedAtDate: Date? {
         MarketAPIClient.date(from: updatedAt)
+    }
+
+    var canonicalQuoteLookupKey: String {
+        MarketInstrumentIdentity.canonicalQuoteLookupKey(symbol: symbol, exchange: exchange)
     }
 }
 

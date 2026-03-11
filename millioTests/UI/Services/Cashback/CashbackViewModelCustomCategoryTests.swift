@@ -116,9 +116,10 @@ struct CashbackViewModelCustomCategoryTests {
         #expect(viewModel.state.customCategories.first?.icon == "🍩")
     }
 
-    @Test("Системные категории кэшбэка используют emoji по умолчанию")
+    @Test("Системные категории кэшбэка используют ожидаемые иконки по умолчанию")
     func testSystemCashbackCategoryIconsAreEmoji() {
-        #expect((35...40).contains(CashbackCategory.allCases.count))
+        #expect((36...41).contains(CashbackCategory.allCases.count))
+        #expect(CashbackCategory.allPurchases.icon == "🛒")
         #expect(CashbackCategory.gasStation.icon == "⛽️")
         #expect(CashbackCategory.supermarket.icon == "🛒")
         #expect(CashbackCategory.restaurant.icon == "🍽️")
@@ -134,6 +135,21 @@ struct CashbackViewModelCustomCategoryTests {
         #expect(CashbackCategory.marketplaces.icon == "📦")
         #expect(CashbackCategory.online.icon == "🌐")
         #expect(CashbackCategory.other.icon == "🧩")
+    }
+
+    @Test("Легаси кастомная категория с дефолтной корзиной получает системную иконку по имени")
+    func testLegacyCustomCategoryUsesResolvedSystemIcon() throws {
+        let context = try createModelContext()
+        let customCategory = CashbackCustomCategory(name: "Такси", icon: CashbackCustomCategory.defaultIcon)
+        context.insert(customCategory)
+        try context.save()
+
+        let viewModel = CashbackViewModel(modelContext: context)
+        let option = viewModel.categoryOption(for: "\(Cashback.customCategoryPrefix)\(customCategory.categoryID)")
+
+        #expect(option.displayName == "Такси")
+        #expect(option.icon == CashbackCategory.taxi.icon)
+        #expect(option.isCustom)
     }
 
     @Test("updateCashbacksForCard сохраняет кастомную категорию в кэшбэке")
@@ -596,6 +612,52 @@ struct CashbackViewModelCustomCategoryTests {
             defaults: defaults
         )
         #expect(second.isFavoriteCategory(rawValue: CashbackCategory.restaurant.rawValue))
+    }
+
+    @Test("Импортный дубль системной категории не попадает в избранное отдельной строкой")
+    func testFavoriteCategoryOptionsDeduplicateImportedAliases() throws {
+        let context = try createModelContext()
+        let viewModel = CashbackViewModel(modelContext: context, defaults: makeDefaults())
+
+        _ = viewModel.createCustomCategory("Такси", icon: CashbackCustomCategory.defaultIcon)
+
+        let options = viewModel.favoriteCategoryOptions()
+        let taxiOptions = options.filter { $0.rawValue == CashbackCategory.taxi.rawValue }
+
+        #expect(taxiOptions.count == 1)
+        #expect(taxiOptions.first?.displayName == CashbackCategory.taxi.displayName)
+        #expect(taxiOptions.first?.isCustom == false)
+    }
+
+    @Test("Избранное схлопывает импортный алиас в каноническую системную категорию")
+    func testFavoriteCategoriesCanonicalizeImportedAliases() throws {
+        let context = try createModelContext()
+        let defaults = makeDefaults()
+        let now = monthDate(year: 2026, month: 2)
+        let customCategory = CashbackCustomCategory(name: "Комфорт+", icon: CashbackCustomCategory.defaultIcon)
+        context.insert(customCategory)
+
+        let aliasCashback = Cashback(
+            name: "Комфорт+",
+            categoryRaw: "\(Cashback.customCategoryPrefix)\(customCategory.categoryID)",
+            percentage: 7,
+            cardIDs: [],
+            monthKey: Cashback.monthKey(for: now)
+        )
+        context.insert(aliasCashback)
+        try context.save()
+
+        let viewModel = CashbackViewModel(
+            modelContext: context,
+            now: { now },
+            defaults: defaults
+        )
+
+        viewModel.handle(.toggleFavoriteCategory(rawValue: aliasCashback.categoryRaw))
+
+        #expect(viewModel.isFavoriteCategory(rawValue: CashbackCategory.taxi.rawValue))
+        #expect(viewModel.isFavoriteCategory(rawValue: aliasCashback.categoryRaw, fallbackName: aliasCashback.name))
+        #expect(viewModel.state.visibleCashbacks.first?.name == "Комфорт+")
     }
 
     @Test("Переименование кастомной категории в системную переносит избранное")

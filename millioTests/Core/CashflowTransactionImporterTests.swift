@@ -29,7 +29,8 @@ struct CashflowTransactionImporterTests {
             "updatedAt": now.timeIntervalSince1970,
             "transactionUniqueID": "expense|\(now.timeIntervalSince1970)|123.45|\(now.timeIntervalSince1970)",
             "recurrenceRuleRaw": "monthly",
-            "recurrenceSeriesID": "series-001"
+            "recurrenceSeriesID": "series-001",
+            "affectsCardBalance": false
         ]
         
         let context = makeContext()
@@ -41,5 +42,6 @@ struct CashflowTransactionImporterTests {
         #expect(fetched.first?.amount == 123.45)
         #expect(fetched.first?.recurrenceRule == .monthly)
         #expect(fetched.first?.recurrenceSeriesID == "series-001")
+        #expect(fetched.first?.affectsCardBalance == false)
     }
 }

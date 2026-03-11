@@ -50,6 +50,10 @@ struct CashbackImportCategoryResolver {
         map[normalize("Транспорт")] = .transport
         map[normalize("Transport")] = .transport
         map[normalize("Такси")] = .taxi
+        map[normalize("Яндекс Такси")] = .taxi
+        map[normalize("Комфорт")] = .taxi
+        map[normalize("Комфорт+")] = .taxi
+        map[normalize("Ultima")] = .taxi
         map[normalize("Taxi")] = .taxi
         map[normalize("Развлечения")] = .entertainment
         map[normalize("Entertainment")] = .entertainment
@@ -62,6 +66,10 @@ struct CashbackImportCategoryResolver {
         map[normalize("Home repair")] = .homeRepair
         map[normalize("Детские товары")] = .kids
         map[normalize("Kids goods")] = .kids
+        map[normalize("Яндекс Лавка")] = .supermarket
+        map[normalize("Лавка")] = .supermarket
+        map[normalize("Цветы")] = .flowersGifts
+        map[normalize("Цветы и подарки")] = .flowersGifts
         map[normalize("Telecom")] = .telecom
         map[normalize("Internet")] = .internet
 
@@ -78,7 +86,7 @@ struct CashbackImportCategoryResolver {
         Rule(category: .pharmacy, keywords: ["аптек", "pharmac", "drugstore"]),
         Rule(category: .healthcare, keywords: ["медицин", "клиник", "healthcare", "medical clinic"]),
         Rule(category: .transport, keywords: ["транспорт", "каршеринг", "transport", "public transit"]),
-        Rule(category: .taxi, keywords: ["такси", "taxi"]),
+        Rule(category: .taxi, keywords: ["такси", "taxi", "комфорт", "ultima"]),
         Rule(category: .entertainment, keywords: ["развлеч", "кино", "театр", "entertainment", "movie", "cinema"]),
         Rule(category: .online, keywords: ["онлайн", "интернет", "маркетплейс", "online", "internet"]),
         Rule(category: .hotels, keywords: ["отел", "гостиниц", "hotel"]),
@@ -86,7 +94,9 @@ struct CashbackImportCategoryResolver {
         Rule(category: .electronics, keywords: ["техник", "электрон", "electronic", "gadget"]),
         Rule(category: .homeRepair, keywords: ["дом и ремонт", "ремонт", "home repair"]),
         Rule(category: .kids, keywords: ["детск", "kids"]),
-        Rule(category: .telecom, keywords: ["связ", "mobile", "telecom", "cellular"])
+        Rule(category: .telecom, keywords: ["связ", "mobile", "telecom", "cellular"]),
+        Rule(category: .supermarket, keywords: ["лавка", "супермаркет", "продукт", "supermarket", "grocery"]),
+        Rule(category: .flowersGifts, keywords: ["цвет", "подар", "flowers", "gift"])
     ]
 
     func resolveSystemCategoryRaw(for importedName: String) -> String? {
@@ -104,6 +114,24 @@ struct CashbackImportCategoryResolver {
         }
 
         return nil
+    }
+
+    /// Import flow must stay conservative: bank tariff labels should remain custom categories,
+    /// otherwise we silently destroy user intent during screenshot/manual import.
+    func resolveSystemCategoryRawForImport(_ importedName: String) -> String? {
+        let normalizedImported = Self.normalize(importedName)
+        guard !normalizedImported.isEmpty else { return nil }
+
+        switch normalizedImported {
+        case Self.normalize("Комфорт"),
+             Self.normalize("Комфорт+"),
+             Self.normalize("Ultima"):
+            return nil
+        default:
+            break
+        }
+
+        return resolveSystemCategoryRaw(for: importedName)
     }
 
     private static func normalize(_ value: String) -> String {

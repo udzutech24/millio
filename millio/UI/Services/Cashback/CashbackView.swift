@@ -374,10 +374,10 @@ private struct CashbackFavoriteCategoriesSheet: View {
     @State private var categoryEditorSourceRaw: String?
 
     private var categoryOptions: [CashbackCategoryOption] {
-        let options = viewModel.categoryOptions(matching: searchText)
+        let options = viewModel.favoriteCategoryOptions(matching: searchText)
         return options.sorted { lhs, rhs in
-            let lhsFavorite = viewModel.isFavoriteCategory(rawValue: lhs.rawValue)
-            let rhsFavorite = viewModel.isFavoriteCategory(rawValue: rhs.rawValue)
+            let lhsFavorite = viewModel.isFavoriteCategory(rawValue: lhs.rawValue, fallbackName: lhs.displayName)
+            let rhsFavorite = viewModel.isFavoriteCategory(rawValue: rhs.rawValue, fallbackName: rhs.displayName)
             if lhsFavorite != rhsFavorite { return lhsFavorite && !rhsFavorite }
             return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
         }
@@ -405,7 +405,10 @@ private struct CashbackFavoriteCategoriesSheet: View {
                     ScrollView {
                         VStack(spacing: 0) {
                             ForEach(Array(categoryOptions.enumerated()), id: \.element.rawValue) { index, category in
-                                let isFavorite = viewModel.isFavoriteCategory(rawValue: category.rawValue)
+                                let isFavorite = viewModel.isFavoriteCategory(
+                                    rawValue: category.rawValue,
+                                    fallbackName: category.displayName
+                                )
                                 HStack(spacing: 12) {
                                     Button {
                                         openCategoryEditor(for: category)
@@ -588,16 +591,15 @@ private struct CashbackRowView: View {
     let cashback: Cashback
     @ObservedObject var viewModel: CashbackViewModel
 
-    private var isFavoriteCategory: Bool {
-        viewModel.isFavoriteCategory(rawValue: cashback.categoryRaw)
-    }
-
     var body: some View {
         let categoryOption = viewModel.categoryOption(
             for: cashback.categoryRaw,
             fallbackName: cashback.name
         )
-        let isFavorite = isFavoriteCategory
+        let isFavorite = viewModel.isFavoriteCategory(
+            rawValue: cashback.categoryRaw,
+            fallbackName: cashback.name
+        )
         let isPinned = viewModel.isPinnedCashback(cashback)
 
         HStack(spacing: 14) {
@@ -611,7 +613,7 @@ private struct CashbackRowView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
-                    Text(cashback.displayCategoryName)
+                    Text(categoryOption.displayName)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                         .lineLimit(1)

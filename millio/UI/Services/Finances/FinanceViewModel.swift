@@ -146,6 +146,10 @@ struct FinanceState {
     
     /// Сообщение об ошибке или предупреждении при конвертации валют
     var currencyConversionWarning: String? = nil
+
+    /// Закрываемое уведомление о том, что часть ручного обновления не выполнилась.
+    var refreshIssueMessage: String? = nil
+    var showRefreshIssue: Bool = false
 }
 
 enum InvestmentOrderSide: Hashable {
@@ -600,6 +604,7 @@ final class FinanceViewModel: ViewModelProtocol {
         
         let investmentDescriptor = FetchDescriptor<Investment>()
         let allInvestments = (try? modelContext.fetch(investmentDescriptor)) ?? []
+        normalizeMarketQuoteLookupKeys(allInvestments)
         state.availableInvestments = allInvestments.filter { $0.archivedAt == nil }
         state.archivedInvestments = allInvestments.filter { $0.archivedAt != nil }
 
@@ -633,6 +638,33 @@ final class FinanceViewModel: ViewModelProtocol {
             } catch {
                 AppLogger.log(.error, category: "Finance", "Failed to normalize credits includeInTotal: \(error.localizedDescription)")
             }
+        }
+    }
+
+    private func normalizeMarketQuoteLookupKeys(_ investments: [Investment]) {
+        var requiresSave = false
+
+        for investment in investments where investment.isMarketPriced {
+            let rawSymbol = investment.marketSymbol?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .uppercased() ?? ""
+            guard !rawSymbol.isEmpty else { continue }
+
+            let normalizedKey = MarketInstrumentIdentity.canonicalQuoteLookupKey(
+                symbol: rawSymbol,
+                exchange: investment.marketExchange
+            )
+            if !normalizedKey.isEmpty, investment.marketQuoteLookupKey != normalizedKey {
+                investment.marketQuoteLookupKey = normalizedKey
+                requiresSave = true
+            }
+        }
+
+        guard requiresSave else { return }
+        do {
+            try modelContext.save()
+        } catch {
+            AppLogger.log(.error, category: "Finance", "Failed to normalize market quote lookup keys: \(error.localizedDescription)")
         }
     }
     
@@ -1461,6 +1493,7 @@ final class FinanceViewModel: ViewModelProtocol {
         state.isLoadingRates = true
         defer { state.isLoadingRates = false }
         await refreshCurrencyQuotes(forceRefresh: true)
+        presentRefreshIssueIfNeeded(message: state.currencyConversionWarning)
     }
 
     private func refreshCurrencyQuotes(forceRefresh: Bool) async {
@@ -1477,10 +1510,12 @@ final class FinanceViewModel: ViewModelProtocol {
     func refreshStockPrices() async {
         state.isLoadingRates = true
         defer { state.isLoadingRates = false }
-        await refreshStockPrices(forceRefresh: true)
+        let failedSymbols = await refreshStockPrices(forceRefresh: true)
+        presentRefreshIssueIfNeeded(message: stockRefreshIssueMessage(for: failedSymbols))
     }
 
-    private func refreshStockPrices(forceRefresh: Bool) async {
+    @discardableResult
+    private func refreshStockPrices(forceRefresh: Bool) async -> [String] {
         let descriptor = FetchDescriptor<Investment>()
         let activeStocks = ((try? modelContext.fetch(descriptor)) ?? []).filter {
             $0.archivedAt == nil && $0.category == .stocks && $0.isMarketPriced
@@ -1488,38 +1523,49 @@ final class FinanceViewModel: ViewModelProtocol {
 
         guard !activeStocks.isEmpty else {
             await refreshGroupTotalsAndAmounts()
-            return
+            return []
         }
 
         var didUpdateAnyPrice = false
+        var failedSymbols = Set<String>()
 
         for stock in activeStocks {
-            guard let symbol = stock.marketSymbol?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .uppercased(),
-                !symbol.isEmpty else {
+            let lookupSymbols = stockQuoteLookupSymbols(for: stock)
+            guard !lookupSymbols.isEmpty else {
+                failedSymbols.insert(stock.name.trimmingCharacters(in: .whitespacesAndNewlines))
                 continue
             }
 
-            do {
-                guard let latestPrice = try await marketDataClient.latestPrice(
-                    symbol: symbol,
-                    forceRefresh: forceRefresh
-                ), latestPrice > 0 else {
-                    continue
-                }
+            var refreshed = false
 
-                stock.lastKnownUnitPrice = latestPrice
-                stock.lastKnownPriceUpdatedAt = Date()
-                stock.recalculateAmountFromPosition()
-                stock.updatedAt = Date()
-                didUpdateAnyPrice = true
-            } catch {
-                AppLogger.log(
-                    .warning,
-                    category: "Finance",
-                    "Failed to refresh stock quote for \(symbol): \(error.localizedDescription)"
-                )
+            for symbol in lookupSymbols {
+                do {
+                    guard let latestPrice = try await marketDataClient.latestPrice(
+                        symbol: symbol,
+                        forceRefresh: forceRefresh
+                    ), latestPrice > 0 else {
+                        continue
+                    }
+
+                    stock.lastKnownUnitPrice = latestPrice
+                    stock.lastKnownPriceUpdatedAt = Date()
+                    stock.marketQuoteLookupKey = symbol
+                    stock.recalculateAmountFromPosition()
+                    stock.updatedAt = Date()
+                    didUpdateAnyPrice = true
+                    refreshed = true
+                    break
+                } catch {
+                    AppLogger.log(
+                        .warning,
+                        category: "Finance",
+                        "Failed to refresh stock quote for \(symbol): \(error.localizedDescription)"
+                    )
+                }
+            }
+
+            if !refreshed {
+                failedSymbols.insert(stockDisplaySymbol(stock))
             }
         }
 
@@ -1533,11 +1579,74 @@ final class FinanceViewModel: ViewModelProtocol {
 
         loadAccounts()
         await refreshGroupTotalsAndAmounts()
+        return failedSymbols
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .sorted()
     }
 
     /// Backward-compatible alias. Prefer `refreshCurrencyQuotes()`.
     func refreshRates() async {
         await refreshCurrencyQuotes()
+    }
+
+    func dismissRefreshIssue() {
+        state.showRefreshIssue = false
+        state.refreshIssueMessage = nil
+    }
+
+    private func presentRefreshIssueIfNeeded(message: String?) {
+        guard let normalizedMessage = normalizedRefreshIssueMessage(message) else {
+            dismissRefreshIssue()
+            return
+        }
+        state.refreshIssueMessage = normalizedMessage
+        state.showRefreshIssue = true
+    }
+
+    private func normalizedRefreshIssueMessage(_ message: String?) -> String? {
+        guard let message else { return nil }
+        let normalized = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    private func stockRefreshIssueMessage(for failedSymbols: [String]) -> String? {
+        guard !failedSymbols.isEmpty else { return nil }
+        let label = FinancesL10n.text(
+            locale: .current,
+            ru: "Не обновились акции",
+            en: "Failed to refresh stocks"
+        )
+        return "\(label): \(failedSymbols.joined(separator: ", "))"
+    }
+
+    private func stockQuoteLookupSymbols(for investment: Investment) -> [String] {
+        let rawSymbol = stockDisplaySymbol(investment)
+        guard !rawSymbol.isEmpty else { return [] }
+
+        let canonicalKey = investment.marketQuoteLookupKey?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+        let fallbacks = MarketInstrumentIdentity.fallbackQuoteLookupKeys(
+            symbol: rawSymbol,
+            exchange: investment.marketExchange
+        )
+        return uniqueQuoteSymbols(([canonicalKey].compactMap { $0 }) + fallbacks)
+    }
+
+    private func stockDisplaySymbol(_ investment: Investment) -> String {
+        investment.marketSymbol?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased() ?? ""
+    }
+
+    private func uniqueQuoteSymbols(_ values: [String]) -> [String] {
+        var seen: Set<String> = []
+        return values.filter { value in
+            let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            guard !normalized.isEmpty else { return false }
+            return seen.insert(normalized).inserted
+        }
     }
     
     private func deleteGroup(_ group: FinanceGroup) {

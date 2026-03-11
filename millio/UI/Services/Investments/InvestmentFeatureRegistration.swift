@@ -47,6 +47,8 @@ struct InvestmentImporter: ModelImporter {
         let hasInitialAmount = data["hasInitialAmount"] as? Bool
         let marketSymbol = data["marketSymbol"] as? String
         let marketExchange = data["marketExchange"] as? String
+        let marketQuoteLookupKey = data["marketQuoteLookupKey"] as? String
+        let marketMICCode = data["marketMICCode"] as? String
         let marketCurrency = data["marketCurrency"] as? String
         let marketQuantity = data["marketQuantity"] as? Double
         let lastKnownUnitPrice = data["lastKnownUnitPrice"] as? Double
@@ -83,6 +85,8 @@ struct InvestmentImporter: ModelImporter {
             existingInvestment.updatedAt = Date(timeIntervalSince1970: updatedAt)
             existingInvestment.marketSymbol = marketSymbol
             existingInvestment.marketExchange = marketExchange
+            existingInvestment.marketQuoteLookupKey = marketQuoteLookupKey
+            existingInvestment.marketMICCode = marketMICCode
             existingInvestment.marketCurrency = marketCurrency
             existingInvestment.marketQuantity = marketQuantity
             existingInvestment.lastKnownUnitPrice = lastKnownUnitPrice
@@ -128,6 +132,8 @@ struct InvestmentImporter: ModelImporter {
         }
         investment.marketSymbol = marketSymbol
         investment.marketExchange = marketExchange
+        investment.marketQuoteLookupKey = marketQuoteLookupKey
+        investment.marketMICCode = marketMICCode
         investment.marketCurrency = marketCurrency
         investment.marketQuantity = marketQuantity
         investment.lastKnownUnitPrice = lastKnownUnitPrice

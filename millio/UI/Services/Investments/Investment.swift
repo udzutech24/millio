@@ -114,6 +114,12 @@ final class Investment: Persistable {
     /// Биржа/площадка котировки (если доступно)
     var marketExchange: String?
 
+    /// Канонический ключ инструмента для quote endpoint провайдера.
+    var marketQuoteLookupKey: String?
+
+    /// MIC-код площадки, если доступен из search API.
+    var marketMICCode: String?
+
     /// Валюта котировки инструмента
     var marketCurrency: String?
 
@@ -347,6 +353,12 @@ final class Investment: Persistable {
         }
         if let marketExchange {
             dict["marketExchange"] = marketExchange
+        }
+        if let marketQuoteLookupKey {
+            dict["marketQuoteLookupKey"] = marketQuoteLookupKey
+        }
+        if let marketMICCode {
+            dict["marketMICCode"] = marketMICCode
         }
         if let marketCurrency {
             dict["marketCurrency"] = marketCurrency

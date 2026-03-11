@@ -20,6 +20,8 @@ struct BackupManagementView: View {
     @State private var passphraseConfirmation: String = ""
     @State private var isPassphraseVisible = false
     @State private var isPassphraseConfirmed = false
+    @State private var isPassphraseEditorExpanded = true
+    @State private var isHydratingStoredPassphrase = false
     @State private var encryptionMode: BackupEncryptionMode = .deviceKey
     @State private var backupVersions: [BackupVersionInfo] = []
     @State private var deletingRecordName: String?
@@ -65,6 +67,10 @@ struct BackupManagementView: View {
 
     private var isPassphraseReadyForBackup: Bool {
         encryptionMode != .passphrase || (isPassphraseValid && isPassphraseConfirmed)
+    }
+
+    private var hasConfirmedPassphrase: Bool {
+        isPassphraseConfirmed && !trimmedPassphrase.isEmpty
     }
 
     private var isBackupOperational: Bool {
@@ -214,10 +220,8 @@ struct BackupManagementView: View {
             let isDeviceKeyEnabled = SettingsManager.shared.isEncryptionEnabled
             encryptionMode = isDeviceKeyEnabled ? .deviceKey : .passphrase
 
-            if let stored = BackupPassphraseStore.load(), !stored.isEmpty {
-                passphrase = stored
-                passphraseConfirmation = stored
-                isPassphraseConfirmed = true
+            if !hydrateStoredPassphrase() {
+                isPassphraseEditorExpanded = true
             }
 
             Task { await refreshStatusIfNeeded() }
@@ -233,10 +237,14 @@ struct BackupManagementView: View {
             }
         }
         .onChange(of: passphrase) { _, _ in
+            guard !isHydratingStoredPassphrase else { return }
             isPassphraseConfirmed = false
+            isPassphraseEditorExpanded = true
         }
         .onChange(of: passphraseConfirmation) { _, _ in
+            guard !isHydratingStoredPassphrase else { return }
             isPassphraseConfirmed = false
+            isPassphraseEditorExpanded = true
         }
     }
 
@@ -371,10 +379,12 @@ struct BackupManagementView: View {
                     switch newValue {
                     case .deviceKey:
                         SettingsManager.shared.isEncryptionEnabled = true
-                        isPassphraseConfirmed = false
                         focusedField = nil
                     case .passphrase:
                         SettingsManager.shared.isEncryptionEnabled = false
+                        if !hydrateStoredPassphrase() {
+                            isPassphraseEditorExpanded = true
+                        }
                     }
                 }
 
@@ -388,8 +398,8 @@ struct BackupManagementView: View {
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundStyle(AppColors.textPrimary)
                                 Text(
-                                    isPassphraseConfirmed
-                                        ? BackupL10n.tr("backup.passphrase.section.subtitle.confirmed", fallback: "Passphrase confirmed")
+                                    hasConfirmedPassphrase && !isPassphraseEditorExpanded
+                                        ? BackupL10n.tr("backup.passphrase.section.subtitle.confirmed", fallback: "Saved and ready to use")
                                         : BackupL10n.tr("backup.passphrase.section.subtitle.input", fallback: "Enter and confirm")
                                 )
                                     .font(.system(size: 12, weight: .regular))
@@ -399,9 +409,9 @@ struct BackupManagementView: View {
 
                             Spacer()
 
-                            if isPassphraseConfirmed {
-                                Button(BackupL10n.tr("backup.passphrase.edit", fallback: "Edit")) {
-                                    isPassphraseConfirmed = false
+                            if hasConfirmedPassphrase {
+                                Button(BackupL10n.tr("backup.passphrase.edit", fallback: "Change passphrase")) {
+                                    isPassphraseEditorExpanded = true
                                     focusedField = .passphrase
                                 }
                                 .font(.system(size: 13, weight: .semibold))
@@ -412,8 +422,8 @@ struct BackupManagementView: View {
                         .padding(.top, 12)
                         .padding(.bottom, 8)
 
-                        if isPassphraseConfirmed {
-                            passphraseConfirmedSummary
+                        if hasConfirmedPassphrase && !isPassphraseEditorExpanded {
+                            passphraseCollapsedSummary
                                 .padding(.horizontal, 14)
                                 .padding(.bottom, 12)
                         } else {
@@ -819,9 +829,25 @@ struct BackupManagementView: View {
         return date.formatted(date: .abbreviated, time: .shortened)
     }
 
+    @discardableResult
+    private func hydrateStoredPassphrase() -> Bool {
+        guard let stored = BackupPassphraseStore.load(), !stored.isEmpty else {
+            return false
+        }
+
+        isHydratingStoredPassphrase = true
+        passphrase = stored
+        passphraseConfirmation = stored
+        isPassphraseConfirmed = true
+        isPassphraseEditorExpanded = false
+        isHydratingStoredPassphrase = false
+        return true
+    }
+
     private func confirmPassphraseIfPossible() {
         guard isPassphraseValid else { return }
         isPassphraseConfirmed = true
+        isPassphraseEditorExpanded = false
         focusedField = nil
         _ = BackupPassphraseStore.save(trimmedPassphrase)
     }
@@ -891,7 +917,7 @@ struct BackupManagementView: View {
         .disabled(!isEnabled)
     }
 
-    private var passphraseConfirmedSummary: some View {
+    private var passphraseCollapsedSummary: some View {
         HStack(spacing: 10) {
             Image(systemName: "checkmark.shield.fill")
                 .font(.system(size: 15, weight: .semibold))
@@ -900,10 +926,10 @@ struct BackupManagementView: View {
                 .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(BackupL10n.tr("backup.passphrase.summary.title", fallback: "Passphrase is ready"))
+                Text(BackupL10n.tr("backup.passphrase.summary.title", fallback: "Saved"))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
-                Text(BackupL10n.tr("backup.passphrase.summary.subtitle", fallback: "Passphrase is saved. You can change it anytime."))
+                Text(BackupL10n.tr("backup.passphrase.summary.subtitle", fallback: "Used for backup and restore. Change it only if needed."))
                     .font(.system(size: 11, weight: .regular))
                     .foregroundStyle(AppColors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)

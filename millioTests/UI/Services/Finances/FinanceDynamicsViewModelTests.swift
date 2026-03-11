@@ -902,6 +902,75 @@ struct FinanceDynamicsViewModelTests {
         #expect(abs(balanceWithFlag - 5000) < 0.01)
     }
 
+    @Test("History-only доходы и расходы не искажают исторический баланс карты")
+    func testHistoryOnlyCashflowTransactionsDoNotAffectDynamicsBalance() async throws {
+        let modelContext = try createTestModelContext()
+        let operationDate = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 10, hour: 12)) ?? Date()
+
+        let card = Card(
+            name: "History only",
+            cardNumber: "7777",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 1_000
+        )
+        card.initialBalance = 1_000
+        card.hasInitialBalance = true
+        modelContext.insert(card)
+
+        let group = FinanceGroup(name: "Тест", colorHex: "#FFFFFF")
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+
+        modelContext.insert(
+            CashflowTransaction(
+                transactionType: .expense,
+                amount: 200,
+                currency: "RUB",
+                transactionDate: operationDate,
+                cardID: card.cardUniqueID,
+                expenseCategoryRaw: ExpenseCategory.groceries.rawValue,
+                affectsCardBalance: false
+            )
+        )
+        modelContext.insert(
+            CashflowTransaction(
+                transactionType: .income,
+                amount: 350,
+                currency: "RUB",
+                transactionDate: operationDate,
+                cardID: card.cardUniqueID,
+                incomeCategoryRaw: IncomeCategory.salary.rawValue,
+                affectsCardBalance: false
+            )
+        )
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+
+        let balance = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: operationDate,
+            accountCardIDs: [card.cardUniqueID]
+        )
+
+        #expect(abs(balance - 1_000) < 0.01)
+    }
+
     @Test("Конвертация в динамике нормализует валютные пары")
     func testDynamicsConversionNormalizesCurrencyPair() async throws {
         let modelContext = try createTestModelContext()

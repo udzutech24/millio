@@ -376,6 +376,25 @@ private struct FinancesMainTabView: View {
                     }
                 }
             }
+
+            VStack {
+                Spacer()
+                if let message = viewModel.state.refreshIssueMessage {
+                    ToastView(
+                        message: message,
+                        isPresented: Binding(
+                            get: { viewModel.state.showRefreshIssue },
+                            set: { isPresented in
+                                if isPresented {
+                                    viewModel.state.showRefreshIssue = true
+                                } else {
+                                    viewModel.dismissRefreshIssue()
+                                }
+                            }
+                        )
+                    )
+                }
+            }
         }
     }
     

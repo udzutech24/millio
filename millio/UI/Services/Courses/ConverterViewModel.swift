@@ -854,6 +854,7 @@ final class ConverterViewModel: ViewModelProtocol {
         if state.isFetchingRates { return }
 
         let requiredCrypto = requiredCryptoCodes()
+        let requestedCodes = requestedRefreshCodes()
         let needsCryptoBackfill = hasMissingCryptoRates(for: requiredCrypto)
         
         let now = Date().timeIntervalSince1970
@@ -870,6 +871,7 @@ final class ConverterViewModel: ViewModelProtocol {
                 storedCachedRates = state.allRates
                 syncWidgetConverterSnapshot()
             }
+            presentRefreshIssueIfNeeded(for: missingRequestedCodes(from: requestedCodes))
             return
         }
         
@@ -885,39 +887,15 @@ final class ConverterViewModel: ViewModelProtocol {
             // Фильтруем выбранные валюты, оставляя только те, что есть в новом источнике
             filterSelectedCurrenciesToAvailable()
             syncWidgetConverterSnapshot()
+            presentRefreshIssueIfNeeded(for: missingRequestedCodes(from: requestedCodes))
             
             // Тактильный отклик теперь только в UI при нажатии на кнопку
         } catch {
             state.isOffline = true
-            
-            // Показываем ошибку в тостере
-            let errorMessage: String
-            if let urlError = error as? URLError {
-                switch urlError.code {
-                case .notConnectedToInternet, .networkConnectionLost:
-                    errorMessage = ConverterL10n.noInternetError
-                case .timedOut:
-                    errorMessage = ConverterL10n.timeoutError
-                case .badServerResponse:
-                    errorMessage = ConverterL10n.serverError(source: state.rateSource.title)
-                case .cannotParseResponse:
-                    errorMessage = ConverterL10n.parseError(source: state.rateSource.title)
-                default:
-                    errorMessage = ConverterL10n.genericUpdateError
-                }
-            } else {
-                errorMessage = ConverterL10n.genericUpdateError
-            }
-            
-            state.toastMessage = errorMessage
-            state.showToast = true
-            
-            // Автоматически скрываем тостер через 3 секунды
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 3_000_000_000)
-                state.showToast = false
-                state.toastMessage = nil
-            }
+            presentRefreshIssueIfNeeded(
+                for: requestedCodes,
+                fallback: errorRefreshMessage(for: requestedCodes, error: error)
+            )
         }
     }
     
@@ -1119,8 +1097,77 @@ final class ConverterViewModel: ViewModelProtocol {
             .sorted()
     }
 
+    private func requestedRefreshCodes() -> [String] {
+        Set((state.selectedCurrencies + [state.activeCode]).map { $0.uppercased() })
+            .filter { !$0.isEmpty && $0 != "USD" }
+            .sorted()
+    }
+
+    private func missingRequestedCodes(from requestedCodes: [String]) -> [String] {
+        requestedCodes.filter { state.allRates[$0] == nil }
+    }
+
     private func hasMissingCryptoRates(for codes: [String]) -> Bool {
         codes.contains { (state.allRates[$0] ?? 0) <= 0 }
+    }
+
+    func dismissToast() {
+        state.showToast = false
+        state.toastMessage = nil
+    }
+
+    private func presentRefreshIssueIfNeeded(for codes: [String], fallback: String? = nil) {
+        if let message = refreshIssueMessage(for: codes) ?? fallback {
+            state.toastMessage = message
+            state.showToast = true
+        } else {
+            dismissToast()
+        }
+    }
+
+    private func refreshIssueMessage(for codes: [String]) -> String? {
+        guard !codes.isEmpty else { return nil }
+        let prefix = localizedRefreshIssuePrefix()
+        return "\(prefix): \(codes.joined(separator: ", "))"
+    }
+
+    private func errorRefreshMessage(for codes: [String], error: Error) -> String {
+        if !codes.isEmpty {
+            return refreshIssueMessage(for: codes) ?? localizedRefreshFallbackMessage()
+        }
+
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .notConnectedToInternet, .networkConnectionLost:
+                return ConverterL10n.noInternetError
+            case .timedOut:
+                return ConverterL10n.timeoutError
+            case .badServerResponse:
+                return ConverterL10n.serverError(source: state.rateSource.title)
+            case .cannotParseResponse:
+                return ConverterL10n.parseError(source: state.rateSource.title)
+            default:
+                return localizedRefreshFallbackMessage()
+            }
+        }
+
+        return localizedRefreshFallbackMessage()
+    }
+
+    private func localizedRefreshIssuePrefix() -> String {
+        let languageCode = Locale.current.identifier
+            .split(whereSeparator: { $0 == "-" || $0 == "_" })
+            .first?
+            .lowercased() ?? ""
+        return languageCode == "ru" ? "Не обновились курсы" : "Failed to refresh rates"
+    }
+
+    private func localizedRefreshFallbackMessage() -> String {
+        let languageCode = Locale.current.identifier
+            .split(whereSeparator: { $0 == "-" || $0 == "_" })
+            .first?
+            .lowercased() ?? ""
+        return languageCode == "ru" ? "Курсы не обновились." : "Rates were not refreshed."
     }
 
     /// Догружает crypto-курсы в формате "1 USD = X CRYPTO" и мержит в текущий словарь.

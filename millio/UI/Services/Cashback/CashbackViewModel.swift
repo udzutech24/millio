@@ -216,6 +216,24 @@ final class CashbackViewModel: ViewModelProtocol {
         }
     }
 
+    /// Категории для экрана избранного без дублей по смыслу.
+    /// Импортные кастомные ярлыки схлопываются в системную категорию, если резолвер знает эквивалент.
+    func favoriteCategoryOptions(matching query: String = "") -> [CashbackCategoryOption] {
+        let options = categoryOptions(matching: query)
+        var uniqueByCanonicalRaw: [String: CashbackCategoryOption] = [:]
+
+        for option in options {
+            let presented = presentedFavoriteCategoryOption(for: option)
+            if let existing = uniqueByCanonicalRaw[presented.rawValue] {
+                uniqueByCanonicalRaw[presented.rawValue] = preferredFavoriteCategoryOption(lhs: existing, rhs: presented)
+            } else {
+                uniqueByCanonicalRaw[presented.rawValue] = presented
+            }
+        }
+
+        return Array(uniqueByCanonicalRaw.values)
+    }
+
     func categoryOption(for raw: String, fallbackName: String = "") -> CashbackCategoryOption {
         if let system = CashbackCategory(rawValue: raw) {
             return CashbackCategoryOption(
@@ -237,20 +255,13 @@ final class CashbackViewModel: ViewModelProtocol {
         }
 
         let safeFallbackName = fallbackName.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let resolvedSystemRaw = importedCategoryResolver.resolveSystemCategoryRaw(for: safeFallbackName),
-           let resolvedSystem = CashbackCategory(rawValue: resolvedSystemRaw) {
-            return CashbackCategoryOption(
-                rawValue: raw,
-                displayName: safeFallbackName.isEmpty ? resolvedSystem.displayName : safeFallbackName,
-                icon: resolvedSystem.icon,
-                isCustom: true
-            )
-        }
-
         return CashbackCategoryOption(
             rawValue: raw,
             displayName: safeFallbackName.isEmpty ? CashbackCategory.other.displayName : safeFallbackName,
-            icon: CashbackCustomCategory.defaultIcon,
+            icon: resolvedIcon(
+                for: safeFallbackName.isEmpty ? CashbackCategory.other.displayName : safeFallbackName,
+                storedIcon: CashbackCustomCategory.defaultIcon
+            ),
             isCustom: true
         )
     }
@@ -261,7 +272,7 @@ final class CashbackViewModel: ViewModelProtocol {
             return categoryOption(for: CashbackCategory.other.rawValue)
         }
 
-        if let systemRaw = importedCategoryResolver.resolveSystemCategoryRaw(for: trimmed) {
+        if let systemRaw = importedCategoryResolver.resolveSystemCategoryRawForImport(trimmed) {
             return categoryOption(for: systemRaw, fallbackName: trimmed)
         }
 
@@ -273,7 +284,11 @@ final class CashbackViewModel: ViewModelProtocol {
     }
 
     func isFavoriteCategory(rawValue: String) -> Bool {
-        state.favoriteCategoryRaws.contains(rawValue)
+        state.favoriteCategoryRaws.contains(canonicalFavoriteRaw(for: rawValue))
+    }
+
+    func isFavoriteCategory(rawValue: String, fallbackName: String) -> Bool {
+        state.favoriteCategoryRaws.contains(canonicalFavoriteRaw(for: rawValue, fallbackName: fallbackName))
     }
 
     func isPinnedCashback(_ cashback: Cashback) -> Bool {
@@ -329,7 +344,7 @@ final class CashbackViewModel: ViewModelProtocol {
 
         if let systemMatch = systemCategoryOptions.first(where: {
             $0.displayName.caseInsensitiveCompare(trimmed) == .orderedSame
-        }), systemMatch.icon == normalizedIcon {
+        }) {
             return systemMatch
         }
 
@@ -628,8 +643,12 @@ final class CashbackViewModel: ViewModelProtocol {
         state.visibleCashbacks = state.cashbacks
             .filter { $0.monthKey == selectedMonthKey }
             .sorted { lhs, rhs in
-                let lhsFavorite = state.favoriteCategoryRaws.contains(lhs.categoryRaw)
-                let rhsFavorite = state.favoriteCategoryRaws.contains(rhs.categoryRaw)
+                let lhsFavorite = state.favoriteCategoryRaws.contains(
+                    canonicalFavoriteRaw(for: lhs.categoryRaw, fallbackName: lhs.name)
+                )
+                let rhsFavorite = state.favoriteCategoryRaws.contains(
+                    canonicalFavoriteRaw(for: rhs.categoryRaw, fallbackName: rhs.name)
+                )
                 if lhsFavorite != rhsFavorite { return lhsFavorite && !rhsFavorite }
                 let lhsPinned = isPinnedCashback(lhs)
                 let rhsPinned = isPinnedCashback(rhs)
@@ -770,6 +789,34 @@ final class CashbackViewModel: ViewModelProtocol {
         }
     }
 
+    private func presentedFavoriteCategoryOption(for option: CashbackCategoryOption) -> CashbackCategoryOption {
+        let canonicalRaw = canonicalFavoriteRaw(for: option.rawValue, fallbackName: option.displayName)
+        guard canonicalRaw != option.rawValue,
+              let system = CashbackCategory(rawValue: canonicalRaw) else {
+            return option
+        }
+
+        return CashbackCategoryOption(
+            rawValue: system.rawValue,
+            displayName: system.displayName,
+            icon: system.icon,
+            isCustom: false
+        )
+    }
+
+    private func preferredFavoriteCategoryOption(
+        lhs: CashbackCategoryOption,
+        rhs: CashbackCategoryOption
+    ) -> CashbackCategoryOption {
+        if lhs.isCustom != rhs.isCustom {
+            return lhs.isCustom ? rhs : lhs
+        }
+        if lhs.displayName.count != rhs.displayName.count {
+            return lhs.displayName.count < rhs.displayName.count ? lhs : rhs
+        }
+        return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending ? lhs : rhs
+    }
+
     private func resolvedIcon(for categoryName: String, storedIcon: String) -> String {
         let normalizedStoredIcon = CashbackCustomCategory.normalizeIcon(storedIcon)
         guard normalizedStoredIcon == CashbackCustomCategory.defaultIcon,
@@ -778,6 +825,25 @@ final class CashbackViewModel: ViewModelProtocol {
             return normalizedStoredIcon
         }
         return resolvedSystem.icon
+    }
+
+    private func canonicalFavoriteRaw(for rawValue: String, fallbackName: String = "") -> String {
+        if CashbackCategory(rawValue: rawValue) != nil {
+            return rawValue
+        }
+
+        if let customID = Self.customCategoryID(from: rawValue),
+           let custom = state.customCategories.first(where: { $0.categoryID == customID }),
+           let resolved = importedCategoryResolver.resolveSystemCategoryRaw(for: custom.name) {
+            return resolved
+        }
+
+        let safeFallbackName = fallbackName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let resolved = importedCategoryResolver.resolveSystemCategoryRaw(for: safeFallbackName) {
+            return resolved
+        }
+
+        return rawValue
     }
 
     private func updateCashbacksForCard(
@@ -849,13 +915,14 @@ final class CashbackViewModel: ViewModelProtocol {
     }
 
     private func toggleFavoriteCategory(rawValue: String) {
-        if state.favoriteCategoryRaws.contains(rawValue) {
-            state.favoriteCategoryRaws.remove(rawValue)
+        let canonicalRaw = canonicalFavoriteRaw(for: rawValue)
+        if state.favoriteCategoryRaws.contains(canonicalRaw) {
+            state.favoriteCategoryRaws.remove(canonicalRaw)
         } else {
-            state.favoriteCategoryRaws.insert(rawValue)
+            state.favoriteCategoryRaws.insert(canonicalRaw)
             state.pinnedCashbackKeys = Set(
                 state.pinnedCashbackKeys.filter { key in
-                    keyCategoryRaw(from: key) != rawValue
+                    canonicalFavoriteRaw(for: keyCategoryRaw(from: key)) != canonicalRaw
                 }
             )
             savePinnedCashbackKeys()
@@ -874,7 +941,9 @@ final class CashbackViewModel: ViewModelProtocol {
     }
 
     private func togglePinnedCashback(_ cashback: Cashback) {
-        if state.favoriteCategoryRaws.contains(cashback.categoryRaw) {
+        if state.favoriteCategoryRaws.contains(
+            canonicalFavoriteRaw(for: cashback.categoryRaw, fallbackName: cashback.name)
+        ) {
             return
         }
         let key = pinnedCashbackKey(for: cashback)
@@ -906,32 +975,46 @@ final class CashbackViewModel: ViewModelProtocol {
     }
 
     private func migrateCategoryPreferences(from sourceRaw: String, to targetRaw: String) {
-        guard sourceRaw != targetRaw else { return }
-        let hadFavorite = state.favoriteCategoryRaws.remove(sourceRaw) != nil
+        let canonicalSourceRaw = canonicalFavoriteRaw(for: sourceRaw)
+        let canonicalTargetRaw = canonicalFavoriteRaw(for: targetRaw)
+        guard canonicalSourceRaw != canonicalTargetRaw else { return }
+        let hadFavorite = state.favoriteCategoryRaws.remove(canonicalSourceRaw) != nil
 
         if hadFavorite {
-            state.favoriteCategoryRaws.insert(targetRaw)
+            state.favoriteCategoryRaws.insert(canonicalTargetRaw)
         }
 
         saveFavoriteCategoryRaws()
     }
 
     private func removeCategoryPreferences(rawValue: String) {
-        let hadFavorite = state.favoriteCategoryRaws.remove(rawValue) != nil
-        let hadPinned = !state.pinnedCashbackKeys.filter({ keyCategoryRaw(from: $0) == rawValue }).isEmpty
-        state.pinnedCashbackKeys = Set(state.pinnedCashbackKeys.filter { keyCategoryRaw(from: $0) != rawValue })
+        let canonicalRaw = canonicalFavoriteRaw(for: rawValue)
+        let hadFavorite = state.favoriteCategoryRaws.remove(canonicalRaw) != nil
+        let hadPinned = !state.pinnedCashbackKeys.filter({
+            canonicalFavoriteRaw(for: keyCategoryRaw(from: $0)) == canonicalRaw
+        }).isEmpty
+        state.pinnedCashbackKeys = Set(
+            state.pinnedCashbackKeys.filter { canonicalFavoriteRaw(for: keyCategoryRaw(from: $0)) != canonicalRaw }
+        )
         guard hadFavorite || hadPinned else { return }
         saveFavoriteCategoryRaws()
         savePinnedCashbackKeys()
     }
 
     private func sanitizeStoredCategoryPreferences() {
-        let allowedRaws = Set(systemCategoryOptions.map(\.rawValue) + customCategoryOptions.map(\.rawValue))
+        let allowedRaws = Set(
+            (systemCategoryOptions.map(\.rawValue) + customCategoryOptions.map(\.rawValue))
+                .map { canonicalFavoriteRaw(for: $0) }
+        )
         let sanitizedHidden = Set(state.hiddenCategoryRaws.filter { allowedRaws.contains($0) })
-        let sanitizedFavorites = Set(state.favoriteCategoryRaws.filter { allowedRaws.contains($0) })
+        let sanitizedFavorites = Set(
+            state.favoriteCategoryRaws
+                .map { canonicalFavoriteRaw(for: $0) }
+                .filter { allowedRaws.contains($0) }
+        )
         let sanitizedPinned = Set(
             state.pinnedCashbackKeys.filter { key in
-                let raw = keyCategoryRaw(from: key)
+                let raw = canonicalFavoriteRaw(for: keyCategoryRaw(from: key))
                 return allowedRaws.contains(raw) && !sanitizedFavorites.contains(raw)
             }
         )

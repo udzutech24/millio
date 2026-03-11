@@ -384,4 +384,20 @@ struct ConverterViewModelTests {
         viewModel.handle(.updateSearchText("биткоин"))
         #expect(viewModel.filteredCodes.contains("BTC"))
     }
+
+    @Test("Ручное обновление курсов показывает, какие валюты не обновились")
+    func testFetchRatesShowsRequestedCodesOnFailure() async {
+        let mockRepo = MockConverterRateRepository()
+        mockRepo.shouldFail = true
+
+        let viewModel = ConverterViewModel(rateRepository: mockRepo)
+        viewModel.state.selectedCurrencies = ["USD", "EUR", "RUB"]
+        viewModel.state.activeCode = "EUR"
+
+        await viewModel.fetchRates(force: true)
+
+        #expect(viewModel.state.showToast)
+        #expect(viewModel.state.toastMessage?.contains("EUR") == true)
+        #expect(viewModel.state.toastMessage?.contains("RUB") == true)
+    }
 }

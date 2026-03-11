@@ -1,6 +1,12 @@
 import Foundation
 import Combine
 
+enum QuickSetupProductFlowPolicy {
+    static func shouldAutoOpenMarketSearch(previousType: QuickSetupProductType, newType: QuickSetupProductType) -> Bool {
+        previousType != newType && newType.isMarketTracked
+    }
+}
+
 struct QuickSetupSystemContext {
     let preferredLanguageIdentifiers: [String]
     let locale: Locale

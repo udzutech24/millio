@@ -131,7 +131,13 @@ struct ConverterView: View {
                 if let message = viewModel.state.toastMessage {
                     ToastView(message: message, isPresented: Binding(
                         get: { viewModel.state.showToast },
-                        set: { viewModel.state.showToast = $0 }
+                        set: { isPresented in
+                            if isPresented {
+                                viewModel.state.showToast = true
+                            } else {
+                                viewModel.dismissToast()
+                            }
+                        }
                     ))
                 }
             }

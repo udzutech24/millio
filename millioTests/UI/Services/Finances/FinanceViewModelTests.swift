@@ -46,9 +46,13 @@ final class MockCurrencyRateService: CurrencyRateServiceProtocol {
 
 actor MockMarketDataClient: MarketDataClientProtocol {
     var pricesBySymbol: [String: Double?]
+    var errorsBySymbol: [String: Error]
+    var latestPriceRequests: [String]
 
-    init(pricesBySymbol: [String: Double?] = [:]) {
+    init(pricesBySymbol: [String: Double?] = [:], errorsBySymbol: [String: Error] = [:]) {
         self.pricesBySymbol = pricesBySymbol
+        self.errorsBySymbol = errorsBySymbol
+        self.latestPriceRequests = []
     }
 
     func searchSymbols(query: String, outputSize: Int) async throws -> [TwelveDataSymbol] {
@@ -57,6 +61,10 @@ actor MockMarketDataClient: MarketDataClientProtocol {
 
     func latestPrice(symbol: String, forceRefresh: Bool) async throws -> Double? {
         let key = symbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        latestPriceRequests.append(key)
+        if let error = errorsBySymbol[key] {
+            throw error
+        }
         return pricesBySymbol[key] ?? nil
     }
 }
@@ -1066,6 +1074,120 @@ struct FinanceViewModelTests {
         #expect(abs((cryptoInvestment.lastKnownUnitPrice ?? 0) - 50_000.0) < 0.000001)
         #expect(abs(cryptoInvestment.amount - 500.0) < 0.01)
         #expect(viewModel.state.isLoadingRates == false)
+    }
+
+    @Test("Ручное обновление акций показывает, какие тикеры не обновились")
+    func testRefreshStockPricesShowsFailedSymbolsNotification() async throws {
+        let modelContext = try createTestModelContext()
+
+        let apple = Investment(
+            name: "Apple",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 100,
+            currency: "USD"
+        )
+        apple.marketSymbol = "AAPL"
+        apple.marketQuantity = 2
+        apple.lastKnownUnitPrice = 50
+        modelContext.insert(apple)
+
+        let tesla = Investment(
+            name: "Tesla",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 200,
+            currency: "USD"
+        )
+        tesla.marketSymbol = "TSLA"
+        tesla.marketQuantity = 2
+        tesla.lastKnownUnitPrice = 100
+        modelContext.insert(tesla)
+
+        try modelContext.save()
+
+        let marketClient = MockMarketDataClient(
+            pricesBySymbol: ["AAPL": 125],
+            errorsBySymbol: ["TSLA": URLError(.timedOut)]
+        )
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            marketDataClient: marketClient,
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadAccounts)
+
+        await viewModel.refreshStockPrices()
+
+        #expect(viewModel.state.showRefreshIssue)
+        #expect(viewModel.state.refreshIssueMessage?.contains("TSLA") == true)
+        #expect(viewModel.state.refreshIssueMessage?.contains("AAPL") == false)
+    }
+
+    @Test("Обновление акций пробует fallback форматы для market symbol")
+    func testRefreshStockPricesUsesFallbackSymbols() async throws {
+        let modelContext = try createTestModelContext()
+
+        let spy = Investment(
+            name: "SPY",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 100,
+            currency: "USD"
+        )
+        spy.marketSymbol = "NYSE:SPY"
+        spy.marketQuantity = 1
+        spy.lastKnownUnitPrice = 100
+        modelContext.insert(spy)
+        try modelContext.save()
+
+        let marketClient = MockMarketDataClient(
+            pricesBySymbol: ["SPY.US": 677.03]
+        )
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            marketDataClient: marketClient,
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadAccounts)
+
+        await viewModel.refreshStockPrices()
+
+        let requests = await marketClient.latestPriceRequests
+        #expect(requests == ["SPY", "SPY.US"])
+        #expect(abs((spy.lastKnownUnitPrice ?? 0) - 677.03) < 0.0001)
+        #expect(viewModel.state.showRefreshIssue == false)
+    }
+
+    @Test("Загрузка финансов нормализует канонический ключ котировки для старых акций")
+    func testLoadAccountsNormalizesMarketQuoteLookupKey() throws {
+        let modelContext = try createTestModelContext()
+
+        let qqq = Investment(
+            name: "QQQ",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 100,
+            currency: "USD"
+        )
+        qqq.marketSymbol = "NASDAQ:QQQ"
+        qqq.marketExchange = "NASDAQ"
+        qqq.marketQuoteLookupKey = nil
+        modelContext.insert(qqq)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            marketDataClient: MockMarketDataClient(),
+            skipInitialLoad: true
+        )
+
+        viewModel.handle(.loadAccounts)
+
+        #expect(qqq.marketQuoteLookupKey == "QQQ")
     }
 
     @Test("Быстрое редактирование кредитной карты обновляет лимит, долг и создает корректировку")

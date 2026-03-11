@@ -36,68 +36,68 @@ struct CashflowPeriodSelectorView: View {
                 
                 Form {
                     Section {
-                        Picker("Period type", selection: $selectedPeriodType) {
-                            Text("Month").tag(PeriodType.month)
-                            Text("Quarter").tag(PeriodType.quarter)
-                            Text("Year").tag(PeriodType.year)
-                            Text("Custom period").tag(PeriodType.custom)
+                        Picker(String(localized: "cashflow.period_selector.type"), selection: $selectedPeriodType) {
+                            Text("cashflow.period_selector.month").tag(PeriodType.month)
+                            Text("cashflow.period_selector.quarter").tag(PeriodType.quarter)
+                            Text("cashflow.period_selector.year").tag(PeriodType.year)
+                            Text("cashflow.period_selector.custom").tag(PeriodType.custom)
                         }
                         .foregroundStyle(AppColors.textPrimary)
                     } header: {
-                        Text("Period type")
+                        Text("cashflow.period_selector.type")
                             .foregroundStyle(AppColors.textSecondary)
                     }
                     
                     if selectedPeriodType == .month {
                         Section {
-                            DatePicker("Month", selection: $selectedMonth, displayedComponents: .date)
+                            DatePicker(String(localized: "cashflow.period_selector.month"), selection: $selectedMonth, displayedComponents: .date)
                                 .datePickerStyle(.graphical)
                                 .foregroundStyle(AppColors.textPrimary)
                         } header: {
-                            Text("Select month")
+                            Text("cashflow.period_selector.select_month")
                                 .foregroundStyle(AppColors.textSecondary)
                         }
                     } else if selectedPeriodType == .quarter {
                         Section {
-                            DatePicker("Quarter", selection: $selectedQuarter, displayedComponents: .date)
+                            DatePicker(String(localized: "cashflow.period_selector.quarter"), selection: $selectedQuarter, displayedComponents: .date)
                                 .datePickerStyle(.graphical)
                                 .foregroundStyle(AppColors.textPrimary)
                         } header: {
-                            Text("Select quarter")
+                            Text("cashflow.period_selector.select_quarter")
                                 .foregroundStyle(AppColors.textSecondary)
                         }
                     } else if selectedPeriodType == .year {
                         Section {
-                            DatePicker("Year", selection: $selectedYear, displayedComponents: .date)
+                            DatePicker(String(localized: "cashflow.period_selector.year"), selection: $selectedYear, displayedComponents: .date)
                                 .datePickerStyle(.graphical)
                                 .foregroundStyle(AppColors.textPrimary)
                         } header: {
-                            Text("Select year")
+                            Text("cashflow.period_selector.select_year")
                                 .foregroundStyle(AppColors.textSecondary)
                         }
                     } else if selectedPeriodType == .custom {
                         Section {
                             CalendarRangeMonthView(startDate: $customStartDate, endDate: $customEndDate)
                         } header: {
-                            Text("Select period")
+                            Text("cashflow.period_selector.select_period")
                                 .foregroundStyle(AppColors.textSecondary)
                         }
                     }
                 }
                 .scrollContentBackground(.hidden)
             }
-            .navigationTitle("Period selection")
+            .navigationTitle("cashflow.period_selector.title")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
+                    Button(String(localized: "cashflow.common.cancel")) {
                         dismiss()
                     }
                     .foregroundStyle(AppColors.textPrimary)
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Apply") {
+                    Button(String(localized: "cashflow.common.apply")) {
                         applyPeriod()
                     }
                     .foregroundStyle(

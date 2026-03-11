@@ -105,7 +105,7 @@ enum CashbackCategory: String, Codable, CaseIterable {
     
     var icon: String {
         switch self {
-        case .allPurchases: return "square"
+        case .allPurchases: return "🛒"
         case .gasStation: return "⛽️"
         case .supermarket: return "🛒"
         case .restaurant: return "🍽️"

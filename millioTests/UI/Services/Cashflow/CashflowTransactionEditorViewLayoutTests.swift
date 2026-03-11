@@ -24,19 +24,35 @@ struct CashflowTransactionEditorViewLayoutTests {
         #expect(cards.first?.currency == "USD")
     }
 
-    @Test("Для расхода показываются только карты в выбранной валюте")
-    func expenseFiltersCardsByCurrency() {
-        let eurCard = Card(name: "EUR", cardNumber: "1111", bank: .sberbank, cardType: .debit, currency: "EUR")
-        let usdCard = Card(name: "USD", cardNumber: "2222", bank: .tinkoff, cardType: .debit, currency: "USD")
+    @Test("Для расхода показываются только карты в выбранной валюте, а избранные идут первыми")
+    func expenseFiltersCardsByCurrencyAndPrioritizesFavorites() {
+        let regularEurCard = Card(name: "EUR Regular", cardNumber: "1111", bank: .sberbank, cardType: .debit, currency: "EUR")
+        let favoriteEurCard = Card(name: "EUR Favorite", cardNumber: "2222", bank: .tinkoff, cardType: .debit, currency: "EUR", isFavorite: true)
+        let usdCard = Card(name: "USD", cardNumber: "3333", bank: .tinkoff, cardType: .debit, currency: "USD", isFavorite: true)
 
         let cards = CashflowTransactionEditorView.cardsForCurrency(
-            [eurCard, usdCard],
+            [regularEurCard, favoriteEurCard, usdCard],
             transactionType: .expense,
             currency: "eur"
         )
 
-        #expect(cards.count == 1)
-        #expect(cards.first?.currency == "EUR")
+        #expect(cards.count == 2)
+        #expect(cards.map(\.cardUniqueID) == [favoriteEurCard.cardUniqueID, regularEurCard.cardUniqueID])
+        #expect(Set(cards.map(\.currency)) == Set(["EUR"]))
+    }
+
+    @Test("Список карт сортирует избранные раньше обычных")
+    func cardPickerPrioritizesFavorites() {
+        let regular = Card(name: "Regular", cardNumber: "1111", bank: .sberbank, cardType: .debit, currency: "RUB")
+        let favorite = Card(name: "Favorite", cardNumber: "2222", bank: .tinkoff, cardType: .debit, currency: "RUB", isFavorite: true)
+
+        let cards = CashflowTransactionEditorView.cardsForCurrency(
+            [regular, favorite],
+            transactionType: .transfer,
+            currency: "RUB"
+        )
+
+        #expect(cards.map(\.cardUniqueID) == [favorite.cardUniqueID, regular.cardUniqueID])
     }
 
     @Test("Для перевода фильтрации по валюте нет")
@@ -91,6 +107,20 @@ struct CashflowTransactionEditorViewLayoutTests {
         #expect(kind.historyFilter == .expense)
     }
 
+    @Test("Для расходов быстрые переходы собраны в один горизонтальный ряд")
+    func expenseManagementEntries() {
+        let entries = CashflowManagementEntry.entries(for: .expense)
+
+        #expect(entries.map(\.destination) == [.bulkImport, .recurring, .planned])
+    }
+
+    @Test("Для доходов быстрые переходы не показывают массовый импорт")
+    func incomeManagementEntries() {
+        let entries = CashflowManagementEntry.entries(for: .income)
+
+        #expect(entries.map(\.destination) == [.recurring, .planned])
+    }
+
     @Test("Селектор валюты операции закрепляет основную валюту профиля")
     func operationCurrencyPrimaryPinnedCodeNormalization() {
         #expect(CashflowTransactionEditorView.operationCurrencyPrimaryPinnedCode(from: " rub ") == "RUB")
@@ -112,5 +142,12 @@ struct CashflowTransactionEditorViewLayoutTests {
         let sanitized = CashflowTransactionEditorView.sanitizedAmountText(from: "99,9999")
 
         #expect(sanitized == "99.99")
+    }
+
+    @Test("Поле суммы уменьшает шрифт для длинных значений")
+    func amountFieldUsesCompactFontForLongValues() {
+        #expect(CashflowTransactionEditorView.amountFontSize(for: "12 345") == CashflowTransactionEditorView.amountBaseFontSize)
+        #expect(CashflowTransactionEditorView.amountFontSize(for: "1234567") == CashflowTransactionEditorView.amountCompactFontSize)
+        #expect(CashflowTransactionEditorView.amountFontSize(for: "1 234 567.89") == CashflowTransactionEditorView.amountCompactFontSize)
     }
 }

@@ -6,6 +6,9 @@
 //
 
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct SlideToConfirmControl: View {
     let title: String
@@ -17,6 +20,7 @@ struct SlideToConfirmControl: View {
     let action: () -> Void
 
     @State private var dragOffset: CGFloat = 0
+    @State private var lastHapticStep: Int = -1
 
     private let knobSize: CGFloat = 56
     private let horizontalPadding: CGFloat = 8
@@ -71,21 +75,21 @@ struct SlideToConfirmControl: View {
                     DragGesture(minimumDistance: 5)
                         .onChanged { value in
                             guard isEnabled, !isLoading else { return }
-                            dragOffset = min(max(0, value.translation.width), maxOffset)
+                            let nextOffset = min(max(0, value.translation.width), maxOffset)
+                            dragOffset = nextOffset
+                            handleDragProgress(offset: nextOffset, maxOffset: maxOffset)
                         }
                         .onEnded { _ in
                             guard isEnabled, !isLoading else {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    dragOffset = 0
-                                }
+                                resetSliderPosition()
                                 return
                             }
-                            if dragOffset >= maxOffset * 0.82 {
+                            let progress = maxOffset > 0 ? dragOffset / maxOffset : 0
+                            if SlideToConfirmHapticsPlan.isCompletionReached(for: Double(progress)) {
+                                triggerSuccessHaptic()
                                 action()
                             }
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                dragOffset = 0
-                            }
+                            resetSliderPosition()
                         }
                 )
                 .allowsHitTesting(isEnabled && !isLoading)
@@ -94,5 +98,38 @@ struct SlideToConfirmControl: View {
         .frame(height: 72)
         .opacity(isEnabled ? 1 : 0.45)
         .animation(.easeInOut(duration: 0.2), value: isEnabled)
+    }
+
+    private func handleDragProgress(offset: CGFloat, maxOffset: CGFloat) {
+        guard maxOffset > 0 else { return }
+        let progress = offset / maxOffset
+        let currentStep = SlideToConfirmHapticsPlan.progressStep(for: Double(progress))
+
+        if currentStep > lastHapticStep {
+            triggerProgressHaptic()
+        }
+
+        lastHapticStep = currentStep
+    }
+
+    private func resetSliderPosition() {
+        lastHapticStep = -1
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            dragOffset = 0
+        }
+    }
+
+    private func triggerProgressHaptic() {
+        #if canImport(UIKit)
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.impactOccurred()
+        #endif
+    }
+
+    private func triggerSuccessHaptic() {
+        #if canImport(UIKit)
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
+        #endif
     }
 }

@@ -458,8 +458,14 @@ struct QuickSetupView: View {
                     let selected = viewModel.productTypeForCreation == type
                     Button {
                         focusedField = nil
+                        let previousType = viewModel.productTypeForCreation
                         withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
                             viewModel.selectProductType(type)
+                        }
+                        if QuickSetupProductFlowPolicy.shouldAutoOpenMarketSearch(previousType: previousType, newType: type) {
+                            DispatchQueue.main.async {
+                                showMarketSearchSheet = true
+                            }
                         }
                         fireSelectionHaptic()
                     } label: {

@@ -32,6 +32,8 @@ struct InvestmentEditorView: View {
 
     @State private var marketSymbol: String = ""
     @State private var marketExchange: String?
+    @State private var marketQuoteLookupKey: String?
+    @State private var marketMICCode: String?
     @State private var marketCurrency: String?
     @State private var marketQuantityText: String = ""
     @State private var purchaseUnitPriceText: String = ""
@@ -84,6 +86,16 @@ struct InvestmentEditorView: View {
 
     private var marketSearchButtonTitle: LocalizedStringKey {
         selectedCategory == .crypto ? "finances.market.search_pair_button" : "finances.market.search_ticker_button"
+    }
+
+    private var needsMarketSymbolSelection: Bool {
+        isMarketCategory && marketSymbol.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var marketSymbolHintText: String {
+        selectedCategory == .crypto
+            ? String(localized: "finances.add_account.hint.select_coin_or_pair")
+            : String(localized: "finances.add_account.hint.select_ticker")
     }
 
     private var positionTotal: Double? {
@@ -165,6 +177,8 @@ struct InvestmentEditorView: View {
 
                     marketSymbol = editing.marketSymbol ?? ""
                     marketExchange = editing.marketExchange
+                    marketQuoteLookupKey = editing.marketQuoteLookupKey
+                    marketMICCode = editing.marketMICCode
                     marketCurrency = editing.marketCurrency
                     marketQuantityText = editing.marketQuantity.map { String($0) } ?? ""
                     purchaseUnitPriceText = editing.averagePurchaseUnitPrice.map { String($0) } ?? ""
@@ -175,7 +189,7 @@ struct InvestmentEditorView: View {
 
                 loadAvailableCurrencies()
             }
-            .onChange(of: selectedCategory) { _, newValue in
+            .onChange(of: selectedCategory) { oldValue, newValue in
                 if (newValue == .stocks || newValue == .crypto),
                    !canUseMarketCategory(newValue),
                    !isEditingMarketAssetWithLockedIdentity {
@@ -186,6 +200,16 @@ struct InvestmentEditorView: View {
                 }
                 if !(newValue == .stocks || newValue == .crypto) {
                     clearMarketState()
+                }
+                if MarketSearchFlowPolicy.shouldAutoOpenSearch(
+                    previousCategory: oldValue,
+                    newCategory: newValue,
+                    marketSymbol: marketSymbol,
+                    isEditingLockedIdentity: isEditingMarketAssetWithLockedIdentity
+                ) {
+                    DispatchQueue.main.async {
+                        showMarketSearchSheet = true
+                    }
                 }
             }
             .onChange(of: marketQuantityText) { _, _ in
@@ -338,27 +362,57 @@ struct InvestmentEditorView: View {
 
             FinancesRowDivider()
 
-                if !isEditingMarketAssetWithLockedIdentity {
-                    HStack(spacing: 12) {
-                        Button {
-                            guard canUseMarketCategory(selectedCategory) else {
-                                paywallMessage = marketCategoryPaywallMessage(for: selectedCategory)
-                                showPaywallAlert = true
-                                return
-                            }
-                            showMarketSearchSheet = true
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "magnifyingglass")
-                                Text(marketSearchButtonTitle)
+            if !isEditingMarketAssetWithLockedIdentity {
+                HStack(spacing: 12) {
+                    Button {
+                        guard canUseMarketCategory(selectedCategory) else {
+                            paywallMessage = marketCategoryPaywallMessage(for: selectedCategory)
+                            showPaywallAlert = true
+                            return
                         }
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: AppColors.investmentsGradient,
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
+                        showMarketSearchSheet = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "magnifyingglass")
+                            Text(marketSearchButtonTitle)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(
+                                    needsMarketSymbolSelection
+                                        ? Color(red: 0.18, green: 0.95, blue: 0.45).opacity(0.16)
+                                        : Color.clear
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(
+                                            needsMarketSymbolSelection
+                                                ? Color(red: 0.18, green: 0.95, blue: 0.45).opacity(0.75)
+                                                : Color.clear,
+                                            lineWidth: 1
+                                        )
+                                )
                         )
+                    }
+                    .foregroundStyle(
+                        needsMarketSymbolSelection
+                            ? AnyShapeStyle(Color(red: 0.18, green: 0.95, blue: 0.45))
+                            : AnyShapeStyle(
+                                LinearGradient(
+                                    colors: AppColors.investmentsGradient,
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                    )
+
+                    if needsMarketSymbolSelection {
+                        Text(marketSymbolHintText)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Color(red: 0.18, green: 0.95, blue: 0.45))
+                            .fixedSize(horizontal: false, vertical: true)
                     }
 
                     Spacer()
@@ -603,7 +657,11 @@ struct InvestmentEditorView: View {
     }
 
     private func refreshLatestPrice(forceRefresh: Bool) {
-        guard !marketSymbol.isEmpty else {
+        let lookupKey = marketQuoteLookupKey ?? MarketInstrumentIdentity.canonicalQuoteLookupKey(
+            symbol: marketSymbol,
+            exchange: marketExchange
+        )
+        guard !lookupKey.isEmpty else {
             return
         }
 
@@ -621,13 +679,15 @@ struct InvestmentEditorView: View {
 
             do {
                 let latestQuote = try await marketDataClient.latestQuote(
-                    symbol: marketSymbol,
+                    symbol: lookupKey,
                     forceRefresh: forceRefresh
                 )
 
                 await MainActor.run {
                     lastKnownUnitPrice = latestQuote?.price
                     lastKnownPriceUpdatedAt = latestQuote?.updatedAtDate ?? (latestQuote == nil ? nil : Date())
+                    marketQuoteLookupKey = latestQuote?.canonicalQuoteLookupKey ?? lookupKey
+                    marketMICCode = latestQuote?.micCode ?? marketMICCode
                     marketProviderRaw = latestQuote == nil ? nil : "market-backend"
                     if let latestPrice = latestQuote?.price, purchaseUnitPriceText.isEmpty {
                         purchaseUnitPriceText = String(latestPrice)
@@ -647,6 +707,8 @@ struct InvestmentEditorView: View {
     private func applySelectedMarketSymbol(_ symbol: TwelveDataSymbol) {
         marketSymbol = symbol.symbol
         marketExchange = symbol.exchange
+        marketQuoteLookupKey = symbol.canonicalQuoteLookupKey
+        marketMICCode = symbol.micCode
         marketCurrency = symbol.currency
         selectedCurrency = symbol.currency ?? selectedCurrency
         marketProviderRaw = "market-backend"
@@ -660,6 +722,8 @@ struct InvestmentEditorView: View {
     private func clearMarketState() {
         marketSymbol = ""
         marketExchange = nil
+        marketQuoteLookupKey = nil
+        marketMICCode = nil
         marketCurrency = nil
         marketQuantityText = ""
         purchaseUnitPriceText = ""
@@ -720,6 +784,8 @@ struct InvestmentEditorView: View {
             marketData = InvestmentMarketData(
                 symbol: isEditingMarketAssetWithLockedIdentity ? lockedSymbol : (marketSymbol.isEmpty ? nil : marketSymbol),
                 exchange: marketExchange,
+                quoteLookupKey: marketQuoteLookupKey,
+                micCode: marketMICCode,
                 currency: marketCurrency ?? selectedCurrency,
                 quantity: quantity,
                 unitPrice: lastKnownUnitPrice,

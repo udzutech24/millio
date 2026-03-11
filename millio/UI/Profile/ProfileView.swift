@@ -774,7 +774,7 @@ struct ProfileView: View {
     }
 }
 
-private struct SupportContactSheet: View {
+struct SupportContactSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
 

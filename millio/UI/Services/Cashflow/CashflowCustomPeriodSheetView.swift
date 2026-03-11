@@ -39,7 +39,7 @@ struct CashflowCustomPeriodSheetView: View {
                         .font(.headline)
                         .foregroundStyle(AppColors.textPrimary)
 
-                        Text("Select start and end dates on the calendar")
+                        Text("cashflow.custom_period.calendar_hint")
                             .font(.callout)
                             .foregroundStyle(AppColors.textSecondary)
                     }
@@ -76,7 +76,7 @@ struct CashflowCustomPeriodSheetView: View {
                         viewModel.handle(.resetToDefaultPeriod)
                         dismiss()
                     } label: {
-                        Text("Reset")
+                        Text("cashflow.common.reset")
                             .font(.system(size: 16, weight: .semibold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
@@ -92,7 +92,7 @@ struct CashflowCustomPeriodSheetView: View {
                         applyDraftPeriod()
                         dismiss()
                     } label: {
-                        Text("Show")
+                        Text("cashflow.custom_period.show")
                             .font(.system(size: 16, weight: .semibold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)

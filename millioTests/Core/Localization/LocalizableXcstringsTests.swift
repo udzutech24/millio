@@ -48,6 +48,10 @@ final class LocalizableXcstringsTests: XCTestCase {
         try assertLocalized(strings: strings, key: "profile.rate_app.dialog.feedback.action")
 
         try assertLocalized(strings: strings, key: "profile.contact.header.title")
+        try assertLocalized(strings: strings, key: "finances.market.search.contact_action")
+        try assertLocalized(strings: strings, key: "finances.market.search.instructions_stocks")
+        try assertLocalized(strings: strings, key: "finances.market.search.instructions_crypto")
+        try assertLocalized(strings: strings, key: "finances.market.search.support_hint")
         try assertLocalized(strings: strings, key: "converter.settings.section_widget")
         try assertLocalized(strings: strings, key: "converter.settings.widget.preview_title")
         try assertLocalized(strings: strings, key: "converter.settings.widget.preview_subtitle")

@@ -1185,6 +1185,147 @@ extension CashflowViewModelTests {
         #expect(result.first?.transactionType == .expense)
     }
 
+    @Test("History-only расход попадает в cashflow, но не меняет баланс карты")
+    func testHistoryOnlyExpenseDoesNotChangeCardBalance() async throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 10, hour: 12)) ?? Date()
+
+        let card = Card(
+            name: "History",
+            cardNumber: "1111",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 1_000
+        )
+        modelContext.insert(card)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(
+            modelContext: modelContext,
+            now: { fixedNow },
+            assetsSnapshotProvider: { _, _, _ in (start: 0, end: 0) }
+        )
+
+        let transaction = CashflowTransaction(
+            transactionType: .expense,
+            amount: 250,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: card.cardUniqueID,
+            expenseCategoryRaw: ExpenseCategory.groceries.rawValue,
+            affectsCardBalance: false
+        )
+        viewModel.handle(.updateTransaction(transaction))
+
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            viewModel.state.transactions.count == 1
+            && abs(viewModel.state.totalExpense - 250) < 0.01
+        }
+
+        #expect(abs(card.balance - 1_000) < 0.01)
+        #expect(viewModel.state.transactions.first?.affectsCardBalance == false)
+    }
+
+    @Test("Редактирование расхода корректно пересчитывает баланс карты")
+    func testEditingExpenseReplacesOldBalanceEffect() async throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 10, hour: 12)) ?? Date()
+
+        let card = Card(
+            name: "Main",
+            cardNumber: "2222",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 1_000
+        )
+        modelContext.insert(card)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        let original = CashflowTransaction(
+            transactionType: .expense,
+            amount: 100,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: card.cardUniqueID,
+            expenseCategoryRaw: ExpenseCategory.shopping.rawValue
+        )
+        viewModel.handle(.updateTransaction(original))
+
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            abs(card.balance - 900) < 0.01 && viewModel.state.transactions.count == 1
+        }
+
+        guard let existing = viewModel.state.transactions.first else {
+            Issue.record("Expected saved transaction")
+            return
+        }
+        viewModel.state.editingTransaction = existing
+
+        let replacement = CashflowTransaction(
+            transactionType: .expense,
+            amount: 250,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: card.cardUniqueID,
+            expenseCategoryRaw: ExpenseCategory.shopping.rawValue
+        )
+        viewModel.handle(.updateTransaction(replacement))
+
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            abs(card.balance - 750) < 0.01
+            && abs(viewModel.state.transactions.first?.amount ?? 0 - 250) < 0.01
+        }
+
+        #expect(abs(card.balance - 750) < 0.01)
+    }
+
+    @Test("Полное удаление операции откатывает влияние на баланс карты")
+    func testDeleteTransactionRevertsCardBalance() async throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 10, hour: 12)) ?? Date()
+
+        let card = Card(
+            name: "Delete",
+            cardNumber: "3333",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 1_000
+        )
+        modelContext.insert(card)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        let transaction = CashflowTransaction(
+            transactionType: .expense,
+            amount: 200,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: card.cardUniqueID,
+            expenseCategoryRaw: ExpenseCategory.bills.rawValue
+        )
+        viewModel.handle(.updateTransaction(transaction))
+
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            abs(card.balance - 800) < 0.01 && viewModel.state.transactions.count == 1
+        }
+
+        guard let existing = viewModel.state.transactions.first else {
+            Issue.record("Expected saved transaction")
+            return
+        }
+        viewModel.handle(.deleteTransaction(existing, recalculate: true))
+
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            abs(card.balance - 1_000) < 0.01 && viewModel.state.transactions.isEmpty
+        }
+
+        #expect(abs(card.balance - 1_000) < 0.01)
+    }
+
     private func waitUntil(
         timeoutNanoseconds: UInt64,
         intervalNanoseconds: UInt64 = 50_000_000,

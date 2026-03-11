@@ -25,12 +25,12 @@ enum CashflowTransactionType: String, Codable, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .income: return "Income"
-        case .expense: return "Expense"
-        case .transfer: return "Transfer"
-        case .balanceAdjustment: return "Asset value adjustment"
-        case .cardBalanceAdjustment: return "Account balance adjustment"
-        case .creditDebtAdjustment: return "Debt adjustment"
+        case .income: return String(localized: "Income")
+        case .expense: return String(localized: "Expense")
+        case .transfer: return String(localized: "Transfer")
+        case .balanceAdjustment: return String(localized: "Asset value adjustment")
+        case .cardBalanceAdjustment: return String(localized: "Account balance adjustment")
+        case .creditDebtAdjustment: return String(localized: "Debt adjustment")
         }
     }
     
@@ -54,8 +54,8 @@ enum CashflowRecurrenceRule: String, Codable, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .none: return "Do not repeat"
-        case .monthly: return "Monthly"
+        case .none: return String(localized: "Do not repeat")
+        case .monthly: return String(localized: "Monthly")
         }
     }
 }
@@ -72,12 +72,12 @@ enum IncomeCategory: String, Codable, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .salary: return "Salary"
-        case .freelance: return "Freelance"
-        case .investment: return "Investments"
-        case .gift: return "Gift"
-        case .bonus: return "Bonus"
-        case .other: return "Other"
+        case .salary: return String(localized: "Salary")
+        case .freelance: return String(localized: "Freelance")
+        case .investment: return String(localized: "Investments")
+        case .gift: return String(localized: "Gift")
+        case .bonus: return String(localized: "Bonus")
+        case .other: return String(localized: "Other")
         }
     }
     
@@ -108,15 +108,15 @@ enum ExpenseCategory: String, Codable, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .groceries: return "Groceries"
-        case .cafe: return "Cafe"
-        case .transport: return "Transport"
-        case .shopping: return "Shopping"
-        case .entertainment: return "Entertainment"
-        case .bills: return "Bills"
-        case .health: return "Health"
-        case .education: return "Education"
-        case .other: return "Other"
+        case .groceries: return String(localized: "Groceries")
+        case .cafe: return String(localized: "Cafe")
+        case .transport: return String(localized: "Transport")
+        case .shopping: return String(localized: "Shopping")
+        case .entertainment: return String(localized: "Entertainment")
+        case .bills: return String(localized: "Bills")
+        case .health: return String(localized: "Health")
+        case .education: return String(localized: "Education")
+        case .other: return String(localized: "Other")
         }
     }
     
@@ -479,6 +479,9 @@ final class CashflowTransaction: Persistable {
 
     /// ID серии автоповтора (общий для всех операций серии)
     var recurrenceSeriesID: String?
+
+    /// Влияет ли операция на текущий остаток карты
+    var affectsCardBalance: Bool = true
     
     /// Дата создания записи
     var createdAt: Date = Date()
@@ -533,7 +536,8 @@ final class CashflowTransaction: Persistable {
         expenseCategoryRaw: String? = nil,
         note: String? = nil,
         recurrenceRule: CashflowRecurrenceRule = .none,
-        recurrenceSeriesID: String? = nil
+        recurrenceSeriesID: String? = nil,
+        affectsCardBalance: Bool = true
     ) {
         self.transactionTypeRaw = transactionType.rawValue
         self.amount = amount
@@ -548,6 +552,7 @@ final class CashflowTransaction: Persistable {
         self.note = note
         self.recurrenceRuleRaw = recurrenceRule.rawValue
         self.recurrenceSeriesID = recurrenceSeriesID
+        self.affectsCardBalance = affectsCardBalance
         self.createdAt = Date()
         self.updatedAt = Date()
     }
@@ -605,6 +610,9 @@ final class CashflowTransaction: Persistable {
         }
         if let recurrenceSeriesID = recurrenceSeriesID {
             dict["recurrenceSeriesID"] = recurrenceSeriesID
+        }
+        if !affectsCardBalance {
+            dict["affectsCardBalance"] = false
         }
         
         return try JSONSerialization.data(withJSONObject: dict)

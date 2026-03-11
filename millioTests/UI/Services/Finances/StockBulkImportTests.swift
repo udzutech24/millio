@@ -208,6 +208,72 @@ struct StockBulkImportTests {
         #expect(merged[0].buyPrice == 100)
     }
 
+    @Test("Удаление merged preview строки убирает все исходные дубли")
+    func removeVisibleRowRemovesAllMergedDuplicates() async throws {
+        let context = try makeContext()
+        let client = StockBulkImportMockMarketDataClient()
+        let viewModel = StockBulkImportViewModel(
+            modelContext: context,
+            marketDataClient: client,
+            parser: StockBulkImportParser(textRecognizer: StubTextRecognizer())
+        )
+
+        let candidate = StockBulkImportCandidate(
+            symbol: "AAPL",
+            market: "NASDAQ",
+            displayName: "Apple",
+            currency: "USD",
+            providerRaw: "market-backend"
+        )
+        let spyCandidate = StockBulkImportCandidate(
+            symbol: "SPY",
+            market: "US",
+            displayName: "SPDR S&P 500 ETF Trust",
+            currency: "USD",
+            providerRaw: "market-backend"
+        )
+
+        viewModel.rows = [
+            StockBulkImportRowDraft(
+                rawLine: "AAPL 2 @ 100",
+                tickerText: "AAPL",
+                marketText: "NASDAQ",
+                quantityText: "2",
+                buyPriceText: "100",
+                sourceOrderIndex: 0,
+                candidates: [candidate],
+                selectedCandidate: candidate
+            ),
+            StockBulkImportRowDraft(
+                rawLine: "AAPL 3 @ 110",
+                tickerText: "AAPL",
+                marketText: "NASDAQ",
+                quantityText: "3",
+                buyPriceText: "110",
+                sourceOrderIndex: 1,
+                candidates: [candidate],
+                selectedCandidate: candidate
+            ),
+            StockBulkImportRowDraft(
+                rawLine: "SPY 1 @ 600",
+                tickerText: "SPY",
+                marketText: "US",
+                quantityText: "1",
+                buyPriceText: "600",
+                sourceOrderIndex: 2,
+                candidates: [spyCandidate],
+                selectedCandidate: spyCandidate
+            )
+        ]
+
+        let mergedAaplRow = try #require(viewModel.visibleRows.first { $0.selectedCandidate?.normalizedSymbol == "AAPL" })
+        viewModel.removeVisibleRow(mergedAaplRow)
+
+        #expect(viewModel.rows.count == 1)
+        #expect(viewModel.rows[0].selectedCandidate?.normalizedSymbol == "SPY")
+        #expect(viewModel.visibleRows.count == 1)
+    }
+
     @Test("Строка addable только при found + qty + buyPrice")
     func rowValidationRequiresCandidateQuantityAndBuyPrice() {
         let candidate = StockBulkImportCandidate(

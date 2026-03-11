@@ -10,20 +10,42 @@ import SwiftUI
 struct ToastView: View {
     let message: String
     @Binding var isPresented: Bool
+
+    private var closeLabel: String {
+        let languageCode = Locale.current.identifier
+            .split(whereSeparator: { $0 == "-" || $0 == "_" })
+            .first?
+            .lowercased() ?? ""
+        return languageCode == "ru" ? "Закрыть" : "Close"
+    }
     
     var body: some View {
         if isPresented {
-            HStack(spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(AppColors.error)
-                
+                    .padding(.top, 2)
+
                 Text(message)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(AppColors.textPrimary)
-                    .lineLimit(2)
-                
-                Spacer()
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 8)
+
+                Button {
+                    isPresented = false
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(closeLabel))
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)

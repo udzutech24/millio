@@ -1096,6 +1096,8 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     @State private var currencySearchText: String = ""
     @State private var marketSymbol: String = ""
     @State private var marketExchange: String?
+    @State private var marketQuoteLookupKey: String?
+    @State private var marketMICCode: String?
     @State private var marketCurrency: String?
     @State private var marketQuantityText: String = ""
     @State private var marketQuantityDisplayText: String = ""
@@ -1167,6 +1169,8 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
             let marketData = InvestmentMarketData(
                 symbol: marketSymbol.isEmpty ? nil : marketSymbol,
                 exchange: marketExchange,
+                quoteLookupKey: marketQuoteLookupKey,
+                micCode: marketMICCode,
                 currency: marketCurrency ?? selectedCurrency,
                 quantity: quantity,
                 unitPrice: lastKnownUnitPrice,
@@ -1247,9 +1251,19 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
             amountText = sanitized
         }
         .onChange(of: selectedCurrency) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
-        .onChange(of: selectedCategory) { _, newValue in
+        .onChange(of: selectedCategory) { oldValue, newValue in
             if !(newValue == .stocks || newValue == .crypto) {
                 clearMarketState()
+            }
+            if MarketSearchFlowPolicy.shouldAutoOpenSearch(
+                previousCategory: oldValue,
+                newCategory: newValue,
+                marketSymbol: marketSymbol,
+                isEditingLockedIdentity: false
+            ) {
+                DispatchQueue.main.async {
+                    showMarketSearchSheet = true
+                }
             }
             onInvestmentDataChanged(getInvestmentData())
         }
@@ -1336,11 +1350,25 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     private var marketSearchButtonTitle: LocalizedStringKey {
         selectedCategory == .crypto ? "finances.market.search_pair_button" : "finances.market.search_ticker_button"
     }
+
+    private var needsMarketSymbolSelection: Bool {
+        isMarketCategory && marketSymbol.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var marketSymbolHintText: String {
+        selectedCategory == .crypto
+            ? String(localized: "finances.add_account.hint.select_coin_or_pair")
+            : String(localized: "finances.add_account.hint.select_ticker")
+    }
     
     private var marketInstrumentSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: String(localized: "finances.market.section_symbol"))
-            FinancesGlassCard {
+            FinancesGlassCard(
+                accentColor: needsMarketSymbolSelection
+                    ? Color(red: 0.18, green: 0.95, blue: 0.45)
+                    : nil
+            ) {
                 VStack(spacing: 0) {
                     HStack(spacing: 12) {
                         Text(marketInstrumentTitle)
@@ -1365,17 +1393,48 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                                 Text(marketSearchButtonTitle)
                                     .font(.system(size: 15, weight: .semibold))
                             }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(
+                                        needsMarketSymbolSelection
+                                            ? Color(red: 0.18, green: 0.95, blue: 0.45).opacity(0.16)
+                                            : Color.clear
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                            .stroke(
+                                                needsMarketSymbolSelection
+                                                    ? Color(red: 0.18, green: 0.95, blue: 0.45).opacity(0.75)
+                                                    : Color.clear,
+                                                lineWidth: 1
+                                            )
+                                    )
+                            )
                             .foregroundStyle(
-                                LinearGradient(
-                                    colors: AppColors.financesGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
+                                needsMarketSymbolSelection
+                                    ? AnyShapeStyle(Color(red: 0.18, green: 0.95, blue: 0.45))
+                                    : AnyShapeStyle(
+                                        LinearGradient(
+                                            colors: AppColors.financesGradient,
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
                             )
                         }
-                        
+
+                        if needsMarketSymbolSelection {
+                            Text(marketSymbolHintText)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(Color(red: 0.18, green: 0.95, blue: 0.45))
+                                .fixedSize(horizontal: false, vertical: true)
+                                .transition(.opacity)
+                        }
+
                         Spacer()
-                        
+
                         if let marketExchange, !marketExchange.isEmpty {
                             Text(marketExchange)
                                 .font(.system(size: 13, weight: .regular))
@@ -1626,6 +1685,8 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
         isFavorite = editing.isFavorite
         marketSymbol = editing.marketSymbol ?? ""
         marketExchange = editing.marketExchange
+        marketQuoteLookupKey = editing.marketQuoteLookupKey
+        marketMICCode = editing.marketMICCode
         marketCurrency = editing.marketCurrency
         marketQuantityText = editing.marketQuantity.map { "\($0)" } ?? ""
         marketQuantityDisplayText = formatNumberForDisplay(marketQuantityText)
@@ -1642,7 +1703,11 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     }
     
     private func refreshLatestPrice(forceRefresh: Bool) {
-        guard !marketSymbol.isEmpty else {
+        let lookupKey = marketQuoteLookupKey ?? MarketInstrumentIdentity.canonicalQuoteLookupKey(
+            symbol: marketSymbol,
+            exchange: marketExchange
+        )
+        guard !lookupKey.isEmpty else {
             return
         }
         
@@ -1660,13 +1725,15 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
             
             do {
                 let latestQuote = try await marketDataClient.latestQuote(
-                    symbol: marketSymbol,
+                    symbol: lookupKey,
                     forceRefresh: forceRefresh
                 )
                 
                 await MainActor.run {
                     lastKnownUnitPrice = latestQuote?.price
                     lastKnownPriceUpdatedAt = latestQuote?.updatedAtDate ?? (latestQuote == nil ? nil : Date())
+                    marketQuoteLookupKey = latestQuote?.canonicalQuoteLookupKey ?? lookupKey
+                    marketMICCode = latestQuote?.micCode ?? marketMICCode
                     marketProviderRaw = latestQuote == nil ? nil : "market-backend"
                     if let latestPrice = latestQuote?.price, purchaseUnitPriceText.isEmpty {
                         purchaseUnitPriceText = String(latestPrice)
@@ -1687,6 +1754,8 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     private func applySelectedMarketSymbol(_ symbol: TwelveDataSymbol) {
         marketSymbol = symbol.symbol
         marketExchange = symbol.exchange
+        marketQuoteLookupKey = symbol.canonicalQuoteLookupKey
+        marketMICCode = symbol.micCode
         marketCurrency = symbol.currency
         selectedCurrency = symbol.currency ?? selectedCurrency
         marketProviderRaw = "market-backend"
@@ -1701,6 +1770,8 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     private func clearMarketState() {
         marketSymbol = ""
         marketExchange = nil
+        marketQuoteLookupKey = nil
+        marketMICCode = nil
         marketCurrency = nil
         marketQuantityText = ""
         purchaseUnitPriceText = ""

@@ -177,13 +177,13 @@ enum ChartPeriod: String, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .month: return "Month"
-        case .quarter: return "Quarter"
-        case .year: return "Year"
-        case .specificMonth: return "Month"
-        case .specificQuarter: return "Quarter"
-        case .specificYear: return "Year"
-        case .custom: return "Custom period"
+        case .month: return String(localized: "Month")
+        case .quarter: return String(localized: "Quarter")
+        case .year: return String(localized: "Year")
+        case .specificMonth: return String(localized: "Month")
+        case .specificQuarter: return String(localized: "Quarter")
+        case .specificYear: return String(localized: "Year")
+        case .custom: return String(localized: "Custom period")
         }
     }
 }
@@ -328,7 +328,15 @@ final class CashflowViewModel: ViewModelProtocol {
             state.showTransactionEditor = true
             
         case .deleteTransaction(let transaction, let recalculate):
-            deleteTransaction(transaction, recalculate: recalculate)
+            state.transactions.removeAll(where: { $0.persistentModelID == transaction.persistentModelID })
+            state.filteredTransactions.removeAll(where: { $0.persistentModelID == transaction.persistentModelID })
+            if recalculate {
+                Task { @MainActor in
+                    await deleteTransactionAsync(transaction, recalculate: true)
+                }
+            } else {
+                deleteTransactionWithoutRecalculation(transaction)
+            }
             
         case .updateTransaction(let transaction):
             Task { @MainActor in
@@ -812,7 +820,8 @@ final class CashflowViewModel: ViewModelProtocol {
                 transactionDate: transactionDates[index],
                 cardID: request.cardID,
                 expenseCategoryRaw: entry.expenseCategoryRaw,
-                note: entry.note
+                note: entry.note,
+                affectsCardBalance: request.shouldAffectCardBalance
             )
             let exchangeInfo = await resolveExchangeInfo(for: transaction)
             transaction.exchangeRate = exchangeInfo.rate
@@ -1030,12 +1039,12 @@ final class CashflowViewModel: ViewModelProtocol {
     }
 
     func incomeCategoryDisplayName(for raw: String?) -> String {
-        guard let raw else { return "Uncategorized" }
+        guard let raw else { return String(localized: "Uncategorized") }
         return categoryOption(for: raw, kind: .income).displayName
     }
 
     func expenseCategoryDisplayName(for raw: String?) -> String {
-        guard let raw else { return "Uncategorized" }
+        guard let raw else { return String(localized: "Uncategorized") }
         return categoryOption(for: raw, kind: .expense).displayName
     }
 
@@ -1495,7 +1504,8 @@ final class CashflowViewModel: ViewModelProtocol {
                         expenseCategoryRaw: template.expenseCategoryRaw,
                         note: template.note,
                         recurrenceRule: .none,
-                        recurrenceSeriesID: templateSeriesID
+                        recurrenceSeriesID: templateSeriesID,
+                        affectsCardBalance: template.affectsCardBalance
                     )
                     let exchangeInfo = await resolveExchangeInfo(for: generated)
                     generated.exchangeRate = exchangeInfo.rate
@@ -1526,7 +1536,7 @@ final class CashflowViewModel: ViewModelProtocol {
     }
 
     private func applyRecurringTransactionToCardBalance(_ transaction: CashflowTransaction) async {
-        guard let cardID = transaction.cardID else {
+        guard transaction.affectsCardBalance, let cardID = transaction.cardID else {
             return
         }
 
@@ -1555,6 +1565,130 @@ final class CashflowViewModel: ViewModelProtocol {
             return
         }
         card.updatedAt = now()
+    }
+
+    private func shouldAffectCardBalance(_ transaction: CashflowTransaction?) -> Bool {
+        guard let transaction else { return false }
+        switch transaction.transactionType {
+        case .income, .expense:
+            return transaction.affectsCardBalance
+        case .transfer, .balanceAdjustment, .cardBalanceAdjustment:
+            return true
+        case .creditDebtAdjustment:
+            return false
+        }
+    }
+
+    private func balanceDelta(
+        for transaction: CashflowTransaction?,
+        onCardID cardID: String,
+        in cardCurrency: String,
+        direction: CardBalanceEffectDirection
+    ) async throws -> Double {
+        guard let transaction, shouldAffectCardBalance(transaction) else {
+            return 0
+        }
+
+        let amountInCardCurrency = try await convertAmountForValidation(
+            amount: transaction.amount,
+            from: transaction.currency,
+            to: cardCurrency,
+            on: transaction.transactionDate
+        )
+
+        let appliedDelta: Double
+        switch transaction.transactionType {
+        case .income:
+            appliedDelta = transaction.cardID == cardID ? amountInCardCurrency : 0
+        case .expense:
+            appliedDelta = transaction.cardID == cardID ? -amountInCardCurrency : 0
+        case .transfer:
+            if transaction.cardID == cardID {
+                appliedDelta = -amountInCardCurrency
+            } else if transaction.toCardID == cardID {
+                appliedDelta = amountInCardCurrency
+            } else {
+                appliedDelta = 0
+            }
+        case .balanceAdjustment, .cardBalanceAdjustment:
+            appliedDelta = transaction.cardID == cardID ? amountInCardCurrency : 0
+        case .creditDebtAdjustment:
+            appliedDelta = 0
+        }
+
+        switch direction {
+        case .apply:
+            return appliedDelta
+        case .revert:
+            return -appliedDelta
+        }
+    }
+
+    private func card(for cardID: String) -> Card? {
+        if let cached = state.availableCards.first(where: { $0.cardUniqueID == cardID }) {
+            return cached
+        }
+        let descriptor = FetchDescriptor<Card>()
+        let allCards = (try? modelContext.fetch(descriptor)) ?? []
+        return allCards.first(where: { $0.cardUniqueID == cardID })
+    }
+
+    private func applyCardBalanceEffect(
+        for transaction: CashflowTransaction,
+        direction: CardBalanceEffectDirection
+    ) async throws {
+        let impactedCardIDs = Set([transaction.cardID, transaction.toCardID].compactMap { $0 })
+        guard !impactedCardIDs.isEmpty else { return }
+
+        let resolvedCards = impactedCardIDs.compactMap { cardID -> (String, Card)? in
+            guard let card = card(for: cardID) else { return nil }
+            return (cardID, card)
+        }
+
+        for (cardID, card) in resolvedCards {
+            let delta = try await balanceDelta(
+                for: transaction,
+                onCardID: cardID,
+                in: card.currency,
+                direction: direction
+            )
+            guard abs(delta) > 0.0000001 else { continue }
+            card.balance = max(0, card.balance + delta)
+            card.updatedAt = now()
+        }
+    }
+
+    private func canPersistTransaction(
+        _ transaction: CashflowTransaction,
+        replacing existingTransaction: CashflowTransaction?
+    ) async throws -> Bool {
+        switch transaction.transactionType {
+        case .expense:
+            guard transaction.affectsCardBalance,
+                  let fromCardID = transaction.cardID else {
+                return true
+            }
+            return try await isAmountAvailable(
+                amount: transaction.amount,
+                currency: transaction.currency,
+                fromCardID: fromCardID,
+                on: transaction.transactionDate,
+                replacing: existingTransaction
+            )
+        case .transfer:
+            guard let fromCardID = transaction.cardID else {
+                return false
+            }
+            return try await isAmountAvailable(
+                amount: transaction.amount,
+                currency: transaction.currency,
+                fromCardID: fromCardID,
+                on: transaction.transactionDate,
+                replacing: existingTransaction
+            )
+        case .income, .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
+            return true
+        }
     }
 
     private static func monthStart(for date: Date, calendar: Calendar) -> Date {
@@ -1603,7 +1737,18 @@ final class CashflowViewModel: ViewModelProtocol {
         let rateCurrency: String?
     }
 
-    func isAmountAvailable(amount: Double, currency: String, fromCardID: String, on date: Date) async throws -> Bool {
+    private enum CardBalanceEffectDirection {
+        case apply
+        case revert
+    }
+
+    func isAmountAvailable(
+        amount: Double,
+        currency: String,
+        fromCardID: String,
+        on date: Date,
+        replacing existingTransaction: CashflowTransaction? = nil
+    ) async throws -> Bool {
         guard let card = state.availableCards.first(where: { $0.cardUniqueID == fromCardID }) else {
             AppLogger.log(.warning, category: "Cashflow", "isAmountAvailable: card not found for fromCardID: \(fromCardID)")
             return false
@@ -1615,8 +1760,15 @@ final class CashflowViewModel: ViewModelProtocol {
             to: card.currency,
             on: date
         )
-        
-        return convertedAmount <= card.balance + 0.0001
+
+        let restoredBalance = card.balance + (try await balanceDelta(
+            for: existingTransaction,
+            onCardID: fromCardID,
+            in: card.currency,
+            direction: .revert
+        ))
+
+        return convertedAmount <= restoredBalance + 0.0001
     }
 
     private func convertAmountForValidation(amount: Double, from: String, to: String, on date: Date) async throws -> Double {
@@ -1702,47 +1854,61 @@ final class CashflowViewModel: ViewModelProtocol {
         return transaction.amount
     }
     
-    private func deleteTransaction(_ transaction: CashflowTransaction, recalculate: Bool) {
+    private func deleteTransactionAsync(_ transaction: CashflowTransaction, recalculate: Bool) async {
+        if recalculate {
+            do {
+                try await applyCardBalanceEffect(for: transaction, direction: .revert)
+            } catch {
+                AppLogger.log(.error, category: "Cashflow", "Failed to revert card balance on delete: \(error.localizedDescription)")
+                return
+            }
+        }
+
         modelContext.delete(transaction)
         
         do {
             try modelContext.save()
             if recalculate {
                 loadTransactions()
-            } else {
-                state.transactions.removeAll(where: { $0.persistentModelID == transaction.persistentModelID })
-                state.filteredTransactions.removeAll(where: { $0.persistentModelID == transaction.persistentModelID })
             }
         } catch {
             AppLogger.log(.error, category: "Cashflow", "Failed to delete transaction: \(error.localizedDescription)")
         }
     }
+
+    private func deleteTransactionWithoutRecalculation(_ transaction: CashflowTransaction) {
+        modelContext.delete(transaction)
+
+        do {
+            try modelContext.save()
+        } catch {
+            AppLogger.log(.error, category: "Cashflow", "Failed to delete transaction without recalculation: \(error.localizedDescription)")
+        }
+    }
     
     private func updateTransactionAsync(_ transaction: CashflowTransaction) async {
-        let isNewTransaction = state.editingTransaction == nil
         let exchangeInfo = await resolveExchangeInfo(for: transaction)
 
-        if isNewTransaction,
-           (transaction.transactionType == .expense || transaction.transactionType == .transfer),
-           let fromCardID = transaction.cardID {
-            do {
-                let isAvailable = try await isAmountAvailable(
-                    amount: transaction.amount,
-                    currency: transaction.currency,
-                    fromCardID: fromCardID,
-                    on: transaction.transactionDate
-                )
-                if !isAvailable {
-                    AppLogger.log(.warning, category: "Cashflow", "Insufficient funds for transaction")
-                    return
-                }
-            } catch {
-                AppLogger.log(.error, category: "Cashflow", "Balance validation failed: \(error.localizedDescription)")
+        do {
+            let isAvailable = try await canPersistTransaction(transaction, replacing: state.editingTransaction)
+            if !isAvailable {
+                AppLogger.log(.warning, category: "Cashflow", "Insufficient funds for transaction")
                 return
             }
+        } catch {
+            AppLogger.log(.error, category: "Cashflow", "Balance validation failed: \(error.localizedDescription)")
+            return
         }
         
         if let existing = state.editingTransaction {
+            do {
+                try await applyCardBalanceEffect(for: existing, direction: .revert)
+                try await applyCardBalanceEffect(for: transaction, direction: .apply)
+            } catch {
+                AppLogger.log(.error, category: "Cashflow", "Failed to update card balance effect: \(error.localizedDescription)")
+                return
+            }
+
             // Обновляем существующую транзакцию
             existing.transactionTypeRaw = transaction.transactionTypeRaw
             existing.amount = transaction.amount
@@ -1755,6 +1921,7 @@ final class CashflowViewModel: ViewModelProtocol {
             existing.note = transaction.note
             existing.recurrenceRuleRaw = transaction.recurrenceRuleRaw
             existing.recurrenceSeriesID = transaction.recurrenceSeriesID
+            existing.affectsCardBalance = transaction.affectsCardBalance
             existing.exchangeRate = exchangeInfo.rate
             existing.exchangeRateDate = exchangeInfo.rateDate
             existing.exchangeRateCurrency = exchangeInfo.rateCurrency
@@ -1772,25 +1939,24 @@ final class CashflowViewModel: ViewModelProtocol {
                 expenseCategoryRaw: transaction.expenseCategoryRaw,
                 note: transaction.note,
                 recurrenceRule: transaction.recurrenceRule,
-                recurrenceSeriesID: transaction.recurrenceSeriesID
+                recurrenceSeriesID: transaction.recurrenceSeriesID,
+                affectsCardBalance: transaction.affectsCardBalance
             )
             newTransaction.exchangeRate = exchangeInfo.rate
             newTransaction.exchangeRateDate = exchangeInfo.rateDate
             newTransaction.exchangeRateCurrency = exchangeInfo.rateCurrency
             modelContext.insert(newTransaction)
+            do {
+                try await applyCardBalanceEffect(for: newTransaction, direction: .apply)
+            } catch {
+                AppLogger.log(.error, category: "Cashflow", "Failed to apply card balance effect: \(error.localizedDescription)")
+                modelContext.delete(newTransaction)
+                return
+            }
         }
         
         do {
             try modelContext.save()
-            
-            // Обновляем баланс карт только для новых транзакций
-            if isNewTransaction {
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    await self.updateCardBalancesAsync(for: transaction)
-                }
-            }
-            
             loadTransactions()
             state.showTransactionEditor = false
             state.editingTransaction = nil
@@ -1800,90 +1966,6 @@ final class CashflowViewModel: ViewModelProtocol {
         }
     }
     
-    private func updateCardBalancesAsync(for transaction: CashflowTransaction) async {
-        switch transaction.transactionType {
-        case .income:
-            // Увеличиваем баланс карты
-            if let cardID = transaction.cardID,
-               let card = state.availableCards.first(where: { $0.cardUniqueID == cardID }) {
-                let converted = await convertAmount(
-                    value: transaction.amount,
-                    from: transaction.currency,
-                    to: card.currency
-                )
-                await MainActor.run {
-                    card.balance += converted
-                    card.updatedAt = Date()
-                    do {
-                        try modelContext.save()
-                    } catch {
-                        AppLogger.log(.error, category: "Cashflow", "Failed to save card balance: \(error.localizedDescription)")
-                    }
-                }
-            }
-            
-        case .expense:
-            // Уменьшаем баланс карты
-            if let cardID = transaction.cardID,
-               let card = state.availableCards.first(where: { $0.cardUniqueID == cardID }) {
-                let converted = await convertAmount(
-                    value: transaction.amount,
-                    from: transaction.currency,
-                    to: card.currency
-                )
-                await MainActor.run {
-                    card.balance = max(0, card.balance - converted)
-                    card.updatedAt = Date()
-                    do {
-                        try modelContext.save()
-                    } catch {
-                        AppLogger.log(.error, category: "Cashflow", "Failed to save card balance: \(error.localizedDescription)")
-                    }
-                }
-            }
-            
-        case .transfer:
-            // Переводим с одной карты на другую
-            if let fromCardID = transaction.cardID,
-               let toCardID = transaction.toCardID,
-               let fromCard = state.availableCards.first(where: { $0.cardUniqueID == fromCardID }),
-               let toCard = state.availableCards.first(where: { $0.cardUniqueID == toCardID }) {
-                // Конвертируем сумму в валюту карты-источника
-                let fromConverted = await convertAmount(
-                    value: transaction.amount,
-                    from: transaction.currency,
-                    to: fromCard.currency
-                )
-                // Конвертируем сумму в валюту карты-получателя
-                let toConverted = await convertAmount(
-                    value: transaction.amount,
-                    from: transaction.currency,
-                    to: toCard.currency
-                )
-                
-                await MainActor.run {
-                    fromCard.balance = max(0, fromCard.balance - fromConverted)
-                    toCard.balance += toConverted
-                    fromCard.updatedAt = Date()
-                    toCard.updatedAt = Date()
-                    do {
-                        try modelContext.save()
-                    } catch {
-                        AppLogger.log(.error, category: "Cashflow", "Failed to save card balances: \(error.localizedDescription)")
-                    }
-                }
-            }
-            
-        case .balanceAdjustment:
-            // Ручное изменение баланса уже было применено к карте
-            // Не нужно обновлять баланс повторно
-            break
-        case .cardBalanceAdjustment, .creditDebtAdjustment:
-            // Корректировки баланса/долга не изменяют баланс повторно
-            break
-        }
-    }
-
     private func migrateTransactions(
         fromRaw sourceRaw: String,
         toRaw targetRaw: String,

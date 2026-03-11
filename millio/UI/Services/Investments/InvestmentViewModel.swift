@@ -52,6 +52,8 @@ struct InvestmentState {
 struct InvestmentMarketData: Equatable {
     var symbol: String?
     var exchange: String?
+    var quoteLookupKey: String?
+    var micCode: String?
     var currency: String?
     var quantity: Double?
     var unitPrice: Double?
@@ -397,6 +399,8 @@ final class InvestmentViewModel: ViewModelProtocol {
         if !isMarketCategory {
             investment.marketSymbol = nil
             investment.marketExchange = nil
+            investment.marketQuoteLookupKey = nil
+            investment.marketMICCode = nil
             investment.marketCurrency = nil
             investment.marketQuantity = nil
             investment.lastKnownUnitPrice = nil
@@ -409,6 +413,8 @@ final class InvestmentViewModel: ViewModelProtocol {
 
         investment.marketSymbol = marketData?.symbol
         investment.marketExchange = marketData?.exchange
+        investment.marketQuoteLookupKey = marketData?.quoteLookupKey
+        investment.marketMICCode = marketData?.micCode
         investment.marketCurrency = marketData?.currency
         investment.marketQuantity = marketData?.quantity
         investment.lastKnownUnitPrice = marketData?.unitPrice

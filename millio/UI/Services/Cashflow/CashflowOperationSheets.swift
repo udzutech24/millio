@@ -87,9 +87,6 @@ private struct CashflowCategoryTransactionSheet: View {
                         headerSection
                         monthSelectorSection
                         monthlyTotalSection
-                        if kind.categoryKind == .expense {
-                            bulkImportEntrySection
-                        }
                         managementSection
                         searchSection
                         categoriesSection
@@ -165,11 +162,11 @@ private struct CashflowCategoryTransactionSheet: View {
                     handleCategoryEditorSave(name: name, icon: icon)
                 }
             }
-            .alert("Delete category?", isPresented: $showDeleteCategoryAlert) {
-                Button("Cancel", role: .cancel) {
+            .alert(String(localized: "cashflow.operation.delete_category.title"), isPresented: $showDeleteCategoryAlert) {
+                Button(String(localized: "cashflow.common.cancel"), role: .cancel) {
                     pendingDeleteCategoryRaw = nil
                 }
-                Button("Delete", role: .destructive) {
+                Button(String(localized: "cashflow.history.detail.delete"), role: .destructive) {
                     guard let raw = pendingDeleteCategoryRaw else { return }
                     if viewModel.deleteCategory(rawValue: raw, kind: kind.categoryKind),
                        selectedCategory?.rawValue == raw {
@@ -178,7 +175,7 @@ private struct CashflowCategoryTransactionSheet: View {
                     pendingDeleteCategoryRaw = nil
                 }
             } message: {
-                Text("Linked transactions will be moved to a safe system category.")
+                Text("cashflow.operation.delete_category.message")
             }
             .onAppear {
                 reloadMonthlyTotal()
@@ -234,7 +231,7 @@ private struct CashflowCategoryTransactionSheet: View {
                     )
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Transaction history")
+            .accessibilityLabel(String(localized: "cashflow.operation.history_accessibility"))
 
             Button {
                 showHelpSheet = true
@@ -320,7 +317,7 @@ private struct CashflowCategoryTransactionSheet: View {
                 .padding(.horizontal, 2)
 
             HStack {
-                Text("Total")
+                Text("cashflow.operation.total")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary.opacity(0.92))
                 Spacer()
@@ -344,67 +341,12 @@ private struct CashflowCategoryTransactionSheet: View {
         .background(outerPanelBackground)
     }
 
-    @ViewBuilder
-    private var bulkImportEntrySection: some View {
-        Button {
-            showBulkExpenseImportSheet = true
-        } label: {
-            HStack(spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(kind.strokeGradient.opacity(0.18))
-                        .frame(width: 48, height: 48)
-
-                    Image(systemName: "square.stack.3d.down.right.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(kind.strokeGradient)
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(
-                        String(
-                            localized: "cashflow.bulk_expense.entry.title",
-                            defaultValue: "Mass import",
-                            comment: "Entry card title for bulk expense import"
-                        )
-                    )
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-
-                    Text(
-                        String(
-                            localized: "cashflow.bulk_expense.entry.subtitle",
-                            defaultValue: "Paste lines or parse a bank screenshot and distribute everything at once.",
-                            comment: "Entry card subtitle for bulk expense import"
-                        )
-                    )
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(AppColors.textSecondary)
-                    .multilineTextAlignment(.leading)
-                }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(AppColors.textSecondary.opacity(0.72))
-            }
-            .padding(14)
-            .background(innerPanelBackground)
-            .overlay(
-                RoundedRectangle(cornerRadius: innerCornerRadius, style: .continuous)
-                    .stroke(kind.strokeGradient.opacity(0.34), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
     private var searchSection: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(AppColors.textSecondary)
-            TextField("Search category", text: $searchText)
+            TextField(String(localized: "cashflow.operation.search_category"), text: $searchText)
                 .textInputAutocapitalization(.words)
                 .foregroundStyle(AppColors.textPrimary)
         }
@@ -415,38 +357,30 @@ private struct CashflowCategoryTransactionSheet: View {
 
     private var managementSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Transaction management")
+            Text("cashflow.operation.management")
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary)
                 .padding(.horizontal, 2)
 
-            HStack(spacing: 10) {
-                managementButton(
-                    title: "Recurring",
-                    icon: "repeat",
-                    action: { showRecurringManagement = true }
-                )
-
-                managementButton(
-                    title: "Planned",
-                    icon: "calendar.badge.plus",
-                    action: { showPlannedManagement = true }
-                )
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(CashflowManagementEntry.entries(for: kind.categoryKind)) { entry in
+                        managementButton(entry: entry)
+                    }
+                }
             }
         }
     }
 
-    private func managementButton(
-        title: String,
-        icon: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
+    private func managementButton(entry: CashflowManagementEntry) -> some View {
+        Button {
+            handleManagementTap(entry)
+        } label: {
             HStack(spacing: 10) {
-                Image(systemName: icon)
-                    .font(.system(size: 15, weight: .semibold))
+                Image(systemName: entry.icon)
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color.white.opacity(0.92))
-                    .frame(width: 34, height: 34)
+                    .frame(width: 30, height: 30)
                     .background(
                         Circle()
                             .fill(Color.black.opacity(0.92))
@@ -456,22 +390,33 @@ private struct CashflowCategoryTransactionSheet: View {
                             )
                     )
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                }
+                Text(entry.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
 
-                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(AppColors.textSecondary.opacity(0.72))
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .frame(maxWidth: .infinity, minHeight: 68, alignment: .leading)
+            .frame(minWidth: 112, minHeight: 52, alignment: .leading)
             .background(innerPanelBackground)
         }
         .buttonStyle(.plain)
+    }
+
+    private func handleManagementTap(_ entry: CashflowManagementEntry) {
+        switch entry.destination {
+        case .bulkImport:
+            showBulkExpenseImportSheet = true
+        case .recurring:
+            showRecurringManagement = true
+        case .planned:
+            showPlannedManagement = true
+        }
     }
 
     private var categoriesSection: some View {
@@ -715,6 +660,53 @@ private struct CashflowCategoryTransactionSheet: View {
     }
 }
 
+struct CashflowManagementEntry: Identifiable, Equatable {
+    let title: String
+    let icon: String
+    let destination: CashflowManagementDestination
+
+    var id: CashflowManagementDestination { destination }
+
+    static func entries(for categoryKind: CashflowCategoryKind) -> [CashflowManagementEntry] {
+        var entries: [CashflowManagementEntry] = []
+        if categoryKind == .expense {
+            entries.append(
+                CashflowManagementEntry(
+                    title: String(
+                        localized: "cashflow.bulk_expense.entry.title",
+                        defaultValue: "Mass import",
+                        comment: "Compact entry title for bulk expense import"
+                    ),
+                    icon: "square.stack.3d.down.right.fill",
+                    destination: .bulkImport
+                )
+            )
+        }
+
+        entries.append(
+            CashflowManagementEntry(
+                title: "Recurring",
+                icon: "repeat",
+                destination: .recurring
+            )
+        )
+        entries.append(
+            CashflowManagementEntry(
+                title: "Planned",
+                icon: "calendar.badge.plus",
+                destination: .planned
+            )
+        )
+        return entries
+    }
+}
+
+enum CashflowManagementDestination: Hashable {
+    case bulkImport
+    case recurring
+    case planned
+}
+
 /// Тестируемый источник кратких подсказок для экранов "Новый доход/расход".
 struct CashflowCategoryHelpContent {
     let title: String
@@ -827,15 +819,15 @@ enum CashflowCategoryTransactionSheetKind {
 
     var navigationTitle: String {
         switch self {
-        case .income: return "New income"
-        case .expense: return "New expense"
+        case .income: return String(localized: "New income")
+        case .expense: return String(localized: "New expense")
         }
     }
 
     var monthlyTotalTitle: String {
         switch self {
-        case .income: return "Total income for month"
-        case .expense: return "Total expense for month"
+        case .income: return String(localized: "Total income for month")
+        case .expense: return String(localized: "Total expense for month")
         }
     }
 

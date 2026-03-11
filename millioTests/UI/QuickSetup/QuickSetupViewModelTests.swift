@@ -134,6 +134,33 @@ final class QuickSetupViewModelTests: XCTestCase {
         )
     }
 
+    func testMarketSearchAutoOpenPolicyTriggersOnlyOnTransitionToMarketProduct() {
+        XCTAssertTrue(
+            QuickSetupProductFlowPolicy.shouldAutoOpenMarketSearch(
+                previousType: .card,
+                newType: .ticker
+            )
+        )
+        XCTAssertTrue(
+            QuickSetupProductFlowPolicy.shouldAutoOpenMarketSearch(
+                previousType: .debt,
+                newType: .crypto
+            )
+        )
+        XCTAssertFalse(
+            QuickSetupProductFlowPolicy.shouldAutoOpenMarketSearch(
+                previousType: .ticker,
+                newType: .ticker
+            )
+        )
+        XCTAssertFalse(
+            QuickSetupProductFlowPolicy.shouldAutoOpenMarketSearch(
+                previousType: .crypto,
+                newType: .card
+            )
+        )
+    }
+
     func testQuickSetupHidesRussianWhenSystemLanguageIsNotRussian() {
         let appState = AppState()
         let systemContext = QuickSetupSystemContext(

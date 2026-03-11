@@ -92,17 +92,17 @@ struct CashflowScheduledTransactionsView: View {
                 onSave: { editingTransaction = nil }
             )
         }
-        .alert("Delete transaction?", isPresented: $showDeleteAlert) {
-            Button("Cancel", role: .cancel) {
+        .alert(String(localized: "cashflow.scheduled.delete_transaction.title"), isPresented: $showDeleteAlert) {
+            Button(String(localized: "cashflow.common.cancel"), role: .cancel) {
                 pendingDeleteTransaction = nil
             }
-            Button("Delete", role: .destructive) {
+            Button(String(localized: "cashflow.history.detail.delete"), role: .destructive) {
                 guard let transactionToDelete = pendingDeleteTransaction else { return }
                 viewModel.handle(.deleteTransaction(transactionToDelete, recalculate: true))
                 pendingDeleteTransaction = nil
             }
         } message: {
-            Text("The transaction will be deleted permanently.")
+            Text("cashflow.scheduled.delete_transaction.message")
         }
     }
 
@@ -112,7 +112,7 @@ struct CashflowScheduledTransactionsView: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(AppColors.textSecondary)
 
-            TextField("Search transaction", text: $searchText)
+            TextField(String(localized: "cashflow.scheduled.search_transaction"), text: $searchText)
                 .textInputAutocapitalization(.words)
                 .foregroundStyle(AppColors.textPrimary)
         }
@@ -186,7 +186,7 @@ struct CashflowScheduledTransactionsView: View {
                             .multilineTextAlignment(.leading)
 
                         if mode == .recurring {
-                            Text("Monthly")
+                            Text("cashflow.scheduled.monthly_badge")
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundStyle(AppColors.textSecondary)
                                 .padding(.horizontal, 8)
@@ -350,65 +350,65 @@ enum CashflowScheduledTransactionsMode: Hashable {
     func navigationTitle(for kind: CashflowCategoryKind) -> String {
         switch (self, kind) {
         case (.recurring, .income):
-            return "Recurring income"
+            return String(localized: "Recurring income")
         case (.recurring, .expense):
-            return "Recurring expenses"
+            return String(localized: "Recurring expenses")
         case (.plannedOneTime, .income):
-            return "Planned income"
+            return String(localized: "Planned income")
         case (.plannedOneTime, .expense):
-            return "Planned expenses"
+            return String(localized: "Planned expenses")
         }
     }
 
     func createNavigationTitle(for kind: CashflowCategoryKind) -> String {
         switch (self, kind) {
         case (.recurring, .income):
-            return "New recurring income"
+            return String(localized: "New recurring income")
         case (.recurring, .expense):
-            return "New recurring expense"
+            return String(localized: "New recurring expense")
         case (.plannedOneTime, .income):
-            return "New planned income"
+            return String(localized: "New planned income")
         case (.plannedOneTime, .expense):
-            return "New planned expense"
+            return String(localized: "New planned expense")
         }
     }
 
     func editNavigationTitle(for kind: CashflowCategoryKind) -> String {
         switch (self, kind) {
         case (.recurring, .income):
-            return "Recurring income"
+            return String(localized: "Recurring income")
         case (.recurring, .expense):
-            return "Recurring expense"
+            return String(localized: "Recurring expense")
         case (.plannedOneTime, .income):
-            return "Planned income"
+            return String(localized: "Planned income")
         case (.plannedOneTime, .expense):
-            return "Planned expense"
+            return String(localized: "Planned expense")
         }
     }
 
     func emptyTitle(for kind: CashflowCategoryKind) -> String {
         switch (self, kind) {
         case (.recurring, .income):
-            return "Recurring income has not been added yet"
+            return String(localized: "Recurring income has not been added yet")
         case (.recurring, .expense):
-            return "Recurring expenses have not been added yet"
+            return String(localized: "Recurring expenses have not been added yet")
         case (.plannedOneTime, .income):
-            return "No planned income"
+            return String(localized: "No planned income")
         case (.plannedOneTime, .expense):
-            return "No planned expenses"
+            return String(localized: "No planned expenses")
         }
     }
 
     func createButtonTitle(for kind: CashflowCategoryKind) -> String {
         switch (self, kind) {
         case (.recurring, .income):
-            return "Add recurring income"
+            return String(localized: "Add recurring income")
         case (.recurring, .expense):
-            return "Add recurring expense"
+            return String(localized: "Add recurring expense")
         case (.plannedOneTime, .income):
-            return "Add planned income"
+            return String(localized: "Add planned income")
         case (.plannedOneTime, .expense):
-            return "Add planned expense"
+            return String(localized: "Add planned expense")
         }
     }
 }

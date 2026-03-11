@@ -11,6 +11,7 @@ struct CashbackLocalizationTests {
     @Test("Системные категории кешбэка резолвятся через ключи локализации")
     func cashbackCategoriesAreLocalized() {
         let checks: [(CashbackCategory, String)] = [
+            (.allPurchases, "cashback.category.all_purchases"),
             (.gasStation, "cashback.category.gas_station"),
             (.supermarket, "cashback.category.supermarket"),
             (.restaurant, "cashback.category.restaurant"),

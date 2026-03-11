@@ -11,6 +11,10 @@ import UIKit
 
 struct CashflowTransactionEditorView: View {
     static let amountMaxFractionDigits = 2
+    static let amountBaseFontSize: CGFloat = 38
+    static let amountCompactFontSize: CGFloat = 32
+    static let amountMinimumScaleFactor: CGFloat = 0.72
+    static let amountRowHeight: CGFloat = 96
 
     @ObservedObject var viewModel: CashflowViewModel
     @Environment(\.dismiss) private var dismiss
@@ -40,6 +44,7 @@ struct CashflowTransactionEditorView: View {
     @State private var selectedExpenseCategoryRaw: String? = nil
     @State private var note: String = ""
     @State private var recurrenceRule: CashflowRecurrenceRule = .none
+    @State private var shouldAffectCardBalance: Bool = true
     @State private var availableCurrencies: [String] = []
     @State private var isLoadingCurrencies: Bool = false
     @State private var isAmountOverBalance: Bool = false
@@ -94,6 +99,7 @@ struct CashflowTransactionEditorView: View {
             _selectedExpenseCategoryRaw = State(initialValue: transaction.expenseCategoryRaw)
             _note = State(initialValue: transaction.note ?? "")
             _recurrenceRule = State(initialValue: transaction.recurrenceRule)
+            _shouldAffectCardBalance = State(initialValue: transaction.affectsCardBalance)
         } else if let type = transactionType {
             _selectedTransactionType = State(initialValue: type)
             if type == .income {
@@ -102,9 +108,11 @@ struct CashflowTransactionEditorView: View {
                 _selectedExpenseCategoryRaw = State(initialValue: preselectedExpenseCategoryRaw ?? ExpenseCategory.groceries.rawValue)
             }
             _recurrenceRule = State(initialValue: initialRecurrenceRule ?? .none)
+            _shouldAffectCardBalance = State(initialValue: true)
         } else {
             _selectedTransactionType = State(initialValue: .expense)
             _recurrenceRule = State(initialValue: initialRecurrenceRule ?? .none)
+            _shouldAffectCardBalance = State(initialValue: true)
         }
     }
 
@@ -238,6 +246,9 @@ struct CashflowTransactionEditorView: View {
             validateAvailableBalance()
         }
         .onChange(of: selectedTransactionType) { _, _ in
+            if selectedTransactionType != .income && selectedTransactionType != .expense {
+                shouldAffectCardBalance = true
+            }
             synchronizeSelectedCards()
             validateAvailableBalance()
         }
@@ -312,14 +323,14 @@ struct CashflowTransactionEditorView: View {
 
     private var transactionTypeSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionTitle("Transaction type")
+            sectionTitle(String(localized: "cashflow.editor.section.transaction_type"))
             editorCard {
                 VStack(spacing: 0) {
                     HStack {
-                        Text("Transaction type")
+                        Text("cashflow.editor.transaction_type")
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
-                        Picker("Transaction type", selection: $selectedTransactionType) {
+                        Picker(String(localized: "cashflow.editor.transaction_type"), selection: $selectedTransactionType) {
                             ForEach(CashflowTransactionType.allCases, id: \.self) { type in
                                 HStack(spacing: 6) {
                                     Image(systemName: type.icon)
@@ -355,14 +366,14 @@ struct CashflowTransactionEditorView: View {
 
     private var categorySection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionTitle("Category")
+            sectionTitle(String(localized: "cashflow.editor.section.category"))
             editorCard {
                 Button {
                     fireLightImpact()
                     showCategorySheet = true
                 } label: {
                     HStack {
-                        Text(selectedTransactionType == .income ? "Income category" : "Expense category")
+                        Text(selectedTransactionType == .income ? "cashflow.editor.income_category" : "cashflow.editor.expense_category")
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         HStack(spacing: 8) {
@@ -392,11 +403,11 @@ struct CashflowTransactionEditorView: View {
 
     private var mainInfoSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionTitle("Main info")
+            sectionTitle(String(localized: "cashflow.editor.section.main_info"))
             editorCard {
                 VStack(spacing: 0) {
                     HStack {
-                        Text("Amount")
+                        Text("cashflow.editor.amount")
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
@@ -406,12 +417,19 @@ struct CashflowTransactionEditorView: View {
                         ))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
-                        .font(.system(size: 42, weight: .bold, design: .rounded))
+                        .font(.system(
+                            size: Self.amountFontSize(for: amountDisplayText),
+                            weight: .bold,
+                            design: .rounded
+                        ))
+                        .lineLimit(1)
+                        .minimumScaleFactor(Self.amountMinimumScaleFactor)
                         .foregroundStyle(AppColors.textPrimary)
                         .focused($isAmountFieldFocused)
-                        .frame(maxWidth: 150)
+                        .frame(minWidth: 170, maxWidth: .infinity, alignment: .trailing)
+                        .layoutPriority(1)
                     }
-                    .padding(.vertical, 14)
+                    .frame(minHeight: Self.amountRowHeight)
                     .padding(.horizontal, 16)
                     .background(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -432,13 +450,17 @@ struct CashflowTransactionEditorView: View {
                     if shouldShowCardSelectionInMainInfo {
                         FinancesRowDivider()
                         mainInfoCardRows
+                        if showsAffectCardBalanceToggle {
+                            FinancesRowDivider()
+                            affectCardBalanceToggleRow
+                        }
                         FinancesRowDivider()
                     } else {
                         FinancesRowDivider()
                     }
 
                     HStack {
-                        Text("Currency")
+                        Text("cashflow.editor.currency")
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         if isLoadingCurrencies {
@@ -468,7 +490,7 @@ struct CashflowTransactionEditorView: View {
                     FinancesRowDivider()
 
                     HStack {
-                        Text("Date")
+                        Text("cashflow.editor.date")
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         DatePicker("", selection: $transactionDate, displayedComponents: .date)
@@ -484,7 +506,13 @@ struct CashflowTransactionEditorView: View {
 
     private var selectedCategorySummarySection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionTitle(selectedTransactionType == .income ? "Selected income" : "Selected expense")
+            sectionTitle(
+                String(
+                    localized: selectedTransactionType == .income
+                        ? "cashflow.editor.section.selected_income"
+                        : "cashflow.editor.section.selected_expense"
+                )
+            )
             editorCard {
                 HStack(spacing: 10) {
                     CashflowCategoryIconView(
@@ -506,13 +534,13 @@ struct CashflowTransactionEditorView: View {
 
     private var recurrenceSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionTitle("Recurrence")
+            sectionTitle(String(localized: "cashflow.editor.section.recurrence"))
             editorCard {
                 HStack {
-                    Text("Frequency")
+                    Text("cashflow.editor.frequency")
                         .foregroundStyle(AppColors.textPrimary)
                     Spacer()
-                    Picker("Frequency", selection: $recurrenceRule) {
+                    Picker(String(localized: "cashflow.editor.frequency"), selection: $recurrenceRule) {
                         ForEach(CashflowRecurrenceRule.allCases, id: \.self) { rule in
                             Text(rule.displayName).tag(rule)
                         }
@@ -538,7 +566,7 @@ struct CashflowTransactionEditorView: View {
     private var incomeExpenseCardContent: some View {
         if cardsForCurrentSelection.isEmpty {
             VStack(spacing: 10) {
-                Text("No cards in selected currency")
+                Text("cashflow.editor.no_cards_in_currency")
                     .font(.system(size: 14))
                     .foregroundStyle(AppColors.textTertiary)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -546,7 +574,7 @@ struct CashflowTransactionEditorView: View {
                 Button {
                     openFinancesAddCard()
                 } label: {
-                    Text("Add card in Finances")
+                    Text("cashflow.editor.add_card_in_finances")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                         .padding(.horizontal, 12)
@@ -566,15 +594,15 @@ struct CashflowTransactionEditorView: View {
             .padding(.horizontal, 16)
         } else {
             HStack {
-                Text("Card")
+                Text("cashflow.editor.card")
                     .foregroundStyle(AppColors.textPrimary)
                     .layoutPriority(1)
                 Spacer()
-                Picker("Card", selection: Binding(
+                Picker(String(localized: "cashflow.editor.card"), selection: Binding(
                     get: { selectedCardID ?? "" },
                     set: { selectedCardID = $0.isEmpty ? nil : $0 }
                 )) {
-                    Text("Select card").tag("")
+                    Text("cashflow.editor.select_card").tag("")
                     ForEach(cardsForCurrentSelection) { card in
                         Text(card.name).tag(card.cardUniqueID)
                     }
@@ -598,7 +626,7 @@ struct CashflowTransactionEditorView: View {
 
             if isAmountOverBalance {
                 FinancesRowDivider()
-                Text("Insufficient funds")
+                Text("cashflow.editor.insufficient_funds")
                     .font(.caption)
                     .foregroundStyle(AppColors.error)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -611,7 +639,7 @@ struct CashflowTransactionEditorView: View {
     @ViewBuilder
     private var transferCardContent: some View {
         if viewModel.state.availableCards.isEmpty {
-            Text("No available cards")
+            Text("cashflow.editor.no_available_cards")
                 .font(.system(size: 14))
                 .foregroundStyle(AppColors.textTertiary)
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -619,15 +647,15 @@ struct CashflowTransactionEditorView: View {
                 .padding(.horizontal, 16)
         } else {
             HStack {
-                Text("From card")
+                Text("cashflow.editor.from_card")
                     .foregroundStyle(AppColors.textPrimary)
                     .layoutPriority(1)
                 Spacer()
-                Picker("From card", selection: Binding(
+                Picker(String(localized: "cashflow.editor.from_card"), selection: Binding(
                     get: { selectedCardID ?? "" },
                     set: { selectedCardID = $0.isEmpty ? nil : $0 }
                 )) {
-                    Text("Select card").tag("")
+                    Text("cashflow.editor.select_card").tag("")
                     ForEach(viewModel.state.availableCards.filter { $0.cardUniqueID != selectedToCardID }) { card in
                         Text(card.name).tag(card.cardUniqueID)
                     }
@@ -651,7 +679,7 @@ struct CashflowTransactionEditorView: View {
 
             if isAmountOverBalance {
                 FinancesRowDivider()
-                Text("Insufficient funds")
+                Text("cashflow.editor.insufficient_funds")
                     .font(.caption)
                     .foregroundStyle(AppColors.error)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -662,15 +690,15 @@ struct CashflowTransactionEditorView: View {
             FinancesRowDivider()
 
             HStack {
-                Text("To card")
+                Text("cashflow.editor.to_card")
                     .foregroundStyle(AppColors.textPrimary)
                     .layoutPriority(1)
                 Spacer()
-                Picker("To card", selection: Binding(
+                Picker(String(localized: "cashflow.editor.to_card"), selection: Binding(
                     get: { selectedToCardID ?? "" },
                     set: { selectedToCardID = $0.isEmpty ? nil : $0 }
                 )) {
-                    Text("Select card").tag("")
+                    Text("cashflow.editor.select_card").tag("")
                     ForEach(viewModel.state.availableCards.filter { $0.cardUniqueID != selectedCardID }) { card in
                         Text(card.name).tag(card.cardUniqueID)
                     }
@@ -684,11 +712,44 @@ struct CashflowTransactionEditorView: View {
         }
     }
 
+    private var affectCardBalanceToggleRow: some View {
+        Toggle(
+            isOn: $shouldAffectCardBalance,
+            label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(
+                        String(
+                            localized: "cashflow.bulk_expense.affect_balance",
+                            defaultValue: "Update card balance",
+                            comment: "Toggle title for applying card balance changes"
+                        )
+                    )
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+
+                    Text(
+                        String(
+                            localized: "cashflow.bulk_expense.affect_balance.subtitle",
+                            defaultValue: "Turn off if you only want history without touching the current balance.",
+                            comment: "Toggle subtitle for applying card balance changes"
+                        )
+                    )
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppColors.textSecondary)
+                }
+            }
+        )
+        .toggleStyle(.switch)
+        .tint(getGradientColors().first ?? Color.white)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 16)
+    }
+
     // MARK: - Дополнительно
 
     private var additionalSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionTitle("Additional")
+            sectionTitle(String(localized: "Additional"))
             editorCard {
                 VStack(spacing: 0) {
                     TextField("Comment", text: $note, axis: .vertical)
@@ -727,6 +788,10 @@ struct CashflowTransactionEditorView: View {
 
     private var shouldShowSelectedCategorySummary: Bool {
         !showsCategorySection && (selectedTransactionType == .income || selectedTransactionType == .expense)
+    }
+
+    private var showsAffectCardBalanceToggle: Bool {
+        selectedTransactionType == .income || selectedTransactionType == .expense
     }
 
     private var shouldShowCardSelectionInMainInfo: Bool {
@@ -868,24 +933,20 @@ struct CashflowTransactionEditorView: View {
             return editingTransaction?.recurrenceSeriesID ?? UUID().uuidString
         }()
 
-        let transaction: CashflowTransaction
-        if let editing = editingTransaction {
-            transaction = editing
-        } else {
-            transaction = CashflowTransaction(
-                transactionType: selectedTransactionType,
-                amount: amount,
-                currency: selectedCurrency,
-                transactionDate: transactionDate,
-                cardID: selectedCardID,
-                toCardID: selectedToCardID,
-                incomeCategoryRaw: resolvedIncomeCategoryRaw,
-                expenseCategoryRaw: resolvedExpenseCategoryRaw,
-                note: note.isEmpty ? nil : note,
-                recurrenceRule: effectiveRecurrenceRule,
-                recurrenceSeriesID: resolvedRecurrenceSeriesID
-            )
-        }
+        let transaction = CashflowTransaction(
+            transactionType: selectedTransactionType,
+            amount: amount,
+            currency: selectedCurrency,
+            transactionDate: transactionDate,
+            cardID: selectedCardID,
+            toCardID: selectedToCardID,
+            incomeCategoryRaw: resolvedIncomeCategoryRaw,
+            expenseCategoryRaw: resolvedExpenseCategoryRaw,
+            note: note.isEmpty ? nil : note,
+            recurrenceRule: effectiveRecurrenceRule,
+            recurrenceSeriesID: resolvedRecurrenceSeriesID,
+            affectsCardBalance: showsAffectCardBalanceToggle ? shouldAffectCardBalance : true
+        )
 
         transaction.transactionTypeRaw = selectedTransactionType.rawValue
         transaction.amount = amount
@@ -898,6 +959,7 @@ struct CashflowTransactionEditorView: View {
         transaction.note = note.isEmpty ? nil : note
         transaction.recurrenceRuleRaw = effectiveRecurrenceRule.rawValue
         transaction.recurrenceSeriesID = resolvedRecurrenceSeriesID
+        transaction.affectsCardBalance = showsAffectCardBalanceToggle ? shouldAffectCardBalance : true
 
         viewModel.handle(.updateTransaction(transaction))
         fireSuccessHaptic()
@@ -932,7 +994,7 @@ struct CashflowTransactionEditorView: View {
     // MARK: - Balance Validation
 
     private var shouldValidateBalance: Bool {
-        selectedTransactionType == .expense || selectedTransactionType == .transfer
+        selectedTransactionType == .transfer || (selectedTransactionType == .expense && shouldAffectCardBalance)
     }
 
     private var availableBalanceText: String? {
@@ -970,7 +1032,8 @@ struct CashflowTransactionEditorView: View {
                     amount: amount,
                     currency: currency,
                     fromCardID: card,
-                    on: date
+                    on: date,
+                    replacing: editingTransaction
                 )
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
@@ -1028,6 +1091,11 @@ extension CashflowTransactionEditorView {
         AmountInputFormatter.display(value, maxFractionDigits: amountMaxFractionDigits)
     }
 
+    static func amountFontSize(for value: String) -> CGFloat {
+        let significantCharacters = value.filter { $0.isWholeNumber }.count
+        return significantCharacters >= 7 ? amountCompactFontSize : amountBaseFontSize
+    }
+
     static func operationCurrencyPrimaryPinnedCode(from primaryCurrencyCode: String?) -> String? {
         guard let primaryCurrencyCode else { return nil }
         let normalized = primaryCurrencyCode
@@ -1052,16 +1120,30 @@ extension CashflowTransactionEditorView {
         transactionType: CashflowTransactionType,
         currency: String
     ) -> [Card] {
-        guard transactionType == .income || transactionType == .expense else {
-            return cards
+        let sortedCards = cards.sorted { lhs, rhs in
+            if lhs.isFavorite != rhs.isFavorite {
+                return lhs.isFavorite
+            }
+            if lhs.priority.sortOrder != rhs.priority.sortOrder {
+                return lhs.priority.sortOrder < rhs.priority.sortOrder
+            }
+            if lhs.updatedAt != rhs.updatedAt {
+                return lhs.updatedAt > rhs.updatedAt
+            }
+            return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
         }
 
+        guard transactionType == .income || transactionType == .expense else {
+            return sortedCards
+        }
+
+        // Income and expense must stay on same-currency cards; favorites only affect order inside that subset.
         let normalizedCurrency = currency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         guard !normalizedCurrency.isEmpty else {
-            return cards
+            return sortedCards
         }
 
-        return cards.filter {
+        return sortedCards.filter {
             $0.currency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == normalizedCurrency
         }
     }
@@ -1309,8 +1391,8 @@ struct CashflowCategoryEditorSheet: View {
 
     private var title: String {
         switch mode {
-        case .create: return "New category"
-        case .edit: return "Edit category"
+        case .create: return String(localized: "cashflow.editor.new_category")
+        case .edit: return String(localized: "cashflow.editor.edit_category")
         }
     }
 

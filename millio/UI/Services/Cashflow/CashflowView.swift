@@ -56,11 +56,11 @@ func cashflowShouldShowNoCardsHint(hasEntries: Bool, hasAvailableCards: Bool) ->
 }
 
 func cashflowExpandedHintText(visiblePeriods: Int, locale: Locale = .autoupdatingCurrent) -> String {
-    let isRussian = locale.identifier.lowercased().hasPrefix("ru")
-    if isRussian {
-        return "Подсказка: нажмите на столбец, чтобы увидеть месяц. Окно \(visiblePeriods) помогает сравнивать динамику без перегруза."
-    }
-    return "Hint: tap a bar to inspect the month. Range \(visiblePeriods) keeps trends readable without noise."
+    String(
+        format: AppLocalization.string("cashflow.chart.hint_format", locale: locale),
+        locale: locale,
+        visiblePeriods
+    )
 }
 
 struct CashflowActionButtonsLayout {
@@ -191,7 +191,7 @@ private struct CashflowContentView: View {
                 .padding(.bottom, 20)
             }
         }
-        .navigationTitle("Cashflow")
+        .navigationTitle(String(localized: "main.service.cashflow"))
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar { topToolbar }
@@ -350,7 +350,7 @@ private struct CashflowContentView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .center) {
                     HStack(spacing: 8) {
-                        Text("Asset value change")
+                        Text("cashflow.stats.asset_value_change")
                             .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(primarySecondaryText)
                         Button {
@@ -404,7 +404,7 @@ private struct CashflowContentView: View {
                     .overlay(innerSeparator)
 
                 HStack {
-                    Text("Result")
+                    Text("cashflow.stats.result")
                         .font(.system(size: 19, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                     Spacer()
@@ -514,7 +514,7 @@ private struct CashflowContentView: View {
                         .buttonStyle(.plain)
                     }
                 } else {
-                    Text("No transactions")
+                    Text("cashflow.main.empty.no_transactions")
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(primarySecondaryText)
                 }
@@ -953,7 +953,7 @@ private struct CashflowContentView: View {
             .minimumScaleFactor(0.75)
             .contentTransition(.opacity)
 
-            Text("Result")
+            Text("cashflow.stats.result")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(primarySecondaryText.opacity(0.85))
 
@@ -1040,7 +1040,7 @@ private struct CashflowContentView: View {
 
     private var fullScreenVisiblePeriodsControl: some View {
         HStack(spacing: 10) {
-            Text("Visible range")
+            Text("cashflow.chart.visible_range")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(primarySecondaryText)
 
@@ -1636,7 +1636,7 @@ private struct CashflowContentView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
-                        Text("How is asset value change calculated?")
+                        Text("cashflow.asset_change.info_title")
                             .font(.system(size: 34, weight: .bold))
                             .foregroundStyle(AppColors.textPrimary)
 
@@ -1644,7 +1644,7 @@ private struct CashflowContentView: View {
                             .font(.system(size: 18, weight: .regular))
                             .foregroundStyle(AppColors.textSecondary)
 
-                        Text("Substitution:")
+                        Text("cashflow.asset_change.substitution")
                             .font(.system(size: 24, weight: .bold))
                             .foregroundStyle(AppColors.textPrimary)
 
@@ -1658,7 +1658,7 @@ private struct CashflowContentView: View {
                         .font(.system(size: 18, weight: .regular))
                         .foregroundStyle(AppColors.textPrimary)
 
-                        Text("Balance check:")
+                        Text("cashflow.asset_change.balance_check")
                             .font(.system(size: 24, weight: .bold))
                             .foregroundStyle(AppColors.textPrimary)
 
@@ -1666,11 +1666,11 @@ private struct CashflowContentView: View {
                             (viewModel.state.assetsAtPeriodEnd - viewModel.state.assetsAtPeriodStart) -
                             (viewModel.state.totalIncome + viewModel.state.assetValueChange - viewModel.state.contributedExpense)
                         )
-                        Text(checkValue < 0.01 ? "Matches" : "Mismatch")
+                        Text(checkValue < 0.01 ? "cashflow.asset_change.matches" : "cashflow.asset_change.mismatch")
                             .font(.system(size: 18, weight: .bold))
                             .foregroundStyle(checkValue < 0.01 ? Color.green : Color.red)
 
-                        Text("Explanation: this is asset revaluation/movement for the period after explicit inflows (income) and recorded expenses are accounted for.")
+                        Text("cashflow.asset_change.explanation")
                             .font(.system(size: 18, weight: .regular))
                             .foregroundStyle(AppColors.textSecondary)
                     }

@@ -1496,10 +1496,14 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 }
                 
                 let cardTransactions = transactionsByCardCache[account.accountID] ?? []
+                let effectiveCreationDate = cardTransactions
+                    .map(\.transactionDate)
+                    .min()
+                    .map { min(card.createdAt, $0) } ?? card.createdAt
 
                 // Определяем баланс на запрашиваемую дату
                 var cardBalance: Double
-                if date < card.createdAt {
+                if date < effectiveCreationDate {
                     if includeInitialBeforeCreation {
                         // Если период начинается раньше создания, считаем старт с начального баланса
                         cardBalance = initialBalanceAtCreation
@@ -1513,13 +1517,14 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     
                     // Используем предфильтрованные транзакции из кэша вместо фильтрации всех транзакций
                     let transactionsUpToDate = cardTransactions
-                        .filter { $0.transactionDate >= card.createdAt && $0.transactionDate <= date }
+                        .filter { $0.transactionDate >= effectiveCreationDate && $0.transactionDate <= date }
                         .sorted(by: { $0.transactionDate < $1.transactionDate })
                     
                     for transaction in transactionsUpToDate {
                         switch transaction.transactionType {
                         case .income:
-                            if transaction.cardID == account.accountID {
+                            if transaction.affectsCardBalance,
+                               transaction.cardID == account.accountID {
                                 let converted = await convertTransactionAmount(
                                     transaction,
                                     to: accountCurrency
@@ -1528,7 +1533,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                             }
                             
                         case .expense:
-                            if transaction.cardID == account.accountID {
+                            if transaction.affectsCardBalance,
+                               transaction.cardID == account.accountID {
                                 let converted = await convertTransactionAmount(
                                     transaction,
                                     to: accountCurrency
@@ -1880,7 +1886,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     func getAccountInfoForDynamics(account: FinanceAccount) -> (name: String, amount: Double, currency: String, icon: String, isCreditCardDebt: Bool)? {
         switch account.accountType {
         case .card:
-            if let card = cardsCache[account.accountID] {
+            if let card = resolvedCard(for: account.accountID) {
                 if card.cardType == .credit, let limit = card.creditLimit {
                     let amount = max(0, limit - card.balance)
                     return (card.name, amount, card.currency, card.cardType.icon, true)
@@ -1888,11 +1894,11 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 return (card.name, card.balance, card.currency, card.cardType.icon, false)
             }
         case .credit:
-            if let credit = creditsCache[account.accountID] {
+            if let credit = resolvedCredit(for: account.accountID) {
                 return (credit.name, credit.remainingAmount, credit.currency, credit.creditType.icon, false)
             }
         case .investment:
-            if let investment = investmentsCache[account.accountID] {
+            if let investment = resolvedInvestment(for: account.accountID) {
                 return (
                     financeViewModel.investmentDisplayName(investment),
                     investment.amount,
@@ -1903,6 +1909,48 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             }
         }
         
+        return nil
+    }
+
+    private func resolvedCard(for id: String) -> Card? {
+        if let cached = cardsCache[id] {
+            return cached
+        }
+
+        let descriptor = FetchDescriptor<Card>()
+        let fetched = (try? modelContext.fetch(descriptor)) ?? []
+        if let card = fetched.first(where: { $0.cardUniqueID == id }) {
+            cardsCache[id] = card
+            return card
+        }
+        return nil
+    }
+
+    private func resolvedCredit(for id: String) -> Credit? {
+        if let cached = creditsCache[id] {
+            return cached
+        }
+
+        let descriptor = FetchDescriptor<Credit>()
+        let fetched = (try? modelContext.fetch(descriptor)) ?? []
+        if let credit = fetched.first(where: { $0.creditUniqueID == id }) {
+            creditsCache[id] = credit
+            return credit
+        }
+        return nil
+    }
+
+    private func resolvedInvestment(for id: String) -> Investment? {
+        if let cached = investmentsCache[id] {
+            return cached
+        }
+
+        let descriptor = FetchDescriptor<Investment>()
+        let fetched = (try? modelContext.fetch(descriptor)) ?? []
+        if let investment = fetched.first(where: { $0.investmentUniqueID == id }) {
+            investmentsCache[id] = investment
+            return investment
+        }
         return nil
     }
     

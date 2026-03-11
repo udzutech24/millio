@@ -62,7 +62,9 @@ final class StockBulkImportViewModel: ObservableObject {
                 continue
             }
 
-            if var existing = merged[mergeCandidate], existing.status == .found, row.status == .found {
+            if var existing = merged[mergeCandidate],
+               existingSelectedForMerge(existing),
+               existingSelectedForMerge(row) {
                 let quantity = (existing.quantity ?? 0) + (row.quantity ?? 0)
                 existing.quantityText = formatNumber(quantity)
                 if existing.buyPrice == nil {
@@ -152,6 +154,36 @@ final class StockBulkImportViewModel: ObservableObject {
     func removeRow(_ rowID: UUID) {
         rows.removeAll { $0.id == rowID }
         failedQuoteSymbolsByRowID.removeValue(forKey: rowID)
+        syncMarketDataWarning()
+    }
+
+    func removeVisibleRow(_ row: StockBulkImportRowDraft) {
+        guard mergeDuplicates,
+              let mergeKey = row.selectedCandidate?.mergeKey,
+              !mergeKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            removeRow(row.id)
+            return
+        }
+
+        let matchingIDs: Set<UUID> = Set(
+            rows.compactMap { sourceRow in
+                guard existingSelectedForMerge(sourceRow),
+                      sourceRow.selectedCandidate?.mergeKey == mergeKey else {
+                    return nil
+                }
+                return sourceRow.id
+            }
+        )
+
+        guard !matchingIDs.isEmpty else {
+            removeRow(row.id)
+            return
+        }
+
+        rows.removeAll { matchingIDs.contains($0.id) }
+        for rowID in matchingIDs {
+            failedQuoteSymbolsByRowID.removeValue(forKey: rowID)
+        }
         syncMarketDataWarning()
     }
 
@@ -309,6 +341,10 @@ final class StockBulkImportViewModel: ObservableObject {
 
     private func sanitizeTicker(_ value: String) -> String {
         String(value.uppercased().filter { $0.isLetter || $0.isNumber || $0 == "." || $0 == ":" || $0 == "-" }.prefix(24))
+    }
+
+    private func existingSelectedForMerge(_ row: StockBulkImportRowDraft) -> Bool {
+        row.selectedCandidate != nil
     }
 
     private func formatNumber(_ value: Double) -> String {
@@ -702,7 +738,7 @@ struct StockBulkImportSheet: View {
                         .clipShape(Capsule())
                 }
 
-                inlineEditorGrid(for: row)
+                inlineEditorGrid(for: row, showsDelete: true)
             }
             .padding(14)
         }
@@ -771,7 +807,7 @@ struct StockBulkImportSheet: View {
 
                 if showsDelete {
                     Button(role: .destructive) {
-                        viewModel.removeRow(row.id)
+                        viewModel.removeVisibleRow(row)
                     } label: {
                         Image(systemName: "trash")
                             .frame(width: 40, height: 40)
@@ -779,6 +815,7 @@ struct StockBulkImportSheet: View {
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(Text(String(localized: "finances.common.delete")))
                 }
             }
 

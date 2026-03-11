@@ -61,6 +61,7 @@ struct CashflowTransactionImporter: ModelImporter {
         let recurrenceRuleRaw = dict["recurrenceRuleRaw"] as? String
         let recurrenceRule = recurrenceRuleRaw.flatMap(CashflowRecurrenceRule.init(rawValue:)) ?? .none
         let recurrenceSeriesID = dict["recurrenceSeriesID"] as? String
+        let affectsCardBalance = dict["affectsCardBalance"] as? Bool ?? true
         
         // Создаем новую транзакцию
         let transaction = CashflowTransaction(
@@ -76,7 +77,8 @@ struct CashflowTransactionImporter: ModelImporter {
             expenseCategoryRaw: expenseCategoryRaw,
             note: note,
             recurrenceRule: recurrenceRule,
-            recurrenceSeriesID: recurrenceSeriesID
+            recurrenceSeriesID: recurrenceSeriesID,
+            affectsCardBalance: affectsCardBalance
         )
         transaction.createdAt = createdAt
         transaction.updatedAt = updatedAt
