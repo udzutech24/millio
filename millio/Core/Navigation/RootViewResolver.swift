@@ -48,6 +48,10 @@ struct RootViewResolver: View {
             return .error
         }
     }
+
+    static func shouldResetNavigationPath(from oldRoute: RootViewRoute, to newRoute: RootViewRoute) -> Bool {
+        oldRoute != newRoute
+    }
     
     var body: some View {
         let route = Self.route(
@@ -82,6 +86,10 @@ struct RootViewResolver: View {
         }
         .onChange(of: route) { _, newRoute in
             authManager.logResolvedRoute(newRoute)
+        }
+        .onChange(of: route) { oldRoute, newRoute in
+            guard Self.shouldResetNavigationPath(from: oldRoute, to: newRoute) else { return }
+            router.popToRoot()
         }
         .onChange(of: authManager.isAuthenticated) { wasAuthenticated, isAuthenticated in
             guard !wasAuthenticated, isAuthenticated else { return }

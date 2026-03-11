@@ -23,6 +23,7 @@ extension UNUserNotificationCenter: UserNotificationCenterProtocol {}
 protocol NotificationManagerProtocol {
     func requestAuthorization() async -> Bool
     func scheduleDailyReminder(enabled: Bool) async
+    func scheduleDailyReminder(using settings: DailyReminderSettings) async
     func cancelDailyReminder()
 }
 
@@ -35,35 +36,18 @@ final class NotificationManager: NotificationManagerProtocol {
     private let notificationCenter: any UserNotificationCenterProtocol
     private let now: () -> Date
     private let calendar: Calendar
-    private let dailyReminderIdentifier = "daily_reminder"
-    
-    // Дружелюбные сообщения для ежедневных напоминаний
-    private let reminderMessages = [
-        "Привет! Не забудь зафиксировать свои финансы сегодня 📊",
-        "Привет! Время проверить свои финансовые цели 💰",
-        "Привет! Как дела с финансами? Запиши сегодняшние траты 📝",
-        "Добро пожаловать! Не забудь обновить свои финансовые данные ✨",
-        "Привет! Время подумать о своих финансах и целях 🎯",
-        "Привет! Проверь свои счета и транзакции сегодня 💳",
-        "Привет! Не забудь записать свои доходы и расходы 📈",
-        "Добро пожаловать! Время обновить свои финансовые планы 🌟",
-        "Привет! Как твои финансовые цели? Проверь прогресс 🚀",
-        "Привет! Не забудь зафиксировать важные финансовые операции 💎",
-        "Привет! Время подвести итоги дня и записать финансы 📊",
-        "Добро пожаловать! Проверь свои карты и счета сегодня 💳",
-        "Привет! Не забудь обновить информацию о своих финансах ✨",
-        "Привет! Время записать сегодняшние финансовые операции 📝",
-        "Привет! Как дела? Проверь свои финансовые цели и прогресс 🎯"
-    ]
+    private let languageProvider: () -> Language
     
     init(
         notificationCenter: any UserNotificationCenterProtocol = UNUserNotificationCenter.current(),
         now: @escaping () -> Date = Date.init,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        languageProvider: @escaping () -> Language = { LanguageManager.shared.currentLanguage }
     ) {
         self.notificationCenter = notificationCenter
         self.now = now
         self.calendar = calendar
+        self.languageProvider = languageProvider
     }
     
     // MARK: - Public Methods
@@ -80,60 +64,84 @@ final class NotificationManager: NotificationManagerProtocol {
     }
     
     func scheduleDailyReminder(enabled: Bool) async {
-        if enabled {
-            // Запрашиваем разрешение, если еще не получено
-            let authorized = await requestAuthorization()
-            guard authorized else {
-                logger.warning("Notification authorization not granted")
-                return
-            }
-            
-            // Отменяем предыдущие уведомления
+        var settings = SettingsManager.shared.dailyReminderSettings
+        settings.isEnabled = enabled
+        await scheduleDailyReminder(using: settings)
+    }
+
+    func scheduleDailyReminder(using settings: DailyReminderSettings) async {
+        let normalized = settings.normalized(calendar: calendar, now: now())
+        guard normalized.isEnabled else {
             cancelDailyReminder()
-            
-            // Создаем новое ежедневное уведомление
-            let content = UNMutableNotificationContent()
-            content.title = "millio"
-            content.body = getRandomMessage()
-            content.sound = .default
-            content.badge = 1
-            
-            // Настраиваем триггер на каждый день в 20:00
-            var dateComponents = DateComponents()
-            dateComponents.hour = 20
-            dateComponents.minute = 0
-            
-            let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
-            
-            let request = UNNotificationRequest(
-                identifier: dailyReminderIdentifier,
-                content: content,
-                trigger: trigger
-            )
-            
-            do {
-                try await notificationCenter.add(request)
-                logger.info("Daily reminder scheduled successfully")
-            } catch {
-                logger.error("Failed to schedule daily reminder: \(error.localizedDescription)")
-            }
-        } else {
-            cancelDailyReminder()
+            return
+        }
+
+        let authorized = await requestAuthorization()
+        guard authorized else {
+            logger.warning("Notification authorization not granted")
+            return
+        }
+
+        cancelDailyReminder()
+
+        let content = UNMutableNotificationContent()
+        content.title = "millio"
+        content.body = normalized.notificationBody(
+            language: languageProvider(),
+            calendar: calendar,
+            now: now()
+        )
+        content.sound = .default
+        content.badge = 1
+
+        guard let trigger = makeTrigger(for: normalized) else {
+            logger.warning("Skipping reminder scheduling because trigger is invalid")
+            return
+        }
+
+        let request = UNNotificationRequest(
+            identifier: DailyReminderSettings.notificationIdentifier,
+            content: content,
+            trigger: trigger
+        )
+
+        do {
+            try await notificationCenter.add(request)
+            logger.info("Daily reminder scheduled successfully")
+        } catch {
+            logger.error("Failed to schedule daily reminder: \(error.localizedDescription)")
         }
     }
     
     func cancelDailyReminder() {
-        notificationCenter.removePendingNotificationRequests(withIdentifiers: [dailyReminderIdentifier])
-        notificationCenter.removeDeliveredNotifications(withIdentifiers: [dailyReminderIdentifier])
+        notificationCenter.removePendingNotificationRequests(withIdentifiers: [DailyReminderSettings.notificationIdentifier])
+        notificationCenter.removeDeliveredNotifications(withIdentifiers: [DailyReminderSettings.notificationIdentifier])
         logger.info("Daily reminder cancelled")
     }
     
     // MARK: - Private Methods
-    
-    private func getRandomMessage() -> String {
-        // Используем день месяца для выбора сообщения (чтобы было предсказуемо, но разнообразно)
-        let day = calendar.component(.day, from: now())
-        let index = day % reminderMessages.count
-        return reminderMessages[index]
+
+    private func makeTrigger(for settings: DailyReminderSettings) -> UNCalendarNotificationTrigger? {
+        var components = DateComponents()
+        components.hour = settings.hour
+        components.minute = settings.minute
+
+        switch settings.cadence {
+        case .daily:
+            return UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
+        case .monthly:
+            components.day = settings.dayOfMonth
+            return UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
+        case .once:
+            let dateComponents = calendar.dateComponents([.year, .month, .day], from: settings.selectedDate)
+            components.year = dateComponents.year
+            components.month = dateComponents.month
+            components.day = dateComponents.day
+
+            guard let fireDate = calendar.date(from: components), fireDate > now() else {
+                return nil
+            }
+            return UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        }
     }
 }

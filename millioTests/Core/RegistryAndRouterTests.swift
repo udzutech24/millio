@@ -106,6 +106,13 @@ struct RootViewResolverTests {
         #expect(RootViewResolver.route(for: .ready, authStatus: .authenticated, isAuthenticated: true, isGuestModeEnabled: false) == .ready)
         #expect(RootViewResolver.route(for: .error(.iCloudUnavailable), authStatus: .authenticated, isAuthenticated: true, isGuestModeEnabled: false) == .error)
     }
+
+    @Test("RootViewResolver сбрасывает стек только при смене root-route")
+    func testShouldResetNavigationPathOnRootRouteChange() {
+        #expect(RootViewResolver.shouldResetNavigationPath(from: .auth, to: .ready))
+        #expect(RootViewResolver.shouldResetNavigationPath(from: .ready, to: .onboarding))
+        #expect(!RootViewResolver.shouldResetNavigationPath(from: .ready, to: .ready))
+    }
 }
 
 @Suite(.serialized)

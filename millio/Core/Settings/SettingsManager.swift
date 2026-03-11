@@ -12,6 +12,7 @@ protocol SettingsManagerProtocol {
     var isBackupEnabled: Bool { get set }
     var isEncryptionEnabled: Bool { get set }
     var isDailyReminderEnabled: Bool { get set }
+    var dailyReminderSettings: DailyReminderSettings { get set }
     var isAppLockEnabled: Bool { get set }
     var isBiometricUnlockEnabled: Bool { get set }
     func resetToDefaults()
@@ -27,6 +28,7 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
     private let backupEnabledKey = "isBackupEnabled"
     private let encryptionEnabledKey = "isEncryptionEnabled"
     private let dailyReminderEnabledKey = "isDailyReminderEnabled"
+    private let dailyReminderSettingsKey = "dailyReminderSettings"
     private let appLockEnabledKey = "isAppLockEnabled"
     private let biometricUnlockEnabledKey = "isBiometricUnlockEnabled"
     private let profileDisplayNameKey = "profileDisplayName"
@@ -94,11 +96,38 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
     
     var isDailyReminderEnabled: Bool {
         get {
-            defaults.object(forKey: dailyReminderEnabledKey) as? Bool ?? false
+            let storedEnabled = defaults.object(forKey: dailyReminderEnabledKey) as? Bool
+            if let storedEnabled {
+                return storedEnabled
+            }
+            return dailyReminderSettings.isEnabled
         }
         set {
             defaults.set(newValue, forKey: dailyReminderEnabledKey)
+            var settings = dailyReminderSettings
+            settings.isEnabled = newValue
+            storeDailyReminderSettings(settings)
             logger.info("Daily reminder enabled: \(newValue)")
+        }
+    }
+
+    var dailyReminderSettings: DailyReminderSettings {
+        get {
+            guard
+                let data = defaults.data(forKey: dailyReminderSettingsKey),
+                let decoded = try? JSONDecoder().decode(DailyReminderSettings.self, from: data)
+            else {
+                var legacy = DailyReminderSettings.default
+                legacy.isEnabled = defaults.object(forKey: dailyReminderEnabledKey) as? Bool ?? false
+                return legacy
+            }
+            return decoded.normalized()
+        }
+        set {
+            let normalized = newValue.normalized()
+            storeDailyReminderSettings(normalized)
+            defaults.set(normalized.isEnabled, forKey: dailyReminderEnabledKey)
+            logger.info("Daily reminder settings updated")
         }
     }
 
@@ -319,6 +348,7 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
         isBackupEnabled = false
         isEncryptionEnabled = false
         isDailyReminderEnabled = false
+        dailyReminderSettings = .default
         isAppLockEnabled = false
         isBiometricUnlockEnabled = false
         profileDisplayName = Self.defaultProfileDisplayName
@@ -338,5 +368,13 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
         defaults.removeObject(forKey: "credit_display_currency")
         defaults.removeObject(forKey: "investment_display_currency")
         defaults.removeObject(forKey: "conv_rate_source")
+    }
+
+    private func storeDailyReminderSettings(_ settings: DailyReminderSettings) {
+        guard let data = try? JSONEncoder().encode(settings) else {
+            logger.error("Failed to encode daily reminder settings")
+            return
+        }
+        defaults.set(data, forKey: dailyReminderSettingsKey)
     }
 }

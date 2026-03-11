@@ -124,7 +124,7 @@ struct millioApp: App {
 
                     // Восстанавливаем расписание уведомлений, если они включены
                     if appState.isDailyReminderEnabled {
-                        await NotificationManager.shared.scheduleDailyReminder(enabled: true)
+                        await NotificationManager.shared.scheduleDailyReminder(using: SettingsManager.shared.dailyReminderSettings)
                     }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in

@@ -22,6 +22,12 @@ final class AppState {
         didSet {
             guard selectedLanguage != oldValue else { return }
             LanguageManager.shared.setLanguage(selectedLanguage)
+            if isDailyReminderEnabled {
+                let settings = SettingsManager.shared.dailyReminderSettings
+                Task { @MainActor in
+                    await NotificationManager.shared.scheduleDailyReminder(using: settings)
+                }
+            }
             languageRefreshToken = UUID()
             if SettingsManager.isDefaultProfileDisplayName(profileDisplayName) {
                 let localizedDefault = SettingsManager.defaultProfileDisplayName

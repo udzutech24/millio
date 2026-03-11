@@ -27,7 +27,7 @@ struct ProfileAccountDetailsView: View {
     private let logoutTitle = String(localized: "profile.auth.logout", defaultValue: "Logout", comment: "Logout button")
     private let emailMissingTitle = String(localized: "profile.auth.email_missing", defaultValue: "Email is not available", comment: "Fallback email text")
     private let guestTitle = String(localized: "profile.auth.guest.title", defaultValue: "Guest mode", comment: "Guest mode title")
-    private let guestSubtitle = String(localized: "profile.auth.guest.subtitle", defaultValue: "You can use the app now and connect an Apple account later.", comment: "Guest mode subtitle")
+    private let guestSubtitle = String(localized: "profile.auth.guest.subtitle", defaultValue: "You can use the app now and connect an Apple account later", comment: "Guest mode subtitle")
     private let exitGuestTitle = String(localized: "profile.auth.exit_guest", defaultValue: "Exit guest mode", comment: "Exit guest mode button title")
     private let signedOutTitle = String(localized: "profile.auth.not_signed_in", defaultValue: "Not signed in", comment: "Signed-out auth state title")
     private let signedOutSubtitle = String(localized: "profile.auth.not_signed_in.subtitle", defaultValue: "Connect your Apple account to sync and restore access.", comment: "Signed-out auth state subtitle")

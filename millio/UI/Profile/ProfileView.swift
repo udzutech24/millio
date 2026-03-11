@@ -313,6 +313,44 @@ struct ProfileView: View {
             : AppLocalization.string("profile.status.not_completed", locale: locale)
     }
 
+    private var remindersRowTitle: String {
+        AppLocalization.string(
+            "profile.reminders",
+            locale: appState.selectedLanguage.locale ?? Locale.current,
+            fallback: isRussianLocale ? "Напоминания" : "Reminders"
+        )
+    }
+
+    private var isRussianLocale: Bool {
+        let identifier = (appState.selectedLanguage.locale ?? Locale.current).identifier.lowercased()
+        return identifier.hasPrefix("ru")
+    }
+
+    private var dailyReminderStatusText: String {
+        let locale = appState.selectedLanguage.locale ?? Locale.current
+        let settings = SettingsManager.shared.dailyReminderSettings
+
+        guard settings.isEnabled else {
+            return AppLocalization.string("profile.status.disabled", locale: locale)
+        }
+
+        let timeText = String(
+            format: "%02d:%02d",
+            locale: locale,
+            settings.hour,
+            settings.minute
+        )
+
+        switch settings.cadence {
+        case .daily:
+            return timeText
+        case .monthly:
+            return "\(settings.dayOfMonth) • \(timeText)"
+        case .once:
+            return settings.selectedDate.formatted(date: .abbreviated, time: .omitted) + " • " + timeText
+        }
+    }
+
     private var premiumStatusLine: String {
         let locale = appState.selectedLanguage.locale ?? Locale.current
         switch appState.subscriptionAccessSource {
@@ -427,21 +465,17 @@ struct ProfileView: View {
             .accessibilityIdentifier("profile.appSecurityLink")
 
         case .dailyReminders:
-            Toggle(isOn: Binding(
-                get: { appState.isDailyReminderEnabled },
-                set: { newValue in
-                    appState.isDailyReminderEnabled = newValue
-                    SettingsManager.shared.isDailyReminderEnabled = newValue
-
-                    Task {
-                        await NotificationManager.shared.scheduleDailyReminder(enabled: newValue)
-                    }
+            NavigationLink {
+                DailyReminderSettingsView()
+            } label: {
+                settingsRowText(iconSystemName: "bell", title: remindersRowTitle) {
+                    Text(dailyReminderStatusText)
+                        .foregroundStyle(appState.isDailyReminderEnabled ? AppColors.profileValueAccent : AppColors.textTertiary)
+                    chevron
                 }
-            )) {
-                settingsRow(iconSystemName: "bell", title: "profile.daily_reminders") { EmptyView() }
             }
-            .tint(AppColors.toggleOnGreen)
-            .accessibilityIdentifier("profile.dailyReminderToggle")
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("profile.dailyReminderLink")
 
         case .quickSetup:
             Button {
@@ -495,12 +529,7 @@ struct ProfileView: View {
             NavigationLink {
                 SmartDataResetView()
             } label: {
-                settingsRow(
-                    iconSystemName: "trash",
-                    title: "profile.smart_data_reset",
-                    titleColor: AppColors.error,
-                    iconColor: AppColors.error
-                ) {
+                settingsRow(iconSystemName: "trash", title: "profile.smart_data_reset") {
                     chevron
                 }
             }
@@ -725,6 +754,33 @@ struct ProfileView: View {
             Text(title)
                 .font(.system(size: 16, weight: .regular))
                 .foregroundStyle(AppColors.textPrimary)
+
+            Spacer()
+
+            HStack(spacing: 6) {
+                trailing()
+            }
+        }
+        .frame(minHeight: 32)
+        .contentShape(Rectangle())
+    }
+
+    private func settingsRowText<Trailing: View>(
+        iconSystemName: String,
+        title: String,
+        titleColor: Color = AppColors.textPrimary,
+        iconColor: Color = AppColors.textSecondary,
+        @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: iconSystemName)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(iconColor)
+                .frame(width: 22, alignment: .leading)
+
+            Text(title)
+                .font(.system(size: 16, weight: .regular))
+                .foregroundStyle(titleColor)
 
             Spacer()
 

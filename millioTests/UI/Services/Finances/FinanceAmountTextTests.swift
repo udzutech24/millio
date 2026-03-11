@@ -37,5 +37,16 @@ struct FinanceAmountTextTests {
         let text = FinanceAmountText.withCurrency(value: 1620746, currencySymbol: "₽", isHidden: false)
         #expect(text == "1 620 746 ₽")
     }
-}
 
+    @Test("percent маскирует проценты в privacy-режиме")
+    func testPercentHidden() {
+        #expect(FinanceAmountText.percent(value: 0.2, isHidden: true) == "•••%")
+        #expect(FinanceAmountText.percent(value: -12.5, isHidden: true) == "•••%")
+    }
+
+    @Test("percent форматирует знак и дробную часть когда privacy-режим выключен")
+    func testPercentVisible() {
+        #expect(FinanceAmountText.percent(value: 0.2, isHidden: false) == "+0.2%")
+        #expect(FinanceAmountText.percent(value: -12.5, isHidden: false) == "-12.5%")
+    }
+}

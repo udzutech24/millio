@@ -51,6 +51,41 @@ struct SettingsAndCurrencyDefaultsTests {
         #expect(isolated.manager.isBiometricUnlockEnabled == false)
     }
 
+    @Test("SettingsManager dailyReminderSettings defaults to disabled expense reminder")
+    func testDailyReminderSettingsDefault() {
+        let isolated = makeIsolatedSettingsManager()
+        defer { isolated.cleanup() }
+
+        #expect(isolated.manager.dailyReminderSettings == .default)
+    }
+
+    @Test("SettingsManager dailyReminderSettings persists and normalizes")
+    func testDailyReminderSettingsPersists() {
+        let isolated = makeIsolatedSettingsManager()
+        defer { isolated.cleanup() }
+
+        isolated.manager.dailyReminderSettings = DailyReminderSettings(
+            isEnabled: true,
+            kind: .custom,
+            cadence: .monthly,
+            hour: 27,
+            minute: 75,
+            dayOfMonth: 48,
+            selectedDate: Date(timeIntervalSince1970: 0),
+            customText: "  Add expenses  "
+        )
+
+        let stored = isolated.manager.dailyReminderSettings
+        #expect(stored.isEnabled == true)
+        #expect(stored.kind == .custom)
+        #expect(stored.cadence == .monthly)
+        #expect(stored.hour == 23)
+        #expect(stored.minute == 59)
+        #expect(stored.dayOfMonth == 31)
+        #expect(stored.trimmedCustomText == "Add expenses")
+        #expect(isolated.manager.isDailyReminderEnabled == true)
+    }
+
     @Test("SettingsManager primaryCurrencyCode defaults to RUB")
     func testPrimaryCurrencyDefault() {
         let isolated = makeIsolatedSettingsManager()

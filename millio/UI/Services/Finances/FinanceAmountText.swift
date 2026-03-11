@@ -36,5 +36,16 @@ enum FinanceAmountText {
         let digitCount = String(rounded).count
         return String(repeating: "•", count: max(minimumDigits, digitCount))
     }
-}
 
+    static func percent(value: Double, isHidden: Bool, minimumMaskDigits: Int = 3) -> String {
+        if isHidden {
+            return "\(maskedDigits(for: value, minimumDigits: minimumMaskDigits))%"
+        }
+
+        if abs(value) >= 999999 {
+            return value > 0 ? "+∞" : "-∞"
+        }
+
+        return String(format: "%+.1f%%", value)
+    }
+}

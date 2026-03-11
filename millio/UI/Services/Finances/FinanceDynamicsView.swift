@@ -199,6 +199,10 @@ private struct FinanceDynamicsContentView: View {
     // Кэшированные значения для графика
     @State private var cachedSelectedPoint: (date: Date, value: Double)? = nil
 
+    private var isAmountHidden: Bool {
+        financeViewModel.state.isAmountHidden
+    }
+
     private enum TradePriceMode: String, CaseIterable, Hashable {
         case market
         case custom
@@ -889,7 +893,9 @@ private struct FinanceDynamicsContentView: View {
     }
 
     private func money(_ value: Double, currency: String) -> String {
-        let number = marketNumber(value, digits: 2)
+        let number = isAmountHidden
+            ? FinanceAmountText.maskedDigits(for: value)
+            : FinanceAmountText.decimal(value: value, maximumFractionDigits: 2)
         return "\(number) \(currency)"
     }
 
@@ -1965,6 +1971,7 @@ private struct FinanceDynamicsContentView: View {
             xAxisStride: xAxisStride,
             xAxisCount: xAxisCount,
             currencyCode: viewModel.state.displayCurrency,
+            isAmountHidden: isAmountHidden,
             onSelectPoint: { newPoint in
                 if let pt = newPoint {
                     cachedSelectedPoint = (date: pt.0, value: pt.1)
@@ -2625,25 +2632,24 @@ private struct FinanceDynamicsContentView: View {
     }
 
     private func formatBalance(_ balance: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.groupingSeparator = " "
-        formatter.usesGroupingSeparator = true
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: balance)) ?? "0"
+        if isAmountHidden {
+            return FinanceAmountText.maskedDigits(for: balance)
+        }
+
+        return FinanceAmountText.decimal(value: balance)
     }
 
     private func formatDelta(_ delta: Double) -> String {
+        if isAmountHidden {
+            return FinanceAmountText.maskedDigits(for: delta)
+        }
+
         let sign = delta >= 0 ? "+" : ""
         return "\(sign)\(formatBalance(delta))"
     }
 
     private func formatPercent(_ percent: Double) -> String {
-        if abs(percent) >= 999999 {
-            return percent > 0 ? "+∞" : "-∞"
-        }
-        return String(format: "%+.1f%%", percent)
+        FinanceAmountText.percent(value: percent, isHidden: isAmountHidden)
     }
 
     private func deltaColor(for item: DynamicsBreakdownItem) -> Color {

@@ -194,13 +194,27 @@ struct NotificationManagerTests {
     func testScheduleDailyReminderAddsRequestWhenAuthorized() async {
         let fakeCenter = FakeNotificationCenter()
         let calendar = makeCalendarUTC()
-        let manager = NotificationManager(notificationCenter: fakeCenter, now: { self.makeDate(day: 3) }, calendar: calendar)
+        let manager = NotificationManager(
+            notificationCenter: fakeCenter,
+            now: { self.makeDate(day: 3) },
+            calendar: calendar,
+            languageProvider: { .russian }
+        )
         
-        await manager.scheduleDailyReminder(enabled: true)
+        await manager.scheduleDailyReminder(using: DailyReminderSettings(
+            isEnabled: true,
+            kind: .expense,
+            cadence: .daily,
+            hour: 20,
+            minute: 0,
+            dayOfMonth: 1,
+            selectedDate: self.makeDate(day: 3),
+            customText: ""
+        ))
         
         #expect(fakeCenter.authorizationRequestCount == 1)
         #expect(fakeCenter.addedRequests.count == 1)
-        #expect(fakeCenter.addedRequests.first?.identifier == "daily_reminder")
+        #expect(fakeCenter.addedRequests.first?.identifier == DailyReminderSettings.notificationIdentifier)
         
         let request = fakeCenter.addedRequests.first!
         #expect(request.content.title == "millio")
@@ -215,24 +229,165 @@ struct NotificationManagerTests {
     @Test("Текст напоминания детерминирован по дню месяца")
     func testReminderMessageIsDeterministicByDay() async {
         let calendar = makeCalendarUTC()
+        let settings = DailyReminderSettings(
+            isEnabled: true,
+            kind: .expense,
+            cadence: .daily,
+            hour: 20,
+            minute: 0,
+            dayOfMonth: 1,
+            selectedDate: self.makeDate(day: 1),
+            customText: ""
+        )
         
         let fake1 = FakeNotificationCenter()
-        let manager1 = NotificationManager(notificationCenter: fake1, now: { self.makeDate(day: 1) }, calendar: calendar)
-        await manager1.scheduleDailyReminder(enabled: true)
+        let manager1 = NotificationManager(
+            notificationCenter: fake1,
+            now: { self.makeDate(day: 1) },
+            calendar: calendar,
+            languageProvider: { .russian }
+        )
+        await manager1.scheduleDailyReminder(using: settings)
         let body1 = fake1.addedRequests.first?.content.body
         
         let fake2 = FakeNotificationCenter()
-        let manager2 = NotificationManager(notificationCenter: fake2, now: { self.makeDate(day: 1) }, calendar: calendar)
-        await manager2.scheduleDailyReminder(enabled: true)
+        let manager2 = NotificationManager(
+            notificationCenter: fake2,
+            now: { self.makeDate(day: 1) },
+            calendar: calendar,
+            languageProvider: { .russian }
+        )
+        await manager2.scheduleDailyReminder(using: settings)
         let body2 = fake2.addedRequests.first?.content.body
         
         #expect(body1 == body2)
         
         let fake3 = FakeNotificationCenter()
-        let manager3 = NotificationManager(notificationCenter: fake3, now: { self.makeDate(day: 2) }, calendar: calendar)
-        await manager3.scheduleDailyReminder(enabled: true)
+        let manager3 = NotificationManager(
+            notificationCenter: fake3,
+            now: { self.makeDate(day: 2) },
+            calendar: calendar,
+            languageProvider: { .russian }
+        )
+        await manager3.scheduleDailyReminder(using: settings)
         let body3 = fake3.addedRequests.first?.content.body
         
         #expect(body3 != body1)
+    }
+
+    @Test("Ежемесячное напоминание использует день месяца и заданное время")
+    func testMonthlyReminderUsesDayOfMonth() async {
+        let fakeCenter = FakeNotificationCenter()
+        let calendar = makeCalendarUTC()
+        let manager = NotificationManager(
+            notificationCenter: fakeCenter,
+            now: { self.makeDate(day: 3) },
+            calendar: calendar,
+            languageProvider: { .english }
+        )
+
+        await manager.scheduleDailyReminder(using: DailyReminderSettings(
+            isEnabled: true,
+            kind: .income,
+            cadence: .monthly,
+            hour: 9,
+            minute: 15,
+            dayOfMonth: 12,
+            selectedDate: self.makeDate(day: 12),
+            customText: ""
+        ))
+
+        let trigger = fakeCenter.addedRequests.first?.trigger as? UNCalendarNotificationTrigger
+        #expect(trigger?.repeats == true)
+        #expect(trigger?.dateComponents.day == 12)
+        #expect(trigger?.dateComponents.hour == 9)
+        #expect(trigger?.dateComponents.minute == 15)
+    }
+
+    @Test("Разовое напоминание использует конкретную дату и не повторяется")
+    func testOneTimeReminderUsesSpecificDate() async throws {
+        let fakeCenter = FakeNotificationCenter()
+        let calendar = makeCalendarUTC()
+        let targetDate = makeDate(month: 2, day: 7)
+        let manager = NotificationManager(
+            notificationCenter: fakeCenter,
+            now: { self.makeDate(day: 3) },
+            calendar: calendar,
+            languageProvider: { .russian }
+        )
+
+        await manager.scheduleDailyReminder(using: DailyReminderSettings(
+            isEnabled: true,
+            kind: .custom,
+            cadence: .once,
+            hour: 14,
+            minute: 45,
+            dayOfMonth: 1,
+            selectedDate: targetDate,
+            customText: "Внести расходы"
+        ))
+
+        let request = try #require(fakeCenter.addedRequests.first)
+        let trigger = request.trigger as? UNCalendarNotificationTrigger
+
+        #expect(trigger?.repeats == false)
+        #expect(trigger?.dateComponents.year == 2026)
+        #expect(trigger?.dateComponents.month == 2)
+        #expect(trigger?.dateComponents.day == 7)
+        #expect(trigger?.dateComponents.hour == 14)
+        #expect(trigger?.dateComponents.minute == 45)
+        #expect(request.content.body == "Внести расходы")
+    }
+
+    @Test("Текст напоминания использует английский язык приложения")
+    func testReminderMessageUsesEnglishLanguage() async throws {
+        let fakeCenter = FakeNotificationCenter()
+        let calendar = makeCalendarUTC()
+        let manager = NotificationManager(
+            notificationCenter: fakeCenter,
+            now: { self.makeDate(day: 1) },
+            calendar: calendar,
+            languageProvider: { .english }
+        )
+
+        await manager.scheduleDailyReminder(using: DailyReminderSettings(
+            isEnabled: true,
+            kind: .expense,
+            cadence: .daily,
+            hour: 10,
+            minute: 0,
+            dayOfMonth: 1,
+            selectedDate: self.makeDate(day: 1),
+            customText: ""
+        ))
+
+        let request = try #require(fakeCenter.addedRequests.first)
+        #expect(request.content.body == "Time to log today's spending.")
+    }
+
+    @Test("Текст напоминания использует русский язык приложения")
+    func testReminderMessageUsesRussianLanguage() async throws {
+        let fakeCenter = FakeNotificationCenter()
+        let calendar = makeCalendarUTC()
+        let manager = NotificationManager(
+            notificationCenter: fakeCenter,
+            now: { self.makeDate(day: 1) },
+            calendar: calendar,
+            languageProvider: { .russian }
+        )
+
+        await manager.scheduleDailyReminder(using: DailyReminderSettings(
+            isEnabled: true,
+            kind: .income,
+            cadence: .daily,
+            hour: 10,
+            minute: 0,
+            dayOfMonth: 1,
+            selectedDate: self.makeDate(day: 1),
+            customText: ""
+        ))
+
+        let request = try #require(fakeCenter.addedRequests.first)
+        #expect(request.content.body == "Запиши новые поступления, если они были.")
     }
 }

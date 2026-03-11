@@ -104,6 +104,9 @@ struct FinanceChartContainerView: View {
     /// Код валюты для форматирования
     let currencyCode: String
 
+    /// Скрывать ли денежные значения в UI
+    let isAmountHidden: Bool
+
     /// Колбэк при выборе точки
     let onSelectPoint: ((Date, Double)?) -> Void
 
@@ -127,7 +130,11 @@ struct FinanceChartContainerView: View {
 
     /// Компактное форматирование суммы для оси Y
     private func formatCompact(_ value: Double) -> String {
-        value.formatted(
+        if isAmountHidden {
+            return FinanceAmountText.maskedDigits(for: value)
+        }
+
+        return value.formatted(
             .number
                 .precision(.fractionLength(0...1))
                 .notation(.compactName)
@@ -136,13 +143,7 @@ struct FinanceChartContainerView: View {
 
     /// Форматирование суммы для аннотации
     private func formatAmount(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.groupingSeparator = " "
-        formatter.usesGroupingSeparator = true
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: value)) ?? "0"
+        FinanceAmountText.decimal(value: value)
     }
 
     // MARK: - Body
@@ -296,7 +297,11 @@ struct FinanceChartContainerView: View {
                             Text(sel.date.formatted(date: .abbreviated, time: .omitted))
                                 .font(.caption2)
                                 .foregroundStyle(AppColors.textSecondary)
-                            Text("\(formatAmount(sel.value)) \(currencyCode)")
+                            Text(FinanceAmountText.withCurrency(
+                                value: sel.value,
+                                currencySymbol: currencyCode,
+                                isHidden: isAmountHidden
+                            ))
                                 .font(.footnote.weight(.semibold))
                                 .foregroundStyle(AppColors.textPrimary)
                         }
@@ -342,6 +347,7 @@ struct FinanceChartContainerView: View {
         xAxisStride: .day,
         xAxisCount: 7,
         currencyCode: "RUB",
+        isAmountHidden: false,
         onSelectPoint: { _ in }
     )
     .frame(height: 200)
