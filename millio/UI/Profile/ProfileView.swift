@@ -326,31 +326,6 @@ struct ProfileView: View {
         return identifier.hasPrefix("ru")
     }
 
-    private var dailyReminderStatusText: String {
-        let locale = appState.selectedLanguage.locale ?? Locale.current
-        let settings = SettingsManager.shared.dailyReminderSettings
-
-        guard settings.isEnabled else {
-            return AppLocalization.string("profile.status.disabled", locale: locale)
-        }
-
-        let timeText = String(
-            format: "%02d:%02d",
-            locale: locale,
-            settings.hour,
-            settings.minute
-        )
-
-        switch settings.cadence {
-        case .daily:
-            return timeText
-        case .monthly:
-            return "\(settings.dayOfMonth) • \(timeText)"
-        case .once:
-            return settings.selectedDate.formatted(date: .abbreviated, time: .omitted) + " • " + timeText
-        }
-    }
-
     private var premiumStatusLine: String {
         let locale = appState.selectedLanguage.locale ?? Locale.current
         switch appState.subscriptionAccessSource {
@@ -469,8 +444,6 @@ struct ProfileView: View {
                 DailyReminderSettingsView()
             } label: {
                 settingsRowText(iconSystemName: "bell", title: remindersRowTitle) {
-                    Text(dailyReminderStatusText)
-                        .foregroundStyle(appState.isDailyReminderEnabled ? AppColors.profileValueAccent : AppColors.textTertiary)
                     chevron
                 }
             }

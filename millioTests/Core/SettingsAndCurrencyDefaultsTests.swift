@@ -66,7 +66,7 @@ struct SettingsAndCurrencyDefaultsTests {
 
         isolated.manager.dailyReminderSettings = DailyReminderSettings(
             isEnabled: true,
-            kind: .custom,
+            enabledKinds: [.custom, .expense, .custom],
             cadence: .monthly,
             hour: 27,
             minute: 75,
@@ -77,7 +77,7 @@ struct SettingsAndCurrencyDefaultsTests {
 
         let stored = isolated.manager.dailyReminderSettings
         #expect(stored.isEnabled == true)
-        #expect(stored.kind == .custom)
+        #expect(stored.sortedEnabledKinds == [.expense, .custom])
         #expect(stored.cadence == .monthly)
         #expect(stored.hour == 23)
         #expect(stored.minute == 59)

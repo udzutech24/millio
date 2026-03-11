@@ -39,12 +39,11 @@ struct DailyReminderSettingsView: View {
                                     labeledControl(
                                         title: localized("profile.daily_reminders.kind", fallback: "What to remind")
                                     ) {
-                                        Picker("", selection: $draftSettings.kind) {
-                                            Text(localized("profile.daily_reminders.kind.expense", fallback: "Expense")).tag(DailyReminderKind.expense)
-                                            Text(localized("profile.daily_reminders.kind.income", fallback: "Income")).tag(DailyReminderKind.income)
-                                            Text(localized("profile.daily_reminders.kind.custom", fallback: "Custom")).tag(DailyReminderKind.custom)
+                                        VStack(spacing: 10) {
+                                            reminderKindToggleRow(for: .expense)
+                                            reminderKindToggleRow(for: .income)
+                                            reminderKindToggleRow(for: .custom)
                                         }
-                                        .pickerStyle(.segmented)
                                     }
 
                                     labeledControl(
@@ -97,7 +96,7 @@ struct DailyReminderSettingsView: View {
                                         .colorScheme(.dark)
                                     }
 
-                                    if draftSettings.kind == .custom {
+                                    if draftSettings.isKindEnabled(.custom) {
                                         labeledControl(
                                             title: localized("profile.daily_reminders.custom_text", fallback: "Reminder text")
                                         ) {
@@ -124,7 +123,7 @@ struct DailyReminderSettingsView: View {
                         .multilineTextAlignment(.leading)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    if draftSettings.isEnabled {
+                    if draftSettings.isActive {
                         FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16)) {
                             VStack(alignment: .leading, spacing: 14) {
                                 VStack(alignment: .leading, spacing: 6) {
@@ -183,19 +182,11 @@ struct DailyReminderSettingsView: View {
     }
 
     private var configuredSummaryText: String {
-        guard draftSettings.isEnabled else {
+        guard draftSettings.isActive else {
             return localized("profile.daily_reminders.summary.off", fallback: "Reminders are disabled.")
         }
 
-        let kindText: String
-        switch draftSettings.kind {
-        case .expense:
-            kindText = localized("profile.daily_reminders.kind.expense", fallback: "Expense")
-        case .income:
-            kindText = localized("profile.daily_reminders.kind.income", fallback: "Income")
-        case .custom:
-            kindText = localized("profile.daily_reminders.kind.custom", fallback: "Custom")
-        }
+        let kindText = draftSettings.sortedEnabledKinds.map(kindTitle).joined(separator: ", ")
 
         let timeText = String(format: "%02d:%02d", locale: locale, draftSettings.hour, draftSettings.minute)
 
@@ -228,11 +219,14 @@ struct DailyReminderSettingsView: View {
     }
 
     private var previewMessageText: String {
-        draftSettings.notificationBody(
-            language: appState.selectedLanguage,
-            calendar: Calendar.current,
-            now: Date()
-        )
+        draftSettings.sortedEnabledKinds.map {
+            "• " + draftSettings.notificationBody(
+                for: $0,
+                language: appState.selectedLanguage,
+                calendar: Calendar.current,
+                now: Date()
+            )
+        }.joined(separator: "\n")
     }
 
     private var titleText: String {
@@ -269,7 +263,7 @@ struct DailyReminderSettingsView: View {
         guard !didSave else { return }
         let normalized = draftSettings.normalized()
         SettingsManager.shared.dailyReminderSettings = normalized
-        appState.isDailyReminderEnabled = normalized.isEnabled
+        appState.isDailyReminderEnabled = normalized.isActive
 
         Task {
             await NotificationManager.shared.scheduleDailyReminder(using: normalized)
@@ -301,6 +295,31 @@ struct DailyReminderSettingsView: View {
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func reminderKindToggleRow(for kind: DailyReminderKind) -> some View {
+        Toggle(
+            isOn: Binding(
+                get: { draftSettings.isKindEnabled(kind) },
+                set: { draftSettings.setKind(kind, enabled: $0) }
+            )
+        ) {
+            Text(kindTitle(kind))
+                .font(.system(size: 16, weight: .regular))
+                .foregroundStyle(AppColors.textPrimary)
+        }
+        .tint(AppColors.toggleOnGreen)
+    }
+
+    private func kindTitle(_ kind: DailyReminderKind) -> String {
+        switch kind {
+        case .expense:
+            return localized("profile.daily_reminders.kind.expense", fallback: "Expense")
+        case .income:
+            return localized("profile.daily_reminders.kind.income", fallback: "Income")
+        case .custom:
+            return localized("profile.daily_reminders.kind.custom", fallback: "Custom")
+        }
     }
 
     private func localized(_ key: String, fallback: String) -> String {

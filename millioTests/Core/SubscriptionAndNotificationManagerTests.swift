@@ -203,7 +203,7 @@ struct NotificationManagerTests {
         
         await manager.scheduleDailyReminder(using: DailyReminderSettings(
             isEnabled: true,
-            kind: .expense,
+            enabledKinds: [.expense],
             cadence: .daily,
             hour: 20,
             minute: 0,
@@ -214,7 +214,7 @@ struct NotificationManagerTests {
         
         #expect(fakeCenter.authorizationRequestCount == 1)
         #expect(fakeCenter.addedRequests.count == 1)
-        #expect(fakeCenter.addedRequests.first?.identifier == DailyReminderSettings.notificationIdentifier)
+        #expect(fakeCenter.addedRequests.first?.identifier == DailyReminderSettings.notificationIdentifier(for: .expense))
         
         let request = fakeCenter.addedRequests.first!
         #expect(request.content.title == "millio")
@@ -231,7 +231,7 @@ struct NotificationManagerTests {
         let calendar = makeCalendarUTC()
         let settings = DailyReminderSettings(
             isEnabled: true,
-            kind: .expense,
+            enabledKinds: [.expense],
             cadence: .daily,
             hour: 20,
             minute: 0,
@@ -288,7 +288,7 @@ struct NotificationManagerTests {
 
         await manager.scheduleDailyReminder(using: DailyReminderSettings(
             isEnabled: true,
-            kind: .income,
+            enabledKinds: [.income],
             cadence: .monthly,
             hour: 9,
             minute: 15,
@@ -318,7 +318,7 @@ struct NotificationManagerTests {
 
         await manager.scheduleDailyReminder(using: DailyReminderSettings(
             isEnabled: true,
-            kind: .custom,
+            enabledKinds: [.custom],
             cadence: .once,
             hour: 14,
             minute: 45,
@@ -352,7 +352,7 @@ struct NotificationManagerTests {
 
         await manager.scheduleDailyReminder(using: DailyReminderSettings(
             isEnabled: true,
-            kind: .expense,
+            enabledKinds: [.expense],
             cadence: .daily,
             hour: 10,
             minute: 0,
@@ -378,7 +378,7 @@ struct NotificationManagerTests {
 
         await manager.scheduleDailyReminder(using: DailyReminderSettings(
             isEnabled: true,
-            kind: .income,
+            enabledKinds: [.income],
             cadence: .daily,
             hour: 10,
             minute: 0,
@@ -389,5 +389,32 @@ struct NotificationManagerTests {
 
         let request = try #require(fakeCenter.addedRequests.first)
         #expect(request.content.body == "Запиши новые поступления, если они были.")
+    }
+
+    @Test("Можно включить несколько типов напоминаний одновременно")
+    func testMultipleKindsScheduleMultipleRequests() async {
+        let fakeCenter = FakeNotificationCenter()
+        let calendar = makeCalendarUTC()
+        let manager = NotificationManager(
+            notificationCenter: fakeCenter,
+            now: { self.makeDate(day: 1) },
+            calendar: calendar,
+            languageProvider: { .english }
+        )
+
+        await manager.scheduleDailyReminder(using: DailyReminderSettings(
+            isEnabled: true,
+            enabledKinds: [.expense, .custom],
+            cadence: .daily,
+            hour: 10,
+            minute: 0,
+            dayOfMonth: 1,
+            selectedDate: self.makeDate(day: 1),
+            customText: "Custom ping"
+        ))
+
+        #expect(fakeCenter.addedRequests.count == 2)
+        #expect(fakeCenter.addedRequests.map(\.identifier).contains(DailyReminderSettings.notificationIdentifier(for: .expense)))
+        #expect(fakeCenter.addedRequests.map(\.identifier).contains(DailyReminderSettings.notificationIdentifier(for: .custom)))
     }
 }

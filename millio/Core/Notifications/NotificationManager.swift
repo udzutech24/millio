@@ -71,7 +71,7 @@ final class NotificationManager: NotificationManagerProtocol {
 
     func scheduleDailyReminder(using settings: DailyReminderSettings) async {
         let normalized = settings.normalized(calendar: calendar, now: now())
-        guard normalized.isEnabled else {
+        guard normalized.isActive else {
             cancelDailyReminder()
             return
         }
@@ -84,38 +84,42 @@ final class NotificationManager: NotificationManagerProtocol {
 
         cancelDailyReminder()
 
-        let content = UNMutableNotificationContent()
-        content.title = "millio"
-        content.body = normalized.notificationBody(
-            language: languageProvider(),
-            calendar: calendar,
-            now: now()
-        )
-        content.sound = .default
-        content.badge = 1
-
         guard let trigger = makeTrigger(for: normalized) else {
             logger.warning("Skipping reminder scheduling because trigger is invalid")
             return
         }
 
-        let request = UNNotificationRequest(
-            identifier: DailyReminderSettings.notificationIdentifier,
-            content: content,
-            trigger: trigger
-        )
+        for kind in normalized.sortedEnabledKinds {
+            let content = UNMutableNotificationContent()
+            content.title = "millio"
+            content.body = normalized.notificationBody(
+                for: kind,
+                language: languageProvider(),
+                calendar: calendar,
+                now: now()
+            )
+            content.sound = .default
+            content.badge = 1
 
-        do {
-            try await notificationCenter.add(request)
-            logger.info("Daily reminder scheduled successfully")
-        } catch {
-            logger.error("Failed to schedule daily reminder: \(error.localizedDescription)")
+            let request = UNNotificationRequest(
+                identifier: DailyReminderSettings.notificationIdentifier(for: kind),
+                content: content,
+                trigger: trigger
+            )
+
+            do {
+                try await notificationCenter.add(request)
+            } catch {
+                logger.error("Failed to schedule daily reminder for \(kind.rawValue): \(error.localizedDescription)")
+            }
         }
+        logger.info("Daily reminders scheduled successfully")
     }
     
     func cancelDailyReminder() {
-        notificationCenter.removePendingNotificationRequests(withIdentifiers: [DailyReminderSettings.notificationIdentifier])
-        notificationCenter.removeDeliveredNotifications(withIdentifiers: [DailyReminderSettings.notificationIdentifier])
+        let identifiers = DailyReminderKind.allCases.map(DailyReminderSettings.notificationIdentifier(for:))
+        notificationCenter.removePendingNotificationRequests(withIdentifiers: identifiers)
+        notificationCenter.removeDeliveredNotifications(withIdentifiers: identifiers)
         logger.info("Daily reminder cancelled")
     }
     

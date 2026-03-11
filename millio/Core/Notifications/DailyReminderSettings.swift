@@ -29,10 +29,10 @@ struct DailyReminderSettings: Codable, Equatable {
     static let defaultHour = 20
     static let defaultMinute = 0
     static let defaultDayOfMonth = 1
-    static let notificationIdentifier = "daily_reminder"
+    static let notificationIdentifierPrefix = "daily_reminder"
 
     var isEnabled: Bool
-    var kind: DailyReminderKind
+    var enabledKinds: [DailyReminderKind]
     var cadence: DailyReminderCadence
     var hour: Int
     var minute: Int
@@ -43,7 +43,7 @@ struct DailyReminderSettings: Codable, Equatable {
     static var `default`: DailyReminderSettings {
         DailyReminderSettings(
             isEnabled: false,
-            kind: .expense,
+            enabledKinds: [.expense],
             cadence: .daily,
             hour: defaultHour,
             minute: defaultMinute,
@@ -57,11 +57,24 @@ struct DailyReminderSettings: Codable, Equatable {
         customText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    var hasEnabledKinds: Bool {
+        !sortedEnabledKinds.isEmpty
+    }
+
+    var isActive: Bool {
+        isEnabled && hasEnabledKinds
+    }
+
+    var sortedEnabledKinds: [DailyReminderKind] {
+        DailyReminderKind.allCases.filter { enabledKinds.contains($0) }
+    }
+
     func normalized(calendar: Calendar = .current, now: Date = Date()) -> DailyReminderSettings {
         var normalized = self
         normalized.hour = min(max(hour, 0), 23)
         normalized.minute = min(max(minute, 0), 59)
         normalized.dayOfMonth = min(max(dayOfMonth, 1), 31)
+        normalized.enabledKinds = normalized.sortedEnabledKinds
 
         let startOfToday = calendar.startOfDay(for: now)
         if selectedDate < startOfToday {
@@ -72,6 +85,7 @@ struct DailyReminderSettings: Codable, Equatable {
     }
 
     func notificationBody(
+        for kind: DailyReminderKind,
         language: Language = LanguageManager.shared.currentLanguage,
         calendar: Calendar = .current,
         now: Date = Date()
@@ -127,5 +141,23 @@ struct DailyReminderSettings: Codable, Equatable {
             let preferred = Locale.preferredLanguages.first?.lowercased() ?? Locale.current.identifier.lowercased()
             return preferred.hasPrefix("ru")
         }
+    }
+
+    func isKindEnabled(_ kind: DailyReminderKind) -> Bool {
+        enabledKinds.contains(kind)
+    }
+
+    mutating func setKind(_ kind: DailyReminderKind, enabled: Bool) {
+        if enabled {
+            if !enabledKinds.contains(kind) {
+                enabledKinds.append(kind)
+            }
+        } else {
+            enabledKinds.removeAll { $0 == kind }
+        }
+    }
+
+    static func notificationIdentifier(for kind: DailyReminderKind) -> String {
+        "\(notificationIdentifierPrefix).\(kind.rawValue)"
     }
 }

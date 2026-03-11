@@ -98,9 +98,9 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
         get {
             let storedEnabled = defaults.object(forKey: dailyReminderEnabledKey) as? Bool
             if let storedEnabled {
-                return storedEnabled
+                return storedEnabled && dailyReminderSettings.hasEnabledKinds
             }
-            return dailyReminderSettings.isEnabled
+            return dailyReminderSettings.isActive
         }
         set {
             defaults.set(newValue, forKey: dailyReminderEnabledKey)
