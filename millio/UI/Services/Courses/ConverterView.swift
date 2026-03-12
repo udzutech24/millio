@@ -800,7 +800,7 @@ struct ConverterView: View {
 
 #if os(iOS)
     private func historyImage(for fileName: String?) -> UIImage? {
-        guard let fileName, !fileName.isEmpty else { return nil }
+        guard let fileName = fileName, !fileName.isEmpty else { return nil }
         let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
         ?? FileManager.default.temporaryDirectory
         let url = base.appendingPathComponent("ConverterShareHistory", isDirectory: true).appendingPathComponent(fileName)
@@ -1307,16 +1307,6 @@ struct ConverterView: View {
 
 }
 
-#if DEBUG
-struct ConverterView_Previews: PreviewProvider {
-    static var previews: some View {
-        NavigationStack {
-            ConverterView()
-                .navigationTitle("")
-        }
-    }
-}
-
 private struct ConverterWidgetSettingsPreview: View {
     private let previewRows: [(flag: String, title: String, value: String)] = [
         ("🇺🇸", "USD", "78.54 ₽"),
@@ -1420,6 +1410,16 @@ private struct ConverterWidgetInstructionRow: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: 0)
+        }
+    }
+}
+
+#if DEBUG
+struct ConverterView_Previews: PreviewProvider {
+    static var previews: some View {
+        NavigationStack {
+            ConverterView()
+                .navigationTitle("")
         }
     }
 }
