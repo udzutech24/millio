@@ -377,6 +377,79 @@ struct StockBulkImportTests {
         #expect(rows[0].selectedCandidate?.normalizedSymbol == "VXUS")
     }
 
+    @Test("Remote matcher uses shared resolver aliases for company-name queries")
+    func matcherUsesSharedResolverAliases() async throws {
+        let context = try makeContext()
+        let client = StockBulkImportMockMarketDataClient()
+        await client.setSearchResults([
+            TwelveDataSymbol(
+                symbol: "AAPL",
+                instrumentName: "Apple Inc.",
+                exchange: "NASDAQ",
+                micCode: "XNAS",
+                instrumentType: "Common Stock",
+                country: "United States",
+                currency: "USD"
+            )
+        ], for: "APPLE")
+
+        let matcher = StockBulkImportMatcher(modelContext: context, marketDataClient: client)
+        let rows = await matcher.buildDraftRows(from: [
+            StockBulkImportParsedRow(
+                rawLine: "Apple",
+                ticker: "APPLE",
+                market: nil,
+                quantity: 1,
+                buyPrice: 100,
+                sourceOrderIndex: 0
+            )
+        ])
+
+        #expect(rows.count == 1)
+        #expect(rows[0].candidates.first?.normalizedSymbol == "AAPL")
+    }
+
+    @Test("Remote matcher prefers requested market using shared candidate policy")
+    func matcherPrefersRequestedMarket() async throws {
+        let context = try makeContext()
+        let client = StockBulkImportMockMarketDataClient()
+        await client.setSearchResults([
+            TwelveDataSymbol(
+                symbol: "SPY",
+                instrumentName: "SPDR S&P 500 ETF Trust",
+                exchange: "NYSE",
+                micCode: nil,
+                instrumentType: "ETF",
+                country: "United States",
+                currency: "USD"
+            ),
+            TwelveDataSymbol(
+                symbol: "SPY",
+                instrumentName: "SPDR S&P 500 ETF Trust",
+                exchange: "AMEX",
+                micCode: nil,
+                instrumentType: "ETF",
+                country: "United States",
+                currency: "USD"
+            )
+        ], for: "SPY")
+
+        let matcher = StockBulkImportMatcher(modelContext: context, marketDataClient: client)
+        let rows = await matcher.buildDraftRows(from: [
+            StockBulkImportParsedRow(
+                rawLine: "AMEX SPY",
+                ticker: "SPY",
+                market: "AMEX",
+                quantity: 1,
+                buyPrice: 100,
+                sourceOrderIndex: 0
+            )
+        ])
+
+        #expect(rows.count == 1)
+        #expect(rows[0].candidates.first?.normalizedMarket == "AMEX")
+    }
+
     @Test("Ручной refresh строки форсирует обновление котировки")
     func refreshCurrentPriceForcesQuoteReload() async throws {
         let context = try makeContext()

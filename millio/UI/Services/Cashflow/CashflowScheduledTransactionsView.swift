@@ -350,65 +350,65 @@ enum CashflowScheduledTransactionsMode: Hashable {
     func navigationTitle(for kind: CashflowCategoryKind) -> String {
         switch (self, kind) {
         case (.recurring, .income):
-            return String(localized: "Recurring income")
+            return String(localized: "cashflow.scheduled.recurring_income")
         case (.recurring, .expense):
-            return String(localized: "Recurring expenses")
+            return String(localized: "cashflow.scheduled.recurring_expenses")
         case (.plannedOneTime, .income):
-            return String(localized: "Planned income")
+            return String(localized: "cashflow.scheduled.planned_income")
         case (.plannedOneTime, .expense):
-            return String(localized: "Planned expenses")
+            return String(localized: "cashflow.scheduled.planned_expenses")
         }
     }
 
     func createNavigationTitle(for kind: CashflowCategoryKind) -> String {
         switch (self, kind) {
         case (.recurring, .income):
-            return String(localized: "New recurring income")
+            return String(localized: "cashflow.scheduled.new_recurring_income")
         case (.recurring, .expense):
-            return String(localized: "New recurring expense")
+            return String(localized: "cashflow.scheduled.new_recurring_expense")
         case (.plannedOneTime, .income):
-            return String(localized: "New planned income")
+            return String(localized: "cashflow.scheduled.new_planned_income")
         case (.plannedOneTime, .expense):
-            return String(localized: "New planned expense")
+            return String(localized: "cashflow.scheduled.new_planned_expense")
         }
     }
 
     func editNavigationTitle(for kind: CashflowCategoryKind) -> String {
         switch (self, kind) {
         case (.recurring, .income):
-            return String(localized: "Recurring income")
+            return String(localized: "cashflow.scheduled.recurring_income")
         case (.recurring, .expense):
-            return String(localized: "Recurring expense")
+            return String(localized: "cashflow.scheduled.recurring_expense")
         case (.plannedOneTime, .income):
-            return String(localized: "Planned income")
+            return String(localized: "cashflow.scheduled.planned_income")
         case (.plannedOneTime, .expense):
-            return String(localized: "Planned expense")
+            return String(localized: "cashflow.scheduled.planned_expense")
         }
     }
 
     func emptyTitle(for kind: CashflowCategoryKind) -> String {
         switch (self, kind) {
         case (.recurring, .income):
-            return String(localized: "Recurring income has not been added yet")
+            return String(localized: "cashflow.scheduled.empty.recurring_income")
         case (.recurring, .expense):
-            return String(localized: "Recurring expenses have not been added yet")
+            return String(localized: "cashflow.scheduled.empty.recurring_expenses")
         case (.plannedOneTime, .income):
-            return String(localized: "No planned income")
+            return String(localized: "cashflow.scheduled.empty.planned_income")
         case (.plannedOneTime, .expense):
-            return String(localized: "No planned expenses")
+            return String(localized: "cashflow.scheduled.empty.planned_expenses")
         }
     }
 
     func createButtonTitle(for kind: CashflowCategoryKind) -> String {
         switch (self, kind) {
         case (.recurring, .income):
-            return String(localized: "Add recurring income")
+            return String(localized: "cashflow.scheduled.add_recurring_income")
         case (.recurring, .expense):
-            return String(localized: "Add recurring expense")
+            return String(localized: "cashflow.scheduled.add_recurring_expense")
         case (.plannedOneTime, .income):
-            return String(localized: "Add planned income")
+            return String(localized: "cashflow.scheduled.add_planned_income")
         case (.plannedOneTime, .expense):
-            return String(localized: "Add planned expense")
+            return String(localized: "cashflow.scheduled.add_planned_expense")
         }
     }
 }

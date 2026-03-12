@@ -111,6 +111,9 @@ final class Investment: Persistable {
     /// Символ биржевого инструмента (например, AAPL, BTCUSD)
     var marketSymbol: String?
 
+    /// Stable internal asset identity. Holdings should point here, not to provider symbols.
+    var assetID: String?
+
     /// Биржа/площадка котировки (если доступно)
     var marketExchange: String?
 
@@ -350,6 +353,9 @@ final class Investment: Persistable {
 
         if let marketSymbol {
             dict["marketSymbol"] = marketSymbol
+        }
+        if let assetID {
+            dict["assetID"] = assetID
         }
         if let marketExchange {
             dict["marketExchange"] = marketExchange

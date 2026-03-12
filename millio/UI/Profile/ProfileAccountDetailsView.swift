@@ -22,18 +22,18 @@ struct ProfileAccountDetailsView: View {
     }()
 
     private let title = String(localized: "profile.auth.account_details", defaultValue: "Account details", comment: "Account details screen title")
-    private let connectedTitle = String(localized: "profile.auth.connected", defaultValue: "Connected with Apple ID", comment: "Connected state title")
-    private let connectedSubtitle = String(localized: "profile.auth.connected.subtitle", defaultValue: "Your account is ready for sync and restore.", comment: "Connected state subtitle")
-    private let logoutTitle = String(localized: "profile.auth.logout", defaultValue: "Logout", comment: "Logout button")
-    private let emailMissingTitle = String(localized: "profile.auth.email_missing", defaultValue: "Email is not available", comment: "Fallback email text")
-    private let guestTitle = String(localized: "profile.auth.guest.title", defaultValue: "Guest mode", comment: "Guest mode title")
-    private let guestSubtitle = String(localized: "profile.auth.guest.subtitle", defaultValue: "You can use the app now and connect an Apple account later", comment: "Guest mode subtitle")
-    private let exitGuestTitle = String(localized: "profile.auth.exit_guest", defaultValue: "Exit guest mode", comment: "Exit guest mode button title")
+    private let connectedTitle = String(localized: "profile.auth.connected", defaultValue: "Signed in with Apple", comment: "Connected state title")
+    private let connectedSubtitle = String(localized: "profile.auth.connected.subtitle", defaultValue: "Sync and restore are enabled for this account.", comment: "Connected state subtitle")
+    private let logoutTitle = String(localized: "profile.auth.logout", defaultValue: "Sign out", comment: "Logout button")
+    private let emailMissingTitle = String(localized: "profile.auth.email_missing", defaultValue: "No email provided", comment: "Fallback email text")
+    private let guestTitle = String(localized: "profile.auth.guest.title", defaultValue: "Guest Mode", comment: "Guest mode title")
+    private let guestSubtitle = String(localized: "profile.auth.guest.subtitle", defaultValue: "Use Millio now and connect your Apple Account later.", comment: "Guest mode subtitle")
+    private let exitGuestTitle = String(localized: "profile.auth.exit_guest", defaultValue: "Leave Guest Mode", comment: "Exit guest mode button title")
     private let signedOutTitle = String(localized: "profile.auth.not_signed_in", defaultValue: "Not signed in", comment: "Signed-out auth state title")
-    private let signedOutSubtitle = String(localized: "profile.auth.not_signed_in.subtitle", defaultValue: "Connect your Apple account to sync and restore access.", comment: "Signed-out auth state subtitle")
+    private let signedOutSubtitle = String(localized: "profile.auth.not_signed_in.subtitle", defaultValue: "Sign in with Apple to enable sync and restore.", comment: "Signed-out auth state subtitle")
     private let nameTitle = String(localized: "profile.auth.name", defaultValue: "Name", comment: "Account detail field title for name")
     private let emailTitle = String(localized: "profile.auth.email", defaultValue: "Email", comment: "Account detail field title for email")
-    private let lastLoginTitle = String(localized: "profile.auth.last_login", defaultValue: "Last login", comment: "Account detail field title for last login")
+    private let lastLoginTitle = String(localized: "profile.auth.last_login", defaultValue: "Last sign-in", comment: "Account detail field title for last login")
 
     var body: some View {
         ZStack {

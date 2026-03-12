@@ -328,7 +328,7 @@ private struct CashflowContentView: View {
             rowDivider
 
             expandableStatRow(
-                title: String(localized: "Income"),
+                title: String(localized: "main.quick_action.income"),
                 value: formatSignedMoney(viewModel.state.totalIncome),
                 valueColor: positiveColor(for: viewModel.state.totalIncome),
                 isExpanded: $showIncomeBreakdown
@@ -616,7 +616,7 @@ private struct CashflowContentView: View {
                         .frame(width: itemSize, height: itemSize)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Text("Back"))
+                .accessibilityLabel(Text("cashflow.accessibility.back"))
 
                 Menu {
                     ForEach(MiniAppNavigation.destinations(excluding: currentRoute)) { destination in
@@ -633,7 +633,7 @@ private struct CashflowContentView: View {
                         .frame(width: itemSize, height: itemSize)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Text("Quick navigation for mini apps"))
+                .accessibilityLabel(Text("cashflow.accessibility.quick_navigation"))
             }
             .padding(.horizontal, 10)
             .frame(height: 40)
@@ -650,7 +650,7 @@ private struct CashflowContentView: View {
                     .frame(width: 42, height: 38)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text("Transaction history"))
+            .accessibilityLabel(Text("cashflow.accessibility.transaction_history"))
         }
 
         ToolbarItem(placement: .topBarTrailing) {
@@ -666,7 +666,7 @@ private struct CashflowContentView: View {
                 .frame(height: 38)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text("Display currency selector"))
+            .accessibilityLabel(Text("cashflow.accessibility.display_currency_selector"))
         }
     }
     
@@ -914,7 +914,7 @@ private struct CashflowContentView: View {
                             .frame(width: 40, height: 40, alignment: .center)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(Text("Select period"))
+                    .accessibilityLabel(Text("cashflow.accessibility.select_period"))
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -1483,7 +1483,7 @@ private struct CashflowContentView: View {
                     .clipShape(Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(String(localized: "Hide hints"))
+            .accessibilityLabel(String(localized: "cashflow.accessibility.hide_hints"))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)

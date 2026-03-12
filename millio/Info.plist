@@ -29,8 +29,25 @@
 	</dict>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Use Face ID to unlock the app</string>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<false/>
 	<key>TWELVE_DATA_API_KEY</key>
 	<string>$(TWELVE_DATA_API_KEY)</string>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Millio Backup</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.alekseya.millio.backup</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -50,5 +67,27 @@
 	</array>
 	<key>UILaunchScreen</key>
 	<false/>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.alekseya.millio.backup</string>
+			<key>UTTypeDescription</key>
+			<string>Millio Backup File</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>millio-backup</string>
+				</array>
+				<key>public.mime-type</key>
+				<string>application/vnd.millio.backup</string>
+			</dict>
+		</dict>
+	</array>
 </dict>
 </plist>

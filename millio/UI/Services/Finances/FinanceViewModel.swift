@@ -604,6 +604,7 @@ final class FinanceViewModel: ViewModelProtocol {
         
         let investmentDescriptor = FetchDescriptor<Investment>()
         let allInvestments = (try? modelContext.fetch(investmentDescriptor)) ?? []
+        normalizeMarketAssetIdentities(allInvestments)
         normalizeMarketQuoteLookupKeys(allInvestments)
         state.availableInvestments = allInvestments.filter { $0.archivedAt == nil }
         state.archivedInvestments = allInvestments.filter { $0.archivedAt != nil }
@@ -638,6 +639,22 @@ final class FinanceViewModel: ViewModelProtocol {
             } catch {
                 AppLogger.log(.error, category: "Finance", "Failed to normalize credits includeInTotal: \(error.localizedDescription)")
             }
+        }
+    }
+
+    private func normalizeMarketAssetIdentities(_ investments: [Investment]) {
+        var requiresSave = false
+        let assetCatalogStore = AssetCatalogStore(modelContext: modelContext)
+
+        for investment in investments where investment.isMarketPriced {
+            requiresSave = assetCatalogStore.migrateInvestmentIfNeeded(investment) || requiresSave
+        }
+
+        guard requiresSave else { return }
+        do {
+            try modelContext.save()
+        } catch {
+            AppLogger.log(.error, category: "Finance", "Failed to normalize market asset identities: \(error.localizedDescription)")
         }
     }
 
@@ -1621,32 +1638,13 @@ final class FinanceViewModel: ViewModelProtocol {
     }
 
     private func stockQuoteLookupSymbols(for investment: Investment) -> [String] {
-        let rawSymbol = stockDisplaySymbol(investment)
-        guard !rawSymbol.isEmpty else { return [] }
-
-        let canonicalKey = investment.marketQuoteLookupKey?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .uppercased()
-        let fallbacks = MarketInstrumentIdentity.fallbackQuoteLookupKeys(
-            symbol: rawSymbol,
-            exchange: investment.marketExchange
-        )
-        return uniqueQuoteSymbols(([canonicalKey].compactMap { $0 }) + fallbacks)
+        ProviderInstrumentResolver(modelContext: modelContext).quoteLookupSymbols(for: investment)
     }
 
     private func stockDisplaySymbol(_ investment: Investment) -> String {
         investment.marketSymbol?
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .uppercased() ?? ""
-    }
-
-    private func uniqueQuoteSymbols(_ values: [String]) -> [String] {
-        var seen: Set<String> = []
-        return values.filter { value in
-            let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-            guard !normalized.isEmpty else { return false }
-            return seen.insert(normalized).inserted
-        }
     }
     
     private func deleteGroup(_ group: FinanceGroup) {

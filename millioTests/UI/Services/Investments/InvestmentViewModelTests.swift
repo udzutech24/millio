@@ -39,7 +39,9 @@ struct InvestmentViewModelTests {
     private static let sharedContainer: ModelContainer = {
         let schema = Schema([
             Investment.self,
-            CashflowTransaction.self
+            CashflowTransaction.self,
+            AssetCatalogItem.self,
+            AssetProviderMapping.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         return try! ModelContainer(for: schema, configurations: [config])
@@ -48,6 +50,8 @@ struct InvestmentViewModelTests {
     private func createTestModelContext() throws -> ModelContext {
         let context = Self.sharedContainer.mainContext
         try context.deleteAll(CashflowTransaction.self)
+        try context.deleteAll(AssetProviderMapping.self)
+        try context.deleteAll(AssetCatalogItem.self)
         try context.deleteAll(Investment.self)
         try context.save()
         return context
@@ -87,6 +91,40 @@ struct InvestmentViewModelTests {
 
         #expect(viewModel.state.investments.count == 1)
         #expect(viewModel.state.investments.first?.name == "Активная")
+    }
+
+    @Test("Загрузка инвестиций мигрирует legacy market identity в asset catalog")
+    func testLoadInvestmentsMigratesAssetIdentity() async throws {
+        let context = try createTestModelContext()
+
+        let investment = Investment(
+            name: "Apple",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 1000,
+            currency: "USD",
+            includeInTotal: true,
+            priority: .normal,
+            isFavorite: true
+        )
+        investment.marketSymbol = "AAPL.US"
+        investment.marketExchange = "US"
+        investment.marketMICCode = "XNAS"
+        investment.marketCurrency = "USD"
+        investment.marketProviderRaw = "market-backend"
+
+        context.insert(investment)
+        try context.save()
+
+        _ = InvestmentViewModel(modelContext: context)
+
+        let investments = try context.fetch(FetchDescriptor<Investment>())
+        let catalogItems = try context.fetch(FetchDescriptor<AssetCatalogItem>())
+        let mappings = try context.fetch(FetchDescriptor<AssetProviderMapping>())
+
+        #expect(investments.first?.assetID == "asset.stocks.aapl")
+        #expect(catalogItems.first?.assetID == "asset.stocks.aapl")
+        #expect(mappings.first?.assetID == "asset.stocks.aapl")
     }
 
     @Test("Сортировка: избранные первыми")

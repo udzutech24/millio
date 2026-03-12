@@ -61,6 +61,69 @@ final class LocalizableXcstringsTests: XCTestCase {
         try assertLocalized(strings: strings, key: "converter.settings.widget.step_add_widget")
     }
 
+    func testCashflowStringsAreLocalizedInENAndRU() throws {
+        let xcstringsURL = try Self.localizableXcstringsURL()
+        let data = try Data(contentsOf: xcstringsURL)
+
+        let jsonObject = try JSONSerialization.jsonObject(with: data)
+        guard
+            let root = jsonObject as? [String: Any],
+            let strings = root["strings"] as? [String: Any]
+        else {
+            return XCTFail("Invalid `millio/Localizable.xcstrings` JSON structure.")
+        }
+
+        let cashflowKeys = strings.keys.filter { $0.hasPrefix("cashflow.") }
+        XCTAssertFalse(cashflowKeys.isEmpty, "Expected at least one `cashflow.*` key in `Localizable.xcstrings`.")
+
+        for key in cashflowKeys {
+            guard
+                let entry = strings[key] as? [String: Any],
+                let localizations = entry["localizations"] as? [String: Any]
+            else {
+                XCTFail("Missing `localizations` for `\(key)`.")
+                continue
+            }
+
+            XCTAssertNotNil(localizations["en"], "Missing English localization for `\(key)`.")
+            XCTAssertNotNil(localizations["ru"], "Missing Russian localization for `\(key)`.")
+        }
+    }
+
+    func testProfileAuthStringsAreLocalizedInENAndRU() throws {
+        let xcstringsURL = try Self.localizableXcstringsURL()
+        let data = try Data(contentsOf: xcstringsURL)
+
+        let jsonObject = try JSONSerialization.jsonObject(with: data)
+        guard
+            let root = jsonObject as? [String: Any],
+            let strings = root["strings"] as? [String: Any]
+        else {
+            return XCTFail("Invalid `millio/Localizable.xcstrings` JSON structure.")
+        }
+
+        let keys = [
+            "profile.auth.account_details",
+            "profile.auth.connected",
+            "profile.auth.connected.subtitle",
+            "profile.auth.details",
+            "profile.auth.email",
+            "profile.auth.email_missing",
+            "profile.auth.exit_guest",
+            "profile.auth.guest.subtitle",
+            "profile.auth.guest.title",
+            "profile.auth.last_login",
+            "profile.auth.logout",
+            "profile.auth.name",
+            "profile.auth.not_signed_in",
+            "profile.auth.not_signed_in.subtitle"
+        ]
+
+        for key in keys {
+            try assertLocalized(strings: strings, key: key)
+        }
+    }
+
     private static func localizableXcstringsURL() throws -> URL {
         var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         let fileManager = FileManager.default

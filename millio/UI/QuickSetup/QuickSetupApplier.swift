@@ -283,6 +283,21 @@ struct QuickSetupApplier {
     private func applyMarketSnapshot(_ snapshot: QuickSetupProductMarketSnapshot?, to investment: Investment) {
         guard let snapshot else { return }
 
+        if let identity = MarketAssetIdentityResolver.resolve(
+            category: investment.category,
+            symbol: snapshot.symbol,
+            exchange: snapshot.exchange,
+            instrumentName: investment.name,
+            micCode: nil,
+            instrumentType: investment.category == .crypto ? "Cryptocurrency" : "Common Stock",
+            currency: snapshot.currencyCode,
+            country: nil,
+            providerName: snapshot.providerRaw
+        ) {
+            investment.assetID = identity.assetID
+            AssetCatalogStore(modelContext: modelContext).syncIfSupported(identity: identity)
+        }
+
         investment.marketSymbol = snapshot.symbol
         investment.marketExchange = snapshot.exchange
         investment.marketCurrency = snapshot.currencyCode

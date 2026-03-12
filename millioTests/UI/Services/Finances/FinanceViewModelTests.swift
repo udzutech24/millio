@@ -67,6 +67,10 @@ actor MockMarketDataClient: MarketDataClientProtocol {
         }
         return pricesBySymbol[key] ?? nil
     }
+
+    func allLatestPriceRequests() -> [String] {
+        latestPriceRequests
+    }
 }
 
 // MARK: - Тесты
@@ -78,6 +82,8 @@ struct FinanceViewModelTests {
         Card.self,
         Credit.self,
         Investment.self,
+        AssetCatalogItem.self,
+        AssetProviderMapping.self,
         FinanceGroup.self,
         FinanceAccount.self,
         CashflowTransaction.self,
@@ -125,6 +131,38 @@ struct FinanceViewModelTests {
         viewModel.handle(.syncPrimaryCurrencyChange(old: "RUB", new: "USD"))
 
         #expect(viewModel.state.displayCurrency == "USD")
+    }
+
+    @Test("FinanceViewModel мигрирует legacy market investments на assetID-first при загрузке")
+    func testLoadAccountsMigratesMarketAssetIdentity() throws {
+        let modelContext = try createTestModelContext()
+        let investment = Investment(
+            name: "Apple",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 1000,
+            currency: "USD",
+            includeInTotal: true,
+            priority: .normal,
+            isFavorite: true
+        )
+        investment.marketSymbol = "AAPL.US"
+        investment.marketExchange = "US"
+        investment.marketMICCode = "XNAS"
+        investment.marketCurrency = "USD"
+        investment.marketProviderRaw = "market-backend"
+        modelContext.insert(investment)
+        try modelContext.save()
+
+        _ = FinanceViewModel(modelContext: modelContext)
+
+        let investments = try modelContext.fetch(FetchDescriptor<Investment>())
+        let assetCatalogItems = try modelContext.fetch(FetchDescriptor<AssetCatalogItem>())
+        let providerMappings = try modelContext.fetch(FetchDescriptor<AssetProviderMapping>())
+
+        #expect(investments.first?.assetID == "asset.stocks.aapl")
+        #expect(assetCatalogItems.first?.assetID == "asset.stocks.aapl")
+        #expect(providerMappings.first?.assetID == "asset.stocks.aapl")
     }
 
     @Test("Инвестиции без FinanceAccount привязываются к \"Без группы\" и становятся видимыми")
@@ -1159,6 +1197,55 @@ struct FinanceViewModelTests {
         #expect(requests == ["SPY", "SPY.US"])
         #expect(abs((spy.lastKnownUnitPrice ?? 0) - 677.03) < 0.0001)
         #expect(viewModel.state.showRefreshIssue == false)
+    }
+
+    @Test("Обновление акций предпочитает provider mapping для assetID-first инструмента")
+    func testRefreshStockPricesPrefersProviderMapping() async throws {
+        let modelContext = try createTestModelContext()
+
+        let apple = Investment(
+            name: "Apple",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 100,
+            currency: "USD"
+        )
+        apple.assetID = "asset.stocks.aapl"
+        apple.marketSymbol = "AAPL"
+        apple.marketExchange = "NASDAQ"
+        apple.marketQuantity = 1
+        apple.lastKnownUnitPrice = 100
+        modelContext.insert(apple)
+
+        let mapping = AssetProviderMapping(
+            mappingID: "asset.stocks.aapl|market-backend|aapl.us|us",
+            assetID: "asset.stocks.aapl",
+            providerName: "market-backend",
+            providerSymbol: "AAPL.US",
+            providerExchangeCode: "US",
+            providerInstrumentID: nil,
+            status: .active,
+            lastVerifiedAt: Date()
+        )
+        modelContext.insert(mapping)
+        try modelContext.save()
+
+        let marketClient = MockMarketDataClient(
+            pricesBySymbol: ["AAPL.US": 215.0]
+        )
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockInvestmentCurrencyService(),
+            marketDataClient: marketClient,
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadAccounts)
+
+        await viewModel.refreshStockPrices()
+
+        let requests = await marketClient.allLatestPriceRequests()
+        #expect(requests.first == "AAPL.US")
+        #expect(abs((apple.lastKnownUnitPrice ?? 0) - 215.0) < 0.0001)
     }
 
     @Test("Загрузка финансов нормализует канонический ключ котировки для старых акций")

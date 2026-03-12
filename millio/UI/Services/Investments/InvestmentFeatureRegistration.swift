@@ -13,9 +13,13 @@ struct InvestmentFeatureRegistration {
     static func register() {
         // Регистрируем модели
         ModelTypeRegistry.shared.register(Investment.self, typeName: "Investment")
+        ModelTypeRegistry.shared.register(AssetCatalogItem.self, typeName: "AssetCatalogItem")
+        ModelTypeRegistry.shared.register(AssetProviderMapping.self, typeName: "AssetProviderMapping")
         
         // Регистрируем импортеры
         ModelTypeRegistry.shared.registerImporter(InvestmentImporter.self)
+        ModelTypeRegistry.shared.registerImporter(AssetCatalogItemImporter.self)
+        ModelTypeRegistry.shared.registerImporter(AssetProviderMappingImporter.self)
     }
 }
 
@@ -46,6 +50,7 @@ struct InvestmentImporter: ModelImporter {
         let initialAmount = data["initialAmount"] as? Double
         let hasInitialAmount = data["hasInitialAmount"] as? Bool
         let marketSymbol = data["marketSymbol"] as? String
+        let assetID = data["assetID"] as? String
         let marketExchange = data["marketExchange"] as? String
         let marketQuoteLookupKey = data["marketQuoteLookupKey"] as? String
         let marketMICCode = data["marketMICCode"] as? String
@@ -84,6 +89,7 @@ struct InvestmentImporter: ModelImporter {
             existingInvestment.includeInTotal = includeInTotal
             existingInvestment.updatedAt = Date(timeIntervalSince1970: updatedAt)
             existingInvestment.marketSymbol = marketSymbol
+            existingInvestment.assetID = assetID
             existingInvestment.marketExchange = marketExchange
             existingInvestment.marketQuoteLookupKey = marketQuoteLookupKey
             existingInvestment.marketMICCode = marketMICCode
@@ -94,6 +100,23 @@ struct InvestmentImporter: ModelImporter {
             existingInvestment.totalPurchaseCost = totalPurchaseCost
             existingInvestment.lastKnownPriceUpdatedAt = lastKnownPriceUpdatedAt
             existingInvestment.marketProviderRaw = marketProviderRaw
+            if existingInvestment.assetID == nil || existingInvestment.assetID?.isEmpty == true {
+                let resolvedIdentity = MarketAssetIdentityResolver.resolve(
+                    category: existingInvestment.category,
+                    symbol: marketSymbol,
+                    exchange: marketExchange,
+                    instrumentName: existingInvestment.name,
+                    micCode: marketMICCode,
+                    instrumentType: existingInvestment.category == .crypto ? "Cryptocurrency" : "Common Stock",
+                    currency: marketCurrency,
+                    country: nil,
+                    providerName: marketProviderRaw
+                )
+                existingInvestment.assetID = resolvedIdentity?.assetID
+                if let resolvedIdentity {
+                    syncCatalogOnMainActorIfNeeded(identity: resolvedIdentity, context: context)
+                }
+            }
             if let archivedAt = data["archivedAt"] as? TimeInterval {
                 existingInvestment.archivedAt = Date(timeIntervalSince1970: archivedAt)
             }
@@ -131,6 +154,7 @@ struct InvestmentImporter: ModelImporter {
             investment.uniqueID = uniqueID
         }
         investment.marketSymbol = marketSymbol
+        investment.assetID = assetID
         investment.marketExchange = marketExchange
         investment.marketQuoteLookupKey = marketQuoteLookupKey
         investment.marketMICCode = marketMICCode
@@ -141,8 +165,41 @@ struct InvestmentImporter: ModelImporter {
         investment.totalPurchaseCost = totalPurchaseCost
         investment.lastKnownPriceUpdatedAt = lastKnownPriceUpdatedAt
         investment.marketProviderRaw = marketProviderRaw
+        if investment.assetID == nil || investment.assetID?.isEmpty == true {
+            let resolvedIdentity = MarketAssetIdentityResolver.resolve(
+                category: investment.category,
+                symbol: marketSymbol,
+                exchange: marketExchange,
+                instrumentName: investment.name,
+                micCode: marketMICCode,
+                instrumentType: investment.category == .crypto ? "Cryptocurrency" : "Common Stock",
+                currency: marketCurrency,
+                country: nil,
+                providerName: marketProviderRaw
+            )
+            investment.assetID = resolvedIdentity?.assetID
+            if let resolvedIdentity {
+                syncCatalogOnMainActorIfNeeded(identity: resolvedIdentity, context: context)
+            }
+        }
         investment.ensureUniqueID()
         
         context.insert(investment)
+    }
+
+    private static func syncCatalogOnMainActorIfNeeded(
+        identity: ResolvedAssetIdentity,
+        context: ModelContext
+    ) {
+        if Thread.isMainThread {
+            _ = MainActor.assumeIsolated {
+                AssetCatalogStore(modelContext: context).syncIfSupported(identity: identity)
+            }
+            return
+        }
+
+        _ = DispatchQueue.main.sync {
+            AssetCatalogStore(modelContext: context).syncIfSupported(identity: identity)
+        }
     }
 }

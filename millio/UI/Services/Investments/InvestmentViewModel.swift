@@ -184,6 +184,15 @@ final class InvestmentViewModel: ViewModelProtocol {
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
         if let investments = try? modelContext.fetch(descriptor) {
+            let assetCatalogStore = AssetCatalogStore(modelContext: modelContext)
+            var didMigrateAssetIdentity = false
+            for investment in investments where investment.archivedAt == nil && investment.isMarketPriced {
+                didMigrateAssetIdentity = assetCatalogStore.migrateInvestmentIfNeeded(investment) || didMigrateAssetIdentity
+            }
+            if didMigrateAssetIdentity {
+                try? modelContext.save()
+            }
+
             let activeInvestments = investments.filter { $0.archivedAt == nil }
             // Сортируем: сначала избранные, потом по приоритету, потом по дате
             state.investments = activeInvestments.sorted { inv1, inv2 in
@@ -397,6 +406,7 @@ final class InvestmentViewModel: ViewModelProtocol {
         let isMarketCategory = (category == .stocks || category == .crypto)
 
         if !isMarketCategory {
+            investment.assetID = nil
             investment.marketSymbol = nil
             investment.marketExchange = nil
             investment.marketQuoteLookupKey = nil
@@ -409,6 +419,23 @@ final class InvestmentViewModel: ViewModelProtocol {
             investment.lastKnownPriceUpdatedAt = nil
             investment.marketProviderRaw = nil
             return
+        }
+
+        if let identity = MarketAssetIdentityResolver.resolve(
+            category: category,
+            symbol: marketData?.symbol,
+            exchange: marketData?.exchange,
+            instrumentName: investment.name,
+            micCode: marketData?.micCode,
+            instrumentType: category == .crypto ? "Cryptocurrency" : "Common Stock",
+            currency: marketData?.currency,
+            country: nil,
+            providerName: marketData?.providerRaw
+        ) {
+            investment.assetID = identity.assetID
+            AssetCatalogStore(modelContext: modelContext).syncIfSupported(identity: identity)
+        } else {
+            investment.assetID = nil
         }
 
         investment.marketSymbol = marketData?.symbol

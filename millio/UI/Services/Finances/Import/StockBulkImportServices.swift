@@ -4,11 +4,11 @@ import SwiftData
 @MainActor
 final class StockBulkImportMatcher {
     private let modelContext: ModelContext
-    private let marketDataClient: MarketDataClientProtocol
+    private let instrumentResolver: MarketInstrumentResolver
 
     init(modelContext: ModelContext, marketDataClient: MarketDataClientProtocol = MarketAPIClient.shared) {
         self.modelContext = modelContext
-        self.marketDataClient = marketDataClient
+        self.instrumentResolver = MarketInstrumentResolver(client: marketDataClient)
     }
 
     func buildDraftRows(from parsedRows: [StockBulkImportParsedRow]) async -> [StockBulkImportRowDraft] {
@@ -61,22 +61,12 @@ final class StockBulkImportMatcher {
 
         for ticker in uniqueTickers {
             do {
-                let symbols = try await marketDataClient.searchSymbols(query: ticker, outputSize: 30)
-                let exactCandidates = symbols.compactMap { symbol -> StockBulkImportCandidate? in
-                    guard matchesTicker(symbol.symbol, expectedTicker: ticker) else { return nil }
-                    let type = symbol.normalizedInstrumentType ?? ""
-                    guard type.contains("stock") || type.contains("equity") || type.contains("etf") || type.isEmpty else {
-                        return nil
-                    }
-                    return StockBulkImportCandidate(
-                        symbol: symbol.symbol,
-                        market: symbol.exchange,
-                        displayName: symbol.displayName,
-                        currency: "USD",
-                        providerRaw: "market-backend"
-                    )
-                }
-                remoteCatalog[ticker] = Array(Set(exactCandidates))
+                let resolvedCandidates = try await instrumentResolver.resolveBulkImportCandidates(
+                    query: ticker,
+                    market: parsedRows.first(where: { $0.ticker == ticker })?.market,
+                    outputSize: 30
+                )
+                remoteCatalog[ticker] = resolvedCandidates
             } catch {
                 remoteCatalog[ticker] = []
             }
@@ -91,25 +81,15 @@ final class StockBulkImportMatcher {
         remoteCatalog: [String: [StockBulkImportCandidate]]
     ) -> [StockBulkImportCandidate] {
         let combined = Array(Set(localCatalog + (remoteCatalog[row.ticker] ?? [])))
-        let symbolMatches = combined.filter { $0.normalizedSymbol == row.ticker.uppercased() }
-        guard !symbolMatches.isEmpty else { return [] }
+        let tickerMatches = combined.filter { $0.normalizedSymbol == row.ticker.uppercased() }
+        let rankedPool = tickerMatches.isEmpty ? combined : tickerMatches
+        guard !rankedPool.isEmpty else { return [] }
 
-        guard let normalizedMarket = StockBulkImportMarketNormalizer.normalize(row.market) else {
-            return symbolMatches.sorted(by: candidateSort)
-        }
-
-        if normalizedMarket == "US" {
-            let usMatches = symbolMatches.filter {
-                guard let market = $0.normalizedMarket else { return false }
-                return ["NASDAQ", "NYSE", "AMEX", "BATS", "IEX", "US"].contains(market)
-            }
-            return (usMatches.isEmpty ? symbolMatches : usMatches).sorted(by: candidateSort)
-        }
-
-        let exactMarketMatches = symbolMatches.filter {
-            $0.normalizedMarket == normalizedMarket
-        }
-        return (exactMarketMatches.isEmpty ? symbolMatches : exactMarketMatches).sorted(by: candidateSort)
+        return MarketInstrumentCandidatePolicy.rankBulkImportCandidates(
+            rankedPool,
+            query: row.ticker,
+            preferredMarket: row.market
+        )
     }
 
     private func resolvedTickerSymbol(from storedSymbol: String?) -> String {
@@ -123,38 +103,6 @@ final class StockBulkImportMatcher {
             return String(firstSegment).uppercased()
         }
         return trimmed.uppercased()
-    }
-
-    private func matchesTicker(_ providerSymbol: String, expectedTicker: String) -> Bool {
-        let normalizedExpected = expectedTicker.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        let normalizedProvider = providerSymbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        guard !normalizedExpected.isEmpty, !normalizedProvider.isEmpty else { return false }
-
-        if normalizedProvider == normalizedExpected {
-            return true
-        }
-
-        if resolvedTickerSymbol(from: normalizedProvider) == normalizedExpected {
-            return true
-        }
-
-        if let suffixTicker = normalizedProvider.split(separator: ".").first.map(String.init),
-           suffixTicker == normalizedExpected {
-            return true
-        }
-
-        return false
-    }
-
-    private var candidateSort: (StockBulkImportCandidate, StockBulkImportCandidate) -> Bool {
-        { lhs, rhs in
-            let leftMarket = lhs.normalizedMarket ?? "ZZZ"
-            let rightMarket = rhs.normalizedMarket ?? "ZZZ"
-            if leftMarket != rightMarket {
-                return leftMarket < rightMarket
-            }
-            return lhs.displayName < rhs.displayName
-        }
     }
 
     private static func formatNumber(_ value: Double) -> String {
@@ -196,23 +144,36 @@ struct StockBulkImportPersistenceService {
         var investmentByIdentityKey: [String: Investment] = [:]
         investmentByIdentityKey.reserveCapacity(investments.count)
         for investment in investments where investment.archivedAt == nil && investment.category == .stocks {
-            let key = normalizedIdentityKey(symbol: investment.marketSymbol, exchange: investment.marketExchange)
+            let key = investment.assetID ?? normalizedIdentityKey(symbol: investment.marketSymbol, exchange: investment.marketExchange)
             guard !key.isEmpty else { continue }
             investmentByIdentityKey[key] = investment
         }
         var financeAccounts = (try? modelContext.fetch(FetchDescriptor<FinanceAccount>())) ?? []
 
         for resolvedRow in resolvedRows {
+            let resolvedIdentity = MarketAssetIdentityResolver.resolve(
+                category: .stocks,
+                symbol: resolvedRow.candidate.storedSymbol,
+                exchange: resolvedRow.candidate.normalizedMarket,
+                instrumentName: resolvedRow.candidate.displayName,
+                micCode: nil,
+                instrumentType: "Common Stock",
+                currency: resolvedRow.candidate.currency,
+                country: nil,
+                providerName: resolvedRow.candidate.providerRaw
+            )
+            let identityKey = resolvedIdentity?.assetID ?? resolvedRow.candidate.identityKey
             let latestPrice = await fetchLatestPrice(for: resolvedRow.candidate)
             let effectiveUnitPrice = resolvedRow.currentPrice ?? latestPrice ?? resolvedRow.buyPrice
             let amount = resolvedRow.quantity * effectiveUnitPrice
 
-            if let existing = investmentByIdentityKey[resolvedRow.candidate.identityKey] {
+            if let existing = investmentByIdentityKey[identityKey] {
                 existing.ensureUniqueID()
                 existing.name = existing.name.isEmpty ? resolvedRow.candidate.displayName : existing.name
                 existing.investmentType = .positive
                 existing.category = .stocks
                 existing.currency = "USD"
+                existing.assetID = resolvedIdentity?.assetID ?? existing.assetID
                 existing.marketCurrency = "USD"
                 existing.marketExchange = resolvedRow.candidate.normalizedMarket
                 existing.marketSymbol = resolvedRow.candidate.storedSymbol
@@ -227,6 +188,9 @@ struct StockBulkImportPersistenceService {
                     unitPrice: effectiveUnitPrice,
                     fallbackBuyPrice: resolvedRow.buyPrice
                 )
+                if let resolvedIdentity {
+                    AssetCatalogStore(modelContext: modelContext).syncIfSupported(identity: resolvedIdentity)
+                }
                 updateFinanceAccountLink(for: existing, in: &financeAccounts, group: resolvedGroup)
                 continue
             }
@@ -242,6 +206,7 @@ struct StockBulkImportPersistenceService {
                 isFavorite: false
             )
             investment.marketSymbol = resolvedRow.candidate.storedSymbol
+            investment.assetID = resolvedIdentity?.assetID
             investment.marketExchange = resolvedRow.candidate.normalizedMarket
             investment.marketCurrency = "USD"
             investment.marketQuantity = resolvedRow.quantity
@@ -257,7 +222,10 @@ struct StockBulkImportPersistenceService {
             )
 
             modelContext.insert(investment)
-            investmentByIdentityKey[resolvedRow.candidate.identityKey] = investment
+            if let resolvedIdentity {
+                AssetCatalogStore(modelContext: modelContext).syncIfSupported(identity: resolvedIdentity)
+            }
+            investmentByIdentityKey[identityKey] = investment
             let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
             account.group = resolvedGroup
             modelContext.insert(account)

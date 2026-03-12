@@ -819,15 +819,15 @@ enum CashflowCategoryTransactionSheetKind {
 
     var navigationTitle: String {
         switch self {
-        case .income: return String(localized: "New income")
-        case .expense: return String(localized: "New expense")
+        case .income: return String(localized: "cashflow.operation.new_income")
+        case .expense: return String(localized: "cashflow.operation.new_expense")
         }
     }
 
     var monthlyTotalTitle: String {
         switch self {
-        case .income: return String(localized: "Total income for month")
-        case .expense: return String(localized: "Total expense for month")
+        case .income: return String(localized: "cashflow.operation.total_income_for_month")
+        case .expense: return String(localized: "cashflow.operation.total_expense_for_month")
         }
     }
 
@@ -919,9 +919,9 @@ private struct CashflowCategoryQuickCreateSheet: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
-                        FinancesSectionHeader(title: "Name")
+                        FinancesSectionHeader(title: String(localized: "cashflow.editor.category_name"))
                         FinancesGlassCard {
-                            TextField("Enter name", text: $name)
+                            TextField("cashflow.editor.enter_name", text: $name)
                                 .textInputAutocapitalization(.words)
                                 .foregroundStyle(AppColors.textPrimary)
                                 .focused($isNameFieldFocused)
@@ -929,10 +929,10 @@ private struct CashflowCategoryQuickCreateSheet: View {
                                 .padding(.vertical, 12)
                         }
 
-                        FinancesSectionHeader(title: "Icon")
+                        FinancesSectionHeader(title: String(localized: "cashflow.editor.category_icon"))
                         FinancesGlassCard {
                             VStack(spacing: 12) {
-                                Picker("Icon type", selection: $selectedTab) {
+                                Picker(String(localized: "cashflow.editor.icon_type"), selection: $selectedTab) {
                                     ForEach(IconPickerTab.allCases) { tab in
                                         Text(tab.rawValue).tag(tab)
                                     }
@@ -944,7 +944,7 @@ private struct CashflowCategoryQuickCreateSheet: View {
                                         Image(systemName: "magnifyingglass")
                                             .font(.system(size: 14, weight: .medium))
                                             .foregroundStyle(AppColors.textTertiary)
-                                        TextField("Icon search (e.g. car, cart, heart)", text: $iconSearchText)
+                                        TextField("cashflow.editor.icon_search_hint", text: $iconSearchText)
                                             .font(.system(size: 14, weight: .regular))
                                             .foregroundStyle(AppColors.textPrimary)
                                     }
@@ -990,17 +990,17 @@ private struct CashflowCategoryQuickCreateSheet: View {
                 .scrollDismissesKeyboard(.immediately)
                 .dismissKeyboardOnTap()
             }
-            .navigationTitle("New category")
+            .navigationTitle("cashflow.editor.new_category")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") {
+                    Button(String(localized: "cashflow.common.cancel")) {
                         dismiss()
                     }
                     .foregroundStyle(AppColors.textPrimary)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Save") {
+                    Button(String(localized: "cashflow.common.save")) {
                         onSave(name, icon)
                     }
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

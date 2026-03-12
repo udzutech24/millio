@@ -290,7 +290,7 @@ struct CashflowTransactionEditorView: View {
                         showCurrencyPicker = false
                     }
                 )
-                .navigationTitle("Transaction currency")
+                .navigationTitle("cashflow.editor.transaction_currency")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
@@ -752,7 +752,7 @@ struct CashflowTransactionEditorView: View {
             sectionTitle(String(localized: "Additional"))
             editorCard {
                 VStack(spacing: 0) {
-                    TextField("Comment", text: $note, axis: .vertical)
+                    TextField("cashflow.editor.comment", text: $note, axis: .vertical)
                         .lineLimit(3...6)
                         .foregroundStyle(AppColors.textPrimary)
                         .padding(.vertical, 12)
@@ -1196,7 +1196,7 @@ private struct CashflowCategorySelectionSheet: View {
                             Image(systemName: "magnifyingglass")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(AppColors.textSecondary)
-                            TextField("Search category", text: $searchText)
+                            TextField("cashflow.editor.search_category", text: $searchText)
                                 .textInputAutocapitalization(.words)
                                 .foregroundStyle(AppColors.textPrimary)
                         }
@@ -1240,11 +1240,11 @@ private struct CashflowCategorySelectionSheet: View {
                                     }
                                     .buttonStyle(.plain)
                                     .contextMenu {
-                                        Button("Edit") {
+                                        Button(String(localized: "cashflow.common.edit")) {
                                             openEditSheet(for: option)
                                         }
                                         if viewModel.canDeleteCategory(rawValue: option.rawValue, kind: kind) {
-                                            Button("Delete", role: .destructive) {
+                                            Button(String(localized: "cashflow.history.detail.delete"), role: .destructive) {
                                                 pendingDeleteRaw = option.rawValue
                                                 showDeleteAlert = true
                                             }
@@ -1292,17 +1292,17 @@ private struct CashflowCategorySelectionSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Close") {
+                    Button(String(localized: "cashflow.common.close")) {
                         dismiss()
                     }
                     .foregroundStyle(AppColors.textPrimary)
                 }
             }
-            .alert("Delete category?", isPresented: $showDeleteAlert) {
-                Button("Cancel", role: .cancel) {
+            .alert(String(localized: "cashflow.editor.delete_category.title"), isPresented: $showDeleteAlert) {
+                Button(String(localized: "cashflow.common.cancel"), role: .cancel) {
                     pendingDeleteRaw = nil
                 }
-                Button("Delete", role: .destructive) {
+                Button(String(localized: "cashflow.history.detail.delete"), role: .destructive) {
                     guard let raw = pendingDeleteRaw else { return }
                     if viewModel.deleteCategory(rawValue: raw, kind: kind), selectedRaw == raw {
                         selectedRaw = fallbackRaw
@@ -1310,7 +1310,7 @@ private struct CashflowCategorySelectionSheet: View {
                     pendingDeleteRaw = nil
                 }
             } message: {
-                Text("Linked transactions will be moved to a safe system category.")
+                Text("cashflow.editor.delete_category.message")
             }
             .fullScreenCover(isPresented: $showEditorSheet) {
                 CashflowCategoryEditorSheet(
@@ -1418,9 +1418,9 @@ struct CashflowCategoryEditorSheet: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
-                        FinancesSectionHeader(title: "Name")
+                        FinancesSectionHeader(title: String(localized: "cashflow.editor.category_name"))
                         FinancesGlassCard {
-                            TextField("Enter name", text: $name)
+                            TextField("cashflow.editor.enter_name", text: $name)
                                 .textInputAutocapitalization(.words)
                                 .foregroundStyle(AppColors.textPrimary)
                                 .focused($isNameFieldFocused)
@@ -1428,10 +1428,10 @@ struct CashflowCategoryEditorSheet: View {
                                 .padding(.vertical, 12)
                         }
 
-                        FinancesSectionHeader(title: "Icon")
+                        FinancesSectionHeader(title: String(localized: "cashflow.editor.category_icon"))
                         FinancesGlassCard {
                             VStack(spacing: 12) {
-                                Picker("Icon type", selection: $selectedTab) {
+                                Picker(String(localized: "cashflow.editor.icon_type"), selection: $selectedTab) {
                                     ForEach(IconPickerTab.allCases) { tab in
                                         Text(tab.rawValue).tag(tab)
                                     }
@@ -1443,7 +1443,7 @@ struct CashflowCategoryEditorSheet: View {
                                         Image(systemName: "magnifyingglass")
                                             .font(.system(size: 14, weight: .medium))
                                             .foregroundStyle(AppColors.textTertiary)
-                                        TextField("Icon search (e.g. car, cart, heart)", text: $iconSearchText)
+                                        TextField("cashflow.editor.icon_search_hint", text: $iconSearchText)
                                             .font(.system(size: 14, weight: .regular))
                                             .foregroundStyle(AppColors.textPrimary)
                                     }
