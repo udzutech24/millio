@@ -18,6 +18,10 @@ final class LocalizableXcstringsTests: XCTestCase {
 
         XCTAssertNotNil(localizations["en"], "Missing English localization for `profile.contact.feedback_message`.")
         XCTAssertNotNil(localizations["ru"], "Missing Russian localization for `profile.contact.feedback_message`.")
+
+        let localizedValues = try localizedStringValues(for: localizations, key: "profile.contact.feedback_message")
+        XCTAssertFalse(localizedValues["en", default: ""].hasSuffix("."), "English `profile.contact.feedback_message` should not end with a period.")
+        XCTAssertFalse(localizedValues["ru", default: ""].hasSuffix("."), "Russian `profile.contact.feedback_message` should not end with a period.")
     }
 
     func testRateAppStringsAreLocalizedInENAndRU() throws {
@@ -161,5 +165,26 @@ final class LocalizableXcstringsTests: XCTestCase {
 
         XCTAssertNotNil(localizations["en"], "Missing English localization for `\(key)`.")
         XCTAssertNotNil(localizations["ru"], "Missing Russian localization for `\(key)`.")
+    }
+
+    private func localizedStringValues(
+        for localizations: [String: Any],
+        key: String
+    ) throws -> [String: String] {
+        try Dictionary(uniqueKeysWithValues: localizations.map { locale, value in
+            guard
+                let localization = value as? [String: Any],
+                let stringUnit = localization["stringUnit"] as? [String: Any],
+                let stringValue = stringUnit["value"] as? String
+            else {
+                throw NSError(
+                    domain: "LocalizableXcstringsTests",
+                    code: 2,
+                    userInfo: [NSLocalizedDescriptionKey: "Missing string value for `\(key)` locale `\(locale)`."]
+                )
+            }
+
+            return (locale, stringValue)
+        })
     }
 }

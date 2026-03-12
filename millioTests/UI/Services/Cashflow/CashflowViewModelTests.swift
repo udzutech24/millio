@@ -39,6 +39,20 @@ struct CashflowViewModelTests {
     }
 }
 
+@MainActor
+private final class CashflowTestNotificationManager: NotificationManagerProtocol {
+    private(set) var scheduledSnapshotCount: Int = 0
+
+    func requestAuthorization() async -> Bool { true }
+    func scheduleDailyReminder(enabled: Bool) async {}
+    func scheduleDailyReminder(using settings: DailyReminderSettings) async {}
+    func cancelDailyReminder() {}
+    func scheduleCashflowScheduledReminders(for transactions: [CashflowTransaction]) async {
+        scheduledSnapshotCount = transactions.count
+    }
+    func cancelCashflowScheduledReminders() {}
+}
+
 extension CashflowViewModelTests {
     @Test("Заголовок месяца в Cashflow учитывает locale (en_US)")
     func periodHeaderTitleUsesProvidedLocaleForMonthPeriod() {
@@ -581,9 +595,16 @@ extension CashflowViewModelTests {
         }
 
         let expenseBreakdown = viewModel.state.expenseBreakdown
-        #expect(expenseBreakdown.map { $0.title } == ["Shopping", "Cafe", "Groceries"])
+        #expect(
+            expenseBreakdown.map { $0.title } ==
+            [
+                ExpenseCategory.shopping.displayName,
+                ExpenseCategory.cafe.displayName,
+                ExpenseCategory.groceries.displayName
+            ]
+        )
         #expect(expenseBreakdown.map { $0.convertedAmount } == [300, 200, 100])
-        #expect(viewModel.state.incomeBreakdown.first?.title == "Salary")
+        #expect(viewModel.state.incomeBreakdown.first?.title == IncomeCategory.salary.displayName)
         #expect(viewModel.state.incomeBreakdown.first?.convertedAmount == 400)
     }
 
@@ -616,6 +637,25 @@ extension CashflowViewModelTests {
         #expect(expense.icon == "🛒")
         #expect(!CashflowCustomCategory.isSFSymbolIcon(income.icon))
         #expect(!CashflowCustomCategory.isSFSymbolIcon(expense.icon))
+    }
+
+    @Test("Доходы при старте содержат 8 базовых категорий с релевантными иконками и локализацией")
+    func testIncomeSystemCategoriesDefaultSetAndLocalization() {
+        #expect(
+            IncomeCategory.allCases.map(\.rawValue) ==
+            ["salary", "freelance", "business", "investment", "rental", "gift", "bonus", "other"]
+        )
+        #expect(IncomeCategory.allCases.count == 8)
+
+        #expect(IncomeCategory.business.icon == "🏢")
+        #expect(IncomeCategory.rental.icon == "🏠")
+
+        let ruLocale = Locale(identifier: "ru_RU")
+        let enLocale = Locale(identifier: "en_US")
+        #expect(AppLocalization.string("Business", locale: ruLocale) == "Бизнес")
+        #expect(AppLocalization.string("Business", locale: enLocale) == "Business")
+        #expect(AppLocalization.string("Rental", locale: ruLocale) == "Аренда")
+        #expect(AppLocalization.string("Rental", locale: enLocale) == "Rental")
     }
 
     @Test("Нормализация иконки поддерживает emoji и SF Symbols")
@@ -801,8 +841,24 @@ extension CashflowViewModelTests {
         let months = viewModel.state.transactions
             .map { calendar.component(.month, from: $0.transactionDate) }
             .sorted()
+        let expectedBalanceDelta = viewModel.state.transactions.reduce(0.0) { partial, transaction in
+            guard transaction.cardID == card.cardUniqueID,
+                  transaction.affectsCardBalance,
+                  !transaction.isRecurringTemplate else {
+                return partial
+            }
+            switch transaction.transactionType {
+            case .income:
+                return partial + transaction.amount
+            case .expense:
+                return partial - transaction.amount
+            default:
+                return partial
+            }
+        }
+        let expectedBalance = 1_000 + expectedBalanceDelta
         #expect(months == [1, 2, 3])
-        #expect(abs(card.balance - 1_200) < 0.01)
+        #expect(abs(card.balance - expectedBalance) < 0.01)
 
         viewModel.handle(.loadTransactions)
         try await Task.sleep(nanoseconds: 300_000_000)
@@ -976,6 +1032,195 @@ extension CashflowViewModelTests {
         #expect(planned.map(\.amount) == [50, 70])
         #expect(planned.allSatisfy { $0.recurrenceRule == .none })
         #expect(planned.allSatisfy { $0.transactionType == .expense })
+    }
+
+    @Test("Будущий запланированный расход не списывает баланс карты сразу")
+    func testPlannedFutureExpenseDoesNotAffectBalanceImmediately() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 10, hour: 12)) ?? Date()
+
+        let card = Card(
+            name: "Main",
+            cardNumber: "0001",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 1_000
+        )
+        modelContext.insert(card)
+        try modelContext.save()
+
+        let notifications = CashflowTestNotificationManager()
+        let viewModel = CashflowViewModel(
+            modelContext: modelContext,
+            notificationManager: notifications,
+            now: { fixedNow }
+        )
+
+        let plannedExpense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 150,
+            currency: "RUB",
+            transactionDate: calendar.date(byAdding: .day, value: 2, to: fixedNow) ?? fixedNow,
+            cardID: card.cardUniqueID,
+            expenseCategory: .shopping
+        )
+        viewModel.handle(.updateTransaction(plannedExpense))
+        try await Task.sleep(nanoseconds: 250_000_000)
+
+        #expect(abs(card.balance - 1_000) < 0.01)
+        #expect(notifications.scheduledSnapshotCount >= 1)
+    }
+
+    @Test("Регулярный шаблон расхода не списывает баланс карты в момент создания")
+    func testRecurringTemplateExpenseDoesNotAffectBalanceImmediately() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 10, hour: 12)) ?? Date()
+
+        let card = Card(
+            name: "Main",
+            cardNumber: "0002",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 1_000
+        )
+        modelContext.insert(card)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        let recurringTemplate = CashflowTransaction(
+            transactionType: .expense,
+            amount: 200,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: card.cardUniqueID,
+            expenseCategory: .bills,
+            recurrenceRule: .monthly,
+            recurrenceSeriesID: "template-expense-bills"
+        )
+
+        viewModel.handle(.updateTransaction(recurringTemplate))
+        try await Task.sleep(nanoseconds: 250_000_000)
+
+        #expect(abs(card.balance - 1_000) < 0.01)
+    }
+
+    @Test("Текущий обычный расход продолжает списывать баланс карты")
+    func testCurrentExpenseStillAffectsBalance() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 10, hour: 12)) ?? Date()
+
+        let card = Card(
+            name: "Main",
+            cardNumber: "0003",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 1_000
+        )
+        modelContext.insert(card)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        let currentExpense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 120,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: card.cardUniqueID,
+            expenseCategory: .groceries
+        )
+
+        viewModel.handle(.updateTransaction(currentExpense))
+        try await Task.sleep(nanoseconds: 250_000_000)
+
+        #expect(abs(card.balance - 880) < 0.01)
+    }
+
+    @Test("Запланированный расход с включенным тумблером списывается автоматически в дату")
+    func testPlannedExpenseAutoAppliesOnDueDate() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        var simulatedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 10, hour: 12)) ?? Date()
+
+        let card = Card(
+            name: "Main",
+            cardNumber: "0101",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 1_000
+        )
+        modelContext.insert(card)
+        try modelContext.save()
+
+        let notifications = CashflowTestNotificationManager()
+        let viewModel = CashflowViewModel(
+            modelContext: modelContext,
+            notificationManager: notifications,
+            now: { simulatedNow }
+        )
+
+        let plannedExpense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 250,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 12, hour: 9)) ?? simulatedNow,
+            cardID: card.cardUniqueID,
+            expenseCategory: .bills,
+            affectsCardBalance: true
+        )
+        viewModel.handle(.updateTransaction(plannedExpense))
+        try await Task.sleep(nanoseconds: 250_000_000)
+        #expect(abs(card.balance - 1_000) < 0.01)
+
+        simulatedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 13, hour: 10)) ?? simulatedNow
+        viewModel.handle(.loadTransactions)
+        try await Task.sleep(nanoseconds: 400_000_000)
+
+        #expect(abs(card.balance - 750) < 0.01)
+    }
+
+    @Test("Запланированный расход с выключенным тумблером не списывается автоматически в дату")
+    func testPlannedExpenseManualModeDoesNotAutoApplyOnDueDate() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        var simulatedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 10, hour: 12)) ?? Date()
+
+        let card = Card(
+            name: "Main",
+            cardNumber: "0102",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 1_000
+        )
+        modelContext.insert(card)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { simulatedNow })
+        let plannedExpense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 250,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 12, hour: 9)) ?? simulatedNow,
+            cardID: card.cardUniqueID,
+            expenseCategory: .bills,
+            affectsCardBalance: false
+        )
+        viewModel.handle(.updateTransaction(plannedExpense))
+        try await Task.sleep(nanoseconds: 250_000_000)
+        #expect(abs(card.balance - 1_000) < 0.01)
+
+        simulatedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 13, hour: 10)) ?? simulatedNow
+        viewModel.handle(.loadTransactions)
+        try await Task.sleep(nanoseconds: 400_000_000)
+
+        #expect(abs(card.balance - 1_000) < 0.01)
     }
 
     @Test("Удаление операции исключает ее из регулярных и запланированных списков")

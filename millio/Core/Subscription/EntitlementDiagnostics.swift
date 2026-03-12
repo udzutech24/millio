@@ -18,7 +18,7 @@ enum EntitlementDiagnostics {
         return [
             EntitlementDiagnosticItem(
                 id: "converter.crypto",
-                title: isRussian ? "Крипта в конвертере" : "Crypto in converter",
+                title: isRussian ? "Криптовалюта в конвертере" : "Crypto in converter",
                 location: isRussian ? "Курсы -> выбор валюты и конвертер" : "Courses -> currency picker and converter",
                 freeBehavior: isRussian ? "Доступны только фиатные валюты." : "Only fiat currencies are available.",
                 premiumBehavior: isRussian ? "Криптовалюты разблокированы." : "Crypto currencies are unlocked.",
@@ -29,7 +29,7 @@ enum EntitlementDiagnostics {
             ),
             EntitlementDiagnosticItem(
                 id: "finances.market_assets",
-                title: isRussian ? "Акции и крипта в финансах" : "Stocks & crypto in Finances",
+                title: isRussian ? "Акции и криптовалюта в финансах" : "Stocks & crypto in Finances",
                 location: isRussian ? "Финансы -> добавление инвест-счёта и редактор инвестиций" : "Finances -> add investment account and investment editor",
                 freeBehavior: isRussian ? "Недоступны без PRO." : "Locked without PRO.",
                 premiumBehavior: isRussian ? "Полный доступ к рынкам." : "Full market access.",
@@ -40,7 +40,7 @@ enum EntitlementDiagnostics {
             ),
             EntitlementDiagnosticItem(
                 id: "finances.tracked_tickers",
-                title: isRussian ? "Лимит тикеров акций и крипты" : "Tracked stock & crypto tickers",
+                title: isRussian ? "Лимит тикеров акций и криптовалюты" : "Tracked stock & crypto tickers",
                 location: isRussian ? "Финансы -> добавление рыночных активов и Quick Setup" : "Finances -> market assets and Quick Setup",
                 freeBehavior: isRussian ? "До \(EntitlementPolicy.freeTrackedTickerLimit) тикеров." : "Up to \(EntitlementPolicy.freeTrackedTickerLimit) tracked tickers.",
                 premiumBehavior: isRussian ? "Безлимит тикеров." : "Unlimited tracked tickers.",

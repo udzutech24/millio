@@ -47,80 +47,15 @@ struct ConverterView: View {
     
     // MARK: - Compile-friendly layout
     
-    private struct Layout {
-        let totalH: CGFloat
-        let bottomSafe: CGFloat
-        let contentGap: CGFloat
-        let keySpacing: CGFloat
-        let desiredRows: Int
-        let rowSpacing: CGFloat
-        let rowH: CGFloat
-        let keyH: CGFloat
-        let fontSize: CGFloat
-        let listBlockH: CGFloat
-        let keypadBlockH: CGFloat
-    }
-    
-    
-    private func makeLayout(totalH: CGFloat, bottomSafe: CGFloat) -> Layout {
-        let isTallScreen = totalH >= 900
-        let contentGap: CGFloat = isTallScreen ? 14 : 20
-        
-        let availableHeight = max(
-            0,
-            totalH - bottomSafe - contentGap - 8
-        )
-        
-        // На высоких экранах даем больше места клавиатуре.
-        let listRatio: CGFloat = isTallScreen ? 0.56 : 0.60
-        let rawListH = floor(availableHeight * listRatio)
-        let rawKeypadH = max(0, availableHeight - rawListH)
-        let listBlockH = max(280, rawListH)
-        let keypadBlockH = max(200, rawKeypadH)
-        
-        let desiredRows: Int = 6
-        let rowSpacing: CGFloat = availableHeight < 700 ? 8 : 10
-        let keySpacing: CGFloat = availableHeight < 700 ? 8 : 10
-        
-        let rawRowH = (listBlockH - CGFloat(desiredRows - 1) * rowSpacing) / CGFloat(desiredRows)
-        let rowH = min(74, max(56, floor(rawRowH)))
-        
-        let rawKeyH = (keypadBlockH - CGFloat(5 - 1) * keySpacing) / 5
-        let keyHMax: CGFloat = isTallScreen ? 80 : 74
-        let keyH = min(keyHMax, max(52, floor(rawKeyH)))
-        let fontSize: CGFloat = keyH >= 68 ? 24 : (keyH >= 60 ? 22 : 20)
-        
-        // Гарантируем, что все значения конечные и положительные
-        let safeKeyH = keyH.isFinite && keyH > 0 ? keyH : 60
-        let safeKeySpacing = keySpacing.isFinite && keySpacing >= 0 ? keySpacing : 8
-        let safeRowH = rowH.isFinite && rowH > 0 ? rowH : 62
-        let safeRowSpacing = rowSpacing.isFinite && rowSpacing >= 0 ? rowSpacing : 8
-        let safeFontSize = fontSize.isFinite && fontSize > 0 ? fontSize : 18
-        
-        return Layout(
-            totalH: totalH,
-            bottomSafe: bottomSafe,
-            contentGap: contentGap,
-            keySpacing: safeKeySpacing,
-            desiredRows: desiredRows,
-            rowSpacing: safeRowSpacing,
-            rowH: safeRowH,
-            keyH: safeKeyH,
-            fontSize: safeFontSize,
-            listBlockH: listBlockH,
-            keypadBlockH: keypadBlockH
-        )
-    }
-    
     var body: some View {
         ZStack {
             Color.black
                 .ignoresSafeArea()
             
             GeometryReader { geo in
-                let layout = makeLayout(
-                    totalH: geo.size.height,
-                    bottomSafe: geo.safeAreaInsets.bottom
+                let layout = ConverterScreenLayoutCalculator.makeLayout(
+                    totalHeight: geo.size.height,
+                    bottomSafeArea: geo.safeAreaInsets.bottom
                 )
                 mainContent(layout: layout)
             }
@@ -235,32 +170,32 @@ struct ConverterView: View {
     // MARK: - Split view helpers
     
     @ViewBuilder
-    private func mainContent(layout: Layout) -> some View {
+    private func mainContent(layout: ConverterScreenLayout) -> some View {
         VStack(spacing: 0) {
             currencyList(layout: layout)
                 .padding(.horizontal, 16)
                 .padding(.top, 6)
-                .frame(height: layout.listBlockH, alignment: .top)
+                .frame(height: layout.listBlockHeight, alignment: .top)
             
             Color.clear
                 .frame(height: layout.contentGap)
             
             // Клавиатура всегда внизу
             VStack(spacing: 0) {
-                keypad(height: layout.keyH, spacing: layout.keySpacing, fontSize: layout.fontSize)
+                keypad(height: layout.keyHeight, spacing: layout.keySpacing, fontSize: layout.fontSize)
                     .padding(.horizontal, 16)
-                    .frame(height: layout.keypadBlockH, alignment: .bottom)
+                    .frame(height: layout.keypadBlockHeight, alignment: .bottom)
             }
             .background(Color.clear)
         }
-        .padding(.bottom, max(0, layout.bottomSafe - 8))
+        .padding(.bottom, layout.bottomPadding)
     }
     
     @ViewBuilder
-    private func currencyList(layout: Layout) -> some View {
+    private func currencyList(layout: ConverterScreenLayout) -> some View {
         let safeRowSpacing = layout.rowSpacing.isFinite && layout.rowSpacing >= 0 ? layout.rowSpacing : 8
-        let regularRowHeight: CGFloat = layout.rowH
-        let activeRowHeight: CGFloat = min(layout.rowH + 4, 76)
+        let regularRowHeight: CGFloat = layout.rowHeight
+        let activeRowHeight: CGFloat = min(layout.rowHeight + 4, 76)
         
         VStack(spacing: safeRowSpacing) {
             ForEach(Array(viewModel.state.selectedCurrencies.enumerated()), id: \.offset) { idx, code in
@@ -1223,6 +1158,7 @@ struct ConverterView: View {
                         .frame(width: buttonWidth * 2 + safeSpacing)
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         }
     }
     

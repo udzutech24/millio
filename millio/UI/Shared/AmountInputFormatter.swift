@@ -61,6 +61,7 @@ enum AmountInputFormatter {
         formatter.usesGroupingSeparator = true
         formatter.groupingSize = 3
         formatter.secondaryGroupingSize = 3
+        formatter.minimumGroupingDigits = 1
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = hasDecimalSeparator ? maxFractionDigits : 0
 

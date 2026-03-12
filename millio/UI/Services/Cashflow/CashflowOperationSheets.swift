@@ -8,6 +8,36 @@
 import SwiftUI
 import UIKit
 
+/// Единая политика сетки категорий для экранов создания дохода/расхода.
+/// Для расходов на узких экранах уменьшаем количество колонок до 3,
+/// чтобы подписи категорий оставались читаемыми в одну строку.
+struct CashflowCategoryGridLayout {
+    static let compactExpenseColumns = 3
+    static let regularColumns = 4
+    static let compactWidthThreshold: CGFloat = 330
+    static let columnSpacing: CGFloat = 8
+
+    static func columnCount(
+        for kind: CashflowCategoryTransactionSheetKind,
+        containerWidth: CGFloat
+    ) -> Int {
+        if kind == .expense, containerWidth < compactWidthThreshold {
+            return compactExpenseColumns
+        }
+        return regularColumns
+    }
+
+    static func columns(
+        for kind: CashflowCategoryTransactionSheetKind,
+        containerWidth: CGFloat
+    ) -> [GridItem] {
+        Array(
+            repeating: GridItem(.flexible(), spacing: columnSpacing),
+            count: columnCount(for: kind, containerWidth: containerWidth)
+        )
+    }
+}
+
 struct CashflowIncomeTransactionSheet: View {
     @ObservedObject var viewModel: CashflowViewModel
 
@@ -52,10 +82,17 @@ private struct CashflowCategoryTransactionSheet: View {
     @State private var categoryEditorName: String = ""
     @State private var categoryEditorIcon: String = CashflowCustomCategory.defaultIcon
     @State private var pendingDeleteCategoryRaw: String?
+    @State private var categoryGridWidth: CGFloat = UIScreen.main.bounds.width
 
-    private let categoryColumns: [GridItem] = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
     private let outerCornerRadius: CGFloat = 22
     private let innerCornerRadius: CGFloat = 16
+
+    private var categoryColumns: [GridItem] {
+        CashflowCategoryGridLayout.columns(
+            for: kind,
+            containerWidth: categoryGridWidth
+        )
+    }
 
     private var currentMonthStart: Date {
         Calendar.current.startOfMonth(for: Date())
@@ -436,8 +473,10 @@ private struct CashflowCategoryTransactionSheet: View {
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(AppColors.textPrimary)
                             .multilineTextAlignment(.center)
-                            .lineLimit(2)
-                            .frame(minHeight: 30, alignment: .center)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.62)
+                            .truncationMode(.tail)
+                            .frame(maxWidth: .infinity, minHeight: 18, alignment: .center)
 
                         Text(formattedCategoryTotal(for: option))
                             .font(.system(size: 11, weight: .medium))
@@ -468,6 +507,17 @@ private struct CashflowCategoryTransactionSheet: View {
                         }
                     }
                 }
+            }
+        }
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear {
+                        updateCategoryGridWidth(proxy.size.width)
+                    }
+                    .onChange(of: proxy.size.width) { _, newWidth in
+                        updateCategoryGridWidth(newWidth)
+                    }
             }
         }
     }
@@ -657,6 +707,13 @@ private struct CashflowCategoryTransactionSheet: View {
         guard !code.isEmpty else { return amount }
         let symbol = MonetaCurrency(rawValue: code)?.symbol ?? code
         return "\(amount) \(symbol)"
+    }
+
+    private func updateCategoryGridWidth(_ width: CGFloat) {
+        guard width > 0 else { return }
+        let rounded = width.rounded(.toNearestOrAwayFromZero)
+        guard abs(rounded - categoryGridWidth) >= 1 else { return }
+        categoryGridWidth = rounded
     }
 }
 
@@ -897,6 +954,10 @@ private struct CashflowCategoryQuickCreateSheet: View {
     @State private var selectedTab: IconPickerTab = .emoji
     @State private var iconSearchText: String = ""
 
+    private var canSave: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     private var filteredSymbolIcons: [String] {
         let query = iconSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !query.isEmpty else { return CashflowCustomCategory.allowedSFSymbolIcons }
@@ -994,16 +1055,25 @@ private struct CashflowCategoryQuickCreateSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(String(localized: "cashflow.common.cancel")) {
+                    Button {
                         dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary.opacity(0.92))
                     }
-                    .foregroundStyle(AppColors.textPrimary)
+                    .accessibilityLabel(String(localized: "cashflow.common.cancel"))
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(String(localized: "cashflow.common.save")) {
+                    Button {
                         onSave(name, icon)
+                    } label: {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(canSave ? Color(hex: "6DFFC7") : AppColors.textSecondary.opacity(0.55))
                     }
-                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .accessibilityLabel(String(localized: "cashflow.common.save"))
+                    .disabled(!canSave)
                 }
             }
             .onAppear {

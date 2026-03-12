@@ -88,6 +88,78 @@ enum MarketSymbolSearchIndex {
             popularityScore: 87
         ),
         MarketSymbolSearchIndexEntry(
+            symbol: TwelveDataSymbol(symbol: "AVGO", instrumentName: "Broadcom Inc.", exchange: "NASDAQ", micCode: "XNAS", instrumentType: "Common Stock", country: "United States", currency: "USD"),
+            filter: .stocks,
+            aliases: ["broadcom", "avgo", "vmware"],
+            popularityScore: 91
+        ),
+        MarketSymbolSearchIndexEntry(
+            symbol: TwelveDataSymbol(symbol: "WMT", instrumentName: "Walmart Inc.", exchange: "NYSE", micCode: "XNYS", instrumentType: "Common Stock", country: "United States", currency: "USD"),
+            filter: .stocks,
+            aliases: ["walmart", "wal mart", "retail giant"],
+            popularityScore: 89
+        ),
+        MarketSymbolSearchIndexEntry(
+            symbol: TwelveDataSymbol(symbol: "JPM", instrumentName: "JPMorgan Chase & Co.", exchange: "NYSE", micCode: "XNYS", instrumentType: "Common Stock", country: "United States", currency: "USD"),
+            filter: .stocks,
+            aliases: ["jpmorgan", "jp morgan", "chase"],
+            popularityScore: 86
+        ),
+        MarketSymbolSearchIndexEntry(
+            symbol: TwelveDataSymbol(symbol: "V", instrumentName: "Visa Inc.", exchange: "NYSE", micCode: "XNYS", instrumentType: "Common Stock", country: "United States", currency: "USD"),
+            filter: .stocks,
+            aliases: ["visa", "payments"],
+            popularityScore: 85
+        ),
+        MarketSymbolSearchIndexEntry(
+            symbol: TwelveDataSymbol(symbol: "LLY", instrumentName: "Eli Lilly and Company", exchange: "NYSE", micCode: "XNYS", instrumentType: "Common Stock", country: "United States", currency: "USD"),
+            filter: .stocks,
+            aliases: ["eli lilly", "lilly", "pharma"],
+            popularityScore: 84
+        ),
+        MarketSymbolSearchIndexEntry(
+            symbol: TwelveDataSymbol(symbol: "XOM", instrumentName: "Exxon Mobil Corporation", exchange: "NYSE", micCode: "XNYS", instrumentType: "Common Stock", country: "United States", currency: "USD"),
+            filter: .stocks,
+            aliases: ["exxon", "exxon mobil", "oil major"],
+            popularityScore: 83
+        ),
+        MarketSymbolSearchIndexEntry(
+            symbol: TwelveDataSymbol(symbol: "VOO", instrumentName: "Vanguard S&P 500 ETF", exchange: "NYSE", micCode: "ARCX", instrumentType: "ETF", country: "United States", currency: "USD"),
+            filter: .stocks,
+            aliases: ["voo", "vanguard sp500", "vanguard s&p 500"],
+            popularityScore: 90
+        ),
+        MarketSymbolSearchIndexEntry(
+            symbol: TwelveDataSymbol(symbol: "IVV", instrumentName: "iShares Core S&P 500 ETF", exchange: "NYSE", micCode: "ARCX", instrumentType: "ETF", country: "United States", currency: "USD"),
+            filter: .stocks,
+            aliases: ["ivv", "ishares sp500", "ishares s&p 500"],
+            popularityScore: 82
+        ),
+        MarketSymbolSearchIndexEntry(
+            symbol: TwelveDataSymbol(symbol: "VTI", instrumentName: "Vanguard Total Stock Market ETF", exchange: "NYSE", micCode: "ARCX", instrumentType: "ETF", country: "United States", currency: "USD"),
+            filter: .stocks,
+            aliases: ["vti", "total stock market", "vanguard total market"],
+            popularityScore: 81
+        ),
+        MarketSymbolSearchIndexEntry(
+            symbol: TwelveDataSymbol(symbol: "ORCL", instrumentName: "Oracle Corporation", exchange: "NYSE", micCode: "XNYS", instrumentType: "Common Stock", country: "United States", currency: "USD"),
+            filter: .stocks,
+            aliases: ["oracle", "database", "cloud database"],
+            popularityScore: 80
+        ),
+        MarketSymbolSearchIndexEntry(
+            symbol: TwelveDataSymbol(symbol: "COST", instrumentName: "Costco Wholesale Corporation", exchange: "NASDAQ", micCode: "XNAS", instrumentType: "Common Stock", country: "United States", currency: "USD"),
+            filter: .stocks,
+            aliases: ["costco", "wholesale"],
+            popularityScore: 79
+        ),
+        MarketSymbolSearchIndexEntry(
+            symbol: TwelveDataSymbol(symbol: "TSM", instrumentName: "Taiwan Semiconductor Manufacturing Company Limited", exchange: "NYSE", micCode: "XNYS", instrumentType: "Common Stock", country: "Taiwan", currency: "USD"),
+            filter: .stocks,
+            aliases: ["tsm", "tsmc", "taiwan semiconductor", "chips foundry"],
+            popularityScore: 78
+        ),
+        MarketSymbolSearchIndexEntry(
             symbol: TwelveDataSymbol(symbol: "BTC/USD", instrumentName: "Bitcoin / US Dollar", exchange: "CRYPTO", micCode: nil, instrumentType: "Cryptocurrency", country: nil, currency: "USD"),
             filter: .crypto,
             aliases: ["bitcoin", "btc", "xbt"],
@@ -148,6 +220,20 @@ enum MarketSymbolSearchIndex {
             popularityScore: 77
         )
     ]
+
+    static func topSymbols(for filter: MarketSymbolFilter, limit: Int) -> [TwelveDataSymbol] {
+        entries
+            .filter { $0.filter == filter }
+            .sorted { lhs, rhs in
+                if lhs.popularityScore != rhs.popularityScore {
+                    return lhs.popularityScore > rhs.popularityScore
+                }
+
+                return lhs.symbol.displayName.localizedCaseInsensitiveCompare(rhs.symbol.displayName) == .orderedAscending
+            }
+            .prefix(limit)
+            .map(\.symbol)
+    }
 }
 
 enum MarketSymbolSearchEngine {

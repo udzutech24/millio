@@ -1194,7 +1194,7 @@ struct FinanceViewModelTests {
         await viewModel.refreshStockPrices()
 
         let requests = await marketClient.latestPriceRequests
-        #expect(requests == ["SPY", "SPY.US"])
+        #expect(requests == ["NYSE:SPY", "SPY", "SPY.US"])
         #expect(abs((spy.lastKnownUnitPrice ?? 0) - 677.03) < 0.0001)
         #expect(viewModel.state.showRefreshIssue == false)
     }

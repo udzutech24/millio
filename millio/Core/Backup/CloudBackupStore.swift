@@ -152,7 +152,7 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
     private let snapshotVersionField = "backupVersion"
     private let snapshotSizeField = "backupSize"
     private let snapshotPinnedField = "isPinned"
-    private let maxSnapshots: Int
+    private let maxSnapshots: Int?
     private let now: () -> Date
 
     private struct BackupIndexEntry: Codable {
@@ -190,21 +190,21 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
     
     init(
         container: CKContainer = .default(),
-        maxSnapshots: Int = 3,
+        maxSnapshots: Int? = nil,
         now: @escaping () -> Date = Date.init
     ) {
         self.container = CKContainerAdapter(container: container)
-        self.maxSnapshots = max(1, maxSnapshots)
+        self.maxSnapshots = maxSnapshots.map { max(1, $0) }
         self.now = now
     }
     
     init(
         container: CloudBackupContainerProtocol,
-        maxSnapshots: Int = 3,
+        maxSnapshots: Int? = nil,
         now: @escaping () -> Date = Date.init
     ) {
         self.container = container
-        self.maxSnapshots = max(1, maxSnapshots)
+        self.maxSnapshots = maxSnapshots.map { max(1, $0) }
         self.now = now
     }
     
@@ -242,16 +242,35 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         backupDate: Date,
         backupVersion: String
     ) async throws -> BackupVersionInfo {
+        if isPinned {
+            return try await storePinnedBackup(
+                data,
+                backupDate: backupDate,
+                backupVersion: backupVersion
+            )
+        }
+
+        return try await storeAutoBackup(
+            data,
+            backupDate: backupDate,
+            backupVersion: backupVersion
+        )
+    }
+
+    private func storePinnedBackup(
+        _ data: Data,
+        backupDate: Date,
+        backupVersion: String
+    ) async throws -> BackupVersionInfo {
         let privateDB = container.privateCloudDatabase
-        
-        // Создаём временный файл для CKAsset
+
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("backup")
-        
+
         try data.write(to: tempURL)
         defer { try? FileManager.default.removeItem(at: tempURL) }
-        
+
         do {
             let snapshotRecordID = CKRecord.ID(recordName: makeSnapshotRecordName(on: backupDate))
             let snapshotRecord = CKRecord(recordType: snapshotRecordType, recordID: snapshotRecordID)
@@ -259,7 +278,7 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
             snapshotRecord[snapshotDateField] = backupDate
             snapshotRecord[snapshotVersionField] = backupVersion
             snapshotRecord[snapshotSizeField] = Int64(data.count)
-            snapshotRecord[snapshotPinnedField] = isPinned ? 1 : 0
+            snapshotRecord[snapshotPinnedField] = 1
             _ = try await privateDB.save(snapshotRecord)
 
             let newEntry = BackupIndexEntry(
@@ -267,7 +286,7 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
                 date: backupDate,
                 size: Int64(data.count),
                 version: backupVersion,
-                isPinned: isPinned
+                isPinned: true
             )
             let existingEntries = try await loadIndexEntries(from: privateDB)
             let indexUpdate = mergeIndexEntries(existingEntries, appending: newEntry)
@@ -286,26 +305,48 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
                 logger.warning("Failed to save backup index cache: \(self.descriptiveCloudKitError(error), privacy: .public)")
             }
 
-            do {
-                try await saveLegacyLatestRecord(
-                    dataSize: Int64(data.count),
-                    backupDate: backupDate,
-                    backupVersion: backupVersion,
-                    assetURL: tempURL,
-                    database: privateDB
-                )
-            } catch {
-                // Legacy latest используется только как fallback/совместимость.
-                logger.warning("Failed to update legacy latest backup record: \(self.descriptiveCloudKitError(error), privacy: .public)")
-            }
-
             logger.info("Backup uploaded successfully")
             return BackupVersionInfo(
                 recordName: snapshotRecordID.recordName,
                 date: backupDate,
                 size: Int64(data.count),
                 version: backupVersion,
-                isPinned: isPinned
+                isPinned: true
+            )
+        } catch {
+            throw mapCloudKitError(error)
+        }
+    }
+
+    private func storeAutoBackup(
+        _ data: Data,
+        backupDate: Date,
+        backupVersion: String
+    ) async throws -> BackupVersionInfo {
+        let privateDB = container.privateCloudDatabase
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("backup")
+
+        try data.write(to: tempURL)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        do {
+            try await saveLegacyLatestRecord(
+                dataSize: Int64(data.count),
+                backupDate: backupDate,
+                backupVersion: backupVersion,
+                assetURL: tempURL,
+                database: privateDB
+            )
+
+            logger.info("Auto backup uploaded successfully")
+            return BackupVersionInfo(
+                recordName: legacyLatestRecordID.recordName,
+                date: backupDate,
+                size: Int64(data.count),
+                version: backupVersion,
+                isPinned: false
             )
         } catch {
             throw mapCloudKitError(error)
@@ -328,7 +369,7 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
 
     func listBackupRecordNamesForRestore() async throws -> [String] {
         let privateDB = container.privateCloudDatabase
-        let versions = try await listSnapshotVersions(using: privateDB)
+        let versions = try await listBackupVersions()
 
         var orderedNames: [String] = []
         var seen = Set<String>()
@@ -339,11 +380,10 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
             }
         }
 
-        let legacyName = legacyLatestRecordID.recordName
-        if seen.insert(legacyName).inserted {
-            orderedNames.append(legacyName)
+        if seen.contains(legacyLatestRecordID.recordName) == false,
+           try await hasLegacyBackupPayload(using: privateDB) {
+            orderedNames.append(legacyLatestRecordID.recordName)
         }
-
         return orderedNames
     }
 
@@ -362,37 +402,23 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
     
     func getLatestBackupInfo() async throws -> BackupInfo? {
         let privateDB = container.privateCloudDatabase
-
-        if let info = try await latestInfoFromSnapshots(using: privateDB) {
-            return info
-        }
-
-        if let info = try await legacyLatestInfo(using: privateDB) {
-            return info
-        }
-
-        return nil
+        let snapshotInfo = try await latestInfoFromSnapshots(using: privateDB)
+        let autoInfo = try await legacyLatestInfo(using: privateDB)
+        return [snapshotInfo, autoInfo]
+            .compactMap { $0 }
+            .max { lhs, rhs in lhs.date < rhs.date }
     }
 
     func listBackupVersions() async throws -> [BackupVersionInfo] {
         let privateDB = container.privateCloudDatabase
-        let versions = try await listSnapshotVersions(using: privateDB)
-        if !versions.isEmpty {
-            return versions
+        var versions = try await listSnapshotVersions(using: privateDB)
+
+        if let autoVersion = try await autoBackupVersion(using: privateDB),
+           versions.contains(where: { $0.recordName == autoVersion.recordName }) == false {
+            versions.append(autoVersion)
         }
 
-        if let legacy = try await legacyLatestInfo(using: privateDB) {
-            return [
-                BackupVersionInfo(
-                    recordName: legacyLatestRecordID.recordName,
-                    date: legacy.date,
-                    size: legacy.size,
-                    version: legacy.version,
-                    isPinned: false
-                )
-            ]
-        }
-        return []
+        return versions.sorted { $0.date > $1.date }
     }
 
     func deleteBackup(recordName: String) async throws {
@@ -403,6 +429,10 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
             // Запись уже отсутствует — удаляем только из индекса.
         } catch {
             throw mapCloudKitError(error)
+        }
+
+        guard recordName != legacyLatestRecordID.recordName else {
+            return
         }
 
         do {
@@ -438,6 +468,7 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         legacyRecord[snapshotDateField] = backupDate
         legacyRecord[snapshotVersionField] = backupVersion
         legacyRecord[snapshotSizeField] = dataSize
+        legacyRecord[snapshotPinnedField] = 0
         do {
             _ = try await database.save(legacyRecord)
         } catch {
@@ -470,6 +501,9 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
                 .sorted { $0.date > $1.date }
         } catch let error as CKError where error.code == .unknownItem {
             return []
+        } catch where isSnapshotQueryUnsupported(error) {
+            logger.warning("Snapshot query not supported, fallback to legacy backup path")
+            return []
         } catch {
             throw mapCloudKitError(error)
         }
@@ -481,6 +515,9 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
     ) -> (retainedEntries: [BackupIndexEntry], staleEntries: [BackupIndexEntry]) {
         let dedupedEntries = [newEntry] + existingEntries.filter { $0.recordName != newEntry.recordName }
         let sortedEntries = dedupedEntries.sorted { $0.date > $1.date }
+        guard let maxSnapshots else {
+            return (sortedEntries, [])
+        }
 
         let pinnedEntries = sortedEntries.filter(\.isPinned)
         let rollingEntries = sortedEntries.filter { !$0.isPinned }
@@ -498,6 +535,10 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
     }
 
     private func staleSnapshotEntries(from versions: [BackupVersionInfo]) -> [BackupVersionInfo] {
+        guard let maxSnapshots else {
+            return []
+        }
+
         let pinnedEntries = versions.filter(\.isPinned)
         let rollingEntries = versions.filter { !$0.isPinned }
         let retainedRecordNames = Set(
@@ -584,6 +625,34 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         }
     }
 
+    private func hasLegacyBackupPayload(using database: CloudBackupDatabaseProtocol) async throws -> Bool {
+        do {
+            let record = try await database.record(for: legacyLatestRecordID)
+            guard let asset = record["backupData"] as? CKAsset else {
+                return false
+            }
+            return asset.fileURL != nil
+        } catch let error as CKError where error.code == .unknownItem {
+            return false
+        } catch {
+            throw mapCloudKitError(error)
+        }
+    }
+
+    private func autoBackupVersion(using database: CloudBackupDatabaseProtocol) async throws -> BackupVersionInfo? {
+        guard let info = try await legacyLatestInfo(using: database) else {
+            return nil
+        }
+
+        return BackupVersionInfo(
+            recordName: legacyLatestRecordID.recordName,
+            date: info.date,
+            size: info.size,
+            version: info.version,
+            isPinned: false
+        )
+    }
+
     private func legacyLatestInfo(using database: CloudBackupDatabaseProtocol) async throws -> BackupInfo? {
         do {
             let record = try await database.record(for: legacyLatestRecordID)
@@ -606,6 +675,22 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         }
 
         return BackupFailureCode.cloudKitOperationFailed(error.localizedDescription).appError
+    }
+
+    private func isSnapshotQueryUnsupported(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        let reason = (nsError.userInfo[NSLocalizedFailureReasonErrorKey] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() ?? ""
+        let description = error.localizedDescription.lowercased()
+
+        let isInvalidArguments = (error as? CKError)?.code == .invalidArguments
+            || (nsError.domain == CKError.errorDomain && nsError.code == CKError.invalidArguments.rawValue)
+        let mentionsQueryable = reason.contains("queryable")
+            || reason.contains("not marked queryable")
+            || description.contains("queryable")
+
+        return isInvalidArguments && mentionsQueryable
     }
 
     private func descriptiveCloudKitError(_ error: Error) -> String {

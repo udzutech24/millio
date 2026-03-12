@@ -447,4 +447,49 @@ struct NotificationManagerTests {
         #expect(fakeCenter.addedRequests.map(\.identifier).contains(DailyReminderSettings.notificationIdentifier(for: .expense)))
         #expect(fakeCenter.addedRequests.map(\.identifier).contains(DailyReminderSettings.notificationIdentifier(for: .custom)))
     }
+
+    @Test("Плановые cashflow напоминания ставятся для будущих одноразовых и регулярных операций")
+    func testScheduleCashflowRemindersForPlannedAndRecurring() async throws {
+        let fakeCenter = FakeNotificationCenter()
+        let calendar = makeCalendarUTC()
+        let fixedNow = makeDate(month: 3, day: 10)
+        let manager = NotificationManager(
+            notificationCenter: fakeCenter,
+            now: { fixedNow },
+            calendar: calendar,
+            languageProvider: { .russian },
+            defaults: UserDefaults(suiteName: "NotificationManagerTests-\(UUID().uuidString)")!
+        )
+
+        let plannedExpense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 100,
+            currency: "RUB",
+            transactionDate: makeDate(month: 3, day: 12),
+            cardID: nil
+        )
+        let recurringIncome = CashflowTransaction(
+            transactionType: .income,
+            amount: 200,
+            currency: "RUB",
+            transactionDate: makeDate(month: 2, day: 5),
+            cardID: nil,
+            recurrenceRule: .monthly,
+            recurrenceSeriesID: "series-reminder"
+        )
+        let pastExpense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 50,
+            currency: "RUB",
+            transactionDate: makeDate(month: 3, day: 1),
+            cardID: nil
+        )
+
+        await manager.scheduleCashflowScheduledReminders(for: [plannedExpense, recurringIncome, pastExpense])
+
+        #expect(fakeCenter.addedRequests.count == 2)
+        #expect(fakeCenter.addedRequests.allSatisfy { $0.identifier.contains("cashflow_scheduled_reminder") })
+        let bodies = fakeCenter.addedRequests.map(\.content.body).joined(separator: " | ")
+        #expect(bodies.contains("запланирован"))
+    }
 }

@@ -92,12 +92,12 @@ enum BackupExperiencePresenter {
             title = BackupL10n.tr("backup.dashboard.title.ready", fallback: "Backup is configured")
             subtitle = BackupL10n.format(
                 "backup.dashboard.subtitle.last_backup_format",
-                fallback: "Last backup: %@.",
+                fallback: "Latest backup: %@. Auto backup updates about every 3 days.",
                 relativeBackupDate(lastBackupDate)
             )
         } else {
             title = BackupL10n.tr("backup.dashboard.title.almost", fallback: "Almost done")
-            subtitle = BackupL10n.tr("backup.dashboard.subtitle.almost", fallback: "Create your first backup.")
+            subtitle = BackupL10n.tr("backup.dashboard.subtitle.almost", fallback: "Save your first version. Auto backup updates about every 3 days.")
         }
 
         let storageTitle: String
@@ -186,7 +186,7 @@ enum BackupExperiencePresenter {
             BackupReadinessItem(
                 title: BackupL10n.tr("backup.readiness.backup_enabled.title", fallback: "Backup is enabled"),
                 detail: isBackupEnabled
-                    ? BackupL10n.tr("backup.readiness.backup_enabled.detail.on", fallback: "Auto backup runs when the app goes to background.")
+                    ? BackupL10n.tr("backup.readiness.backup_enabled.detail.on", fallback: "Auto backup refreshes about every 3 days while you keep using the app.")
                     : BackupL10n.tr("backup.readiness.backup_enabled.detail.off", fallback: "Turn on backup."),
                 isComplete: isBackupEnabled
             ),
@@ -208,7 +208,7 @@ enum BackupExperiencePresenter {
                 title: BackupL10n.tr("backup.readiness.has_recent.title", fallback: "Recent backup exists"),
                 detail: lastBackupDate != nil
                     ? BackupL10n.tr("backup.readiness.has_recent.detail.on", fallback: "A backup is ready for restore.")
-                    : BackupL10n.tr("backup.readiness.has_recent.detail.off", fallback: "Create your first backup manually."),
+                    : BackupL10n.tr("backup.readiness.has_recent.detail.off", fallback: "Save your first version manually."),
                 isComplete: lastBackupDate != nil
             ),
             BackupReadinessItem(

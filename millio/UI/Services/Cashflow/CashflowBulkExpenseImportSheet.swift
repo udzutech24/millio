@@ -14,25 +14,41 @@ struct CashflowBulkExpenseImportSheet: View {
     let onComplete: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
-
     @State private var mode: CashflowBulkExpenseImportMode = .manual
     @State private var selectedCardID: String?
-    @State private var manualInput: String = ""
-    @State private var rows: [CashflowBulkExpenseRowDraft] = []
+    @State private var selectedMonth: Date
+    @State private var categoryDrafts: [CashflowBulkExpenseCategoryDraft] = []
+    @State private var categorySearchText: String = ""
     @State private var shouldAffectCardBalance: Bool = true
-    @State private var statementTotalText: String = ""
+    @State private var loadedAffectingTotal: Double = 0
     @State private var screenshotItems: [PhotosPickerItem] = []
     @State private var isProcessing: Bool = false
     @State private var errorMessage: String?
     @State private var saveMessage: String?
+    @State private var isErrorDismissed: Bool = false
+    @State private var isSaveDismissed: Bool = false
+    @State private var showHelpSheet: Bool = false
+    @State private var showMonthPickerSheet: Bool = false
+    @State private var showCategoryEditorSheet: Bool = false
+    @State private var categoryEditorName: String = ""
+    @State private var categoryEditorIcon: String = CashflowCustomCategory.defaultIcon
+    @FocusState private var focusedCategoryID: String?
 
     private let parser = CashflowBulkExpenseImportParser()
     private let categoryResolver = CashflowBulkExpenseImportCategoryResolver()
     private let outerCornerRadius: CGFloat = 24
     private let innerCornerRadius: CGFloat = 18
     private let accent = Color(hex: "5FD1FF")
+    private let toggleAccent = Color(hex: "6A7EA3")
     private let positive = Color(hex: "6DFFC7")
     private let warning = Color(hex: "FFB454")
+    private let danger = Color(hex: "FF5A5F")
+    private let categoryGridColumns = [
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8)
+    ]
 
     init(
         viewModel: CashflowViewModel,
@@ -42,25 +58,33 @@ struct CashflowBulkExpenseImportSheet: View {
         self.viewModel = viewModel
         self.month = month
         self.onComplete = onComplete
+        _selectedMonth = State(initialValue: month)
     }
 
     var body: some View {
         NavigationStack {
-            ZStack {
+            ZStack(alignment: .bottomTrailing) {
                 Color.black.ignoresSafeArea()
 
                 ScrollView {
-                    VStack(spacing: 16) {
-                        introCard
+                    VStack(spacing: 12) {
+                        modeSelector
+                        introHeader
                         controlsCard
-                        inputCard
+                        if mode == .screenshot {
+                            screenshotCard
+                        }
                         summaryCard
-                        rowsCard
+                        categoriesCard
                     }
                     .padding(.horizontal, 16)
-                    .padding(.top, 12)
+                    .padding(.top, 6)
                     .padding(.bottom, 120)
                 }
+
+                floatingAddCategoryButton
+                    .padding(.trailing, 24)
+                    .padding(.bottom, 24)
             }
             .navigationTitle(
                 String(
@@ -105,9 +129,8 @@ struct CashflowBulkExpenseImportSheet: View {
                 }
             }
             .onAppear {
-                if selectedCardID == nil {
-                    selectedCardID = preferredCard?.cardUniqueID
-                }
+                showMonthPickerSheet = false
+                configureInitialStateIfNeeded()
             }
             .onChange(of: screenshotItems) { _, newItems in
                 guard !newItems.isEmpty else { return }
@@ -115,76 +138,128 @@ struct CashflowBulkExpenseImportSheet: View {
                     await analyzePhotos(items: newItems)
                 }
             }
+            .onChange(of: selectedCardID) { _, _ in
+                Task {
+                    await reloadDrafts()
+                }
+            }
+            .onChange(of: selectedMonth) { _, _ in
+                Task {
+                    await reloadDrafts()
+                }
+            }
+            .onDisappear {
+                showMonthPickerSheet = false
+            }
+            .sheet(isPresented: $showHelpSheet) {
+                bulkImportHelpSheet
+            }
+            .sheet(isPresented: $showMonthPickerSheet) {
+                monthPickerSheet
+                    .presentationDetents([.fraction(0.3)])
+                    .presentationDragIndicator(.visible)
+            }
+            .fullScreenCover(isPresented: $showCategoryEditorSheet) {
+                CashflowCategoryEditorSheet(
+                    mode: .create,
+                    name: $categoryEditorName,
+                    icon: $categoryEditorIcon
+                ) { name, icon in
+                    handleCreateCategory(name: name, icon: icon)
+                }
+            }
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
     }
 
-    private var introCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "square.stack.3d.down.right.fill")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(accent)
-                    .frame(width: 36, height: 36)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(accent.opacity(0.12))
-                    )
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(
-                        String(
-                            localized: "cashflow.bulk_expense.hero.title",
-                            defaultValue: "Import a whole month at once",
-                            comment: "Hero title for bulk expense import"
-                        )
-                    )
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.96))
-
-                    Text(
-                        String(
-                            localized: "cashflow.bulk_expense.hero.subtitle",
-                            defaultValue: "Choose a card, paste lines or load a bank screenshot, review categories, then save everything in one pass.",
-                            comment: "Hero subtitle for bulk expense import"
-                        )
-                    )
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.68))
-                    .fixedSize(horizontal: false, vertical: true)
+    private var introHeader: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Button {
+                showMonthPickerSheet = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text(monthTitle)
+                        .lineLimit(1)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 11, weight: .bold))
                 }
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.92))
+                .padding(.horizontal, 12)
+                .frame(height: 38)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color.white.opacity(0.06))
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        )
+                )
             }
+            .buttonStyle(.plain)
 
-            HStack(spacing: 10) {
-                badge(
-                    title: monthTitle,
-                    systemImage: "calendar"
+            Button {
+                showHelpSheet = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "questionmark.circle")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.92))
+                .padding(.horizontal, 13)
+                .frame(height: 38)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color.white.opacity(0.06))
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        )
                 )
-                badge(
-                    title: selectedCard?.name ?? String(
-                        localized: "cashflow.bulk_expense.no_card",
-                        defaultValue: "No card",
-                        comment: "Placeholder for no selected card"
-                    ),
-                    systemImage: "creditcard.fill"
-                )
+            }
+            .buttonStyle(.plain)
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var modeSelector: some View {
+        HStack(spacing: 6) {
+            ForEach(CashflowBulkExpenseImportMode.allCases) { item in
+                Button {
+                    mode = item
+                } label: {
+                    Text(item.title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(mode == item ? Color.white.opacity(0.96) : Color.white.opacity(0.62))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 34)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(mode == item ? Color.white.opacity(0.16) : Color.clear)
+                        )
+                }
+                .buttonStyle(.plain)
             }
         }
-        .padding(18)
-        .background(cardBackground)
+        .padding(4)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
+                )
+        )
     }
 
     private var controlsCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Picker("", selection: $mode) {
-                ForEach(CashflowBulkExpenseImportMode.allCases) { mode in
-                    Text(mode.title).tag(mode)
-                }
-            }
-            .pickerStyle(.segmented)
-
-            VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(
                     String(
                         localized: "cashflow.bulk_expense.card_title",
@@ -192,7 +267,7 @@ struct CashflowBulkExpenseImportSheet: View {
                         comment: "Card picker title in bulk expense import"
                     )
                 )
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Color.white.opacity(0.64))
 
                 Menu {
@@ -206,30 +281,33 @@ struct CashflowBulkExpenseImportSheet: View {
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: selectedCard?.cardType.icon ?? "creditcard.fill")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(accent)
+
                         VStack(alignment: .leading, spacing: 2) {
                             Text(selectedCard?.name ?? String(
                                 localized: "cashflow.bulk_expense.pick_card",
                                 defaultValue: "Choose card",
                                 comment: "Placeholder text for picking a card"
                             ))
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(Color.white.opacity(0.94))
 
                             if let selectedCard {
                                 Text("\(CashflowBulkExpenseRowDraft.formatAmount(selectedCard.balance)) \(selectedCard.currency)")
-                                    .font(.system(size: 12, weight: .medium))
+                                    .font(.system(size: 11, weight: .medium))
                                     .foregroundStyle(Color.white.opacity(0.58))
                             }
                         }
+
                         Spacer()
+
                         Image(systemName: "chevron.up.chevron.down")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(Color.white.opacity(0.54))
                     }
-                    .padding(.horizontal, 14)
-                    .frame(height: 56)
+                    .padding(.horizontal, 12)
+                    .frame(height: 46)
                     .background(innerBackground)
                 }
                 .buttonStyle(.plain)
@@ -246,138 +324,223 @@ struct CashflowBulkExpenseImportSheet: View {
                                 comment: "Toggle title for applying card balance changes"
                             )
                         )
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Color.white.opacity(0.92))
 
                         Text(
                             String(
                                 localized: "cashflow.bulk_expense.affect_balance.subtitle",
-                                defaultValue: "Turn off if you only want history without touching the current balance.",
+                                defaultValue: "Saved monthly totals reopen on this screen. Turn this off if you only want history.",
                                 comment: "Toggle subtitle for applying card balance changes"
                             )
                         )
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(Color.white.opacity(0.58))
+                        .lineLimit(2)
                     }
                 }
             )
             .toggleStyle(.switch)
-            .tint(accent)
+            .tint(toggleAccent)
         }
-        .padding(18)
+        .padding(12)
         .background(cardBackground)
     }
 
-    @ViewBuilder
-    private var inputCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if mode == .manual {
-                Text(
-                    String(
-                        localized: "cashflow.bulk_expense.manual.hint",
-                        defaultValue: "One line per expense: `supermarket 5 200`, `taxi 870`, `pharmacy 1 140`.",
-                        comment: "Manual import input hint"
-                    )
+    private func monthNavButton(systemImage: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(isEnabled ? Color.white.opacity(0.94) : Color.white.opacity(0.24))
+                .frame(width: 34, height: 34)
+                .background(
+                    Circle()
+                        .fill(Color.black.opacity(0.72))
+                        .overlay(
+                            Circle()
+                                .stroke(Color.white.opacity(isEnabled ? 0.34 : 0.12), lineWidth: 1)
+                        )
                 )
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Color.white.opacity(0.58))
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+    }
 
-                TextEditor(text: $manualInput)
-                    .scrollContentBackground(.hidden)
-                    .frame(minHeight: 140)
-                    .padding(12)
-                    .background(innerBackground)
-                    .overlay(
-                        Group {
-                            if manualInput.isEmpty {
-                                Text(
-                                    String(
-                                        localized: "cashflow.bulk_expense.manual.placeholder",
-                                        defaultValue: "supermarket 12 480\nrestaurant 5 300\ninternet 890",
-                                        comment: "Placeholder for manual bulk expense input"
-                                    )
-                                )
-                                .font(.system(size: 15, weight: .medium))
-                                .foregroundStyle(Color.white.opacity(0.28))
-                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                                .padding(20)
-                                .allowsHitTesting(false)
+    private var monthPickerSheet: some View {
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+
+                VStack(spacing: 14) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(
+                            String(
+                                localized: "cashflow.bulk_expense.month_picker.title",
+                                defaultValue: "Select month",
+                                comment: "Month picker title for bulk expense import"
+                            )
+                        )
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Color.white.opacity(0.95))
+
+                        Text(
+                            String(
+                                localized: "cashflow.bulk_expense.month_picker.subtitle",
+                                defaultValue: "The current month is selected by default. If needed, switch the period and close the sheet.",
+                                comment: "Month picker subtitle for bulk expense import"
+                            )
+                        )
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Color.white.opacity(0.6))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 10) {
+                            monthNavButton(systemImage: "chevron.left", isEnabled: true) {
+                                shiftMonth(by: -1)
+                            }
+
+                            Spacer(minLength: 0)
+
+                            Text(monthTitle)
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundStyle(Color.white.opacity(0.97))
+
+                            Spacer(minLength: 0)
+
+                            monthNavButton(systemImage: "chevron.right", isEnabled: canMoveToNextMonth) {
+                                shiftMonth(by: 1)
                             }
                         }
-                    )
 
-                Button {
-                    parseManualInput()
-                } label: {
-                    rowActionLabel(
-                        title: String(
-                            localized: "cashflow.bulk_expense.manual.parse",
-                            defaultValue: "Parse lines",
-                            comment: "Parse manual bulk expense input button"
-                        ),
-                        systemImage: "wand.and.stars"
-                    )
-                }
-                .buttonStyle(.plain)
-                .disabled(manualInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isProcessing)
-            } else {
-                Text(
-                    String(
-                        localized: "cashflow.bulk_expense.screenshot.hint",
-                        defaultValue: "Load one or several screenshots from your bank. The parser will extract merchant lines and amounts.",
-                        comment: "Screenshot import hint"
-                    )
-                )
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Color.white.opacity(0.58))
-
-                PhotosPicker(
-                    selection: $screenshotItems,
-                    maxSelectionCount: 6,
-                    matching: .images
-                ) {
-                    rowActionLabel(
-                        title: isProcessing
-                            ? String(
-                                localized: "cashflow.bulk_expense.screenshot.processing",
-                                defaultValue: "Analyzing screenshots…",
-                                comment: "Processing screenshots button label"
+                        Text(periodRangeTitle)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Color.white.opacity(0.58))
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(Color.black.opacity(0.9))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [
+                                                accent.opacity(0.8),
+                                                Color(hex: "D23AF2").opacity(0.82)
+                                            ],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        ),
+                                        lineWidth: 1.2
+                                    )
                             )
-                            : String(
-                                localized: "cashflow.bulk_expense.screenshot.pick",
-                                defaultValue: "Choose screenshots",
-                                comment: "Choose screenshot button label"
-                            ),
-                        systemImage: isProcessing ? "hourglass" : "photo.on.rectangle.angled"
                     )
-                }
-                .buttonStyle(.plain)
-                .disabled(isProcessing)
-            }
 
-            if let errorMessage {
-                inlineMessage(errorMessage, tint: warning)
+                    Button {
+                        showMonthPickerSheet = false
+                    } label: {
+                        Text(String(localized: "Done"))
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Color.white.opacity(0.94))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 46)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(Color.white.opacity(0.08))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                    )
+                            )
+                    }
+                    .buttonStyle(.plain)
+
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 12)
             }
-            if let saveMessage {
-                inlineMessage(saveMessage, tint: positive)
+            .presentationBackground(.clear)
+        }
+    }
+
+    private var screenshotCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(
+                String(
+                    localized: "cashflow.bulk_expense.screenshot.hint",
+                    defaultValue: "Load one or several screenshots from your bank. Recognized expenses will be merged into the monthly category totals below.",
+                    comment: "Screenshot import hint"
+                )
+            )
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(Color.white.opacity(0.58))
+
+            PhotosPicker(
+                selection: $screenshotItems,
+                maxSelectionCount: 6,
+                matching: .images
+            ) {
+                rowActionLabel(
+                    title: isProcessing
+                    ? String(
+                        localized: "cashflow.bulk_expense.screenshot.processing",
+                        defaultValue: "Analyzing screenshots…",
+                        comment: "Processing screenshots button label"
+                    )
+                    : String(
+                        localized: "cashflow.bulk_expense.screenshot.pick",
+                        defaultValue: "Choose screenshots",
+                        comment: "Choose screenshot button label"
+                    ),
+                    systemImage: isProcessing ? "hourglass" : "photo.on.rectangle.angled"
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(isProcessing)
+
+            if let errorMessage, !isErrorDismissed {
+                noticeCard(
+                    text: errorMessage,
+                    tint: danger,
+                    systemImage: "exclamationmark.triangle.fill"
+                ) {
+                    isErrorDismissed = true
+                }
+            }
+            if let saveMessage, !isSaveDismissed {
+                noticeCard(
+                    text: saveMessage,
+                    tint: positive,
+                    systemImage: "sparkles"
+                ) {
+                    isSaveDismissed = true
+                }
             }
         }
-        .padding(18)
+        .padding(16)
         .background(cardBackground)
     }
 
     private var summaryCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
                 summaryMetric(
                     title: String(
                         localized: "cashflow.bulk_expense.summary.rows",
-                        defaultValue: "Rows",
-                        comment: "Summary title for row count"
+                        defaultValue: "Categories",
+                        comment: "Summary title for category count"
                     ),
-                    value: "\(addableRows.count)/\(rows.count)"
+                    value: "\(filledDrafts.count)/\(categoryDrafts.count)"
                 )
+
                 Spacer()
+
                 summaryMetric(
                     title: String(
                         localized: "cashflow.bulk_expense.summary.total",
@@ -388,269 +551,402 @@ struct CashflowBulkExpenseImportSheet: View {
                 )
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text(
-                    String(
-                        localized: "cashflow.bulk_expense.summary.statement_total",
-                        defaultValue: "Statement total (optional)",
-                        comment: "Optional statement total field title"
-                    )
-                )
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Color.white.opacity(0.64))
-
-                TextField(
-                    "",
-                    text: $statementTotalText,
-                    prompt: Text(
-                        String(
-                            localized: "cashflow.bulk_expense.summary.statement_total.placeholder",
-                            defaultValue: "For example 101 552",
-                            comment: "Placeholder for statement total field"
-                        )
-                    )
-                    .foregroundStyle(Color.white.opacity(0.28))
-                )
-                .keyboardType(.decimalPad)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.94))
-                .padding(.horizontal, 14)
-                .frame(height: 54)
-                .background(innerBackground)
-            }
-
-            if let remainingAmount {
-                HStack(spacing: 10) {
-                    Text(
-                        String(
-                            localized: "cashflow.bulk_expense.summary.remaining",
-                            defaultValue: "Remaining",
-                            comment: "Remaining amount label"
-                        )
-                    )
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.62))
-                    Spacer()
-                    Text("\(CashflowBulkExpenseRowDraft.formatAmount(remainingAmount)) \(selectedCard?.currency ?? "RUB")")
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(remainingAmount > 0.009 ? warning : positive)
-                }
-
-                if remainingAmount > 0.009 {
-                    Button {
-                        appendRemainderRow(amount: remainingAmount)
-                    } label: {
-                        rowActionLabel(
-                            title: String(
-                                localized: "cashflow.bulk_expense.summary.remainder_to_other",
-                                defaultValue: "Send remainder to Other",
-                                comment: "Button to append remainder to Other category"
-                            ),
-                            systemImage: "plus.circle.fill"
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-
             if let selectedCard, shouldAffectCardBalance {
-                let overflow = totalAmount - selectedCard.balance
+                let availableBalance = selectedCard.balance + loadedAffectingTotal
+                let overflow = totalAmount - availableBalance
                 if overflow > 0.009 {
-                    inlineMessage(
-                        String(
+                    noticeCard(
+                        text: String(
                             localized: "cashflow.bulk_expense.summary.balance_warning",
-                            defaultValue: "This import exceeds the selected card balance by \(CashflowBulkExpenseRowDraft.formatAmount(overflow)) \(selectedCard.currency).",
+                            defaultValue: "This monthly import exceeds the available card balance by \(CashflowBulkExpenseRowDraft.formatAmount(overflow)) \(selectedCard.currency).",
                             comment: "Warning for bulk expense import when amount exceeds card balance"
                         ),
-                        tint: warning
+                        tint: warning,
+                        systemImage: "exclamationmark.triangle.fill"
                     )
                 }
             }
         }
-        .padding(18)
+        .padding(16)
         .background(cardBackground)
     }
 
-    private var rowsCard: some View {
+    private var categoriesCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text(
-                    String(
-                        localized: "cashflow.bulk_expense.rows.title",
-                        defaultValue: "Expense rows",
-                        comment: "Bulk expense rows card title"
-                    )
-                )
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.95))
-
-                Spacer()
-
-                Button {
-                    addEmptyRow()
-                } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(accent)
-                }
-                .buttonStyle(.plain)
-            }
-
-            if rows.isEmpty {
-                Text(
-                    String(
-                        localized: "cashflow.bulk_expense.rows.empty",
-                        defaultValue: "No rows yet. Paste expenses or import screenshots first.",
-                        comment: "Empty state for bulk expense rows"
-                    )
-                )
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Color.white.opacity(0.54))
-            } else {
-                LazyVStack(spacing: 10) {
-                    ForEach($rows) { $row in
-                        rowEditor($row)
-                    }
-                }
-            }
-        }
-        .padding(18)
-        .background(cardBackground)
-    }
-
-    private func rowEditor(_ row: Binding<CashflowBulkExpenseRowDraft>) -> some View {
-        let availableOptions = viewModel.categoryOptions(for: .expense)
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 10) {
-                TextField(
-                    String(
-                        localized: "cashflow.bulk_expense.row.title_placeholder",
-                        defaultValue: "Merchant or category",
-                        comment: "Placeholder for bulk expense row title"
-                    ),
-                    text: row.titleText
-                )
-                .textInputAutocapitalization(.sentences)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.94))
-                .onChange(of: row.wrappedValue.titleText) { _, _ in
-                    reclassifyRow(id: row.wrappedValue.id)
-                }
-
-                Button(role: .destructive) {
-                    rows.removeAll { $0.id == row.wrappedValue.id }
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.52))
-                        .frame(width: 30, height: 30)
-                }
-                .buttonStyle(.plain)
-            }
-
             HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.42))
+
                 TextField(
                     String(
-                        localized: "cashflow.bulk_expense.row.amount_placeholder",
-                        defaultValue: "Amount",
-                        comment: "Placeholder for bulk expense row amount"
+                        localized: "cashflow.bulk_expense.search.placeholder",
+                        defaultValue: "Search category",
+                        comment: "Search placeholder for bulk expense categories"
                     ),
-                    text: row.amountText
+                    text: $categorySearchText
                 )
-                .keyboardType(.decimalPad)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.92))
-                .padding(.horizontal, 12)
-                .frame(height: 44)
-                .background(innerBackground)
-
-                Menu {
-                    ForEach(availableOptions, id: \.rawValue) { option in
-                        Button {
-                            row.wrappedValue.selectedCategoryRaw = option.rawValue
-                            row.wrappedValue.usesSuggestedCategory = false
-                            row.wrappedValue.confidence = max(row.wrappedValue.confidence, .medium)
-                        } label: {
-                            Label(option.displayName, systemImage: CashflowCustomCategory.isSFSymbolIcon(option.icon) ? option.icon : "tag.fill")
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 8) {
-                        Text(selectedCategoryName(for: row.wrappedValue))
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Color.white.opacity(0.92))
-                            .lineLimit(1)
-                        Spacer(minLength: 0)
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(Color.white.opacity(0.42))
-                    }
-                    .padding(.horizontal, 12)
-                    .frame(height: 44)
-                    .background(innerBackground)
-                }
-                .buttonStyle(.plain)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.94))
             }
-
-            TextField(
-                String(
-                    localized: "cashflow.bulk_expense.row.note_placeholder",
-                    defaultValue: "Optional note",
-                    comment: "Placeholder for bulk expense row note"
-                ),
-                text: row.noteText
-            )
-            .font(.system(size: 14, weight: .medium))
-            .foregroundStyle(Color.white.opacity(0.84))
-            .padding(.horizontal, 12)
-            .frame(height: 42)
+            .padding(.horizontal, 14)
+            .frame(height: 46)
             .background(innerBackground)
 
-            HStack(spacing: 8) {
-                Text(row.wrappedValue.confidence.label)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(confidenceColor(row.wrappedValue.confidence))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(confidenceColor(row.wrappedValue.confidence).opacity(0.12))
-                    )
+            LazyVGrid(columns: categoryGridColumns, spacing: 8) {
+                ForEach($categoryDrafts) { $draft in
+                    if filteredCategoryDrafts.contains(where: { $0.id == draft.id }) {
+                        categoryTile($draft)
+                    }
+                }
+            }
+            .padding(.bottom, 76)
 
-                if row.wrappedValue.requiresAttention {
-                    Text(
-                        String(
-                            localized: "cashflow.bulk_expense.row.attention",
-                            defaultValue: "Review category or amount",
-                            comment: "Attention label for problematic bulk expense row"
-                        )
-                    )
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(warning)
-                } else {
-                    Text(
-                        String(
-                            localized: "cashflow.bulk_expense.row.ready",
-                            defaultValue: "Ready to save",
-                            comment: "Ready label for valid bulk expense row"
-                        )
-                    )
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(positive)
+            if let errorMessage, !isErrorDismissed {
+                noticeCard(
+                    text: errorMessage,
+                    tint: danger,
+                    systemImage: "exclamationmark.triangle.fill"
+                ) {
+                    isErrorDismissed = true
+                }
+            }
+            if let saveMessage, !isSaveDismissed {
+                noticeCard(
+                    text: saveMessage,
+                    tint: positive,
+                    systemImage: "sparkles"
+                ) {
+                    isSaveDismissed = true
                 }
             }
         }
-        .padding(14)
-        .background(innerBackground)
+    }
+
+    private func categoryTile(_ draft: Binding<CashflowBulkExpenseCategoryDraft>) -> some View {
+        let amountBinding = Binding(
+            get: {
+                draft.wrappedValue.amountText
+            },
+            set: { newValue in
+                draft.wrappedValue.amountText = formatTileAmountInput(newValue)
+            }
+        )
+
+        return VStack(spacing: 6) {
+            HStack {
+                Spacer(minLength: 0)
+                CashflowCategoryIconView(
+                    icon: draft.wrappedValue.category.icon,
+                    fontSize: 18,
+                    fontWeight: .semibold,
+                    tint: AnyShapeStyle(Color.white.opacity(0.95))
+                )
+                Spacer(minLength: 0)
+            }
+            .frame(height: 20)
+
+            Text(draft.wrappedValue.category.displayName)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.94))
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: 28)
+
+            TextField(
+                "",
+                text: amountBinding,
+                prompt: Text("0").foregroundStyle(Color.white.opacity(0.28))
+            )
+            .keyboardType(.decimalPad)
+            .multilineTextAlignment(.center)
+            .font(tileAmountFont(for: amountBinding.wrappedValue))
+            .minimumScaleFactor(0.6)
+            .lineLimit(1)
+            .focused($focusedCategoryID, equals: draft.wrappedValue.id)
+            .foregroundStyle(draft.wrappedValue.hasValue ? Color.white.opacity(0.98) : Color.white.opacity(0.72))
+            .padding(.horizontal, 2)
+            .frame(height: 24)
+
+            if !draft.wrappedValue.noteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(draft.wrappedValue.noteText)
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.42))
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: 92)
+        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color.black.opacity(0.88))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    accent.opacity(draft.wrappedValue.hasValue ? 0.9 : 0.5),
+                                    Color(hex: "C428C8").opacity(draft.wrappedValue.hasValue ? 0.85 : 0.5)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: draft.wrappedValue.hasValue ? 1.4 : 1
+                        )
+                )
+        )
+        .onTapGesture {
+            focusedCategoryID = draft.wrappedValue.id
+        }
+        .contextMenu {
+            Button(role: .destructive) {
+                draft.wrappedValue.amountText = ""
+                draft.wrappedValue.noteText = ""
+            } label: {
+                Label(
+                    String(
+                        localized: "cashflow.bulk_expense.tile.clear",
+                        defaultValue: "Clear amount",
+                        comment: "Context action to clear category amount in tile mode"
+                    ),
+                    systemImage: "trash"
+                )
+            }
+        }
+    }
+
+    private var floatingAddCategoryButton: some View {
+        Button {
+            categoryEditorName = ""
+            categoryEditorIcon = CashflowCustomCategory.defaultIcon
+            showCategoryEditorSheet = true
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 28, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.95))
+                .frame(width: 72, height: 72)
+                .background(
+                    Circle()
+                        .fill(Color.black.opacity(0.92))
+                        .overlay(
+                            Circle()
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [
+                                            accent.opacity(0.65),
+                                            Color(hex: "C428C8").opacity(0.6)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1.2
+                                )
+                        )
+                )
+        }
+        .padding(.trailing, 4)
+        .padding(.bottom, 4)
+        .buttonStyle(.plain)
+    }
+
+    private func formatTileAmountInput(_ value: String) -> String {
+        let sanitized = AmountInputFormatter.sanitize(value, maxFractionDigits: 0)
+        return AmountInputFormatter.display(sanitized, maxFractionDigits: 0)
+    }
+
+    private func handleCreateCategory(name: String, icon: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        if let created = viewModel.createCustomCategory(kind: .expense, name: trimmed, icon: icon),
+           categoryDrafts.contains(where: { $0.category.rawValue == created.rawValue }) == false {
+            let nextIndex = (categoryDrafts.map(\.sourceOrderIndex).max() ?? -1) + 1
+            categoryDrafts.append(
+                CashflowBulkExpenseCategoryDraft(
+                    category: created,
+                    sourceOrderIndex: nextIndex
+                )
+            )
+        }
+
+        showCategoryEditorSheet = false
+    }
+
+    private func tileAmountFont(for value: String) -> Font {
+        let digitCount = value.filter(\.isNumber).count
+
+        switch digitCount {
+        case 0...4:
+            return .system(size: 20, weight: .bold, design: .rounded)
+        case 5...6:
+            return .system(size: 18, weight: .bold, design: .rounded)
+        case 7...8:
+            return .system(size: 16, weight: .bold, design: .rounded)
+        default:
+            return .system(size: 14, weight: .bold, design: .rounded)
+        }
+    }
+
+    private var bulkImportHelpSheet: some View {
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        helpHeroCard
+                        helpStepCard(
+                            number: "1",
+                            title: String(
+                                localized: "cashflow.bulk_expense.help.step.period.title",
+                                defaultValue: "Choose period and card",
+                                comment: "Bulk expense import help step title"
+                            ),
+                            body: String(
+                                localized: "cashflow.bulk_expense.help.step.period.body",
+                                defaultValue: "First choose a month and card. The import is tied to that exact pair, so reopening the screen shows the saved totals for the same month.",
+                                comment: "Bulk expense import help step body"
+                            )
+                        )
+                        helpStepCard(
+                            number: "2",
+                            title: String(
+                                localized: "cashflow.bulk_expense.help.step.categories.title",
+                                defaultValue: "Fill categories with monthly totals",
+                                comment: "Bulk expense import help step title"
+                            ),
+                            body: String(
+                                localized: "cashflow.bulk_expense.help.step.categories.body",
+                                defaultValue: "In manual mode, enter the total amount into the needed category. The field formats numbers immediately, and larger values shrink to stay readable.",
+                                comment: "Bulk expense import help step body"
+                            )
+                        )
+                        helpStepCard(
+                            number: "3",
+                            title: String(
+                                localized: "cashflow.bulk_expense.help.step.screenshot.title",
+                                defaultValue: "Or import screenshots",
+                                comment: "Bulk expense import help step title"
+                            ),
+                            body: String(
+                                localized: "cashflow.bulk_expense.help.step.screenshot.body",
+                                defaultValue: "Screenshot mode tries to recognize bank expenses and merge them into monthly categories automatically. It is a speed-up, not magic, so the result should still be checked.",
+                                comment: "Bulk expense import help step body"
+                            )
+                        )
+                        helpStepCard(
+                            number: "4",
+                            title: String(
+                                localized: "cashflow.bulk_expense.help.step.balance.title",
+                                defaultValue: "Decide whether to update card balance",
+                                comment: "Bulk expense import help step title"
+                            ),
+                            body: String(
+                                localized: "cashflow.bulk_expense.help.step.balance.body",
+                                defaultValue: "If the toggle is on, saving also adjusts the current card balance. If you only need categorized history, turn it off.",
+                                comment: "Bulk expense import help step body"
+                            )
+                        )
+                        helpStepCard(
+                            number: "5",
+                            title: String(
+                                localized: "cashflow.bulk_expense.help.step.save.title",
+                                defaultValue: "Save without duplicates",
+                                comment: "Bulk expense import help step title"
+                            ),
+                            body: String(
+                                localized: "cashflow.bulk_expense.help.step.save.body",
+                                defaultValue: "One card and one month keep a single category set. Saving again updates the current set instead of creating duplicate noise.",
+                                comment: "Bulk expense import help step body"
+                            )
+                        )
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 24)
+                }
+            }
+            .navigationTitle(
+                String(
+                    localized: "cashflow.bulk_expense.help.sheet_title",
+                    defaultValue: "How it works",
+                    comment: "Help sheet title for bulk expense import"
+                )
+            )
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(String(localized: "Done")) {
+                        showHelpSheet = false
+                    }
+                    .foregroundStyle(accent)
+                }
+            }
+        }
+    }
+
+    private var helpHeroCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(String(localized: "cashflow.bulk_expense.title"))
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(Color.white.opacity(0.96))
+
+            Text(
+                String(
+                    localized: "cashflow.bulk_expense.help.hero.body",
+                    defaultValue: "This screen is designed for quickly recording monthly expenses by category without creating each transaction manually.",
+                    comment: "Help hero body for bulk expense import"
+                )
+            )
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.68))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(cardBackground)
+    }
+
+    private func helpStepCard(number: String, title: String, body: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(number)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(accent)
+                .frame(width: 28, height: 28)
+                .background(
+                    Circle()
+                        .fill(accent.opacity(0.12))
+                )
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.94))
+
+                Text(body)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.66))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(cardBackground)
     }
 
     private func summaryMetric(title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Color.white.opacity(0.56))
             Text(value)
-                .font(.system(size: 20, weight: .bold))
+                .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(Color.white.opacity(0.94))
         }
     }
@@ -661,10 +957,10 @@ struct CashflowBulkExpenseImportSheet: View {
             Text(title)
                 .lineLimit(1)
         }
-        .font(.system(size: 12, weight: .semibold))
+        .font(.system(size: 11, weight: .semibold))
         .foregroundStyle(Color.white.opacity(0.74))
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 6)
         .background(
             Capsule(style: .continuous)
                 .fill(Color.white.opacity(0.07))
@@ -692,20 +988,57 @@ struct CashflowBulkExpenseImportSheet: View {
         )
     }
 
-    private func inlineMessage(_ text: String, tint: Color) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "exclamationmark.circle.fill")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(tint)
-            Text(text)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Color.white.opacity(0.82))
+    private func noticeCard(
+        text: String,
+        tint: Color,
+        systemImage: String,
+        onDismiss: (() -> Void)? = nil
+    ) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(tint)
+                        .frame(width: 28, height: 28)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(tint.opacity(0.12))
+                        )
+
+                    Text(text)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.84))
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            if let onDismiss {
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color.white.opacity(0.68))
+                        .frame(width: 28, height: 28)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(Color.white.opacity(0.04))
+                        )
+                }
+                .buttonStyle(.plain)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(tint.opacity(0.12))
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color(red: 0.09, green: 0.07, blue: 0.09))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(tint.opacity(0.78), lineWidth: 1.2)
+                )
         )
     }
 
@@ -745,80 +1078,126 @@ struct CashflowBulkExpenseImportSheet: View {
         return viewModel.state.availableCards.first(where: { $0.cardUniqueID == selectedCardID })
     }
 
-    private var addableRows: [CashflowBulkExpenseRowDraft] {
-        rows
-            .filter(\.isAddable)
+    private var filledDrafts: [CashflowBulkExpenseCategoryDraft] {
+        categoryDrafts
+            .filter(\.hasValue)
             .sorted { $0.sourceOrderIndex < $1.sourceOrderIndex }
     }
 
+    private var filteredCategoryDrafts: [CashflowBulkExpenseCategoryDraft] {
+        let trimmed = categorySearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return categoryDrafts }
+        return categoryDrafts.filter { draft in
+            draft.category.displayName.localizedCaseInsensitiveContains(trimmed)
+        }
+    }
+
     private var canSave: Bool {
-        selectedCardID != nil && !addableRows.isEmpty
+        selectedCardID != nil && !filledDrafts.isEmpty
     }
 
     private var monthTitle: String {
         let formatter = DateFormatter()
         formatter.locale = .autoupdatingCurrent
         formatter.setLocalizedDateFormatFromTemplate("LLLL yyyy")
-        return formatter.string(from: month).localizedCapitalized
+        return formatter.string(from: selectedMonth).localizedCapitalized
+    }
+
+    private var monthShortTitle: String {
+        let formatter = DateFormatter()
+        formatter.locale = .autoupdatingCurrent
+        formatter.setLocalizedDateFormatFromTemplate("LLL yyyy")
+        return formatter.string(from: selectedMonth).localizedCapitalized
+    }
+
+    private var periodRangeTitle: String {
+        let calendar = Calendar.current
+        let start = calendar.date(from: calendar.dateComponents([.year, .month], from: selectedMonth)) ?? selectedMonth
+        let end = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: start) ?? start
+        let formatter = DateFormatter()
+        formatter.locale = .autoupdatingCurrent
+        formatter.dateFormat = "dd.MM.yyyy"
+        return "\(formatter.string(from: start)) — \(formatter.string(from: end))"
+    }
+
+    private var canMoveToNextMonth: Bool {
+        let calendar = Calendar.current
+        guard let nextMonth = calendar.date(byAdding: .month, value: 1, to: selectedMonth) else { return false }
+        let nextMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: nextMonth)) ?? nextMonth
+        let currentMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) ?? Date()
+        return nextMonthStart <= currentMonthStart
     }
 
     private var totalAmount: Double {
-        addableRows.compactMap(\.amount).reduce(0, +)
+        filledDrafts.compactMap(\.amount).reduce(0, +)
     }
 
     private var totalAmountLabel: String {
         "\(CashflowBulkExpenseRowDraft.formatAmount(totalAmount)) \(selectedCard?.currency ?? "RUB")"
     }
 
-    private var remainingAmount: Double? {
-        guard let statementTotal = CashflowBulkExpenseRowDraft.parseAmount(statementTotalText) else { return nil }
-        return max(0, statementTotal - totalAmount)
-    }
-
-    private func confidenceColor(_ confidence: CashflowBulkExpenseImportMatchConfidence) -> Color {
-        switch confidence {
-        case .high:
-            return positive
-        case .medium:
-            return accent
-        case .low:
-            return warning
+    private func configureInitialStateIfNeeded() {
+        if selectedCardID == nil {
+            selectedCardID = preferredCard?.cardUniqueID
+        }
+        if categoryDrafts.isEmpty {
+            categoryDrafts = makeEmptyCategoryDrafts()
+        }
+        Task {
+            await reloadDrafts()
         }
     }
 
-    private func selectedCategoryName(for row: CashflowBulkExpenseRowDraft) -> String {
-        viewModel.categoryOption(for: row.selectedCategoryRaw, kind: .expense).displayName
+    private func shiftMonth(by value: Int) {
+        guard let shifted = Calendar.current.date(byAdding: .month, value: value, to: selectedMonth) else { return }
+        if value > 0 && !canMoveToNextMonth {
+            return
+        }
+        selectedMonth = shifted
     }
 
-    private func addEmptyRow() {
-        let nextIndex = (rows.map(\.sourceOrderIndex).max() ?? -1) + 1
-        rows.append(
-            CashflowBulkExpenseRowDraft(
-                rawLine: "",
-                titleText: "",
-                amountText: "",
-                sourceOrderIndex: nextIndex,
-                confidence: .low
-            )
-        )
+    private func makeEmptyCategoryDrafts() -> [CashflowBulkExpenseCategoryDraft] {
+        viewModel.categoryOptions(for: .expense).enumerated().map { index, option in
+            CashflowBulkExpenseCategoryDraft(category: option, sourceOrderIndex: index)
+        }
     }
 
-    private func parseManualInput() {
-        let parsedRows = CashflowBulkExpenseImportParser.parseManualInput(manualInput)
-        rows = makeDrafts(from: parsedRows)
-        errorMessage = rows.isEmpty
-            ? String(
-                localized: "cashflow.bulk_expense.manual.empty_parse",
-                defaultValue: "Nothing usable was found in the pasted lines.",
-                comment: "Error when manual input parsing finds nothing"
-            )
-            : nil
+    private func reloadDrafts() async {
+        let emptyDrafts = makeEmptyCategoryDrafts()
+        categoryDrafts = emptyDrafts
+        loadedAffectingTotal = 0
+        errorMessage = nil
         saveMessage = nil
+        isErrorDismissed = false
+        isSaveDismissed = false
+
+        guard let selectedCardID else { return }
+        let storedEntries = viewModel.bulkExpenseImportStoredEntries(
+            cardID: selectedCardID,
+            month: selectedMonth
+        )
+
+        if let firstEntry = storedEntries.first {
+            shouldAffectCardBalance = firstEntry.affectsCardBalance
+        }
+        loadedAffectingTotal = storedEntries
+            .filter(\.affectsCardBalance)
+            .reduce(0) { $0 + $1.amount }
+
+        for entry in storedEntries {
+            guard let index = categoryDrafts.firstIndex(where: { $0.category.rawValue == entry.categoryRaw }) else {
+                continue
+            }
+            categoryDrafts[index].amountText = CashflowBulkExpenseRowDraft.formatAmount(entry.amount)
+            categoryDrafts[index].noteText = entry.note ?? ""
+        }
     }
 
     private func analyzePhotos(items: [PhotosPickerItem]) async {
         errorMessage = nil
         saveMessage = nil
+        isErrorDismissed = false
+        isSaveDismissed = false
         isProcessing = true
         defer { isProcessing = false }
 
@@ -831,89 +1210,72 @@ struct CashflowBulkExpenseImportSheet: View {
 
         do {
             let parsedRows = try await parser.parseScreenshots(from: imageDataList)
-            rows = makeDrafts(from: parsedRows)
+            mergeParsedRowsIntoCategories(parsedRows)
         } catch {
             errorMessage = error.localizedDescription
-            rows = []
         }
     }
 
-    private func makeDrafts(from parsedRows: [CashflowBulkExpenseParsedRow]) -> [CashflowBulkExpenseRowDraft] {
+    private func mergeParsedRowsIntoCategories(_ parsedRows: [CashflowBulkExpenseParsedRow]) {
+        guard !parsedRows.isEmpty else {
+            errorMessage = String(
+                localized: "cashflow.bulk_expense.manual.empty_parse",
+                defaultValue: "Nothing usable was found in the imported data.",
+                comment: "Error when bulk import parsing finds nothing"
+            )
+            return
+        }
+
         let availableOptions = viewModel.categoryOptions(for: .expense)
+        var mergedCount = 0
 
-        return parsedRows.map { row in
+        for row in parsedRows {
             let resolution = categoryResolver.resolve(title: row.title, availableOptions: availableOptions)
-            return CashflowBulkExpenseRowDraft(
-                rawLine: row.rawLine,
-                titleText: row.title,
-                amountText: CashflowBulkExpenseRowDraft.formatAmount(row.amount),
-                selectedCategoryRaw: resolution.option.rawValue,
-                noteText: "",
-                sourceOrderIndex: row.sourceOrderIndex,
-                confidence: resolution.confidence,
-                usesSuggestedCategory: true
-            )
+            guard let index = categoryDrafts.firstIndex(where: { $0.category.rawValue == resolution.option.rawValue }) else {
+                continue
+            }
+            let existingAmount = categoryDrafts[index].amount ?? 0
+            let newAmount = existingAmount + row.amount
+            categoryDrafts[index].amountText = CashflowBulkExpenseRowDraft.formatAmount(newAmount)
+            mergedCount += 1
         }
-    }
 
-    private func reclassifyRow(id: UUID) {
-        guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
-        guard rows[index].usesSuggestedCategory else { return }
-        let resolution = categoryResolver.resolve(
-            title: rows[index].titleText,
-            availableOptions: viewModel.categoryOptions(for: .expense)
+        saveMessage = String(
+            localized: "cashflow.bulk_expense.screenshot.merged",
+            defaultValue: "Merged \(mergedCount) recognized expenses into monthly category totals.",
+            comment: "Success message after merging screenshot rows into categories"
         )
-        rows[index].selectedCategoryRaw = resolution.option.rawValue
-        rows[index].confidence = resolution.confidence
-    }
-
-    private func appendRemainderRow(amount: Double) {
-        let nextIndex = (rows.map(\.sourceOrderIndex).max() ?? -1) + 1
-        rows.append(
-            CashflowBulkExpenseRowDraft(
-                rawLine: "remainder",
-                titleText: String(
-                    localized: "cashflow.bulk_expense.remainder.title",
-                    defaultValue: "Statement remainder",
-                    comment: "Auto-generated title for statement remainder row"
-                ),
-                amountText: CashflowBulkExpenseRowDraft.formatAmount(amount),
-                selectedCategoryRaw: ExpenseCategory.other.rawValue,
-                noteText: String(
-                    localized: "cashflow.bulk_expense.remainder.note",
-                    defaultValue: "Auto-filled from statement total",
-                    comment: "Auto-generated note for statement remainder row"
-                ),
-                sourceOrderIndex: nextIndex,
-                confidence: .medium,
-                usesSuggestedCategory: false
-            )
-        )
-        statementTotalText = ""
+        errorMessage = nil
+        isSaveDismissed = false
+        isErrorDismissed = false
+        mode = .manual
     }
 
     private func saveRows() async {
         errorMessage = nil
         saveMessage = nil
+        isErrorDismissed = false
+        isSaveDismissed = false
 
         guard let selectedCardID else {
             errorMessage = CashflowBulkExpenseImportError.cardNotFound.localizedDescription
+            isErrorDismissed = false
             return
         }
 
-        let entries = addableRows.compactMap { row -> CashflowBulkExpensePersistEntry? in
-            guard let amount = row.amount, amount > 0 else { return nil }
+        let entries = filledDrafts.compactMap { draft -> CashflowBulkExpensePersistEntry? in
+            guard let amount = draft.amount, amount > 0 else { return nil }
             return CashflowBulkExpensePersistEntry(
                 amount: amount,
-                expenseCategoryRaw: row.selectedCategoryRaw,
-                note: row.normalizedExpenseNote,
-                sourceOrderIndex: row.sourceOrderIndex
+                expenseCategoryRaw: draft.category.rawValue,
+                note: draft.normalizedNote,
+                sourceOrderIndex: draft.sourceOrderIndex
             )
         }
 
         let request = CashflowBulkExpensePersistRequest(
             cardID: selectedCardID,
-            month: month,
+            month: selectedMonth,
             shouldAffectCardBalance: shouldAffectCardBalance,
             entries: entries
         )
@@ -925,13 +1287,15 @@ struct CashflowBulkExpenseImportSheet: View {
             let savedCount = try await viewModel.persistBulkExpenseImport(request)
             saveMessage = String(
                 localized: "cashflow.bulk_expense.saved",
-                defaultValue: "Saved \(savedCount) expenses.",
+                defaultValue: "Saved \(savedCount) category totals.",
                 comment: "Success message after saving bulk expense import"
             )
+            isSaveDismissed = false
             onComplete?()
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
+            isErrorDismissed = false
         }
     }
 }

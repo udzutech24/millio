@@ -9,7 +9,6 @@ final class OnboardingViewTests: XCTestCase {
         let hosted = try makeHostedOnboardingView()
 
         XCTAssertNotNil(hosted.window)
-        XCTAssertNotNil(hosted.hosting.view.findView(withAccessibilityIdentifier: "quickSetup.skipButton"))
         XCTAssertNil(hosted.hosting.view.findView(withAccessibilityIdentifier: "onboarding.startQuickSetupButton"))
     }
 

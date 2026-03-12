@@ -383,15 +383,19 @@ struct millioApp: App {
     }
     
     private func triggerBackgroundBackup() {
-        // Backup только если включен в настройках и DIContainer доступен
         guard appState.isBackupEnabled,
               let diContainer = diContainer else { return }
-        
+
         Task {
+            let policy = AutoBackupPolicy.everyThreeDays
+            let latestInfo = await diContainer.backupManager.lastBackupInfo()
+            guard policy.shouldRun(lastBackupDate: latestInfo?.date, now: Date()) else {
+                return
+            }
+
             do {
                 try await diContainer.backupManager.backupNow()
             } catch {
-                // Логируем, но не блокируем приложение
                 AppLogger.log(.error, category: "App", "Background backup failed: \(error.localizedDescription)")
             }
         }

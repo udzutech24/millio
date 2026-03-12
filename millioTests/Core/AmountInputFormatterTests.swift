@@ -26,6 +26,12 @@ struct AmountInputFormatterTests {
         #expect(displayed == "2 222 222")
     }
 
+    @Test("display groups four-digit integer input")
+    func displayGroupsFourDigitIntegerInput() {
+        let displayed = AmountInputFormatter.display("2222", maxFractionDigits: 0)
+        #expect(displayed == "2 222")
+    }
+
     @Test("sanitize removes fraction when integer-only mode is used")
     func sanitizeDropsFractionInIntegerMode() {
         let sanitized = AmountInputFormatter.sanitize("12 345,67", maxFractionDigits: 0)

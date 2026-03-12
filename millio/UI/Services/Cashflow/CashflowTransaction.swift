@@ -65,7 +65,9 @@ enum CashflowRecurrenceRule: String, Codable, CaseIterable {
 enum IncomeCategory: String, Codable, CaseIterable {
     case salary = "salary"           // Зарплата
     case freelance = "freelance"     // Фриланс
+    case business = "business"       // Бизнес
     case investment = "investment"   // Инвестиции
+    case rental = "rental"           // Аренда
     case gift = "gift"               // Подарок
     case bonus = "bonus"             // Премия
     case other = "other"             // Другое
@@ -74,7 +76,9 @@ enum IncomeCategory: String, Codable, CaseIterable {
         switch self {
         case .salary: return String(localized: "Salary")
         case .freelance: return String(localized: "Freelance")
+        case .business: return String(localized: "Business")
         case .investment: return String(localized: "Investments")
+        case .rental: return String(localized: "Rental")
         case .gift: return String(localized: "Gift")
         case .bonus: return String(localized: "Bonus")
         case .other: return String(localized: "Other")
@@ -85,7 +89,9 @@ enum IncomeCategory: String, Codable, CaseIterable {
         switch self {
         case .salary: return "💼"
         case .freelance: return "🧑‍💻"
+        case .business: return "🏢"
         case .investment: return "📈"
+        case .rental: return "🏠"
         case .gift: return "🎁"
         case .bonus: return "⭐️"
         case .other: return "🧩"
@@ -474,6 +480,12 @@ final class CashflowTransaction: Persistable {
     /// Описание/комментарий
     var note: String?
 
+    /// Источник пакетного импорта для идемпотентного обновления импортных наборов.
+    var importSourceRaw: String?
+
+    /// Уникальный ключ импортной записи внутри её источника.
+    var importReferenceKey: String?
+
     /// Правило автоповтора (none/monthly)
     var recurrenceRuleRaw: String = CashflowRecurrenceRule.none.rawValue
 
@@ -535,6 +547,8 @@ final class CashflowTransaction: Persistable {
         incomeCategoryRaw: String? = nil,
         expenseCategoryRaw: String? = nil,
         note: String? = nil,
+        importSourceRaw: String? = nil,
+        importReferenceKey: String? = nil,
         recurrenceRule: CashflowRecurrenceRule = .none,
         recurrenceSeriesID: String? = nil,
         affectsCardBalance: Bool = true
@@ -550,6 +564,8 @@ final class CashflowTransaction: Persistable {
         self.incomeCategoryRaw = incomeCategoryRaw ?? incomeCategory?.rawValue
         self.expenseCategoryRaw = expenseCategoryRaw ?? expenseCategory?.rawValue
         self.note = note
+        self.importSourceRaw = importSourceRaw
+        self.importReferenceKey = importReferenceKey
         self.recurrenceRuleRaw = recurrenceRule.rawValue
         self.recurrenceSeriesID = recurrenceSeriesID
         self.affectsCardBalance = affectsCardBalance
@@ -595,6 +611,12 @@ final class CashflowTransaction: Persistable {
         }
         if let note = note {
             dict["note"] = note
+        }
+        if let importSourceRaw = importSourceRaw {
+            dict["importSourceRaw"] = importSourceRaw
+        }
+        if let importReferenceKey = importReferenceKey {
+            dict["importReferenceKey"] = importReferenceKey
         }
         if let exchangeRate = exchangeRate {
             dict["exchangeRate"] = exchangeRate

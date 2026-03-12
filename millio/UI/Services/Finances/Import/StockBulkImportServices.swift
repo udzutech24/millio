@@ -144,9 +144,16 @@ struct StockBulkImportPersistenceService {
         var investmentByIdentityKey: [String: Investment] = [:]
         investmentByIdentityKey.reserveCapacity(investments.count)
         for investment in investments where investment.archivedAt == nil && investment.category == .stocks {
-            let key = investment.assetID ?? normalizedIdentityKey(symbol: investment.marketSymbol, exchange: investment.marketExchange)
-            guard !key.isEmpty else { continue }
-            investmentByIdentityKey[key] = investment
+            let normalizedAssetID = investment.assetID?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if let normalizedAssetID, !normalizedAssetID.isEmpty {
+                investmentByIdentityKey[normalizedAssetID] = investment
+            }
+
+            let legacyKey = normalizedIdentityKey(symbol: investment.marketSymbol, exchange: investment.marketExchange)
+            if !legacyKey.isEmpty {
+                investmentByIdentityKey[legacyKey] = investment
+            }
         }
         var financeAccounts = (try? modelContext.fetch(FetchDescriptor<FinanceAccount>())) ?? []
 
@@ -162,12 +169,17 @@ struct StockBulkImportPersistenceService {
                 country: nil,
                 providerName: resolvedRow.candidate.providerRaw
             )
-            let identityKey = resolvedIdentity?.assetID ?? resolvedRow.candidate.identityKey
+            let resolvedAssetID = resolvedIdentity?
+                .assetID
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let identityKeys: [String] = [resolvedAssetID, resolvedRow.candidate.identityKey]
+                .compactMap { $0 }
+                .filter { !$0.isEmpty }
             let latestPrice = await fetchLatestPrice(for: resolvedRow.candidate)
             let effectiveUnitPrice = resolvedRow.currentPrice ?? latestPrice ?? resolvedRow.buyPrice
             let amount = resolvedRow.quantity * effectiveUnitPrice
 
-            if let existing = investmentByIdentityKey[identityKey] {
+            if let existing = identityKeys.compactMap({ investmentByIdentityKey[$0] }).first {
                 existing.ensureUniqueID()
                 existing.name = existing.name.isEmpty ? resolvedRow.candidate.displayName : existing.name
                 existing.investmentType = .positive
@@ -192,6 +204,9 @@ struct StockBulkImportPersistenceService {
                     AssetCatalogStore(modelContext: modelContext).syncIfSupported(identity: resolvedIdentity)
                 }
                 updateFinanceAccountLink(for: existing, in: &financeAccounts, group: resolvedGroup)
+                for identityKey in identityKeys {
+                    investmentByIdentityKey[identityKey] = existing
+                }
                 continue
             }
 
@@ -225,7 +240,9 @@ struct StockBulkImportPersistenceService {
             if let resolvedIdentity {
                 AssetCatalogStore(modelContext: modelContext).syncIfSupported(identity: resolvedIdentity)
             }
-            investmentByIdentityKey[identityKey] = investment
+            for identityKey in identityKeys {
+                investmentByIdentityKey[identityKey] = investment
+            }
             let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
             account.group = resolvedGroup
             modelContext.insert(account)

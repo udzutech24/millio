@@ -760,7 +760,7 @@ private struct CashbackRowView: View {
         }
         .padding(.vertical, 2)
         .contentShape(Rectangle())
-        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button {
                 viewModel.handle(.togglePinnedCashback(cashback))
             } label: {
@@ -783,8 +783,7 @@ private struct CashbackRowView: View {
                 Label("Редактировать", systemImage: "pencil")
             }
             .tint(CashbackScreenStyle.accent)
-        }
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+
             Button(role: .destructive) {
                 viewModel.handle(.deleteCashback(cashback))
             } label: {

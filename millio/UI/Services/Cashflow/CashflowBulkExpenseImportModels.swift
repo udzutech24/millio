@@ -31,6 +31,10 @@ enum CashflowBulkExpenseImportMode: String, CaseIterable, Identifiable {
     }
 }
 
+enum CashflowBulkExpenseImportTransactionSource: String {
+    case monthlyCategoryRollup = "monthly_category_rollup"
+}
+
 enum CashflowBulkExpenseImportMatchConfidence: Int, Comparable {
     case low = 0
     case medium = 1
@@ -200,6 +204,48 @@ struct CashflowBulkExpensePersistEntry: Equatable {
     let expenseCategoryRaw: String
     let note: String?
     let sourceOrderIndex: Int
+}
+
+struct CashflowBulkExpenseCategoryDraft: Identifiable, Equatable {
+    let id: String
+    let category: CashflowCategoryOption
+    var amountText: String
+    var noteText: String
+    var sourceOrderIndex: Int
+
+    init(
+        category: CashflowCategoryOption,
+        amountText: String = "",
+        noteText: String = "",
+        sourceOrderIndex: Int
+    ) {
+        self.id = category.rawValue
+        self.category = category
+        self.amountText = amountText
+        self.noteText = noteText
+        self.sourceOrderIndex = sourceOrderIndex
+    }
+
+    var amount: Double? {
+        CashflowBulkExpenseRowDraft.parseAmount(amountText)
+    }
+
+    var hasValue: Bool {
+        guard let amount else { return false }
+        return amount > 0.0000001
+    }
+
+    var normalizedNote: String? {
+        let trimmed = noteText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
+struct CashflowBulkExpenseStoredCategoryEntry: Equatable {
+    let categoryRaw: String
+    let amount: Double
+    let note: String?
+    let affectsCardBalance: Bool
 }
 
 struct CashflowBulkExpensePersistRequest: Equatable {

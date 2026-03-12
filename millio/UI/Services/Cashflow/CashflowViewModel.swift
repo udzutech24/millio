@@ -271,19 +271,25 @@ final class CashflowViewModel: ViewModelProtocol {
     
     let modelContext: ModelContext
     private let historicalRateStore: HistoricalRateStore
+    private let notificationManager: NotificationManagerProtocol
     private let now: () -> Date
     private let assetsSnapshotProvider: ((Date, Date, String) async -> (start: Double, end: Double)?)?
+    private let defaults = UserDefaults.standard
     
     private var eventSubscriptionID: UUID?
     private var isRecurringGenerationInProgress: Bool = false
+    private var isDueAutoApplyInProgress: Bool = false
+    private let dueAutoApplyCheckpointKey = "cashflow_due_auto_apply_checkpoint_v1"
     
     init(
         modelContext: ModelContext,
+        notificationManager: NotificationManagerProtocol? = nil,
         now: @escaping () -> Date = Date.init,
         assetsSnapshotProvider: ((Date, Date, String) async -> (start: Double, end: Double)?)? = nil
     ) {
         self.modelContext = modelContext
         self.historicalRateStore = HistoricalRateStore(modelContext: modelContext)
+        self.notificationManager = notificationManager ?? NotificationManager.shared
         self.now = now
         self.assetsSnapshotProvider = assetsSnapshotProvider
         state.displayCurrency = SettingsManager.shared.primaryCurrencyCode
@@ -414,6 +420,7 @@ final class CashflowViewModel: ViewModelProtocol {
     
     private func loadTransactions() {
         loadTransactionsSnapshot()
+        scheduleDueAutoApplyIfNeeded()
         scheduleRecurringGeneration()
     }
 
@@ -422,6 +429,10 @@ final class CashflowViewModel: ViewModelProtocol {
             sortBy: [SortDescriptor(\.transactionDate, order: .reverse)]
         )
         state.transactions = (try? modelContext.fetch(descriptor)) ?? []
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.notificationManager.scheduleCashflowScheduledReminders(for: self.state.transactions)
+        }
         applyFilters()
         loadAvailableCurrencies()
         updateChartData()
@@ -437,6 +448,21 @@ final class CashflowViewModel: ViewModelProtocol {
 
             let didGenerate = await self.generateRecurringTransactionsIfNeeded()
             if didGenerate {
+                self.loadTransactionsSnapshot()
+            }
+        }
+    }
+
+    private func scheduleDueAutoApplyIfNeeded() {
+        guard !isDueAutoApplyInProgress else { return }
+        isDueAutoApplyInProgress = true
+
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.isDueAutoApplyInProgress = false }
+
+            let didApply = await self.applyDuePlannedTransactionsIfNeeded()
+            if didApply {
                 self.loadTransactionsSnapshot()
             }
         }
@@ -786,6 +812,10 @@ final class CashflowViewModel: ViewModelProtocol {
         }
 
         let sortedEntries = request.entries.sorted { $0.sourceOrderIndex < $1.sourceOrderIndex }
+        let existingTransactions = bulkExpenseImportTransactions(
+            cardID: request.cardID,
+            month: request.month
+        )
         let transactionDates = Self.bulkExpenseTransactionDates(
             for: request.month,
             count: sortedEntries.count,
@@ -793,27 +823,39 @@ final class CashflowViewModel: ViewModelProtocol {
             calendar: Calendar.current
         )
 
-        var totalInCardCurrency: Double = 0
-        if request.shouldAffectCardBalance {
-            for entry in sortedEntries {
-                totalInCardCurrency += await convertAmount(
-                    value: entry.amount,
-                    from: card.currency,
-                    to: card.currency
-                )
-            }
+        let existingAffectingTotal = existingTransactions
+            .filter(\.affectsCardBalance)
+            .reduce(0) { $0 + $1.amount }
+        let newAffectingTotal = request.shouldAffectCardBalance
+            ? sortedEntries.reduce(0) { $0 + $1.amount }
+            : 0
+        let availableBalanceBeforeImport = card.balance + existingAffectingTotal
 
-            if totalInCardCurrency - card.balance > 0.0000001 {
-                throw CashflowBulkExpenseImportError.insufficientFunds(
-                    required: totalInCardCurrency,
-                    available: card.balance,
-                    currency: card.currency
-                )
+        if newAffectingTotal - availableBalanceBeforeImport > 0.0000001 {
+            throw CashflowBulkExpenseImportError.insufficientFunds(
+                required: newAffectingTotal,
+                available: availableBalanceBeforeImport,
+                currency: card.currency
+            )
+        }
+
+        var existingByReferenceKey: [String: CashflowTransaction] = [:]
+        for transaction in existingTransactions {
+            if let key = transaction.importReferenceKey {
+                existingByReferenceKey[key] = transaction
             }
         }
 
+        var seenReferenceKeys = Set<String>()
         for (index, entry) in sortedEntries.enumerated() {
-            let transaction = CashflowTransaction(
+            let referenceKey = Self.bulkExpenseImportReferenceKey(
+                cardID: request.cardID,
+                month: request.month,
+                categoryRaw: entry.expenseCategoryRaw
+            )
+            seenReferenceKeys.insert(referenceKey)
+
+            let transaction = existingByReferenceKey[referenceKey] ?? CashflowTransaction(
                 transactionType: .expense,
                 amount: entry.amount,
                 currency: card.currency,
@@ -821,17 +863,37 @@ final class CashflowViewModel: ViewModelProtocol {
                 cardID: request.cardID,
                 expenseCategoryRaw: entry.expenseCategoryRaw,
                 note: entry.note,
+                importSourceRaw: CashflowBulkExpenseImportTransactionSource.monthlyCategoryRollup.rawValue,
+                importReferenceKey: referenceKey,
                 affectsCardBalance: request.shouldAffectCardBalance
             )
+            transaction.amount = entry.amount
+            transaction.currency = card.currency
+            transaction.transactionDate = transactionDates[index]
+            transaction.cardID = request.cardID
+            transaction.expenseCategoryRaw = entry.expenseCategoryRaw
+            transaction.note = entry.note
+            transaction.importSourceRaw = CashflowBulkExpenseImportTransactionSource.monthlyCategoryRollup.rawValue
+            transaction.importReferenceKey = referenceKey
+            transaction.affectsCardBalance = request.shouldAffectCardBalance
+            transaction.updatedAt = Date()
+
             let exchangeInfo = await resolveExchangeInfo(for: transaction)
             transaction.exchangeRate = exchangeInfo.rate
             transaction.exchangeRateDate = exchangeInfo.rateDate
             transaction.exchangeRateCurrency = exchangeInfo.rateCurrency
-            modelContext.insert(transaction)
+            if existingByReferenceKey[referenceKey] == nil {
+                modelContext.insert(transaction)
+            }
         }
 
-        if request.shouldAffectCardBalance {
-            card.balance = max(0, card.balance - totalInCardCurrency)
+        for transaction in existingTransactions where !seenReferenceKeys.contains(transaction.importReferenceKey ?? "") {
+            modelContext.delete(transaction)
+        }
+
+        let adjustedBalance = max(0, availableBalanceBeforeImport - newAffectingTotal)
+        if abs(adjustedBalance - card.balance) > 0.0000001 {
+            card.balance = adjustedBalance
             card.updatedAt = Date()
         }
 
@@ -844,6 +906,28 @@ final class CashflowViewModel: ViewModelProtocol {
             AppLogger.log(.error, category: "Cashflow", "Failed to save bulk expenses: \(error.localizedDescription)")
             throw error
         }
+    }
+
+    func bulkExpenseImportStoredEntries(
+        cardID: String,
+        month: Date
+    ) -> [CashflowBulkExpenseStoredCategoryEntry] {
+        bulkExpenseImportTransactions(cardID: cardID, month: month)
+            .compactMap { transaction in
+                guard let categoryRaw = transaction.expenseCategoryRaw else { return nil }
+                return CashflowBulkExpenseStoredCategoryEntry(
+                    categoryRaw: categoryRaw,
+                    amount: transaction.amount,
+                    note: transaction.note,
+                    affectsCardBalance: transaction.affectsCardBalance
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.categoryRaw == rhs.categoryRaw {
+                    return lhs.amount > rhs.amount
+                }
+                return lhs.categoryRaw < rhs.categoryRaw
+            }
     }
 
     /// Возвращает суммы по категориям за выбранный месяц для типа операции.
@@ -1002,6 +1086,19 @@ final class CashflowViewModel: ViewModelProtocol {
         return (0..<count).map { offset in
             calendar.date(byAdding: .minute, value: -offset, to: anchor) ?? anchor
         }.sorted()
+    }
+
+    static func bulkExpenseImportReferenceKey(
+        cardID: String,
+        month: Date,
+        categoryRaw: String,
+        calendar: Calendar = .current
+    ) -> String {
+        let monthStart = monthStart(for: month, calendar: calendar)
+        let components = calendar.dateComponents([.year, .month], from: monthStart)
+        let year = components.year ?? 0
+        let month = components.month ?? 0
+        return "bulk-expense|\(cardID)|\(year)-\(String(format: "%02d", month))|\(categoryRaw)"
     }
 
     // MARK: - Categories
@@ -1637,6 +1734,8 @@ final class CashflowViewModel: ViewModelProtocol {
         for transaction: CashflowTransaction,
         direction: CardBalanceEffectDirection
     ) async throws {
+        guard shouldApplyCardBalanceImmediately(for: transaction) else { return }
+
         let impactedCardIDs = Set([transaction.cardID, transaction.toCardID].compactMap { $0 })
         guard !impactedCardIDs.isEmpty else { return }
 
@@ -1664,6 +1763,9 @@ final class CashflowViewModel: ViewModelProtocol {
     ) async throws -> Bool {
         switch transaction.transactionType {
         case .expense:
+            guard shouldApplyCardBalanceImmediately(for: transaction) else {
+                return true
+            }
             guard transaction.affectsCardBalance,
                   let fromCardID = transaction.cardID else {
                 return true
@@ -1676,6 +1778,9 @@ final class CashflowViewModel: ViewModelProtocol {
                 replacing: existingTransaction
             )
         case .transfer:
+            guard shouldApplyCardBalanceImmediately(for: transaction) else {
+                return true
+            }
             guard let fromCardID = transaction.cardID else {
                 return false
             }
@@ -1691,8 +1796,81 @@ final class CashflowViewModel: ViewModelProtocol {
         }
     }
 
+    private func shouldApplyCardBalanceImmediately(for transaction: CashflowTransaction) -> Bool {
+        switch transaction.transactionType {
+        case .income, .expense:
+            guard transaction.affectsCardBalance else { return false }
+            guard !transaction.isRecurringTemplate else { return false }
+            return transaction.transactionDate <= now()
+        case .transfer:
+            return transaction.transactionDate <= now()
+        case .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
+            return true
+        }
+    }
+
+    private func applyDuePlannedTransactionsIfNeeded() async -> Bool {
+        let referenceNow = now()
+        guard let previousCheckpoint = defaults.object(forKey: dueAutoApplyCheckpointKey) as? Date else {
+            defaults.set(referenceNow, forKey: dueAutoApplyCheckpointKey)
+            return false
+        }
+
+        let dueTransactions = state.transactions
+            .filter { transaction in
+                guard transaction.transactionType == .income || transaction.transactionType == .expense else {
+                    return false
+                }
+                guard transaction.recurrenceRule == .none else { return false }
+                guard transaction.affectsCardBalance else { return false }
+                return transaction.transactionDate > previousCheckpoint
+                    && transaction.transactionDate <= referenceNow
+            }
+            .sorted { $0.transactionDate < $1.transactionDate }
+
+        guard !dueTransactions.isEmpty else {
+            defaults.set(referenceNow, forKey: dueAutoApplyCheckpointKey)
+            return false
+        }
+
+        for transaction in dueTransactions {
+            do {
+                try await applyCardBalanceEffect(for: transaction, direction: .apply)
+                transaction.updatedAt = referenceNow
+            } catch {
+                AppLogger.log(
+                    .error,
+                    category: "Cashflow",
+                    "Failed to auto-apply due planned transaction: \(error.localizedDescription)"
+                )
+            }
+        }
+
+        do {
+            try modelContext.save()
+            defaults.set(referenceNow, forKey: dueAutoApplyCheckpointKey)
+            return true
+        } catch {
+            AppLogger.log(.error, category: "Cashflow", "Failed to save due planned auto-apply: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     private static func monthStart(for date: Date, calendar: Calendar) -> Date {
         calendar.date(from: calendar.dateComponents([.year, .month], from: date)) ?? date
+    }
+
+    private func bulkExpenseImportTransactions(cardID: String, month: Date) -> [CashflowTransaction] {
+        let calendar = Calendar.current
+        let monthStart = Self.monthStart(for: month, calendar: calendar)
+        let descriptor = FetchDescriptor<CashflowTransaction>()
+        let allTransactions = (try? modelContext.fetch(descriptor)) ?? []
+        return allTransactions.filter { transaction in
+            transaction.transactionType == .expense
+            && transaction.cardID == cardID
+            && transaction.importSourceRaw == CashflowBulkExpenseImportTransactionSource.monthlyCategoryRollup.rawValue
+            && Self.isSameMonth(transaction.transactionDate, monthStart, calendar: calendar)
+        }
     }
 
     private static func endOfDay(for date: Date, calendar: Calendar) -> Date {
@@ -1902,8 +2080,12 @@ final class CashflowViewModel: ViewModelProtocol {
         
         if let existing = state.editingTransaction {
             do {
-                try await applyCardBalanceEffect(for: existing, direction: .revert)
-                try await applyCardBalanceEffect(for: transaction, direction: .apply)
+                if shouldApplyCardBalanceImmediately(for: existing) {
+                    try await applyCardBalanceEffect(for: existing, direction: .revert)
+                }
+                if shouldApplyCardBalanceImmediately(for: transaction) {
+                    try await applyCardBalanceEffect(for: transaction, direction: .apply)
+                }
             } catch {
                 AppLogger.log(.error, category: "Cashflow", "Failed to update card balance effect: \(error.localizedDescription)")
                 return
@@ -1947,7 +2129,9 @@ final class CashflowViewModel: ViewModelProtocol {
             newTransaction.exchangeRateCurrency = exchangeInfo.rateCurrency
             modelContext.insert(newTransaction)
             do {
-                try await applyCardBalanceEffect(for: newTransaction, direction: .apply)
+                if shouldApplyCardBalanceImmediately(for: newTransaction) {
+                    try await applyCardBalanceEffect(for: newTransaction, direction: .apply)
+                }
             } catch {
                 AppLogger.log(.error, category: "Cashflow", "Failed to apply card balance effect: \(error.localizedDescription)")
                 modelContext.delete(newTransaction)

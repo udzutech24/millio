@@ -25,6 +25,8 @@ protocol NotificationManagerProtocol {
     func scheduleDailyReminder(enabled: Bool) async
     func scheduleDailyReminder(using settings: DailyReminderSettings) async
     func cancelDailyReminder()
+    func scheduleCashflowScheduledReminders(for transactions: [CashflowTransaction]) async
+    func cancelCashflowScheduledReminders()
 }
 
 /// Менеджер локальных уведомлений
@@ -37,17 +39,22 @@ final class NotificationManager: NotificationManagerProtocol {
     private let now: () -> Date
     private let calendar: Calendar
     private let languageProvider: () -> Language
+    private let defaults: UserDefaults
+    private let scheduledReminderIDsKey = "cashflow_scheduled_reminder_ids"
+    private static let scheduledReminderIdentifierPrefix = "cashflow_scheduled_reminder"
     
     init(
         notificationCenter: any UserNotificationCenterProtocol = UNUserNotificationCenter.current(),
         now: @escaping () -> Date = Date.init,
         calendar: Calendar = .current,
-        languageProvider: @escaping () -> Language = { LanguageManager.shared.currentLanguage }
+        languageProvider: @escaping () -> Language = { LanguageManager.shared.currentLanguage },
+        defaults: UserDefaults = .standard
     ) {
         self.notificationCenter = notificationCenter
         self.now = now
         self.calendar = calendar
         self.languageProvider = languageProvider
+        self.defaults = defaults
     }
     
     // MARK: - Public Methods
@@ -122,6 +129,56 @@ final class NotificationManager: NotificationManagerProtocol {
         notificationCenter.removeDeliveredNotifications(withIdentifiers: identifiers)
         logger.info("Daily reminder cancelled")
     }
+
+    func scheduleCashflowScheduledReminders(for transactions: [CashflowTransaction]) async {
+        let reminders = buildScheduledReminderPayloads(from: transactions)
+        if reminders.isEmpty {
+            cancelCashflowScheduledReminders()
+            return
+        }
+
+        let authorized = await requestAuthorization()
+        guard authorized else {
+            logger.warning("Skipping scheduled cashflow reminders: authorization not granted")
+            return
+        }
+
+        cancelCashflowScheduledReminders()
+
+        var createdIdentifiers: [String] = []
+        for payload in reminders {
+            let content = UNMutableNotificationContent()
+            content.title = "millio"
+            content.body = payload.body
+            content.sound = .default
+
+            let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: payload.fireDate)
+            let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+            let request = UNNotificationRequest(
+                identifier: payload.identifier,
+                content: content,
+                trigger: trigger
+            )
+
+            do {
+                try await notificationCenter.add(request)
+                createdIdentifiers.append(payload.identifier)
+            } catch {
+                logger.error("Failed to schedule cashflow reminder \(payload.identifier): \(error.localizedDescription)")
+            }
+        }
+
+        defaults.set(createdIdentifiers, forKey: scheduledReminderIDsKey)
+        logger.info("Scheduled cashflow reminders updated: \(createdIdentifiers.count)")
+    }
+
+    func cancelCashflowScheduledReminders() {
+        let identifiers = defaults.stringArray(forKey: scheduledReminderIDsKey) ?? []
+        guard !identifiers.isEmpty else { return }
+        notificationCenter.removePendingNotificationRequests(withIdentifiers: identifiers)
+        notificationCenter.removeDeliveredNotifications(withIdentifiers: identifiers)
+        defaults.set([], forKey: scheduledReminderIDsKey)
+    }
     
     // MARK: - Private Methods
 
@@ -147,5 +204,101 @@ final class NotificationManager: NotificationManagerProtocol {
             }
             return UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
         }
+    }
+
+    private struct ScheduledReminderPayload {
+        let identifier: String
+        let fireDate: Date
+        let body: String
+    }
+
+    private func buildScheduledReminderPayloads(from transactions: [CashflowTransaction]) -> [ScheduledReminderPayload] {
+        let referenceNow = now()
+        let horizonEnd = calendar.date(byAdding: .day, value: 45, to: referenceNow) ?? referenceNow
+
+        return transactions.compactMap { transaction in
+            guard transaction.transactionType == .income || transaction.transactionType == .expense else {
+                return nil
+            }
+
+            let plannedDate: Date
+            if transaction.isRecurringTemplate {
+                guard let next = nextOccurrenceDate(for: transaction, relativeTo: referenceNow) else { return nil }
+                plannedDate = next
+            } else {
+                guard transaction.transactionDate > referenceNow else { return nil }
+                plannedDate = transaction.transactionDate
+            }
+
+            let reminderDate = normalizedReminderDate(for: plannedDate)
+            guard reminderDate > referenceNow, reminderDate <= horizonEnd else { return nil }
+
+            let kind: String = {
+                switch transaction.transactionType {
+                case .income: return languageProvider() == .russian ? "доход" : "income"
+                case .expense: return languageProvider() == .russian ? "расход" : "expense"
+                default: return ""
+                }
+            }()
+
+            let baseMessage: String = {
+                if languageProvider() == .russian {
+                    return transaction.isRecurringTemplate
+                    ? "Напоминание: регулярный \(kind) запланирован на \(formattedDate(reminderDate))."
+                    : "Напоминание: запланированный \(kind) на \(formattedDate(reminderDate))."
+                }
+                return transaction.isRecurringTemplate
+                ? "Reminder: recurring \(kind) is due on \(formattedDate(reminderDate))."
+                : "Reminder: planned \(kind) is due on \(formattedDate(reminderDate))."
+            }()
+
+            let identitySource = transaction.recurrenceSeriesID ?? transaction.transactionUniqueID
+            let identifier = "\(Self.scheduledReminderIdentifierPrefix)|\(identitySource)|\(Int(reminderDate.timeIntervalSince1970))"
+            return ScheduledReminderPayload(identifier: identifier, fireDate: reminderDate, body: baseMessage)
+        }
+    }
+
+    private func nextOccurrenceDate(for transaction: CashflowTransaction, relativeTo referenceDate: Date) -> Date? {
+        guard transaction.isRecurringTemplate else { return nil }
+        guard transaction.recurrenceRule == .monthly else { return nil }
+
+        let baseline = calendar.startOfDay(for: referenceDate)
+        let baselineMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: baseline)) ?? baseline
+        let anchorDay = calendar.component(.day, from: transaction.transactionDate)
+        var candidate = makeMonthlyDate(monthStart: baselineMonthStart, day: anchorDay)
+
+        if candidate <= baseline,
+           let nextMonth = calendar.date(byAdding: .month, value: 1, to: baselineMonthStart) {
+            candidate = makeMonthlyDate(monthStart: nextMonth, day: anchorDay)
+        }
+        return candidate
+    }
+
+    private func makeMonthlyDate(monthStart: Date, day: Int) -> Date {
+        let daysRange = calendar.range(of: .day, in: .month, for: monthStart) ?? (1..<29)
+        let minDay = daysRange.lowerBound
+        let maxDay = daysRange.upperBound - 1
+        let clampedDay = min(max(day, minDay), maxDay)
+        return calendar.date(byAdding: .day, value: clampedDay - 1, to: monthStart) ?? monthStart
+    }
+
+    private func normalizedReminderDate(for plannedDate: Date) -> Date {
+        let components = calendar.dateComponents([.year, .month, .day], from: plannedDate)
+        var normalized = DateComponents()
+        normalized.year = components.year
+        normalized.month = components.month
+        normalized.day = components.day
+        normalized.hour = 9
+        normalized.minute = 0
+        return calendar.date(from: normalized) ?? plannedDate
+    }
+
+    private func formattedDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.locale = languageProvider() == .russian ? Locale(identifier: "ru_RU") : Locale(identifier: "en_US")
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
     }
 }

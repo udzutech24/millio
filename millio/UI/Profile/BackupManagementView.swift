@@ -109,12 +109,12 @@ struct BackupManagementView: View {
 
     private var createSliderSubtitle: String {
         if isBusy {
-            return BackupL10n.tr("backup.actions.create.subtitle.busy", fallback: "Operation is already running")
+            return BackupL10n.tr("backup.actions.create.subtitle.busy", fallback: "Another backup operation is already running")
         }
         if !isBackupOperational {
-            return BackupL10n.tr("backup.actions.create.subtitle.requirements", fallback: "Turn on backup and iCloud")
+            return BackupL10n.tr("backup.actions.create.subtitle.requirements", fallback: "Turn on backup and iCloud first")
         }
-        return BackupL10n.tr("backup.actions.create.subtitle.safety", fallback: "Protection from accidental trigger")
+        return BackupL10n.tr("backup.actions.create.subtitle.safety", fallback: "Creates a saved version that stays until you delete it")
     }
 
     private var restoreSliderTitle: String {
@@ -253,7 +253,7 @@ struct BackupManagementView: View {
             Text(BackupL10n.tr("backup.screen.title", fallback: "Backup"))
                 .font(.system(size: 26, weight: .bold, design: .rounded))
                 .foregroundStyle(AppColors.textPrimary)
-            Text(BackupL10n.tr("backup.screen.subtitle", fallback: "Turn on backup, configure protection, then create and restore backups."))
+            Text(BackupL10n.tr("backup.screen.subtitle", fallback: "Saved versions stay until deletion. Auto backup refreshes about every 3 days."))
                 .font(.system(size: 13, weight: .regular))
                 .foregroundStyle(AppColors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -523,7 +523,7 @@ struct BackupManagementView: View {
                     .foregroundStyle(AppColors.textSecondary)
 
                 SlideToConfirmControl(
-                    title: BackupL10n.tr("backup.actions.create.title", fallback: "Slide to create backup"),
+                    title: BackupL10n.tr("backup.actions.create.title", fallback: "Slide to save version"),
                     subtitle: createSliderSubtitle,
                     icon: "arrow.up",
                     gradientColors: AppColors.financesGradient,
@@ -543,6 +543,11 @@ struct BackupManagementView: View {
                 ) {
                     showRestoreConfirmation = true
                 }
+
+                Text(BackupL10n.tr("backup.actions.auto_schedule.note", fallback: "Auto backup keeps one current version and refreshes about every 3 days."))
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(AppColors.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 HStack(spacing: 10) {
                     compactActionButton(
@@ -582,11 +587,11 @@ struct BackupManagementView: View {
                 } label: {
                     HStack(spacing: 10) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(BackupL10n.tr("backup.versions.title", fallback: "Saved versions"))
+                            Text(BackupL10n.tr("backup.versions.title", fallback: "Versions"))
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(AppColors.textPrimary)
                             Text(backupVersions.isEmpty
-                                ? BackupL10n.tr("backup.versions.empty.short", fallback: "None yet")
+                                ? BackupL10n.tr("backup.versions.empty.short", fallback: "No versions yet")
                                 : BackupL10n.format("backup.versions.count_format", fallback: "%lld", backupVersions.count)
                             )
                                 .font(.system(size: 12, weight: .regular))
@@ -605,7 +610,7 @@ struct BackupManagementView: View {
 
                 if isVersionsExpanded {
                     if backupVersions.isEmpty {
-                        Text(BackupL10n.tr("backup.versions.empty.full", fallback: "No saved versions yet."))
+                        Text(BackupL10n.tr("backup.versions.empty.full", fallback: "No versions yet. Save one manually or wait for auto backup."))
                             .font(.system(size: 12, weight: .regular))
                             .foregroundStyle(AppColors.textTertiary)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -640,15 +645,17 @@ struct BackupManagementView: View {
 
                                     Spacer()
 
-                                    if version.isPinned {
-                                        Text(BackupL10n.tr("backup.versions.pinned", fallback: "Pinned"))
-                                            .font(.system(size: 10, weight: .semibold))
-                                            .foregroundStyle(AppColors.textPrimary)
-                                            .padding(.horizontal, 8)
-                                            .padding(.vertical, 4)
-                                            .background(AppColors.toggleOnGreen.opacity(0.25))
-                                            .clipShape(Capsule())
-                                    }
+                                    Text(
+                                        version.isPinned
+                                            ? BackupL10n.tr("backup.versions.pinned", fallback: "Saved")
+                                            : BackupL10n.tr("backup.versions.auto", fallback: "Auto")
+                                    )
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(AppColors.textPrimary)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background((version.isPinned ? AppColors.toggleOnGreen : AppColors.brandPrimary).opacity(0.25))
+                                    .clipShape(Capsule())
 
                                     Button(role: .destructive) {
                                         Task { await deleteVersion(recordName: version.recordName) }
@@ -712,9 +719,9 @@ struct BackupManagementView: View {
             focusedField = nil
             switch encryptionMode {
             case .passphrase:
-                try await backupManager.backupNow(passphrase: trimmedPassphrase.isEmpty ? nil : trimmedPassphrase)
+                try await backupManager.saveVersionNow(passphrase: trimmedPassphrase.isEmpty ? nil : trimmedPassphrase)
             case .deviceKey:
-                try await backupManager.backupNow()
+                try await backupManager.saveVersionNow(passphrase: nil)
             }
             await refreshStatusIfNeeded(force: true)
         } catch let appError as AppError {

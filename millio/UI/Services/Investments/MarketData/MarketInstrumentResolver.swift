@@ -73,13 +73,40 @@ final class MarketInstrumentResolver {
         market: String?,
         outputSize: Int = 30
     ) async throws -> [StockBulkImportCandidate] {
-        let symbols = try await resolveSymbols(
-            query: query,
-            filter: .stocks,
-            outputSize: outputSize
-        )
+        let normalizedQuery = MarketSymbolSearchEngine.normalize(query)
+        guard !normalizedQuery.isEmpty else { return [] }
 
-        let candidates = symbols.compactMap { symbol -> StockBulkImportCandidate? in
+        let cacheKey = makeCacheKey(query: normalizedQuery, filter: .stocks)
+        let localResults = MarketSymbolSearchEngine.localResults(filter: .stocks, query: query)
+        let remoteResults: [TwelveDataSymbol]
+        do {
+            let fetched = try await client.searchSymbols(query: query, outputSize: outputSize)
+            cachedResultsByKey[cacheKey] = fetched
+            remoteResults = fetched
+        } catch {
+            remoteResults = cachedResultsByKey[cacheKey] ?? []
+        }
+
+        let prepared = MarketSymbolSearchEngine.prepareResults(
+            remoteSymbols: remoteResults,
+            filter: .stocks,
+            query: normalizedQuery
+        )
+        let symbols = prepared.isEmpty ? localResults : prepared
+        let candidates = makeBulkImportCandidates(from: symbols)
+
+        return Array(
+            MarketInstrumentCandidatePolicy.rankBulkImportCandidates(
+                Array(Set(candidates)),
+                query: query,
+                preferredMarket: market
+            )
+            .prefix(max(1, outputSize))
+        )
+    }
+
+    private func makeBulkImportCandidates(from symbols: [TwelveDataSymbol]) -> [StockBulkImportCandidate] {
+        symbols.compactMap { symbol -> StockBulkImportCandidate? in
             let type = symbol.normalizedInstrumentType ?? ""
             guard type.contains("stock") || type.contains("equity") || type.contains("etf") || type.isEmpty else {
                 return nil
@@ -93,15 +120,6 @@ final class MarketInstrumentResolver {
                 providerRaw: "market-backend"
             )
         }
-
-        return Array(
-            MarketInstrumentCandidatePolicy.rankBulkImportCandidates(
-                Array(Set(candidates)),
-                query: query,
-                preferredMarket: market
-            )
-            .prefix(max(1, outputSize))
-        )
     }
 
     private func makeCacheKey(query: String, filter: MarketSymbolFilter) -> String {

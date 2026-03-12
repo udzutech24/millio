@@ -35,33 +35,9 @@ enum MarketSymbolFilter: Sendable {
     var topSymbols: [TwelveDataSymbol] {
         switch self {
         case .stocks:
-            return [
-                TwelveDataSymbol(symbol: "AAPL", instrumentName: "Apple Inc.", exchange: "NASDAQ", micCode: "XNAS", instrumentType: "Common Stock", country: "United States", currency: "USD"),
-                TwelveDataSymbol(symbol: "MSFT", instrumentName: "Microsoft Corporation", exchange: "NASDAQ", micCode: "XNAS", instrumentType: "Common Stock", country: "United States", currency: "USD"),
-                TwelveDataSymbol(symbol: "NVDA", instrumentName: "NVIDIA Corporation", exchange: "NASDAQ", micCode: "XNAS", instrumentType: "Common Stock", country: "United States", currency: "USD"),
-                TwelveDataSymbol(symbol: "AMZN", instrumentName: "Amazon.com, Inc.", exchange: "NASDAQ", micCode: "XNAS", instrumentType: "Common Stock", country: "United States", currency: "USD"),
-                TwelveDataSymbol(symbol: "GOOGL", instrumentName: "Alphabet Inc. Class A", exchange: "NASDAQ", micCode: "XNAS", instrumentType: "Common Stock", country: "United States", currency: "USD"),
-                TwelveDataSymbol(symbol: "META", instrumentName: "Meta Platforms, Inc.", exchange: "NASDAQ", micCode: "XNAS", instrumentType: "Common Stock", country: "United States", currency: "USD"),
-                TwelveDataSymbol(symbol: "TSLA", instrumentName: "Tesla, Inc.", exchange: "NASDAQ", micCode: "XNAS", instrumentType: "Common Stock", country: "United States", currency: "USD"),
-                TwelveDataSymbol(symbol: "SPY", instrumentName: "SPDR S&P 500 ETF Trust", exchange: "NYSE", micCode: "ARCX", instrumentType: "ETF", country: "United States", currency: "USD"),
-                TwelveDataSymbol(symbol: "QQQ", instrumentName: "Invesco QQQ Trust", exchange: "NASDAQ", micCode: "XNAS", instrumentType: "ETF", country: "United States", currency: "USD"),
-                TwelveDataSymbol(symbol: "AMD", instrumentName: "Advanced Micro Devices, Inc.", exchange: "NASDAQ", micCode: "XNAS", instrumentType: "Common Stock", country: "United States", currency: "USD"),
-                TwelveDataSymbol(symbol: "PLTR", instrumentName: "Palantir Technologies Inc.", exchange: "NASDAQ", micCode: "XNAS", instrumentType: "Common Stock", country: "United States", currency: "USD"),
-                TwelveDataSymbol(symbol: "NFLX", instrumentName: "Netflix, Inc.", exchange: "NASDAQ", micCode: "XNAS", instrumentType: "Common Stock", country: "United States", currency: "USD")
-            ]
+            return MarketSymbolSearchIndex.topSymbols(for: .stocks, limit: 24)
         case .crypto:
-            return [
-                TwelveDataSymbol(symbol: "BTC/USD", instrumentName: "Bitcoin / US Dollar", exchange: "CRYPTO", micCode: nil, instrumentType: "Cryptocurrency", country: nil, currency: "USD"),
-                TwelveDataSymbol(symbol: "ETH/USD", instrumentName: "Ethereum / US Dollar", exchange: "CRYPTO", micCode: nil, instrumentType: "Cryptocurrency", country: nil, currency: "USD"),
-                TwelveDataSymbol(symbol: "SOL/USD", instrumentName: "Solana / US Dollar", exchange: "CRYPTO", micCode: nil, instrumentType: "Cryptocurrency", country: nil, currency: "USD"),
-                TwelveDataSymbol(symbol: "XRP/USD", instrumentName: "XRP / US Dollar", exchange: "CRYPTO", micCode: nil, instrumentType: "Cryptocurrency", country: nil, currency: "USD"),
-                TwelveDataSymbol(symbol: "ADA/USD", instrumentName: "Cardano / US Dollar", exchange: "CRYPTO", micCode: nil, instrumentType: "Cryptocurrency", country: nil, currency: "USD"),
-                TwelveDataSymbol(symbol: "DOGE/USD", instrumentName: "Dogecoin / US Dollar", exchange: "CRYPTO", micCode: nil, instrumentType: "Cryptocurrency", country: nil, currency: "USD"),
-                TwelveDataSymbol(symbol: "BNB/USD", instrumentName: "BNB / US Dollar", exchange: "CRYPTO", micCode: nil, instrumentType: "Cryptocurrency", country: nil, currency: "USD"),
-                TwelveDataSymbol(symbol: "AVAX/USD", instrumentName: "Avalanche / US Dollar", exchange: "CRYPTO", micCode: nil, instrumentType: "Cryptocurrency", country: nil, currency: "USD"),
-                TwelveDataSymbol(symbol: "DOT/USD", instrumentName: "Polkadot / US Dollar", exchange: "CRYPTO", micCode: nil, instrumentType: "Cryptocurrency", country: nil, currency: "USD"),
-                TwelveDataSymbol(symbol: "LINK/USD", instrumentName: "Chainlink / US Dollar", exchange: "CRYPTO", micCode: nil, instrumentType: "Cryptocurrency", country: nil, currency: "USD")
-            ]
+            return MarketSymbolSearchIndex.topSymbols(for: .crypto, limit: 10)
         }
     }
 
@@ -343,23 +319,23 @@ struct MarketSymbolSearchSheet: View {
         NavigationStack {
             ZStack {
                 GradientBackground()
-                ScrollView {
-                    VStack(spacing: 16) {
-                        if shouldShowQuickPicks {
-                            quickPicksSection
-                                .padding(.horizontal, 16)
-                                .padding(.top, 12)
-                        }
+                VStack(spacing: 16) {
+                    if shouldShowQuickPicks {
+                        quickPicksSection
+                            .padding(.horizontal, 16)
+                            .padding(.top, 12)
+                    }
 
-                        contentView
-                            .frame(maxWidth: .infinity, alignment: .top)
+                    contentView
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
+                    if viewModel.results.isEmpty {
                         instructionsCard
                             .padding(.horizontal, 16)
                             .padding(.top, shouldShowQuickPicks ? 8 : 0)
                     }
-                    .padding(.bottom, 24)
                 }
+                .padding(.bottom, 16)
             }
             .navigationTitle(filter.navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
@@ -423,20 +399,22 @@ struct MarketSymbolSearchSheet: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 24)
             } else {
-                LazyVStack(spacing: 0) {
-                    ForEach(Array(viewModel.results.enumerated()), id: \.element.id) { index, item in
-                        marketSymbolRow(item)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 14)
-
-                        if index < viewModel.results.count - 1 {
-                            Divider()
-                                .overlay(Color.white.opacity(0.08))
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(viewModel.results.enumerated()), id: \.element.id) { index, item in
+                            marketSymbolRow(item)
                                 .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+
+                            if index < viewModel.results.count - 1 {
+                                Divider()
+                                    .overlay(Color.white.opacity(0.08))
+                                    .padding(.horizontal, 16)
+                            }
                         }
                     }
+                    .padding(.top, 4)
                 }
-                .padding(.top, 4)
             }
         }
     }
@@ -470,23 +448,7 @@ struct MarketSymbolSearchSheet: View {
                     }
                     .frame(maxWidth: .infinity, minHeight: 74, alignment: .leading)
                     .padding(.horizontal, 12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.07),
-                                        Color.white.opacity(0.035)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .stroke(Color.white.opacity(0.09), lineWidth: 1)
-                            )
-                    )
+                    .marketQuickPickCardStyle()
                 }
                 .buttonStyle(.plain)
             }
@@ -529,49 +491,88 @@ struct MarketSymbolSearchSheet: View {
     }
 
     private var instructionsCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(filter.instructionText)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(AppColors.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            HStack(alignment: .top, spacing: 10) {
+            HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "message.badge.waveform.fill")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(AppColors.brandPrimary)
-                    .padding(.top, 1)
+                    .padding(.top, 2)
 
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text("finances.market.search.support_hint")
-                        .font(.system(size: 13, weight: .regular))
+                        .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(AppColors.textSecondary)
+                        .lineSpacing(1)
                         .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
                     Button(String(localized: "finances.market.search.contact_action")) {
                         showSupportContactSheet = true
                     }
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppColors.brandPrimary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
+        .padding(.horizontal, 13)
+        .padding(.vertical, 12)
         .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color.white.opacity(0.06),
-                            Color.white.opacity(0.035)
+                            Color.white.opacity(0.05),
+                            Color.white.opacity(0.03)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(.white.opacity(0.08), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(.white.opacity(0.05), lineWidth: 0.75)
+                )
+        )
+    }
+}
+
+private extension View {
+    func marketQuickPickCardStyle() -> some View {
+        background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.065),
+                            AppColors.brandPrimary.opacity(0.035),
+                            Color.white.opacity(0.025)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.12),
+                                    AppColors.brandPrimary.opacity(0.16),
+                                    Color.white.opacity(0.07)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
                 )
         )
     }

@@ -68,6 +68,15 @@ struct MarketSymbolSearchViewModelTests {
         #expect(gold.first?.symbol == "GLD")
     }
 
+    @Test("Top quick picks for stocks expose six rows of popular symbols")
+    func topQuickPicksExposeSixRows() {
+        let topSymbols = MarketSymbolFilter.stocks.topSymbols
+
+        #expect(topSymbols.count == 24)
+        #expect(Array(topSymbols.prefix(4)).map(\.symbol) == ["AAPL", "SPY", "MSFT", "NVDA"])
+        #expect(Array(topSymbols.suffix(4)).map(\.symbol) == ["IVV", "VTI", "ORCL", "COST"])
+    }
+
     @Test("Formatter убирает точные дубли тикеров и сохраняет уникальные рынки")
     func deduplicatesExactDuplicates() {
         let duplicated = [
@@ -83,7 +92,7 @@ struct MarketSymbolSearchViewModelTests {
             query: "qqq"
         )
 
-        #expect(prepared.map(\.symbol) == ["QQQ", "QQQM"])
+        #expect(prepared.map(\.symbol) == ["QQQ", "QQQ", "QQQM"])
     }
 
     @Test("Formatter поднимает точное совпадение тикера выше частичных результатов")
@@ -126,10 +135,10 @@ struct MarketSymbolSearchViewModelTests {
         ])
 
         let viewModel = MarketSymbolSearchViewModel(client: client, filter: .stocks)
-        viewModel.searchText = "QQQ"
+        viewModel.searchText = "QQQX"
         viewModel.updateSearch()
 
-        try await Task.sleep(for: .milliseconds(350))
+        try await Task.sleep(for: .milliseconds(700))
 
         #expect(viewModel.results.map(\.symbol) == ["QQQ", "QQQI"])
     }
@@ -159,7 +168,13 @@ struct MarketSymbolSearchViewModelTests {
 
         #expect(viewModel.isLoading == false)
         #expect(viewModel.results.isEmpty)
-        #expect(viewModel.emptyStateHintText == "Enter at least 2 characters to search")
+        #expect(
+            viewModel.emptyStateHintText ==
+            String(
+                format: String(localized: "finances.market.search.min_chars_format"),
+                MarketSymbolSearchViewModel.minimumRemoteQueryLength
+            )
+        )
     }
 
     @Test("ViewModel скрывает raw throttle error и сохраняет локальные результаты")

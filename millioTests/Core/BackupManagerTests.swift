@@ -861,7 +861,7 @@ struct CloudBackupStoreTests {
         try await store.uploadBackup(data, isPinned: false)
         
         let saved = db.savedRecords.first {
-            $0.recordType == "AppBackup" && $0.recordID.recordName != "latest_backup"
+            $0.recordType == "AppBackup" && $0.recordID.recordName == "latest_backup"
         }
         #expect(saved != nil)
         #expect(saved?["backupSize"] as? Int64 == Int64(data.count))
@@ -970,17 +970,30 @@ struct CloudBackupStoreTests {
             try await store.uploadBackup(Data("payload-\(index)".utf8), isPinned: false)
         }
 
-        let indexRecord = db.recordsByName["backup_index"]
-        let entriesJSON = indexRecord?["entriesJSON"] as? String
-        let entriesData = try #require(entriesJSON?.data(using: .utf8))
-        let entries = try #require(try JSONSerialization.jsonObject(with: entriesData) as? [[String: Any]])
-
-        #expect(entries.count == 3)
-        #expect(db.deletedRecordNames.count == 1)
-        #expect(db.deletedRecordNames.first?.hasPrefix("snapshot_") == true)
+        let versions = try await store.listBackupVersions()
+        #expect(versions.count == 1)
+        #expect(versions.first?.recordName == "latest_backup")
+        #expect(db.deletedRecordNames.isEmpty)
 
         let latest = try await store.downloadLatestBackup()
         #expect(latest == Data("payload-4".utf8))
+    }
+
+    @Test("uploadBackup keeps a single overwritable auto backup version")
+    func testUploadBackupKeepsSingleAutoBackupVersion() async throws {
+        let db = FakeCloudBackupDatabase()
+        let store = CloudBackupStore(
+            container: FakeCloudBackupContainer(accountStatusResult: .available, database: db)
+        )
+
+        for index in 1...4 {
+            try await store.uploadBackup(Data("payload-\(index)".utf8), isPinned: false)
+        }
+
+        let versions = try await store.listBackupVersions()
+        #expect(versions.count == 1)
+        #expect(versions.first?.recordName == "latest_backup")
+        #expect(db.deletedRecordNames.isEmpty)
     }
 
     @Test("importBackup stores pinned snapshot with provided original metadata")
@@ -1010,8 +1023,8 @@ struct CloudBackupStoreTests {
         #expect(saved?["isPinned"] as? Int == 1)
     }
 
-    @Test("uploadBackup не удаляет закрепленные версии при retention авто-бэкапов")
-    func testUploadBackupKeepsPinnedVersionsWhileTrimmingRollingSnapshots() async throws {
+    @Test("uploadBackup keeps pinned versions and updates current auto backup separately")
+    func testUploadBackupKeepsPinnedVersionsAlongsideCurrentAutoBackup() async throws {
         let db = FakeCloudBackupDatabase()
         let store = CloudBackupStore(
             container: FakeCloudBackupContainer(accountStatusResult: .available, database: db),
@@ -1024,10 +1037,11 @@ struct CloudBackupStoreTests {
         try await store.uploadBackup(Data("auto-3".utf8), isPinned: false)
 
         let versions = try await store.listBackupVersions()
-        #expect(versions.count == 3)
+        #expect(versions.count == 2)
         #expect(versions.filter(\.isPinned).count == 1)
-        #expect(versions.filter { !$0.isPinned }.count == 2)
-        #expect(db.deletedRecordNames.count == 1)
+        #expect(versions.filter { !$0.isPinned }.count == 1)
+        #expect(versions.contains(where: { $0.recordName == "latest_backup" }))
+        #expect(db.deletedRecordNames.isEmpty)
     }
 
     @Test("downloadLatestBackup fallback к legacy latest, если index указывает на отсутствующие snapshots")
@@ -1114,7 +1128,7 @@ struct CloudBackupStoreTests {
         let downloaded = try await store.downloadLatestBackup()
 
         #expect(versions.count == 1)
-        #expect(versions.first?.recordName.hasPrefix("snapshot_") == true)
+        #expect(versions.first?.recordName == "latest_backup")
         #expect(downloaded == payload)
     }
 
@@ -1140,7 +1154,7 @@ struct CloudBackupStoreTests {
         let downloaded = try await store.downloadLatestBackup()
 
         #expect(versions.count == 1)
-        #expect(versions.first?.recordName.hasPrefix("snapshot_") == true)
+        #expect(versions.first?.recordName == "latest_backup")
         #expect(downloaded == payload)
     }
 

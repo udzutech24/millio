@@ -67,6 +67,12 @@ struct CashflowBulkExpenseImportTests {
         #expect(transport.confidence >= .medium)
     }
 
+    @Test("Сумма в массовом импорте понимает группировку и форматируется с разделителями")
+    func groupedAmountInputIsParsedAndDisplayed() {
+        #expect(abs((CashflowBulkExpenseRowDraft.parseAmount("22 222") ?? 0) - 22_222) < 0.001)
+        #expect(AmountInputFormatter.display("22222", maxFractionDigits: 0) == "22 222")
+    }
+
     @Test("Пакетный импорт расходов сохраняет операции и уменьшает баланс карты")
     func bulkPersistUpdatesCardBalance() async throws {
         let context = try makeContext()
@@ -139,6 +145,134 @@ struct CashflowBulkExpenseImportTests {
         let transactions = try context.fetch(FetchDescriptor<CashflowTransaction>())
         #expect(transactions.count == 1)
         #expect(transactions.first?.note == "Интернет")
+    }
+
+    @Test("Повторное сохранение месячного импорта обновляет категории без дублей и корректирует баланс по дельте")
+    func bulkPersistUpsertsMonthlyCategorySet() async throws {
+        let context = try makeContext()
+        let card = Card(name: "Main", cardNumber: "1234", bank: .tinkoff, currency: "RUB", balance: 10_000)
+        context.insert(card)
+        try context.save()
+
+        let calendar = Calendar.current
+        let month = calendar.date(from: DateComponents(year: 2026, month: 3, day: 1)) ?? Date()
+        let viewModel = CashflowViewModel(
+            modelContext: context,
+            now: { calendar.date(from: DateComponents(year: 2026, month: 3, day: 15, hour: 12)) ?? Date() }
+        )
+
+        _ = try await viewModel.persistBulkExpenseImport(
+            CashflowBulkExpensePersistRequest(
+                cardID: card.cardUniqueID,
+                month: month,
+                shouldAffectCardBalance: true,
+                entries: [
+                    CashflowBulkExpensePersistEntry(
+                        amount: 1_200,
+                        expenseCategoryRaw: ExpenseCategory.groceries.rawValue,
+                        note: "Первый заход",
+                        sourceOrderIndex: 0
+                    ),
+                    CashflowBulkExpensePersistEntry(
+                        amount: 800,
+                        expenseCategoryRaw: ExpenseCategory.transport.rawValue,
+                        note: nil,
+                        sourceOrderIndex: 1
+                    )
+                ]
+            )
+        )
+
+        _ = try await viewModel.persistBulkExpenseImport(
+            CashflowBulkExpensePersistRequest(
+                cardID: card.cardUniqueID,
+                month: month,
+                shouldAffectCardBalance: true,
+                entries: [
+                    CashflowBulkExpensePersistEntry(
+                        amount: 1_500,
+                        expenseCategoryRaw: ExpenseCategory.groceries.rawValue,
+                        note: "Обновлено",
+                        sourceOrderIndex: 0
+                    ),
+                    CashflowBulkExpensePersistEntry(
+                        amount: 900,
+                        expenseCategoryRaw: ExpenseCategory.bills.rawValue,
+                        note: "Интернет",
+                        sourceOrderIndex: 1
+                    )
+                ]
+            )
+        )
+
+        let transactions = try context.fetch(FetchDescriptor<CashflowTransaction>())
+        let imported = transactions.filter {
+            $0.importSourceRaw == CashflowBulkExpenseImportTransactionSource.monthlyCategoryRollup.rawValue
+        }
+
+        #expect(imported.count == 2)
+        #expect(abs(card.balance - 7_600) < 0.001)
+        #expect(imported.contains {
+            $0.expenseCategoryRaw == ExpenseCategory.groceries.rawValue
+            && abs($0.amount - 1_500) < 0.001
+            && $0.note == "Обновлено"
+        })
+        #expect(imported.contains {
+            $0.expenseCategoryRaw == ExpenseCategory.bills.rawValue
+            && abs($0.amount - 900) < 0.001
+            && $0.note == "Интернет"
+        })
+        #expect(!imported.contains { $0.expenseCategoryRaw == ExpenseCategory.transport.rawValue })
+    }
+
+    @Test("Экран поднимает только сохраненный месячный набор массового импорта для карты и месяца")
+    func storedEntriesReturnOnlyTaggedMonthlyImportTransactions() async throws {
+        let context = try makeContext()
+        let card = Card(name: "Main", cardNumber: "1234", bank: .tinkoff, currency: "RUB", balance: 5_000)
+        context.insert(card)
+
+        let month = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 1)) ?? Date()
+        let tagged = CashflowTransaction(
+            transactionType: .expense,
+            amount: 1_250,
+            currency: "RUB",
+            transactionDate: month,
+            cardID: card.cardUniqueID,
+            expenseCategoryRaw: ExpenseCategory.groceries.rawValue,
+            note: "Импорт",
+            importSourceRaw: CashflowBulkExpenseImportTransactionSource.monthlyCategoryRollup.rawValue,
+            importReferenceKey: CashflowViewModel.bulkExpenseImportReferenceKey(
+                cardID: card.cardUniqueID,
+                month: month,
+                categoryRaw: ExpenseCategory.groceries.rawValue
+            ),
+            affectsCardBalance: false
+        )
+        let regular = CashflowTransaction(
+            transactionType: .expense,
+            amount: 900,
+            currency: "RUB",
+            transactionDate: month,
+            cardID: card.cardUniqueID,
+            expenseCategoryRaw: ExpenseCategory.transport.rawValue,
+            note: "Обычная транзакция",
+            affectsCardBalance: true
+        )
+        context.insert(tagged)
+        context.insert(regular)
+        try context.save()
+
+        let viewModel = CashflowViewModel(modelContext: context)
+        let stored = viewModel.bulkExpenseImportStoredEntries(
+            cardID: card.cardUniqueID,
+            month: month
+        )
+
+        #expect(stored.count == 1)
+        #expect(stored.first?.categoryRaw == ExpenseCategory.groceries.rawValue)
+        #expect(abs((stored.first?.amount ?? 0) - 1_250) < 0.001)
+        #expect(stored.first?.note == "Импорт")
+        #expect(stored.first?.affectsCardBalance == false)
     }
 
     @Test("Даты пакетного импорта остаются внутри выбранного месяца")

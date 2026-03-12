@@ -717,23 +717,11 @@ struct CashflowTransactionEditorView: View {
             isOn: $shouldAffectCardBalance,
             label: {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(
-                        String(
-                            localized: "cashflow.bulk_expense.affect_balance",
-                            defaultValue: "Update card balance",
-                            comment: "Toggle title for applying card balance changes"
-                        )
-                    )
+                    Text(autoApplyToggleTitle)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
 
-                    Text(
-                        String(
-                            localized: "cashflow.bulk_expense.affect_balance.subtitle",
-                            defaultValue: "Turn off if you only want history without touching the current balance.",
-                            comment: "Toggle subtitle for applying card balance changes"
-                        )
-                    )
+                    Text(autoApplyToggleSubtitle)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(AppColors.textSecondary)
                 }
@@ -743,6 +731,24 @@ struct CashflowTransactionEditorView: View {
         .tint(getGradientColors().first ?? Color.white)
         .padding(.vertical, 10)
         .padding(.horizontal, 16)
+    }
+
+    private var autoApplyToggleTitle: String {
+        switch LanguageManager.shared.currentLanguage {
+        case .russian:
+            return "Списывать автоматически в дату операции"
+        case .english, .system:
+            return "Auto apply on operation date"
+        }
+    }
+
+    private var autoApplyToggleSubtitle: String {
+        switch LanguageManager.shared.currentLanguage {
+        case .russian:
+            return "Выключи, если хочешь выполнить операцию вручную без автосписания по дате."
+        case .english, .system:
+            return "Turn off to keep this operation manual, without automatic balance change on date."
+        }
     }
 
     // MARK: - Дополнительно
@@ -1389,6 +1395,10 @@ struct CashflowCategoryEditorSheet: View {
     @State private var selectedTab: IconPickerTab = .emoji
     @State private var iconSearchText: String = ""
 
+    private var canSave: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     private var title: String {
         switch mode {
         case .create: return String(localized: "cashflow.editor.new_category")
@@ -1493,14 +1503,25 @@ struct CashflowCategoryEditorSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                        .foregroundStyle(AppColors.textPrimary)
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary.opacity(0.92))
+                    }
+                    .accessibilityLabel(String(localized: "cashflow.common.cancel"))
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Save") {
+                    Button {
                         onSave(name, icon)
+                    } label: {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(canSave ? Color(hex: "6DFFC7") : AppColors.textSecondary.opacity(0.55))
                     }
-                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .accessibilityLabel(String(localized: "cashflow.common.save"))
+                    .disabled(!canSave)
                 }
             }
             .onAppear {
