@@ -39,6 +39,17 @@ enum EntitlementDiagnostics {
                     : (isRussian ? "Закрыто на Free" : "Locked for Free")
             ),
             EntitlementDiagnosticItem(
+                id: "finances.tracked_tickers",
+                title: isRussian ? "Лимит тикеров акций и крипты" : "Tracked stock & crypto tickers",
+                location: isRussian ? "Финансы -> добавление рыночных активов и Quick Setup" : "Finances -> market assets and Quick Setup",
+                freeBehavior: isRussian ? "До \(EntitlementPolicy.freeTrackedTickerLimit) тикеров." : "Up to \(EntitlementPolicy.freeTrackedTickerLimit) tracked tickers.",
+                premiumBehavior: isRussian ? "Безлимит тикеров." : "Unlimited tracked tickers.",
+                isPremiumActive: appState.isPro,
+                currentState: appState.isPro
+                    ? (isRussian ? "Без лимита" : "Unlimited")
+                    : (isRussian ? "Лимит \(EntitlementPolicy.freeTrackedTickerLimit)" : "Limit \(EntitlementPolicy.freeTrackedTickerLimit)")
+            ),
+            EntitlementDiagnosticItem(
                 id: "finances.products",
                 title: isRussian ? "Лимит продуктов" : "Products limit",
                 location: isRussian ? "Финансы -> добавление продуктов" : "Finances -> add products",

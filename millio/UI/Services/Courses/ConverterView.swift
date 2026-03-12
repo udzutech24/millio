@@ -222,6 +222,7 @@ struct ConverterView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
+        .interactiveBackSwipe()
         .toolbar { topToolbar }
         .premiumUpsellAlert(
             isPresented: $showCryptoProAlert,

@@ -92,20 +92,7 @@ struct FinanceLocalizationTests {
 
     @Test("Все ключи finances.* имеют переводы ru/en в Localizable.xcstrings")
     func allFinanceKeysHaveRuAndEnTranslations() throws {
-        let testFileURL = URL(fileURLWithPath: #filePath)
-        let repoRootURL = testFileURL
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let xcstringsURL = repoRootURL
-            .appendingPathComponent("millio")
-            .appendingPathComponent("Localizable.xcstrings")
-
-        let data = try Data(contentsOf: xcstringsURL)
-        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let strings = try #require(json["strings"] as? [String: Any])
+        let strings = try loadFinanceStrings()
 
         for (key, rawValue) in strings where key.hasPrefix("finances.") {
             let value = try #require(rawValue as? [String: Any], "Invalid entry for key: \(key)")
@@ -119,5 +106,90 @@ struct FinanceLocalizationTests {
             #expect(!enValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "Empty en value: \(key)")
             #expect(!ruValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "Empty ru value: \(key)")
         }
+    }
+
+    @Test("Индустриальные формулировки в финансах зафиксированы для ru/en")
+    func industrialFinanceCopyMatchesExpectedValues() throws {
+        let strings = try loadFinanceStrings()
+
+        try assertLocalizedValue(
+            strings: strings,
+            key: "finances.main.empty_intro.title",
+            locale: "ru",
+            equals: "Контур финансового контроля"
+        )
+        try assertLocalizedValue(
+            strings: strings,
+            key: "finances.main.empty_intro.title",
+            locale: "en",
+            equals: "Finance Control Center"
+        )
+        try assertLocalizedValue(
+            strings: strings,
+            key: "finances.main.empty_intro.description",
+            locale: "ru",
+            equals: "Сведите карты, кредитные обязательства и инвестиционные позиции в единый контур контроля. Откройте «Динамику», чтобы анализировать движение баланса, прирост капитала и источники потерь во времени."
+        )
+        try assertLocalizedValue(
+            strings: strings,
+            key: "finances.main.empty_intro.description",
+            locale: "en",
+            equals: "Consolidate cards, loan obligations, and investment positions in a single control area. Open Dynamics to analyze balance movement, capital growth, and loss sources over time."
+        )
+        try assertLocalizedValue(
+            strings: strings,
+            key: "finances.settings.title",
+            locale: "ru",
+            equals: "Параметры финансов"
+        )
+        try assertLocalizedValue(
+            strings: strings,
+            key: "finances.settings.title",
+            locale: "en",
+            equals: "Finance Controls"
+        )
+        try assertLocalizedValue(
+            strings: strings,
+            key: "finances.dynamics.pro.title",
+            locale: "ru",
+            equals: "Расширенная графическая аналитика доступна в PRO"
+        )
+        try assertLocalizedValue(
+            strings: strings,
+            key: "finances.dynamics.pro.title",
+            locale: "en",
+            equals: "Advanced charting is available in PRO"
+        )
+    }
+
+    private func loadFinanceStrings() throws -> [String: Any] {
+        let testFileURL = URL(fileURLWithPath: #filePath)
+        let repoRootURL = testFileURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let xcstringsURL = repoRootURL
+            .appendingPathComponent("millio")
+            .appendingPathComponent("Localizable.xcstrings")
+
+        let data = try Data(contentsOf: xcstringsURL)
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        return try #require(json["strings"] as? [String: Any])
+    }
+
+    private func assertLocalizedValue(
+        strings: [String: Any],
+        key: String,
+        locale: String,
+        equals expectedValue: String
+    ) throws {
+        let rawValue = try #require(strings[key] as? [String: Any], "Missing key: \(key)")
+        let localizations = try #require(rawValue["localizations"] as? [String: Any], "Missing localizations: \(key)")
+        let localeValue = try #require(localizations[locale] as? [String: Any], "Missing locale \(locale): \(key)")
+        let stringUnit = try #require(localeValue["stringUnit"] as? [String: Any], "Missing stringUnit: \(key)")
+        let value = try #require(stringUnit["value"] as? String, "Missing value: \(key)")
+        #expect(value == expectedValue, "Unexpected \(locale) copy for \(key)")
     }
 }

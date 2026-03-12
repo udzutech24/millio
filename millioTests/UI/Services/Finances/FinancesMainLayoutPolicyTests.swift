@@ -23,5 +23,19 @@ struct FinancesMainLayoutPolicyTests {
 
         #expect(paddingWithFAB > paddingWithoutFAB)
         #expect(paddingWithoutFAB > CGFloat.zero)
+        #expect(paddingWithFAB == 148)
+        #expect(paddingWithoutFAB == 28)
+    }
+
+    @Test("Главный экран использует компактный FAB и согласованные отступы")
+    func financeMainUsesSharedSpacingConstants() {
+        #expect(FinancesMainLayoutPolicy.sectionSpacing == 18)
+        #expect(FinancesMainLayoutPolicy.horizontalPadding == 18)
+        #expect(FinancesMainLayoutPolicy.heroCornerRadius == 26)
+        #expect(FinancesMainLayoutPolicy.sectionCardCornerRadius == 22)
+        #expect(FinancesMainLayoutPolicy.fabDiameter == 52)
+        #expect(FinancesMainLayoutPolicy.fabIconSize == 20)
+        #expect(FinancesMainLayoutPolicy.fabTrailingPadding == 20)
+        #expect(FinancesMainLayoutPolicy.fabBottomPadding == 104)
     }
 }

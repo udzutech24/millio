@@ -18,9 +18,9 @@ struct SubscriptionPlanTests {
         #expect(SubscriptionPlan.monthly.productID(monthlyID: monthly, yearlyID: yearly) == monthly)
     }
 
-    @Test("Годовой план содержит бейдж скидки, месячный нет")
-    func yearlyHasSavingsBadgeOnly() {
-        #expect(SubscriptionPlan.yearly.badgeKey != nil)
-        #expect(SubscriptionPlan.monthly.badgeKey == nil)
+    @Test("Fallback цены для планов заданы для offline состояния")
+    func plansHaveFallbackPrices() {
+        #expect(!SubscriptionPlan.yearly.fallbackTotalPrice.isEmpty)
+        #expect(!SubscriptionPlan.monthly.fallbackTotalPrice.isEmpty)
     }
 }

@@ -5,14 +5,30 @@
 - Converter:
   - Free: fiat currencies.
   - PRO: crypto currencies.
+- Finances / market assets:
+  - Free: stocks and crypto are locked.
+  - PRO: stocks and crypto are available.
 - Finances / tracked tickers (stocks + crypto):
   - Free: up to 5 tracked tickers.
   - PRO: unlimited tracked tickers.
+- Finances / products:
+  - Free: up to 15 products total across cards, credits, and investments.
+  - PRO: no product count limit.
+- Finances / charts:
+  - Free: charts are locked.
+  - PRO: charts are available.
 - Cashback cards:
   - Free: up to 3 cards for cashback setup.
   - PRO: no card count limit.
+- Cashback categories:
+  - Free: up to 10 cashback categories per month.
+  - PRO: unlimited cashback categories.
+- Cashback screenshot import:
+  - Free: locked.
+  - PRO: available.
 - Cashflow:
-  - Free: no additional monetization limits.
+  - Free: chart is locked.
+  - PRO: chart is available.
 
 ## Source of truth
 
@@ -41,5 +57,12 @@
   - `millio/UI/QuickSetup/QuickSetupApplier.swift`
 - Cashback card limit and screenshot import:
   - `millio/UI/Services/Cashback/CashbackView.swift`
+- Cashback category limit:
+  - `millio/UI/Services/Cashback/CashbackView.swift`
+- Finance charts:
+  - `millio/UI/Services/Finances/FinanceDynamicsView.swift`
+  - `millio/UI/Services/Finances/Components/FinanceOverviewCardView.swift`
+- Cashflow chart:
+  - `millio/UI/Services/Cashflow/CashflowView.swift`
 - Home Screen widget is not paywalled:
   - `millioCurrencyWidgetExtension/CurrencyConverterPremiumWidget.swift`

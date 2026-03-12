@@ -15,8 +15,11 @@ struct QuickSetupView: View {
     @State private var showMarketSearchSheet = false
     @State private var isSaving = false
     @State private var errorMessage: String?
-    @Namespace private var productTypeNamespace
     @State private var showCelebrate = false
+    @State private var productAmountDisplayText = ""
+    @State private var productQuantityDisplayText = ""
+    @State private var productPurchasePriceDisplayText = ""
+    @State private var productCurrentPriceDisplayText = ""
 
     private let mode: QuickSetupFlowMode
     private let onCompleted: (() -> Void)?
@@ -27,6 +30,22 @@ struct QuickSetupView: View {
         case productAmount
         case productQuantity
         case productPurchasePrice
+    }
+
+    private var expenseCategoryGridColumns: [GridItem] {
+        [
+            GridItem(.flexible(minimum: 90), spacing: 8),
+            GridItem(.flexible(minimum: 90), spacing: 8),
+            GridItem(.flexible(minimum: 90), spacing: 8)
+        ]
+    }
+
+    private var productTypeGridColumns: [GridItem] {
+        [
+            GridItem(.flexible(minimum: 84), spacing: 8),
+            GridItem(.flexible(minimum: 84), spacing: 8),
+            GridItem(.flexible(minimum: 84), spacing: 8)
+        ]
     }
 
     init(
@@ -166,6 +185,65 @@ struct QuickSetupView: View {
                 triggerSummaryCelebration()
             }
         }
+        .onChange(of: productAmountDisplayText) { _, newValue in
+            handleAmountDisplayChange(
+                newValue,
+                raw: viewModel.productAmountInput,
+                setRaw: { viewModel.productAmountInput = $0 },
+                setDisplay: { productAmountDisplayText = $0 }
+            )
+        }
+        .onChange(of: productQuantityDisplayText) { _, newValue in
+            handleAmountDisplayChange(
+                newValue,
+                raw: viewModel.productQuantityInput,
+                setRaw: { viewModel.productQuantityInput = $0 },
+                setDisplay: { productQuantityDisplayText = $0 }
+            )
+        }
+        .onChange(of: productPurchasePriceDisplayText) { _, newValue in
+            handleAmountDisplayChange(
+                newValue,
+                raw: viewModel.productPurchasePriceInput,
+                setRaw: { viewModel.productPurchasePriceInput = $0 },
+                setDisplay: { productPurchasePriceDisplayText = $0 }
+            )
+        }
+        .onChange(of: productCurrentPriceDisplayText) { _, newValue in
+            handleAmountDisplayChange(
+                newValue,
+                raw: viewModel.productCurrentPriceInput,
+                setRaw: { viewModel.productCurrentPriceInput = $0 },
+                setDisplay: { productCurrentPriceDisplayText = $0 }
+            )
+        }
+        .onChange(of: viewModel.productAmountInput) { _, newValue in
+            let formatted = AmountInputFormatter.display(AmountInputFormatter.sanitize(newValue))
+            if formatted != productAmountDisplayText {
+                productAmountDisplayText = formatted
+            }
+        }
+        .onChange(of: viewModel.productQuantityInput) { _, newValue in
+            let formatted = AmountInputFormatter.display(AmountInputFormatter.sanitize(newValue))
+            if formatted != productQuantityDisplayText {
+                productQuantityDisplayText = formatted
+            }
+        }
+        .onChange(of: viewModel.productPurchasePriceInput) { _, newValue in
+            let formatted = AmountInputFormatter.display(AmountInputFormatter.sanitize(newValue))
+            if formatted != productPurchasePriceDisplayText {
+                productPurchasePriceDisplayText = formatted
+            }
+        }
+        .onChange(of: viewModel.productCurrentPriceInput) { _, newValue in
+            let formatted = AmountInputFormatter.display(AmountInputFormatter.sanitize(newValue))
+            if formatted != productCurrentPriceDisplayText {
+                productCurrentPriceDisplayText = formatted
+            }
+        }
+        .onAppear {
+            syncAllAmountDisplayTexts()
+        }
     }
 
     private var header: some View {
@@ -186,12 +264,6 @@ struct QuickSetupView: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("quickSetup.headerBackButton")
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("profile.quick_setup")
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundStyle(AppColors.textPrimary)
-            }
 
             Spacer()
 
@@ -221,7 +293,7 @@ struct QuickSetupView: View {
                     Capsule()
                         .fill(
                             LinearGradient(
-                                colors: [AppColors.brandPrimary, Color.cyan],
+                                colors: [AppColors.quickSetupAccent, AppColors.quickSetupAccentMint],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
@@ -237,11 +309,11 @@ struct QuickSetupView: View {
     private var stepHero: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(viewModel.currentStep.title(for: quickSetupLocale))
-                .font(.system(size: 30, weight: .bold))
+                .font(.system(size: 24, weight: .bold))
                 .foregroundStyle(AppColors.textPrimary)
 
             Text(viewModel.currentStep.subtitle(for: quickSetupLocale))
-                .font(.system(size: 15, weight: .regular))
+                .font(.system(size: 14, weight: .regular))
                 .foregroundStyle(AppColors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -267,7 +339,8 @@ struct QuickSetupView: View {
                 title: quickSetupText(ru: "Язык", en: "Language"),
                 value: viewModel.selectedLanguage.displayName,
                 icon: "globe",
-                gradient: AppColors.coursesGradient
+                gradient: AppColors.coursesGradient,
+                isCompleted: isLanguageConfigured
             ) {
                 showLanguageSheet = true
             }
@@ -276,7 +349,8 @@ struct QuickSetupView: View {
                 title: quickSetupText(ru: "Основная валюта", en: "Primary currency"),
                 value: viewModel.primaryCurrencyCode,
                 icon: "dollarsign.circle.fill",
-                gradient: AppColors.financesGradient
+                gradient: AppColors.financesGradient,
+                isCompleted: isPrimaryCurrencyConfigured
             ) {
                 showPrimaryCurrencySheet = true
             }
@@ -285,7 +359,8 @@ struct QuickSetupView: View {
                 title: quickSetupText(ru: "Избранные валюты", en: "Favorite currencies"),
                 value: viewModel.favoriteCurrencyCodes.isEmpty ? quickSetupText(ru: "Не выбраны", en: "Not selected") : viewModel.favoriteCurrencyCodes.joined(separator: ", "),
                 icon: "star.circle.fill",
-                gradient: AppColors.cashbackGradient
+                gradient: AppColors.cashbackGradient,
+                isCompleted: isFavoriteCurrenciesConfigured
             ) {
                 showFavoritesSheet = true
             }
@@ -324,7 +399,7 @@ struct QuickSetupView: View {
                 }
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 10)], spacing: 10) {
+            LazyVGrid(columns: expenseCategoryGridColumns, spacing: 8) {
                 ForEach(expenseCategoryPresets) { category in
                     let isSelected = viewModel.selectedExpenseCategoryIDs.contains(category.id)
                     Button {
@@ -333,22 +408,24 @@ struct QuickSetupView: View {
                         }
                         fireSelectionHaptic()
                     } label: {
-                        VStack(spacing: 8) {
+                        VStack(spacing: 6) {
                             Text(category.icon)
-                                .font(.system(size: 26))
+                                .font(.system(size: 24))
                             Text(category.displayName)
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(AppColors.textPrimary)
-                                .lineLimit(1)
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.82)
+                                .multilineTextAlignment(.center)
                         }
                         .frame(maxWidth: .infinity)
-                        .frame(minHeight: 92)
+                        .frame(minHeight: 74)
                         .background(
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(isSelected ? AppColors.brandPrimary.opacity(0.16) : .white.opacity(0.04))
+                                .fill(.white.opacity(0.04))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                        .stroke(isSelected ? AppColors.brandPrimary.opacity(0.9) : .white.opacity(0.08), lineWidth: 1)
+                                        .stroke(isSelected ? AppColors.quickSetupAccent.opacity(0.9) : .white.opacity(0.08), lineWidth: isSelected ? 0.9 : 1)
                                 )
                         )
                     }
@@ -363,7 +440,7 @@ struct QuickSetupView: View {
                 Spacer()
                 Image(systemName: "info.circle")
                     .foregroundStyle(AppColors.textSecondary)
-                Text(quickSetupText(ru: "Категории можно изменить позже", en: "Categories can be changed later"))
+                Text(quickSetupText(ru: "Категории можно скорректировать позже", en: "Categories can be adjusted later"))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(AppColors.textSecondary)
             }
@@ -391,12 +468,10 @@ struct QuickSetupView: View {
                         fireSuccessHaptic()
                     }
                 } label: {
-                    Text(quickSetupText(ru: "Добавить", en: "Add"))
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(primaryButtonBackground)
+                    quickSetupPrimaryButtonLabel(
+                        title: quickSetupText(ru: "Добавить", en: "Add"),
+                        systemImage: "plus.circle.fill"
+                    )
                 }
                 .buttonStyle(.plain)
             }
@@ -444,7 +519,7 @@ struct QuickSetupView: View {
                 }
             }
 
-            Text(quickSetupText(ru: "Можно добавить позже", en: "Can be added later"))
+            Text(quickSetupText(ru: "Можно добавить после запуска", en: "Can be added after launch"))
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary.opacity(0.9))
         }
@@ -452,69 +527,56 @@ struct QuickSetupView: View {
     }
 
     private var productTypeIconSelector: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(QuickSetupProductType.allCases) { type in
-                    let selected = viewModel.productTypeForCreation == type
-                    Button {
-                        focusedField = nil
-                        let previousType = viewModel.productTypeForCreation
-                        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
-                            viewModel.selectProductType(type)
-                        }
-                        if QuickSetupProductFlowPolicy.shouldAutoOpenMarketSearch(previousType: previousType, newType: type) {
-                            DispatchQueue.main.async {
-                                showMarketSearchSheet = true
-                            }
-                        }
-                        fireSelectionHaptic()
-                    } label: {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Image(systemName: type.icon)
-                                .font(.system(size: 17, weight: .semibold))
-                                .symbolRenderingMode(.hierarchical)
-                                .foregroundStyle(selected ? AppColors.textPrimary : AppColors.textSecondary)
-                                .frame(width: 32, height: 32)
-                                .background(
-                                    Circle()
-                                        .fill(selected ? AppColors.brandPrimary.opacity(0.26) : .white.opacity(0.06))
-                                )
-                            Text(type.title(for: quickSetupLocale))
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(AppColors.textPrimary)
-                                .lineLimit(1)
-                            Text(type.subtitle(for: quickSetupLocale))
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(AppColors.textSecondary)
-                                .lineLimit(1)
-                        }
-                        .frame(width: 104, height: 98, alignment: .leading)
-                        .padding(12)
-                        .background(
-                            ZStack {
-                                if selected {
-                                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                        .fill(AppColors.brandPrimary.opacity(0.16))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                                .stroke(AppColors.brandPrimary.opacity(0.95), lineWidth: 1)
-                                        )
-                                        .matchedGeometryEffect(id: "quick_setup_product_type", in: productTypeNamespace)
-                                } else {
-                                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                        .fill(.white.opacity(0.04))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                                .stroke(.white.opacity(0.08), lineWidth: 1)
-                                        )
-                                }
-                            }
-                        )
+        LazyVGrid(columns: productTypeGridColumns, spacing: 8) {
+            ForEach(QuickSetupProductType.allCases) { type in
+                let selected = viewModel.productTypeForCreation == type
+                Button {
+                    focusedField = nil
+                    let previousType = viewModel.productTypeForCreation
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                        viewModel.selectProductType(type)
                     }
-                    .buttonStyle(.plain)
+                    if QuickSetupProductFlowPolicy.shouldAutoOpenMarketSearch(previousType: previousType, newType: type) {
+                        DispatchQueue.main.async {
+                            showMarketSearchSheet = true
+                        }
+                    }
+                    fireSelectionHaptic()
+                } label: {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Image(systemName: type.icon)
+                            .font(.system(size: 14, weight: .semibold))
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(selected ? AppColors.textPrimary : AppColors.textSecondary)
+                            .frame(width: 28, height: 28)
+                            .background(
+                                Circle()
+                                    .fill(.white.opacity(0.06))
+                            )
+                        Text(type.title(for: quickSetupLocale))
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.82)
+                        Text(type.subtitle(for: quickSetupLocale))
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(AppColors.textSecondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.82)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 80, alignment: .leading)
+                    .padding(10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(.white.opacity(0.04))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(selected ? AppColors.quickSetupAccent.opacity(0.9) : .white.opacity(0.08), lineWidth: selected ? 0.9 : 1)
+                            )
+                    )
                 }
+                .buttonStyle(.plain)
             }
-            .padding(.vertical, 2)
         }
         .padding(.bottom, 4)
     }
@@ -555,12 +617,12 @@ struct QuickSetupView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .fill(isSelected ? AppColors.brandPrimary.opacity(0.16) : .white.opacity(0.04))
+                            .background(
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(.white.opacity(0.04))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                        .stroke(isSelected ? AppColors.brandPrimary.opacity(0.95) : .white.opacity(0.08), lineWidth: 1)
+                                        .stroke(isSelected ? AppColors.quickSetupAccent.opacity(0.9) : .white.opacity(0.08), lineWidth: isSelected ? 0.9 : 1)
                                 )
                         )
                     }
@@ -569,9 +631,9 @@ struct QuickSetupView: View {
             }
 
             VStack(alignment: .leading, spacing: 10) {
-                Text(quickSetupText(ru: "Ваш выбор", en: "Your selection"))
+                Text(quickSetupText(ru: "Итоговая конфигурация", en: "Final configuration"))
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(AppColors.brandPrimary)
+                    .foregroundStyle(AppColors.textSecondary)
 
                 summaryRow(title: quickSetupText(ru: "Язык", en: "Language"), value: selection.language.displayName(for: quickSetupLocale))
                 summaryRow(title: quickSetupText(ru: "Основная валюта", en: "Primary currency"), value: selection.primaryCurrencyCode)
@@ -579,7 +641,7 @@ struct QuickSetupView: View {
                     title: quickSetupText(ru: "Избранные валюты", en: "Favorite currencies"),
                     value: selection.favoriteCurrencyCodes.isEmpty ? quickSetupText(ru: "Не выбраны", en: "Not selected") : selection.favoriteCurrencyCodes.joined(separator: ", ")
                 )
-                summaryRow(title: quickSetupText(ru: "Категории трат", en: "Expense categories"), value: "\(selection.selectedExpenseCategoryIDs.count)")
+                summaryRow(title: quickSetupText(ru: "Категории расходов", en: "Expense categories"), value: "\(selection.selectedExpenseCategoryIDs.count)")
                 summaryRow(title: quickSetupText(ru: "Продукты", en: "Products"), value: "\(selection.products.count)")
             }
         }
@@ -647,18 +709,11 @@ struct QuickSetupView: View {
                     fireSelectionHaptic()
                 }
             } label: {
-                HStack(spacing: 8) {
-                    if isSaving {
-                        ProgressView()
-                            .tint(AppColors.textPrimary)
-                    }
-                    Text(viewModel.currentStep == .summary ? quickSetupText(ru: "Завершить", en: "Finish") : viewModel.continueTitle)
-                        .font(.system(size: 16, weight: .semibold))
-                }
-                .foregroundStyle(AppColors.textPrimary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(primaryButtonBackground)
+                quickSetupPrimaryButtonLabel(
+                    title: viewModel.currentStep == .summary ? quickSetupText(ru: "Завершить", en: "Finish") : viewModel.continueTitle,
+                    systemImage: viewModel.currentStep == .summary ? "checkmark.circle.fill" : "arrow.right.circle.fill",
+                    isLoading: isSaving
+                )
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("quickSetup.continueButton")
@@ -683,11 +738,9 @@ struct QuickSetupView: View {
     }
 
     private var stepProgressText: String {
-        String(
-            format: String(localized: "quick_setup.step_progress_format"),
-            viewModel.currentStep.rawValue + 1,
-            QuickSetupStep.allCases.count,
-            viewModel.currentStep.title(for: quickSetupLocale)
+        quickSetupText(
+            ru: "Шаг \(viewModel.currentStep.rawValue + 1) из \(QuickSetupStep.allCases.count)",
+            en: "Step \(viewModel.currentStep.rawValue + 1) of \(QuickSetupStep.allCases.count)"
         )
     }
 
@@ -783,7 +836,7 @@ struct QuickSetupView: View {
             .ignoresSafeArea()
 
             Circle()
-                .fill(AppColors.brandPrimary.opacity(0.22))
+                .fill(Color.white.opacity(0.06))
                 .frame(width: 320, height: 320)
                 .blur(radius: 120)
                 .offset(x: -110, y: -280)
@@ -799,24 +852,63 @@ struct QuickSetupView: View {
 
     private var primaryButtonBackground: some View {
         RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .fill(
-                LinearGradient(
-                    colors: [AppColors.brandPrimary.opacity(0.34), Color.cyan.opacity(0.2), Color.black.opacity(0.6)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
+            .fill(Color.white.opacity(0.035))
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .stroke(
-                        LinearGradient(
-                            colors: [AppColors.brandPrimary, Color.cyan.opacity(0.9)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        ),
-                        lineWidth: 1
+                        buttonAccentGradient,
+                        lineWidth: buttonIsAccentActive ? 0.9 : 1
                     )
             )
+    }
+
+    private func quickSetupPrimaryButtonLabel(
+        title: String,
+        systemImage: String,
+        isLoading: Bool = false
+    ) -> some View {
+        HStack(spacing: 10) {
+            if isLoading {
+                ProgressView()
+                    .tint(AppColors.textPrimary)
+            } else {
+                Image(systemName: systemImage)
+                    .font(.system(size: 16, weight: .semibold))
+            }
+
+            Text(title)
+                .font(.system(size: 16, weight: .bold))
+        }
+        .foregroundStyle(AppColors.textPrimary)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 15)
+        .background(primaryButtonBackground)
+    }
+
+    private var buttonIsAccentActive: Bool {
+        viewModel.canContinue && !isSaving
+    }
+
+    private var buttonAccentGradient: LinearGradient {
+        LinearGradient(
+            colors: buttonIsAccentActive
+                ? [AppColors.quickSetupAccent, AppColors.quickSetupAccentMint]
+                : [Color.white.opacity(0.12), Color.white.opacity(0.08)],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+    }
+
+    private var isLanguageConfigured: Bool {
+        !viewModel.selectedLanguage.displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var isPrimaryCurrencyConfigured: Bool {
+        !viewModel.primaryCurrencyCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var isFavoriteCurrenciesConfigured: Bool {
+        !viewModel.favoriteCurrencyCodes.isEmpty
     }
 
     private var standardDraftFields: some View {
@@ -834,10 +926,7 @@ struct QuickSetupView: View {
 
             TextField(
                 viewModel.productAmountFieldTitle,
-                text: Binding(
-                    get: { AmountInputFormatter.display(viewModel.productAmountInput) },
-                    set: { viewModel.productAmountInput = AmountInputFormatter.sanitize($0) }
-                )
+                text: $productAmountDisplayText
             )
             .keyboardType(.decimalPad)
             .focused($focusedField, equals: .productAmount)
@@ -861,7 +950,7 @@ struct QuickSetupView: View {
                         Text(viewModel.productMarketSearchTitle)
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(AppColors.textSecondary)
-                        Text(viewModel.productSymbolInput.isEmpty ? quickSetupText(ru: "Не выбран", en: "Not selected") : viewModel.productSymbolInput)
+                        Text(viewModel.productSymbolInput.isEmpty ? quickSetupText(ru: "Не задан", en: "Not selected") : viewModel.productSymbolInput)
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
                     }
@@ -882,10 +971,7 @@ struct QuickSetupView: View {
 
             TextField(
                 viewModel.productAmountFieldTitle,
-                text: Binding(
-                    get: { AmountInputFormatter.display(viewModel.productQuantityInput) },
-                    set: { viewModel.productQuantityInput = AmountInputFormatter.sanitize($0) }
-                )
+                text: $productQuantityDisplayText
             )
             .keyboardType(.decimalPad)
             .focused($focusedField, equals: .productQuantity)
@@ -896,10 +982,7 @@ struct QuickSetupView: View {
 
             TextField(
                 viewModel.productPurchasePriceTitle,
-                text: Binding(
-                    get: { AmountInputFormatter.display(viewModel.productPurchasePriceInput) },
-                    set: { viewModel.productPurchasePriceInput = AmountInputFormatter.sanitize($0) }
-                )
+                text: $productPurchasePriceDisplayText
             )
             .keyboardType(.decimalPad)
             .focused($focusedField, equals: .productPurchasePrice)
@@ -934,6 +1017,16 @@ struct QuickSetupView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(viewModel.productSymbolInput.isEmpty || viewModel.isRefreshingProductQuote)
+                }
+
+                if viewModel.productLatestUnitPrice == nil {
+                    TextField(
+                        quickSetupText(ru: "Ввести текущую цену", en: "Enter current price"),
+                        text: $productCurrentPriceDisplayText
+                    )
+                    .keyboardType(.decimalPad)
+                    .padding(10)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.04)))
                 }
 
                 if let total = viewModel.productPositionTotal {
@@ -972,10 +1065,38 @@ struct QuickSetupView: View {
     }
 
     private var currentUnitPriceText: String {
-        guard let price = viewModel.productLatestUnitPrice else {
-            return "—"
+        if let price = viewModel.productLatestUnitPrice {
+            return moneyText(price, currencyCode: viewModel.productResolvedCurrencyCode)
         }
-        return moneyText(price, currencyCode: viewModel.productResolvedCurrencyCode)
+        let manual = AmountInputFormatter.sanitize(viewModel.productCurrentPriceInput)
+        if let manualPrice = Double(manual), manualPrice > 0 {
+            return moneyText(manualPrice, currencyCode: viewModel.productResolvedCurrencyCode)
+        }
+        return "—"
+    }
+
+    private func syncAllAmountDisplayTexts() {
+        productAmountDisplayText = AmountInputFormatter.display(viewModel.productAmountInput)
+        productQuantityDisplayText = AmountInputFormatter.display(viewModel.productQuantityInput)
+        productPurchasePriceDisplayText = AmountInputFormatter.display(viewModel.productPurchasePriceInput)
+        productCurrentPriceDisplayText = AmountInputFormatter.display(viewModel.productCurrentPriceInput)
+    }
+
+    private func handleAmountDisplayChange(
+        _ newValue: String,
+        raw: String,
+        setRaw: (String) -> Void,
+        setDisplay: (String) -> Void
+    ) {
+        let sanitized = AmountInputFormatter.sanitize(newValue)
+        let formatted = AmountInputFormatter.display(sanitized)
+
+        if newValue != formatted {
+            setDisplay(formatted)
+        }
+        if raw != sanitized {
+            setRaw(sanitized)
+        }
     }
 
     private func stepSectionCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
@@ -1030,10 +1151,10 @@ struct QuickSetupView: View {
             .padding(.vertical, 9)
             .background(
                 Capsule()
-                    .fill(prominence == .accent ? AppColors.brandPrimary.opacity(0.16) : .white.opacity(0.05))
+                    .fill(.white.opacity(0.05))
                     .overlay(
                         Capsule()
-                            .stroke(prominence == .accent ? AppColors.brandPrimary.opacity(0.9) : .white.opacity(0.08), lineWidth: 1)
+                            .stroke(prominence == .accent ? AppColors.quickSetupAccent.opacity(0.9) : .white.opacity(0.08), lineWidth: prominence == .accent ? 0.9 : 1)
                     )
             )
         }
@@ -1048,22 +1169,34 @@ private struct QuickSetupCelebrateBadge: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "sparkles")
+                .font(.system(size: 20, weight: .bold))
+            Text(QuickSetupLocalization.text(locale: locale, ru: "Конфигурация почти готова", en: "Configuration is almost complete"))
                 .font(.system(size: 18, weight: .bold))
-            Text(QuickSetupLocalization.text(locale: locale, ru: "Отлично! Настройка почти готова", en: "Great! Setup is almost complete"))
-                .font(.system(size: 14, weight: .semibold))
+                .lineLimit(2)
         }
         .foregroundStyle(AppColors.textPrimary)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(AppColors.textPrimary.opacity(glow ? 0.18 : 0.08))
+                .fill(Color.white.opacity(0.05))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(AppColors.textPrimary.opacity(glow ? 0.45 : 0.2), lineWidth: 1)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    AppColors.quickSetupAccent.opacity(glow ? 0.94 : 0.82),
+                                    AppColors.quickSetupAccentMint.opacity(glow ? 0.88 : 0.72)
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ),
+                            lineWidth: glow ? 1.0 : 0.9
+                        )
                 )
         )
-        .scaleEffect(glow ? 1.02 : 0.98)
+        .scaleEffect(glow ? 1.02 : 0.99)
         .onAppear {
             withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
                 glow = true
@@ -1077,6 +1210,7 @@ private struct QuickSetupRowCard: View {
     let value: String
     let icon: String
     let gradient: [Color]
+    let isCompleted: Bool
     let action: () -> Void
 
     var body: some View {
@@ -1088,7 +1222,7 @@ private struct QuickSetupRowCard: View {
                     .frame(width: 38, height: 38)
                     .background(
                         Circle()
-                            .fill((gradient.first ?? AppColors.brandPrimary).opacity(0.2))
+                            .fill(.white.opacity(0.06))
                     )
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -1115,14 +1249,16 @@ private struct QuickSetupRowCard: View {
                         RoundedRectangle(cornerRadius: 18, style: .continuous)
                             .stroke(
                                 LinearGradient(
-                                    colors: [
-                                        (gradient.first ?? AppColors.brandPrimary).opacity(0.9),
-                                        .white.opacity(0.08)
-                                    ],
+                                    colors: isCompleted
+                                        ? [AppColors.quickSetupAccent, AppColors.quickSetupAccentMint.opacity(0.78)]
+                                        : [
+                                            (gradient.first ?? AppColors.brandPrimary).opacity(0.9),
+                                            .white.opacity(0.08)
+                                        ],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 ),
-                                lineWidth: 1
+                                lineWidth: isCompleted ? 0.9 : 1
                             )
                     )
             )

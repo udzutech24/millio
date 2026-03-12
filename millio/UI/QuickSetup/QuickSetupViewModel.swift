@@ -33,11 +33,12 @@ struct QuickSetupSystemContext {
             return ["RUB", "USD", "CNY", "EUR", "TRY"]
         }
 
-        let nonRussianDenied = Set(["RUB", "EUR", "CNY", "TRY"])
         let defaults = uniqueCurrencyCodes([
-            systemCurrencyCode,
             fallbackCurrencyCodeForPrimaryLanguage,
+            systemCurrencyCode,
             "USD",
+            "EUR",
+            "CNY",
             "GBP",
             "JPY",
             "CHF",
@@ -45,21 +46,66 @@ struct QuickSetupSystemContext {
             "AUD"
         ])
 
-        return defaults.filter { !nonRussianDenied.contains($0) }
+        return defaults.filter { $0 != "RUB" }
     }
 
     func recommendedPrimaryCurrency(fallback fallbackCode: String) -> String {
         let normalizedFallback = normalizeCurrencyCode(fallbackCode)
-        return recommendedCurrencyCodes.first ?? normalizedFallback
+        return sanitizePrimaryCurrency(recommendedCurrencyCodes.first ?? normalizedFallback, fallback: normalizedFallback)
     }
 
     func recommendedFavoriteCurrencies(primaryCode: String, maxCount: Int) -> [String] {
         let normalizedPrimary = normalizeCurrencyCode(primaryCode)
+        if !hasRussianSystemLanguage {
+            return Array(
+                uniqueCurrencyCodes(["USD", "EUR", "CNY"])
+                    .filter { $0 != normalizedPrimary }
+                    .prefix(maxCount)
+            )
+        }
+
         return Array(
             recommendedCurrencyCodes
                 .filter { $0 != normalizedPrimary }
                 .prefix(maxCount)
         )
+    }
+
+    func sanitizePrimaryCurrency(_ candidateCode: String, fallback fallbackCode: String) -> String {
+        let normalizedCandidate = normalizeCurrencyCode(candidateCode)
+        let normalizedFallback = normalizeCurrencyCode(fallbackCode)
+        let firstRecommended = recommendedCurrencyCodes.first ?? normalizedFallback
+
+        guard !normalizedCandidate.isEmpty else {
+            return firstRecommended
+        }
+        if !hasRussianSystemLanguage, normalizedCandidate == "RUB" {
+            return firstRecommended == "RUB" ? "USD" : firstRecommended
+        }
+        return normalizedCandidate
+    }
+
+    func sanitizeFavoriteCurrencies(
+        _ rawCodes: [String],
+        primaryCode: String,
+        maxCount: Int
+    ) -> [String] {
+        let normalizedPrimary = normalizeCurrencyCode(primaryCode)
+        let fallback = recommendedFavoriteCurrencies(primaryCode: normalizedPrimary, maxCount: maxCount)
+        let allowedCodes = Set(recommendedCurrencyCodes)
+
+        let filtered = uniqueCurrencyCodes(rawCodes)
+            .filter { code in
+                code != normalizedPrimary
+                    && code != "RUB"
+                    && (hasRussianSystemLanguage || allowedCodes.contains(code))
+            }
+
+        if filtered.isEmpty {
+            return Array(fallback.prefix(maxCount))
+        }
+
+        return Array(filtered.prefix(maxCount))
     }
 
     private var systemCurrencyCode: String? {
@@ -129,7 +175,11 @@ final class QuickSetupViewModel: ObservableObject {
 
     @Published var currentStep: QuickSetupStep = .localeAndCurrencies
     @Published var selectedLanguage: Language
-    @Published var primaryCurrencyCode: String
+    @Published var primaryCurrencyCode: String {
+        didSet {
+            removePrimaryFromFavorites()
+        }
+    }
     @Published var favoriteCurrencyCodes: [String]
     @Published var selectedExpenseCategoryIDs: Set<String>
     @Published var productTypeForCreation: QuickSetupProductType = .card
@@ -138,6 +188,7 @@ final class QuickSetupViewModel: ObservableObject {
     @Published var productAmountInput: String = ""
     @Published var productQuantityInput: String = ""
     @Published var productPurchasePriceInput: String = ""
+    @Published var productCurrentPriceInput: String = ""
     @Published private(set) var productMarketExchange: String?
     @Published private(set) var productMarketCurrencyCode: String?
     @Published private(set) var productLatestUnitPrice: Double?
@@ -166,19 +217,27 @@ final class QuickSetupViewModel: ObservableObject {
         self.marketDataClient = marketDataClient
         self.defaults = defaults
         selectedLanguage = appState.selectedLanguage
+        let recommendedPrimary = systemContext.recommendedPrimaryCurrency(fallback: appState.primaryCurrencyCode)
         let hasStoredPrimaryCurrency = defaults.object(forKey: "primaryCurrencyCode") != nil
-        let initialPrimaryCurrency = hasStoredPrimaryCurrency
-            ? appState.primaryCurrencyCode
-            : systemContext.recommendedPrimaryCurrency(fallback: appState.primaryCurrencyCode)
+        let initialPrimaryCandidate = hasStoredPrimaryCurrency ? appState.primaryCurrencyCode : recommendedPrimary
+        let initialPrimaryCurrency = systemContext.sanitizePrimaryCurrency(
+            initialPrimaryCandidate,
+            fallback: recommendedPrimary
+        )
         primaryCurrencyCode = initialPrimaryCurrency
 
         let hasStoredFavoriteCurrencies = defaults.object(forKey: "favoriteCurrencyCodes") != nil
-        favoriteCurrencyCodes = hasStoredFavoriteCurrencies
+        let initialFavorites = hasStoredFavoriteCurrencies
             ? Array(SettingsManager.shared.favoriteCurrencyCodes.prefix(Self.maxFavoriteCurrencies))
             : systemContext.recommendedFavoriteCurrencies(
                 primaryCode: initialPrimaryCurrency,
                 maxCount: Self.maxFavoriteCurrencies
             )
+        favoriteCurrencyCodes = systemContext.sanitizeFavoriteCurrencies(
+            initialFavorites,
+            primaryCode: initialPrimaryCurrency,
+            maxCount: Self.maxFavoriteCurrencies
+        )
         backupPreference = appState.isBackupEnabled ? .cloudBackup : .localOnly
 
         let storedCategories = SettingsManager.shared.quickSetupExpenseCategoryIDs
@@ -239,8 +298,8 @@ final class QuickSetupViewModel: ObservableObject {
 
     var productPositionTotal: Double? {
         guard let quantity = parsedDecimal(productQuantityInput), quantity > 0 else { return nil }
-        if let latestUnitPrice = productLatestUnitPrice, latestUnitPrice > 0 {
-            return quantity * latestUnitPrice
+        if let currentUnitPrice = resolvedCurrentUnitPrice, currentUnitPrice > 0 {
+            return quantity * currentUnitPrice
         }
         if let purchaseUnitPrice = parsedDecimal(productPurchasePriceInput), purchaseUnitPrice > 0 {
             return quantity * purchaseUnitPrice
@@ -252,15 +311,15 @@ final class QuickSetupViewModel: ObservableObject {
         guard
             let quantity = parsedDecimal(productQuantityInput),
             quantity > 0,
-            let latestUnitPrice = productLatestUnitPrice,
-            latestUnitPrice > 0,
+            let currentUnitPrice = resolvedCurrentUnitPrice,
+            currentUnitPrice > 0,
             let purchaseUnitPrice = parsedDecimal(productPurchasePriceInput),
             purchaseUnitPrice > 0
         else {
             return nil
         }
 
-        return quantity * (latestUnitPrice - purchaseUnitPrice)
+        return quantity * (currentUnitPrice - purchaseUnitPrice)
     }
 
     var progress: Double {
@@ -270,7 +329,9 @@ final class QuickSetupViewModel: ObservableObject {
     var canContinue: Bool {
         switch currentStep {
         case .localeAndCurrencies:
-            return !primaryCurrencyCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return
+                !primaryCurrencyCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                !favoriteCurrencyCodes.isEmpty
         case .expenseCategories:
             return !selectedExpenseCategoryIDs.isEmpty
         case .products:
@@ -330,6 +391,13 @@ final class QuickSetupViewModel: ObservableObject {
 
         guard favoriteCurrencyCodes.count < Self.maxFavoriteCurrencies else { return }
         favoriteCurrencyCodes.insert(code, at: 0)
+    }
+
+    private func removePrimaryFromFavorites() {
+        let normalizedPrimary = primaryCurrencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        favoriteCurrencyCodes.removeAll { code in
+            code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == normalizedPrimary
+        }
     }
 
     func toggleExpenseCategory(raw: String) {
@@ -396,10 +464,16 @@ final class QuickSetupViewModel: ObservableObject {
                 lastAddDraftError = QuickSetupLocalization.text(locale: locale, ru: "Укажи количество позиции", en: "Enter position quantity")
                 return false
             }
-            guard let purchaseUnitPrice = parsedDecimal(productPurchasePriceInput), purchaseUnitPrice > 0 else {
-                let locale = selectedLanguage.locale ?? Locale.current
-                lastAddDraftError = QuickSetupLocalization.text(locale: locale, ru: "Укажи цену покупки", en: "Enter buy price")
-                return false
+            let purchaseUnitPrice: Double
+            if productTypeForCreation == .crypto {
+                purchaseUnitPrice = max(0, parsedDecimal(productPurchasePriceInput) ?? 0)
+            } else {
+                guard let parsedPurchaseUnitPrice = parsedDecimal(productPurchasePriceInput), parsedPurchaseUnitPrice > 0 else {
+                    let locale = selectedLanguage.locale ?? Locale.current
+                    lastAddDraftError = QuickSetupLocalization.text(locale: locale, ru: "Укажи цену покупки", en: "Enter buy price")
+                    return false
+                }
+                purchaseUnitPrice = parsedPurchaseUnitPrice
             }
             let currentTickerDraftCount = products.reduce(into: 0) { partialResult, item in
                 if item.type.isMarketTracked {
@@ -417,7 +491,9 @@ final class QuickSetupViewModel: ObservableObject {
                 return false
             }
 
-            let currentUnitPrice = productLatestUnitPrice ?? purchaseUnitPrice
+            let manualCurrentUnitPrice = parsedDecimal(productCurrentPriceInput)
+            let effectivePurchaseUnitPrice = purchaseUnitPrice > 0 ? purchaseUnitPrice : (resolvedCurrentUnitPrice ?? 0)
+            let currentUnitPrice = resolvedCurrentUnitPrice ?? effectivePurchaseUnitPrice
             let resolvedCurrency = productResolvedCurrencyCode
             resolvedName = trimmedSymbol
             amount = quantity * currentUnitPrice
@@ -426,8 +502,8 @@ final class QuickSetupViewModel: ObservableObject {
                 exchange: productMarketExchange,
                 currencyCode: resolvedCurrency,
                 quantity: quantity,
-                purchaseUnitPrice: purchaseUnitPrice,
-                currentUnitPrice: productLatestUnitPrice,
+                purchaseUnitPrice: effectivePurchaseUnitPrice,
+                currentUnitPrice: productLatestUnitPrice ?? manualCurrentUnitPrice,
                 priceUpdatedAt: productLastPriceUpdatedAt,
                 providerRaw: productLatestUnitPrice == nil ? nil : "market-backend"
             )
@@ -469,6 +545,7 @@ final class QuickSetupViewModel: ObservableObject {
         productAmountInput = ""
         productQuantityInput = ""
         productPurchasePriceInput = ""
+        productCurrentPriceInput = ""
 
         guard !keepingTypeSpecificData else { return }
 
@@ -482,5 +559,15 @@ final class QuickSetupViewModel: ObservableObject {
 
     private func parsedDecimal(_ text: String) -> Double? {
         Double(text.replacingOccurrences(of: ",", with: "."))
+    }
+
+    private var resolvedCurrentUnitPrice: Double? {
+        if let latest = productLatestUnitPrice, latest > 0 {
+            return latest
+        }
+        if let manual = parsedDecimal(productCurrentPriceInput), manual > 0 {
+            return manual
+        }
+        return nil
     }
 }

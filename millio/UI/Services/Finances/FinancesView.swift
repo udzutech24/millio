@@ -68,15 +68,13 @@ struct FinancesView: View {
         }
         .navigationTitle(String(localized: "finances.main.title"))
         .navigationBarBackButtonHidden(true)
+        .interactiveBackSwipe()
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button {
                     dismiss()
                 } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary.opacity(0.96))
-                        .frame(width: 28, height: 28)
+                    toolbarButtonLabel(systemName: "chevron.left", weight: .semibold)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "finances.common.back"))
@@ -92,10 +90,7 @@ struct FinancesView: View {
                         }
                     }
                 } label: {
-                    Image(systemName: "square.grid.2x2")
-                        .font(.system(size: 16, weight: .regular))
-                        .foregroundStyle(AppColors.textPrimary.opacity(0.90))
-                        .frame(width: 28, height: 28)
+                    toolbarButtonLabel(systemName: "square.grid.2x2", weight: .regular)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "finances.common.quick_navigation"))
@@ -106,9 +101,7 @@ struct FinancesView: View {
                     Button {
                         showFinanceSettingsSheet = true
                     } label: {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary)
+                        toolbarButtonLabel(systemName: "gearshape", weight: .semibold)
                     }
                     .accessibilityLabel(String(localized: "finances.common.settings"))
                 }
@@ -150,6 +143,13 @@ struct FinancesView: View {
             }
         }
     }
+
+    private func toolbarButtonLabel(systemName: String, weight: Font.Weight) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 16, weight: weight))
+            .foregroundStyle(AppColors.textPrimary.opacity(0.92))
+            .frame(width: 28, height: 28)
+    }
 }
 
 // MARK: - Internal Content View
@@ -176,6 +176,8 @@ private struct FinancesContentViewInternal: View {
                 }
                 .tag(FinancesTab.dynamics)
         }
+        .toolbarBackground(.visible, for: .tabBar)
+        .toolbarBackground(Color.black.opacity(0.52), for: .tabBar)
     }
 }
 
@@ -312,69 +314,22 @@ private struct FinancesMainTabView: View {
             let showsAddFAB = FinancesMainLayoutPolicy.showsAddFAB(visibleGroupsCount: visibleGroups.count)
 
             ScrollView {
-                VStack(spacing: 20) {
+                LazyVStack(spacing: FinancesMainLayoutPolicy.sectionSpacing) {
                     overviewHeroModule
 
-                    // Список групп
+                    if !visibleGroups.isEmpty {
+                        overviewSnapshotSection
+                    }
+
                     groupsListSection(visibleGroups)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 4)
-                // Отступ снизу оставляем только когда FAB реально отображается, чтобы пустой state не "падал" вниз.
+                .padding(.horizontal, FinancesMainLayoutPolicy.horizontalPadding)
+                .padding(.top, 8)
                 .padding(.bottom, FinancesMainLayoutPolicy.scrollContentBottomPadding(showsAddFAB: showsAddFAB))
             }
 
             if showsAddFAB {
-                // Floating Action Button (FAB) внизу справа
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        Button {
-                            viewModel.handle(.showAddAccountSheet(nil))
-                        } label: {
-                            let accentColor = AppColors.financesGradient.first ?? .cyan
-                            let fillGradient = LinearGradient(
-                                colors: [
-                                    Color(red: 0.03, green: 0.07, blue: 0.11),
-                                    Color(red: 0.02, green: 0.04, blue: 0.06),
-                                    Color.black
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                            let glowGradient = LinearGradient(
-                                colors: [
-                                    accentColor.opacity(0.18),
-                                    Color.clear
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-
-                            Image(systemName: "plus")
-                                .font(.system(size: 24, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .frame(width: 56, height: 56)
-                                .background(
-                                    Circle()
-                                        .fill(fillGradient)
-                                        .overlay(
-                                            Circle()
-                                                .fill(glowGradient)
-                                                .opacity(0.6)
-                                        )
-                                        .overlay(
-                                            Circle()
-                                                .stroke(accentColor.opacity(0.55), lineWidth: 1)
-                                        )
-                                )
-
-                        }
-                        .padding(.trailing, 24)
-                        .padding(.bottom, 24)
-                    }
-                }
+                addFloatingButton
             }
 
             VStack {
@@ -401,45 +356,54 @@ private struct FinancesMainTabView: View {
     // MARK: - Hero Overview Module
 
     private var overviewHeroModule: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 16) {
             totalAmountSection
+        }
+        .padding(22)
+        .background(heroModuleBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: FinancesMainLayoutPolicy.heroCornerRadius, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: FinancesMainLayoutPolicy.heroCornerRadius, style: .continuous))
+    }
 
-            Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.02),
-                            Color.white.opacity(0.12),
-                            Color.white.opacity(0.02)
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .frame(height: 1)
-
+    private var overviewSnapshotSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
             FinanceOverviewCardView(
                 financeViewModel: viewModel,
                 chrome: .embedded
             )
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: FinancesMainLayoutPolicy.sectionCardCornerRadius, style: .continuous)
+                    .fill(Color.white.opacity(0.035))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: FinancesMainLayoutPolicy.sectionCardCornerRadius, style: .continuous)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
+                    )
+            )
         }
-        .padding(20)
-        .background(heroModuleBackground)
-        .overlay(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(Color.white.opacity(0.10), lineWidth: 0.8)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
     
     // MARK: - Total Amount Section
     
     private var totalAmountSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Spacer()
+
+                headerActionButton(systemName: viewModel.state.isAmountHidden ? "eye.slash" : "eye") {
+                    viewModel.handle(.toggleAmountVisibility)
+                }
+
+                refreshMenu
+            }
+
             HStack(alignment: .center, spacing: 12) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(formatBalance(viewModel.state.totalAmount, isHidden: viewModel.state.isAmountHidden))
-                        .font(.system(size: 28, weight: .bold))
+                        .font(.system(size: 32, weight: .bold))
                         .foregroundStyle(AppColors.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
@@ -449,7 +413,7 @@ private struct FinancesMainTabView: View {
                     } label: {
                         currencyPickerLabel(
                             symbol: MonetaCurrency(rawValue: viewModel.state.displayCurrency)?.symbol ?? viewModel.state.displayCurrency,
-                            amountFontSize: 28,
+                            amountFontSize: 32,
                             color: AppColors.textSecondary.opacity(0.82)
                         )
                     }
@@ -457,21 +421,6 @@ private struct FinancesMainTabView: View {
                 }
 
                 Spacer()
-
-                HStack(spacing: 6) {
-                    Button {
-                        viewModel.handle(.toggleAmountVisibility)
-                    } label: {
-                        Image(systemName: viewModel.state.isAmountHidden ? "eye.slash" : "eye")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(AppColors.textSecondary)
-                            .frame(width: 26, height: 26)
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-
-                    refreshMenu
-                }
             }
 
             if let secondaryCurrency = viewModel.state.secondaryDisplayCurrency {
@@ -507,11 +456,11 @@ private struct FinancesMainTabView: View {
                 .padding(.vertical, 8)
                 .padding(.horizontal, 12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppColors.warning.opacity(0.12))
+                .background(AppColors.warning.opacity(0.10))
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(AppColors.warning.opacity(0.4), lineWidth: 1)
+                        .stroke(AppColors.warning.opacity(0.32), lineWidth: 1)
                 }
                 .accessibilityLabel(Text(warning))
             }
@@ -535,7 +484,7 @@ private struct FinancesMainTabView: View {
                     HStack {
                         Text(FinancesL10n.format("finances.main.savings.progress", totalText, displayCurrency, goalText, displayCurrency))
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(AppColors.financesGradient.first ?? AppColors.brandPrimary)
+                            .foregroundStyle(AppColors.brandPrimary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
                         
@@ -543,16 +492,10 @@ private struct FinancesMainTabView: View {
                         
                         Text("\(Int(progress * 100))%")
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: AppColors.financesGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
+                            .foregroundStyle(AppColors.brandPrimary)
                     }
                 }
-                .padding(.top, 4)
+                .padding(.top, 2)
             }
             
             if viewModel.state.isLoadingRates {
@@ -581,13 +524,13 @@ private struct FinancesMainTabView: View {
             .disabled(viewModel.state.isLoadingRates)
         } label: {
             ZStack {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.white.opacity(0.06))
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.white.opacity(0.055))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(Color.white.opacity(0.10), lineWidth: 1)
                     )
-                    .frame(width: 26, height: 26)
+                    .frame(width: 32, height: 32)
 
                 if viewModel.state.isLoadingRates {
                     ProgressView()
@@ -605,14 +548,32 @@ private struct FinancesMainTabView: View {
             : String(localized: "finances.common.refresh"))
     }
 
+    private func headerActionButton(systemName: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(AppColors.textSecondary)
+                .frame(width: 32, height: 32)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.white.opacity(0.055))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                        )
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
     private var heroModuleBackground: some View {
-        RoundedRectangle(cornerRadius: 28, style: .continuous)
+        RoundedRectangle(cornerRadius: FinancesMainLayoutPolicy.heroCornerRadius, style: .continuous)
             .fill(
                 LinearGradient(
                     colors: [
-                        Color.white.opacity(0.08),
-                        Color.white.opacity(0.04),
-                        Color.white.opacity(0.02)
+                        Color.white.opacity(0.07),
+                        Color.white.opacity(0.035),
+                        Color.white.opacity(0.018)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
@@ -620,10 +581,26 @@ private struct FinancesMainTabView: View {
             )
             .overlay(alignment: .topLeading) {
                 Circle()
-                    .fill((AppColors.financesGradient.first ?? .cyan).opacity(0.10))
-                    .blur(radius: 30)
-                    .frame(width: 180, height: 180)
-                    .offset(x: -40, y: -50)
+                    .fill((AppColors.financesGradient.first ?? .cyan).opacity(0.08))
+                    .blur(radius: 42)
+                    .frame(width: 170, height: 170)
+                    .offset(x: -48, y: -56)
+            }
+            .overlay(alignment: .bottomTrailing) {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.clear,
+                                AppColors.brandPrimary.opacity(0.06)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: 180, height: 100)
+                    .blur(radius: 18)
+                    .offset(x: 30, y: 22)
             }
     }
     
@@ -635,8 +612,9 @@ private struct FinancesMainTabView: View {
                 emptyGroupsCallToAction
             } else {
                 Text("finances.main.accounts_section.title")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(AppColors.textTertiary.opacity(0.90))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppColors.textTertiary.opacity(0.84))
+                    .textCase(.uppercase)
                     .accessibilityAddTraits(.isHeader)
 
                 groupsListView(visibleGroups)
@@ -645,7 +623,7 @@ private struct FinancesMainTabView: View {
     }
 
     private func groupsListView(_ groups: [FinanceGroup]) -> some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             ForEach(groups) { group in
                 FinanceGroupRow(
                     group: group,
@@ -701,15 +679,9 @@ private struct FinancesMainTabView: View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
                 Capsule(style: .continuous)
-                    .fill(Color.white.opacity(0.12))
+                    .fill(Color.white.opacity(0.10))
                 Capsule(style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: AppColors.financesGradient,
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .fill(AppColors.brandPrimary)
                     .frame(width: max(0, proxy.size.width * progress))
             }
         }
@@ -740,6 +712,47 @@ private struct FinancesMainTabView: View {
             .buttonStyle(.plain)
         }
         .padding(.top, 8)
+    }
+
+    private var addFloatingButton: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                Button {
+                    viewModel.handle(.showAddAccountSheet(nil))
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: FinancesMainLayoutPolicy.fabIconSize, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(
+                            width: FinancesMainLayoutPolicy.fabDiameter,
+                            height: FinancesMainLayoutPolicy.fabDiameter
+                        )
+                        .background(
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color(red: 0.04, green: 0.08, blue: 0.12),
+                                            Color(red: 0.02, green: 0.04, blue: 0.06)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .overlay(
+                                    Circle()
+                                        .stroke(AppColors.brandPrimary.opacity(0.34), lineWidth: 1)
+                                )
+                        )
+                        .shadow(color: AppColors.brandPrimary.opacity(0.14), radius: 16, y: 8)
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, FinancesMainLayoutPolicy.fabTrailingPadding)
+                .padding(.bottom, FinancesMainLayoutPolicy.fabBottomPadding)
+            }
+        }
     }
 }
 

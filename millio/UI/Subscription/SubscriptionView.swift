@@ -18,15 +18,6 @@ struct SubscriptionView: View {
     @State private var showError = false
     @State private var products: [Product] = []
 
-    private let benefits: [SubscriptionBenefit] = [
-        .init(icon: "bitcoinsign.circle.fill", titleKey: "subscription.features.crypto_converter"),
-        .init(icon: "text.viewfinder", titleKey: "subscription.features.cashback_screenshot"),
-        .init(icon: "list.bullet.rectangle.portrait", titleKey: "subscription.features.cashback_categories"),
-        .init(icon: "tray.full.fill", titleKey: "subscription.features.finance_products"),
-        .init(icon: "chart.line.uptrend.xyaxis", titleKey: "subscription.features.finance_markets"),
-        .init(icon: "chart.bar.fill", titleKey: "subscription.features.finance_charts")
-    ]
-
     private var localizationLocale: Locale {
         appState.selectedLanguage.locale ?? Locale.current
     }
@@ -35,12 +26,20 @@ struct SubscriptionView: View {
         ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
     }
 
+    private var legalLinks: ProfileLegalLinks {
+        ProfileLegalLinks.make(for: appState.selectedLanguage, fallbackLocale: localizationLocale)
+    }
+
+    private var manageSubscriptionURL: URL {
+        URL(string: "https://apps.apple.com/account/subscriptions")!
+    }
+
     var body: some View {
         ZStack {
             subscriptionBackground
 
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 20) {
+                VStack(spacing: 22) {
                     header
                     plansCard
                     benefitsSection
@@ -48,7 +47,7 @@ struct SubscriptionView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
-                .padding(.bottom, 24)
+                .padding(.bottom, appState.isPro ? 24 : 112)
             }
             .scrollBounceBehavior(.basedOnSize)
         }
@@ -67,7 +66,11 @@ struct SubscriptionView: View {
                     .ignoresSafeArea()
                 )
         }
-        .safeAreaInset(edge: .bottom) { subscribeButton }
+        .safeAreaInset(edge: .bottom) {
+            if !appState.isPro {
+                subscribeButton
+            }
+        }
         .toolbar(.hidden, for: .navigationBar)
         .alert("subscription.alert.error.title", isPresented: $showError) {
             Button("OK", role: .cancel) { }
@@ -155,44 +158,9 @@ struct SubscriptionView: View {
                             .stroke(Color.white.opacity(0.14), lineWidth: 1)
                     )
 
-                VStack(spacing: 16) {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                RadialGradient(
-                                    colors: [Color(hex: "70C7FF").opacity(0.38), .clear],
-                                    center: .center,
-                                    startRadius: 4,
-                                    endRadius: 58
-                                )
-                            )
-                            .frame(width: 120, height: 120)
-
-                        Image("crown")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 110, height: 90)
-                    }
-                    .padding(.top, 8)
-
-                    VStack(spacing: 8) {
-                        Text("subscription.hero.title")
-                            .font(.system(size: 42, weight: .black, design: .rounded))
-                            .foregroundStyle(AppColors.textPrimary)
-                            .multilineTextAlignment(.center)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.72)
-
-                        Text("subscription.hero.subtitle")
-                            .font(.system(size: 17, weight: .medium))
-                            .foregroundStyle(Color.white.opacity(0.68))
-                            .multilineTextAlignment(.center)
-                            .lineLimit(3)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(maxWidth: 460)
-
-                    heroHighlights
+                VStack(spacing: 18) {
+                    heroTitleBlock
+                    heroHighlightsRow
                 }
                 .padding(.horizontal, 18)
                 .padding(.vertical, 22)
@@ -200,62 +168,135 @@ struct SubscriptionView: View {
         }
     }
 
-    private var heroHighlights: some View {
-        WrappingHStack(alignment: .center, horizontalSpacing: 10, verticalSpacing: 10) {
-            heroValuePill
-            heroUnlockPill
-            heroSmartPill
+    private var heroTitleBlock: some View {
+        VStack(spacing: 16) {
+            ZStack {
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [Color(hex: "70C7FF").opacity(0.38), .clear],
+                            center: .center,
+                            startRadius: 4,
+                            endRadius: 58
+                        )
+                    )
+                    .frame(width: 120, height: 120)
+
+                Image("crown")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 110, height: 90)
+            }
+            .padding(.top, 8)
+
+            VStack(spacing: 10) {
+                Text("subscription.hero.eyebrow")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.6))
+                    .textCase(.uppercase)
+                    .tracking(1.4)
+
+                Text("subscription.hero.title")
+                    .font(.system(size: 42, weight: .black, design: .rounded))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+
+                Text("subscription.hero.subtitle")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.7))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .center)
     }
 
-    private func subscriptionPill(icon: String, text: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 11, weight: .semibold))
-            Text(text)
-                .font(.system(size: 11, weight: .semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .allowsTightening(true)
+    private var heroStatBackground: some View {
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .fill(Color.white.opacity(0.06))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
+            )
+    }
+
+    private var heroHighlightsRow: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                ForEach(SubscriptionContent.heroHighlights) { item in
+                    heroHighlightCard(item)
+                }
+            }
+
+            VStack(spacing: 10) {
+                ForEach(SubscriptionContent.heroHighlights) { item in
+                    heroHighlightCard(item)
+                }
+            }
         }
-        .foregroundStyle(Color.white.opacity(0.78))
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(
-            Capsule()
-                .fill(Color.white.opacity(0.07))
-                .overlay(
-                    Capsule()
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+    }
+
+    private func heroHighlightCard(_ item: SubscriptionBenefitDescriptor) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: item.icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.white)
+                .frame(width: 30, height: 30)
+                .background(
+                    Circle()
+                        .fill(Color.white.opacity(0.08))
+                        .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 1))
                 )
-        )
-    }
 
-    private var heroValuePill: some View {
-        subscriptionPill(icon: "crown.fill", text: String(localized: "subscription.hero.pill.value", locale: localizationLocale))
-    }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(verbatim: AppLocalization.string(item.titleKey, locale: localizationLocale))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(2)
 
-    private var heroUnlockPill: some View {
-        subscriptionPill(icon: "lock.open.display", text: String(localized: "subscription.hero.pill.unlock", locale: localizationLocale))
-    }
+                Text(verbatim: AppLocalization.string(item.detailKey, locale: localizationLocale))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.62))
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(2)
+            }
 
-    private var heroSmartPill: some View {
-        subscriptionPill(icon: "bolt.badge.checkmark.fill", text: String(localized: "subscription.hero.pill.smart", locale: localizationLocale))
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(heroStatBackground)
     }
 
     private var plansCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("subscription.plans.title")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.54))
-                .textCase(.uppercase)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("subscription.plans.title")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.54))
+                    .textCase(.uppercase)
+
+                Text("subscription.plans.subtitle")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.7))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             VStack(spacing: 12) {
                 ForEach(SubscriptionPlan.allCases) { plan in
                     planRow(for: plan)
                 }
             }
+
+            Text("subscription.plans.footnote")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.54))
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(18)
         .background(
@@ -341,8 +382,8 @@ struct SubscriptionView: View {
 
     @ViewBuilder
     private func planBadge(for plan: SubscriptionPlan) -> some View {
-        if let badgeKey = plan.badgeKey {
-            Text(badgeKey)
+        if let badgeText = planBadgeText(for: plan) {
+            Text(verbatim: badgeText)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
@@ -390,14 +431,15 @@ struct SubscriptionView: View {
 
                 Text("subscription.features.subtitle")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.58))
+                    .foregroundStyle(Color.white.opacity(0.64))
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             VStack(spacing: 0) {
-                ForEach(Array(benefits.enumerated()), id: \.offset) { index, benefit in
+                ForEach(Array(SubscriptionContent.benefits.enumerated()), id: \.element.id) { index, benefit in
                     benefitRow(benefit)
 
-                    if index < benefits.count - 1 {
+                    if index < SubscriptionContent.benefits.count - 1 {
                         Divider()
                             .overlay(Color.white.opacity(0.08))
                             .padding(.leading, 64)
@@ -417,7 +459,7 @@ struct SubscriptionView: View {
         }
     }
 
-    private func benefitRow(_ benefit: SubscriptionBenefit) -> some View {
+    private func benefitRow(_ benefit: SubscriptionBenefitDescriptor) -> some View {
         HStack(alignment: .top, spacing: 14) {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(
@@ -434,14 +476,22 @@ struct SubscriptionView: View {
                         .foregroundStyle(.white)
                 }
 
-            Text(benefit.titleKey)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(.white)
-                .lineLimit(2)
-                .minimumScaleFactor(0.82)
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 10)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(verbatim: AppLocalization.string(benefit.titleKey, locale: localizationLocale))
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.82)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(verbatim: AppLocalization.string(benefit.detailKey, locale: localizationLocale))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.62))
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.top, 6)
 
             Spacer()
         }
@@ -458,13 +508,37 @@ struct SubscriptionView: View {
                 trialButton
             }
 
+            legalSection
+        }
+    }
+
+    private var legalSection: some View {
+        VStack(spacing: 14) {
+            WrappingHStack(alignment: .center, horizontalSpacing: 14, verticalSpacing: 10) {
+                if appState.isPro {
+                    Link(String(localized: "subscription.link.manage", locale: localizationLocale), destination: manageSubscriptionURL)
+                }
+                Link(legalLinks.privacyTitle, destination: legalLinks.privacyURL)
+                Link(legalLinks.termsTitle, destination: legalLinks.termsURL)
+            }
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(Color.white.opacity(0.7))
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+
+            Text("subscription.legal.note")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.52))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
             Button {
                 Task {
                     await restorePurchases()
                 }
             } label: {
                 Text("subscription.button.restore")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(AppColors.textSecondary)
             }
             .buttonStyle(.plain)
@@ -486,7 +560,7 @@ struct SubscriptionView: View {
                     .minimumScaleFactor(0.75)
                     .allowsTightening(true)
 
-                Text("subscription.cta.subtitle")
+                Text(ctaSubtitleKey)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Color.white.opacity(0.78))
             }
@@ -527,20 +601,29 @@ struct SubscriptionView: View {
     }
 
     private var subscriptionStatusSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(Color(hex: "4DD471"))
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: appState.isTrialActive ? "sparkles" : "checkmark.circle.fill")
+                    .foregroundStyle(appState.isTrialActive ? Color(hex: "70C7FF") : Color(hex: "4DD471"))
 
-                Text(appState.isTrialActive ? "subscription.status.trial_active" : "subscription.status.subscribed_active")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.white)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(appState.isTrialActive ? "subscription.status.trial_active" : "subscription.status.subscribed_active")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+
+                    Text(appState.isTrialActive ? "subscription.status.trial_detail" : "subscription.status.subscribed_detail")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.62))
+                }
             }
 
             if let expirationDate = appState.subscriptionExpirationDate {
-                (Text("subscription.status.expires_at") + Text(": ") + Text(verbatim: formatDate(expirationDate)))
-                    .font(.system(size: 14))
-                    .foregroundStyle(Color.white.opacity(0.7))
+                HStack(spacing: 8) {
+                    Text("subscription.status.expires_at")
+                    Text(verbatim: formatDate(expirationDate))
+                }
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.78))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -579,10 +662,29 @@ struct SubscriptionView: View {
         .disabled(isLoading)
     }
 
+    private var ctaSubtitleKey: LocalizedStringKey {
+        selectedPlan == .yearly ? "subscription.cta.subtitle.yearly" : "subscription.cta.subtitle.monthly"
+    }
+
     private var ctaTitle: Text {
         let fallback = selectedPlan.fallbackTotalPrice
         let totalPrice = planTotalPrice(for: selectedPlan) ?? fallback
         return Text("subscription.button.subscribe") + Text(" ") + Text(verbatim: totalPrice)
+    }
+
+    private func planBadgeText(for plan: SubscriptionPlan) -> String? {
+        switch plan {
+        case .monthly:
+            return nil
+        case .yearly:
+            if let savings = yearlySavingsPercentage {
+                return String(
+                    format: String(localized: "subscription.plan.yearly.savings_format", locale: localizationLocale),
+                    savings
+                )
+            }
+            return String(localized: "subscription.plan.yearly.savings", locale: localizationLocale)
+        }
     }
 
     private func planPriceLabel(for plan: SubscriptionPlan) -> Text {
@@ -599,6 +701,25 @@ struct SubscriptionView: View {
 
     private func product(for plan: SubscriptionPlan) -> Product? {
         products.first { $0.id == plan.productID(monthlyID: SubscriptionManager.shared.monthlyProductID, yearlyID: SubscriptionManager.shared.yearlyProductID) }
+    }
+
+    private var yearlySavingsPercentage: Int? {
+        guard
+            let monthlyProduct = product(for: .monthly),
+            let yearlyProduct = product(for: .yearly)
+        else {
+            return nil
+        }
+
+        let monthlyValue = NSDecimalNumber(decimal: monthlyProduct.price).doubleValue
+        let yearlyValue = NSDecimalNumber(decimal: yearlyProduct.price).doubleValue
+        guard monthlyValue > 0, yearlyValue > 0 else { return nil }
+
+        let annualMonthlyValue = monthlyValue * 12
+        guard annualMonthlyValue > yearlyValue else { return nil }
+
+        let percent = ((annualMonthlyValue - yearlyValue) / annualMonthlyValue) * 100
+        return max(1, Int(percent.rounded()))
     }
 
     private func loadProducts() async {
@@ -708,25 +829,12 @@ enum SubscriptionPlan: CaseIterable, Identifiable {
         }
     }
 
-    /// Optional badge label for emphasizing plan-specific savings.
-    var badgeKey: LocalizedStringKey? {
-        switch self {
-        case .yearly: return "subscription.plan.yearly.savings"
-        case .monthly: return nil
-        }
-    }
-
     func productID(monthlyID: String, yearlyID: String) -> String {
         switch self {
         case .yearly: return yearlyID
         case .monthly: return monthlyID
         }
     }
-}
-
-private struct SubscriptionBenefit {
-    let icon: String
-    let titleKey: LocalizedStringKey
 }
 
 private struct PremiumStarsBackground: View {

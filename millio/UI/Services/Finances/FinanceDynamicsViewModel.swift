@@ -729,7 +729,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         if state.isSingleAccountMode && !state.selectedAccountIDs.isEmpty {
             // Режим одного счета
             for group in state.groups {
-                if let groupAccounts = group.accounts {
+                let groupAccounts = orderedAccounts(in: group)
+                if !groupAccounts.isEmpty {
                     if let account = groupAccounts.first(where: { state.selectedAccountIDs.contains($0.accountUniqueID) }) {
                         accounts.append(account)
                         break
@@ -739,7 +740,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         } else {
             // Обычная логика
             for group in groupsToShow {
-                guard let groupAccounts = group.accounts, !groupAccounts.isEmpty else {
+                let groupAccounts = orderedAccounts(in: group)
+                guard !groupAccounts.isEmpty else {
                     // Пропускаем группы без счетов
                     continue
                 }
@@ -789,7 +791,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         let selectedGroupIDs = state.selectedGroupIDs
         let selectedAccountIDs = state.selectedAccountIDs
         let groups = state.groups
-        
+
         switch viewMode {
         case .groups:
             // Группируем по группам - вычисляем параллельно
@@ -799,56 +801,45 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             
             // Подготавливаем данные для групп до входа в TaskGroup
             let groupsData = await MainActor.run {
-                groupsToShow.compactMap { groupItem -> (String, String, [String])? in
-                    guard let groupAccounts = groupItem.accounts else { return nil }
+                groupsToShow.enumerated().compactMap { index, groupItem -> (Int, String, String, [String], [String])? in
+                    let groupAccounts = self.orderedAccounts(in: groupItem)
                     let filteredAccounts = selectedAccountIDs.isEmpty
                         ? groupAccounts
                         : groupAccounts.filter { selectedAccountIDs.contains($0.accountUniqueID) }
                     if filteredAccounts.isEmpty { return nil }
-                    // Извлекаем accountCardIDs на main actor
                     let accountCardIDs = Set(filteredAccounts.compactMap { account -> String? in
                         if account.accountType == .card {
                             return account.accountID
                         }
                         return nil
                     })
-                    return (groupItem.groupUniqueID, groupItem.name, Array(accountCardIDs))
+                    return (
+                        index,
+                        groupItem.groupUniqueID,
+                        groupItem.name,
+                        filteredAccounts.map(\.accountUniqueID),
+                        Array(accountCardIDs)
+                    )
                 }
             }
-            
-            // Подготавливаем account IDs для передачи
-            let accountIDsForGroups = await MainActor.run {
-                groupsToShow.compactMap { groupItem -> (String, [String])? in
-                    guard let groupAccounts = groupItem.accounts else { return nil }
-                    let filteredAccounts = selectedAccountIDs.isEmpty
-                        ? groupAccounts
-                        : groupAccounts.filter { selectedAccountIDs.contains($0.accountUniqueID) }
-                    if filteredAccounts.isEmpty { return nil }
-                    let accountIDs = filteredAccounts.map { $0.accountUniqueID }
-                    return (groupItem.groupUniqueID, accountIDs)
-                }
-            }
-            
-            // Сохраняем только ID групп для передачи между задачами
-            let groupIDs = await MainActor.run {
-                Set(groupsToShow.map { $0.groupUniqueID })
-            }
-            
-            await withTaskGroup(of: DynamicsBreakdownItem?.self) { group in
-                for (groupID, groupName, accountCardIDsArray) in groupsData {
+
+            var orderedItems: [Int: DynamicsBreakdownItem] = [:]
+
+            await withTaskGroup(of: (Int, DynamicsBreakdownItem?).self) { group in
+                for (index, groupID, groupName, accountIDs, accountCardIDsArray) in groupsData {
                     group.addTask { @MainActor in
-                        // Получаем accounts на main actor по их IDs из state.groups внутри @MainActor контекста
-                        guard groupIDs.contains(groupID),
-                              let (_, accountIDs) = accountIDsForGroups.first(where: { $0.0 == groupID }),
-                              let groupItem = self.state.groups.first(where: { $0.groupUniqueID == groupID }),
-                              let groupAccounts = groupItem.accounts else {
-                            return nil
+                        guard let groupItem = self.state.groups.first(where: { $0.groupUniqueID == groupID }) else {
+                            return (index, nil)
                         }
-                        
-                        let filteredAccounts = groupAccounts.filter { accountIDs.contains($0.accountUniqueID) }
+
+                        let filteredAccounts = self
+                            .orderedAccounts(in: groupItem)
+                            .filter { accountIDs.contains($0.accountUniqueID) }
+                        guard !filteredAccounts.isEmpty else {
+                            return (index, nil)
+                        }
                         let accountCardIDs = Set(accountCardIDsArray)
-                        
-                        // Вычисляем start и end балансы параллельно
+
                         async let startBalanceTask = self.calculateBalanceAtDate(
                             accounts: filteredAccounts,
                             date: startDate,
@@ -870,8 +861,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                         // Для групп считаем чистый баланс (долги учитываем со знаком минус)
                         let delta = endBalance - startBalance
                         let percent = self.calculateDeltaPercent(delta: delta, startBalance: startBalance)
-                        
-                        return DynamicsBreakdownItem(
+
+                        return (index, DynamicsBreakdownItem(
                             id: groupID,
                             name: groupName,
                             startValue: startBalance,
@@ -882,22 +873,23 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                             accountType: nil,
                             isCreditCard: false,
                             isArchived: false
-                        )
+                        ))
                     }
                 }
-                
-                for await item in group {
-                    if let item = item {
-                        breakdown.append(item)
+
+                for await (index, item) in group {
+                    if let item {
+                        orderedItems[index] = item
                     }
                 }
             }
+
+            breakdown = groupsData.compactMap { orderedItems[$0.0] }
             
         case .accounts:
             // Показываем каждый счет отдельно - вычисляем параллельно
-            // Подготавливаем данные для счетов до входа в TaskGroup
             let accountsData = await MainActor.run {
-                accounts.compactMap { account -> (String, String, String, String, Bool, Bool)? in
+                accounts.enumerated().compactMap { index, account -> (Int, String, String, String, Bool, Bool)? in
                     guard let accountInfo = self.getAccountInfoForDynamics(account: account) else {
                         return nil
                     }
@@ -905,32 +897,22 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                     let accountCardID = account.accountID
                     let isCard = account.accountType == .card
                     let isArchived = self.isAccountArchived(account)
-                    return (accountID, accountInfo.name, accountCardID, accountID, isCard, isArchived)
+                    return (index, accountID, accountInfo.name, accountCardID, isCard, isArchived)
                 }
             }
-            
-            // Сохраняем accounts для использования в TaskGroup
-            // Используем только ID для передачи между задачами, объекты получаем внутри @MainActor
-            let accountUniqueIDs = await MainActor.run {
-                Set(accounts.map { $0.accountUniqueID })
-            }
-            
-            await withTaskGroup(of: DynamicsBreakdownItem?.self) { group in
-                for (accountUniqueID, accountName, accountCardID, _, isCard, isArchived) in accountsData {
+
+            var orderedItems: [Int: DynamicsBreakdownItem] = [:]
+
+            await withTaskGroup(of: (Int, DynamicsBreakdownItem?).self) { group in
+                for (index, accountUniqueID, accountName, accountCardID, isCard, isArchived) in accountsData {
                     group.addTask { @MainActor in
                         let accountCardIDs = isCard ? Set([accountCardID]) : Set<String>()
-                        
-                        // Получаем account из getAccountsForCalculation() внутри @MainActor контекста
-                        guard accountUniqueIDs.contains(accountUniqueID) else {
-                            return nil
-                        }
-                        
+
                         let currentAccounts = self.getAccountsForCalculation()
                         guard let account = currentAccounts.first(where: { $0.accountUniqueID == accountUniqueID }) else {
-                            return nil
+                            return (index, nil)
                         }
-                        
-                        // Вычисляем start и end балансы параллельно
+
                         async let startBalanceTask = self.calculateBalanceAtDate(
                             accounts: [account],
                             date: startDate,
@@ -949,7 +931,6 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                         let startBalance = await startBalanceTask
                         let endBalance = await endBalanceTask
                 
-                        // Определяем, является ли карта кредитной или это кредит
                         let isCreditCard: Bool
                         let isCredit: Bool
                         if account.accountType == .card {
@@ -967,27 +948,22 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                             isCreditCard = false
                             isCredit = false
                         }
-                        
-                        // Для кредитных карт и кредитов: уменьшение долга = положительная дельта
-                        // Инвертируем дельту: если долг уменьшился (endBalance < startBalance), это хорошо (+)
+
                         let rawDelta = endBalance - startBalance
                         let delta: Double
                         if isCreditCard || isCredit {
-                            // Инвертируем: уменьшение долга (отрицательная rawDelta) становится положительной дельтой
                             delta = -rawDelta
                         } else {
                             delta = rawDelta
                         }
-                        
-                        // Расчет процента: для кредитных карт и кредитов считаем от начального долга
+
                         let percent = self.calculateDeltaPercent(delta: delta, startBalance: startBalance)
-                        
-                        // Получаем информацию о счете для иконки
+
                         guard let accountInfo = self.getAccountInfoForDynamics(account: account) else {
-                            return nil
+                            return (index, nil)
                         }
-                        
-                        return DynamicsBreakdownItem(
+
+                        return (index, DynamicsBreakdownItem(
                             id: accountUniqueID,
                             name: accountName,
                             startValue: startBalance,
@@ -998,16 +974,18 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                             accountType: account.accountType,
                             isCreditCard: isCreditCard,
                             isArchived: isArchived
-                        )
+                        ))
                     }
                 }
-                
-                for await item in group {
-                    if let item = item {
-                        breakdown.append(item)
+
+                for await (index, item) in group {
+                    if let item {
+                        orderedItems[index] = item
                     }
                 }
             }
+
+            breakdown = accountsData.compactMap { orderedItems[$0.0] }
         }
         
         await MainActor.run {
@@ -2198,9 +2176,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         
         var accounts: [FinanceAccount] = []
         for group in groupsToShow {
-            if let groupAccounts = group.accounts {
-                accounts.append(contentsOf: groupAccounts)
-            }
+            accounts.append(contentsOf: orderedAccounts(in: group))
         }
         
         guard state.showArchivedAccounts == false else {
@@ -2212,11 +2188,32 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
 
     /// Получить список счетов внутри группы (с учетом архива)
     func getAccounts(for group: FinanceGroup) -> [FinanceAccount] {
-        guard let groupAccounts = group.accounts else { return [] }
+        let groupAccounts = orderedAccounts(in: group)
         if state.showArchivedAccounts {
             return groupAccounts
         }
         return groupAccounts.filter { !isAccountArchived($0) }
+    }
+
+    private func orderedAccounts(in group: FinanceGroup) -> [FinanceAccount] {
+        let accounts = group.accounts ?? []
+        if group.usesManualAccountOrdering {
+            return accounts.sorted { lhs, rhs in
+                if lhs.order != rhs.order {
+                    return lhs.order < rhs.order
+                }
+                return lhs.createdAt < rhs.createdAt
+            }
+        }
+
+        return accounts.sorted { lhs, rhs in
+            let lhsAmount = getAccountInfoForDynamics(account: lhs)?.amount ?? 0
+            let rhsAmount = getAccountInfoForDynamics(account: rhs)?.amount ?? 0
+            if lhsAmount != rhsAmount {
+                return lhsAmount > rhsAmount
+            }
+            return lhs.createdAt < rhs.createdAt
+        }
     }
 
     private func isAccountArchived(_ account: FinanceAccount) -> Bool {

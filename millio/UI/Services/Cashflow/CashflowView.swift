@@ -194,6 +194,7 @@ private struct CashflowContentView: View {
         .navigationTitle(String(localized: "main.service.cashflow"))
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
+        .interactiveBackSwipe()
         .toolbar { topToolbar }
         .safeAreaInset(edge: .bottom) {
             actionButtonsSection

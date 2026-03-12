@@ -113,6 +113,10 @@ enum AppColors {
     
     /// Brand primary (RGB 104, 165, 255)
     static let brandPrimary = Color(red: 104/255.0, green: 165/255.0, blue: 255/255.0)
+    static let quickSetupAccent = Color(hex: "4ADE80")
+    static let quickSetupAccentStrong = Color(hex: "22C55E")
+    static let quickSetupAccentMint = Color(hex: "34D399")
+    static let quickSetupAccentDeep = Color(hex: "0B1F17")
 
     static let profileValueAccent = Color(hex: "6AA8FF")
     static let toggleOnGreen = Color(hex: "34C759")

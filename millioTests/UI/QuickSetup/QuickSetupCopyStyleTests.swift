@@ -64,4 +64,24 @@ final class QuickSetupCopyStyleTests: XCTestCase {
         XCTAssertFalse(viewModel.addDraftProduct())
         XCTAssertEqual(viewModel.lastAddDraftError, "Enter buy price")
     }
+
+    func testStepCopyUsesConciseFormulationsInRussian() {
+        let locale = Locale(identifier: "ru_RU")
+        XCTAssertEqual(QuickSetupStep.localeAndCurrencies.title(for: locale), "Язык и валюты")
+        XCTAssertEqual(QuickSetupStep.localeAndCurrencies.subtitle(for: locale), "Выберите язык и валюты")
+        XCTAssertEqual(QuickSetupStep.products.title(for: locale), "Продукты")
+        XCTAssertEqual(QuickSetupStep.summary.title(for: locale), "Хранение данных")
+    }
+
+    func testBackupPreferenceCopyUsesOperationalTone() {
+        let ruLocale = Locale(identifier: "ru_RU")
+        let enLocale = Locale(identifier: "en_US")
+
+        XCTAssertEqual(QuickSetupBackupPreference.localOnly.title(for: ruLocale), "Локальный контур")
+        XCTAssertEqual(QuickSetupBackupPreference.localOnly.details(for: ruLocale), "Выгрузку можно включить позже: Профиль -> Backup")
+        XCTAssertEqual(QuickSetupBackupPreference.cloudBackup.details(for: ruLocale), "Шифрование: AES-GCM с ключом устройства или парольной фразой")
+
+        XCTAssertEqual(QuickSetupBackupPreference.localOnly.title(for: enLocale), "Local mode")
+        XCTAssertEqual(QuickSetupBackupPreference.cloudBackup.title(for: enLocale), "Local + iCloud")
+    }
 }

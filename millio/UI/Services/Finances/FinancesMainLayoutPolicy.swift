@@ -10,12 +10,20 @@ import SwiftUI
 /// Важное поведение: когда список продуктов пуст, нижние подсказки/доп. контент не должны
 /// выталкивать CTA «Добавить продукт» к самому низу (и тем более под таббар/поверх него).
 enum FinancesMainLayoutPolicy {
+    static let sectionSpacing: CGFloat = 18
+    static let horizontalPadding: CGFloat = 18
+    static let heroCornerRadius: CGFloat = 26
+    static let sectionCardCornerRadius: CGFloat = 22
+    static let fabDiameter: CGFloat = 52
+    static let fabIconSize: CGFloat = 20
+    static let fabTrailingPadding: CGFloat = 20
+    static let fabBottomPadding: CGFloat = 104
+
     static func showsAddFAB(visibleGroupsCount: Int) -> Bool {
         visibleGroupsCount > 0
     }
 
     static func scrollContentBottomPadding(showsAddFAB: Bool) -> CGFloat {
-        showsAddFAB ? 100 : 24
+        showsAddFAB ? 148 : 28
     }
 }
-

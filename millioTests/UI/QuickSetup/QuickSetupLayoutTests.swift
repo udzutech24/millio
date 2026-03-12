@@ -35,6 +35,21 @@ final class QuickSetupLayoutTests: XCTestCase {
         XCTAssertEqual(scrollFrame.maxY, hosted.hosting.view.bounds.maxY, accuracy: 1)
     }
 
+    func testFinishButtonStaysWithinSafeAreaOnSummaryStepSmallScreen() throws {
+        let hosted = try makeHostedQuickSetup(
+            size: CGSize(width: 320, height: 568),
+            safeAreaBottom: 34,
+            step: .summary
+        )
+
+        XCTAssertNotNil(hosted.window)
+
+        let scrollView = try XCTUnwrap(hosted.hosting.view.findHostingScrollView())
+        let scrollFrame = scrollView.convert(scrollView.bounds, to: hosted.hosting.view)
+        XCTAssertGreaterThan(scrollView.adjustedContentInset.bottom, 80)
+        XCTAssertEqual(scrollFrame.maxY, hosted.hosting.view.bounds.maxY, accuracy: 1)
+    }
+
     func testProductFieldsArePresentOnProductsStep() throws {
         let hosted = try makeHostedQuickSetup(
             size: CGSize(width: 320, height: 568),

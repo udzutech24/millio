@@ -1395,4 +1395,96 @@ struct FinanceDynamicsViewModelTests {
         #expect(abs(marchEntry.debit - 60) < 0.01)
         #expect(abs(marchEntry.credit - 30) < 0.01)
     }
+
+    @Test("Динамика повторяет порядок групп и счетов из финансов")
+    func testDynamicsBreakdownUsesFinanceOrdering() async throws {
+        let modelContext = try createTestModelContext()
+
+        let firstGroup = FinanceGroup(name: "Первая", colorHex: "#111111", order: 0)
+        let secondGroup = FinanceGroup(name: "Вторая", colorHex: "#222222", order: 1)
+        modelContext.insert(firstGroup)
+        modelContext.insert(secondGroup)
+
+        let alphaCard = Card(
+            name: "Alpha",
+            cardNumber: "1111",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 100
+        )
+        let betaCard = Card(
+            name: "Beta",
+            cardNumber: "2222",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 200
+        )
+        let gammaCard = Card(
+            name: "Gamma",
+            cardNumber: "3333",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 300
+        )
+        modelContext.insert(alphaCard)
+        modelContext.insert(betaCard)
+        modelContext.insert(gammaCard)
+
+        let alphaAccount = FinanceAccount(accountType: .card, accountID: alphaCard.cardUniqueID)
+        alphaAccount.group = firstGroup
+        let betaAccount = FinanceAccount(accountType: .card, accountID: betaCard.cardUniqueID)
+        betaAccount.group = secondGroup
+        let gammaAccount = FinanceAccount(accountType: .card, accountID: gammaCard.cardUniqueID)
+        gammaAccount.group = secondGroup
+
+        modelContext.insert(alphaAccount)
+        modelContext.insert(betaAccount)
+        modelContext.insert(gammaAccount)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        financeViewModel.handle(.loadGroups)
+        financeViewModel.handle(.loadAccounts)
+        financeViewModel.handle(.moveGroup(sourceGroupID: secondGroup.groupUniqueID, destinationIndex: 0))
+
+        let reorderedSecondGroup = try #require(
+            financeViewModel.state.groups.first(where: { $0.groupUniqueID == secondGroup.groupUniqueID })
+        )
+        financeViewModel.handle(
+            .moveAccount(
+                sourceAccountID: gammaAccount.accountUniqueID,
+                destinationIndex: 0,
+                groupID: reorderedSecondGroup.groupUniqueID
+            )
+        )
+
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+
+        dynamicsViewModel.state.viewMode = .groups
+        await dynamicsViewModel.updateDynamicsBreakdown()
+        #expect(dynamicsViewModel.state.dynamicsBreakdown.map(\.name) == ["Вторая", "Первая"])
+
+        let orderedGroup = try #require(dynamicsViewModel.state.groups.first)
+        #expect(
+            dynamicsViewModel.getAccounts(for: orderedGroup).compactMap { account in
+                dynamicsViewModel.getAccountInfoForDynamics(account: account)?.name
+            } == ["Gamma", "Beta"]
+        )
+
+        dynamicsViewModel.state.viewMode = .accounts
+        await dynamicsViewModel.updateDynamicsBreakdown()
+        #expect(dynamicsViewModel.state.dynamicsBreakdown.map(\.name) == ["Gamma", "Beta", "Alpha"])
+    }
 }

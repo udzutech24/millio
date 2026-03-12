@@ -59,6 +59,13 @@ enum FinanceDynamicsTopBarStyle {
     }
 }
 
+enum FinanceDynamicsHeaderStyle {
+    static let summaryCardCornerRadius: CGFloat = 16
+    static let summaryCardHeight: CGFloat = 88
+    static let summaryTitleFontSize: CGFloat = 12
+    static let summaryAmountFontSize: CGFloat = 24
+}
+
 // MARK: - Finance Dynamics View
 
 struct FinanceDynamicsView: View {
@@ -282,9 +289,14 @@ private struct FinanceDynamicsContentView: View {
         }
         .navigationTitle(viewModel.state.isSingleAccountMode ? "" : String(localized: "finances.dynamics.title"))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(marketInvestment != nil ? .hidden : .visible, for: .navigationBar)
         .toolbar {
-            if shouldShowSingleAccountActionBar, let account = initialAccount {
+            if let marketInvestment,
+               viewModel.state.isSingleAccountMode,
+               initialAccount != nil {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    marketEditTopBar(for: marketInvestment)
+                }
+            } else if shouldShowSingleAccountActionBar, let account = initialAccount {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     singleAccountActionBar(account: account)
                 }
@@ -362,163 +374,108 @@ private struct FinanceDynamicsContentView: View {
     private func marketInvestmentDetailsView(_ investment: Investment) -> some View {
         GeometryReader { proxy in
             let compactLayout = proxy.size.height < 820
-            let topInset = proxy.safeAreaInsets.top
 
-            VStack(spacing: compactLayout ? 8 : 12) {
-                marketScreenTopBar(for: investment, compactLayout: compactLayout)
-
-                FinancesGlassCard(
-                    accentColor: Color.cyan.opacity(0.95),
-                    cornerRadius: compactLayout ? 16 : 18,
-                    contentPadding: EdgeInsets(top: compactLayout ? 10 : 14, leading: 12, bottom: compactLayout ? 10 : 14, trailing: 12)
-                ) {
-                    VStack(alignment: .leading, spacing: compactLayout ? 8 : 12) {
-                        HStack {
-                            Text(financeViewModel.investmentDisplayName(investment))
-                                .font(.system(size: compactLayout ? 30 : 34, weight: .semibold))
-                                .foregroundStyle(AppColors.textPrimary)
-                                .lineLimit(1)
-                            Spacer()
-                        }
-
-                        HStack(spacing: compactLayout ? 8 : 9) {
-                            RoundedRectangle(cornerRadius: compactLayout ? 14 : 16, style: .continuous)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [Color.white.opacity(0.08), Color.white.opacity(0.04)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .overlay {
-                                    VStack(spacing: compactLayout ? 3 : 5) {
-                                        Text(
-                                            FinancesL10n.format(
-                                                "finances.dynamics.market.position_total_with_currency",
-                                                resolvedInvestmentCurrency(investment)
-                                            )
-                                        )
-                                            .font(.system(size: compactLayout ? 11 : 12, weight: .medium))
-                                            .foregroundStyle(AppColors.textSecondary)
-                                            .lineLimit(1)
-                                        Text(money(investment.positionTotal ?? investment.amount, currency: resolvedInvestmentCurrency(investment)))
-                                            .font(.system(size: compactLayout ? 22 : 25, weight: .semibold))
-                                            .foregroundStyle(AppColors.textPrimary)
-                                            .lineLimit(1)
-                                            .minimumScaleFactor(0.78)
-                                    }
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, compactLayout ? 10 : 12)
-                                }
-                                .frame(maxWidth: .infinity)
-
-                            growthCard(for: investment, compactLayout: compactLayout)
-                                .frame(width: compactLayout ? 106 : 118)
-                        }
-                        .frame(height: compactLayout ? 78 : 88)
-
-                        Divider()
-                            .overlay(Color.white.opacity(0.09))
-
-                        Text(String(localized: "finances.dynamics.market.instrument_info"))
-                            .font(.system(size: compactLayout ? 18 : 20, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.85)
-
-                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: compactLayout ? 6 : 8) {
-                            statCell(
-                                marketQuantityTitle(for: investment),
-                                "\(marketNumber(investment.marketQuantity ?? 0, digits: 8)) \(marketQuantityUnit(for: investment))",
-                                isEditable: true,
-                                isEditing: isInlineMarketEdit,
-                                editText: $editQuantityText,
-                                keyboardType: .decimalPad,
-                                compactLayout: compactLayout
-                            )
-                            statCell(
-                                FinancesL10n.format(
-                                    "finances.dynamics.trade.price_with_currency",
-                                    resolvedInvestmentCurrency(investment)
-                                ),
-                                money(investment.lastKnownUnitPrice ?? 0, currency: resolvedInvestmentCurrency(investment)),
-                                isEditable: true,
-                                isEditing: isInlineMarketEdit,
-                                editText: $editUnitPriceText,
-                                keyboardType: .decimalPad,
-                                compactLayout: compactLayout
-                            )
-                            statCell(
-                                String(localized: "finances.add_account.investment.purchase_price"),
-                                money(investment.averagePurchaseUnitPrice ?? 0, currency: resolvedInvestmentCurrency(investment)),
-                                isEditable: true,
-                                isEditing: isInlineMarketEdit,
-                                editText: $editPurchasePriceText,
-                                keyboardType: .decimalPad,
-                                compactLayout: compactLayout
-                            )
-                            statCell(
-                                String(localized: "finances.dynamics.market.purchase_total"),
-                                money(investment.totalPurchaseCost ?? 0, currency: resolvedInvestmentCurrency(investment)),
-                                compactLayout: compactLayout
-                            )
-                        }
-
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: compactLayout ? 6 : 8) {
-                    Text(String(localized: "finances.dynamics.market.actions"))
-                        .font(.system(size: compactLayout ? 18 : 20, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+            ScrollView {
+                VStack(spacing: 16) {
+                    marketSummaryCard(for: investment)
 
                     FinancesGlassCard(
                         accentColor: Color.cyan.opacity(0.95),
-                        contentPadding: EdgeInsets(top: compactLayout ? 10 : 12, leading: 12, bottom: compactLayout ? 10 : 12, trailing: 12)
+                        cornerRadius: compactLayout ? 16 : 18,
+                        contentPadding: EdgeInsets(top: compactLayout ? 10 : 14, leading: 12, bottom: compactLayout ? 10 : 14, trailing: 12)
                     ) {
-                        HStack(spacing: compactLayout ? 8 : 10) {
-                            actionButton(title: String(localized: "finances.dynamics.market.action.buy"), icon: "cart.badge.plus", color: Color.green.opacity(0.88), compactLayout: compactLayout) {
-                                tradeMode = .buy
-                                prepareTradeDraft(for: investment)
-                                showTradeSheet = true
+                        VStack(alignment: .leading, spacing: compactLayout ? 8 : 12) {
+                            Text(String(localized: "finances.dynamics.market.instrument_info"))
+                                .font(.system(size: compactLayout ? 18 : 20, weight: .semibold))
+                                .foregroundStyle(AppColors.textPrimary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+
+                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: compactLayout ? 6 : 8) {
+                                statCell(
+                                    marketQuantityTitle(for: investment),
+                                    "\(marketNumber(investment.marketQuantity ?? 0, digits: 8)) \(marketQuantityUnit(for: investment))",
+                                    isEditable: true,
+                                    isEditing: isInlineMarketEdit,
+                                    editText: $editQuantityText,
+                                    keyboardType: .decimalPad,
+                                    compactLayout: compactLayout
+                                )
+                                statCell(
+                                    FinancesL10n.format(
+                                        "finances.dynamics.trade.price_with_currency",
+                                        resolvedInvestmentCurrency(investment)
+                                    ),
+                                    money(investment.lastKnownUnitPrice ?? 0, currency: resolvedInvestmentCurrency(investment)),
+                                    isEditable: true,
+                                    isEditing: isInlineMarketEdit,
+                                    editText: $editUnitPriceText,
+                                    keyboardType: .decimalPad,
+                                    compactLayout: compactLayout
+                                )
+                                statCell(
+                                    String(localized: "finances.add_account.investment.purchase_price"),
+                                    money(investment.averagePurchaseUnitPrice ?? 0, currency: resolvedInvestmentCurrency(investment)),
+                                    isEditable: true,
+                                    isEditing: isInlineMarketEdit,
+                                    editText: $editPurchasePriceText,
+                                    keyboardType: .decimalPad,
+                                    compactLayout: compactLayout
+                                )
+                                statCell(
+                                    String(localized: "finances.dynamics.market.purchase_total"),
+                                    money(investment.totalPurchaseCost ?? 0, currency: resolvedInvestmentCurrency(investment)),
+                                    compactLayout: compactLayout
+                                )
                             }
-                            actionButton(title: String(localized: "finances.dynamics.market.action.sell"), icon: "cart.badge.minus", color: Color.red.opacity(0.9), compactLayout: compactLayout) {
-                                tradeMode = .sell
-                                prepareTradeDraft(for: investment)
-                                showTradeSheet = true
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: compactLayout ? 6 : 8) {
+                        Text(String(localized: "finances.dynamics.market.actions"))
+                            .font(.system(size: compactLayout ? 18 : 20, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        FinancesGlassCard(
+                            accentColor: Color.cyan.opacity(0.95),
+                            contentPadding: EdgeInsets(top: compactLayout ? 10 : 12, leading: 12, bottom: compactLayout ? 10 : 12, trailing: 12)
+                        ) {
+                            HStack(spacing: compactLayout ? 8 : 10) {
+                                actionButton(title: String(localized: "finances.dynamics.market.action.buy"), icon: "cart.badge.plus", color: Color.green.opacity(0.88), compactLayout: compactLayout) {
+                                    tradeMode = .buy
+                                    prepareTradeDraft(for: investment)
+                                    showTradeSheet = true
+                                }
+                                actionButton(title: String(localized: "finances.dynamics.market.action.sell"), icon: "cart.badge.minus", color: Color.red.opacity(0.9), compactLayout: compactLayout) {
+                                    tradeMode = .sell
+                                    prepareTradeDraft(for: investment)
+                                    showTradeSheet = true
+                                }
                             }
                         }
                     }
                 }
-                Spacer(minLength: 0)
+                .padding(.horizontal, 16)
+                .padding(.top, FinanceDynamicsTopBarStyle.baseScrollContentTopPadding)
+                .padding(.bottom, 32)
             }
-            .padding(.horizontal, 14)
-            .padding(.top, max(4, topInset))
-            .padding(.bottom, 12)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .ignoresSafeArea(edges: .top)
     }
 
-    private func marketScreenTopBar(for investment: Investment, compactLayout: Bool) -> some View {
-        HStack(spacing: 10) {
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: compactLayout ? 17 : 18, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-                    .frame(width: compactLayout ? 34 : 38, height: compactLayout ? 34 : 38)
-                    .background(
-                        Circle().fill(Color.white.opacity(0.08))
-                    )
-            }
-            .buttonStyle(.plain)
+    private func marketSummaryCard(for investment: Investment) -> some View {
+        let growth = investment.positionGrowthPercent ?? 0
+        let currency = resolvedInvestmentCurrency(investment)
 
-            Spacer(minLength: 4)
-
-            marketEditTopBar(for: investment)
+        return dynamicsSummaryCard(
+            title: financeViewModel.investmentDisplayName(investment),
+            symbol: currency,
+            value: FinanceAmountText.decimal(
+                value: investment.positionTotal ?? investment.amount,
+                maximumFractionDigits: 2
+            )
+        ) {
+            marketGrowthBadge(growth: growth)
         }
     }
 
@@ -585,6 +542,28 @@ private struct FinanceDynamicsContentView: View {
                     .frame(width: FinanceDynamicsTopBarStyle.compactButtonSide, height: FinanceDynamicsTopBarStyle.compactButtonSide)
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    private func marketGrowthBadge(growth: Double) -> some View {
+        let textColor: Color = growth > 0 ? .green : (growth < 0 ? .red : AppColors.textSecondary)
+        let backgroundColor: Color = growth > 0
+            ? Color.green.opacity(0.16)
+            : (growth < 0 ? Color.red.opacity(0.16) : Color.white.opacity(0.08))
+
+        return VStack(alignment: .trailing, spacing: 2) {
+            Text(String(localized: "finances.dynamics.growth"))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(AppColors.textSecondary)
+                .lineLimit(1)
+
+            Text(formatPercent(growth))
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(textColor)
+                .lineLimit(1)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(backgroundColor))
         }
     }
 
@@ -1593,7 +1572,18 @@ private struct FinanceDynamicsContentView: View {
             return accountInfo.name
         }()
 
-        return RoundedRectangle(cornerRadius: 16, style: .continuous)
+        return dynamicsSummaryCard(title: accountName, symbol: symbol, value: formatBalance(viewModel.state.currentBalance)) {
+            EmptyView()
+        }
+    }
+
+    private func dynamicsSummaryCard<Trailing: View>(
+        title: String,
+        symbol: String,
+        value: String,
+        @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
+        RoundedRectangle(cornerRadius: FinanceDynamicsHeaderStyle.summaryCardCornerRadius, style: .continuous)
             .fill(
                 LinearGradient(
                     colors: [Color.white.opacity(0.08), Color.white.opacity(0.04)],
@@ -1602,40 +1592,46 @@ private struct FinanceDynamicsContentView: View {
                 )
             )
             .overlay {
-                VStack(spacing: 5) {
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text(accountName + ",")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(AppColors.textSecondary)
-                            .lineLimit(1)
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text(title + ",")
+                                .font(.system(size: FinanceDynamicsHeaderStyle.summaryTitleFontSize, weight: .medium))
+                                .foregroundStyle(AppColors.textSecondary)
+                                .lineLimit(1)
 
-                        dynamicsCurrencySuffix(
-                            symbol: symbol,
-                            amountFontSize: 12,
-                            color: AppColors.textSecondary.opacity(0.82),
-                            showsChevron: false
-                        )
+                            dynamicsCurrencySuffix(
+                                symbol: symbol,
+                                amountFontSize: FinanceDynamicsHeaderStyle.summaryTitleFontSize,
+                                color: AppColors.textSecondary.opacity(0.82),
+                                showsChevron: false
+                            )
+                        }
+
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text(value)
+                                .font(.system(size: FinanceDynamicsHeaderStyle.summaryAmountFontSize, weight: .semibold))
+                                .foregroundStyle(AppColors.textPrimary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.78)
+
+                            dynamicsCurrencySuffix(
+                                symbol: symbol,
+                                amountFontSize: FinanceDynamicsHeaderStyle.summaryAmountFontSize,
+                                color: AppColors.textSecondary.opacity(0.82),
+                                showsChevron: false
+                            )
+                        }
                     }
 
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text(formatBalance(viewModel.state.currentBalance))
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.78)
+                    Spacer(minLength: 0)
 
-                        dynamicsCurrencySuffix(
-                            symbol: symbol,
-                            amountFontSize: 24,
-                            color: AppColors.textSecondary.opacity(0.82),
-                            showsChevron: false
-                        )
-                    }
+                    trailing()
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 12)
             }
-        .frame(height: 88)
+            .frame(height: FinanceDynamicsHeaderStyle.summaryCardHeight)
     }
 
     private func dynamicsCurrencySuffix(

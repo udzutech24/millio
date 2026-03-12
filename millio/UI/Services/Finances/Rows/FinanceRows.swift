@@ -49,7 +49,7 @@ struct FinanceGroupRow: View {
     var body: some View {
         groupContent
             .background(groupBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .contextMenu {
                 contextMenuContent
             }
@@ -94,17 +94,12 @@ struct FinanceGroupRow: View {
 
             dragChevron
         }
-        .padding(.vertical, 18)
-        .padding(.horizontal, 18)
+        .padding(.vertical, 16)
+        .padding(.horizontal, 16)
     }
     
     private var headerContent: some View {
         HStack(spacing: 12) {
-            Circle()
-                .fill(group.color)
-                .frame(width: 12, height: 12)
-               
-            
             // Название группы
             groupNameSection
             
@@ -118,7 +113,7 @@ struct FinanceGroupRow: View {
     private var groupNameSection: some View {
         HStack(spacing: 6) {
             Text(group.name)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(AppColors.textPrimary)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -130,16 +125,21 @@ struct FinanceGroupRow: View {
         financeAmountLabel(
             amountText: formatBalance(groupTotal, isHidden: viewModel.state.isAmountHidden),
             currencySymbol: MonetaCurrency(rawValue: groupDisplayCurrency)?.symbol ?? groupDisplayCurrency,
-            amountFontSize: 15,
-            amountColor: AppColors.textPrimary,
-            currencyColor: AppColors.textSecondary.opacity(0.78)
+            amountFontSize: 14,
+            amountColor: AppColors.textPrimary.opacity(0.92),
+            currencyColor: AppColors.textSecondary.opacity(0.70)
         )
         .frame(maxWidth: .infinity, alignment: .trailing)
-        .padding(.leading, 28)
+        .padding(.leading, 20)
     }
     
     private var accountsAccordion: some View {
         VStack(spacing: 0) {
+            Divider()
+                .background(Color.white.opacity(0.08))
+                .padding(.leading, 38)
+                .padding(.trailing, 16)
+
             let displayAccounts: [(account: FinanceAccount, info: (name: String, amount: Double, currency: String, icon: String, isCreditCardDebt: Bool))] = viewModel.orderedAccounts(for: group).compactMap { account in
                 guard let info = viewModel.getAccountInfo(account: account) else {
                     return nil
@@ -152,7 +152,7 @@ struct FinanceGroupRow: View {
                     .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(AppColors.textTertiary)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 18)
+                    .padding(.horizontal, 16)
                     .padding(.vertical, 14)
             } else {
                 ForEach(Array(displayAccounts.enumerated()), id: \.element.account.id) { index, item in
@@ -175,14 +175,14 @@ struct FinanceGroupRow: View {
 
                     if index != displayAccounts.count - 1 {
                         Divider()
-                            .background(Color.white.opacity(0.14))
-                            .padding(.leading, 64)
-                            .padding(.trailing, 18)
+                            .background(Color.white.opacity(0.08))
+                            .padding(.leading, 52)
+                            .padding(.trailing, 16)
                     }
                 }
             }
         }
-        .padding(.bottom, 14)
+        .padding(.bottom, 10)
     }
 
     private var dragChevron: some View {
@@ -207,35 +207,18 @@ struct FinanceGroupRow: View {
     
     private var groupBackground: some View {
         let accentColor = group.color
-        let fillGradient = LinearGradient(
-            colors: [
-                Color.white.opacity(0.07),
-                Color.white.opacity(0.035),
-                Color.white.opacity(0.02)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-
-        return RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .fill(fillGradient)
+        return RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .fill(Color.white.opacity(0.035))
             .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.white.opacity(0.10), lineWidth: 0.8)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
             )
             .overlay(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                accentColor.opacity(0.18),
-                                Color.clear
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .blendMode(.screen)
+                Capsule(style: .continuous)
+                    .fill(accentColor.opacity(0.85))
+                    .frame(width: 4)
+                    .padding(.vertical, 14)
+                    .padding(.leading, 10)
             }
     }
     
@@ -379,7 +362,7 @@ private struct FinanceAccountRow: View {
             
             VStack(alignment: .leading, spacing: 3) {
                 Text(name)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -402,13 +385,12 @@ private struct FinanceAccountRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             
             trailingAmountSection(
-                amountFont: .system(size: 16, weight: .semibold),
-                amountFontSize: 16,
+                amountFontSize: 15,
                 maximumFractionDigits: 0
             )
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
         .contentShape(Rectangle())
         .onTapGesture {
             onEdit()
@@ -423,7 +405,7 @@ private struct FinanceAccountRow: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(name)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -447,13 +429,12 @@ private struct FinanceAccountRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             trailingAmountSection(
-                amountFont: .system(size: 17, weight: .semibold),
-                amountFontSize: 17,
+                amountFontSize: 15,
                 maximumFractionDigits: 2
             )
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
         .contentShape(Rectangle())
         .onTapGesture {
             onEdit()
@@ -467,10 +448,10 @@ private struct FinanceAccountRow: View {
     @ViewBuilder
     private func iconBadge(colors: [Color]) -> some View {
         RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .fill(Color.white.opacity(0.07))
+            .fill(Color.white.opacity(0.05))
             .overlay {
                 Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(
                         LinearGradient(
                             colors: colors,
@@ -479,12 +460,11 @@ private struct FinanceAccountRow: View {
                         )
                     )
             }
-            .frame(width: 34, height: 34)
+            .frame(width: 32, height: 32)
     }
 
     @ViewBuilder
     private func trailingAmountSection(
-        amountFont: Font,
         amountFontSize: CGFloat,
         maximumFractionDigits: Int
     ) -> some View {
@@ -497,8 +477,8 @@ private struct FinanceAccountRow: View {
                     amountText: formatBalance(amount, isHidden: viewModel.state.isAmountHidden, maximumFractionDigits: maximumFractionDigits),
                     currencySymbol: MonetaCurrency(rawValue: currency)?.symbol ?? currency,
                     amountFontSize: amountFontSize,
-                    amountColor: amountColor,
-                    currencyColor: amountColor.opacity(0.76)
+                    amountColor: amountColor.opacity(0.92),
+                    currencyColor: amountColor.opacity(0.66)
                 )
             }
         }

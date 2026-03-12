@@ -406,7 +406,7 @@ struct FinanceOverviewCardView: View {
     private func compactLedgerOverview(
         presentation: FinanceOverviewLedgerPresentation
     ) -> some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: 10) {
             compactSideCard(
                 side: presentation.credit,
                 color: creditColor,
@@ -534,27 +534,22 @@ struct FinanceOverviewCardView: View {
         let metrics = FinanceOverviewLedgerStyle.compactCardMetrics
 
         return Button(action: onTap) {
-            VStack(alignment: .leading, spacing: metrics.contentSpacing) {
-                HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(side.side.title)
-                        .font(.system(size: metrics.titleFontSize, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppColors.textSecondary)
 
                     Spacer(minLength: 8)
 
-                    Circle()
-                        .stroke(color.opacity(0.9), lineWidth: 1.6)
-                        .frame(width: metrics.iconSize, height: metrics.iconSize)
-                        .overlay {
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: metrics.iconFontSize, weight: .bold))
-                                .foregroundStyle(color)
-                        }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(color.opacity(0.82))
                 }
 
                 Text(amountWithCurrency(side.total))
-                    .font(.system(size: metrics.amountFontSize, weight: .bold))
-                    .foregroundStyle(color)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(color.opacity(0.9))
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
 
@@ -568,30 +563,24 @@ struct FinanceOverviewCardView: View {
 
                     ZStack(alignment: .leading) {
                         Capsule(style: .continuous)
-                            .fill(Color.white.opacity(0.05))
-                            .frame(height: metrics.progressHeight)
+                            .fill(Color.white.opacity(0.045))
+                            .frame(height: 8)
                         Capsule(style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [color.opacity(0.88), color.opacity(0.56)],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .frame(width: barWidth, height: metrics.progressHeight)
+                            .fill(color.opacity(0.7))
+                            .frame(width: barWidth, height: 8)
                     }
                 }
-                .frame(height: metrics.progressHeight)
+                .frame(height: 8)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, metrics.horizontalPadding)
-            .padding(.vertical, metrics.verticalPadding)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
             .background(
-                RoundedRectangle(cornerRadius: metrics.cornerRadius, style: .continuous)
-                    .fill(Color.clear)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.white.opacity(0.025))
                     .overlay(
-                        RoundedRectangle(cornerRadius: metrics.cornerRadius, style: .continuous)
-                            .stroke(Color.white.opacity(0.11), lineWidth: 0.9)
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(Color.white.opacity(0.07), lineWidth: 0.9)
                     )
             )
         }

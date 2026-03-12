@@ -93,6 +93,7 @@ private struct CashbackContentViewInternal: View {
         }
         .navigationBarBackButtonHidden(true)
         .navigationBarTitleDisplayMode(.inline)
+        .interactiveBackSwipe()
         .toolbar { topToolbar }
         .sheet(isPresented: Binding(
             get: { viewModel.state.showCashbackEditor },

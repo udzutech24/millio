@@ -17,11 +17,11 @@ enum QuickSetupStep: Int, CaseIterable, Identifiable {
         case .localeAndCurrencies:
             return QuickSetupLocalization.text(locale: locale, ru: "Язык и валюты", en: "Language and currencies")
         case .expenseCategories:
-            return QuickSetupLocalization.text(locale: locale, ru: "Категории трат", en: "Expense categories")
+            return QuickSetupLocalization.text(locale: locale, ru: "Категории", en: "Categories")
         case .products:
-            return QuickSetupLocalization.text(locale: locale, ru: "Добавить продукты", en: "Add products")
+            return QuickSetupLocalization.text(locale: locale, ru: "Продукты", en: "Products")
         case .summary:
-            return QuickSetupLocalization.text(locale: locale, ru: "Безопасность", en: "Security")
+            return QuickSetupLocalization.text(locale: locale, ru: "Хранение данных", en: "Data storage")
         }
     }
 
@@ -32,13 +32,13 @@ enum QuickSetupStep: Int, CaseIterable, Identifiable {
     func subtitle(for locale: Locale) -> String {
         switch self {
         case .localeAndCurrencies:
-            return QuickSetupLocalization.text(locale: locale, ru: "Выберите язык приложения и основные валюты", en: "Choose app language and key currencies")
+            return QuickSetupLocalization.text(locale: locale, ru: "Выберите язык и валюты", en: "Choose language and currencies")
         case .expenseCategories:
-            return QuickSetupLocalization.text(locale: locale, ru: "Оставьте только те категории, которые нужны с первого дня", en: "Keep only categories you need from day one")
+            return QuickSetupLocalization.text(locale: locale, ru: "Оставьте нужные категории", en: "Keep only needed categories")
         case .products:
-            return QuickSetupLocalization.text(locale: locale, ru: "Добавьте счета и активы, если хотите увидеть их сразу в Финансах", en: "Add accounts and assets if you want to see them in Finances right away")
+            return QuickSetupLocalization.text(locale: locale, ru: "Добавьте счета и активы", en: "Add accounts and assets")
         case .summary:
-            return QuickSetupLocalization.text(locale: locale, ru: "Выберите, как хранить данные и резервные копии", en: "Choose how data and backups should be stored")
+            return QuickSetupLocalization.text(locale: locale, ru: "Выберите режим хранения и backup", en: "Select storage and backup mode")
         }
     }
 }
@@ -164,9 +164,9 @@ enum QuickSetupBackupPreference: String, CaseIterable, Identifiable {
     func title(for locale: Locale) -> String {
         switch self {
         case .localOnly:
-            return QuickSetupLocalization.text(locale: locale, ru: "Только на устройстве", en: "Only on this device")
+            return QuickSetupLocalization.text(locale: locale, ru: "Локальный контур", en: "Local mode")
         case .cloudBackup:
-            return QuickSetupLocalization.text(locale: locale, ru: "Выгружать в iCloud", en: "Upload to iCloud")
+            return QuickSetupLocalization.text(locale: locale, ru: "Локально + iCloud", en: "Local + iCloud")
         }
     }
 
@@ -177,7 +177,7 @@ enum QuickSetupBackupPreference: String, CaseIterable, Identifiable {
     func subtitle(for locale: Locale) -> String {
         switch self {
         case .localOnly:
-            return QuickSetupLocalization.text(locale: locale, ru: "Данные останутся локально в SwiftData, выгрузка выключена", en: "Data stays local in SwiftData, upload is disabled")
+            return QuickSetupLocalization.text(locale: locale, ru: "Данные хранятся только на устройстве в SwiftData, выгрузка отключена", en: "Data stays on device in SwiftData, upload is disabled")
         case .cloudBackup:
             return QuickSetupLocalization.text(locale: locale, ru: "Снимки хранятся в Private CloudKit вашего Apple ID", en: "Snapshots are stored in your Apple ID Private CloudKit")
         }
@@ -190,9 +190,9 @@ enum QuickSetupBackupPreference: String, CaseIterable, Identifiable {
     func details(for locale: Locale) -> String {
         switch self {
         case .localOnly:
-            return QuickSetupLocalization.text(locale: locale, ru: "В любой момент можно включить выгрузку в Профиль -> Backup", en: "You can enable upload anytime in Profile -> Backup")
+            return QuickSetupLocalization.text(locale: locale, ru: "Выгрузку можно включить позже: Профиль -> Backup", en: "Upload can be enabled later in Profile -> Backup")
         case .cloudBackup:
-            return QuickSetupLocalization.text(locale: locale, ru: "Шифрование backup: AES-GCM (ключ устройства) или парольная фраза в Backup", en: "Backup encryption: AES-GCM (device key) or passphrase in Backup")
+            return QuickSetupLocalization.text(locale: locale, ru: "Шифрование: AES-GCM с ключом устройства или парольной фразой", en: "Encryption: AES-GCM with device key or passphrase")
         }
     }
 

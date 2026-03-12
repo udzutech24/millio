@@ -20,10 +20,11 @@ struct EntitlementDiagnosticsTests {
         let items = EntitlementDiagnostics.items(for: appState)
         let ids = items.map(\.id)
 
-        #expect(items.count == 8)
+        #expect(items.count == 9)
         #expect(ids == [
             "converter.crypto",
             "finances.market_assets",
+            "finances.tracked_tickers",
             "finances.products",
             "finances.charts",
             "cashflow.chart",

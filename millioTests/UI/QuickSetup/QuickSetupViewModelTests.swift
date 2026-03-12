@@ -55,6 +55,30 @@ final class QuickSetupViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.favoriteCurrencyCodes.contains("USD"))
     }
 
+    func testChangingPrimaryCurrencyRemovesItFromFavoritesImmediately() {
+        let appState = AppState()
+        let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)
+
+        viewModel.favoriteCurrencyCodes = ["USD", "EUR", "CNY"]
+        viewModel.primaryCurrencyCode = "USD"
+
+        XCTAssertEqual(viewModel.favoriteCurrencyCodes, ["EUR", "CNY"])
+        XCTAssertFalse(viewModel.favoriteCurrencyCodes.contains("USD"))
+    }
+
+    func testLocaleStepRequiresFavoriteCurrenciesToContinue() {
+        let appState = AppState()
+        let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)
+
+        viewModel.currentStep = .localeAndCurrencies
+        viewModel.primaryCurrencyCode = "USD"
+        viewModel.favoriteCurrencyCodes = []
+        XCTAssertFalse(viewModel.canContinue)
+
+        viewModel.favoriteCurrencyCodes = ["EUR"]
+        XCTAssertTrue(viewModel.canContinue)
+    }
+
     func testAddDraftProductRequiresNameAndResetsInputs() {
         let appState = AppState()
         let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)
@@ -172,12 +196,11 @@ final class QuickSetupViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.availableLanguages, [.system, .english])
         XCTAssertEqual(viewModel.primaryCurrencyCode, "USD")
-        XCTAssertEqual(viewModel.favoriteCurrencyCodes, ["GBP", "JPY", "CHF", "CAD"])
-        XCTAssertEqual(Array(viewModel.recommendedCurrencyCodes.prefix(5)), ["USD", "GBP", "JPY", "CHF", "CAD"])
+        XCTAssertEqual(viewModel.favoriteCurrencyCodes, ["EUR", "CNY"])
+        XCTAssertEqual(Array(viewModel.recommendedCurrencyCodes.prefix(5)), ["USD", "EUR", "CNY", "GBP", "JPY"])
         XCTAssertFalse(viewModel.recommendedCurrencyCodes.contains("RUB"))
-        XCTAssertFalse(viewModel.recommendedCurrencyCodes.contains("EUR"))
-        XCTAssertFalse(viewModel.recommendedCurrencyCodes.contains("CNY"))
-        XCTAssertFalse(viewModel.recommendedCurrencyCodes.contains("TRY"))
+        XCTAssertTrue(viewModel.recommendedCurrencyCodes.contains("EUR"))
+        XCTAssertTrue(viewModel.recommendedCurrencyCodes.contains("CNY"))
     }
 
     func testQuickSetupShowsRussianAndRussianCentricCurrenciesForRussianSystem() {
@@ -226,6 +249,131 @@ final class QuickSetupViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.products.first?.amount, 30)
         XCTAssertEqual(viewModel.products.first?.marketSnapshot?.quantity, 3)
         XCTAssertEqual(viewModel.products.first?.marketSnapshot?.purchaseUnitPrice, 10)
+    }
+
+    func testAddDraftCryptoAllowsMissingBuyPriceWhenMarketPriceExists() async {
+        let appState = AppState()
+        let viewModel = QuickSetupViewModel(
+            appState: appState,
+            marketDataClient: QuickSetupMarketDataClientMock(latestPriceValue: 12.5),
+            defaults: isolatedDefaults
+        )
+
+        viewModel.selectProductType(.crypto)
+        viewModel.applySelectedMarketSymbol(
+            TwelveDataSymbol(
+                symbol: "BTC/USD",
+                instrumentName: "Bitcoin",
+                exchange: "BINANCE",
+                micCode: nil,
+                instrumentType: "Cryptocurrency",
+                country: nil,
+                currency: "USD"
+            )
+        )
+        viewModel.productQuantityInput = "2"
+        viewModel.productPurchasePriceInput = ""
+        await viewModel.refreshSelectedMarketQuote(forceRefresh: true)
+
+        XCTAssertTrue(viewModel.addDraftProduct())
+        XCTAssertEqual(viewModel.products.count, 1)
+        XCTAssertEqual(viewModel.products.first?.amount, 25)
+        XCTAssertEqual(viewModel.products.first?.marketSnapshot?.purchaseUnitPrice, 12.5)
+    }
+
+    func testAddDraftCryptoAllowsMissingBuyPriceWithoutMarketPrice() {
+        let appState = AppState()
+        let viewModel = QuickSetupViewModel(
+            appState: appState,
+            marketDataClient: QuickSetupMarketDataClientMock(latestPriceValue: nil),
+            defaults: isolatedDefaults
+        )
+
+        viewModel.selectProductType(.crypto)
+        viewModel.applySelectedMarketSymbol(
+            TwelveDataSymbol(
+                symbol: "ETH/USD",
+                instrumentName: "Ethereum",
+                exchange: "BINANCE",
+                micCode: nil,
+                instrumentType: "Cryptocurrency",
+                country: nil,
+                currency: "USD"
+            )
+        )
+        viewModel.productQuantityInput = "1.5"
+        viewModel.productPurchasePriceInput = ""
+
+        XCTAssertTrue(viewModel.addDraftProduct())
+        XCTAssertEqual(viewModel.products.count, 1)
+        XCTAssertEqual(viewModel.products.first?.amount, 0)
+        XCTAssertEqual(viewModel.products.first?.marketSnapshot?.purchaseUnitPrice, 0)
+    }
+
+    func testAddDraftCryptoUsesManualCurrentPriceWhenFeedUnavailable() {
+        let appState = AppState()
+        let viewModel = QuickSetupViewModel(
+            appState: appState,
+            marketDataClient: QuickSetupMarketDataClientMock(latestPriceValue: nil),
+            defaults: isolatedDefaults
+        )
+
+        viewModel.selectProductType(.crypto)
+        viewModel.applySelectedMarketSymbol(
+            TwelveDataSymbol(
+                symbol: "BTC/USD",
+                instrumentName: "Bitcoin",
+                exchange: "BINANCE",
+                micCode: nil,
+                instrumentType: "Cryptocurrency",
+                country: nil,
+                currency: "USD"
+            )
+        )
+        viewModel.productQuantityInput = "2"
+        viewModel.productPurchasePriceInput = ""
+        viewModel.productCurrentPriceInput = "69380.78"
+
+        XCTAssertEqual(viewModel.productPositionTotal ?? -1, 138761.56, accuracy: 0.0001)
+        XCTAssertTrue(viewModel.addDraftProduct())
+        XCTAssertEqual(viewModel.products.count, 1)
+        XCTAssertEqual(viewModel.products.first?.amount ?? -1, 138761.56, accuracy: 0.0001)
+        XCTAssertEqual(viewModel.products.first?.marketSnapshot?.currentUnitPrice ?? -1, 69380.78, accuracy: 0.0001)
+    }
+
+    func testNonRussianSystemSanitizesStoredRublePrimaryAndFavorites() {
+        let appState = AppState()
+        appState.primaryCurrencyCode = "RUB"
+        let systemContext = QuickSetupSystemContext(
+            preferredLanguageIdentifiers: ["en-US"],
+            locale: Locale(identifier: "en_US")
+        )
+
+        isolatedDefaults.set("RUB", forKey: "primaryCurrencyCode")
+        isolatedDefaults.set(["RUB", "USD", "EUR", "CNY"], forKey: "favoriteCurrencyCodes")
+        let previousFavorites = SettingsManager.shared.favoriteCurrencyCodes
+        defer { SettingsManager.shared.favoriteCurrencyCodes = previousFavorites }
+        SettingsManager.shared.favoriteCurrencyCodes = ["RUB", "USD", "EUR", "CNY"]
+
+        let viewModel = QuickSetupViewModel(appState: appState, systemContext: systemContext, defaults: isolatedDefaults)
+
+        XCTAssertEqual(viewModel.primaryCurrencyCode, "USD")
+        XCTAssertEqual(viewModel.favoriteCurrencyCodes, ["EUR", "CNY"])
+        XCTAssertFalse(viewModel.favoriteCurrencyCodes.contains("RUB"))
+    }
+
+    func testPrimaryRecommendationPrefersLanguageCurrencyWhenLocaleCurrencyDiffers() {
+        let appState = AppState()
+        let systemContext = QuickSetupSystemContext(
+            preferredLanguageIdentifiers: ["en-GB"],
+            locale: Locale(identifier: "en_CH")
+        )
+
+        let viewModel = QuickSetupViewModel(appState: appState, systemContext: systemContext, defaults: isolatedDefaults)
+
+        XCTAssertEqual(viewModel.primaryCurrencyCode, "USD")
+        XCTAssertEqual(viewModel.recommendedCurrencyCodes.first, "USD")
+        XCTAssertTrue(viewModel.recommendedCurrencyCodes.contains("CHF"))
     }
 }
 

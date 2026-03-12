@@ -1,7 +1,13 @@
 # Quick Setup Flow
 
 ## Goal
-`QuickSetup` replaces promo-only onboarding with a real setup flow that configures language, currencies, expense categories, and initial finance products.
+`QuickSetup` replaces promo-only onboarding with an operational setup flow that configures language, currencies, expense categories, and initial finance products.
+
+## Start Screen
+- First launch now opens an onboarding start screen before quick setup.
+- The screen explains the setup scope and offers two actions:
+  - Start quick setup.
+  - Skip and go straight to the workspace.
 
 ## Steps
 1. `localeAndCurrencies`
@@ -13,7 +19,9 @@
   - Non-Russian system locale: `System`, `English`.
 - Quick setup prioritizes currencies by system locale:
   - Russian system locale: `RUB`, `USD`, `CNY`, `EUR`, `TRY`.
-  - Non-Russian system locale: system currency first, then `USD`, `GBP`, `JPY`, `CHF`, `CAD`, `AUD` (without `RUB`, `EUR`, `CNY`, `TRY` in recommendations).
+  - Non-Russian system locale: system currency first, then `USD`, `EUR`, `CNY`, `GBP`, `JPY`, `CHF`, `CAD`, `AUD` (without `RUB` in recommendations).
+- For non-Russian system locale, `RUB` is sanitized out from quick setup defaults even when old settings contain it.
+- Default favorite currencies for non-Russian system locale are derived from `USD`, `EUR`, `CNY` and never include the selected primary currency.
 
 2. `expenseCategories`
 - Choose expense categories to keep visible in Cashflow.
@@ -38,7 +46,7 @@
   - AES-GCM with passphrase (portable mode, configured in Profile -> Backup).
 
 ## Entry Points
-- First launch: `OnboardingView` opens `QuickSetupView` in onboarding mode.
+- First launch: `OnboardingView` opens `OnboardingStartView`, then `QuickSetupView` in onboarding mode.
 - Main screen: a dismissible `Quick setup` banner is shown until setup is completed.
 - Profile: dedicated row in `Settings` (under `App security`) to re-open `Quick setup` anytime.
 
