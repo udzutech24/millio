@@ -151,27 +151,12 @@ enum CashbackScreenStyle {
         endPoint: .trailing
     )
 
-    static let showcaseCardFill = LinearGradient(
-        colors: [
-            Color(hex: "111827"),
-            Color(hex: "1B2232"),
-            Color(hex: "20283A")
-        ],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
+    static let showcaseCardFill = Color.clear
 
-    static let showcaseCardStroke = LinearGradient(
-        colors: [
-            Color(hex: "0A84FF").opacity(0.88),
-            Color(hex: "00D1C7").opacity(0.88)
-        ],
-        startPoint: .leading,
-        endPoint: .trailing
-    )
-
-    static let showcaseInsetStroke = Color.white.opacity(0.06)
-    static let showcaseStrokeWidth: CGFloat = 0.8
+    static let showcaseCardStroke = Color.white.opacity(0.22)
+    static let showcaseInsetStroke = accent.opacity(0.10)
+    static let showcaseStrokeWidth: CGFloat = 0.75
+    static let showcaseBorderGlow = Color.clear
     static let showcasePercentTint = LinearGradient(
         colors: [
             Color(hex: "89C7FF"),

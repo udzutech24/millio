@@ -72,27 +72,78 @@ private struct CashbackContentViewInternal: View {
     @Environment(AppState.self) private var appState
     @Environment(AppRouter.self) private var router
     @State private var showFavoriteCategoriesSheet: Bool = false
+    @State private var isSearchExpanded: Bool = false
+    @State private var searchText: String = ""
+    @FocusState private var isSearchFieldFocused: Bool
     private let currentRoute: AppRoute = .cashback
 
     private var localizationLocale: Locale {
         appState.selectedLanguage.locale ?? Locale.current
     }
 
+    private var filteredCashbacks: [Cashback] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return viewModel.state.visibleCashbacks }
+
+        return viewModel.state.visibleCashbacks.filter { cashback in
+            let categoryOption = viewModel.categoryOption(
+                for: cashback.categoryRaw,
+                fallbackName: cashback.name
+            )
+            let cardNames = viewModel.getCardsForCashback(cashback).map(\.name)
+
+            if categoryOption.displayName.localizedCaseInsensitiveContains(query) {
+                return true
+            }
+
+            if cashback.name.localizedCaseInsensitiveContains(query) {
+                return true
+            }
+
+            return cardNames.contains { $0.localizedCaseInsensitiveContains(query) }
+        }
+    }
+
     var body: some View {
         ZStack {
             GradientBackground()
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    dismissSearchKeyboard()
+                }
 
             if viewModel.state.visibleCashbacks.isEmpty {
                 emptyStateView
                     .padding(.horizontal, 16)
             } else {
-                cashbacksList
+                VStack(spacing: 0) {
+                    if isSearchExpanded {
+                        searchPanel
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+
+                    if filteredCashbacks.isEmpty {
+                        searchEmptyStateView
+                            .padding(.horizontal, 16)
+                            .onTapGesture {
+                                dismissSearchKeyboard()
+                            }
+                    } else {
+                        cashbacksList
+                            .simultaneousGesture(
+                                TapGesture().onEnded {
+                                    dismissSearchKeyboard()
+                                }
+                            )
+                    }
+                }
             }
         }
         .navigationBarBackButtonHidden(true)
         .navigationBarTitleDisplayMode(.inline)
         .interactiveBackSwipe()
         .toolbar { topToolbar }
+        .animation(.easeInOut(duration: 0.18), value: isSearchExpanded)
         .safeAreaInset(edge: .bottom) {
             addCashbackFAB
         }
@@ -192,7 +243,7 @@ private struct CashbackContentViewInternal: View {
     private var cashbacksList: some View {
         List {
             Section {
-                ForEach(Array(viewModel.state.visibleCashbacks.enumerated()), id: \.element.id) { _, cashback in
+                ForEach(Array(filteredCashbacks.enumerated()), id: \.element.id) { _, cashback in
                     CashbackRowView(
                         cashback: cashback,
                         viewModel: viewModel
@@ -216,6 +267,77 @@ private struct CashbackContentViewInternal: View {
             Color.clear.frame(height: 86)
         }
         .padding(.top, -14)
+    }
+
+    private var searchPanel: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(AppColors.textSecondary)
+
+            TextField("Поиск категории", text: $searchText)
+                .textInputAutocapitalization(.never)
+                .disableAutocorrection(true)
+                .submitLabel(.done)
+                .foregroundStyle(AppColors.textPrimary)
+                .focused($isSearchFieldFocused)
+                .onSubmit {
+                    dismissSearchKeyboard()
+                }
+
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppColors.textTertiary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("Очистить поиск"))
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white.opacity(0.05))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 0.75)
+                )
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 6)
+        .onAppear {
+            DispatchQueue.main.async {
+                isSearchFieldFocused = true
+            }
+        }
+    }
+
+    private var searchEmptyStateView: some View {
+        VStack(spacing: 12) {
+            Spacer(minLength: 40)
+
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 28, weight: .medium))
+                .foregroundStyle(AppColors.textTertiary)
+
+            Text("Ничего не найдено")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(AppColors.textPrimary)
+
+            Text("Попробуйте другое название категории или карты")
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(AppColors.textTertiary)
+                .multilineTextAlignment(.center)
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.bottom, 72)
     }
 
     @ToolbarContentBuilder
@@ -290,16 +412,33 @@ private struct CashbackContentViewInternal: View {
         }
 
         ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                showFavoriteCategoriesSheet = true
-            } label: {
-                Image(systemName: "line.3.horizontal.decrease.circle")
-                    .font(.system(size: iconSize, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.94))
-                    .frame(width: itemSize, height: itemSize)
+            HStack(spacing: 10) {
+                Button {
+                    isSearchExpanded.toggle()
+                    if !isSearchExpanded {
+                        searchText = ""
+                        dismissSearchKeyboard()
+                    }
+                } label: {
+                    Image(systemName: isSearchExpanded ? "xmark" : "magnifyingglass")
+                        .font(.system(size: iconSize - 1, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.94))
+                        .frame(width: itemSize, height: itemSize)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(isSearchExpanded ? "Закрыть поиск" : "Поиск"))
+
+                Button {
+                    showFavoriteCategoriesSheet = true
+                } label: {
+                    Image(systemName: "line.3.horizontal.decrease.circle")
+                        .font(.system(size: iconSize, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.94))
+                        .frame(width: itemSize, height: itemSize)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("Избранные категории"))
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text("Избранные категории"))
         }
     }
 
@@ -327,6 +466,13 @@ private struct CashbackContentViewInternal: View {
 
     private var toolbarYearText: String {
         CashbackMonthTitleFormatter.yearText(for: viewModel.state.selectedMonth, locale: localizationLocale)
+    }
+
+    private func dismissSearchKeyboard() {
+        isSearchFieldFocused = false
+        #if canImport(UIKit)
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        #endif
     }
 }
 
@@ -685,20 +831,25 @@ private struct CashbackRowView: View {
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(CashbackScreenStyle.showcaseCardFill)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(CashbackScreenStyle.showcaseCardStroke, lineWidth: CashbackScreenStyle.showcaseStrokeWidth)
+                    }
             )
     }
 
     private var contentCardBackground: some View {
         RoundedRectangle(cornerRadius: 18, style: .continuous)
             .fill(CashbackScreenStyle.showcaseCardFill)
-            .overlay(alignment: .topLeading) {
-                Circle()
-                    .fill(CashbackScreenStyle.neonCyan.opacity(0.08))
-                    .frame(width: 58, height: 58)
-                    .blur(radius: 14)
-                    .offset(x: -8, y: -10)
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(CashbackScreenStyle.showcaseCardStroke, lineWidth: CashbackScreenStyle.showcaseStrokeWidth)
             }
-            .shadow(color: CashbackScreenStyle.neonCyan.opacity(0.06), radius: 8, y: 2)
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(CashbackScreenStyle.showcaseInsetStroke, lineWidth: 0.5)
+                    .padding(1)
+            }
     }
 
     private var cardSubtitle: String {
