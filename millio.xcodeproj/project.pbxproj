@@ -739,7 +739,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = millioCurrencyWidgetExtension/millioCurrencyWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 14;
+				CURRENT_PROJECT_VERSION = 19;
 				DEVELOPMENT_TEAM = RZ9K4783T9;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = millioCurrencyWidgetExtension/Info.plist;
@@ -768,7 +768,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = millioCurrencyWidgetExtension/millioCurrencyWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 14;
+				CURRENT_PROJECT_VERSION = 19;
 				DEVELOPMENT_TEAM = RZ9K4783T9;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = millioCurrencyWidgetExtension/Info.plist;

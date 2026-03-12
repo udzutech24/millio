@@ -145,10 +145,11 @@ enum MarketSymbolSearchFormatter {
     // We collapse backend duplicates by market identity and keep the richest payload.
     static func dedupeIdentityKey(for symbol: TwelveDataSymbol) -> String {
         let quoteKey = normalized(symbol.canonicalQuoteLookupKey)
+        let market = normalized(symbol.exchange ?? symbol.micCode ?? "")
         let type = normalized(symbol.instrumentType ?? "")
         let currency = normalized(symbol.currency ?? "")
         let name = normalized(symbol.displayName)
-        return [quoteKey, type, currency, name].joined(separator: "|")
+        return [quoteKey, market, type, currency, name].joined(separator: "|")
     }
 
     private static func metadataScore(_ symbol: TwelveDataSymbol) -> Int {
@@ -202,6 +203,13 @@ final class MarketSymbolSearchViewModel: ObservableObject {
             return
         }
 
+        guard query.count >= Self.minimumRemoteQueryLength else {
+            results = []
+            errorMessage = nil
+            isLoading = false
+            return
+        }
+
         let queryCacheKey = MarketSymbolSearchEngine.normalize(query)
         let localResults = resolver.localResults(query: query, filter: filter)
         let cachedResults = cachedResultsByQuery[queryCacheKey] ?? []
@@ -212,11 +220,6 @@ final class MarketSymbolSearchViewModel: ObservableObject {
         )
         results = seededResults.isEmpty ? localResults : seededResults
         errorMessage = nil
-
-        guard query.count >= Self.minimumRemoteQueryLength else {
-            isLoading = false
-            return
-        }
 
         if MarketSymbolSearchEngine.shouldSkipRemoteSearch(
             filter: filter,

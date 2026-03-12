@@ -21,7 +21,7 @@ struct CashflowExpandedChartHintTests {
     @Test("Hint для английского языка содержит рекомендуемое окно")
     func englishHintContainsVisibleRange() {
         let text = cashflowExpandedHintText(visiblePeriods: 12, locale: Locale(identifier: "en_US"))
-        #expect(text.contains("Visible range"))
+        #expect(text.contains("Range"))
         #expect(text.contains("12"))
         #expect(text != "cashflow.chart.hint_format")
     }

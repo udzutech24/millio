@@ -3,6 +3,7 @@
 //  millioTests
 //
 
+import CoreGraphics
 import Testing
 @testable import millio
 
@@ -19,5 +20,12 @@ struct InteractiveBackSwipePolicyTests {
     func respectsExplicitDisableFlag() {
         #expect(!InteractiveBackSwipePolicy.shouldEnableGesture(isEnabled: false, navigationStackDepth: 2))
         #expect(!InteractiveBackSwipePolicy.shouldEnableGesture(isEnabled: false, navigationStackDepth: 8))
+    }
+
+    @Test("Жест начинается только для уверенного свайпа вправо")
+    func startsOnlyForRightDominantVelocity() {
+        #expect(InteractiveBackSwipePolicy.shouldBeginGesture(velocity: CGPoint(x: 600, y: 40)))
+        #expect(!InteractiveBackSwipePolicy.shouldBeginGesture(velocity: CGPoint(x: -600, y: 20)))
+        #expect(!InteractiveBackSwipePolicy.shouldBeginGesture(velocity: CGPoint(x: 220, y: 400)))
     }
 }

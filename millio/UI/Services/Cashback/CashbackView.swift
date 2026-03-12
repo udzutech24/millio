@@ -88,13 +88,14 @@ private struct CashbackContentViewInternal: View {
             } else {
                 cashbacksList
             }
-
-            addCashbackFAB
         }
         .navigationBarBackButtonHidden(true)
         .navigationBarTitleDisplayMode(.inline)
         .interactiveBackSwipe()
         .toolbar { topToolbar }
+        .safeAreaInset(edge: .bottom) {
+            addCashbackFAB
+        }
         .sheet(isPresented: Binding(
             get: { viewModel.state.showCashbackEditor },
             set: { if !$0 { viewModel.handle(.hideCashbackEditor) } }
@@ -157,35 +158,33 @@ private struct CashbackContentViewInternal: View {
     }
 
     private var addCashbackFAB: some View {
-        VStack {
+        HStack {
             Spacer()
-            HStack {
-                Spacer()
-                Button {
-                    viewModel.handle(.addCashback)
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 56, height: 56)
-                        .background(
-                            Circle()
-                                .fill(CashbackScreenStyle.fabFill)
-                                .overlay(
-                                    Circle()
-                                        .fill(CashbackScreenStyle.glow)
-                                        .opacity(0.6)
-                                )
-                                .overlay(
-                                    Circle()
-                                        .stroke(CashbackScreenStyle.accent.opacity(0.55), lineWidth: 1)
-                                )
-                        )
-                }
-                .padding(.trailing, 24)
-                .padding(.bottom, 24)
+            Button {
+                viewModel.handle(.addCashback)
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 58, height: 58)
+                .background(addCashbackFABBackground)
+                .shadow(color: CashbackScreenStyle.accent.opacity(0.22), radius: 16, y: 10)
             }
+            .buttonStyle(.plain)
         }
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+        .padding(.bottom, 12)
+        .background(Color.clear)
+    }
+
+    private var addCashbackFABBackground: some View {
+        Circle()
+            .fill(CashbackScreenStyle.fabFill)
+            .overlay(
+                Circle()
+                    .stroke(CashbackScreenStyle.accent.opacity(0.6), lineWidth: 1.2)
+            )
     }
 
     // MARK: - Cashbacks List
@@ -193,18 +192,13 @@ private struct CashbackContentViewInternal: View {
     private var cashbacksList: some View {
         List {
             Section {
-                ForEach(Array(viewModel.state.visibleCashbacks.enumerated()), id: \.element.id) { index, cashback in
+                ForEach(Array(viewModel.state.visibleCashbacks.enumerated()), id: \.element.id) { _, cashback in
                     CashbackRowView(
                         cashback: cashback,
                         viewModel: viewModel
                     )
                     .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
-                    .listRowBackground(
-                        cashbackRowBackground(
-                            isFirst: index == 0,
-                            isLast: index == viewModel.state.visibleCashbacks.count - 1
-                        )
-                    )
+                    .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                 }
             } header: {
@@ -219,35 +213,9 @@ private struct CashbackContentViewInternal: View {
         .scrollContentBackground(.hidden)
         .background(Color.clear)
         .safeAreaInset(edge: .bottom) {
-            Color.clear.frame(height: 88)
+            Color.clear.frame(height: 86)
         }
-        .padding(.top, 8)
-    }
-
-    @ViewBuilder
-    private func cashbackRowBackground(isFirst: Bool, isLast: Bool) -> some View {
-        let shape = UnevenRoundedRectangle(
-            cornerRadii: .init(
-                topLeading: isFirst ? 28 : 0,
-                bottomLeading: isLast ? 28 : 0,
-                bottomTrailing: isLast ? 28 : 0,
-                topTrailing: isFirst ? 28 : 0
-            ),
-            style: .continuous
-        )
-
-        ZStack(alignment: .bottom) {
-            shape
-                .fill(CashbackScreenStyle.listFill)
-
-            if !isLast {
-                Rectangle()
-                    .fill(CashbackScreenStyle.rowDivider)
-                    .frame(height: 1)
-                    .padding(.leading, 62)
-                    .padding(.trailing, 10)
-            }
-        }
+        .padding(.top, -14)
     }
 
     @ToolbarContentBuilder
@@ -603,44 +571,48 @@ private struct CashbackRowView: View {
         )
         let isPinned = viewModel.isPinnedCashback(cashback)
 
-        HStack(spacing: 14) {
-            CashbackCategoryIconView(
-                icon: categoryOption.icon,
-                fontSize: 24,
-                fontWeight: .regular,
-                tint: AnyShapeStyle(AppColors.textPrimary)
-            )
-            .frame(width: 36, height: 36)
+        HStack(alignment: .center, spacing: 10) {
+            HStack(alignment: .center, spacing: 10) {
+                categoryIconBox(icon: categoryOption.icon)
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(categoryOption.displayName)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                         .lineLimit(1)
 
-                    if isFavorite {
-                        statusBadge(title: "TOP", fill: Color.orange.opacity(0.18), tint: .orange)
-                    } else if isPinned {
-                        statusBadge(title: "PIN", fill: CashbackScreenStyle.neonCyan.opacity(0.18), tint: CashbackScreenStyle.neonCyan)
-                    }
+                    Text(cardSubtitle)
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .lineLimit(1)
                 }
 
-                Text(cardSubtitle)
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(AppColors.textSecondary)
-                    .lineLimit(1)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+                Spacer(minLength: 8)
 
-            Text(cashback.formattedPercentage)
-                .font(.system(size: 20, weight: .bold, design: .rounded))
-                .minimumScaleFactor(0.5)
-                .lineLimit(1)
-                .foregroundStyle(AppColors.textPrimary)
+                HStack(spacing: 6) {
+                    if isFavorite {
+                        statusBadge(title: "TOP", fill: Color.orange.opacity(0.18), tint: .orange)
+                    }
+
+                    if isPinned {
+                        statusBadge(
+                            title: "PIN",
+                            fill: CashbackScreenStyle.neonCyan.opacity(0.18),
+                            tint: CashbackScreenStyle.neonCyan
+                        )
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 60)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(contentCardBackground)
+
+            percentageCapsule
+                .frame(height: 60)
+                .fixedSize(horizontal: true, vertical: false)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 8)
+        .padding(.vertical, 2)
         .contentShape(Rectangle())
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
             Button {
@@ -686,6 +658,47 @@ private struct CashbackRowView: View {
                 Capsule(style: .continuous)
                     .fill(fill)
             )
+    }
+
+    private func categoryIconBox(icon: String) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+
+            CashbackCategoryIconView(
+                icon: icon,
+                fontSize: 14,
+                fontWeight: .semibold,
+                tint: AnyShapeStyle(AppColors.textPrimary)
+            )
+        }
+        .frame(width: 28, height: 28)
+    }
+
+    private var percentageCapsule: some View {
+        Text(cashback.formattedPercentage)
+            .font(.system(size: 21, weight: .bold, design: .rounded))
+            .minimumScaleFactor(0.7)
+            .lineLimit(1)
+            .foregroundStyle(CashbackScreenStyle.showcasePercentTint)
+            .frame(width: 60, height: 60)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(CashbackScreenStyle.showcaseCardFill)
+            )
+    }
+
+    private var contentCardBackground: some View {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .fill(CashbackScreenStyle.showcaseCardFill)
+            .overlay(alignment: .topLeading) {
+                Circle()
+                    .fill(CashbackScreenStyle.neonCyan.opacity(0.08))
+                    .frame(width: 58, height: 58)
+                    .blur(radius: 14)
+                    .offset(x: -8, y: -10)
+            }
+            .shadow(color: CashbackScreenStyle.neonCyan.opacity(0.06), radius: 8, y: 2)
     }
 
     private var cardSubtitle: String {

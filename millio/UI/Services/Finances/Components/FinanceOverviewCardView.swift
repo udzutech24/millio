@@ -534,24 +534,24 @@ struct FinanceOverviewCardView: View {
         let metrics = FinanceOverviewLedgerStyle.compactCardMetrics
 
         return Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: metrics.contentSpacing) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(side.side.title)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: metrics.titleFontSize, weight: .semibold))
                         .foregroundStyle(AppColors.textSecondary)
 
                     Spacer(minLength: 8)
 
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: metrics.chevronFontSize, weight: .semibold))
                         .foregroundStyle(color.opacity(0.82))
                 }
 
                 Text(amountWithCurrency(side.total))
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: metrics.amountFontSize, weight: .bold))
                     .foregroundStyle(color.opacity(0.9))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.72)
+                    .minimumScaleFactor(0.82)
 
                 GeometryReader { proxy in
                     let barWidth = FinanceOverviewLedgerStyle.barWidth(
@@ -564,22 +564,23 @@ struct FinanceOverviewCardView: View {
                     ZStack(alignment: .leading) {
                         Capsule(style: .continuous)
                             .fill(Color.white.opacity(0.045))
-                            .frame(height: 8)
+                            .frame(height: metrics.progressHeight)
                         Capsule(style: .continuous)
                             .fill(color.opacity(0.7))
-                            .frame(width: barWidth, height: 8)
+                            .frame(width: barWidth, height: metrics.progressHeight)
                     }
                 }
-                .frame(height: 8)
+                .frame(height: metrics.progressHeight)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+            .frame(minHeight: metrics.minHeight, alignment: .topLeading)
+            .padding(.horizontal, metrics.horizontalPadding)
+            .padding(.vertical, metrics.verticalPadding)
             .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                RoundedRectangle(cornerRadius: metrics.cornerRadius, style: .continuous)
                     .fill(Color.white.opacity(0.025))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        RoundedRectangle(cornerRadius: metrics.cornerRadius, style: .continuous)
                             .stroke(Color.white.opacity(0.07), lineWidth: 0.9)
                     )
             )

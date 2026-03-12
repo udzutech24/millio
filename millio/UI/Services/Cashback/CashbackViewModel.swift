@@ -345,7 +345,11 @@ final class CashbackViewModel: ViewModelProtocol {
         if let systemMatch = systemCategoryOptions.first(where: {
             $0.displayName.caseInsensitiveCompare(trimmed) == .orderedSame
         }) {
-            return systemMatch
+            // Если пользователь оставил системное имя, но явно выбрал другую иконку,
+            // это уже отдельная кастомная категория, а не alias системной.
+            if normalizedIcon == systemMatch.icon {
+                return systemMatch
+            }
         }
 
         let normalized = CashbackCustomCategory.normalize(trimmed)

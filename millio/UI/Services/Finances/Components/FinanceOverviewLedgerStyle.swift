@@ -12,14 +12,14 @@ enum FinanceOverviewLedgerStyle {
     struct CompactCardMetrics: Equatable {
         let titleFontSize: CGFloat
         let amountFontSize: CGFloat
-        let iconSize: CGFloat
-        let iconFontSize: CGFloat
         let progressHeight: CGFloat
         let minProgressWidth: CGFloat
         let horizontalPadding: CGFloat
         let verticalPadding: CGFloat
         let cornerRadius: CGFloat
         let contentSpacing: CGFloat
+        let minHeight: CGFloat
+        let chevronFontSize: CGFloat
     }
 
     static func countsText(groups: Int, accounts: Int) -> String {
@@ -59,15 +59,17 @@ enum FinanceOverviewLedgerStyle {
     static var compactCardMetrics: CompactCardMetrics {
         CompactCardMetrics(
             titleFontSize: 16,
-            amountFontSize: 15,
-            iconSize: 28,
-            iconFontSize: 11,
+            amountFontSize: 19,
             progressHeight: 10,
-            minProgressWidth: 24,
-            horizontalPadding: 14,
-            verticalPadding: 12,
-            cornerRadius: 22,
-            contentSpacing: 10
+            minProgressWidth: 28,
+            horizontalPadding: 16,
+            verticalPadding: 16,
+            cornerRadius: 20,
+            contentSpacing: 12,
+            // Keep the compact debit/credit pills visually balanced:
+            // the space below the progress bar should be close to the top inset.
+            minHeight: 102,
+            chevronFontSize: 15
         )
     }
 }

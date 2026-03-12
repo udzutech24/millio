@@ -73,14 +73,14 @@ struct FinanceOverviewLedgerStyleTests {
         let metrics = FinanceOverviewLedgerStyle.compactCardMetrics
 
         #expect(metrics.titleFontSize == 16)
-        #expect(metrics.amountFontSize == 15)
-        #expect(metrics.iconSize == 28)
-        #expect(metrics.iconFontSize == 11)
+        #expect(metrics.amountFontSize == 19)
         #expect(metrics.progressHeight == 10)
-        #expect(metrics.minProgressWidth == 24)
-        #expect(metrics.horizontalPadding == 14)
-        #expect(metrics.verticalPadding == 12)
-        #expect(metrics.cornerRadius == 22)
-        #expect(metrics.contentSpacing == 10)
+        #expect(metrics.minProgressWidth == 28)
+        #expect(metrics.horizontalPadding == 16)
+        #expect(metrics.verticalPadding == 16)
+        #expect(metrics.cornerRadius == 20)
+        #expect(metrics.contentSpacing == 12)
+        #expect(metrics.minHeight == 102)
+        #expect(metrics.chevronFontSize == 15)
     }
 }

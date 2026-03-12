@@ -17,13 +17,14 @@ enum FinancesMainLayoutPolicy {
     static let fabDiameter: CGFloat = 52
     static let fabIconSize: CGFloat = 20
     static let fabTrailingPadding: CGFloat = 20
-    static let fabBottomPadding: CGFloat = 104
+    /// FAB должен висеть непосредственно над tab bar, а не в середине пустого пространства.
+    static let fabBottomPadding: CGFloat = 28
 
     static func showsAddFAB(visibleGroupsCount: Int) -> Bool {
         visibleGroupsCount > 0
     }
 
     static func scrollContentBottomPadding(showsAddFAB: Bool) -> CGFloat {
-        showsAddFAB ? 148 : 28
+        showsAddFAB ? 92 : 28
     }
 }

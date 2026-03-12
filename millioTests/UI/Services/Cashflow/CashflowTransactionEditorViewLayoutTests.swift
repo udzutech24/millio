@@ -5,6 +5,7 @@
 //  Created by Codex on 01.03.2026.
 //
 
+import Foundation
 import Testing
 @testable import millio
 
@@ -90,8 +91,8 @@ struct CashflowTransactionEditorViewLayoutTests {
     @Test("Конфигурация cashflow-листа для дохода")
     func incomeSheetConfiguration() {
         let kind = CashflowCategoryTransactionSheetKind.income
-        #expect(kind.navigationTitle == "New income")
-        #expect(kind.monthlyTotalTitle == "Total income for month")
+        #expect(kind.navigationTitle == String(localized: "cashflow.operation.new_income"))
+        #expect(kind.monthlyTotalTitle == String(localized: "cashflow.operation.total_income_for_month"))
         #expect(kind.categoryKind == .income)
         #expect(kind.transactionType == .income)
         #expect(kind.historyFilter == .income)
@@ -100,8 +101,8 @@ struct CashflowTransactionEditorViewLayoutTests {
     @Test("Конфигурация cashflow-листа для расхода")
     func expenseSheetConfiguration() {
         let kind = CashflowCategoryTransactionSheetKind.expense
-        #expect(kind.navigationTitle == "New expense")
-        #expect(kind.monthlyTotalTitle == "Total expense for month")
+        #expect(kind.navigationTitle == String(localized: "cashflow.operation.new_expense"))
+        #expect(kind.monthlyTotalTitle == String(localized: "cashflow.operation.total_expense_for_month"))
         #expect(kind.categoryKind == .expense)
         #expect(kind.transactionType == .expense)
         #expect(kind.historyFilter == .expense)

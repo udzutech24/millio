@@ -215,13 +215,10 @@ enum MarketAssetIdentityResolver {
             return nil
         }
 
-        let canonicalLookupKey = MarketInstrumentIdentity.canonicalQuoteLookupKey(
+        let canonicalSymbol = canonicalAssetSymbol(
             symbol: normalizedSymbol,
             exchange: exchange
         )
-        let canonicalSymbol = canonicalLookupKey.isEmpty
-            ? normalizedSymbol.uppercased()
-            : canonicalLookupKey.uppercased()
 
         let assetType = assetType(for: category, instrumentType: instrumentType)
         let assetID = makeAssetID(category: category, canonicalSymbol: canonicalSymbol)
@@ -246,9 +243,51 @@ enum MarketAssetIdentityResolver {
         )
     }
 
+    private static func canonicalAssetSymbol(symbol: String, exchange: String?) -> String {
+        let trimmedSymbol = symbol.trimmingCharacters(in: .whitespacesAndNewlines)
+        let quoteLookupKey = MarketInstrumentIdentity.canonicalQuoteLookupKey(
+            symbol: trimmedSymbol,
+            exchange: exchange
+        )
+        let baseTicker = StockBulkImportCandidate.canonicalTicker(from: trimmedSymbol)
+
+        guard !baseTicker.isEmpty else {
+            return quoteLookupKey.isEmpty ? trimmedSymbol.uppercased() : quoteLookupKey.uppercased()
+        }
+
+        switch normalizedAssetMarket(exchange: exchange, symbol: trimmedSymbol) {
+        case nil, "US", "NASDAQ", "NYSE", "AMEX", "BATS", "IEX":
+            return baseTicker
+        case let market?:
+            return "\(market):\(baseTicker)"
+        }
+    }
+
     private static func normalizedProviderName(_ providerName: String?) -> String {
         let trimmed = providerName?.trimmingCharacters(in: .whitespacesAndNewlines)
         return (trimmed?.isEmpty == false ? trimmed! : defaultProviderName).lowercased()
+    }
+
+    private static func normalizedAssetMarket(exchange: String?, symbol: String) -> String? {
+        let normalizedExchange = exchange?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+        if let normalizedExchange, !normalizedExchange.isEmpty {
+            return normalizedExchange
+        }
+
+        let rawSymbol = symbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if rawSymbol.contains(":"),
+           let market = rawSymbol.split(separator: ":", maxSplits: 1).first {
+            let normalizedMarket = String(market).trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            return normalizedMarket.isEmpty ? nil : normalizedMarket
+        }
+
+        if rawSymbol.hasSuffix(".US") {
+            return "US"
+        }
+
+        return nil
     }
 
     private static func normalizedExchangeCode(_ exchange: String?, micCode: String?) -> String? {
@@ -447,13 +486,9 @@ struct AssetCatalogStore {
     }
 
     private func supportsCatalogModels() -> Bool {
-        do {
-            _ = try modelContext.fetch(FetchDescriptor<AssetCatalogItem>())
-            _ = try modelContext.fetch(FetchDescriptor<AssetProviderMapping>())
-            return true
-        } catch {
-            return false
-        }
+        let schema = modelContext.container.schema
+        return schema.entity(for: AssetCatalogItem.self) != nil &&
+            schema.entity(for: AssetProviderMapping.self) != nil
     }
 
     private func inferredInstrumentType(for investment: Investment) -> String? {

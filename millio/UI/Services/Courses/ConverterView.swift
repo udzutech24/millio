@@ -239,6 +239,7 @@ struct ConverterView: View {
         VStack(spacing: 0) {
             currencyList(layout: layout)
                 .padding(.horizontal, 16)
+                .padding(.top, 6)
                 .frame(height: layout.listBlockH, alignment: .top)
             
             Color.clear

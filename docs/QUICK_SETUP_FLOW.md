@@ -3,11 +3,10 @@
 ## Goal
 `QuickSetup` replaces promo-only onboarding with an operational setup flow that configures language, currencies, expense categories, and initial finance products.
 
-## Start Screen
-- First launch now opens an onboarding start screen before quick setup.
-- The screen explains the setup scope and offers two actions:
-  - Start quick setup.
-  - Skip and go straight to the workspace.
+## Start Flow
+- First launch opens `QuickSetupView` immediately in onboarding mode.
+- There is no separate intro/promo screen before the first setup step.
+- If the user leaves onboarding, the app still proceeds to the workspace without marking quick setup as completed.
 
 ## Steps
 1. `localeAndCurrencies`
@@ -46,7 +45,7 @@
   - AES-GCM with passphrase (portable mode, configured in Profile -> Backup).
 
 ## Entry Points
-- First launch: `OnboardingView` opens `OnboardingStartView`, then `QuickSetupView` in onboarding mode.
+- First launch: `OnboardingView` opens `QuickSetupView` directly in onboarding mode.
 - Main screen: a dismissible `Quick setup` banner is shown until setup is completed.
 - Profile: dedicated row in `Settings` (under `App security`) to re-open `Quick setup` anytime.
 

@@ -390,55 +390,54 @@ private struct FinancesMainTabView: View {
     
     private var totalAmountSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 10) {
-                Spacer()
+            HStack(alignment: .top, spacing: 16) {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(formatBalance(viewModel.state.totalAmount, isHidden: viewModel.state.isAmountHidden))
+                            .font(.system(size: 36, weight: .bold))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.58)
 
-                headerActionButton(systemName: viewModel.state.isAmountHidden ? "eye.slash" : "eye") {
-                    viewModel.handle(.toggleAmountVisibility)
-                }
-
-                refreshMenu
-            }
-
-            HStack(alignment: .center, spacing: 12) {
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(formatBalance(viewModel.state.totalAmount, isHidden: viewModel.state.isAmountHidden))
-                        .font(.system(size: 32, weight: .bold))
-                        .foregroundStyle(AppColors.textPrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-
-                    Button {
-                        viewModel.handle(.showDisplayCurrencySheet)
-                    } label: {
-                        currencyPickerLabel(
-                            symbol: MonetaCurrency(rawValue: viewModel.state.displayCurrency)?.symbol ?? viewModel.state.displayCurrency,
-                            amountFontSize: 32,
-                            color: AppColors.textSecondary.opacity(0.82)
-                        )
+                        Button {
+                            viewModel.handle(.showDisplayCurrencySheet)
+                        } label: {
+                            currencyPickerLabel(
+                                symbol: MonetaCurrency(rawValue: viewModel.state.displayCurrency)?.symbol ?? viewModel.state.displayCurrency,
+                                amountFontSize: 36,
+                                color: AppColors.textSecondary.opacity(0.82)
+                            )
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
-                }
 
-                Spacer()
-            }
+                    if let secondaryCurrency = viewModel.state.secondaryDisplayCurrency {
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text(formatBalance(viewModel.state.secondaryTotalAmount, isHidden: viewModel.state.isAmountHidden))
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(AppColors.textTertiary)
 
-            if let secondaryCurrency = viewModel.state.secondaryDisplayCurrency {
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(formatBalance(viewModel.state.secondaryTotalAmount, isHidden: viewModel.state.isAmountHidden))
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(AppColors.textTertiary)
-
-                    Button {
-                        viewModel.handle(.showSecondaryDisplayCurrencySheet)
-                    } label: {
-                        currencyPickerLabel(
-                            symbol: MonetaCurrency(rawValue: secondaryCurrency)?.symbol ?? secondaryCurrency,
-                            amountFontSize: 15,
-                            color: AppColors.textTertiary.opacity(0.82)
-                        )
+                            Button {
+                                viewModel.handle(.showSecondaryDisplayCurrencySheet)
+                            } label: {
+                                currencyPickerLabel(
+                                    symbol: MonetaCurrency(rawValue: secondaryCurrency)?.symbol ?? secondaryCurrency,
+                                    amountFontSize: 15,
+                                    color: AppColors.textTertiary.opacity(0.82)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
-                    .buttonStyle(.plain)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                HStack(spacing: 10) {
+                    headerActionButton(systemName: viewModel.state.isAmountHidden ? "eye.slash" : "eye") {
+                        viewModel.handle(.toggleAmountVisibility)
+                    }
+
+                    refreshMenu
                 }
             }
 

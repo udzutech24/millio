@@ -23,7 +23,7 @@ struct FinancesMainLayoutPolicyTests {
 
         #expect(paddingWithFAB > paddingWithoutFAB)
         #expect(paddingWithoutFAB > CGFloat.zero)
-        #expect(paddingWithFAB == 148)
+        #expect(paddingWithFAB == 92)
         #expect(paddingWithoutFAB == 28)
     }
 
@@ -36,6 +36,6 @@ struct FinancesMainLayoutPolicyTests {
         #expect(FinancesMainLayoutPolicy.fabDiameter == 52)
         #expect(FinancesMainLayoutPolicy.fabIconSize == 20)
         #expect(FinancesMainLayoutPolicy.fabTrailingPadding == 20)
-        #expect(FinancesMainLayoutPolicy.fabBottomPadding == 104)
+        #expect(FinancesMainLayoutPolicy.fabBottomPadding == 28)
     }
 }
