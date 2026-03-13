@@ -109,7 +109,10 @@ final class AppState {
     var pendingOpenMainIncomeSheet: Bool = false
     /// One-shot deep-link trigger from widget to open converter service.
     var pendingOpenConverterService: Bool = false
-    
+    var backendRegionCode: String = ""
+    var backendBaseURLString: String = ""
+    var isBackendFallbackActive: Bool = false
+
     init() {
         self.isBackupEnabled = SettingsManager.shared.isBackupEnabled
         self.isDailyReminderEnabled = SettingsManager.shared.isDailyReminderEnabled
@@ -123,6 +126,12 @@ final class AppState {
         self.isAppLocked = self.isAppLockEnabled
         self.isGuestModeEnabled = SettingsManager.shared.isGuestModeEnabled
         self.isDebugMenuUnlocked = SettingsManager.shared.isDebugMenuUnlocked
+    }
+
+    func applyBackendRuntime(_ runtime: BackendSessionRuntime) {
+        backendRegionCode = runtime.selectedEndpoint.region.rawValue
+        backendBaseURLString = runtime.selectedEndpoint.baseURL.absoluteString
+        isBackendFallbackActive = runtime.fallbackActivated
     }
 
     func applySubscriptionSnapshot(_ snapshot: SubscriptionSnapshot) {

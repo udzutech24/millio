@@ -33,6 +33,10 @@ struct FinanceGroupRow: View {
     let group: FinanceGroup
     @ObservedObject var viewModel: FinanceViewModel
     @Binding var draggedGroupID: String?
+
+    private let contentLeadingInset: CGFloat = 28
+    private let contentTrailingInset: CGFloat = 16
+    private let expandedDividerLeadingInset: CGFloat = 64
     
     private var groupID: String {
         group.groupUniqueID
@@ -95,7 +99,8 @@ struct FinanceGroupRow: View {
             dragChevron
         }
         .padding(.vertical, 16)
-        .padding(.horizontal, 16)
+        .padding(.leading, contentLeadingInset)
+        .padding(.trailing, contentTrailingInset)
     }
     
     private var headerContent: some View {
@@ -137,8 +142,8 @@ struct FinanceGroupRow: View {
         VStack(spacing: 0) {
             Divider()
                 .background(Color.white.opacity(0.08))
-                .padding(.leading, 38)
-                .padding(.trailing, 16)
+                .padding(.leading, expandedDividerLeadingInset)
+                .padding(.trailing, contentTrailingInset)
 
             let displayAccounts: [(account: FinanceAccount, info: (name: String, amount: Double, currency: String, icon: String, isCreditCardDebt: Bool))] = viewModel.orderedAccounts(for: group).compactMap { account in
                 guard let info = viewModel.getAccountInfo(account: account) else {
@@ -152,7 +157,8 @@ struct FinanceGroupRow: View {
                     .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(AppColors.textTertiary)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
+                    .padding(.leading, contentLeadingInset)
+                    .padding(.trailing, contentTrailingInset)
                     .padding(.vertical, 14)
             } else {
                 ForEach(Array(displayAccounts.enumerated()), id: \.element.account.id) { index, item in
@@ -176,8 +182,8 @@ struct FinanceGroupRow: View {
                     if index != displayAccounts.count - 1 {
                         Divider()
                             .background(Color.white.opacity(0.08))
-                            .padding(.leading, 52)
-                            .padding(.trailing, 16)
+                            .padding(.leading, expandedDividerLeadingInset)
+                            .padding(.trailing, contentTrailingInset)
                     }
                 }
             }
@@ -345,6 +351,9 @@ private struct FinanceAccountRow: View {
     let isCreditCardDebt: Bool
     let onEdit: () -> Void
     let onQuickEditAmount: () -> Void
+
+    private let contentLeadingInset: CGFloat = 28
+    private let contentTrailingInset: CGFloat = 16
     
     var body: some View {
         if viewModel.getMarketInvestment(account: account) != nil {
@@ -389,7 +398,8 @@ private struct FinanceAccountRow: View {
                 maximumFractionDigits: 0
             )
         }
-        .padding(.horizontal, 16)
+        .padding(.leading, contentLeadingInset)
+        .padding(.trailing, contentTrailingInset)
         .padding(.vertical, 11)
         .contentShape(Rectangle())
         .onTapGesture {
@@ -433,7 +443,8 @@ private struct FinanceAccountRow: View {
                 maximumFractionDigits: 2
             )
         }
-        .padding(.horizontal, 16)
+        .padding(.leading, contentLeadingInset)
+        .padding(.trailing, contentTrailingInset)
         .padding(.vertical, 11)
         .contentShape(Rectangle())
         .onTapGesture {

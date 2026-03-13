@@ -60,8 +60,7 @@ struct TwelveDataClientTests {
 
     @Test("MarketAPIClient требует configured auth service")
     func testUnconfiguredClientFails() async {
-        let configuration = AuthConfiguration(baseURL: URL(string: "http://localhost:3000/api/v1")!)
-        let client = MarketAPIClient(configurationProvider: { configuration })
+        let client = MarketAPIClient()
 
         await #expect(throws: MarketAPIClientError.unconfigured) {
             _ = try await client.searchSymbols(query: "AAPL")

@@ -33,7 +33,8 @@ final class DIContainer {
     @MainActor
     static func create(
         appState: AppState,
-        modelContainer: ModelContainer
+        modelContainer: ModelContainer,
+        backendRuntime: BackendSessionRuntime
     ) -> DIContainer {
         let isUnitTesting = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
         let modelContext = modelContainer.mainContext
@@ -61,8 +62,8 @@ final class DIContainer {
         }
         let authService: any AuthServiceProtocol
         do {
-            let authConfiguration = try AuthConfiguration.live()
-            authService = AuthService(apiClient: AuthAPIClient(configuration: authConfiguration))
+            let apiClientFactory = APIClientFactory(runtime: backendRuntime)
+            authService = apiClientFactory.makeAuthService()
         } catch {
             AppLogger.log(.error, category: "Auth", "Failed to initialize auth service: \(error.localizedDescription)")
             authService = UnconfiguredAuthService()

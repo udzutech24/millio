@@ -312,7 +312,7 @@ enum MarketAPIClientError: LocalizedError, Equatable, Sendable {
     var errorDescription: String? {
         switch self {
         case .invalidConfiguration:
-            return "AUTH_BASE_URL is missing or invalid."
+            return "Backend API base URL configuration is missing or invalid."
         case .unconfigured:
             return "Market API client is not configured yet."
         case .unauthorized:
@@ -409,6 +409,18 @@ private actor MarketAPIAuthContext {
     }
 }
 
+private actor MarketAPIConfigurationContext {
+    private var configurationProvider: @Sendable () throws -> AuthConfiguration = { try AuthConfiguration.live() }
+
+    func configure(provider: @escaping @Sendable () throws -> AuthConfiguration) {
+        configurationProvider = provider
+    }
+
+    func resolve() throws -> AuthConfiguration {
+        try configurationProvider()
+    }
+}
+
 final class MarketAPIClient: MarketDataClientProtocol, @unchecked Sendable {
     static let shared = MarketAPIClient()
 
@@ -452,19 +464,17 @@ final class MarketAPIClient: MarketDataClientProtocol, @unchecked Sendable {
     }
 
     private let session: URLSession
-    private let configurationProvider: @Sendable () throws -> AuthConfiguration
     private let cacheStore: MarketQuoteCacheStore
     private let authContext = MarketAPIAuthContext()
+    private let configurationContext = MarketAPIConfigurationContext()
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
 
     init(
         session: URLSession = .shared,
-        cacheTTL: TimeInterval = 30,
-        configurationProvider: @escaping @Sendable () throws -> AuthConfiguration = { try AuthConfiguration.live() }
+        cacheTTL: TimeInterval = 30
     ) {
         self.session = session
-        self.configurationProvider = configurationProvider
         self.cacheStore = MarketQuoteCacheStore(ttl: cacheTTL)
         decoder = JSONDecoder()
         encoder = JSONEncoder()
@@ -472,8 +482,12 @@ final class MarketAPIClient: MarketDataClientProtocol, @unchecked Sendable {
         Self.iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     }
 
-    func configure(authService: any AuthServiceProtocol) async {
+    func configure(
+        authService: any AuthServiceProtocol,
+        configurationProvider: @escaping @Sendable () throws -> AuthConfiguration
+    ) async {
         await authContext.configure(authService: authService)
+        await configurationContext.configure(provider: configurationProvider)
     }
 
     func searchSymbols(query: String, outputSize: Int = 20) async throws -> [TwelveDataSymbol] {
@@ -645,7 +659,7 @@ final class MarketAPIClient: MarketDataClientProtocol, @unchecked Sendable {
     ) async throws -> Response {
         let configuration: AuthConfiguration
         do {
-            configuration = try configurationProvider()
+            configuration = try await configurationContext.resolve()
         } catch {
             throw MarketAPIClientError.invalidConfiguration
         }

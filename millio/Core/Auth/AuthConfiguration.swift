@@ -2,9 +2,11 @@ import Foundation
 
 struct AuthConfiguration: Sendable {
     let baseURL: URL
+    let region: BackendRegion
 
-    init(baseURL: URL) {
+    init(baseURL: URL, region: BackendRegion = .de) {
         self.baseURL = Self.normalize(baseURL)
+        self.region = region
     }
 
     static func live(bundle: Bundle = .main, processInfo: ProcessInfo = .processInfo) throws -> AuthConfiguration {
@@ -23,7 +25,14 @@ struct AuthConfiguration: Sendable {
            !environmentURL.isEmpty,
            let url = URL(string: environmentURL),
            url.host() != nil {
-            return AuthConfiguration(baseURL: url)
+            return AuthConfiguration(baseURL: url, region: .de)
+        }
+
+        if let deBaseURL = environment["DE_API_BASE_URL"] ?? infoDictionary["DE_API_BASE_URL"] as? String {
+            let trimmed = deBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let url = URL(string: trimmed), url.host() != nil {
+                return AuthConfiguration(baseURL: url, region: .de)
+            }
         }
 
         let scheme = (
@@ -66,7 +75,7 @@ struct AuthConfiguration: Sendable {
             throw AuthServiceError.invalidConfiguration
         }
 
-        return AuthConfiguration(baseURL: url)
+        return AuthConfiguration(baseURL: url, region: .de)
     }
 
     private static func normalize(_ baseURL: URL) -> URL {

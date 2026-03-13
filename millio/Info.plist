@@ -4,6 +4,10 @@
 <dict>
 	<key>AUTH_BASE_URL</key>
 	<string>$(AUTH_BASE_URL)</string>
+	<key>RU_API_BASE_URL</key>
+	<string>$(RU_API_BASE_URL)</string>
+	<key>DE_API_BASE_URL</key>
+	<string>$(DE_API_BASE_URL)</string>
 	<key>AUTH_BASE_SCHEME</key>
 	<string>$(AUTH_BASE_SCHEME)</string>
 	<key>AUTH_BASE_HOST</key>

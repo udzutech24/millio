@@ -75,6 +75,7 @@ struct millioApp: App {
     @State private var activeDataScope: DataScope = .guest
     @State private var activeModelContainer: ModelContainer?
     @State private var didRestoreAuthSession = false
+    @State private var backendRuntime: BackendSessionRuntime?
     private let appLockCoordinator = AppLockLifecycleCoordinator()
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "App")
 
@@ -180,6 +181,7 @@ struct millioApp: App {
     @MainActor
     private func initializeApp(container: ModelContainer, restoreSession: Bool) async {
         let start = DispatchTime.now()
+        let backendRuntime = await resolveBackendRuntimeIfNeeded()
 
         appLockCoordinator.enforceLockStateOnLaunch(appState: appState, hasPin: AppLockPinStore.shared.hasPin())
 
@@ -189,7 +191,8 @@ struct millioApp: App {
         let diStart = DispatchTime.now()
         let container = DIContainer.create(
             appState: appState,
-            modelContainer: container
+            modelContainer: container,
+            backendRuntime: backendRuntime
         )
         self.diContainer = container
         authManager.configure(service: container.authService)
@@ -197,7 +200,11 @@ struct millioApp: App {
         authManager.configure(onSessionChanged: { user in
             await switchToDataScopeIfNeeded(for: user)
         })
-        await MarketAPIClient.shared.configure(authService: container.authService)
+        let apiClientFactory = APIClientFactory(runtime: backendRuntime)
+        await MarketAPIClient.shared.configure(
+            authService: container.authService,
+            configurationProvider: apiClientFactory.authConfigurationProvider()
+        )
         self.financeStartupWarmupUseCase = FinanceStartupWarmupUseCase(
             modelContext: container.modelContainer.mainContext
         )
@@ -230,6 +237,38 @@ struct millioApp: App {
 
             await financeStartupWarmupUseCase?.warmupIfNeeded()
         }
+    }
+
+    @MainActor
+    private func resolveBackendRuntimeIfNeeded() async -> BackendSessionRuntime {
+        if let backendRuntime {
+            appState.applyBackendRuntime(backendRuntime)
+            return backendRuntime
+        }
+
+        let resolvedEndpoints: BackendEndpoints
+        do {
+            resolvedEndpoints = try BackendEndpoints.live(
+                environment: ProcessInfo.processInfo.environment,
+                infoDictionary: Bundle.main.infoDictionary ?? [:]
+            )
+        } catch {
+            AppLogger.log(.error, category: "Backend", "Failed to resolve backend endpoints: \(error.localizedDescription)")
+            let fallbackRuntime = BackendSessionRuntime(
+                selectedEndpoint: BackendEndpoint(region: .de, baseURL: URL(string: "https://api.udzutech.com/api/v1")!),
+                preferredEndpoint: BackendEndpoint(region: .de, baseURL: URL(string: "https://api.udzutech.com/api/v1")!),
+                fallbackActivated: false,
+                forcedOverride: false
+            )
+            self.backendRuntime = fallbackRuntime
+            appState.applyBackendRuntime(fallbackRuntime)
+            return fallbackRuntime
+        }
+
+        let runtime = await BackendStartupResolver(endpoints: resolvedEndpoints).resolve()
+        self.backendRuntime = runtime
+        appState.applyBackendRuntime(runtime)
+        return runtime
     }
 
     @MainActor

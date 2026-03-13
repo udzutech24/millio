@@ -29,6 +29,24 @@ private actor MarketSymbolSearchClientMock: MarketDataClientProtocol {
     }
 }
 
+private func waitUntil(
+    timeout: Duration = .seconds(2),
+    pollingInterval: Duration = .milliseconds(25),
+    _ condition: @MainActor @escaping () -> Bool
+) async throws {
+    let deadline = ContinuousClock.now + timeout
+
+    while ContinuousClock.now < deadline {
+        if await condition() {
+            return
+        }
+
+        try await Task.sleep(for: pollingInterval)
+    }
+
+    Issue.record("Timed out waiting for async condition")
+}
+
 @Suite(.serialized)
 @MainActor
 struct MarketSymbolSearchViewModelTests {
@@ -162,7 +180,9 @@ struct MarketSymbolSearchViewModelTests {
         viewModel.searchText = "QQQX"
         viewModel.updateSearch()
 
-        try await Task.sleep(for: .milliseconds(700))
+        try await waitUntil {
+            viewModel.results.map(\.symbol) == ["QQQ", "QQQI"]
+        }
 
         #expect(viewModel.results.map(\.symbol) == ["QQQ", "QQQI"])
     }
@@ -175,7 +195,9 @@ struct MarketSymbolSearchViewModelTests {
         viewModel.searchText = "tesla"
         viewModel.updateSearch()
 
-        try await Task.sleep(for: .milliseconds(350))
+        try await waitUntil {
+            viewModel.results.first?.symbol == "TSLA"
+        }
 
         #expect(viewModel.results.first?.symbol == "TSLA")
     }
@@ -212,7 +234,9 @@ struct MarketSymbolSearchViewModelTests {
         viewModel.searchText = "tesla"
         viewModel.updateSearch()
 
-        try await Task.sleep(for: .milliseconds(650))
+        try await waitUntil {
+            viewModel.results.first?.symbol == "TSLA" && viewModel.isLoading == false
+        }
 
         #expect(viewModel.results.first?.symbol == "TSLA")
         #expect(viewModel.errorMessage == nil)
@@ -228,7 +252,9 @@ struct MarketSymbolSearchViewModelTests {
 
         viewModel.searchText = "vxus"
         viewModel.updateSearch()
-        try await Task.sleep(for: .milliseconds(650))
+        try await waitUntil {
+            viewModel.results.first?.symbol == "VXUS" && viewModel.isLoading == false
+        }
 
         #expect(viewModel.results.first?.symbol == "VXUS")
 

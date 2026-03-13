@@ -2,17 +2,21 @@
 
 ## Configuration
 
-- `AUTH_BASE_URL` can be provided directly from environment, but `xcconfig` should use split fields because `http://` is parsed as a comment there.
-- Default app values are:
-  - `AUTH_BASE_SCHEME = https`
-  - `AUTH_BASE_HOST = api.udzutech.com`
-  - `AUTH_BASE_PORT =`
-  - `AUTH_BASE_PATH = /api/v1`
+- Backend endpoints are defined in one place:
+  - `RU_API_BASE_URL = https://apiru.udzutech.com/api/v1`
+  - `DE_API_BASE_URL = https://api.udzutech.com/api/v1`
+- Startup resolver rule:
+  - country `RU` selects `RU_API_BASE_URL`
+  - every other country code, including missing/unknown, selects `DE_API_BASE_URL`
+- The app probes `GET /runtime/server-info` on startup, logs region/base URL mismatches, and falls back to the secondary backend once if the preferred backend does not answer.
+- The selected backend is kept for the current app session and reused by both `AuthAPIClient` and `MarketAPIClient`.
+- QA/debug override is available in debug builds through:
+  - `BACKEND_FORCE_REGION = RU|DE`
+  - `BACKEND_FORCE_BASE_URL = https://...`
+- Legacy `AUTH_BASE_*` keys remain only as a compatibility fallback for local-only tooling/tests and should not be treated as the main source of truth anymore.
 - For local backend development, override the values in `millio/Config/Secrets.local`, for example:
-  - `AUTH_BASE_SCHEME = http`
-  - `AUTH_BASE_HOST = localhost`
-  - `AUTH_BASE_PORT = 3000`
-  - `AUTH_BASE_PATH = /api/v1`
+  - `DE_API_BASE_URL = http://localhost:3000/api/v1`
+  - `RU_API_BASE_URL = http://localhost:3001/api/v1`
 
 ## Architecture
 
@@ -21,8 +25,8 @@
 - `AuthManager` is the SwiftUI-facing state holder injected through the app environment.
 - `AuthDiagnosticsLogger` writes a safe client-side trace for the full auth flow.
 - `AuthErrorMapper` converts typed auth failures into user-facing messages without collapsing everything into one generic toast.
-- `MarketAPIClient` reuses the same backend base URL and gets Bearer tokens from `AuthService`.
-- `refreshToken` is stored in Keychain only.
+- `MarketAPIClient` reuses the exact same runtime-selected backend base URL and gets Bearer tokens from `AuthService`.
+- `refreshToken` is stored in Keychain only, namespaced by backend base URL/region.
 - `accessToken` is kept in memory and renewed through `/auth/refresh`.
 - SwiftData is isolated by session scope:
   - guest mode uses `millio_guest` persistent store

@@ -74,7 +74,7 @@ enum AuthServiceError: LocalizedError, Equatable, Sendable {
     var errorDescription: String? {
         switch self {
         case .invalidConfiguration:
-            return "AUTH_BASE_URL is missing or invalid."
+            return "Backend API base URL configuration is missing or invalid."
         case .invalidIdentityToken:
             return "Apple Sign In did not return a valid identity token."
         case .unexpectedAuthorizationCredential:
