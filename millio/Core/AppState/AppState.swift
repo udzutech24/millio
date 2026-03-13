@@ -112,6 +112,7 @@ final class AppState {
     var backendRegionCode: String = ""
     var backendBaseURLString: String = ""
     var isBackendFallbackActive: Bool = false
+    var backendSelectionSummary: String = ""
 
     init() {
         self.isBackupEnabled = SettingsManager.shared.isBackupEnabled
@@ -132,6 +133,7 @@ final class AppState {
         backendRegionCode = runtime.selectedEndpoint.region.rawValue
         backendBaseURLString = runtime.selectedEndpoint.baseURL.absoluteString
         isBackendFallbackActive = runtime.fallbackActivated
+        backendSelectionSummary = runtime.selectionSummaryLine
     }
 
     func applySubscriptionSnapshot(_ snapshot: SubscriptionSnapshot) {

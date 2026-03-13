@@ -7,12 +7,14 @@ struct BackendDebugStatusContentTests {
         let content = BackendDebugStatusContent.make(
             regionCode: "de",
             baseURLString: "https://api.udzutech.com/api/v1",
-            isFallbackActive: false
+            isFallbackActive: false,
+            selectionSummary: "Selection: Auto (DE)"
         )
 
         #expect(content?.regionLine == "Login backend: DE")
         #expect(content?.baseURLLine == "https://api.udzutech.com/api/v1")
         #expect(content?.fallbackLine == "Fallback: off")
+        #expect(content?.selectionLine == "Selection: Auto (DE)")
     }
 
     @Test("skips backend banner when runtime base URL is empty")
@@ -20,7 +22,8 @@ struct BackendDebugStatusContentTests {
         let content = BackendDebugStatusContent.make(
             regionCode: "RU",
             baseURLString: "   ",
-            isFallbackActive: true
+            isFallbackActive: true,
+            selectionSummary: ""
         )
 
         #expect(content == nil)

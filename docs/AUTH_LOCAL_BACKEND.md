@@ -6,6 +6,8 @@
   - `RU_API_BASE_URL = https://apiru.udzutech.com/api/v1`
   - `DE_API_BASE_URL = https://api.udzutech.com/api/v1`
 - Startup resolver rule:
+  - debug override has top priority: `BACKEND_FORCE_REGION` / `BACKEND_FORCE_BASE_URL`
+  - otherwise the app resolves the best-effort device country code from locale plus preferred language fallbacks
   - country `RU` selects `RU_API_BASE_URL`
   - every other country code, including missing/unknown, selects `DE_API_BASE_URL`
 - The app probes `GET /runtime/server-info` on startup, logs region/base URL mismatches, and falls back to the secondary backend once if the preferred backend does not answer.

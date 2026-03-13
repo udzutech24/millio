@@ -8,6 +8,65 @@ enum BackendRegion: String, CaseIterable, Sendable {
     var analyticsValue: String { rawValue.lowercased() }
 }
 
+enum BackendSelectionSource: String, Sendable {
+    case automaticLocale
+    case debugOverride
+}
+
+struct SystemCountryCodeResolver {
+    static func resolve(
+        autoupdatingLocale: Locale = .autoupdatingCurrent,
+        currentLocale: Locale = .current,
+        preferredLanguages: [String] = Locale.preferredLanguages
+    ) -> String? {
+        let candidates = [
+            regionIdentifier(from: autoupdatingLocale),
+            regionIdentifier(from: currentLocale),
+            regionIdentifier(from: autoupdatingLocale.identifier),
+            regionIdentifier(from: currentLocale.identifier)
+        ] + preferredLanguages.map(regionIdentifier(from:))
+
+        for candidate in candidates {
+            guard let normalized = normalizeCountryCode(candidate) else { continue }
+            return normalized
+        }
+
+        return nil
+    }
+
+    private static func regionIdentifier(from locale: Locale) -> String? {
+        if let region = locale.region?.identifier {
+            return region
+        }
+
+        return regionIdentifier(from: locale.identifier)
+    }
+
+    private static func regionIdentifier(from identifier: String) -> String? {
+        let normalizedIdentifier = identifier
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "-", with: "_")
+
+        guard !normalizedIdentifier.isEmpty else { return nil }
+
+        let locale = Locale(identifier: normalizedIdentifier)
+        if let region = locale.region?.identifier {
+            return region
+        }
+
+        let components = normalizedIdentifier.split(separator: "_")
+        guard components.count >= 2 else { return nil }
+        return String(components.last ?? "")
+    }
+
+    private static func normalizeCountryCode(_ rawValue: String?) -> String? {
+        guard let rawValue else { return nil }
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard trimmed.count >= 2 else { return nil }
+        return trimmed
+    }
+}
+
 struct BackendEndpoint: Equatable, Sendable {
     let region: BackendRegion
     let baseURL: URL
@@ -90,6 +149,8 @@ struct BackendSessionRuntime: Equatable, Sendable {
     let preferredEndpoint: BackendEndpoint
     let fallbackActivated: Bool
     let forcedOverride: Bool
+    let selectionSource: BackendSelectionSource
+    let detectedCountryCode: String?
 
     var authConfiguration: AuthConfiguration {
         AuthConfiguration(
@@ -104,6 +165,16 @@ struct BackendSessionRuntime: Equatable, Sendable {
             .map { String(format: "%02x", $0) }
             .joined()
         return "refreshToken.\(selectedEndpoint.region.analyticsValue).\(hash)"
+    }
+
+    var selectionSummaryLine: String {
+        switch selectionSource {
+        case .debugOverride:
+            return "Selection: Debug override"
+        case .automaticLocale:
+            let countryCode = detectedCountryCode ?? "unknown"
+            return "Selection: Auto (\(countryCode))"
+        }
     }
 }
 
@@ -122,7 +193,7 @@ struct BackendStartupResolver {
         endpoints: BackendEndpoints,
         session: URLSession = .shared,
         countryCodeProvider: @escaping @Sendable () -> String? = {
-            Locale.autoupdatingCurrent.region?.identifier
+            SystemCountryCodeResolver.resolve()
         },
         forcedEndpointProvider: @escaping @Sendable (BackendEndpoints) -> BackendEndpoint? = Self.liveForcedEndpointProvider(
             environment: ProcessInfo.processInfo.environment,
@@ -137,14 +208,26 @@ struct BackendStartupResolver {
 
     func resolve() async -> BackendSessionRuntime {
         let forcedEndpoint = forcedEndpointProvider(endpoints)
-        let preferredEndpoint = forcedEndpoint ?? endpoints.endpoint(for: countryCodeProvider())
+        let detectedCountryCode = countryCodeProvider()
+        let selectionSource: BackendSelectionSource
+        let preferredEndpoint: BackendEndpoint
+
+        if let forcedEndpoint {
+            preferredEndpoint = forcedEndpoint
+            selectionSource = .debugOverride
+        } else {
+            preferredEndpoint = endpoints.endpoint(for: detectedCountryCode)
+            selectionSource = .automaticLocale
+        }
 
         if await probe(endpoint: preferredEndpoint, logPrefix: "preferred") {
             let runtime = BackendSessionRuntime(
                 selectedEndpoint: preferredEndpoint,
                 preferredEndpoint: preferredEndpoint,
                 fallbackActivated: false,
-                forcedOverride: forcedEndpoint != nil
+                forcedOverride: forcedEndpoint != nil,
+                selectionSource: selectionSource,
+                detectedCountryCode: detectedCountryCode
             )
             logSelection(runtime)
             return runtime
@@ -155,7 +238,9 @@ struct BackendStartupResolver {
                 selectedEndpoint: preferredEndpoint,
                 preferredEndpoint: preferredEndpoint,
                 fallbackActivated: false,
-                forcedOverride: true
+                forcedOverride: true,
+                selectionSource: selectionSource,
+                detectedCountryCode: detectedCountryCode
             )
             logSelection(runtime)
             return runtime
@@ -167,7 +252,9 @@ struct BackendStartupResolver {
                 selectedEndpoint: fallbackEndpoint,
                 preferredEndpoint: preferredEndpoint,
                 fallbackActivated: true,
-                forcedOverride: false
+                forcedOverride: false,
+                selectionSource: selectionSource,
+                detectedCountryCode: detectedCountryCode
             )
             logSelection(runtime)
             return runtime
@@ -183,7 +270,9 @@ struct BackendStartupResolver {
             selectedEndpoint: preferredEndpoint,
             preferredEndpoint: preferredEndpoint,
             fallbackActivated: false,
-            forcedOverride: false
+            forcedOverride: false,
+            selectionSource: selectionSource,
+            detectedCountryCode: detectedCountryCode
         )
         logSelection(runtime)
         return runtime
@@ -252,7 +341,7 @@ struct BackendStartupResolver {
         AppLogger.log(
             .info,
             category: "Backend",
-            "Selected backend region=\(runtime.selectedEndpoint.region.rawValue) baseURL=\(runtime.selectedEndpoint.baseURL.absoluteString) fallbackActive=\(runtime.fallbackActivated) forcedOverride=\(runtime.forcedOverride)"
+            "Selected backend region=\(runtime.selectedEndpoint.region.rawValue) baseURL=\(runtime.selectedEndpoint.baseURL.absoluteString) fallbackActive=\(runtime.fallbackActivated) forcedOverride=\(runtime.forcedOverride) selectionSource=\(runtime.selectionSource.rawValue) detectedCountryCode=\(runtime.detectedCountryCode ?? "unknown")"
         )
     }
 

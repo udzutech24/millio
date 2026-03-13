@@ -25,6 +25,8 @@ struct BackendStartupResolverTests {
         #expect(runtime.selectedEndpoint.region == .ru)
         #expect(runtime.selectedEndpoint.baseURL == ruURL)
         #expect(runtime.fallbackActivated == false)
+        #expect(runtime.selectionSource == .automaticLocale)
+        #expect(runtime.detectedCountryCode == "RU")
     }
 
     @Test(
@@ -48,6 +50,7 @@ struct BackendStartupResolverTests {
         #expect(runtime.selectedEndpoint.region == .de)
         #expect(runtime.selectedEndpoint.baseURL == deURL)
         #expect(runtime.fallbackActivated == false)
+        #expect(runtime.selectionSource == .automaticLocale)
     }
 
     @Test("Falls back to secondary backend when preferred backend is down")
@@ -71,6 +74,18 @@ struct BackendStartupResolverTests {
         #expect(runtime.selectedEndpoint.region == .de)
         #expect(runtime.selectedEndpoint.baseURL == deURL)
         #expect(runtime.fallbackActivated)
+        #expect(runtime.selectionSource == .automaticLocale)
+    }
+
+    @Test("Preferred language region is used when locale region is missing")
+    func testSystemCountryCodeResolverFallsBackToPreferredLanguageRegion() {
+        let resolved = SystemCountryCodeResolver.resolve(
+            autoupdatingLocale: Locale(identifier: "en"),
+            currentLocale: Locale(identifier: "fr"),
+            preferredLanguages: ["ru-RU", "en-US"]
+        )
+
+        #expect(resolved == "RU")
     }
 
     @Test("Auth tokens are isolated between RU and DE backends")
@@ -79,13 +94,17 @@ struct BackendStartupResolverTests {
             selectedEndpoint: BackendEndpoint(region: .ru, baseURL: ruURL),
             preferredEndpoint: BackendEndpoint(region: .ru, baseURL: ruURL),
             fallbackActivated: false,
-            forcedOverride: false
+            forcedOverride: false,
+            selectionSource: .automaticLocale,
+            detectedCountryCode: "RU"
         )
         let deRuntime = BackendSessionRuntime(
             selectedEndpoint: BackendEndpoint(region: .de, baseURL: deURL),
             preferredEndpoint: BackendEndpoint(region: .de, baseURL: deURL),
             fallbackActivated: false,
-            forcedOverride: false
+            forcedOverride: false,
+            selectionSource: .automaticLocale,
+            detectedCountryCode: "DE"
         )
 
         let backend = InMemoryAccountTokenBackend()
