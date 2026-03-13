@@ -14,3 +14,40 @@ command = "xcodebuild -workspace Millio.xcworkspace -scheme Millio -destination 
 name = "Запустить симулятор"
 icon = "run"
 command = "cd /Users/alekseya/millio && xcodebuild -project millio.xcodeproj -scheme millio -destination 'id=E2DDC54C-5B5C-492B-9A00-02DAC0C50C7F' build"
+
+[[actions]]
+name = "Xcode simulator"
+icon = "test"
+command = '''
+#!/bin/bash
+set -euo pipefail
+
+SIMULATOR_NAME="iPhone 16 Pro"
+SCHEME="Millio"
+WORKSPACE="Millio.xcworkspace"
+BUNDLE_ID="com.your.bundleid"
+
+# Стартуем симулятор
+xcrun simctl boot "$SIMULATOR_NAME" 2>/dev/null || true
+open -a Simulator
+
+# Собираем
+BUILD_DIR="$(mktemp -d /tmp/millio_build_XXXX)"
+xcodebuild \
+  -workspace "$WORKSPACE" \
+  -scheme "$SCHEME" \
+  -destination "platform=iOS Simulator,name=$SIMULATOR_NAME" \
+  -derivedDataPath "$BUILD_DIR" \
+  build
+
+APP_PATH="$BUILD_DIR/Build/Products/Debug-iphonesimulator/$SCHEME.app"
+
+if [[ ! -d "$APP_PATH" ]]; then
+  echo "App not found at $APP_PATH"
+  exit 1
+fi
+
+# Устанавливаем и запускаем
+xcrun simctl install booted "$APP_PATH"
+xcrun simctl launch booted "$BUNDLE_ID"
+'''

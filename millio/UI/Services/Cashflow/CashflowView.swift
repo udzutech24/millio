@@ -144,6 +144,8 @@ private struct CashflowContentView: View {
     @State private var showExpandedChart: Bool = false
     @State private var showExpandedPeriodSelector: Bool = false
     @State private var fullScreenChartVisiblePeriods: Int = 4
+    @State private var chartReferenceAnchorDate: Date = Date()
+    @State private var selectedChartPeriodStart: Date? = nil
     @State private var isExpandedHintHidden: Bool = HintsVisibilityPrefs(key: "cashflow.expanded_chart.bottom_hint").isHidden
     @State private var historyInitialFilter: CashflowHistoryTypeFilter = .all
     @State private var historyInitialStartDate: Date? = nil
@@ -160,6 +162,7 @@ private struct CashflowContentView: View {
     private let innerSeparator = Color.white.opacity(0.16)
     private let panelCornerRadius: CGFloat = 22
     private let rowCornerRadius: CGFloat = 16
+    private let compactChartHistoricalPeriods = 6
 
     private enum TopToolbarAction: CaseIterable {
         case currency
@@ -259,9 +262,28 @@ private struct CashflowContentView: View {
         }
         .onAppear {
             hideEmptyIntroIfNeeded()
+            if viewModel.state.chartPeriod == .custom {
+                chartReferenceAnchorDate = viewModel.state.customEndDate
+            } else {
+                chartReferenceAnchorDate = Date()
+            }
         }
         .onChange(of: viewModel.state.transactions.map(\.transactionTypeRaw)) { _, _ in
             hideEmptyIntroIfNeeded()
+        }
+        .onChange(of: viewModel.state.chartPeriod) { _, newPeriod in
+            if newPeriod == .custom {
+                chartReferenceAnchorDate = viewModel.state.customEndDate
+                return
+            }
+            if Calendar.current.isDate(viewModel.state.selectedMonth, equalTo: Date(), toGranularity: .month) {
+                chartReferenceAnchorDate = Date()
+            }
+        }
+        .onChange(of: viewModel.state.customEndDate) { _, newDate in
+            if viewModel.state.chartPeriod == .custom {
+                chartReferenceAnchorDate = newDate
+            }
         }
     }
     
@@ -834,7 +856,9 @@ private struct CashflowContentView: View {
                 maxBarHeight: 110,
                 minimumGroupWidth: 56,
                 barWidth: 26,
-                labelFontSize: 14
+                labelFontSize: 14,
+                visibleWindowPeriods: compactChartVisiblePeriods,
+                onBarTap: handleChartBarTap
             )
 
             
@@ -919,10 +943,13 @@ private struct CashflowContentView: View {
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
+                    ToolbarGlassIconButton(
+                        systemName: "checkmark",
+                        accessibilityLabel: String(localized: "Done"),
+                        isHighlighted: true
+                    ) {
                         showExpandedChart = false
                     }
-                    .foregroundStyle(AppColors.textPrimary)
                 }
             }
             .sheet(isPresented: $showExpandedPeriodSelector) {
@@ -1005,7 +1032,7 @@ private struct CashflowContentView: View {
     }
 
     private var hasChartData: Bool {
-        abs(viewModel.state.totalIncome) > 0.000001 || abs(viewModel.state.totalExpense) > 0.000001
+        !viewModel.state.convertedTransactions.isEmpty
     }
 
     private var cashflowInsightsSelectedDateRange: ClosedRange<Date> {
@@ -1020,20 +1047,24 @@ private struct CashflowContentView: View {
     }
 
     private var cashflowInsightsPresentation: CashflowInsightsPresentation {
-        return CashflowInsightsChartBuilder.makePresentation(
+        return CashflowInsightsChartBuilder.makeFullScreenPresentation(
             entries: viewModel.state.convertedTransactions,
-            dateRange: cashflowInsightsSelectedDateRange,
             granularity: cashflowInsightsGranularity,
+            selectedPeriodStart: selectedChartPeriodStart,
+            referenceDate: compactChartReferenceDate,
+            maxVisiblePeriods: compactChartMaxPeriods,
             calendar: .current,
             locale: .autoupdatingCurrent
         )
     }
 
     private var cashflowFullScreenPresentation: CashflowInsightsPresentation {
-        CashflowInsightsChartBuilder.makePresentation(
+        CashflowInsightsChartBuilder.makeFullScreenPresentation(
             entries: viewModel.state.convertedTransactions,
-            dateRange: cashflowInsightsSelectedDateRange,
             granularity: cashflowInsightsGranularity,
+            selectedPeriodStart: selectedChartPeriodStart,
+            referenceDate: fullScreenChartReferenceDate,
+            maxVisiblePeriods: fullScreenChartVisiblePeriods,
             calendar: .current,
             locale: .autoupdatingCurrent
         )
@@ -1062,6 +1093,22 @@ private struct CashflowContentView: View {
             )
         }
         .padding(.horizontal, 2)
+    }
+
+    private var compactChartVisiblePeriods: Int {
+        viewModel.state.chartPeriod == .custom ? 4 : 3
+    }
+
+    private var compactChartMaxPeriods: Int {
+        viewModel.state.chartPeriod == .custom ? 4 : compactChartHistoricalPeriods
+    }
+
+    private var compactChartReferenceDate: Date {
+        viewModel.state.chartPeriod == .custom ? cashflowInsightsSelectedDateRange.upperBound : chartReferenceAnchorDate
+    }
+
+    private var fullScreenChartReferenceDate: Date {
+        viewModel.state.chartPeriod == .custom ? cashflowInsightsSelectedDateRange.upperBound : chartReferenceAnchorDate
     }
 
     @ViewBuilder
@@ -1134,7 +1181,9 @@ private struct CashflowContentView: View {
         maxBarHeight: CGFloat,
         minimumGroupWidth: CGFloat,
         barWidth: CGFloat,
-        labelFontSize: CGFloat
+        labelFontSize: CGFloat,
+        visibleWindowPeriods: Int,
+        onBarTap: @escaping (CashflowInsightsBar) -> Void
     ) -> some View {
         GeometryReader { proxy in
             let maxValue = max(
@@ -1143,28 +1192,37 @@ private struct CashflowContentView: View {
             )
             let groupWidth = CashflowInsightsChartStyle.compactGroupWidth(
                 containerWidth: proxy.size.width,
-                barCount: presentation.bars.count,
+                barCount: visibleWindowPeriods,
                 minimumGroupWidth: minimumGroupWidth
             )
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .bottom, spacing: 8) {
-                    ForEach(presentation.bars) { bar in
-                        cashflowInsightsBarGroup(
-                            bar: bar,
-                            granularity: granularity,
-                            selectedPeriodStart: presentation.selectedPeriodStart,
-                            maxValue: maxValue,
-                            groupWidth: groupWidth,
-                            maxBarHeight: maxBarHeight,
-                            barWidth: barWidth,
-                            labelFontSize: labelFontSize
-                        )
+            ScrollViewReader { reader in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .bottom, spacing: 8) {
+                        ForEach(presentation.bars) { bar in
+                            cashflowInsightsBarGroup(
+                                bar: bar,
+                                granularity: granularity,
+                                selectedPeriodStart: presentation.selectedPeriodStart,
+                                maxValue: maxValue,
+                                groupWidth: groupWidth,
+                                maxBarHeight: maxBarHeight,
+                                barWidth: barWidth,
+                                labelFontSize: labelFontSize,
+                                onTap: { onBarTap(bar) }
+                            )
+                        }
                     }
                 }
-                .frame(maxHeight: .infinity, alignment: .bottomLeading)
-                .padding(.horizontal, 2)
+                .onAppear {
+                    scrollChartToLatestPeriod(reader: reader, bars: presentation.bars)
+                }
+                .onChange(of: presentation.bars.map(\.periodStart)) { _, _ in
+                    scrollChartToLatestPeriod(reader: reader, bars: presentation.bars)
+                }
             }
+            .frame(maxHeight: .infinity, alignment: .bottomLeading)
+            .padding(.horizontal, 2)
         }
         .frame(height: chartHeight)
     }
@@ -1184,30 +1242,40 @@ private struct CashflowContentView: View {
                 1
             )
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .bottom, spacing: metrics.spacing) {
-                    ForEach(presentation.bars) { bar in
-                        cashflowInsightsBarGroup(
-                            bar: bar,
-                            granularity: granularity,
-                            selectedPeriodStart: presentation.selectedPeriodStart,
-                            maxValue: maxValue,
-                            groupWidth: metrics.groupWidth,
-                            maxBarHeight: metrics.maxBarHeight,
-                            barWidth: metrics.barWidth,
-                            labelFontSize: metrics.labelFontSize
-                        )
+            ScrollViewReader { reader in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .bottom, spacing: metrics.spacing) {
+                        ForEach(presentation.bars) { bar in
+                            cashflowInsightsBarGroup(
+                                bar: bar,
+                                granularity: granularity,
+                                selectedPeriodStart: presentation.selectedPeriodStart,
+                                maxValue: maxValue,
+                                groupWidth: metrics.groupWidth,
+                                maxBarHeight: metrics.maxBarHeight,
+                                barWidth: metrics.barWidth,
+                                labelFontSize: metrics.labelFontSize,
+                                onTap: { handleChartBarTap(bar) }
+                            )
+                        }
                     }
                 }
-                .frame(maxHeight: .infinity, alignment: .bottom)
-                .padding(.horizontal, 10)
-                .padding(.top, 12)
-                .padding(.bottom, 14)
+                .onAppear {
+                    scrollChartToLatestPeriod(reader: reader, bars: presentation.bars)
+                }
+                .onChange(of: presentation.bars.map(\.periodStart)) { _, _ in
+                    scrollChartToLatestPeriod(reader: reader, bars: presentation.bars)
+                }
             }
+            .frame(maxHeight: .infinity, alignment: .bottom)
+            .padding(.horizontal, 2)
+            .padding(.top, 12)
+            .padding(.bottom, 14)
         }
         .frame(height: 332)
     }
 
+    @ViewBuilder
     private func cashflowInsightsBarGroup(
         bar: CashflowInsightsBar,
         granularity: CashflowInsightsGranularity,
@@ -1216,7 +1284,8 @@ private struct CashflowContentView: View {
         groupWidth: CGFloat,
         maxBarHeight: CGFloat,
         barWidth: CGFloat,
-        labelFontSize: CGFloat
+        labelFontSize: CGFloat,
+        onTap: (() -> Void)? = nil
     ) -> some View {
         let comparisonGranularity: Calendar.Component = {
             switch granularity {
@@ -1234,7 +1303,7 @@ private struct CashflowContentView: View {
             toGranularity: comparisonGranularity
         )
 
-        return VStack(spacing: 12) {
+        let content = VStack(spacing: 12) {
             Spacer(minLength: 0)
 
             HStack(alignment: .bottom, spacing: 8) {
@@ -1339,6 +1408,34 @@ private struct CashflowContentView: View {
                 y: 10
             )
             .offset(y: isSelected ? -2 : 0)
+        if let onTap {
+            Button {
+                onTap()
+                fireLightImpact()
+            } label: {
+                content
+            }
+            .buttonStyle(.plain)
+        } else {
+            content
+        }
+    }
+
+    private func handleChartBarTap(_ bar: CashflowInsightsBar) {
+        selectedChartPeriodStart = bar.periodStart
+        if cashflowInsightsGranularity == .month {
+            viewModel.handle(.setSelectedMonth(bar.periodStart))
+        }
+    }
+
+    private func scrollChartToLatestPeriod(
+        reader: ScrollViewProxy,
+        bars: [CashflowInsightsBar]
+    ) {
+        guard let last = bars.last else { return }
+        DispatchQueue.main.async {
+            reader.scrollTo(last.periodStart, anchor: .trailing)
+        }
     }
 
     private func chartColumn(

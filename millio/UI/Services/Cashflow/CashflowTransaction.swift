@@ -66,10 +66,10 @@ enum IncomeCategory: String, Codable, CaseIterable {
     case salary = "salary"           // Зарплата
     case freelance = "freelance"     // Фриланс
     case business = "business"       // Бизнес
+    case bonus = "bonus"             // Премия
     case investment = "investment"   // Инвестиции
     case rental = "rental"           // Аренда
     case gift = "gift"               // Подарок
-    case bonus = "bonus"             // Премия
     case other = "other"             // Другое
     
     var displayName: String {
@@ -87,14 +87,14 @@ enum IncomeCategory: String, Codable, CaseIterable {
     
     var icon: String {
         switch self {
-        case .salary: return "💼"
-        case .freelance: return "🧑‍💻"
+        case .salary: return "💳"
+        case .freelance: return "🛠️"
         case .business: return "🏢"
+        case .bonus: return "🏅"
         case .investment: return "📈"
-        case .rental: return "🏠"
+        case .rental: return "🏘️"
         case .gift: return "🎁"
-        case .bonus: return "⭐️"
-        case .other: return "🧩"
+        case .other: return "📦"
         }
     }
 }

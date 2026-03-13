@@ -38,6 +38,8 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
     private let quickSetupCompletedKey = "quickSetupCompleted"
     private let quickSetupBannerHiddenKey = "quickSetupBannerHidden"
     private let quickSetupExpenseCategoryIDsKey = "quickSetupExpenseCategoryIDs"
+    private let quickSetupBannerMigrationAppliedKey = "quickSetupBannerMigrationApplied"
+    private let lastSeenAppVersionKey = "lastSeenAppVersion"
     private let launchSplashDisplayModeKey = "launchSplashDisplayMode"
     private let lastLaunchSplashShownAtKey = "lastLaunchSplashShownAt"
     private let guestModeEnabledKey = "guestModeEnabled"
@@ -129,6 +131,15 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
             defaults.set(normalized.isEnabled, forKey: dailyReminderEnabledKey)
             logger.info("Daily reminder settings updated")
         }
+    }
+
+    @discardableResult
+    func updateDailyReminderSettingsIfNeeded(_ newSettings: DailyReminderSettings) -> Bool {
+        let normalized = newSettings.normalized()
+        let current = dailyReminderSettings
+        guard normalized != current else { return false }
+        dailyReminderSettings = normalized
+        return true
     }
 
     var isAppLockEnabled: Bool {
@@ -254,6 +265,32 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
         }
     }
 
+    /// The last app version seen on device (used for update migrations).
+    var lastSeenAppVersion: String? {
+        get { defaults.string(forKey: lastSeenAppVersionKey) }
+        set {
+            let normalized = newValue?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let normalized, normalized.isEmpty {
+                defaults.removeObject(forKey: lastSeenAppVersionKey)
+                return
+            }
+            defaults.set(normalized, forKey: lastSeenAppVersionKey)
+        }
+    }
+
+    /// Suppresses quick setup banner for legacy users after update.
+    /// A legacy user is someone who already completed onboarding before quick setup existed,
+    /// so there is no stored quick setup completion flag yet.
+    func applyQuickSetupBannerSuppressionIfNeeded(hasCompletedOnboarding: Bool, lastSeenVersion: String?) {
+        guard defaults.object(forKey: quickSetupBannerMigrationAppliedKey) as? Bool != true else { return }
+        guard hasCompletedOnboarding else { return }
+        guard lastSeenVersion != nil else { return }
+        defer { defaults.set(true, forKey: quickSetupBannerMigrationAppliedKey) }
+        guard defaults.object(forKey: quickSetupCompletedKey) == nil else { return }
+        isQuickSetupBannerHidden = true
+        logger.info("Quick setup banner suppressed for legacy user")
+    }
+
     var launchSplashDisplayMode: LaunchSplashDisplayMode {
         get {
             guard
@@ -358,6 +395,8 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
         isQuickSetupCompleted = false
         isQuickSetupBannerHidden = false
         quickSetupExpenseCategoryIDs = []
+        defaults.removeObject(forKey: quickSetupBannerMigrationAppliedKey)
+        defaults.removeObject(forKey: lastSeenAppVersionKey)
         launchSplashDisplayMode = .always
         lastLaunchSplashShownAt = nil
         isGuestModeEnabled = false

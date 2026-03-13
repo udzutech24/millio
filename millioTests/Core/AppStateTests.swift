@@ -287,6 +287,16 @@ struct AppStateTests {
 @Suite(.serialized)
 @MainActor
 struct AppLifecycleUseCaseTests {
+    private static func restoreDefaults(_ snapshots: [String: Any?], defaults: UserDefaults) {
+        for (key, value) in snapshots {
+            if let value {
+                defaults.set(value, forKey: key)
+            } else {
+                defaults.removeObject(forKey: key)
+            }
+        }
+    }
+
     @Test("initialize переводит в onboarding при непройденном онбординге")
     func testInitializeSetsOnboardingWhenNotCompleted() async {
         let defaults = UserDefaults.standard
@@ -326,7 +336,91 @@ struct AppLifecycleUseCaseTests {
         
         #expect(appState.lifecycle == .ready)
     }
-    
+
+    @Test("initialize скрывает баннер быстрой настройки для legacy пользователей")
+    func testInitializeSuppressesQuickSetupBannerForLegacyUsers() async {
+        let defaults = UserDefaults.standard
+        let keys = [
+            "hasCompletedOnboarding",
+            "quickSetupCompleted",
+            "quickSetupBannerHidden",
+            "quickSetupBannerMigrationApplied",
+            "lastSeenAppVersion"
+        ]
+        let snapshot = Dictionary(uniqueKeysWithValues: keys.map { ($0, defaults.object(forKey: $0)) })
+        defer { Self.restoreDefaults(snapshot, defaults: defaults) }
+
+        defaults.set(true, forKey: "hasCompletedOnboarding")
+        defaults.removeObject(forKey: "quickSetupCompleted")
+        defaults.set(false, forKey: "quickSetupBannerHidden")
+        defaults.removeObject(forKey: "quickSetupBannerMigrationApplied")
+        defaults.set("0.9 (1)", forKey: "lastSeenAppVersion")
+
+        let appState = AppState()
+        appState.isBackupEnabled = false
+
+        let useCase = AppLifecycleUseCase(appState: appState, backupManager: FakeBackupManager())
+        await useCase.initialize()
+
+        #expect(SettingsManager.shared.isQuickSetupBannerHidden == true)
+    }
+
+    @Test("initialize не трогает баннер если статус quick setup уже известен")
+    func testInitializeKeepsQuickSetupBannerWhenStatusStored() async {
+        let defaults = UserDefaults.standard
+        let keys = [
+            "hasCompletedOnboarding",
+            "quickSetupCompleted",
+            "quickSetupBannerHidden",
+            "quickSetupBannerMigrationApplied",
+            "lastSeenAppVersion"
+        ]
+        let snapshot = Dictionary(uniqueKeysWithValues: keys.map { ($0, defaults.object(forKey: $0)) })
+        defer { Self.restoreDefaults(snapshot, defaults: defaults) }
+
+        defaults.set(true, forKey: "hasCompletedOnboarding")
+        defaults.set(false, forKey: "quickSetupCompleted")
+        defaults.set(false, forKey: "quickSetupBannerHidden")
+        defaults.removeObject(forKey: "quickSetupBannerMigrationApplied")
+        defaults.set("0.9 (1)", forKey: "lastSeenAppVersion")
+
+        let appState = AppState()
+        appState.isBackupEnabled = false
+
+        let useCase = AppLifecycleUseCase(appState: appState, backupManager: FakeBackupManager())
+        await useCase.initialize()
+
+        #expect(SettingsManager.shared.isQuickSetupBannerHidden == false)
+    }
+
+    @Test("initialize не скрывает баннер при первом запуске (без lastSeen версии)")
+    func testInitializeDoesNotSuppressBannerOnFirstLaunch() async {
+        let defaults = UserDefaults.standard
+        let keys = [
+            "hasCompletedOnboarding",
+            "quickSetupCompleted",
+            "quickSetupBannerHidden",
+            "quickSetupBannerMigrationApplied",
+            "lastSeenAppVersion"
+        ]
+        let snapshot = Dictionary(uniqueKeysWithValues: keys.map { ($0, defaults.object(forKey: $0)) })
+        defer { Self.restoreDefaults(snapshot, defaults: defaults) }
+
+        defaults.set(true, forKey: "hasCompletedOnboarding")
+        defaults.removeObject(forKey: "quickSetupCompleted")
+        defaults.set(false, forKey: "quickSetupBannerHidden")
+        defaults.removeObject(forKey: "quickSetupBannerMigrationApplied")
+        defaults.removeObject(forKey: "lastSeenAppVersion")
+
+        let appState = AppState()
+        appState.isBackupEnabled = false
+
+        let useCase = AppLifecycleUseCase(appState: appState, backupManager: FakeBackupManager())
+        await useCase.initialize()
+
+        #expect(SettingsManager.shared.isQuickSetupBannerHidden == false)
+    }
+
     @Test("initialize обновляет iCloud статус в фоне при включенном backup")
     func testInitializeRefreshesICloudStatusWhenBackupEnabled() async throws {
         let defaults = UserDefaults.standard

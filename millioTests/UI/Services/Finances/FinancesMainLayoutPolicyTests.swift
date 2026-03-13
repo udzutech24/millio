@@ -23,8 +23,8 @@ struct FinancesMainLayoutPolicyTests {
 
         #expect(paddingWithFAB > paddingWithoutFAB)
         #expect(paddingWithoutFAB > CGFloat.zero)
-        #expect(paddingWithFAB == 92)
-        #expect(paddingWithoutFAB == 28)
+        #expect(paddingWithFAB == FinancesMainLayoutPolicy.fabDiameter + FinancesMainLayoutPolicy.fabBottomPadding)
+        #expect(paddingWithoutFAB == FinancesMainLayoutPolicy.scrollBottomPaddingWithoutFAB)
     }
 
     @Test("Главный экран использует компактный FAB и согласованные отступы")
@@ -37,5 +37,6 @@ struct FinancesMainLayoutPolicyTests {
         #expect(FinancesMainLayoutPolicy.fabIconSize == 20)
         #expect(FinancesMainLayoutPolicy.fabTrailingPadding == 20)
         #expect(FinancesMainLayoutPolicy.fabBottomPadding == 28)
+        #expect(FinancesMainLayoutPolicy.scrollBottomPaddingWithoutFAB == 24)
     }
 }

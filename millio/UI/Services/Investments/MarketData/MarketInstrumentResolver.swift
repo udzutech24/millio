@@ -47,14 +47,16 @@ final class MarketInstrumentResolver {
         do {
             let remoteResults = try await client.searchSymbols(query: query, outputSize: outputSize)
             cachedResultsByKey[cacheKey] = remoteResults
-            return Array(
-                MarketSymbolSearchEngine.prepareResults(
-                    remoteSymbols: remoteResults,
-                    filter: filter,
-                    query: normalizedQuery
-                )
-                .prefix(max(1, outputSize))
+            let prepared = MarketSymbolSearchEngine.prepareResults(
+                remoteSymbols: remoteResults,
+                filter: filter,
+                query: normalizedQuery
             )
+            let prioritized = MarketSymbolSearchEngine.prioritizeProviderSuffixMatches(
+                prepared,
+                query: normalizedQuery
+            )
+            return Array(prioritized.prefix(max(1, outputSize)))
         } catch {
             let fallback = MarketSymbolSearchEngine.prepareResults(
                 remoteSymbols: cachedResults,
@@ -87,12 +89,16 @@ final class MarketInstrumentResolver {
             remoteResults = cachedResultsByKey[cacheKey] ?? []
         }
 
-        let prepared = MarketSymbolSearchEngine.prepareResults(
-            remoteSymbols: remoteResults,
-            filter: .stocks,
-            query: normalizedQuery
-        )
-        let symbols = prepared.isEmpty ? localResults : prepared
+        let symbols: [TwelveDataSymbol]
+        if remoteResults.isEmpty {
+            symbols = localResults
+        } else {
+            symbols = MarketSymbolSearchFormatter.prepareResults(
+                remoteResults,
+                filter: .stocks,
+                query: normalizedQuery
+            )
+        }
         let candidates = makeBulkImportCandidates(from: symbols)
 
         return Array(

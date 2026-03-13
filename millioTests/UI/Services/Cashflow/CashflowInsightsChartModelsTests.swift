@@ -89,6 +89,34 @@ struct CashflowInsightsChartModelsTests {
         #expect(range.upperBound == Self.date(2026, 2, 28))
     }
 
+    @Test("Full-screen presentation ограничивает количество видимых месяцев")
+    func fullScreenPresentationRespectsMaxVisiblePeriods() {
+        let calendar = Calendar(identifier: .gregorian)
+        let locale = Locale(identifier: "en_US")
+        let referenceDate = Self.date(2026, 3, 15)
+
+        let entries: [CashflowConvertedTransaction] = [
+            .init(id: "dec", date: Self.date(2025, 12, 10), income: 100, expense: 0),
+            .init(id: "jan", date: Self.date(2026, 1, 10), income: 110, expense: 0),
+            .init(id: "feb", date: Self.date(2026, 2, 10), income: 120, expense: 0),
+            .init(id: "mar", date: Self.date(2026, 3, 10), income: 130, expense: 0)
+        ]
+
+        let presentation = CashflowInsightsChartBuilder.makeFullScreenPresentation(
+            entries: entries,
+            granularity: .month,
+            selectedPeriodStart: nil,
+            referenceDate: referenceDate,
+            maxVisiblePeriods: 3,
+            calendar: calendar,
+            locale: locale
+        )
+
+        #expect(presentation.bars.count == 3)
+        #expect(presentation.bars.map(\.label) == ["Jan'26", "Feb'26", "Mar'26"])
+        #expect(presentation.selectedPeriodStart == Self.date(2026, 3, 1))
+    }
+
     private static func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
         Calendar(identifier: .gregorian).date(from: DateComponents(year: year, month: month, day: day)) ?? Date()
     }

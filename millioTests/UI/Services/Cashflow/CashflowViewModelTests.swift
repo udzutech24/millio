@@ -221,8 +221,8 @@ extension CashflowViewModelTests {
         #expect(viewModel.state.transactions.first?.note == "Тест")
     }
 
-    @Test("Дефолтный период Cashflow — последние 3 календарных месяца (до сегодняшнего дня)")
-    func testDefaultPeriodIsLastThreeCalendarMonthsToToday() throws {
+    @Test("Дефолтный период Cashflow — текущий месяц до сегодняшнего дня")
+    func testDefaultPeriodIsCurrentMonthToToday() throws {
         let modelContext = try createTestModelContext()
         let calendar = Calendar.current
         let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 9, hour: 12)) ?? Date()
@@ -230,7 +230,8 @@ extension CashflowViewModelTests {
         let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
         let expected = CashflowViewModel.defaultPeriodRange(referenceDate: fixedNow, calendar: calendar)
 
-        #expect(viewModel.state.chartPeriod == .custom)
+        #expect(viewModel.state.chartPeriod == .specificMonth)
+        #expect(calendar.isDate(viewModel.state.selectedMonth, equalTo: fixedNow, toGranularity: .day))
         #expect(viewModel.state.customStartDate == expected.start)
         #expect(viewModel.state.customEndDate == expected.end)
     }
@@ -633,7 +634,7 @@ extension CashflowViewModelTests {
         let income = viewModel.categoryOption(for: IncomeCategory.salary.rawValue, kind: .income)
         let expense = viewModel.categoryOption(for: ExpenseCategory.groceries.rawValue, kind: .expense)
 
-        #expect(income.icon == "💼")
+        #expect(income.icon == "💳")
         #expect(expense.icon == "🛒")
         #expect(!CashflowCustomCategory.isSFSymbolIcon(income.icon))
         #expect(!CashflowCustomCategory.isSFSymbolIcon(expense.icon))
@@ -643,12 +644,18 @@ extension CashflowViewModelTests {
     func testIncomeSystemCategoriesDefaultSetAndLocalization() {
         #expect(
             IncomeCategory.allCases.map(\.rawValue) ==
-            ["salary", "freelance", "business", "investment", "rental", "gift", "bonus", "other"]
+            ["salary", "freelance", "business", "bonus", "investment", "rental", "gift", "other"]
         )
         #expect(IncomeCategory.allCases.count == 8)
 
+        #expect(IncomeCategory.salary.icon == "💳")
+        #expect(IncomeCategory.freelance.icon == "🛠️")
         #expect(IncomeCategory.business.icon == "🏢")
-        #expect(IncomeCategory.rental.icon == "🏠")
+        #expect(IncomeCategory.bonus.icon == "🏅")
+        #expect(IncomeCategory.investment.icon == "📈")
+        #expect(IncomeCategory.rental.icon == "🏘️")
+        #expect(IncomeCategory.gift.icon == "🎁")
+        #expect(IncomeCategory.other.icon == "📦")
 
         let ruLocale = Locale(identifier: "ru_RU")
         let enLocale = Locale(identifier: "en_US")
@@ -1032,6 +1039,108 @@ extension CashflowViewModelTests {
         #expect(planned.map(\.amount) == [50, 70])
         #expect(planned.allSatisfy { $0.recurrenceRule == .none })
         #expect(planned.allSatisfy { $0.transactionType == .expense })
+    }
+
+    @Test("Планировщик объединяет ежемесячные шаблоны и разовые будущие операции в одном таймлайне")
+    func testScheduledPlannerEntriesCombineRecurringAndOneTime() throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 10)) ?? Date()
+
+        let recurringTemplate = CashflowTransaction(
+            transactionType: .expense,
+            amount: 120,
+            currency: "USD",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 1, day: 12)) ?? fixedNow,
+            expenseCategory: .bills,
+            recurrenceRule: .monthly,
+            recurrenceSeriesID: "series-bills-12"
+        )
+        let oneTimePlanned = CashflowTransaction(
+            transactionType: .expense,
+            amount: 40,
+            currency: "USD",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 18)) ?? fixedNow,
+            expenseCategory: .transport
+        )
+        let laterRecurringTemplate = CashflowTransaction(
+            transactionType: .expense,
+            amount: 70,
+            currency: "USD",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 1, day: 25)) ?? fixedNow,
+            expenseCategory: .shopping,
+            recurrenceRule: .monthly,
+            recurrenceSeriesID: "series-shopping-25"
+        )
+
+        modelContext.insert(recurringTemplate)
+        modelContext.insert(oneTimePlanned)
+        modelContext.insert(laterRecurringTemplate)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        let entries = viewModel.scheduledPlannerEntries(for: .expense, relativeTo: fixedNow)
+
+        #expect(entries.count == 3)
+        #expect(entries.map(\.kind) == [.recurringMonthly, .oneTimePlanned, .recurringMonthly])
+        #expect(entries.map { calendar.component(.day, from: $0.scheduledDate) } == [12, 18, 25])
+        #expect(entries.first?.transaction.recurrenceSeriesID == "series-bills-12")
+    }
+
+    @Test("Календарь платежей проецирует ежемесячные шаблоны на выбранный месяц и не показывает прошедшие дни")
+    func testScheduledCalendarEntriesProjectRecurringIntoDisplayedMonth() throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 10)) ?? Date()
+
+        let recurringDayFive = CashflowTransaction(
+            transactionType: .expense,
+            amount: 90,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 1, day: 5)) ?? fixedNow,
+            expenseCategory: .bills,
+            recurrenceRule: .monthly,
+            recurrenceSeriesID: "series-expense-5"
+        )
+        let recurringDayThirtyOne = CashflowTransaction(
+            transactionType: .expense,
+            amount: 140,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 1, day: 31)) ?? fixedNow,
+            expenseCategory: .shopping,
+            recurrenceRule: .monthly,
+            recurrenceSeriesID: "series-expense-31"
+        )
+        let aprilOneTime = CashflowTransaction(
+            transactionType: .expense,
+            amount: 33,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 4, day: 14)) ?? fixedNow,
+            expenseCategory: .transport
+        )
+
+        modelContext.insert(recurringDayFive)
+        modelContext.insert(recurringDayThirtyOne)
+        modelContext.insert(aprilOneTime)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+
+        let marchEntries = viewModel.scheduledCalendarEntries(
+            for: .expense,
+            month: calendar.date(from: DateComponents(year: 2026, month: 3, day: 1)) ?? fixedNow,
+            relativeTo: fixedNow
+        )
+        #expect(marchEntries.map(\.kind) == [.recurringMonthly])
+        #expect(marchEntries.map { calendar.component(.day, from: $0.scheduledDate) } == [31])
+
+        let aprilEntries = viewModel.scheduledCalendarEntries(
+            for: .expense,
+            month: calendar.date(from: DateComponents(year: 2026, month: 4, day: 1)) ?? fixedNow,
+            relativeTo: fixedNow
+        )
+        #expect(aprilEntries.map(\.kind) == [.recurringMonthly, .oneTimePlanned, .recurringMonthly])
+        #expect(aprilEntries.map { calendar.component(.day, from: $0.scheduledDate) } == [5, 14, 30])
     }
 
     @Test("Будущий запланированный расход не списывает баланс карты сразу")

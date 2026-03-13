@@ -52,3 +52,9 @@
 Также при очистке, затрагивающей финсчета (операции/операции по счетам/обнуление/удаление счетов),
 очищается `finance.balance.audit.snapshot.store` в `UserDefaults`, чтобы ручные snapshot-правки не
 конфликтовали с новым состоянием данных.
+
+## Локализация экрана
+
+- Тексты экрана Smart Data Reset централизованы в `millio/UI/Profile/SmartDataResetLocalization.swift`.
+- Поддерживаются RU/EN через `Locale` (без смешения языков на одном экране).
+- Для защиты от регрессий добавлен тест `SmartDataResetLocalizationTests`.

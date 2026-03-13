@@ -86,6 +86,27 @@ struct SettingsAndCurrencyDefaultsTests {
         #expect(isolated.manager.isDailyReminderEnabled == true)
     }
 
+    @Test("SettingsManager updateDailyReminderSettingsIfNeeded skips identical payloads")
+    func testDailyReminderSettingsUpdateIfNeededSkipsSame() {
+        let isolated = makeIsolatedSettingsManager()
+        defer { isolated.cleanup() }
+
+        let settings = DailyReminderSettings(
+            isEnabled: true,
+            enabledKinds: [.expense],
+            cadence: .daily,
+            hour: 20,
+            minute: 30,
+            dayOfMonth: 10,
+            selectedDate: Date(),
+            customText: ""
+        )
+
+        isolated.manager.dailyReminderSettings = settings
+        let didPersist = isolated.manager.updateDailyReminderSettingsIfNeeded(settings)
+        #expect(didPersist == false)
+    }
+
     @Test("SettingsManager primaryCurrencyCode defaults to RUB")
     func testPrimaryCurrencyDefault() {
         let isolated = makeIsolatedSettingsManager()

@@ -112,7 +112,8 @@ struct CashflowTransactionEditorViewLayoutTests {
     func expenseManagementEntries() {
         let entries = CashflowManagementEntry.entries(for: .expense)
 
-        #expect(entries.map(\.destination) == [.bulkImport, .recurring, .planned])
+        #expect(entries.map(\.destination) == [.bulkImport, .planned])
+        #expect(entries.map(\.lineLimit) == [2, 2])
     }
 
     @Test("Для доходов быстрые переходы не показывают массовый импорт")
@@ -120,6 +121,8 @@ struct CashflowTransactionEditorViewLayoutTests {
         let entries = CashflowManagementEntry.entries(for: .income)
 
         #expect(entries.map(\.destination) == [.recurring, .planned])
+        #expect(entries.map(\.lineLimit) == [1, 2])
+        #expect(entries[1].title == String(localized: "cashflow.management.income_plan.title"))
     }
 
     @Test("Селектор валюты операции закрепляет основную валюту профиля")

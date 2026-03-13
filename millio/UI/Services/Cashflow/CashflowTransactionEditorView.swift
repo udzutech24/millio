@@ -53,6 +53,7 @@ struct CashflowTransactionEditorView: View {
     @State private var showCurrencyPicker: Bool = false
     @State private var currencySearchText: String = ""
     @State private var showCategorySheet: Bool = false
+    @State private var showRecurrenceRulePicker: Bool = false
     @State private var showCryptoProAlert: Bool = false
     @FocusState private var isAmountFieldFocused: Bool
 
@@ -73,6 +74,7 @@ struct CashflowTransactionEditorView: View {
         preselectedIncomeCategoryRaw: String? = nil,
         preselectedExpenseCategoryRaw: String? = nil,
         initialRecurrenceRule: CashflowRecurrenceRule? = nil,
+        initialTransactionDate: Date? = nil,
         onSave: (() -> Void)? = nil
     ) {
         self.viewModel = viewModel
@@ -102,6 +104,7 @@ struct CashflowTransactionEditorView: View {
             _shouldAffectCardBalance = State(initialValue: transaction.affectsCardBalance)
         } else if let type = transactionType {
             _selectedTransactionType = State(initialValue: type)
+            _transactionDate = State(initialValue: initialTransactionDate ?? Date())
             if type == .income {
                 _selectedIncomeCategoryRaw = State(initialValue: preselectedIncomeCategoryRaw ?? IncomeCategory.salary.rawValue)
             } else if type == .expense {
@@ -111,6 +114,7 @@ struct CashflowTransactionEditorView: View {
             _shouldAffectCardBalance = State(initialValue: true)
         } else {
             _selectedTransactionType = State(initialValue: .expense)
+            _transactionDate = State(initialValue: initialTransactionDate ?? Date())
             _recurrenceRule = State(initialValue: initialRecurrenceRule ?? .none)
             _shouldAffectCardBalance = State(initialValue: true)
         }
@@ -309,6 +313,11 @@ struct CashflowTransactionEditorView: View {
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showRecurrenceRulePicker) {
+            CashflowRecurrenceRulePickerSheet(
+                selection: $recurrenceRule
+            )
         }
     }
 
@@ -536,17 +545,23 @@ struct CashflowTransactionEditorView: View {
         VStack(alignment: .leading, spacing: 10) {
             sectionTitle(String(localized: "cashflow.editor.section.recurrence"))
             editorCard {
-                HStack {
-                    Text("cashflow.editor.frequency")
-                        .foregroundStyle(AppColors.textPrimary)
-                    Spacer()
-                    Picker(String(localized: "cashflow.editor.frequency"), selection: $recurrenceRule) {
-                        ForEach(CashflowRecurrenceRule.allCases, id: \.self) { rule in
-                            Text(rule.displayName).tag(rule)
-                        }
+                Button {
+                    showRecurrenceRulePicker = true
+                } label: {
+                    HStack(spacing: 10) {
+                        Text("cashflow.editor.frequency")
+                            .foregroundStyle(AppColors.textPrimary)
+                        Spacer()
+                        Text(recurrenceRule.displayName)
+                            .foregroundStyle(AppColors.textSecondary)
+                            .lineLimit(1)
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AppColors.textSecondary)
                     }
-                    .tint(AppColors.textTertiary)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 .padding(.vertical, 8)
                 .padding(.horizontal, 16)
             }
@@ -1176,11 +1191,15 @@ private struct CashflowCategorySelectionSheet: View {
     @State private var pendingDeleteRaw: String?
 
     private var title: String {
-        kind == .income ? "Income categories" : "Expense categories"
+        kind == .income
+            ? String(localized: "cashflow.editor.category_sheet.title.income")
+            : String(localized: "cashflow.editor.category_sheet.title.expense")
     }
 
     private var createButtonTitle: String {
-        kind == .income ? "Create income category" : "Create expense category"
+        kind == .income
+            ? String(localized: "cashflow.editor.category_sheet.create.income")
+            : String(localized: "cashflow.editor.category_sheet.create.expense")
     }
 
     private var options: [CashflowCategoryOption] {
@@ -1374,6 +1393,54 @@ private struct CashflowCategorySelectionSheet: View {
         }
 
         showEditorSheet = false
+    }
+}
+
+private struct CashflowRecurrenceRulePickerSheet: View {
+    @Binding var selection: CashflowRecurrenceRule
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(CashflowRecurrenceRule.allCases, id: \.self) { rule in
+                    Button {
+                        selection = rule
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Text(rule.displayName)
+                                .foregroundStyle(AppColors.textPrimary)
+                            Spacer()
+                            if selection == rule {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(AppColors.textPrimary)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                }
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(GradientBackground())
+            .navigationTitle(String(localized: "cashflow.editor.section.recurrence"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(String(localized: "cashflow.common.close")) {
+                        dismiss()
+                    }
+                    .foregroundStyle(AppColors.textPrimary)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
     }
 }
 

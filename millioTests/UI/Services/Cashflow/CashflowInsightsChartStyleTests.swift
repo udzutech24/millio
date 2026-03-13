@@ -74,15 +74,16 @@ struct CashflowInsightsChartStyleTests {
         #expect(width == 28)
     }
 
-    @Test("4-period full screen chart keeps groups compact on wide screens")
-    func fullScreenMetricsCapGroupWidthForShortRanges() {
+    @Test("4-period full screen chart stretches groups to fit viewport width")
+    func fullScreenMetricsFitViewportForShortRanges() {
         let metrics = CashflowInsightsChartStyle.fullScreenMetrics(
             containerWidth: 420,
             barCount: 4,
             visiblePeriods: 4
         )
+        let expectedRawWidth: CGFloat = (420 - 2 - 10 * 3) / 4
 
-        #expect(metrics.groupWidth == 78)
+        #expect(abs(metrics.groupWidth - expectedRawWidth) < 0.0001)
         #expect(metrics.barWidth <= 18)
         #expect(metrics.labelFontSize <= 13)
     }

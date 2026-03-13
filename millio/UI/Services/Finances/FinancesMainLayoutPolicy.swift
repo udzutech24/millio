@@ -19,12 +19,15 @@ enum FinancesMainLayoutPolicy {
     static let fabTrailingPadding: CGFloat = 20
     /// FAB должен висеть непосредственно над tab bar, а не в середине пустого пространства.
     static let fabBottomPadding: CGFloat = 28
+    static let scrollBottomPaddingWithoutFAB: CGFloat = 24
 
     static func showsAddFAB(visibleGroupsCount: Int) -> Bool {
         visibleGroupsCount > 0
     }
 
     static func scrollContentBottomPadding(showsAddFAB: Bool) -> CGFloat {
-        showsAddFAB ? 92 : 28
+        // Привязываем отступ к реальным размерам FAB, чтобы не было "пустой пропасти".
+        // Раньше это был магический 92, который на некоторых девайсах визуально ронял экран слишком низко.
+        showsAddFAB ? (fabDiameter + fabBottomPadding) : scrollBottomPaddingWithoutFAB
     }
 }

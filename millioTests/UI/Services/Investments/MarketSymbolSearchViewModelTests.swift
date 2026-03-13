@@ -68,6 +68,30 @@ struct MarketSymbolSearchViewModelTests {
         #expect(gold.first?.symbol == "GLD")
     }
 
+    @Test("Search engine находит глобальные тикеры из локального каталога без remote search")
+    func findsGlobalTickersFromLocalCatalog() {
+        let toyota = MarketSymbolSearchEngine.prepareResults(
+            remoteSymbols: [],
+            filter: .stocks,
+            query: "toyota"
+        )
+        let tencent = MarketSymbolSearchEngine.prepareResults(
+            remoteSymbols: [],
+            filter: .stocks,
+            query: "tencent"
+        )
+        let reliance = MarketSymbolSearchEngine.prepareResults(
+            remoteSymbols: [],
+            filter: .stocks,
+            query: "reliance"
+        )
+
+        #expect(toyota.first?.symbol == "7203")
+        #expect(tencent.first?.symbol == "0700")
+        #expect(reliance.first?.symbol == "RELIANCE")
+        #expect(MarketSymbolSearchEngine.shouldSkipRemoteSearch(filter: .stocks, query: "toyota", localResults: toyota))
+    }
+
     @Test("Top quick picks for stocks expose six rows of popular symbols")
     func topQuickPicksExposeSixRows() {
         let topSymbols = MarketSymbolFilter.stocks.topSymbols

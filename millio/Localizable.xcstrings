@@ -246,9 +246,6 @@
         }
       }
     },
-    "Apply reset" : {
-
-    },
     "Are you sure you want to skip restore? Backup data will not be applied." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3552,6 +3549,70 @@
         }
       }
     },
+    "cashflow.editor.category_sheet.create.expense" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create expense category"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Создать категорию расходов"
+          }
+        }
+      }
+    },
+    "cashflow.editor.category_sheet.create.income" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create income category"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Создать категорию доходов"
+          }
+        }
+      }
+    },
+    "cashflow.editor.category_sheet.title.expense" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expense categories"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Категории расходов"
+          }
+        }
+      }
+    },
+    "cashflow.editor.category_sheet.title.income" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Income categories"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Категории доходов"
+          }
+        }
+      }
+    },
     "cashflow.editor.comment" : {
       "localizations" : {
         "en" : {
@@ -4595,6 +4656,75 @@
         }
       }
     },
+    "cashflow.management.income_plan.title" : {
+      "comment" : "Management entry title for planned income items",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Income plan"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "План доходов"
+          }
+        }
+      }
+    },
+    "cashflow.management.planned.title" : {
+      "comment" : "Management entry title for planned cashflow items",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Planned"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запланированные"
+          }
+        }
+      }
+    },
+    "cashflow.management.planner_expenses.title" : {
+      "comment" : "Management entry title for planned expenses",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Planned"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "План платежей"
+          }
+        }
+      }
+    },
+    "cashflow.management.recurring.title" : {
+      "comment" : "Management entry title for recurring cashflow items",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recurring"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Регулярные"
+          }
+        }
+      }
+    },
     "cashflow.operation.delete_category.message" : {
       "localizations" : {
         "en" : {
@@ -4623,6 +4753,150 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Удалить категорию?"
+          }
+        }
+      }
+    },
+    "cashflow.operation.help.expense_intro" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Expense screen shows expense categories for the selected month."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Экран расходов показывает категории расходов за выбранный месяц."
+          }
+        }
+      }
+    },
+    "cashflow.operation.help.expense_total_hint" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "At the top, you can see total expenses for the month in the display currency."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сверху отображается общий расход за месяц в выбранной валюте."
+          }
+        }
+      }
+    },
+    "cashflow.operation.help.income_intro" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Income screen shows income categories for the selected month."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Экран доходов показывает категории доходов за выбранный месяц"
+          }
+        }
+      }
+    },
+    "cashflow.operation.help.income_total_hint" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "At the top, you can see total income for the month in the display currency."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сверху отображается общий доход за месяц в выбранной валюте"
+          }
+        }
+      }
+    },
+    "cashflow.operation.help.long_press" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Long press a category to open menu: edit or delete."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Зажмите категорию, чтобы открыть меню: редактировать или удалить"
+          }
+        }
+      }
+    },
+    "cashflow.operation.help.safe_migration" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When deleting a category, linked transactions are automatically moved to a safe system category."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "При удалении категории связанные транзакции автоматически переносятся в безопасную системную категорию"
+          }
+        }
+      }
+    },
+    "cashflow.operation.help.tap_category" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tap a category to add a transaction in it."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нажмите на категорию, чтобы добавить в нее транзакцию"
+          }
+        }
+      }
+    },
+    "cashflow.operation.help.tap_plus" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tap + to add your own category (name and icon)."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нажмите +, чтобы добавить свою категорию (название и иконка)"
+          }
+        }
+      }
+    },
+    "cashflow.operation.help.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How it works"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Как это работает"
           }
         }
       }
@@ -4965,7 +5239,42 @@
         }
       }
     },
+    "cashflow.scheduled.add_income_item" : {
+      "comment" : "Button title to add a scheduled income item",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add scheduled income"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавить запланированный доход"
+          }
+        }
+      }
+    },
+    "cashflow.scheduled.add_payment" : {
+      "comment" : "Button title to add a scheduled expense item",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add payment"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавить платеж"
+          }
+        }
+      }
+    },
     "cashflow.scheduled.add_planned_expense" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4982,6 +5291,7 @@
       }
     },
     "cashflow.scheduled.add_planned_income" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5029,6 +5339,125 @@
         }
       }
     },
+    "cashflow.scheduled.create_picker.monthly" : {
+      "comment" : "Create a monthly recurring scheduled transaction",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monthly"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ежемесячно"
+          }
+        }
+      }
+    },
+    "cashflow.scheduled.create_picker.one_time" : {
+      "comment" : "Create a one-time scheduled transaction",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "One-time"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Разово"
+          }
+        }
+      }
+    },
+    "cashflow.scheduled.create_picker.title" : {
+      "comment" : "Title for schedule creation options",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What to add?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Что добавить?"
+          }
+        }
+      }
+    },
+    "cashflow.scheduled.day_agenda.empty_subtitle" : {
+      "comment" : "Empty state subtitle for selected planner day",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pick another date or switch to list to see all monthly and one-time transactions."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выберите другую дату или переключитесь на список, чтобы увидеть все ежемесячные и разовые операции."
+          }
+        }
+      }
+    },
+    "cashflow.scheduled.day_agenda.empty_title" : {
+      "comment" : "Empty state title for selected planner day",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing scheduled for this day"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На этот день ничего не запланировано"
+          }
+        }
+      }
+    },
+    "cashflow.scheduled.day_agenda.empty.add_here" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавить"
+          }
+        }
+      }
+    },
+    "cashflow.scheduled.day_agenda.title" : {
+      "comment" : "Header for scheduled items due on the selected planner day",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Due on %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Срок на %@"
+          }
+        }
+      }
+    },
     "cashflow.scheduled.delete_transaction.message" : {
       "localizations" : {
         "en" : {
@@ -5061,7 +5490,42 @@
         }
       }
     },
+    "cashflow.scheduled.display.calendar" : {
+      "comment" : "Planner display mode title",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calendar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Календарь"
+          }
+        }
+      }
+    },
+    "cashflow.scheduled.display.list" : {
+      "comment" : "Planner display mode title",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "List"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Список"
+          }
+        }
+      }
+    },
     "cashflow.scheduled.empty.planned_expenses" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5078,6 +5542,7 @@
       }
     },
     "cashflow.scheduled.empty.planned_income" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5089,6 +5554,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Нет запланированных доходов"
+          }
+        }
+      }
+    },
+    "cashflow.scheduled.empty.planner_expenses" : {
+      "comment" : "Empty state title for planner expense screen",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No planned payments yet"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Платежи пока не запланированы"
+          }
+        }
+      }
+    },
+    "cashflow.scheduled.empty.planner_income" : {
+      "comment" : "Empty state title for planner income screen",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No planned income yet"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доходы пока не запланированы"
           }
         }
       }
@@ -5205,7 +5704,127 @@
         }
       }
     },
+    "cashflow.scheduled.one_time_badge" : {
+      "comment" : "Badge title for one-time planned transactions",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "One-time"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Разово"
+          }
+        }
+      }
+    },
+    "cashflow.scheduled.overview.empty" : {
+      "comment" : "Empty subtitle for planner overview",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No upcoming scheduled transactions yet."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пока нет ближайших запланированных операций."
+          }
+        }
+      }
+    },
+    "cashflow.scheduled.overview.monthly_prefix" : {
+      "comment" : "Prefix for monthly item in planner overview",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monthly"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ежемесячно"
+          }
+        }
+      }
+    },
+    "cashflow.scheduled.overview.next" : {
+      "comment" : "Label for next scheduled item",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ближайшая"
+          }
+        }
+      }
+    },
+    "cashflow.scheduled.overview.one_time_prefix" : {
+      "comment" : "Prefix for one-time item in planner overview",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "One-time"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Разово"
+          }
+        }
+      }
+    },
+    "cashflow.scheduled.overview.title.expense" : {
+      "comment" : "Planner overview title for expenses",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Payment planner"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Планировщик платежей"
+          }
+        }
+      }
+    },
+    "cashflow.scheduled.overview.title.income" : {
+      "comment" : "Planner overview title for income",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Income planner"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Планировщик доходов"
+          }
+        }
+      }
+    },
     "cashflow.scheduled.planned_expense" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5222,6 +5841,7 @@
       }
     },
     "cashflow.scheduled.planned_expenses" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5238,6 +5858,7 @@
       }
     },
     "cashflow.scheduled.planned_income" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5253,7 +5874,42 @@
         }
       }
     },
+    "cashflow.scheduled.planner_expenses" : {
+      "comment" : "Navigation title for combined scheduled expense planner",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Payment planner"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Планировщик платежей"
+          }
+        }
+      }
+    },
+    "cashflow.scheduled.planner_income" : {
+      "comment" : "Navigation title for combined scheduled income planner",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Income planner"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Планировщик доходов"
+          }
+        }
+      }
+    },
     "cashflow.scheduled.recurring_expense" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5313,6 +5969,104 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Поиск транзакции"
+          }
+        }
+      }
+    },
+    "cashflow.scheduled.section.monthly" : {
+      "comment" : "Section title for monthly recurring scheduled transactions",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monthly"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ежемесячно"
+          }
+        }
+      }
+    },
+    "cashflow.scheduled.section.one_time" : {
+      "comment" : "Section title for one-time planned scheduled transactions",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "One-time"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Разово запланировано"
+          }
+        }
+      }
+    },
+    "cashflow.scheduled.subtitle.account_format" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Account: %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Счет: %@"
+          }
+        }
+      }
+    },
+    "cashflow.scheduled.subtitle.next_format" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next: %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ближайшая: %@"
+          }
+        }
+      }
+    },
+    "cashflow.scheduled.subtitle.planned_date_format" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Planned: %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запланировано: %@"
+          }
+        }
+      }
+    },
+    "cashflow.scheduled.subtitle.start_date_format" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start date: %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Старт: %@"
           }
         }
       }
@@ -5440,6 +6194,7 @@
 
     },
     "Close" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5471,9 +6226,6 @@
           }
         }
       }
-    },
-    "Confirm reset" : {
-
     },
     "Continue using the app" : {
       "extractionState" : "stale",
@@ -6543,6 +7295,7 @@
       }
     },
     "Delete selected data" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6810,6 +7563,7 @@
       }
     },
     "Failed to reset data" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -13388,9 +14142,6 @@
         }
       }
     },
-    "From" : {
-
-    },
     "From card" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -13407,9 +14158,6 @@
           }
         }
       }
-    },
-    "Full reset (all data types)" : {
-
     },
     "Gift" : {
       "localizations" : {
@@ -13594,6 +14342,7 @@
       }
     },
     "Important" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14462,6 +15211,7 @@
       }
     },
     "Period" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14478,6 +15228,7 @@
       }
     },
     "Period is applied to operations, account operations, balance zeroing, and cashback. It is not used when deleting accounts, categories, or settings." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -16461,7 +17212,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Умный сброс данных"
+            "value" : "Умный сброс"
           }
         }
       }
@@ -16747,9 +17498,6 @@
         }
       }
     },
-    "Recommended: create a backup before applying reset." : {
-
-    },
     "Recurrence" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -16903,6 +17651,7 @@
       }
     },
     "Reset complete" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -16917,9 +17666,6 @@
           }
         }
       }
-    },
-    "Resetting..." : {
-
     },
     "restore" : {
       "extractionState" : "manual",
@@ -17292,6 +18038,7 @@
       }
     },
     "Smart reset" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -18821,6 +19568,7 @@
       }
     },
     "This action cannot be undone. Creating a backup first is recommended." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -18851,9 +19599,6 @@
           }
         }
       }
-    },
-    "To" : {
-
     },
     "To card" : {
       "extractionState" : "stale",
@@ -18890,6 +19635,7 @@
       }
     },
     "Total changes" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {

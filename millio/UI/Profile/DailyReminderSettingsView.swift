@@ -173,11 +173,11 @@ struct DailyReminderSettingsView: View {
     private var helperText: String {
         switch draftSettings.cadence {
         case .daily:
-            return localized("profile.daily_reminders.helper.daily", fallback: "A reminder will fire every day at the selected time.")
+            return localized("profile.daily_reminders.helper.daily", fallback: "A reminder will fire every day at the selected time")
         case .monthly:
-            return localized("profile.daily_reminders.helper.monthly", fallback: "A reminder will repeat every month on the selected day.")
+            return localized("profile.daily_reminders.helper.monthly", fallback: "A reminder will repeat every month on the selected day")
         case .once:
-            return localized("profile.daily_reminders.helper.once", fallback: "A one-time reminder will fire on the selected date and time.")
+            return localized("profile.daily_reminders.helper.once", fallback: "A one-time reminder will fire on the selected date and time")
         }
     }
 
@@ -194,14 +194,14 @@ struct DailyReminderSettingsView: View {
         case .daily:
             return localized(
                 "profile.daily_reminders.summary.daily",
-                fallback: "You will get a {kind} reminder every day at {time}."
+                fallback: "You will get a {kind} reminder every day at {time}"
             )
             .replacingOccurrences(of: "{kind}", with: kindText.lowercased())
             .replacingOccurrences(of: "{time}", with: timeText)
         case .monthly:
             return localized(
                 "profile.daily_reminders.summary.monthly",
-                fallback: "You will get a {kind} reminder every month on day {day} at {time}."
+                fallback: "You will get a {kind} reminder every month on day {day} at {time}"
             )
             .replacingOccurrences(of: "{kind}", with: kindText.lowercased())
             .replacingOccurrences(of: "{day}", with: String(draftSettings.dayOfMonth))
@@ -210,7 +210,7 @@ struct DailyReminderSettingsView: View {
             let dateText = draftSettings.selectedDate.formatted(date: .abbreviated, time: .omitted)
             return localized(
                 "profile.daily_reminders.summary.once",
-                fallback: "You will get a one-time {kind} reminder on {date} at {time}."
+                fallback: "You will get a one-time {kind} reminder on {date} at {time}"
             )
             .replacingOccurrences(of: "{kind}", with: kindText.lowercased())
             .replacingOccurrences(of: "{date}", with: dateText)
@@ -220,7 +220,7 @@ struct DailyReminderSettingsView: View {
 
     private var previewMessageText: String {
         draftSettings.sortedEnabledKinds.map {
-            "• " + draftSettings.notificationBody(
+            draftSettings.notificationBody(
                 for: $0,
                 language: appState.selectedLanguage,
                 calendar: Calendar.current,
@@ -262,11 +262,13 @@ struct DailyReminderSettingsView: View {
     private func saveIfNeeded() {
         guard !didSave else { return }
         let normalized = draftSettings.normalized()
-        SettingsManager.shared.dailyReminderSettings = normalized
-        appState.isDailyReminderEnabled = normalized.isActive
-
-        Task {
-            await NotificationManager.shared.scheduleDailyReminder(using: normalized)
+        let didPersist = SettingsManager.shared.updateDailyReminderSettingsIfNeeded(normalized)
+        if didPersist {
+            // Avoid triggering parent view updates during pop if nothing changed.
+            appState.isDailyReminderEnabled = normalized.isActive
+            Task {
+                await NotificationManager.shared.scheduleDailyReminder(using: normalized)
+            }
         }
 
         didSave = true
@@ -344,15 +346,15 @@ struct DailyReminderSettingsView: View {
             "profile.daily_reminders.time": "Время",
             "profile.daily_reminders.custom_text": "Текст напоминания",
             "profile.daily_reminders.custom_placeholder": "Например: внести расходы",
-            "profile.daily_reminders.helper.daily": "Напоминание будет приходить каждый день в выбранное время.",
-            "profile.daily_reminders.helper.monthly": "Напоминание будет повторяться каждый месяц в выбранный день.",
-            "profile.daily_reminders.helper.once": "Разовое напоминание сработает в выбранные дату и время.",
+            "profile.daily_reminders.helper.daily": "Напоминание будет приходить каждый день в выбранное время",
+            "profile.daily_reminders.helper.monthly": "Напоминание будет повторяться каждый месяц в выбранный день",
+            "profile.daily_reminders.helper.once": "Разовое напоминание сработает в выбранные дату и время",
             "profile.daily_reminders.summary.title": "Сейчас настроено",
             "profile.daily_reminders.preview.title": "Пример уведомления",
             "profile.daily_reminders.summary.off": "Напоминания выключены.",
-            "profile.daily_reminders.summary.daily": "Будет приходить напоминание про {kind}, каждый день в {time}.",
-            "profile.daily_reminders.summary.monthly": "Будет приходить напоминание про {kind}, каждый месяц {day}-го числа в {time}.",
-            "profile.daily_reminders.summary.once": "Придет разовое напоминание про {kind}: {date} в {time}."
+            "profile.daily_reminders.summary.daily": "Будет приходить напоминание про {kind}, каждый день в {time}",
+            "profile.daily_reminders.summary.monthly": "Будет приходить напоминание про {kind}, каждый месяц {day}-го числа в {time}",
+            "profile.daily_reminders.summary.once": "Придет разовое напоминание про {kind}: {date} в {time}"
         ]
     }
 }

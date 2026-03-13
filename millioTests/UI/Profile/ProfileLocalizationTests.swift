@@ -40,7 +40,7 @@ struct ProfileLocalizationTests {
         #expect(localizedString("profile.faq.question_prefix", languageCode: "ru") == "В:")
 
         #expect(localizedString("profile.smart_data_reset", languageCode: "en") == "Guided data reset")
-        #expect(localizedString("profile.smart_data_reset", languageCode: "ru") == "Умный сброс данных")
+        #expect(localizedString("profile.smart_data_reset", languageCode: "ru") == "Умный сброс")
     }
 
     @Test("Profile premium status strings are localized for English and Russian locales")

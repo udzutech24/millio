@@ -27,6 +27,10 @@ struct SmartDataResetView: View {
         DataResetService(modelContext: modelContext, appState: appState)
     }
 
+    private var locale: Locale {
+        appState.selectedLanguage.locale ?? Locale.current
+    }
+
     private var request: DataResetRequest {
         let targets = isFullReset ? Set(DataResetTarget.allCases) : selectedTargets
         return DataResetRequest(
@@ -56,37 +60,37 @@ struct SmartDataResetView: View {
                 .padding(.top, 8)
             }
         }
-        .navigationTitle("Smart reset")
+        .navigationTitle(SmartDataResetL10n.navigationTitle(locale: locale))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .alert(
-            "Confirm reset",
+            SmartDataResetL10n.confirmResetTitle(locale: locale),
             isPresented: $showConfirmation
         ) {
-            Button("Cancel", role: .cancel) {}
-            Button("Delete selected data", role: .destructive) {
+            Button(SmartDataResetL10n.cancel(locale: locale), role: .cancel) {}
+            Button(SmartDataResetL10n.deleteSelectedData(locale: locale), role: .destructive) {
                 applyReset()
             }
         } message: {
-            Text("This action cannot be undone. Creating a backup first is recommended.")
+            Text(SmartDataResetL10n.confirmResetMessage(locale: locale))
         }
-        .alert("Reset complete", isPresented: Binding(
+        .alert(SmartDataResetL10n.resetCompleteTitle(locale: locale), isPresented: Binding(
             get: { successMessage != nil },
             set: { newValue in
                 if !newValue { successMessage = nil }
             }
         )) {
-            Button("OK", role: .cancel) {}
+            Button(SmartDataResetL10n.ok(locale: locale), role: .cancel) {}
         } message: {
             Text(successMessage ?? "")
         }
-        .alert("Failed to reset data", isPresented: Binding(
+        .alert(SmartDataResetL10n.failedResetTitle(locale: locale), isPresented: Binding(
             get: { errorMessage != nil },
             set: { newValue in
                 if !newValue { errorMessage = nil }
             }
         )) {
-            Button("OK", role: .cancel) {}
+            Button(SmartDataResetL10n.ok(locale: locale), role: .cancel) {}
         } message: {
             Text(errorMessage ?? "")
         }
@@ -110,10 +114,10 @@ struct SmartDataResetView: View {
     private var warningCard: some View {
         FinancesGlassCard {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Important")
+                Text(SmartDataResetL10n.warningTitle(locale: locale))
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
-                Text("Period is applied to operations, account operations, balance zeroing, and cashback. It is not used when deleting accounts, categories, or settings.")
+                Text(SmartDataResetL10n.warningBody(locale: locale))
                     .font(.system(size: 13, weight: .regular))
                     .foregroundStyle(AppColors.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -125,12 +129,12 @@ struct SmartDataResetView: View {
 
     private var periodCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Period")
+            FinancesSectionHeader(title: SmartDataResetL10n.periodSectionTitle(locale: locale))
             FinancesGlassCard {
                 VStack(spacing: 12) {
-                    Picker("Period", selection: $periodPreset) {
+                    Picker(SmartDataResetL10n.periodPickerTitle(locale: locale), selection: $periodPreset) {
                         ForEach(DataResetPeriodPreset.allCases) { preset in
-                            Text(preset.title).tag(preset)
+                            Text(SmartDataResetL10n.periodTitle(preset, locale: locale)).tag(preset)
                         }
                     }
                     .pickerStyle(.menu)
@@ -138,14 +142,14 @@ struct SmartDataResetView: View {
 
                     if periodPreset == .custom {
                         DatePicker(
-                            "From",
+                            SmartDataResetL10n.periodFrom(locale: locale),
                             selection: $customStartDate,
                             displayedComponents: .date
                         )
                         .tint(AppColors.textPrimary)
 
                         DatePicker(
-                            "To",
+                            SmartDataResetL10n.periodTo(locale: locale),
                             selection: $customEndDate,
                             displayedComponents: .date
                         )
@@ -159,10 +163,10 @@ struct SmartDataResetView: View {
 
     private var targetsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "What to delete")
+            FinancesSectionHeader(title: SmartDataResetL10n.targetsSectionTitle(locale: locale))
             FinancesGlassCard {
                 VStack(spacing: 0) {
-                    Toggle("Full reset (all data types)", isOn: $isFullReset)
+                    Toggle(SmartDataResetL10n.fullResetTitle(locale: locale), isOn: $isFullReset)
                         .foregroundStyle(AppColors.textPrimary)
                         .tint(AppColors.toggleOnGreen)
                         .padding(.vertical, 12)
@@ -172,7 +176,7 @@ struct SmartDataResetView: View {
                         ForEach(DataResetTarget.allCases) { target in
                             FinancesRowDivider()
                             Toggle(
-                                target.title,
+                                SmartDataResetL10n.targetTitle(target, locale: locale),
                                 isOn: Binding(
                                     get: { selectedTargets.contains(target) },
                                     set: { newValue in
@@ -197,30 +201,30 @@ struct SmartDataResetView: View {
 
     private var estimateCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FinancesSectionHeader(title: "Preview")
+            FinancesSectionHeader(title: SmartDataResetL10n.previewSectionTitle(locale: locale))
             FinancesGlassCard {
                 VStack(alignment: .leading, spacing: 8) {
-                    estimateRow("Operations", value: estimate.deletedTransactions)
-                    estimateRow("Cashback", value: estimate.deletedCashbacks)
-                    estimateRow("Cards", value: estimate.deletedCards)
-                    estimateRow("Credits", value: estimate.deletedCredits)
-                    estimateRow("Investments", value: estimate.deletedInvestments)
-                    estimateRow("Account links", value: estimate.deletedFinanceAccounts)
-                    estimateRow("Account groups", value: estimate.deletedFinanceGroups)
-                    estimateRow("Custom cashflow categories", value: estimate.deletedCashflowCustomCategories)
-                    estimateRow("System category overrides", value: estimate.deletedCashflowSystemOverrides)
-                    estimateRow("Custom cashback categories", value: estimate.deletedCashbackCustomCategories)
-                    estimateRow("Zeroed cards", value: estimate.zeroedCards)
-                    estimateRow("Zeroed credits", value: estimate.zeroedCredits)
-                    estimateRow("Zeroed investments", value: estimate.zeroedInvestments)
-                    estimateRow("Created adjustments", value: estimate.createdAdjustmentTransactions)
-                    estimateRow("Settings reset", value: estimate.settingsReset ? 1 : 0)
+                    estimateRow(SmartDataResetL10n.estimateLabelTransactions(locale: locale), value: estimate.deletedTransactions)
+                    estimateRow(SmartDataResetL10n.estimateLabelCashback(locale: locale), value: estimate.deletedCashbacks)
+                    estimateRow(SmartDataResetL10n.estimateLabelCards(locale: locale), value: estimate.deletedCards)
+                    estimateRow(SmartDataResetL10n.estimateLabelCredits(locale: locale), value: estimate.deletedCredits)
+                    estimateRow(SmartDataResetL10n.estimateLabelInvestments(locale: locale), value: estimate.deletedInvestments)
+                    estimateRow(SmartDataResetL10n.estimateLabelAccountLinks(locale: locale), value: estimate.deletedFinanceAccounts)
+                    estimateRow(SmartDataResetL10n.estimateLabelAccountGroups(locale: locale), value: estimate.deletedFinanceGroups)
+                    estimateRow(SmartDataResetL10n.estimateLabelCashflowCustomCategories(locale: locale), value: estimate.deletedCashflowCustomCategories)
+                    estimateRow(SmartDataResetL10n.estimateLabelCashflowSystemOverrides(locale: locale), value: estimate.deletedCashflowSystemOverrides)
+                    estimateRow(SmartDataResetL10n.estimateLabelCashbackCustomCategories(locale: locale), value: estimate.deletedCashbackCustomCategories)
+                    estimateRow(SmartDataResetL10n.estimateLabelZeroedCards(locale: locale), value: estimate.zeroedCards)
+                    estimateRow(SmartDataResetL10n.estimateLabelZeroedCredits(locale: locale), value: estimate.zeroedCredits)
+                    estimateRow(SmartDataResetL10n.estimateLabelZeroedInvestments(locale: locale), value: estimate.zeroedInvestments)
+                    estimateRow(SmartDataResetL10n.estimateLabelCreatedAdjustments(locale: locale), value: estimate.createdAdjustmentTransactions)
+                    estimateRow(SmartDataResetL10n.estimateLabelSettingsReset(locale: locale), value: estimate.settingsReset ? 1 : 0)
 
                     FinancesRowDivider()
                         .padding(.vertical, 4)
 
                     HStack {
-                        Text("Total changes")
+                        Text(SmartDataResetL10n.totalChangesTitle(locale: locale))
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
@@ -242,7 +246,7 @@ struct SmartDataResetView: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(AppColors.brandPrimary)
 
-                    Text("Recommended: create a backup before applying reset.")
+                    Text(SmartDataResetL10n.backupRecommendation(locale: locale))
                         .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(AppColors.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -254,7 +258,7 @@ struct SmartDataResetView: View {
                 } label: {
                     HStack {
                         Image(systemName: "trash.fill")
-                        Text(isApplying ? "Resetting..." : "Apply reset")
+                        Text(SmartDataResetL10n.applyResetButton(isApplying: isApplying, locale: locale))
                             .font(.system(size: 16, weight: .semibold))
                         if isApplying {
                             ProgressView()
@@ -305,7 +309,7 @@ struct SmartDataResetView: View {
         do {
             let result = try service.execute(request)
             estimate = result
-            successMessage = "Applied changes: \(result.totalChanges)"
+            successMessage = SmartDataResetL10n.appliedChangesMessage(result.totalChanges, locale: locale)
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription

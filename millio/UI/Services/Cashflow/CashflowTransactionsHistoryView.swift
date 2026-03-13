@@ -71,6 +71,14 @@ struct CashflowTransactionsHistoryView: View {
         filteredTransactions.count > visibleTransactions.count
     }
 
+    private var activeFilterItems: [CashflowHistoryActiveFilterItem] {
+        CashflowHistoryFilterPresentation.activeItems(
+            selectedFilter: selectedFilter,
+            dateFilterTitle: dateFilterTitle,
+            isDateFilterActive: isDateFilterActive
+        )
+    }
+
     /// Группировка по дате
     private var groupedTransactions: [(date: Date, transactions: [CashflowTransaction])] {
         let calendar = Calendar.current
@@ -151,30 +159,55 @@ struct CashflowTransactionsHistoryView: View {
     // MARK: - Filter Chips
 
     private var filterChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(CashflowHistoryTypeFilter.allCases, id: \.self) { filter in
-                    HistoryFilterChip(
-                        title: filter.title,
-                        isSelected: selectedFilter == filter
-                    ) {
+        VStack(alignment: .leading, spacing: 10) {
+            if !activeFilterItems.isEmpty {
+                ActiveHistoryFiltersGroup(
+                    items: activeFilterItems,
+                    onClearTypeFilter: {
                         withAnimation(.easeInOut(duration: 0.2)) {
-                            selectedFilter = filter
+                            selectedFilter = .all
+                            resetPagination()
+                        }
+                    },
+                    onEditDateFilter: {
+                        isDateFilterSheetPresented = true
+                    },
+                    onClearDateFilter: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedStartDate = nil
+                            selectedEndDate = nil
                             resetPagination()
                         }
                     }
-                }
-
-                HistoryDateFilterChip(
-                    title: dateFilterTitle,
-                    isSelected: isDateFilterActive
-                ) {
-                    isDateFilterSheetPresented = true
-                }
+                )
+                .padding(.horizontal, 24)
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 12)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(CashflowHistoryTypeFilter.allCases, id: \.self) { filter in
+                        HistoryFilterChip(
+                            title: filter.title,
+                            isSelected: selectedFilter == filter
+                        ) {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                selectedFilter = filter
+                                resetPagination()
+                            }
+                        }
+                    }
+
+                    HistoryDateFilterChip(
+                        title: dateFilterTitle,
+                        isSelected: isDateFilterActive
+                    ) {
+                        isDateFilterSheetPresented = true
+                    }
+                }
+                .padding(.horizontal, 24)
+            }
         }
+        .padding(.vertical, 12)
     }
 
     // MARK: - Search Bar
@@ -254,7 +287,7 @@ struct CashflowTransactionsHistoryView: View {
 
     private var transactionsList: some View {
         ScrollView {
-            LazyVStack(spacing: 16) {
+            LazyVStack(spacing: 12) {
                 ForEach(Array(groupedTransactions.enumerated()), id: \.element.date) { index, group in
                     // Разделитель с датой (не для первой группы)
                     if index > 0 {
@@ -262,11 +295,12 @@ struct CashflowTransactionsHistoryView: View {
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(AppColors.textPrimary)
                             .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, 4)
+                            .padding(.top, 6)
+                            .padding(.bottom, 2)
                     }
 
                     ForEach(group.transactions) { transaction in
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: 5) {
                             // Заголовок типа операции
                             FinancesSectionHeader(title: transaction.transactionType.displayName)
 
@@ -281,8 +315,8 @@ struct CashflowTransactionsHistoryView: View {
                 }
             }
             .padding(.horizontal, 24)
-            .padding(.top, 8)
-            .padding(.bottom, 32)
+            .padding(.top, 4)
+            .padding(.bottom, 24)
         }
         .safeAreaInset(edge: .bottom) {
             if canLoadMore {
@@ -370,6 +404,111 @@ struct CashflowTransactionsHistoryView: View {
 }
 
 // MARK: - History Filter Chip
+
+enum CashflowHistoryFilterPresentation {
+    static func activeItems(
+        selectedFilter: CashflowHistoryTypeFilter,
+        dateFilterTitle: String,
+        isDateFilterActive: Bool
+    ) -> [CashflowHistoryActiveFilterItem] {
+        var items: [CashflowHistoryActiveFilterItem] = []
+        if selectedFilter != .all {
+            items.append(.type(selectedFilter))
+        }
+        if isDateFilterActive {
+            items.append(.date(dateFilterTitle))
+        }
+        return items
+    }
+}
+
+enum CashflowHistoryActiveFilterItem: Equatable {
+    case type(CashflowHistoryTypeFilter)
+    case date(String)
+}
+
+private struct ActiveHistoryFiltersGroup: View {
+    let items: [CashflowHistoryActiveFilterItem]
+    let onClearTypeFilter: () -> Void
+    let onEditDateFilter: () -> Void
+    let onClearDateFilter: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                switch item {
+                case let .type(filter):
+                    HistoryActiveFilterChip(
+                        title: filter.title,
+                        systemImage: "line.3.horizontal.decrease.circle.fill",
+                        action: onClearTypeFilter
+                    )
+                case let .date(title):
+                    HistoryActiveFilterChip(
+                        title: title,
+                        systemImage: "calendar",
+                        action: onEditDateFilter,
+                        secondaryAction: onClearDateFilter
+                    )
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 0.75)
+        )
+    }
+}
+
+private struct HistoryActiveFilterChip: View {
+    let title: String
+    let systemImage: String
+    let action: () -> Void
+    var secondaryAction: (() -> Void)? = nil
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Button(action: action) {
+                HStack(spacing: 6) {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 11, weight: .semibold))
+                    Text(title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(1)
+                }
+                .foregroundStyle(AppColors.textPrimary)
+                .padding(.leading, 10)
+                .padding(.trailing, secondaryAction == nil ? 10 : 4)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule()
+                        .fill(Color.white.opacity(0.08))
+                )
+            }
+            .buttonStyle(.plain)
+
+            if let secondaryAction {
+                Button(action: secondaryAction) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .frame(width: 24, height: 24)
+                        .background(
+                            Circle()
+                                .fill(Color.white.opacity(0.08))
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
 
 private struct HistoryFilterChip: View {
     let title: String
@@ -744,28 +883,29 @@ private struct HistoryTransactionCard: View {
         Button {
             onOpenDetails()
         } label: {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 // Сумма с префиксом +/–
                 Text(formattedAmount)
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: 19, weight: .bold))
                     .foregroundStyle(AppColors.textPrimary)
 
                 // Описание операции
                 if let description = transactionDescription, !description.isEmpty {
                     Text(description)
-                        .font(.system(size: 14, weight: .regular))
+                        .font(.system(size: 13.5, weight: .regular))
                         .foregroundStyle(AppColors.textSecondary)
-                        .lineLimit(3)
+                        .lineLimit(2)
                         .multilineTextAlignment(.leading)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(16)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
             .background {
                 GlassBackground(
                     gradient: AppColors.cashflowGradient,
                     cornerRadius: 16,
-                    strokeWidth: 1
+                    strokeWidth: 0.5
                 )
             }
         }

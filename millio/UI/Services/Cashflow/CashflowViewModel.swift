@@ -12,6 +12,32 @@ import Combine
 
 // MARK: - Conversion Error
 
+enum CashflowScheduledEntryKind: String {
+    case recurringMonthly
+    case oneTimePlanned
+
+    var sortPriority: Int {
+        switch self {
+        case .recurringMonthly:
+            return 0
+        case .oneTimePlanned:
+            return 1
+        }
+    }
+}
+
+struct CashflowScheduledEntry: Identifiable {
+    let transaction: CashflowTransaction
+    let scheduledDate: Date
+    let kind: CashflowScheduledEntryKind
+
+    var id: String {
+        let stamp = Int(scheduledDate.timeIntervalSince1970)
+        let createdStamp = Int(transaction.createdAt.timeIntervalSince1970)
+        return "\(transaction.recurrenceSeriesID ?? "one-time")-\(stamp)-\(kind.rawValue)-\(createdStamp)"
+    }
+}
+
 enum ConversionError: Error {
     case rateUnavailable(from: String, to: String, date: Date)
 }
@@ -629,9 +655,6 @@ final class CashflowViewModel: ViewModelProtocol {
         let startDay = calendar.startOfDay(for: startDate)
         let endDay = calendar.startOfDay(for: endDate)
         let endExclusive = calendar.date(byAdding: .day, value: 1, to: endDay) ?? endDay
-        let dayCount = max((calendar.dateComponents([.day], from: startDay, to: endDay).day ?? 0) + 1, 1)
-        let previousEndDay = calendar.date(byAdding: .day, value: -1, to: startDay) ?? startDay
-        let previousStartDay = calendar.date(byAdding: .day, value: -(dayCount - 1), to: previousEndDay) ?? previousEndDay
         
         // Рассчитываем общие суммы за период и детализацию по категориям
         var totalIncome: Double = 0.0
@@ -649,16 +672,14 @@ final class CashflowViewModel: ViewModelProtocol {
                     transaction,
                     to: state.displayCurrency
                 )
-                if transaction.transactionDate >= previousStartDay && transaction.transactionDate < endExclusive {
-                    convertedTransactions.append(
-                        CashflowConvertedTransaction(
-                            id: transaction.transactionUniqueID,
-                            date: transaction.transactionDate,
-                            income: converted,
-                            expense: 0
-                        )
+                convertedTransactions.append(
+                    CashflowConvertedTransaction(
+                        id: transaction.transactionUniqueID,
+                        date: transaction.transactionDate,
+                        income: converted,
+                        expense: 0
                     )
-                }
+                )
                 if transaction.transactionDate >= startDay && transaction.transactionDate < endExclusive {
                     totalIncome += converted
                     let day = calendar.startOfDay(for: transaction.transactionDate)
@@ -672,16 +693,14 @@ final class CashflowViewModel: ViewModelProtocol {
                     transaction,
                     to: state.displayCurrency
                 )
-                if transaction.transactionDate >= previousStartDay && transaction.transactionDate < endExclusive {
-                    convertedTransactions.append(
-                        CashflowConvertedTransaction(
-                            id: transaction.transactionUniqueID,
-                            date: transaction.transactionDate,
-                            income: 0,
-                            expense: converted
-                        )
+                convertedTransactions.append(
+                    CashflowConvertedTransaction(
+                        id: transaction.transactionUniqueID,
+                        date: transaction.transactionDate,
+                        income: 0,
+                        expense: converted
                     )
-                }
+                )
                 if transaction.transactionDate >= startDay && transaction.transactionDate < endExclusive {
                     totalExpense += converted
                     let day = calendar.startOfDay(for: transaction.transactionDate)
@@ -1012,6 +1031,84 @@ final class CashflowViewModel: ViewModelProtocol {
             .sorted { $0.transactionDate < $1.transactionDate }
     }
 
+    func scheduledPlannerEntries(
+        for kind: CashflowCategoryKind,
+        relativeTo referenceDate: Date? = nil
+    ) -> [CashflowScheduledEntry] {
+        let baseline = Calendar.current.startOfDay(for: referenceDate ?? now())
+        let targetType = scheduledTransactionType(for: kind)
+
+        return state.transactions
+            .compactMap { transaction -> CashflowScheduledEntry? in
+                guard transaction.transactionType == targetType else { return nil }
+
+                if transaction.isRecurringTemplate,
+                   let nextDate = nextOccurrenceDate(for: transaction, relativeTo: baseline) {
+                    return CashflowScheduledEntry(
+                        transaction: transaction,
+                        scheduledDate: nextDate,
+                        kind: .recurringMonthly
+                    )
+                }
+
+                guard transaction.recurrenceRule == .none, transaction.transactionDate > baseline else {
+                    return nil
+                }
+
+                return CashflowScheduledEntry(
+                    transaction: transaction,
+                    scheduledDate: transaction.transactionDate,
+                    kind: .oneTimePlanned
+                )
+            }
+            .sorted(by: scheduledEntrySort)
+    }
+
+    func scheduledCalendarEntries(
+        for kind: CashflowCategoryKind,
+        month: Date,
+        relativeTo referenceDate: Date? = nil
+    ) -> [CashflowScheduledEntry] {
+        let calendar = Calendar.current
+        let baseline = calendar.startOfDay(for: referenceDate ?? now())
+        let targetType = scheduledTransactionType(for: kind)
+        let monthStart = Self.monthStart(for: month, calendar: calendar)
+
+        return state.transactions
+            .compactMap { transaction -> CashflowScheduledEntry? in
+                guard transaction.transactionType == targetType else { return nil }
+
+                if transaction.isRecurringTemplate {
+                    let anchorDay = calendar.component(.day, from: transaction.transactionDate)
+                    let scheduledDate = Self.makeMonthlyDate(
+                        monthStart: monthStart,
+                        day: anchorDay,
+                        calendar: calendar
+                    )
+
+                    guard scheduledDate >= baseline else { return nil }
+                    return CashflowScheduledEntry(
+                        transaction: transaction,
+                        scheduledDate: scheduledDate,
+                        kind: .recurringMonthly
+                    )
+                }
+
+                guard transaction.recurrenceRule == .none else { return nil }
+                guard calendar.isDate(transaction.transactionDate, equalTo: monthStart, toGranularity: .month) else {
+                    return nil
+                }
+                guard transaction.transactionDate > baseline else { return nil }
+
+                return CashflowScheduledEntry(
+                    transaction: transaction,
+                    scheduledDate: transaction.transactionDate,
+                    kind: .oneTimePlanned
+                )
+            }
+            .sorted(by: scheduledEntrySort)
+    }
+
     func nextOccurrenceDate(
         for template: CashflowTransaction,
         relativeTo referenceDate: Date? = nil
@@ -1038,6 +1135,25 @@ final class CashflowViewModel: ViewModelProtocol {
         }
 
         return candidate
+    }
+
+    private func scheduledTransactionType(for kind: CashflowCategoryKind) -> CashflowTransactionType {
+        switch kind {
+        case .income:
+            return .income
+        case .expense:
+            return .expense
+        }
+    }
+
+    private func scheduledEntrySort(lhs: CashflowScheduledEntry, rhs: CashflowScheduledEntry) -> Bool {
+        if lhs.scheduledDate != rhs.scheduledDate {
+            return lhs.scheduledDate < rhs.scheduledDate
+        }
+        if lhs.kind.sortPriority != rhs.kind.sortPriority {
+            return lhs.kind.sortPriority < rhs.kind.sortPriority
+        }
+        return lhs.transaction.createdAt < rhs.transaction.createdAt
     }
 
     private func monthlyTotal(
@@ -1379,13 +1495,14 @@ final class CashflowViewModel: ViewModelProtocol {
 
     private func getDateRange() -> (Date, Date) {
         let calendar = Calendar.current
+        let today = calendar.startOfDay(for: now())
         
         switch state.chartPeriod {
         case .month:
             let reference = now()
             let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: reference)) ?? reference
             let endOfMonth = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: startOfMonth) ?? reference
-            return (startOfMonth, endOfMonth)
+            return (startOfMonth, min(endOfMonth, today))
             
         case .quarter:
             let reference = now()
@@ -1407,6 +1524,9 @@ final class CashflowViewModel: ViewModelProtocol {
         case .specificMonth:
             let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: state.selectedMonth)) ?? state.selectedMonth
             let endOfMonth = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: startOfMonth) ?? state.selectedMonth
+            if calendar.isDate(startOfMonth, equalTo: today, toGranularity: .month) {
+                return (startOfMonth, today)
+            }
             return (startOfMonth, endOfMonth)
             
         case .specificQuarter:
@@ -1429,16 +1549,15 @@ final class CashflowViewModel: ViewModelProtocol {
         }
     }
 
-    /// Дефолтный период Cashflow: последние 3 календарных месяца (включая текущий месяц до сегодняшнего дня).
+    /// Дефолтный период Cashflow: текущий календарный месяц до сегодняшнего дня.
     ///
-    /// Пример: для 09.03.2026 вернет 01.01.2026—09.03.2026.
+    /// Пример: для 09.03.2026 вернет 01.03.2026—09.03.2026.
     nonisolated static func defaultPeriodRange(
         referenceDate: Date,
         calendar: Calendar = .current
     ) -> (start: Date, end: Date) {
         let end = calendar.startOfDay(for: referenceDate)
-        let startOfCurrentMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: end)) ?? end
-        let start = calendar.date(byAdding: .month, value: -2, to: startOfCurrentMonth) ?? startOfCurrentMonth
+        let start = calendar.date(from: calendar.dateComponents([.year, .month], from: end)) ?? end
         return (calendar.startOfDay(for: start), end)
     }
 
@@ -1462,9 +1581,10 @@ final class CashflowViewModel: ViewModelProtocol {
 
     private func resetToDefaultPeriodInternal(referenceDate: Date) {
         let range = Self.defaultPeriodRange(referenceDate: referenceDate, calendar: .current)
+        state.selectedMonth = range.end
         state.customStartDate = range.start
         state.customEndDate = range.end
-        state.chartPeriod = .custom
+        state.chartPeriod = .specificMonth
     }
 
     private func updateAssetsBreakdown(startDate: Date, endDate: Date) async {

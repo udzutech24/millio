@@ -96,34 +96,34 @@ struct DailyReminderSettings: Codable, Equatable {
         case .expense:
             let messages = isRussian
                 ? [
-                    "Пора внести расходы за сегодня.",
-                    "Добавь сегодняшние траты, пока все помнишь.",
-                    "Запиши расходы и держи баланс точным."
+                    "Пора внести расходы за сегодня",
+                    "Добавь сегодняшние траты, пока все помнишь",
+                    "Запиши расходы и держи баланс точным"
                 ]
                 : [
-                    "Time to log today's expenses.",
-                    "Add today's spending while it's still fresh.",
-                    "Record your expenses and keep your balance accurate."
+                    "Time to log today's expenses",
+                    "Add today's spending while it's still fresh",
+                    "Record your expenses and keep your balance accurate"
                 ]
             return messages[messageIndex(calendar: calendar, now: now) % messages.count]
         case .income:
             let messages = isRussian
                 ? [
-                    "Пора внести новые доходы.",
-                    "Запиши поступления, чтобы баланс был актуальным.",
-                    "Добавь доходы и обнови картину по финансам."
+                    "Пора внести новые доходы",
+                    "Запиши поступления, чтобы баланс был актуальным",
+                    "Добавь доходы и обнови картину по финансам"
                 ]
                 : [
-                    "Time to log new income.",
-                    "Record incoming funds to keep your balance up to date.",
-                    "Add your income and refresh your financial overview."
+                    "Time to log new income",
+                    "Record incoming funds to keep your balance up to date",
+                    "Add your income and refresh your financial overview"
                 ]
             return messages[messageIndex(calendar: calendar, now: now) % messages.count]
         case .custom:
             if !trimmedCustomText.isEmpty {
                 return trimmedCustomText
             }
-            return isRussian ? "Открой millio и обнови данные." : "Open millio and update your data."
+            return isRussian ? "Открой millio и обнови данные" : "Open millio and update your data"
         }
     }
 

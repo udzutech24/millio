@@ -32,12 +32,16 @@ enum CashflowInsightsChartStyle {
         let count = max(barCount, 1)
         let compactMode = visiblePeriods > 4
         let spacing: CGFloat = compactMode ? 6 : 10
-        let availableWidth = max(containerWidth - 12, 0)
+        // Keep more usable width in full-screen mode so bars fill the viewport.
+        let availableWidth = max(containerWidth - 2, 0)
         let rawGroupWidth = max(
             (availableWidth - spacing * CGFloat(count - 1)) / CGFloat(count),
             1
         )
-        let groupWidth = min(rawGroupWidth, compactMode ? 64 : 78)
+        let shouldFitViewport = !compactMode && visiblePeriods <= 4 && count <= visiblePeriods
+        let groupWidth: CGFloat = shouldFitViewport
+            ? rawGroupWidth
+            : min(rawGroupWidth, compactMode ? 64 : 78)
 
         return CashflowInsightsChartMetrics(
             spacing: spacing,

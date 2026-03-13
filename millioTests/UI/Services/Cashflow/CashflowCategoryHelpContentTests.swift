@@ -7,23 +7,24 @@
 
 import Testing
 @testable import millio
+import Foundation
 
 struct CashflowCategoryHelpContentTests {
     @Test("Подсказка для доходов описывает экран и ключевые действия")
     func incomeHelpContainsMainGuidance() {
         let content = CashflowCategoryHelpContent.make(for: .income)
 
-        #expect(content.title == "How it works")
-        #expect(content.lines.contains { $0.contains("Income screen") })
-        #expect(content.lines.contains { $0.contains("Tap +") })
-        #expect(content.lines.contains { $0.contains("Long press a category") })
+        #expect(content.title == String(localized: "cashflow.operation.help.title"))
+        #expect(content.lines.contains(String(localized: "cashflow.operation.help.income_intro")))
+        #expect(content.lines.contains(String(localized: "cashflow.operation.help.tap_plus")))
+        #expect(content.lines.contains(String(localized: "cashflow.operation.help.long_press")))
     }
 
     @Test("Подсказка для расходов содержит текст про перенос в системную категорию")
     func expenseHelpContainsSafeMigrationNote() {
         let content = CashflowCategoryHelpContent.make(for: .expense)
 
-        #expect(content.lines.contains { $0.contains("Expense screen") })
-        #expect(content.lines.contains { $0.contains("moved to a safe system category") })
+        #expect(content.lines.contains(String(localized: "cashflow.operation.help.expense_intro")))
+        #expect(content.lines.contains(String(localized: "cashflow.operation.help.safe_migration")))
     }
 }

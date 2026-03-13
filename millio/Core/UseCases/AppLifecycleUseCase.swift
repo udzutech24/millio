@@ -52,7 +52,14 @@ final class AppLifecycleUseCase: AppLifecycleUseCaseProtocol {
         // Определяем следующий шаг, но применяем его только после минимальной выдержки splash.
         let lifecycleStart = DispatchTime.now()
         let nextLifecycle: AppLifecycleState
-        if !checkOnboardingStatus() {
+        let hasCompletedOnboarding = checkOnboardingStatus()
+        let lastSeenVersion = SettingsManager.shared.lastSeenAppVersion
+        SettingsManager.shared.applyQuickSetupBannerSuppressionIfNeeded(
+            hasCompletedOnboarding: hasCompletedOnboarding,
+            lastSeenVersion: lastSeenVersion
+        )
+        SettingsManager.shared.lastSeenAppVersion = currentAppVersionString()
+        if !hasCompletedOnboarding {
             nextLifecycle = .onboarding
         } else {
             // Не показываем экран восстановления автоматически
@@ -140,5 +147,14 @@ final class AppLifecycleUseCase: AppLifecycleUseCaseProtocol {
     
     func completeOnboarding() {
         UserDefaults.standard.set(true, forKey: onboardingKey)
+    }
+
+    private func currentAppVersionString() -> String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        if version == build {
+            return version
+        }
+        return "\(version) (\(build))"
     }
 }

@@ -702,8 +702,12 @@ struct FinanceAddAccountView: View {
         }
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                Button(String(localized: "finances.common.cancel")) { dismiss() }
-                    .foregroundStyle(AppColors.textPrimary)
+                ToolbarGlassIconButton(
+                    systemName: "xmark",
+                    accessibilityLabel: String(localized: "finances.common.cancel")
+                ) {
+                    dismiss()
+                }
             }
             ToolbarItem(placement: .navigationBarTrailing) {
                 if areHintsHidden, !validationHints.isEmpty {
@@ -719,19 +723,16 @@ struct FinanceAddAccountView: View {
                 }
             }
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button(isEditingMode ? String(localized: "finances.common.save") : String(localized: "finances.common.add")) { addAccount() }
-                    .foregroundStyle(
-                        isValid
-                        ? AnyShapeStyle(
-                            LinearGradient(
-                                colors: [Color(red: 0.22, green: 1.0, blue: 0.56), Color(red: 0.13, green: 0.79, blue: 0.38)],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        : AnyShapeStyle(Color.white.opacity(0.28))
-                    )
-                    .disabled(!isValid)
+                ToolbarGlassIconButton(
+                    systemName: "checkmark",
+                    accessibilityLabel: isEditingMode
+                    ? String(localized: "finances.common.save")
+                    : String(localized: "finances.common.add"),
+                    isEnabled: isValid,
+                    isHighlighted: isValid
+                ) {
+                    addAccount()
+                }
             }
         }
         .onAppear {

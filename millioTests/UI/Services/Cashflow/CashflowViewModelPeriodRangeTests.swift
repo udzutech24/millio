@@ -10,6 +10,20 @@ import Testing
 @testable import millio
 
 struct CashflowViewModelPeriodRangeTests {
+    @Test("Default period: current month to reference day")
+    func defaultPeriodIsCurrentMonthToReferenceDay() {
+        let calendar = Calendar(identifier: .gregorian)
+        let reference = Self.date(2026, 3, 9)
+
+        let range = CashflowViewModel.defaultPeriodRange(
+            referenceDate: reference,
+            calendar: calendar
+        )
+
+        #expect(range.start == Self.date(2026, 3, 1))
+        #expect(range.end == Self.date(2026, 3, 9))
+    }
+
     @Test("Clamp custom period: end date is capped by reference day")
     func clampCustomPeriodCapsFutureEnd() {
         let calendar = Calendar(identifier: .gregorian)
@@ -46,4 +60,3 @@ struct CashflowViewModelPeriodRangeTests {
         Calendar(identifier: .gregorian).date(from: DateComponents(year: year, month: month, day: day)) ?? Date()
     }
 }
-

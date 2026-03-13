@@ -37,4 +37,5 @@ struct CashflowFormattingTests {
         #expect(cashflowHistoryAmountText(1232) == "1 232")
         #expect(cashflowHistoryAmountText(1232.32) == "1 232,32")
     }
+
 }

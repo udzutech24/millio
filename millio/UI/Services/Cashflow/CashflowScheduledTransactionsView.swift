@@ -14,30 +14,87 @@ struct CashflowScheduledTransactionsView: View {
 
     @State private var searchText: String = ""
     @State private var showCreateSheet: Bool = false
+    @State private var createRecurrenceRule: CashflowRecurrenceRule = .none
+    @State private var createInitialDate: Date? = nil
     @State private var editingTransaction: CashflowTransaction?
     @State private var pendingDeleteTransaction: CashflowTransaction?
     @State private var showDeleteAlert: Bool = false
+    @State private var plannerDisplayMode: PlannerDisplayMode = .calendar
+    @State private var plannerMonthAnchor: Date = CashflowScheduledTransactionsView.monthStart(for: Date())
+    @State private var selectedPlannerDate: Date = Calendar.current.startOfDay(for: Date())
 
-    private var transactions: [CashflowTransaction] {
-        switch mode {
-        case .recurring:
-            return viewModel.recurringTemplates(for: kind)
-        case .plannedOneTime:
-            return viewModel.plannedOneTimeTransactions(for: kind)
-        }
+    private enum PlannerDisplayMode: String, CaseIterable, Identifiable {
+        case calendar
+        case list
+
+        var id: String { rawValue }
+    }
+
+    private var recurringTransactions: [CashflowTransaction] {
+        viewModel.recurringTemplates(for: kind)
+    }
+
+    private var plannedTransactions: [CashflowTransaction] {
+        viewModel.plannedOneTimeTransactions(for: kind)
+    }
+
+    private var plannerEntries: [CashflowScheduledEntry] {
+        viewModel.scheduledPlannerEntries(for: kind)
+    }
+
+    private var plannerCalendarEntries: [CashflowScheduledEntry] {
+        viewModel.scheduledCalendarEntries(for: kind, month: plannerMonthAnchor)
     }
 
     private var filteredTransactions: [CashflowTransaction] {
-        let trimmedQuery = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedQuery.isEmpty else { return transactions }
+        switch mode {
+        case .recurring:
+            return recurringTransactions.filter(matchesSearch)
+        case .planner:
+            return plannedTransactions.filter(matchesSearch)
+        }
+    }
 
-        return transactions.filter { transaction in
-            let query = trimmedQuery.lowercased()
-            if title(for: transaction).lowercased().contains(query) { return true }
-            if subtitle(for: transaction).lowercased().contains(query) { return true }
-            if (transaction.note ?? "").lowercased().contains(query) { return true }
-            if amountString(for: transaction).lowercased().contains(query) { return true }
-            return false
+    private var filteredRecurringTransactions: [CashflowTransaction] {
+        recurringTransactions.filter(matchesSearch)
+    }
+
+    private var filteredPlannedTransactions: [CashflowTransaction] {
+        plannedTransactions.filter(matchesSearch)
+    }
+
+    private var filteredPlannerEntries: [CashflowScheduledEntry] {
+        plannerEntries.filter(matchesSearch)
+    }
+
+    private var filteredPlannerCalendarEntries: [CashflowScheduledEntry] {
+        plannerCalendarEntries.filter(matchesSearch)
+    }
+
+    private var selectedDayEntries: [CashflowScheduledEntry] {
+        filteredPlannerCalendarEntries.filter {
+            Calendar.current.isDate($0.scheduledDate, inSameDayAs: selectedPlannerDate)
+        }
+    }
+
+    private var plannerOverviewEntry: CashflowScheduledEntry? {
+        filteredPlannerEntries.first
+    }
+
+    private var plannerMonthlyCount: Int {
+        filteredPlannerEntries.filter { $0.kind == .recurringMonthly }.count
+    }
+
+    private var plannerOneTimeCount: Int {
+        filteredPlannerEntries.filter { $0.kind == .oneTimePlanned }.count
+    }
+
+    private var listIsEmpty: Bool {
+        switch mode {
+        case .recurring:
+            return filteredTransactions.isEmpty
+        case .planner:
+            return filteredRecurringTransactions.isEmpty && filteredPlannedTransactions.isEmpty
         }
     }
 
@@ -45,30 +102,56 @@ struct CashflowScheduledTransactionsView: View {
         ZStack {
             GradientBackground()
 
-            VStack(spacing: 12) {
-                searchSection
-
-                if filteredTransactions.isEmpty {
+            if listIsEmpty && mode == .recurring {
+                VStack(spacing: 12) {
+                    searchSection
                     emptyState
-                } else {
-                    contentList
                 }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 20)
+            } else {
+                contentList
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 20)
         }
         .navigationTitle(mode.navigationTitle(for: kind))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showCreateSheet = true
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 14, weight: .semibold))
+                if mode == .planner {
+                    Menu {
+                        Button(
+                            String(
+                                localized: "cashflow.scheduled.create_picker.monthly",
+                                defaultValue: "Monthly recurring",
+                                comment: "Create a monthly recurring scheduled transaction"
+                            )
+                        ) {
+                            createMonthlyTransaction()
+                        }
+                        Button(
+                            String(
+                                localized: "cashflow.scheduled.create_picker.one_time",
+                                defaultValue: "One-time planned",
+                                comment: "Create a one-time scheduled transaction"
+                            )
+                        ) {
+                            createPlannedForSelectedDate()
+                        }
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                    }
+                } else {
+                    Button {
+                        handleCreateTapped()
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundStyle(AppColors.textPrimary)
                 }
-                .foregroundStyle(AppColors.textPrimary)
             }
         }
         .sheet(isPresented: $showCreateSheet) {
@@ -77,8 +160,9 @@ struct CashflowScheduledTransactionsView: View {
                 transactionType: kind.transactionType,
                 showsTransactionTypeSection: false,
                 showsRecurrenceSection: mode.showsRecurrenceSection,
-                customNavigationTitle: mode.createNavigationTitle(for: kind),
-                initialRecurrenceRule: mode.defaultRecurrenceRule,
+                customNavigationTitle: mode.createNavigationTitle(for: kind, recurrenceRule: createRecurrenceRule),
+                initialRecurrenceRule: createRecurrenceRule,
+                initialTransactionDate: createInitialDate,
                 onSave: { showCreateSheet = false }
             )
         }
@@ -88,7 +172,7 @@ struct CashflowScheduledTransactionsView: View {
                 transaction: transaction,
                 showsTransactionTypeSection: false,
                 showsRecurrenceSection: mode.showsRecurrenceSection,
-                customNavigationTitle: mode.editNavigationTitle(for: kind),
+                customNavigationTitle: mode.editNavigationTitle(for: kind, transaction: transaction),
                 onSave: { editingTransaction = nil }
             )
         }
@@ -100,10 +184,127 @@ struct CashflowScheduledTransactionsView: View {
                 guard let transactionToDelete = pendingDeleteTransaction else { return }
                 viewModel.handle(.deleteTransaction(transactionToDelete, recalculate: true))
                 pendingDeleteTransaction = nil
+                updatePlannerSelectionIfNeeded()
             }
         } message: {
             Text("cashflow.scheduled.delete_transaction.message")
         }
+        .onAppear {
+            configurePlannerFocusIfNeeded()
+        }
+        .onChange(of: plannerMonthAnchor) { _, _ in
+            updatePlannerSelectionIfNeeded()
+        }
+        .onChange(of: searchText) { _, _ in
+            updatePlannerSelectionIfNeeded()
+        }
+        .onChange(of: viewModel.state.transactions.count) { _, _ in
+            updatePlannerSelectionIfNeeded()
+        }
+    }
+
+    private var contentList: some View {
+        List {
+            listCard(searchSection)
+
+            switch mode {
+            case .recurring:
+                recurringContent
+            case .planner:
+                plannerContent
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Color.clear)
+    }
+
+    @ViewBuilder
+    private var recurringContent: some View {
+        if filteredTransactions.isEmpty {
+            listCard(emptyState)
+        } else {
+            ForEach(filteredTransactions) { transaction in
+                transactionRow(transaction)
+                    .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var plannerContent: some View {
+        listCard(plannerOverviewSection)
+        listCard(plannerModePicker)
+
+        if plannerDisplayMode == .calendar {
+            listCard(plannerCalendarSection)
+
+            if selectedDayEntries.isEmpty {
+                listCard(dayAgendaEmptyState)
+            } else {
+                agendaHeaderRow
+                ForEach(selectedDayEntries) { entry in
+                    transactionRow(entry.transaction, entryKind: entry.kind, scheduledDate: entry.scheduledDate)
+                        .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                }
+            }
+        } else {
+            if filteredRecurringTransactions.isEmpty && filteredPlannedTransactions.isEmpty {
+                listCard(emptyState)
+            } else {
+                if !filteredRecurringTransactions.isEmpty {
+                    plannerSectionHeader(plannerMonthlySectionTitle)
+                    ForEach(filteredRecurringTransactions) { transaction in
+                        transactionRow(transaction, entryKind: .recurringMonthly)
+                            .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                    }
+                }
+
+                if !filteredPlannedTransactions.isEmpty {
+                    plannerSectionHeader(plannerOneTimeSectionTitle)
+                    ForEach(filteredPlannedTransactions) { transaction in
+                        transactionRow(transaction, entryKind: .oneTimePlanned, scheduledDate: transaction.transactionDate)
+                            .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                    }
+                }
+            }
+        }
+    }
+
+    private func listCard<Content: View>(_ content: Content) -> some View {
+        content
+            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+    }
+
+    private func plannerSectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(AppColors.textSecondary)
+            .textCase(.uppercase)
+            .tracking(0.8)
+            .listRowInsets(EdgeInsets(top: 18, leading: 18, bottom: 4, trailing: 16))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+    }
+
+    private var agendaHeaderRow: some View {
+        plannerSectionHeader(
+            String(
+                localized: "cashflow.scheduled.day_agenda.title",
+                defaultValue: "Due on \(formatDayHeader(selectedPlannerDate))",
+                comment: "Header for scheduled items due on the selected planner day"
+            )
+        )
     }
 
     private var searchSection: some View {
@@ -128,6 +329,297 @@ struct CashflowScheduledTransactionsView: View {
         )
     }
 
+    private var plannerOverviewSection: some View {
+        FinancesGlassCard(accentColor: kind.accentColor, cornerRadius: 20, contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(
+                            plannerOverviewTitle
+                        )
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+
+                        if let nextEntry = plannerOverviewEntry {
+                            Text(nextPlannerHeadline(for: nextEntry))
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(AppColors.textSecondary)
+                        } else {
+                            Text(
+                                String(
+                                    localized: "cashflow.scheduled.overview.empty",
+                                    defaultValue: "No upcoming scheduled items yet.",
+                                    comment: "Empty subtitle for planner overview"
+                                )
+                            )
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(AppColors.textSecondary)
+                        }
+                    }
+
+                    Spacer(minLength: 12)
+
+                    Image(systemName: kind == .expense ? "calendar.badge.clock" : "calendar.badge.plus")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(kind.accentColor)
+                        .frame(width: 40, height: 40)
+                        .background(
+                            Circle()
+                                .fill(kind.accentColor.opacity(0.14))
+                        )
+                }
+
+                HStack(spacing: 10) {
+                    plannerMetricCard(
+                        title: String(
+                            localized: "cashflow.scheduled.overview.next",
+                            defaultValue: "Next",
+                            comment: "Label for next scheduled item"
+                        ),
+                        value: plannerOverviewEntry.map { shortDate($0.scheduledDate) } ?? "-"
+                    )
+                    plannerMetricCard(
+                        title: plannerMonthlySectionTitle,
+                        value: "\(plannerMonthlyCount)"
+                    )
+                    plannerMetricCard(
+                        title: plannerOneTimeSectionTitle,
+                        value: "\(plannerOneTimeCount)"
+                    )
+                }
+            }
+        }
+    }
+
+    private func plannerMetricCard(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(AppColors.textSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+
+            Text(value)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(AppColors.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        )
+    }
+
+    private var plannerModePicker: some View {
+        HStack(spacing: 8) {
+            ForEach(PlannerDisplayMode.allCases) { item in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        plannerDisplayMode = item
+                    }
+                } label: {
+                    Text(itemTitle(item))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(plannerDisplayMode == item ? Color.black : AppColors.textSecondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(plannerDisplayMode == item ? Color.white : Color.white.opacity(0.06))
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(6)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        )
+    }
+
+    private var plannerCalendarSection: some View {
+        FinancesGlassCard(accentColor: kind.accentColor, cornerRadius: 20, contentPadding: EdgeInsets(top: 14, leading: 14, bottom: 14, trailing: 14)) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Button {
+                        guard let previousMonth = Calendar.current.date(byAdding: .month, value: -1, to: plannerMonthAnchor) else { return }
+                        plannerMonthAnchor = previousMonth
+                    } label: {
+                        calendarChevron(systemName: "chevron.left")
+                    }
+                    .buttonStyle(.plain)
+
+                    Spacer()
+
+                    Text(plannerMonthTitle)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+
+                    Spacer()
+
+                    Button {
+                        guard let nextMonth = Calendar.current.date(byAdding: .month, value: 1, to: plannerMonthAnchor) else { return }
+                        plannerMonthAnchor = nextMonth
+                    } label: {
+                        calendarChevron(systemName: "chevron.right")
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                HStack(spacing: 6) {
+                    ForEach(rotatedWeekdaySymbols(), id: \.self) { symbol in
+                        Text(symbol.uppercased())
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(AppColors.textSecondary)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 7), spacing: 8) {
+                    ForEach(0..<leadingBlankDays, id: \.self) { _ in
+                        Color.clear
+                            .frame(height: 48)
+                    }
+
+                    ForEach(daysInPlannerMonth(), id: \.self) { day in
+                        plannerDayCell(day)
+                    }
+                }
+            }
+        }
+    }
+
+    private func calendarChevron(systemName: String) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 13, weight: .bold))
+            .foregroundStyle(AppColors.textPrimary)
+            .frame(width: 32, height: 32)
+            .background(
+                Circle()
+                    .fill(Color.white.opacity(0.08))
+            )
+    }
+
+    private func plannerDayCell(_ day: Date) -> some View {
+        let isSelected = Calendar.current.isDate(day, inSameDayAs: selectedPlannerDate)
+        let isToday = Calendar.current.isDateInToday(day)
+        let entryCount = entriesCount(on: day)
+
+        return Button {
+            selectedPlannerDate = Calendar.current.startOfDay(for: day)
+        } label: {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(isSelected ? kind.accentColor.opacity(0.24) : Color.white.opacity(0.05))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(isSelected ? kind.accentColor.opacity(0.85) : Color.white.opacity(0.10), lineWidth: 1)
+                    )
+
+                VStack(spacing: 4) {
+                    Text(dayNumber(day))
+                        .font(.system(size: 20, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(
+                            isSelected
+                                ? AppColors.textPrimary
+                                : AppColors.textPrimary.opacity(isCurrentMonth(day) ? 1.0 : 0.4)
+                        )
+                        .frame(maxWidth: .infinity, alignment: .center)
+
+                    Circle()
+                        .fill(entryCount > 0 ? kind.accentColor : (isToday ? Color.white.opacity(0.7) : Color.clear))
+                        .frame(width: 6, height: 6)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                .padding(.vertical, 8)
+
+                if entryCount > 0 {
+                    Text("\(entryCount)")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(Color.black)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(kind.accentColor)
+                        )
+                        .padding(5)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                }
+            }
+            .frame(height: 52)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var dayAgendaEmptyState: some View {
+        FinancesGlassCard(cornerRadius: 20, contentPadding: EdgeInsets(top: 18, leading: 16, bottom: 18, trailing: 16)) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top, spacing: 10) {
+                    Text(
+                        String(
+                            localized: "cashflow.scheduled.day_agenda.empty_title",
+                            defaultValue: "Nothing due on this day",
+                            comment: "Empty state title for selected planner day"
+                        )
+                    )
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .layoutPriority(1)
+
+                    Spacer()
+
+                    Button {
+                        createPlannedForSelectedDate()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 11, weight: .bold))
+                            Text("cashflow.scheduled.day_agenda.empty.add_here")
+                                .font(.system(size: 12, weight: .semibold))
+                                .lineLimit(1)
+                        }
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(Color.white.opacity(0.10))
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Text(
+                    String(
+                        localized: "cashflow.scheduled.day_agenda.empty_subtitle",
+                        defaultValue: "Pick another date or switch to the list to review all monthly and one-time items.",
+                        comment: "Empty state subtitle for selected planner day"
+                    )
+                )
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(AppColors.textSecondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
     private var emptyState: some View {
         VStack(spacing: 14) {
             Image(systemName: mode.emptyIcon)
@@ -140,7 +632,7 @@ struct CashflowScheduledTransactionsView: View {
                 .multilineTextAlignment(.center)
 
             Button(mode.createButtonTitle(for: kind)) {
-                showCreateSheet = true
+                handleCreateTapped()
             }
             .buttonStyle(.plain)
             .font(.system(size: 15, weight: .semibold))
@@ -153,24 +645,17 @@ struct CashflowScheduledTransactionsView: View {
             )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.vertical, 28)
     }
 
-    private var contentList: some View {
-        List {
-            ForEach(filteredTransactions) { transaction in
-                transactionRow(transaction)
-                    .listRowInsets(EdgeInsets(top: 5, leading: 0, bottom: 5, trailing: 0))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-            }
-        }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .background(Color.clear)
-    }
+    private func transactionRow(
+        _ transaction: CashflowTransaction,
+        entryKind: CashflowScheduledEntryKind? = nil,
+        scheduledDate: Date? = nil
+    ) -> some View {
+        let resolvedKind = entryKind ?? (transaction.isRecurringTemplate ? .recurringMonthly : .oneTimePlanned)
 
-    private func transactionRow(_ transaction: CashflowTransaction) -> some View {
-        FinancesGlassCard(accentColor: kind.accentColor) {
+        return FinancesGlassCard(accentColor: kind.accentColor) {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
@@ -185,8 +670,8 @@ struct CashflowScheduledTransactionsView: View {
                             .foregroundStyle(AppColors.textPrimary)
                             .multilineTextAlignment(.leading)
 
-                        if mode == .recurring {
-                            Text("cashflow.scheduled.monthly_badge")
+                        if let badgeTitle = badgeTitle(for: resolvedKind) {
+                            Text(badgeTitle)
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundStyle(AppColors.textSecondary)
                                 .padding(.horizontal, 8)
@@ -198,7 +683,7 @@ struct CashflowScheduledTransactionsView: View {
                         }
                     }
 
-                    Text(subtitle(for: transaction))
+                    Text(subtitle(for: transaction, entryKind: resolvedKind, scheduledDate: scheduledDate))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(AppColors.textSecondary)
                         .lineLimit(2)
@@ -219,10 +704,10 @@ struct CashflowScheduledTransactionsView: View {
             editingTransaction = transaction
         }
         .contextMenu {
-            Button("Edit") {
+            Button(String(localized: "cashflow.common.edit")) {
                 editingTransaction = transaction
             }
-            Button("Delete", role: .destructive) {
+            Button(String(localized: "cashflow.history.detail.delete"), role: .destructive) {
                 requestDelete(transaction)
             }
         }
@@ -230,14 +715,54 @@ struct CashflowScheduledTransactionsView: View {
             Button(role: .destructive) {
                 requestDelete(transaction)
             } label: {
-                Label("Delete", systemImage: "trash")
+                Label(String(localized: "cashflow.history.detail.delete"), systemImage: "trash")
             }
         }
+    }
+
+    private func handleCreateTapped() {
+        switch mode {
+        case .recurring:
+            createRecurrenceRule = .monthly
+            createInitialDate = Date()
+            showCreateSheet = true
+        case .planner:
+            createPlannedForSelectedDate()
+        }
+    }
+
+    private func createMonthlyTransaction() {
+        createRecurrenceRule = .monthly
+        createInitialDate = selectedPlannerDate
+        showCreateSheet = true
+    }
+
+    private func createPlannedForSelectedDate() {
+        createRecurrenceRule = .none
+        createInitialDate = selectedPlannerDate
+        showCreateSheet = true
     }
 
     private func requestDelete(_ transaction: CashflowTransaction) {
         pendingDeleteTransaction = transaction
         showDeleteAlert = true
+    }
+
+    private func matchesSearch(_ transaction: CashflowTransaction) -> Bool {
+        let trimmedQuery = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedQuery.isEmpty else { return true }
+
+        let query = trimmedQuery.lowercased()
+        if title(for: transaction).lowercased().contains(query) { return true }
+        if subtitle(for: transaction).lowercased().contains(query) { return true }
+        if (transaction.note ?? "").lowercased().contains(query) { return true }
+        if amountString(for: transaction).lowercased().contains(query) { return true }
+        return false
+    }
+
+    private func matchesSearch(_ entry: CashflowScheduledEntry) -> Bool {
+        matchesSearch(entry.transaction)
+        || subtitle(for: entry.transaction, entryKind: entry.kind, scheduledDate: entry.scheduledDate).lowercased().contains(searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
     }
 
     private func title(for transaction: CashflowTransaction) -> String {
@@ -264,23 +789,48 @@ struct CashflowScheduledTransactionsView: View {
         }
     }
 
-    private func subtitle(for transaction: CashflowTransaction) -> String {
+    private func subtitle(
+        for transaction: CashflowTransaction,
+        entryKind: CashflowScheduledEntryKind? = nil,
+        scheduledDate: Date? = nil
+    ) -> String {
         var parts: [String] = []
-        let plannedDate = transaction.transactionDate
+        let resolvedKind = entryKind ?? (transaction.isRecurringTemplate ? .recurringMonthly : .oneTimePlanned)
+        let plannedDate = scheduledDate ?? transaction.transactionDate
 
-        switch mode {
-        case .recurring:
-            if let nextDate = viewModel.nextOccurrenceDate(for: transaction) {
-                parts.append("Next: \(formatDate(nextDate))")
+        switch resolvedKind {
+        case .recurringMonthly:
+            if let nextDate = scheduledDate ?? viewModel.nextOccurrenceDate(for: transaction) {
+                parts.append(
+                    String(
+                        format: String(localized: "cashflow.scheduled.subtitle.next_format"),
+                        formatDate(nextDate)
+                    )
+                )
             } else {
-                parts.append("Start date: \(formatDate(plannedDate))")
+                parts.append(
+                    String(
+                        format: String(localized: "cashflow.scheduled.subtitle.start_date_format"),
+                        formatDate(plannedDate)
+                    )
+                )
             }
-        case .plannedOneTime:
-            parts.append("Planned: \(formatDate(plannedDate))")
+        case .oneTimePlanned:
+            parts.append(
+                String(
+                    format: String(localized: "cashflow.scheduled.subtitle.planned_date_format"),
+                    formatDate(plannedDate)
+                )
+            )
         }
 
         if let cardName = cardName(for: transaction.cardID) {
-            parts.append("Account: \(cardName)")
+            parts.append(
+                String(
+                    format: String(localized: "cashflow.scheduled.subtitle.account_format"),
+                    cardName
+                )
+            )
         }
 
         if let note = transaction.note?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -289,6 +839,19 @@ struct CashflowScheduledTransactionsView: View {
         }
 
         return parts.joined(separator: " • ")
+    }
+
+    private func badgeTitle(for kind: CashflowScheduledEntryKind) -> String? {
+        switch kind {
+        case .recurringMonthly:
+            return String(localized: "cashflow.scheduled.monthly_badge")
+        case .oneTimePlanned:
+            return String(
+                localized: "cashflow.scheduled.one_time_badge",
+                defaultValue: "One-time",
+                comment: "Badge title for one-time planned transactions"
+            )
+        }
     }
 
     private func amountString(for transaction: CashflowTransaction) -> String {
@@ -310,40 +873,192 @@ struct CashflowScheduledTransactionsView: View {
         return formatter.string(from: date)
     }
 
+    private func shortDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = .autoupdatingCurrent
+        formatter.setLocalizedDateFormatFromTemplate("d MMM")
+        return formatter.string(from: date)
+    }
+
+    private func formatDayHeader(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = .autoupdatingCurrent
+        formatter.setLocalizedDateFormatFromTemplate("EEE d MMM")
+        return formatter.string(from: date)
+    }
+
+    private var plannerMonthTitle: String {
+        let formatter = DateFormatter()
+        formatter.locale = .autoupdatingCurrent
+        formatter.setLocalizedDateFormatFromTemplate("LLLL y")
+        return formatter.string(from: plannerMonthAnchor)
+    }
+
+    private func nextPlannerHeadline(for entry: CashflowScheduledEntry) -> String {
+        let category = title(for: entry.transaction)
+        let date = shortDate(entry.scheduledDate)
+        let prefix: String = entry.kind == .recurringMonthly
+            ? String(
+                localized: "cashflow.scheduled.overview.monthly_prefix",
+                defaultValue: "Monthly",
+                comment: "Prefix for monthly item in planner overview"
+            )
+            : String(
+                localized: "cashflow.scheduled.overview.one_time_prefix",
+                defaultValue: "One-time",
+                comment: "Prefix for one-time item in planner overview"
+            )
+        return "\(prefix): \(category) • \(date)"
+    }
+
+    private var plannerOverviewTitle: String {
+        switch kind {
+        case .income:
+            return String(
+                localized: "cashflow.scheduled.overview.title.income",
+                defaultValue: "Income planner",
+                comment: "Planner overview title for income"
+            )
+        case .expense:
+            return String(
+                localized: "cashflow.scheduled.overview.title.expense",
+                defaultValue: "Payment planner",
+                comment: "Planner overview title for expenses"
+            )
+        }
+    }
+
+    private var plannerMonthlySectionTitle: String {
+        String(
+            localized: "cashflow.scheduled.section.monthly",
+            defaultValue: "Every month",
+            comment: "Section title for monthly recurring scheduled transactions"
+        )
+    }
+
+    private var plannerOneTimeSectionTitle: String {
+        String(
+            localized: "cashflow.scheduled.section.one_time",
+            defaultValue: "One-time planned",
+            comment: "Section title for one-time planned scheduled transactions"
+        )
+    }
+
+    private func itemTitle(_ item: PlannerDisplayMode) -> String {
+        switch item {
+        case .calendar:
+            return String(
+                localized: "cashflow.scheduled.display.calendar",
+                defaultValue: "Calendar",
+                comment: "Planner display mode title"
+            )
+        case .list:
+            return String(
+                localized: "cashflow.scheduled.display.list",
+                defaultValue: "List",
+                comment: "Planner display mode title"
+            )
+        }
+    }
+
     private func cardName(for cardID: String?) -> String? {
         guard let cardID else { return nil }
         return viewModel.state.allCards.first(where: { $0.cardUniqueID == cardID })?.name
+    }
+
+    private func configurePlannerFocusIfNeeded() {
+        guard mode == .planner else { return }
+        let focusDate = plannerEntries.first?.scheduledDate ?? Date()
+        plannerMonthAnchor = Self.monthStart(for: focusDate)
+        selectedPlannerDate = Calendar.current.startOfDay(for: focusDate)
+    }
+
+    private func updatePlannerSelectionIfNeeded() {
+        guard mode == .planner else { return }
+
+        let calendar = Calendar.current
+        let selectedMonthMatches = calendar.isDate(selectedPlannerDate, equalTo: plannerMonthAnchor, toGranularity: .month)
+        if selectedMonthMatches,
+           filteredPlannerCalendarEntries.contains(where: { calendar.isDate($0.scheduledDate, inSameDayAs: selectedPlannerDate) }) {
+            return
+        }
+
+        if let firstEntry = filteredPlannerCalendarEntries.first {
+            selectedPlannerDate = calendar.startOfDay(for: firstEntry.scheduledDate)
+            return
+        }
+
+        selectedPlannerDate = calendar.startOfDay(for: plannerMonthAnchor)
+    }
+
+    private func entriesCount(on date: Date) -> Int {
+        filteredPlannerCalendarEntries.filter { Calendar.current.isDate($0.scheduledDate, inSameDayAs: date) }.count
+    }
+
+    private func dayNumber(_ date: Date) -> String {
+        String(Calendar.current.component(.day, from: date))
+    }
+
+    private func isCurrentMonth(_ date: Date) -> Bool {
+        Calendar.current.isDate(date, equalTo: plannerMonthAnchor, toGranularity: .month)
+    }
+
+    private func daysInPlannerMonth() -> [Date] {
+        let calendar = Calendar.current
+        let interval = calendar.dateInterval(of: .month, for: plannerMonthAnchor) ?? DateInterval(start: plannerMonthAnchor, duration: 0)
+        var days: [Date] = []
+        var cursor = interval.start
+
+        while cursor < interval.end {
+            days.append(cursor)
+            guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
+            cursor = next
+        }
+
+        return days
+    }
+
+    private var leadingBlankDays: Int {
+        let calendar = Calendar.current
+        guard let firstDay = daysInPlannerMonth().first else { return 0 }
+        return (calendar.component(.weekday, from: firstDay) + 5) % 7
+    }
+
+    private func rotatedWeekdaySymbols() -> [String] {
+        let symbols = Calendar.current.shortStandaloneWeekdaySymbols
+        guard let first = symbols.first else { return symbols }
+        return Array(symbols.dropFirst()) + [first]
+    }
+
+    private static func monthStart(for date: Date) -> Date {
+        let calendar = Calendar.current
+        return calendar.date(from: calendar.dateComponents([.year, .month], from: date)) ?? date
     }
 }
 
 enum CashflowScheduledTransactionsMode: Hashable {
     case recurring
-    case plannedOneTime
+    case planner
 
     var defaultRecurrenceRule: CashflowRecurrenceRule {
         switch self {
         case .recurring:
             return .monthly
-        case .plannedOneTime:
+        case .planner:
             return .none
         }
     }
 
     var showsRecurrenceSection: Bool {
-        switch self {
-        case .recurring:
-            return true
-        case .plannedOneTime:
-            return false
-        }
+        true
     }
 
     var emptyIcon: String {
         switch self {
         case .recurring:
             return "repeat.circle"
-        case .plannedOneTime:
-            return "calendar.badge.plus"
+        case .planner:
+            return "calendar.badge.clock"
         }
     }
 
@@ -353,37 +1068,37 @@ enum CashflowScheduledTransactionsMode: Hashable {
             return String(localized: "cashflow.scheduled.recurring_income")
         case (.recurring, .expense):
             return String(localized: "cashflow.scheduled.recurring_expenses")
-        case (.plannedOneTime, .income):
-            return String(localized: "cashflow.scheduled.planned_income")
-        case (.plannedOneTime, .expense):
-            return String(localized: "cashflow.scheduled.planned_expenses")
+        case (.planner, .income):
+            return String(
+                localized: "cashflow.scheduled.planner_income",
+                defaultValue: "Income planner",
+                comment: "Navigation title for combined scheduled income planner"
+            )
+        case (.planner, .expense):
+            return String(
+                localized: "cashflow.scheduled.planner_expenses",
+                defaultValue: "Payment planner",
+                comment: "Navigation title for combined scheduled expense planner"
+            )
         }
     }
 
-    func createNavigationTitle(for kind: CashflowCategoryKind) -> String {
-        switch (self, kind) {
-        case (.recurring, .income):
+    func createNavigationTitle(for kind: CashflowCategoryKind, recurrenceRule: CashflowRecurrenceRule) -> String {
+        switch (self, kind, recurrenceRule) {
+        case (.recurring, .income, _), (.planner, .income, .monthly):
             return String(localized: "cashflow.scheduled.new_recurring_income")
-        case (.recurring, .expense):
+        case (.recurring, .expense, _), (.planner, .expense, .monthly):
             return String(localized: "cashflow.scheduled.new_recurring_expense")
-        case (.plannedOneTime, .income):
+        case (.planner, .income, .none):
             return String(localized: "cashflow.scheduled.new_planned_income")
-        case (.plannedOneTime, .expense):
+        case (.planner, .expense, .none):
             return String(localized: "cashflow.scheduled.new_planned_expense")
         }
     }
 
-    func editNavigationTitle(for kind: CashflowCategoryKind) -> String {
-        switch (self, kind) {
-        case (.recurring, .income):
-            return String(localized: "cashflow.scheduled.recurring_income")
-        case (.recurring, .expense):
-            return String(localized: "cashflow.scheduled.recurring_expense")
-        case (.plannedOneTime, .income):
-            return String(localized: "cashflow.scheduled.planned_income")
-        case (.plannedOneTime, .expense):
-            return String(localized: "cashflow.scheduled.planned_expense")
-        }
+    func editNavigationTitle(for kind: CashflowCategoryKind, transaction: CashflowTransaction) -> String {
+        let recurrenceRule = transaction.recurrenceRule
+        return createNavigationTitle(for: kind, recurrenceRule: recurrenceRule)
     }
 
     func emptyTitle(for kind: CashflowCategoryKind) -> String {
@@ -392,10 +1107,18 @@ enum CashflowScheduledTransactionsMode: Hashable {
             return String(localized: "cashflow.scheduled.empty.recurring_income")
         case (.recurring, .expense):
             return String(localized: "cashflow.scheduled.empty.recurring_expenses")
-        case (.plannedOneTime, .income):
-            return String(localized: "cashflow.scheduled.empty.planned_income")
-        case (.plannedOneTime, .expense):
-            return String(localized: "cashflow.scheduled.empty.planned_expenses")
+        case (.planner, .income):
+            return String(
+                localized: "cashflow.scheduled.empty.planner_income",
+                defaultValue: "No planned income yet",
+                comment: "Empty state title for planner income screen"
+            )
+        case (.planner, .expense):
+            return String(
+                localized: "cashflow.scheduled.empty.planner_expenses",
+                defaultValue: "No payments planned yet",
+                comment: "Empty state title for planner expense screen"
+            )
         }
     }
 
@@ -405,10 +1128,18 @@ enum CashflowScheduledTransactionsMode: Hashable {
             return String(localized: "cashflow.scheduled.add_recurring_income")
         case (.recurring, .expense):
             return String(localized: "cashflow.scheduled.add_recurring_expense")
-        case (.plannedOneTime, .income):
-            return String(localized: "cashflow.scheduled.add_planned_income")
-        case (.plannedOneTime, .expense):
-            return String(localized: "cashflow.scheduled.add_planned_expense")
+        case (.planner, .income):
+            return String(
+                localized: "cashflow.scheduled.add_income_item",
+                defaultValue: "Add planned income",
+                comment: "Button title to add a scheduled income item"
+            )
+        case (.planner, .expense):
+            return String(
+                localized: "cashflow.scheduled.add_payment",
+                defaultValue: "Add payment",
+                comment: "Button title to add a scheduled expense item"
+            )
         }
     }
 }

@@ -152,26 +152,18 @@ private struct CashflowCategoryTransactionSheet: View {
                     onSave: { dismiss() }
                 )
             }
-            .navigationDestination(isPresented: $showRecurringManagement) {
-                CashflowScheduledTransactionsView(
-                    viewModel: viewModel,
-                    kind: kind.categoryKind,
-                    mode: .recurring
-                )
-            }
-            .navigationDestination(isPresented: $showPlannedManagement) {
-                CashflowScheduledTransactionsView(
-                    viewModel: viewModel,
-                    kind: kind.categoryKind,
-                    mode: .plannedOneTime
-                )
-            }
             .navigationDestination(isPresented: $showTransactionsHistory) {
                 CashflowTransactionsHistoryView(
                     viewModel: viewModel,
                     showsDismissButton: false,
                     initialFilter: kind.historyFilter
                 )
+            }
+            .sheet(isPresented: $showRecurringManagement) {
+                scheduledManagementSheet(mode: .recurring)
+            }
+            .sheet(isPresented: $showPlannedManagement) {
+                scheduledManagementSheet(mode: .planner)
             }
             .sheet(isPresented: $showCreateCategorySheet) {
                 CashflowCategoryQuickCreateSheet(
@@ -399,11 +391,10 @@ private struct CashflowCategoryTransactionSheet: View {
                 .foregroundStyle(AppColors.textSecondary)
                 .padding(.horizontal, 2)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(CashflowManagementEntry.entries(for: kind.categoryKind)) { entry in
-                        managementButton(entry: entry)
-                    }
+            let entries = CashflowManagementEntry.entries(for: kind.categoryKind)
+            HStack(spacing: 10) {
+                ForEach(entries) { entry in
+                    managementButton(entry: entry)
                 }
             }
         }
@@ -413,33 +404,40 @@ private struct CashflowCategoryTransactionSheet: View {
         Button {
             handleManagementTap(entry)
         } label: {
+            let iconView = Image(systemName: entry.icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.92))
+                .frame(width: 30, height: 30)
+                .background(
+                    Circle()
+                        .fill(Color.black.opacity(0.92))
+                        .overlay(
+                            Circle()
+                                .stroke(kind.strokeGradient.opacity(0.7), lineWidth: 1)
+                        )
+                )
+
             HStack(spacing: 10) {
-                Image(systemName: entry.icon)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.92))
-                    .frame(width: 30, height: 30)
-                    .background(
-                        Circle()
-                            .fill(Color.black.opacity(0.92))
-                            .overlay(
-                                Circle()
-                                    .stroke(kind.strokeGradient.opacity(0.7), lineWidth: 1)
-                            )
-                    )
+                iconView
+
+                Spacer(minLength: 0)
 
                 Text(entry.title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(entry.lineLimit)
+                    .minimumScaleFactor(0.72)
 
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(AppColors.textSecondary.opacity(0.72))
+                Spacer(minLength: 0)
+
+                // Symmetric placeholder to keep the title visually centered.
+                iconView
+                    .opacity(0)
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 10)
             .padding(.vertical, 10)
-            .frame(minWidth: 112, minHeight: 52, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 60, alignment: .center)
             .background(innerPanelBackground)
         }
         .buttonStyle(.plain)
@@ -454,6 +452,37 @@ private struct CashflowCategoryTransactionSheet: View {
         case .planned:
             showPlannedManagement = true
         }
+    }
+
+    @ViewBuilder
+    private func scheduledManagementSheet(mode: CashflowScheduledTransactionsMode) -> some View {
+        NavigationStack {
+            CashflowScheduledTransactionsView(
+                viewModel: viewModel,
+                kind: kind.categoryKind,
+                mode: mode
+            )
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        if mode == .recurring {
+                            showRecurringManagement = false
+                        } else {
+                            showPlannedManagement = false
+                        }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary.opacity(0.92))
+                            .frame(width: 36, height: 36)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(String(localized: "cashflow.common.close"))
+                }
+            }
+        }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
     }
 
     private var categoriesSection: some View {
@@ -721,13 +750,13 @@ struct CashflowManagementEntry: Identifiable, Equatable {
     let title: String
     let icon: String
     let destination: CashflowManagementDestination
+    let lineLimit: Int
 
     var id: CashflowManagementDestination { destination }
 
     static func entries(for categoryKind: CashflowCategoryKind) -> [CashflowManagementEntry] {
-        var entries: [CashflowManagementEntry] = []
         if categoryKind == .expense {
-            entries.append(
+            return [
                 CashflowManagementEntry(
                     title: String(
                         localized: "cashflow.bulk_expense.entry.title",
@@ -735,26 +764,44 @@ struct CashflowManagementEntry: Identifiable, Equatable {
                         comment: "Compact entry title for bulk expense import"
                     ),
                     icon: "square.stack.3d.down.right.fill",
-                    destination: .bulkImport
+                    destination: .bulkImport,
+                    lineLimit: 2
+                ),
+                CashflowManagementEntry(
+                    title: String(
+                        localized: "cashflow.management.planner_expenses.title",
+                        defaultValue: "Planned",
+                        comment: "Management entry title for planned expenses"
+                    ),
+                    icon: "calendar.badge.plus",
+                    destination: .planned,
+                    lineLimit: 2
                 )
-            )
+            ]
         }
 
-        entries.append(
+        return [
             CashflowManagementEntry(
-                title: "Recurring",
+                title: String(
+                    localized: "cashflow.management.recurring.title",
+                    defaultValue: "Recurring",
+                    comment: "Management entry title for recurring cashflow items"
+                ),
                 icon: "repeat",
-                destination: .recurring
-            )
-        )
-        entries.append(
+                destination: .recurring,
+                lineLimit: 1
+            ),
             CashflowManagementEntry(
-                title: "Planned",
+                title: String(
+                    localized: "cashflow.management.income_plan.title",
+                    defaultValue: "Income plan",
+                    comment: "Management entry title for planned income items"
+                ),
                 icon: "calendar.badge.plus",
-                destination: .planned
+                destination: .planned,
+                lineLimit: 2
             )
-        )
-        return entries
+        ]
     }
 }
 
@@ -772,27 +819,27 @@ struct CashflowCategoryHelpContent {
     static func make(for kind: CashflowCategoryTransactionSheetKind) -> CashflowCategoryHelpContent {
         let intro = switch kind {
         case .income:
-            "The Income screen shows income categories for the selected month."
+            String(localized: "cashflow.operation.help.income_intro")
         case .expense:
-            "The Expense screen shows expense categories for the selected month."
+            String(localized: "cashflow.operation.help.expense_intro")
         }
 
         let totalHint = switch kind {
         case .income:
-            "At the top, you can see total income for the month in the display currency."
+            String(localized: "cashflow.operation.help.income_total_hint")
         case .expense:
-            "At the top, you can see total expenses for the month in the display currency."
+            String(localized: "cashflow.operation.help.expense_total_hint")
         }
 
         return CashflowCategoryHelpContent(
-            title: "How it works",
+            title: String(localized: "cashflow.operation.help.title"),
             lines: [
                 intro,
                 totalHint,
-                "Tap a category to add a transaction in it.",
-                "Tap + to add your own category (name and icon).",
-                "Long press a category to open menu: edit or delete.",
-                "When deleting a category, linked transactions are automatically moved to a safe system category."
+                String(localized: "cashflow.operation.help.tap_category"),
+                String(localized: "cashflow.operation.help.tap_plus"),
+                String(localized: "cashflow.operation.help.long_press"),
+                String(localized: "cashflow.operation.help.safe_migration")
             ]
         )
     }
@@ -844,7 +891,7 @@ private struct CashflowCategoryHelpSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") {
+                    Button(String(localized: "cashflow.common.close")) {
                         dismiss()
                     }
                     .foregroundStyle(AppColors.textPrimary)

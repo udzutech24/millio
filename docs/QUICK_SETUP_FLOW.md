@@ -47,6 +47,7 @@
 ## Entry Points
 - First launch: `OnboardingView` opens `QuickSetupView` directly in onboarding mode.
 - Main screen: a dismissible `Quick setup` banner is shown until setup is completed.
+- Existing users after update: banner is suppressed by default (no quick setup completion flag stored yet, but a prior app version was seen).
 - Profile: dedicated row in `Settings` (under `App security`) to re-open `Quick setup` anytime.
 
 ## Persistence
