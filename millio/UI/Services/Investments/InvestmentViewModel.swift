@@ -273,6 +273,7 @@ final class InvestmentViewModel: ViewModelProtocol {
         do {
             try modelContext.save()
             loadInvestments()
+            EventBus.shared.publish(FinanceEvent.investmentsUpdated)
         } catch {
             AppLogger.log(.error, category: "Investment", "Failed to delete investment: \(error.localizedDescription)")
         }
@@ -285,6 +286,7 @@ final class InvestmentViewModel: ViewModelProtocol {
         do {
             try modelContext.save()
             loadInvestments()
+            EventBus.shared.publish(FinanceEvent.investmentsUpdated)
         } catch {
             AppLogger.log(.error, category: "Investment", "Failed to toggle favorite: \(error.localizedDescription)")
         }
@@ -390,6 +392,7 @@ final class InvestmentViewModel: ViewModelProtocol {
             loadInvestments()
             state.showInvestmentEditor = false
             state.editingInvestment = nil
+            EventBus.shared.publish(FinanceEvent.investmentsUpdated)
             if didCreateTransaction {
                 EventBus.shared.publish(FinanceEvent.transactionsUpdated)
             }

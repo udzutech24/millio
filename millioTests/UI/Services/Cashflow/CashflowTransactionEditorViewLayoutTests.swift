@@ -12,62 +12,87 @@ import Testing
 struct CashflowTransactionEditorViewLayoutTests {
     @Test("Для дохода показываются только карты в выбранной валюте")
     func incomeFiltersCardsByCurrency() {
-        let rubCard = Card(name: "RUB", cardNumber: "1111", bank: .sberbank, cardType: .debit, currency: "RUB")
-        let usdCard = Card(name: "USD", cardNumber: "2222", bank: .tinkoff, cardType: .debit, currency: "USD")
+        let rubCard = Card(name: "RUB", cardNumber: "1111", bank: .sberbank, cardType: .debit, priority: .normal, currency: "RUB")
+        let usdCard = Card(name: "USD", cardNumber: "2222", bank: .tinkoff, cardType: .debit, priority: .normal, currency: "USD")
 
-        let cards = CashflowTransactionEditorView.cardsForCurrency(
-            [rubCard, usdCard],
+        let accounts = CashflowTransactionEditorView.selectableAccounts(
+            cards: [rubCard, usdCard],
+            investments: [],
             transactionType: .income,
             currency: "usd"
         )
 
-        #expect(cards.count == 1)
-        #expect(cards.first?.currency == "USD")
+        #expect(accounts.count == 1)
+        #expect(accounts.first?.currency == "USD")
+        #expect(accounts.first?.cardID == usdCard.cardUniqueID)
     }
 
-    @Test("Для расхода показываются только карты в выбранной валюте, а избранные идут первыми")
-    func expenseFiltersCardsByCurrencyAndPrioritizesFavorites() {
-        let regularEurCard = Card(name: "EUR Regular", cardNumber: "1111", bank: .sberbank, cardType: .debit, currency: "EUR")
-        let favoriteEurCard = Card(name: "EUR Favorite", cardNumber: "2222", bank: .tinkoff, cardType: .debit, currency: "EUR", isFavorite: true)
-        let usdCard = Card(name: "USD", cardNumber: "3333", bank: .tinkoff, cardType: .debit, currency: "USD", isFavorite: true)
+    @Test("Для расхода приоритет продукта важнее избранного")
+    func expensePrioritizesProductPriorityBeforeFavoriteFlag() {
+        let lowFavorite = Card(name: "Low Favorite", cardNumber: "1111", bank: .sberbank, cardType: .debit, priority: .low, currency: "EUR", isFavorite: true)
+        let highRegular = Card(name: "High Regular", cardNumber: "2222", bank: .tinkoff, cardType: .debit, priority: .high, currency: "EUR")
+        let usdCard = Card(name: "USD", cardNumber: "3333", bank: .tinkoff, cardType: .debit, priority: .high, currency: "USD", isFavorite: true)
 
-        let cards = CashflowTransactionEditorView.cardsForCurrency(
-            [regularEurCard, favoriteEurCard, usdCard],
+        let accounts = CashflowTransactionEditorView.selectableAccounts(
+            cards: [lowFavorite, highRegular, usdCard],
+            investments: [],
             transactionType: .expense,
             currency: "eur"
         )
 
-        #expect(cards.count == 2)
-        #expect(cards.map(\.cardUniqueID) == [favoriteEurCard.cardUniqueID, regularEurCard.cardUniqueID])
-        #expect(Set(cards.map(\.currency)) == Set(["EUR"]))
+        #expect(accounts.count == 2)
+        #expect(accounts.map(\.cardID) == [highRegular.cardUniqueID, lowFavorite.cardUniqueID])
+        #expect(Set(accounts.map(\.currency)) == Set(["EUR"]))
     }
 
-    @Test("Список карт сортирует избранные раньше обычных")
-    func cardPickerPrioritizesFavorites() {
-        let regular = Card(name: "Regular", cardNumber: "1111", bank: .sberbank, cardType: .debit, currency: "RUB")
-        let favorite = Card(name: "Favorite", cardNumber: "2222", bank: .tinkoff, cardType: .debit, currency: "RUB", isFavorite: true)
+    @Test("Для дохода показываются счета из финансов вместе с картами")
+    func incomeIncludesCashAccountsFromInvestments() {
+        let debitCard = Card(name: "Debit", cardNumber: "1111", bank: .sberbank, cardType: .debit, priority: .normal, currency: "RUB")
+        let account = Investment(
+            name: "Reserve",
+            investmentType: .positive,
+            category: .other,
+            amount: 500,
+            currency: "RUB",
+            includeInTotal: true,
+            priority: .high,
+            isFavorite: false
+        )
+        let asset = Investment(
+            name: "Gold",
+            investmentType: .positive,
+            category: .metals,
+            amount: 900,
+            currency: "RUB",
+            includeInTotal: true,
+            priority: .high,
+            isFavorite: true
+        )
 
-        let cards = CashflowTransactionEditorView.cardsForCurrency(
-            [regular, favorite],
-            transactionType: .transfer,
+        let accounts = CashflowTransactionEditorView.selectableAccounts(
+            cards: [debitCard],
+            investments: [account, asset],
+            transactionType: .income,
             currency: "RUB"
         )
 
-        #expect(cards.map(\.cardUniqueID) == [favorite.cardUniqueID, regular.cardUniqueID])
+        #expect(accounts.count == 2)
+        #expect(accounts.map(\.id) == ["investment:\(account.investmentUniqueID)", "card:\(debitCard.cardUniqueID)"])
     }
 
     @Test("Для перевода фильтрации по валюте нет")
     func transferDoesNotFilterCardsByCurrency() {
-        let rubCard = Card(name: "RUB", cardNumber: "1111", bank: .sberbank, cardType: .debit, currency: "RUB")
-        let usdCard = Card(name: "USD", cardNumber: "2222", bank: .tinkoff, cardType: .debit, currency: "USD")
+        let rubCard = Card(name: "RUB", cardNumber: "1111", bank: .sberbank, cardType: .debit, priority: .normal, currency: "RUB")
+        let usdCard = Card(name: "USD", cardNumber: "2222", bank: .tinkoff, cardType: .debit, priority: .normal, currency: "USD")
 
-        let cards = CashflowTransactionEditorView.cardsForCurrency(
-            [rubCard, usdCard],
+        let accounts = CashflowTransactionEditorView.selectableAccounts(
+            cards: [rubCard, usdCard],
+            investments: [],
             transactionType: .transfer,
             currency: "RUB"
         )
 
-        #expect(cards.count == 2)
+        #expect(accounts.count == 2)
     }
 
     @Test("Основная информация для дохода: карта между суммой и валютой")

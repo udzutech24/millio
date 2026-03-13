@@ -177,6 +177,12 @@ ModelTypeRegistry.shared.registerImporter(MyModelImporter.self)
 - **Конвертер** использует ключи локализации с префиксом `converter.*` (RU/EN), включая тексты отправки и шаринга
 - **Главный экран** использует ключи локализации с префиксом `main.*` (RU/EN): быстрые действия, названия мини‑приложений, accessibility
 
+## TestFlight release
+
+- Автоматизация сборки и отправки в TestFlight описана в `docs/TESTFLIGHT_RELEASE.md`
+- Короткая команда запуска: `make testflight`
+- Основной wrapper-скрипт: `scripts/release_testflight.sh`
+
 ## Тестирование
 
 Unit-тесты для Core компонентов:

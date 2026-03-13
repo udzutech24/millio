@@ -75,6 +75,9 @@ struct CashflowState {
     /// Все карты (включая архивные) для истории
     var allCards: [Card] = []
 
+    /// Доступные счета из инвестиций для выбора в доходах.
+    var availableInvestments: [Investment] = []
+
     /// Пользовательские категории операций
     var customCategories: [CashflowCustomCategory] = []
 
@@ -325,6 +328,7 @@ final class CashflowViewModel: ViewModelProtocol {
         state.selectedYear = nowDate
         resetToDefaultPeriodInternal(referenceDate: nowDate)
         loadCards()
+        loadInvestments()
         loadTransactions()
         loadCustomCategories()
         loadSystemCategoryOverrides()
@@ -348,6 +352,7 @@ final class CashflowViewModel: ViewModelProtocol {
         case .addTransaction(let type):
             // Обновляем список карт перед открытием редактора, чтобы видеть актуальные данные
             loadCards()
+            loadInvestments()
             state.creatingTransactionType = type
             state.editingTransaction = nil
             state.showTransactionEditor = true
@@ -355,6 +360,7 @@ final class CashflowViewModel: ViewModelProtocol {
         case .editTransaction(let transaction):
             // Обновляем список карт перед редактированием на случай изменений в финансах
             loadCards()
+            loadInvestments()
             state.editingTransaction = transaction
             state.creatingTransactionType = nil
             state.showTransactionEditor = true
@@ -501,6 +507,12 @@ final class CashflowViewModel: ViewModelProtocol {
         state.availableCards = allCards.filter { $0.archivedAt == nil }
     }
 
+    private func loadInvestments() {
+        let descriptor = FetchDescriptor<Investment>()
+        let allInvestments = (try? modelContext.fetch(descriptor)) ?? []
+        state.availableInvestments = allInvestments.filter { $0.archivedAt == nil }
+    }
+
     private func loadCustomCategories() {
         let descriptor = FetchDescriptor<CashflowCustomCategory>(
             sortBy: [SortDescriptor(\.createdAt, order: .forward)]
@@ -521,11 +533,14 @@ final class CashflowViewModel: ViewModelProtocol {
             switch event {
             case FinanceEvent.cardsUpdated:
                 self.loadCards()
+            case FinanceEvent.investmentsUpdated:
+                self.loadInvestments()
             case FinanceEvent.transactionsUpdated:
                 self.loadTransactions()
             case BackupEvent.restoreCompleted:
                 self.loadTransactions()
                 self.loadCards()
+                self.loadInvestments()
                 self.loadCustomCategories()
                 self.loadSystemCategoryOverrides()
             default:
@@ -1850,11 +1865,67 @@ final class CashflowViewModel: ViewModelProtocol {
         return allCards.first(where: { $0.cardUniqueID == cardID })
     }
 
-    private func applyCardBalanceEffect(
+    private func investment(for investmentID: String) -> Investment? {
+        if let cached = state.availableInvestments.first(where: { $0.investmentUniqueID == investmentID }) {
+            return cached
+        }
+        let descriptor = FetchDescriptor<Investment>()
+        let allInvestments = (try? modelContext.fetch(descriptor)) ?? []
+        return allInvestments.first(where: { $0.investmentUniqueID == investmentID })
+    }
+
+    private func investmentBalanceDelta(
+        for transaction: CashflowTransaction?,
+        investmentCurrency: String,
+        direction: CardBalanceEffectDirection
+    ) async throws -> Double {
+        guard let transaction, shouldAffectCardBalance(transaction), transaction.investmentID != nil else {
+            return 0
+        }
+
+        let amountInInvestmentCurrency = try await convertAmountForValidation(
+            amount: transaction.amount,
+            from: transaction.currency,
+            to: investmentCurrency,
+            on: transaction.transactionDate
+        )
+
+        let appliedDelta: Double
+        switch transaction.transactionType {
+        case .income, .balanceAdjustment, .cardBalanceAdjustment:
+            appliedDelta = amountInInvestmentCurrency
+        case .expense:
+            appliedDelta = -amountInInvestmentCurrency
+        case .transfer, .creditDebtAdjustment:
+            appliedDelta = 0
+        }
+
+        switch direction {
+        case .apply:
+            return appliedDelta
+        case .revert:
+            return -appliedDelta
+        }
+    }
+
+    private func applyAccountBalanceEffect(
         for transaction: CashflowTransaction,
         direction: CardBalanceEffectDirection
     ) async throws {
         guard shouldApplyCardBalanceImmediately(for: transaction) else { return }
+
+        if let investmentID = transaction.investmentID,
+           let investment = investment(for: investmentID) {
+            let delta = try await investmentBalanceDelta(
+                for: transaction,
+                investmentCurrency: investment.currency,
+                direction: direction
+            )
+            guard abs(delta) > 0.0000001 else { return }
+            investment.amount = max(0, investment.amount + delta)
+            investment.updatedAt = now()
+            return
+        }
 
         let impactedCardIDs = Set([transaction.cardID, transaction.toCardID].compactMap { $0 })
         guard !impactedCardIDs.isEmpty else { return }
@@ -1955,7 +2026,7 @@ final class CashflowViewModel: ViewModelProtocol {
 
         for transaction in dueTransactions {
             do {
-                try await applyCardBalanceEffect(for: transaction, direction: .apply)
+                try await applyAccountBalanceEffect(for: transaction, direction: .apply)
                 transaction.updatedAt = referenceNow
             } catch {
                 AppLogger.log(
@@ -2155,7 +2226,7 @@ final class CashflowViewModel: ViewModelProtocol {
     private func deleteTransactionAsync(_ transaction: CashflowTransaction, recalculate: Bool) async {
         if recalculate {
             do {
-                try await applyCardBalanceEffect(for: transaction, direction: .revert)
+                try await applyAccountBalanceEffect(for: transaction, direction: .revert)
             } catch {
                 AppLogger.log(.error, category: "Cashflow", "Failed to revert card balance on delete: \(error.localizedDescription)")
                 return
@@ -2201,10 +2272,10 @@ final class CashflowViewModel: ViewModelProtocol {
         if let existing = state.editingTransaction {
             do {
                 if shouldApplyCardBalanceImmediately(for: existing) {
-                    try await applyCardBalanceEffect(for: existing, direction: .revert)
+                    try await applyAccountBalanceEffect(for: existing, direction: .revert)
                 }
                 if shouldApplyCardBalanceImmediately(for: transaction) {
-                    try await applyCardBalanceEffect(for: transaction, direction: .apply)
+                    try await applyAccountBalanceEffect(for: transaction, direction: .apply)
                 }
             } catch {
                 AppLogger.log(.error, category: "Cashflow", "Failed to update card balance effect: \(error.localizedDescription)")
@@ -2218,6 +2289,8 @@ final class CashflowViewModel: ViewModelProtocol {
             existing.transactionDate = transaction.transactionDate
             existing.cardID = transaction.cardID
             existing.toCardID = transaction.toCardID
+            existing.creditID = transaction.creditID
+            existing.investmentID = transaction.investmentID
             existing.incomeCategoryRaw = transaction.incomeCategoryRaw
             existing.expenseCategoryRaw = transaction.expenseCategoryRaw
             existing.note = transaction.note
@@ -2237,6 +2310,8 @@ final class CashflowViewModel: ViewModelProtocol {
                 transactionDate: transaction.transactionDate,
                 cardID: transaction.cardID,
                 toCardID: transaction.toCardID,
+                creditID: transaction.creditID,
+                investmentID: transaction.investmentID,
                 incomeCategoryRaw: transaction.incomeCategoryRaw,
                 expenseCategoryRaw: transaction.expenseCategoryRaw,
                 note: transaction.note,
@@ -2250,7 +2325,7 @@ final class CashflowViewModel: ViewModelProtocol {
             modelContext.insert(newTransaction)
             do {
                 if shouldApplyCardBalanceImmediately(for: newTransaction) {
-                    try await applyCardBalanceEffect(for: newTransaction, direction: .apply)
+                    try await applyAccountBalanceEffect(for: newTransaction, direction: .apply)
                 }
             } catch {
                 AppLogger.log(.error, category: "Cashflow", "Failed to apply card balance effect: \(error.localizedDescription)")

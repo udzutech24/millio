@@ -24,6 +24,7 @@ enum BackupEvent: AppEvent {
 enum FinanceEvent: AppEvent {
     case cardsUpdated
     case creditsUpdated
+    case investmentsUpdated
     case transactionsUpdated
     case auditSnapshotsUpdated
 }

@@ -10,6 +10,7 @@
   - every other country code, including missing/unknown, selects `DE_API_BASE_URL`
 - The app probes `GET /runtime/server-info` on startup, logs region/base URL mismatches, and falls back to the secondary backend once if the preferred backend does not answer.
 - The selected backend is kept for the current app session and reused by both `AuthAPIClient` and `MarketAPIClient`.
+- The auth welcome screen always shows a compact backend status banner, including TestFlight/release builds, so QA can verify the exact login target server before signing in.
 - QA/debug override is available in debug builds through:
   - `BACKEND_FORCE_REGION = RU|DE`
   - `BACKEND_FORCE_BASE_URL = https://...`

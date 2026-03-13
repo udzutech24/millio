@@ -718,7 +718,7 @@ final class FinanceViewModel: ViewModelProtocol {
             switch event {
             case FinanceEvent.creditsUpdated:
                 self.handleCreditsUpdated()
-            case FinanceEvent.cardsUpdated:
+            case FinanceEvent.cardsUpdated, FinanceEvent.investmentsUpdated:
                 self.loadAccounts()
                 self.scheduleBackgroundTask { viewModel in
                     await viewModel.refreshGroupTotalsAndAmounts()

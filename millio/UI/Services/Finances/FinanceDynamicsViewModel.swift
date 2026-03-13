@@ -317,6 +317,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             guard let self else { return }
             switch event {
             case FinanceEvent.cardsUpdated,
+                 FinanceEvent.investmentsUpdated,
                  FinanceEvent.creditsUpdated,
                  FinanceEvent.transactionsUpdated,
                  FinanceEvent.auditSnapshotsUpdated:

@@ -39,6 +39,7 @@ struct CashflowTransactionEditorView: View {
     @State private var selectedCurrency: String = SettingsManager.shared.primaryCurrencyCode
     @State private var transactionDate: Date = Date()
     @State private var selectedCardID: String? = nil
+    @State private var selectedInvestmentID: String? = nil
     @State private var selectedToCardID: String? = nil
     @State private var selectedIncomeCategoryRaw: String? = nil
     @State private var selectedExpenseCategoryRaw: String? = nil
@@ -96,6 +97,7 @@ struct CashflowTransactionEditorView: View {
             _selectedCurrency = State(initialValue: transaction.currency)
             _transactionDate = State(initialValue: transaction.transactionDate)
             _selectedCardID = State(initialValue: transaction.cardID)
+            _selectedInvestmentID = State(initialValue: transaction.investmentID)
             _selectedToCardID = State(initialValue: transaction.toCardID)
             _selectedIncomeCategoryRaw = State(initialValue: transaction.incomeCategoryRaw)
             _selectedExpenseCategoryRaw = State(initialValue: transaction.expenseCategoryRaw)
@@ -579,7 +581,7 @@ struct CashflowTransactionEditorView: View {
 
     @ViewBuilder
     private var incomeExpenseCardContent: some View {
-        if cardsForCurrentSelection.isEmpty {
+        if selectableAccountsForCurrentSelection.isEmpty {
             VStack(spacing: 10) {
                 Text("cashflow.editor.no_cards_in_currency")
                     .font(.system(size: 14))
@@ -614,12 +616,12 @@ struct CashflowTransactionEditorView: View {
                     .layoutPriority(1)
                 Spacer()
                 Picker(String(localized: "cashflow.editor.card"), selection: Binding(
-                    get: { selectedCardID ?? "" },
-                    set: { selectedCardID = $0.isEmpty ? nil : $0 }
+                    get: { selectedAccountPickerID },
+                    set: { updateSelectedAccount(using: $0) }
                 )) {
                     Text("cashflow.editor.select_card").tag("")
-                    ForEach(cardsForCurrentSelection) { card in
-                        Text(card.name).tag(card.cardUniqueID)
+                    ForEach(selectableAccountsForCurrentSelection) { account in
+                        Text(account.title).tag(account.id)
                     }
                 }
                 .tint(AppColors.textTertiary)
@@ -653,7 +655,7 @@ struct CashflowTransactionEditorView: View {
 
     @ViewBuilder
     private var transferCardContent: some View {
-        if viewModel.state.availableCards.isEmpty {
+        if transferCardOptions.isEmpty {
             Text("cashflow.editor.no_available_cards")
                 .font(.system(size: 14))
                 .foregroundStyle(AppColors.textTertiary)
@@ -671,8 +673,8 @@ struct CashflowTransactionEditorView: View {
                     set: { selectedCardID = $0.isEmpty ? nil : $0 }
                 )) {
                     Text("cashflow.editor.select_card").tag("")
-                    ForEach(viewModel.state.availableCards.filter { $0.cardUniqueID != selectedToCardID }) { card in
-                        Text(card.name).tag(card.cardUniqueID)
+                    ForEach(transferCardOptions.filter { $0.cardID != selectedToCardID }) { account in
+                        Text(account.title).tag(account.cardID ?? "")
                     }
                 }
                 .tint(AppColors.textTertiary)
@@ -714,8 +716,8 @@ struct CashflowTransactionEditorView: View {
                     set: { selectedToCardID = $0.isEmpty ? nil : $0 }
                 )) {
                     Text("cashflow.editor.select_card").tag("")
-                    ForEach(viewModel.state.availableCards.filter { $0.cardUniqueID != selectedCardID }) { card in
-                        Text(card.name).tag(card.cardUniqueID)
+                    ForEach(transferCardOptions.filter { $0.cardID != selectedCardID }) { account in
+                        Text(account.title).tag(account.cardID ?? "")
                     }
                 }
                 .tint(AppColors.textTertiary)
@@ -819,10 +821,30 @@ struct CashflowTransactionEditorView: View {
         Self.mainInfoRows(for: selectedTransactionType).contains(.fromCard)
     }
 
-    private var cardsForCurrentSelection: [Card] {
-        Self.cardsForCurrency(
-            viewModel.state.availableCards,
+    private var selectableAccountsForCurrentSelection: [CashflowSelectableAccount] {
+        Self.selectableAccounts(
+            cards: viewModel.state.availableCards,
+            investments: viewModel.state.availableInvestments,
             transactionType: selectedTransactionType,
+            currency: selectedCurrency
+        )
+    }
+
+    private var selectedAccountPickerID: String {
+        if let selectedCardID {
+            return "card:\(selectedCardID)"
+        }
+        if let selectedInvestmentID {
+            return "investment:\(selectedInvestmentID)"
+        }
+        return ""
+    }
+
+    private var transferCardOptions: [CashflowSelectableAccount] {
+        Self.selectableAccounts(
+            cards: viewModel.state.availableCards,
+            investments: [],
+            transactionType: .transfer,
             currency: selectedCurrency
         )
     }
@@ -848,7 +870,7 @@ struct CashflowTransactionEditorView: View {
 
         switch selectedTransactionType {
         case .income, .expense:
-            return selectedCardID != nil && !isAmountOverBalance
+            return (selectedCardID != nil || selectedInvestmentID != nil) && !isAmountOverBalance
         case .transfer:
             return selectedCardID != nil && selectedToCardID != nil && selectedCardID != selectedToCardID && !isAmountOverBalance
         case .balanceAdjustment, .cardBalanceAdjustment:
@@ -961,6 +983,7 @@ struct CashflowTransactionEditorView: View {
             transactionDate: transactionDate,
             cardID: selectedCardID,
             toCardID: selectedToCardID,
+            investmentID: selectedInvestmentID,
             incomeCategoryRaw: resolvedIncomeCategoryRaw,
             expenseCategoryRaw: resolvedExpenseCategoryRaw,
             note: note.isEmpty ? nil : note,
@@ -974,6 +997,7 @@ struct CashflowTransactionEditorView: View {
         transaction.currency = selectedCurrency
         transaction.transactionDate = transactionDate
         transaction.cardID = selectedCardID
+        transaction.investmentID = selectedInvestmentID
         transaction.toCardID = selectedToCardID
         transaction.incomeCategoryRaw = resolvedIncomeCategoryRaw
         transaction.expenseCategoryRaw = resolvedExpenseCategoryRaw
@@ -1070,26 +1094,50 @@ struct CashflowTransactionEditorView: View {
         }
     }
 
-    private func synchronizeSelectedCards() {
-        let selectableCards = cardsForCurrentSelection
-        let selectableIDs = Set(selectableCards.map(\.cardUniqueID))
+    private func updateSelectedAccount(using selectionID: String) {
+        if selectionID.isEmpty {
+            selectedCardID = nil
+            selectedInvestmentID = nil
+            return
+        }
 
-        if let selectedCardID, !selectableIDs.contains(selectedCardID) {
+        guard let selection = selectableAccountsForCurrentSelection.first(where: { $0.id == selectionID }) else {
+            selectedCardID = nil
+            selectedInvestmentID = nil
+            return
+        }
+
+        selectedCardID = selection.cardID
+        selectedInvestmentID = selection.investmentID
+    }
+
+    private func synchronizeSelectedCards() {
+        let selectableAccounts = selectableAccountsForCurrentSelection
+        let selectableCardIDs = Set(selectableAccounts.compactMap(\.cardID))
+        let selectableInvestmentIDs = Set(selectableAccounts.compactMap(\.investmentID))
+
+        if let selectedCardID, !selectableCardIDs.contains(selectedCardID) {
             self.selectedCardID = nil
         }
 
+        if let selectedInvestmentID, !selectableInvestmentIDs.contains(selectedInvestmentID) {
+            self.selectedInvestmentID = nil
+        }
+
         if selectedTransactionType == .transfer {
-            if selectedCardID == nil && !selectableCards.isEmpty {
-                selectedCardID = selectableCards.first?.cardUniqueID
+            if selectedCardID == nil {
+                selectedCardID = transferCardOptions.first?.cardID
             }
             if selectedToCardID == selectedCardID {
                 selectedToCardID = nil
             }
+            selectedInvestmentID = nil
             return
         }
 
-        if selectedCardID == nil {
-            selectedCardID = selectableCards.first?.cardUniqueID
+        if selectedCardID == nil && selectedInvestmentID == nil {
+            selectedCardID = selectableAccounts.first?.cardID
+            selectedInvestmentID = selectableAccounts.first?.investmentID
         }
         selectedToCardID = nil
     }
@@ -1136,37 +1184,18 @@ extension CashflowTransactionEditorView {
         }
     }
 
-    static func cardsForCurrency(
-        _ cards: [Card],
+    static func selectableAccounts(
+        cards: [Card],
+        investments: [Investment],
         transactionType: CashflowTransactionType,
         currency: String
-    ) -> [Card] {
-        let sortedCards = cards.sorted { lhs, rhs in
-            if lhs.isFavorite != rhs.isFavorite {
-                return lhs.isFavorite
-            }
-            if lhs.priority.sortOrder != rhs.priority.sortOrder {
-                return lhs.priority.sortOrder < rhs.priority.sortOrder
-            }
-            if lhs.updatedAt != rhs.updatedAt {
-                return lhs.updatedAt > rhs.updatedAt
-            }
-            return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
-        }
-
-        guard transactionType == .income || transactionType == .expense else {
-            return sortedCards
-        }
-
-        // Income and expense must stay on same-currency cards; favorites only affect order inside that subset.
-        let normalizedCurrency = currency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        guard !normalizedCurrency.isEmpty else {
-            return sortedCards
-        }
-
-        return sortedCards.filter {
-            $0.currency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == normalizedCurrency
-        }
+    ) -> [CashflowSelectableAccount] {
+        CashflowSelectableAccountResolver.options(
+            cards: cards,
+            investments: investments,
+            transactionType: transactionType,
+            currency: currency
+        )
     }
 }
 

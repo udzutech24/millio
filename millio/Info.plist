@@ -16,6 +16,8 @@
 	<string>$(AUTH_BASE_PORT)</string>
 	<key>AUTH_BASE_PATH</key>
 	<string>$(AUTH_BASE_PATH)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<true/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
