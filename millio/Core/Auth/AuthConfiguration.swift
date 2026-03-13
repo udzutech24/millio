@@ -3,6 +3,7 @@ import Foundation
 struct AuthConfiguration: Sendable {
     let baseURL: URL
     let region: BackendRegion
+    private static let productionDEBaseURL = URL(string: "https://api.udzutech.com/api/v1")!
 
     init(baseURL: URL, region: BackendRegion = .de) {
         self.baseURL = Self.normalize(baseURL)
@@ -22,15 +23,13 @@ struct AuthConfiguration: Sendable {
     ) throws -> AuthConfiguration {
         let environmentURL = environment["AUTH_BASE_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let environmentURL,
-           !environmentURL.isEmpty,
-           let url = URL(string: environmentURL),
-           url.host() != nil {
+           let url = validatedURL(environmentURL) {
             return AuthConfiguration(baseURL: url, region: .de)
         }
 
         if let deBaseURL = environment["DE_API_BASE_URL"] ?? infoDictionary["DE_API_BASE_URL"] as? String {
             let trimmed = deBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-            if let url = URL(string: trimmed), url.host() != nil {
+            if let url = validatedURL(trimmed) {
                 return AuthConfiguration(baseURL: url, region: .de)
             }
         }
@@ -60,7 +59,7 @@ struct AuthConfiguration: Sendable {
         ).trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !scheme.isEmpty, !host.isEmpty else {
-            throw AuthServiceError.invalidConfiguration
+            return AuthConfiguration(baseURL: productionDEBaseURL, region: .de)
         }
 
         var components = URLComponents()
@@ -72,7 +71,7 @@ struct AuthConfiguration: Sendable {
         components.path = normalizedPath(path)
 
         guard let url = components.url else {
-            throw AuthServiceError.invalidConfiguration
+            return AuthConfiguration(baseURL: productionDEBaseURL, region: .de)
         }
 
         return AuthConfiguration(baseURL: url, region: .de)
@@ -89,5 +88,18 @@ struct AuthConfiguration: Sendable {
     private static func normalizedPath(_ path: String) -> String {
         guard !path.isEmpty else { return "" }
         return path.hasPrefix("/") ? path : "/" + path
+    }
+
+    private static func validatedURL(_ rawValue: String) -> URL? {
+        guard
+            !rawValue.isEmpty,
+            rawValue.contains("$(") == false,
+            let url = URL(string: rawValue),
+            url.host() != nil
+        else {
+            return nil
+        }
+
+        return url
     }
 }

@@ -88,6 +88,31 @@ struct BackendStartupResolverTests {
         #expect(resolved == "RU")
     }
 
+    @Test("Production defaults are used when endpoint config is missing")
+    func testBackendEndpointsLiveFallsBackToProductionDefaults() throws {
+        let endpoints = try BackendEndpoints.live(
+            environment: [:],
+            infoDictionary: [:]
+        )
+
+        #expect(endpoints.ru.baseURL.absoluteString == "https://apiru.udzutech.com/api/v1")
+        #expect(endpoints.de.baseURL.absoluteString == "https://api.udzutech.com/api/v1")
+    }
+
+    @Test("Unresolved plist placeholders fall back to production defaults")
+    func testBackendEndpointsLiveIgnoresUnresolvedPlaceholders() throws {
+        let endpoints = try BackendEndpoints.live(
+            environment: [:],
+            infoDictionary: [
+                "RU_API_BASE_URL": "$(RU_API_BASE_URL)",
+                "DE_API_BASE_URL": "$(DE_API_BASE_URL)"
+            ]
+        )
+
+        #expect(endpoints.ru.baseURL.absoluteString == "https://apiru.udzutech.com/api/v1")
+        #expect(endpoints.de.baseURL.absoluteString == "https://api.udzutech.com/api/v1")
+    }
+
     @Test("Auth tokens are isolated between RU and DE backends")
     func testAuthTokensAreIsolatedBetweenBackends() throws {
         let ruRuntime = BackendSessionRuntime(
@@ -128,6 +153,20 @@ struct BackendStartupResolverTests {
         try ruStore.clearRefreshToken()
         #expect(try ruStore.refreshToken() == nil)
         #expect(try deStore.refreshToken() == "de-refresh")
+    }
+
+    @Test("Configuration fallback summary is explicit")
+    func testConfigurationFallbackSummary() {
+        let runtime = BackendSessionRuntime(
+            selectedEndpoint: BackendEndpoint(region: .de, baseURL: deURL),
+            preferredEndpoint: BackendEndpoint(region: .de, baseURL: deURL),
+            fallbackActivated: false,
+            forcedOverride: false,
+            selectionSource: .configurationFallback,
+            detectedCountryCode: "RU"
+        )
+
+        #expect(runtime.selectionSummaryLine == "Selection: Config fallback (RU)")
     }
 
     private func makeResolver(countryCode: String?) -> BackendStartupResolver {

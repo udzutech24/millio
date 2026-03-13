@@ -27,4 +27,17 @@ struct AuthConfigurationTests {
 
         #expect(configuration.baseURL.absoluteString == "https://example.com/custom")
     }
+
+    @Test("live falls back to production DE URL when DE endpoint is unresolved")
+    func testLiveFallsBackToProductionDEURLForUnresolvedPlaceholder() throws {
+        let configuration = try AuthConfiguration.live(
+            environment: [:],
+            infoDictionary: [
+                "DE_API_BASE_URL": "$(DE_API_BASE_URL)"
+            ]
+        )
+
+        #expect(configuration.baseURL.absoluteString == "https://api.udzutech.com/api/v1")
+        #expect(configuration.region == .de)
+    }
 }

@@ -11,6 +11,7 @@ enum BackendRegion: String, CaseIterable, Sendable {
 enum BackendSelectionSource: String, Sendable {
     case automaticLocale
     case debugOverride
+    case configurationFallback
 }
 
 struct SystemCountryCodeResolver {
@@ -89,6 +90,11 @@ struct BackendEndpoints: Equatable, Sendable {
     let ru: BackendEndpoint
     let de: BackendEndpoint
 
+    private static let productionDefaults: [String: URL] = [
+        "RU_API_BASE_URL": URL(string: "https://apiru.udzutech.com/api/v1")!,
+        "DE_API_BASE_URL": URL(string: "https://api.udzutech.com/api/v1")!
+    ]
+
     func endpoint(for countryCode: String?) -> BackendEndpoint {
         if countryCode?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == BackendRegion.ru.rawValue {
             return ru
@@ -132,12 +138,30 @@ struct BackendEndpoints: Equatable, Sendable {
             ""
         ).trimmingCharacters(in: .whitespacesAndNewlines)
 
+        if let url = validatedURL(rawValue) {
+            return url
+        }
+
+        if let defaultURL = productionDefaults[key] {
+            AppLogger.log(
+                .warning,
+                category: "Backend",
+                "Missing or invalid \(key) in runtime configuration. Falling back to bundled production default \(defaultURL.absoluteString)"
+            )
+            return defaultURL
+        }
+
+        throw AuthServiceError.invalidConfiguration
+    }
+
+    private static func validatedURL(_ rawValue: String) -> URL? {
         guard
             !rawValue.isEmpty,
+            rawValue.contains("$(") == false,
             let url = URL(string: rawValue),
             url.host() != nil
         else {
-            throw AuthServiceError.invalidConfiguration
+            return nil
         }
 
         return url
@@ -174,6 +198,9 @@ struct BackendSessionRuntime: Equatable, Sendable {
         case .automaticLocale:
             let countryCode = detectedCountryCode ?? "unknown"
             return "Selection: Auto (\(countryCode))"
+        case .configurationFallback:
+            let countryCode = detectedCountryCode ?? "unknown"
+            return "Selection: Config fallback (\(countryCode))"
         }
     }
 }

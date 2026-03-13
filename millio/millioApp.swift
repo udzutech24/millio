@@ -259,7 +259,7 @@ struct millioApp: App {
                 preferredEndpoint: BackendEndpoint(region: .de, baseURL: URL(string: "https://api.udzutech.com/api/v1")!),
                 fallbackActivated: false,
                 forcedOverride: false,
-                selectionSource: .automaticLocale,
+                selectionSource: .configurationFallback,
                 detectedCountryCode: SystemCountryCodeResolver.resolve()
             )
             self.backendRuntime = fallbackRuntime
