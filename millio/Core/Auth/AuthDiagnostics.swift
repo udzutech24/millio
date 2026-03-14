@@ -37,6 +37,56 @@ struct AuthResponseMetadata: Equatable, Sendable {
     let durationMilliseconds: Int
 }
 
+struct AuthDiagnosticsContext: Equatable, Sendable {
+    let backendBaseURL: String
+    let region: String
+
+    init(backendBaseURL: String, region: String) {
+        self.backendBaseURL = backendBaseURL
+        self.region = region
+    }
+
+    init(configuration: AuthConfiguration) {
+        self.init(
+            backendBaseURL: configuration.baseURL.absoluteString,
+            region: configuration.region.rawValue
+        )
+    }
+
+    static let empty = AuthDiagnosticsContext(backendBaseURL: "", region: "")
+
+    func fields(
+        endpoint: String? = nil,
+        statusCode: Int? = nil,
+        requestId: String? = nil,
+        errorType: String? = nil,
+        reason: String? = nil
+    ) -> [String: String] {
+        var details: [String: String] = [
+            "backendBaseURL": backendBaseURL,
+            "region": region
+        ]
+
+        if let endpoint {
+            details["endpoint"] = endpoint
+        }
+        if let statusCode {
+            details["httpStatus"] = String(statusCode)
+        }
+        if let requestId {
+            details["requestId"] = requestId
+        }
+        if let errorType {
+            details["errorType"] = errorType
+        }
+        if let reason {
+            details["reason"] = reason
+        }
+
+        return details
+    }
+}
+
 struct AuthNetworkResult<Value: Sendable>: Sendable {
     let value: Value
     let metadata: AuthResponseMetadata

@@ -123,6 +123,20 @@ enum AuthServiceError: LocalizedError, Equatable, Sendable {
     }
 }
 
+enum AuthFlowError: LocalizedError, Equatable, Sendable {
+    case postLoginBootstrapFailed(String)
+    case wrongSessionNamespace
+
+    var errorDescription: String? {
+        switch self {
+        case .postLoginBootstrapFailed(let reason):
+            return reason
+        case .wrongSessionNamespace:
+            return "Session was created for a different backend or region."
+        }
+    }
+}
+
 protocol RefreshTokenStoreProtocol: Sendable {
     func refreshToken() throws -> String?
     func setRefreshToken(_ value: String) throws
@@ -228,7 +242,7 @@ actor AuthTokenStore {
     func store(
         _ response: AuthResponse,
         now: Date = Date(),
-        requestId: String? = nil,
+        metadata: AuthResponseMetadata,
         source: AuthSessionSource
     ) throws -> AuthSession {
         let expiresAt = now.addingTimeInterval(TimeInterval(response.accessTokenExpiresInSeconds))
@@ -237,7 +251,7 @@ actor AuthTokenStore {
         return AuthSession(
             user: response.user,
             accessTokenExpiresAt: expiresAt,
-            requestId: requestId,
+            metadata: metadata,
             source: source
         )
     }
@@ -375,6 +389,7 @@ struct AuthAPIClient: AuthAPIClientProtocol {
     private let decoder: JSONDecoder
     private let clientMetadata: AuthClientMetadata
     private let diagnostics: any AuthDiagnosticsLogging
+    private let diagnosticsContext: AuthDiagnosticsContext
     private let httpDateFormatter: DateFormatter
 
     init(
@@ -389,6 +404,7 @@ struct AuthAPIClient: AuthAPIClientProtocol {
         self.decoder = Self.makeDecoder()
         self.clientMetadata = clientMetadata
         self.diagnostics = diagnostics
+        self.diagnosticsContext = AuthDiagnosticsContext(configuration: configuration)
         self.httpDateFormatter = Self.makeHTTPDateFormatter()
     }
 
@@ -455,10 +471,14 @@ struct AuthAPIClient: AuthAPIClientProtocol {
                 operation: operation,
                 requestId: clientRequestId,
                 backendRequestId: responseRequestId,
-                details: [
-                    "durationMs": String(duration),
-                    "statusCode": String(httpResponse.statusCode)
-                ]
+                details: diagnosticsContext.fields(
+                    endpoint: "/" + operation.path,
+                    statusCode: httpResponse.statusCode,
+                    requestId: responseRequestId ?? clientRequestId
+                )
+                    .merging(["durationMs": String(duration)]) { _, newValue in
+                        newValue
+                    }
             )
 
             if let serviceError = mapHTTPError(
@@ -571,6 +591,9 @@ struct AuthAPIClient: AuthAPIClientProtocol {
     ) -> [String: String] {
         var details: [String: String] = [
             "appVersion": clientMetadata.appVersion,
+            "backendBaseURL": diagnosticsContext.backendBaseURL,
+            "region": diagnosticsContext.region,
+            "endpoint": "/" + operation.path,
             "method": operation.method,
             "path": "/" + operation.path,
             "platform": clientMetadata.platform
@@ -704,17 +727,20 @@ actor AuthService: AuthServiceProtocol {
     private let apiClient: any AuthAPIClientProtocol
     private let tokenStore: AuthTokenStore
     private let diagnostics: any AuthDiagnosticsLogging
+    private let diagnosticsContext: AuthDiagnosticsContext
     private var signInBackoffState = AuthRateLimitBackoffState()
     private var refreshBackoffState = AuthRateLimitBackoffState()
 
     init(
         apiClient: any AuthAPIClientProtocol,
         tokenStore: AuthTokenStore = AuthTokenStore(),
-        diagnostics: any AuthDiagnosticsLogging = AuthDiagnosticsLogger()
+        diagnostics: any AuthDiagnosticsLogging = AuthDiagnosticsLogger(),
+        diagnosticsContext: AuthDiagnosticsContext = .empty
     ) {
         self.apiClient = apiClient
         self.tokenStore = tokenStore
         self.diagnostics = diagnostics
+        self.diagnosticsContext = diagnosticsContext
     }
 
     func signInWithApple(identityToken: String, email: String?, firstName: String?, lastName: String?) async throws -> AuthSession {
@@ -849,23 +875,45 @@ actor AuthService: AuthServiceProtocol {
         _ result: AuthNetworkResult<AuthResponse>,
         source: AuthSessionSource
     ) async throws -> AuthSession {
+        diagnostics.log(
+            .info,
+            phase: "tokens_persist_started",
+            operation: source.operation,
+            requestId: result.metadata.clientRequestId,
+            backendRequestId: result.metadata.requestId,
+            details: diagnosticsContext.fields(
+                endpoint: "/" + source.operation.path,
+                statusCode: result.metadata.statusCode,
+                requestId: result.metadata.requestId ?? result.metadata.clientRequestId,
+                reason: "Persisting auth tokens"
+            )
+        )
+
         do {
             let session = try await tokenStore.store(
                 result.value,
-                requestId: result.metadata.requestId ?? result.metadata.clientRequestId,
+                metadata: result.metadata,
                 source: source
             )
             diagnostics.log(
                 .info,
-                phase: "auth.tokens.persisted",
+                phase: "tokens_persist_succeeded",
                 operation: source.operation,
                 requestId: result.metadata.clientRequestId,
                 backendRequestId: result.metadata.requestId,
-                details: [
-                    "accessTokenStored": "true",
-                    "refreshTokenStored": "true",
-                    "expiresAt": ISO8601DateFormatter().string(from: session.accessTokenExpiresAt)
-                ]
+                details: diagnosticsContext.fields(
+                    endpoint: "/" + source.operation.path,
+                    statusCode: result.metadata.statusCode,
+                    requestId: result.metadata.requestId ?? result.metadata.clientRequestId,
+                    reason: "Auth tokens persisted"
+                )
+                    .merging([
+                        "accessTokenStored": "true",
+                        "refreshTokenStored": "true",
+                        "expiresAt": ISO8601DateFormatter().string(from: session.accessTokenExpiresAt)
+                    ]) { _, newValue in
+                        newValue
+                    }
             )
             return session
         } catch {
@@ -876,7 +924,13 @@ actor AuthService: AuthServiceProtocol {
                 operation: source.operation,
                 requestId: result.metadata.clientRequestId,
                 backendRequestId: result.metadata.requestId,
-                details: ["errorType": AuthErrorMapper.category(for: mappedError).rawValue]
+                details: diagnosticsContext.fields(
+                    endpoint: "/" + source.operation.path,
+                    statusCode: result.metadata.statusCode,
+                    requestId: result.metadata.requestId ?? result.metadata.clientRequestId,
+                    errorType: AuthErrorMapper.category(for: mappedError).rawValue,
+                    reason: mappedError.localizedDescription
+                )
             )
             throw mappedError
         }
@@ -972,6 +1026,14 @@ final class AuthManager {
     private var lastResolvedRoute: RootViewRoute?
     @ObservationIgnored
     private var onSessionChanged: (@MainActor @Sendable (AuthUser?) async -> Void)?
+    @ObservationIgnored
+    private var onPostLoginBootstrap: (@MainActor @Sendable (AuthUser) async throws -> Void)?
+    @ObservationIgnored
+    private var diagnosticsContext: AuthDiagnosticsContext = .empty
+    @ObservationIgnored
+    private var activeAppleSignInAttemptID: UUID?
+    @ObservationIgnored
+    private var isAppleSignInSubmitting = false
 
     init(
         service: any AuthServiceProtocol = UnconfiguredAuthService(),
@@ -997,13 +1059,34 @@ final class AuthManager {
         self.onSessionChanged = onSessionChanged
     }
 
+    func configure(onPostLoginBootstrap: @escaping @MainActor @Sendable (AuthUser) async throws -> Void) {
+        self.onPostLoginBootstrap = onPostLoginBootstrap
+    }
+
+    func configure(authConfiguration: AuthConfiguration) {
+        diagnosticsContext = AuthDiagnosticsContext(configuration: authConfiguration)
+    }
+
     func markAppleSignInStarted() {
-        if isBusy {
+        if isBusy || activeAppleSignInAttemptID != nil {
             diagnostics.log(.warning, phase: "apple_sign_in.ignored_busy", operation: .appleSignIn, requestId: lastAuthRequestId, backendRequestId: nil, details: [:])
             return
         }
 
-        diagnostics.log(.info, phase: "apple_sign_in.started", operation: .appleSignIn, requestId: nil, backendRequestId: nil, details: [:])
+        clearFeedback()
+        isBusy = true
+        activeAppleSignInAttemptID = UUID()
+        diagnostics.log(
+            .info,
+            phase: "apple_sign_in_started",
+            operation: .appleSignIn,
+            requestId: nil,
+            backendRequestId: nil,
+            details: diagnosticsContext.fields(
+                endpoint: "/auth/apple",
+                reason: "Apple Sign In flow started"
+            )
+        )
     }
 
     func restoreSession() async {
@@ -1032,24 +1115,38 @@ final class AuthManager {
     }
 
     func signIn(with authorization: Result<ASAuthorization, Error>) async {
-        guard !isBusy else {
+        guard let attemptID = activeAppleSignInAttemptID else {
             diagnostics.log(.warning, phase: "apple_sign_in.ignored_busy", operation: .appleSignIn, requestId: lastAuthRequestId, backendRequestId: nil, details: [:])
             return
         }
-
-        clearFeedback()
-        isBusy = true
-        defer { isBusy = false }
+        guard !isAppleSignInSubmitting else {
+            diagnostics.log(.warning, phase: "apple_sign_in.ignored_busy", operation: .appleSignIn, requestId: lastAuthRequestId, backendRequestId: nil, details: [:])
+            return
+        }
+        isAppleSignInSubmitting = true
+        defer {
+            isAppleSignInSubmitting = false
+            if activeAppleSignInAttemptID == attemptID {
+                activeAppleSignInAttemptID = nil
+                isBusy = false
+            }
+        }
 
         do {
             let payload = try authorizationExtractor.extract(from: authorization)
             diagnostics.log(
                 .info,
-                phase: "apple_sign_in.credential_received",
+                phase: "apple_credential_received",
                 operation: .appleSignIn,
                 requestId: nil,
                 backendRequestId: nil,
-                details: AuthDiagnosticsFields.token("identityToken", value: payload.identityToken)
+                details: diagnosticsContext.fields(
+                    endpoint: "/auth/apple",
+                    reason: "Apple credential received"
+                )
+                    .merging(AuthDiagnosticsFields.token("identityToken", value: payload.identityToken)) { _, newValue in
+                        newValue
+                    }
                     .merging(AuthDiagnosticsFields.optionalString("email", value: payload.email)) { _, newValue in
                         newValue
                     }
@@ -1061,17 +1158,62 @@ final class AuthManager {
                     }
             )
 
+            diagnostics.log(
+                .info,
+                phase: "auth_request_started",
+                operation: .appleSignIn,
+                requestId: nil,
+                backendRequestId: nil,
+                details: diagnosticsContext.fields(
+                    endpoint: "/auth/apple",
+                    reason: "Submitting /auth/apple"
+                )
+            )
+
             let session = try await service.signInWithApple(
                 identityToken: payload.identityToken,
                 email: payload.email,
                 firstName: payload.firstName,
                 lastName: payload.lastName
             )
+            guard activeAppleSignInAttemptID == attemptID else {
+                return
+            }
+            diagnostics.log(
+                .info,
+                phase: "auth_request_succeeded",
+                operation: .appleSignIn,
+                requestId: session.metadata.clientRequestId,
+                backendRequestId: session.metadata.requestId,
+                details: diagnosticsContext.fields(
+                    endpoint: "/auth/apple",
+                    statusCode: session.metadata.statusCode,
+                    requestId: session.requestId,
+                    reason: "Successful /auth/apple response"
+                )
+            )
             apply(session)
+            await runPostLoginBootstrap(for: session)
+            diagnostics.log(
+                .info,
+                phase: "login_flow_completed",
+                operation: .appleSignIn,
+                requestId: session.metadata.clientRequestId,
+                backendRequestId: session.metadata.requestId,
+                details: diagnosticsContext.fields(
+                    endpoint: "/auth/apple",
+                    statusCode: session.metadata.statusCode,
+                    requestId: session.requestId,
+                    reason: "Login flow completed"
+                )
+            )
         } catch let error as ASAuthorizationError where error.code == .canceled {
             diagnostics.log(.info, phase: "apple_sign_in.cancelled", operation: .appleSignIn, requestId: nil, backendRequestId: nil, details: [:])
             clearFeedback()
         } catch {
+            guard activeAppleSignInAttemptID == attemptID else {
+                return
+            }
             present(error, operation: .appleSignIn)
         }
     }
@@ -1160,8 +1302,8 @@ final class AuthManager {
             .info,
             phase: "auth.session.updated",
             operation: session.source.operation,
-            requestId: session.requestId,
-            backendRequestId: session.requestId,
+            requestId: session.metadata.clientRequestId,
+            backendRequestId: session.metadata.requestId,
             details: [
                 "authenticated": "true",
                 "source": session.source.rawValue
@@ -1206,5 +1348,59 @@ final class AuthManager {
                 "toast": presentation.shouldPresentToast ? "true" : "false"
             ]
         )
+    }
+
+    // Post-login work is allowed to fail without tearing down a valid session.
+    private func runPostLoginBootstrap(for session: AuthSession) async {
+        guard let onPostLoginBootstrap else { return }
+
+        diagnostics.log(
+            .info,
+            phase: "post_login_bootstrap_started",
+            operation: .me,
+            requestId: session.metadata.clientRequestId,
+            backendRequestId: session.metadata.requestId,
+            details: diagnosticsContext.fields(
+                endpoint: "/auth/me",
+                requestId: session.requestId,
+                reason: "Running post-login bootstrap"
+            )
+        )
+
+        do {
+            try await onPostLoginBootstrap(session.user)
+        } catch AuthServiceError.unauthorized {
+            let error = AuthFlowError.wrongSessionNamespace
+            diagnostics.log(
+                .error,
+                phase: "post_login_bootstrap_failed",
+                operation: .me,
+                requestId: session.metadata.clientRequestId,
+                backendRequestId: session.metadata.requestId,
+                details: diagnosticsContext.fields(
+                    endpoint: "/auth/me",
+                    requestId: session.requestId,
+                    errorType: AuthErrorMapper.category(for: error).rawValue,
+                    reason: error.localizedDescription
+                )
+            )
+            present(error, operation: .me)
+        } catch {
+            let flowError = AuthFlowError.postLoginBootstrapFailed(error.localizedDescription)
+            diagnostics.log(
+                .error,
+                phase: "post_login_bootstrap_failed",
+                operation: .me,
+                requestId: session.metadata.clientRequestId,
+                backendRequestId: session.metadata.requestId,
+                details: diagnosticsContext.fields(
+                    endpoint: "/auth/me",
+                    requestId: session.requestId,
+                    errorType: AuthErrorMapper.category(for: flowError).rawValue,
+                    reason: error.localizedDescription
+                )
+            )
+            present(flowError, operation: .me)
+        }
     }
 }

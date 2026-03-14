@@ -15,6 +15,8 @@ enum AuthErrorCategory: String, Equatable, Sendable {
     case appleCredentials
     case business
     case serviceUnavailable
+    case postLoginBootstrap
+    case wrongSessionNamespace
     case unknown
 }
 
@@ -26,6 +28,10 @@ struct AuthErrorPresentation: Equatable, Sendable {
 
 enum AuthErrorMapper {
     static func presentation(for error: Error) -> AuthErrorPresentation {
+        if let flowError = error as? AuthFlowError {
+            return presentation(for: flowError)
+        }
+
         guard let authError = error as? AuthServiceError else {
             return AuthErrorPresentation(
                 category: .unknown,
@@ -120,7 +126,7 @@ enum AuthErrorMapper {
                 category: .invalidResponse,
                 message: String(
                     localized: "auth.error.invalid_response",
-                    defaultValue: "Server returned an invalid response. Try again later.",
+                    defaultValue: "Auth response parse failed. Try again.",
                     comment: "Invalid auth response toast"
                 ),
                 shouldPresentToast: true
@@ -130,7 +136,7 @@ enum AuthErrorMapper {
                 category: .tokenPersistence,
                 message: String(
                     localized: "auth.error.token_persistence",
-                    defaultValue: "Signed in, but failed to save your session. Try again.",
+                    defaultValue: "Token persistence failed. Signed in, but failed to save your session.",
                     comment: "Token persistence failure toast"
                 ),
                 shouldPresentToast: true
@@ -146,23 +152,13 @@ enum AuthErrorMapper {
 
     private static func presentation(for error: AuthTransportError) -> AuthErrorPresentation {
         switch error {
-        case .noInternet:
+        case .noInternet, .timeout:
             return .init(
-                category: .noInternet,
+                category: error == .timeout ? .timeout : .noInternet,
                 message: String(
                     localized: "auth.error.offline",
                     defaultValue: "No internet connection. Check your network and try again.",
                     comment: "Offline auth toast"
-                ),
-                shouldPresentToast: true
-            )
-        case .timeout:
-            return .init(
-                category: .timeout,
-                message: String(
-                    localized: "auth.error.timeout",
-                    defaultValue: "Server is taking too long to respond. Try again.",
-                    comment: "Timed out auth toast"
                 ),
                 shouldPresentToast: true
             )
@@ -185,6 +181,31 @@ enum AuthErrorMapper {
                     localized: "auth.error.network",
                     defaultValue: "Network error. Try again.",
                     comment: "Generic network auth toast"
+                ),
+                shouldPresentToast: true
+            )
+        }
+    }
+
+    private static func presentation(for error: AuthFlowError) -> AuthErrorPresentation {
+        switch error {
+        case .postLoginBootstrapFailed:
+            return .init(
+                category: .postLoginBootstrap,
+                message: String(
+                    localized: "auth.error.post_login_bootstrap",
+                    defaultValue: "Post-login bootstrap failed. Your session is active.",
+                    comment: "Post-login bootstrap failure toast"
+                ),
+                shouldPresentToast: true
+            )
+        case .wrongSessionNamespace:
+            return .init(
+                category: .wrongSessionNamespace,
+                message: String(
+                    localized: "auth.error.wrong_session_namespace",
+                    defaultValue: "Signed in, but the session belongs to a different backend or region.",
+                    comment: "Wrong backend/session namespace toast"
                 ),
                 shouldPresentToast: true
             )

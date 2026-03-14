@@ -91,30 +91,22 @@ struct BackendEndpoints: Equatable, Sendable {
     let de: BackendEndpoint
 
     private static let productionDefaults: [String: URL] = [
-        "RU_API_BASE_URL": URL(string: "https://apiru.udzutech.com/api/v1")!,
+        "RU_API_BASE_URL": URL(string: "https://api.udzutech.com/api/v1")!,
         "DE_API_BASE_URL": URL(string: "https://api.udzutech.com/api/v1")!
     ]
 
     func endpoint(for countryCode: String?) -> BackendEndpoint {
-        if countryCode?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == BackendRegion.ru.rawValue {
-            return ru
-        }
         return de
     }
 
     func alternate(to endpoint: BackendEndpoint) -> BackendEndpoint {
-        endpoint.region == .ru ? de : ru
+        de
     }
 
     static func live(
         environment: [String: String],
         infoDictionary: [String: Any]
     ) throws -> BackendEndpoints {
-        let ru = try resolveURL(
-            key: "RU_API_BASE_URL",
-            environment: environment,
-            infoDictionary: infoDictionary
-        )
         let de = try resolveURL(
             key: "DE_API_BASE_URL",
             environment: environment,
@@ -122,7 +114,7 @@ struct BackendEndpoints: Equatable, Sendable {
         )
 
         return BackendEndpoints(
-            ru: BackendEndpoint(region: .ru, baseURL: ru),
+            ru: BackendEndpoint(region: .ru, baseURL: de),
             de: BackendEndpoint(region: .de, baseURL: de)
         )
     }
@@ -290,7 +282,7 @@ struct BackendStartupResolver {
         AppLogger.log(
             .warning,
             category: "Backend",
-            "Backend probe failed for both regions. Keeping preferred backend \(preferredEndpoint.region.rawValue) at \(preferredEndpoint.baseURL.absoluteString)"
+            "Backend probe failed. Keeping preferred backend \(preferredEndpoint.region.rawValue) at \(preferredEndpoint.baseURL.absoluteString)"
         )
 
         let runtime = BackendSessionRuntime(
@@ -384,11 +376,11 @@ struct BackendStartupResolver {
             )?.trimmingCharacters(in: .whitespacesAndNewlines)
             .uppercased()
 
-            if forcedRegion == BackendRegion.ru.rawValue {
-                return endpoints.ru
+            if forcedRegion == BackendRegion.de.rawValue {
+                return endpoints.de
             }
 
-            if forcedRegion == BackendRegion.de.rawValue {
+            if forcedRegion == BackendRegion.ru.rawValue {
                 return endpoints.de
             }
 
@@ -407,9 +399,6 @@ struct BackendStartupResolver {
             }
 
             let normalizedURL = BackendEndpoint(region: .de, baseURL: url).baseURL
-            if normalizedURL == endpoints.ru.baseURL {
-                return endpoints.ru
-            }
             if normalizedURL == endpoints.de.baseURL {
                 return endpoints.de
             }

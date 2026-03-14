@@ -133,6 +133,122 @@ struct AuthManagerTests {
         #expect(manager.status == .signedOut)
         #expect(manager.currentUser == nil)
     }
+
+    @Test("200 OK from auth apple switches app into authenticated state")
+    func testSignInSuccessAuthenticatesUser() async {
+        let service = SignInAuthService(result: .success(.fixtureSession))
+        let manager = AuthManager(
+            service: service,
+            toastCenter: ToastCenter(),
+            authorizationExtractor: StubAppleAuthorizationExtractor()
+        )
+        manager.configure(authConfiguration: AuthConfiguration(baseURL: URL(string: "https://api.example.com/api/v1")!, region: .de))
+
+        manager.markAppleSignInStarted()
+        await manager.signIn(with: .failure(AuthServiceError.unconfigured))
+
+        #expect(manager.isAuthenticated)
+        #expect(manager.currentUser == .fixture)
+        #expect(manager.errorMessage == nil)
+        #expect(await service.signInCalls == 1)
+    }
+
+    @Test("parse failure after 200 is not mapped as no internet")
+    func testSignInDecodingFailureIsNotOffline() async {
+        let toastCenter = ToastCenter()
+        let manager = AuthManager(
+            service: SignInAuthService(result: .failure(AuthServiceError.decodingFailed(requestId: "backend-auth-1"))),
+            toastCenter: toastCenter,
+            authorizationExtractor: StubAppleAuthorizationExtractor()
+        )
+
+        manager.markAppleSignInStarted()
+        await manager.signIn(with: .failure(AuthServiceError.unconfigured))
+
+        #expect(toastCenter.message == "Auth response parse failed. Try again.")
+        #expect(manager.errorMessage == "Auth response parse failed. Try again.")
+    }
+
+    @Test("token persistence failure after 200 is not mapped as no internet")
+    func testSignInTokenPersistenceFailureIsNotOffline() async {
+        let toastCenter = ToastCenter()
+        let manager = AuthManager(
+            service: SignInAuthService(result: .failure(AuthServiceError.tokenPersistenceFailed("Keychain save failed."))),
+            toastCenter: toastCenter,
+            authorizationExtractor: StubAppleAuthorizationExtractor()
+        )
+
+        manager.markAppleSignInStarted()
+        await manager.signIn(with: .failure(AuthServiceError.unconfigured))
+
+        #expect(toastCenter.message == "Token persistence failed. Signed in, but failed to save your session.")
+        #expect(manager.errorMessage == "Token persistence failed. Signed in, but failed to save your session.")
+    }
+
+    @Test("post login bootstrap failure does not clear successful session")
+    func testPostLoginBootstrapFailureKeepsAuthenticatedState() async {
+        let toastCenter = ToastCenter()
+        let service = SignInAuthService(result: .success(.fixtureSession))
+        let manager = AuthManager(
+            service: service,
+            toastCenter: toastCenter,
+            authorizationExtractor: StubAppleAuthorizationExtractor()
+        )
+        manager.configure(onPostLoginBootstrap: { _ in
+            throw AuthServiceError.transport(.noInternet)
+        })
+
+        manager.markAppleSignInStarted()
+        await manager.signIn(with: .failure(AuthServiceError.unconfigured))
+
+        #expect(manager.isAuthenticated)
+        #expect(manager.currentUser == .fixture)
+        #expect(toastCenter.message == "Post-login bootstrap failed. Your session is active.")
+    }
+
+    @Test("bootstrap unauthorized maps to wrong backend namespace and keeps session")
+    func testPostLoginBootstrapUnauthorizedMapsToNamespaceError() async {
+        let toastCenter = ToastCenter()
+        let service = SignInAuthService(result: .success(.fixtureSession))
+        let manager = AuthManager(
+            service: service,
+            toastCenter: toastCenter,
+            authorizationExtractor: StubAppleAuthorizationExtractor()
+        )
+        manager.configure(onPostLoginBootstrap: { _ in
+            throw AuthServiceError.unauthorized(requestId: "backend-me-1")
+        })
+
+        manager.markAppleSignInStarted()
+        await manager.signIn(with: .failure(AuthServiceError.unconfigured))
+
+        #expect(manager.isAuthenticated)
+        #expect(toastCenter.message == "Signed in, but the session belongs to a different backend or region.")
+    }
+
+    @Test("double tap does not start two login flows")
+    func testDoubleTapDoesNotStartTwoLoginFlows() async {
+        let service = DelayedSignInAuthService()
+        let manager = AuthManager(
+            service: service,
+            toastCenter: ToastCenter(),
+            authorizationExtractor: StubAppleAuthorizationExtractor()
+        )
+
+        manager.markAppleSignInStarted()
+        manager.markAppleSignInStarted()
+
+        let first = Task { await manager.signIn(with: .failure(AuthServiceError.unconfigured)) }
+        let second = Task { await manager.signIn(with: .failure(AuthServiceError.unconfigured)) }
+
+        await service.waitUntilStarted()
+        await service.finish(with: .fixtureSession)
+        await first.value
+        await second.value
+
+        #expect(await service.signInCalls == 1)
+        #expect(manager.isAuthenticated)
+    }
 }
 
 private struct FailingAuthService: AuthServiceProtocol {
@@ -165,6 +281,76 @@ private struct FailingAuthService: AuthServiceProtocol {
 
     func accessToken(forceRefresh: Bool) async throws -> String {
         throw restoreError ?? AuthServiceError.unconfigured
+    }
+}
+
+private actor SignInAuthService: AuthServiceProtocol {
+    private let result: Result<AuthSession, Error>
+    private(set) var signInCalls = 0
+
+    init(result: Result<AuthSession, Error>) {
+        self.result = result
+    }
+
+    func signInWithApple(identityToken: String, email: String?, firstName: String?, lastName: String?) async throws -> AuthSession {
+        signInCalls += 1
+        switch result {
+        case .success(let session):
+            return session
+        case .failure(let error):
+            throw error
+        }
+    }
+
+    func restoreSession() async throws -> AuthSession? { nil }
+    func currentUser() async throws -> AuthUser { throw AuthServiceError.unconfigured }
+    func logout() async {}
+    func accessTokenExpiryDate() async -> Date? { .now.addingTimeInterval(600) }
+    func accessToken(forceRefresh: Bool) async throws -> String { throw AuthServiceError.unconfigured }
+}
+
+private actor DelayedSignInAuthService: AuthServiceProtocol {
+    private(set) var signInCalls = 0
+    private var startedContinuation: CheckedContinuation<Void, Never>?
+    private var resultContinuation: CheckedContinuation<AuthSession, Error>?
+
+    func signInWithApple(identityToken: String, email: String?, firstName: String?, lastName: String?) async throws -> AuthSession {
+        signInCalls += 1
+        startedContinuation?.resume()
+        return try await withCheckedThrowingContinuation { continuation in
+            resultContinuation = continuation
+        }
+    }
+
+    func restoreSession() async throws -> AuthSession? { nil }
+    func currentUser() async throws -> AuthUser { throw AuthServiceError.unconfigured }
+    func logout() async {}
+    func accessTokenExpiryDate() async -> Date? { .now.addingTimeInterval(600) }
+    func accessToken(forceRefresh: Bool) async throws -> String { throw AuthServiceError.unconfigured }
+
+    func waitUntilStarted() async {
+        if signInCalls > 0 {
+            return
+        }
+        await withCheckedContinuation { continuation in
+            startedContinuation = continuation
+        }
+    }
+
+    func finish(with session: AuthSession) {
+        resultContinuation?.resume(returning: session)
+        resultContinuation = nil
+    }
+}
+
+private struct StubAppleAuthorizationExtractor: AppleAuthorizationExtracting {
+    func extract(from authorization: Result<ASAuthorization, Error>) throws -> AppleAuthorizationPayload {
+        AppleAuthorizationPayload(
+            identityToken: "identity-token",
+            email: "sid@example.com",
+            firstName: "Sid",
+            lastName: "Orkin"
+        )
     }
 }
 
@@ -314,5 +500,19 @@ private extension AuthUser {
         fullName: "Other User",
         avatarUrl: nil,
         lastLoginAt: nil
+    )
+}
+
+private extension AuthSession {
+    static let fixtureSession = AuthSession(
+        user: .fixture,
+        accessTokenExpiresAt: .now.addingTimeInterval(900),
+        metadata: AuthResponseMetadata(
+            statusCode: 200,
+            requestId: "backend-auth-1",
+            clientRequestId: "client-auth-1",
+            durationMilliseconds: 20
+        ),
+        source: .appleSignIn
     )
 }

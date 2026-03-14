@@ -4,26 +4,26 @@ import Testing
 
 @Suite(.serialized)
 struct BackendStartupResolverTests {
-    private let ruURL = URL(string: "https://apiru.udzutech.com/api/v1")!
     private let deURL = URL(string: "https://api.udzutech.com/api/v1")!
+    private let altURL = URL(string: "https://alt.example.com/api/v1")!
 
-    @Test("RU country selects RU backend")
-    func testRUCountrySelectsRUBackend() async {
+    @Test("RU country now resolves to the single DE backend")
+    func testRUCountrySelectsSingleBackend() async {
         URLProtocolBackendStub.setHandler { request in
             let url = try #require(request.url)
-            #expect(url.absoluteString == "https://apiru.udzutech.com/api/v1/runtime/server-info")
+            #expect(url.absoluteString == "https://api.udzutech.com/api/v1/runtime/server-info")
             return Self.successResponse(
                 url: url,
-                region: "RU",
-                publicApiBaseURL: "https://apiru.udzutech.com/api/v1"
+                region: "DE",
+                publicApiBaseURL: "https://api.udzutech.com/api/v1"
             )
         }
         defer { URLProtocolBackendStub.reset() }
 
         let runtime = await makeResolver(countryCode: "RU").resolve()
 
-        #expect(runtime.selectedEndpoint.region == .ru)
-        #expect(runtime.selectedEndpoint.baseURL == ruURL)
+        #expect(runtime.selectedEndpoint.region == .de)
+        #expect(runtime.selectedEndpoint.baseURL == deURL)
         #expect(runtime.fallbackActivated == false)
         #expect(runtime.selectionSource == .automaticLocale)
         #expect(runtime.detectedCountryCode == "RU")
@@ -53,27 +53,20 @@ struct BackendStartupResolverTests {
         #expect(runtime.selectionSource == .automaticLocale)
     }
 
-    @Test("Falls back to secondary backend when preferred backend is down")
-    func testFallbackToSecondaryBackend() async {
+    @Test("Keeps single backend when probe fails because there is no secondary host anymore")
+    func testProbeFailureKeepsSingleBackend() async {
         URLProtocolBackendStub.setHandler { request in
-            let url = try #require(request.url)
-            if url.host() == "apiru.udzutech.com" {
-                throw URLError(.cannotConnectToHost)
-            }
-            return Self.successResponse(
-                url: url,
-                region: "DE",
-                publicApiBaseURL: "https://api.udzutech.com/api/v1"
-            )
+            _ = try #require(request.url)
+            throw URLError(.cannotConnectToHost)
         }
         defer { URLProtocolBackendStub.reset() }
 
         let runtime = await makeResolver(countryCode: "RU").resolve()
 
-        #expect(runtime.preferredEndpoint.region == .ru)
         #expect(runtime.selectedEndpoint.region == .de)
+        #expect(runtime.preferredEndpoint.region == .de)
         #expect(runtime.selectedEndpoint.baseURL == deURL)
-        #expect(runtime.fallbackActivated)
+        #expect(runtime.fallbackActivated == false)
         #expect(runtime.selectionSource == .automaticLocale)
     }
 
@@ -95,7 +88,7 @@ struct BackendStartupResolverTests {
             infoDictionary: [:]
         )
 
-        #expect(endpoints.ru.baseURL.absoluteString == "https://apiru.udzutech.com/api/v1")
+        #expect(endpoints.ru.baseURL.absoluteString == "https://api.udzutech.com/api/v1")
         #expect(endpoints.de.baseURL.absoluteString == "https://api.udzutech.com/api/v1")
     }
 
@@ -109,21 +102,13 @@ struct BackendStartupResolverTests {
             ]
         )
 
-        #expect(endpoints.ru.baseURL.absoluteString == "https://apiru.udzutech.com/api/v1")
+        #expect(endpoints.ru.baseURL.absoluteString == "https://api.udzutech.com/api/v1")
         #expect(endpoints.de.baseURL.absoluteString == "https://api.udzutech.com/api/v1")
     }
 
-    @Test("Auth tokens are isolated between RU and DE backends")
+    @Test("Auth tokens are isolated between different backend namespaces")
     func testAuthTokensAreIsolatedBetweenBackends() throws {
-        let ruRuntime = BackendSessionRuntime(
-            selectedEndpoint: BackendEndpoint(region: .ru, baseURL: ruURL),
-            preferredEndpoint: BackendEndpoint(region: .ru, baseURL: ruURL),
-            fallbackActivated: false,
-            forcedOverride: false,
-            selectionSource: .automaticLocale,
-            detectedCountryCode: "RU"
-        )
-        let deRuntime = BackendSessionRuntime(
+        let primaryRuntime = BackendSessionRuntime(
             selectedEndpoint: BackendEndpoint(region: .de, baseURL: deURL),
             preferredEndpoint: BackendEndpoint(region: .de, baseURL: deURL),
             fallbackActivated: false,
@@ -131,28 +116,36 @@ struct BackendStartupResolverTests {
             selectionSource: .automaticLocale,
             detectedCountryCode: "DE"
         )
+        let alternateRuntime = BackendSessionRuntime(
+            selectedEndpoint: BackendEndpoint(region: .de, baseURL: altURL),
+            preferredEndpoint: BackendEndpoint(region: .de, baseURL: altURL),
+            fallbackActivated: false,
+            forcedOverride: false,
+            selectionSource: .automaticLocale,
+            detectedCountryCode: "US"
+        )
 
         let backend = InMemoryAccountTokenBackend()
-        let ruStore = AccountScopedRefreshTokenStore(
-            account: ruRuntime.refreshTokenAccountKey,
+        let primaryStore = AccountScopedRefreshTokenStore(
+            account: primaryRuntime.refreshTokenAccountKey,
             backend: backend
         )
-        let deStore = AccountScopedRefreshTokenStore(
-            account: deRuntime.refreshTokenAccountKey,
+        let alternateStore = AccountScopedRefreshTokenStore(
+            account: alternateRuntime.refreshTokenAccountKey,
             backend: backend
         )
 
-        try ruStore.setRefreshToken("ru-refresh")
-        #expect(try ruStore.refreshToken() == "ru-refresh")
-        #expect(try deStore.refreshToken() == nil)
+        try primaryStore.setRefreshToken("primary-refresh")
+        #expect(try primaryStore.refreshToken() == "primary-refresh")
+        #expect(try alternateStore.refreshToken() == nil)
 
-        try deStore.setRefreshToken("de-refresh")
-        #expect(try ruStore.refreshToken() == "ru-refresh")
-        #expect(try deStore.refreshToken() == "de-refresh")
+        try alternateStore.setRefreshToken("alternate-refresh")
+        #expect(try primaryStore.refreshToken() == "primary-refresh")
+        #expect(try alternateStore.refreshToken() == "alternate-refresh")
 
-        try ruStore.clearRefreshToken()
-        #expect(try ruStore.refreshToken() == nil)
-        #expect(try deStore.refreshToken() == "de-refresh")
+        try primaryStore.clearRefreshToken()
+        #expect(try primaryStore.refreshToken() == nil)
+        #expect(try alternateStore.refreshToken() == "alternate-refresh")
     }
 
     @Test("Configuration fallback summary is explicit")
@@ -172,7 +165,7 @@ struct BackendStartupResolverTests {
     private func makeResolver(countryCode: String?) -> BackendStartupResolver {
         BackendStartupResolver(
             endpoints: BackendEndpoints(
-                ru: BackendEndpoint(region: .ru, baseURL: ruURL),
+                ru: BackendEndpoint(region: .ru, baseURL: deURL),
                 de: BackendEndpoint(region: .de, baseURL: deURL)
             ),
             session: makeSession(),

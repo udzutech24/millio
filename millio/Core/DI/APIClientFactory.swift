@@ -8,7 +8,8 @@ struct APIClientFactory {
             apiClient: AuthAPIClient(configuration: runtime.authConfiguration),
             tokenStore: AuthTokenStore(
                 refreshTokenStore: KeychainRefreshTokenStore(account: runtime.refreshTokenAccountKey)
-            )
+            ),
+            diagnosticsContext: AuthDiagnosticsContext(configuration: runtime.authConfiguration)
         )
     }
 

@@ -1,5 +1,5 @@
 TWELVE_DATA_API_KEY =
-RU_API_BASE_URL = https://apiru.udzutech.com/api/v1
+RU_API_BASE_URL = https://api.udzutech.com/api/v1
 DE_API_BASE_URL = https://api.udzutech.com/api/v1
 AUTH_BASE_URL =
 AUTH_BASE_SCHEME = https

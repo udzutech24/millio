@@ -50,19 +50,23 @@ enum AuthSessionSource: String, Equatable, Sendable {
 struct AuthSession: Equatable, Sendable {
     let user: AuthUser
     let accessTokenExpiresAt: Date
-    let requestId: String?
+    let metadata: AuthResponseMetadata
     let source: AuthSessionSource
 
     init(
         user: AuthUser,
         accessTokenExpiresAt: Date,
-        requestId: String? = nil,
+        metadata: AuthResponseMetadata,
         source: AuthSessionSource = .appleSignIn
     ) {
         self.user = user
         self.accessTokenExpiresAt = accessTokenExpiresAt
-        self.requestId = requestId
+        self.metadata = metadata
         self.source = source
+    }
+
+    var requestId: String? {
+        metadata.requestId ?? metadata.clientRequestId
     }
 }
 

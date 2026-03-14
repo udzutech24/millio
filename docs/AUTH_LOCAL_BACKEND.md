@@ -3,15 +3,14 @@
 ## Configuration
 
 - Backend endpoints are defined in one place:
-  - `RU_API_BASE_URL = https://apiru.udzutech.com/api/v1`
+  - `RU_API_BASE_URL = https://api.udzutech.com/api/v1`
   - `DE_API_BASE_URL = https://api.udzutech.com/api/v1`
-- The client now has hardcoded production safety defaults for both URLs. If `Info.plist`/xcconfig values are missing or unresolved (for example literal `$(RU_API_BASE_URL)`), runtime falls back to those production URLs and reports `Selection: Config fallback (...)` in the auth banner.
+- The client now has a single production safety default URL. If `Info.plist`/xcconfig values are missing or unresolved (for example literal `$(RU_API_BASE_URL)`), runtime falls back to `https://api.udzutech.com/api/v1` and reports `Selection: Config fallback (...)` in the auth banner.
 - Startup resolver rule:
   - debug override has top priority: `BACKEND_FORCE_REGION` / `BACKEND_FORCE_BASE_URL`
   - otherwise the app resolves the best-effort device country code from locale plus preferred language fallbacks
-  - country `RU` selects `RU_API_BASE_URL`
-  - every other country code, including missing/unknown, selects `DE_API_BASE_URL`
-- The app probes `GET /runtime/server-info` on startup, logs region/base URL mismatches, and falls back to the secondary backend once if the preferred backend does not answer.
+  - all country codes currently resolve to `DE_API_BASE_URL`
+- The app probes `GET /runtime/server-info` on startup and keeps the single configured backend even if the probe fails.
 - The selected backend is kept for the current app session and reused by both `AuthAPIClient` and `MarketAPIClient`.
 - The auth welcome screen always shows a compact backend status banner, including TestFlight/release builds, so QA can verify the exact login target server before signing in.
 - QA/debug override is available in debug builds through:

@@ -197,7 +197,13 @@ struct millioApp: App {
         self.diContainer = container
         authManager.configure(service: container.authService)
         authManager.configure(toastCenter: toastCenter)
+        authManager.configure(authConfiguration: backendRuntime.authConfiguration)
         authManager.configure(onSessionChanged: { user in
+            if user == nil {
+                await switchToDataScopeIfNeeded(for: nil)
+            }
+        })
+        authManager.configure(onPostLoginBootstrap: { user in
             await switchToDataScopeIfNeeded(for: user)
         })
         let apiClientFactory = APIClientFactory(runtime: backendRuntime)
