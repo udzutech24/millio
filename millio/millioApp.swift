@@ -221,7 +221,9 @@ struct millioApp: App {
         await useCase.initialize()
         if restoreSession {
             await authManager.restoreSession()
+            await switchToDataScopeIfNeeded(for: authManager.currentUser)
         }
+        await presentRestoreFlowIfNeeded()
         logger.info("AppLifecycleUseCase.initialize finished in \(Double(DispatchTime.now().uptimeNanoseconds - initStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
         logger.info("initializeApp finished in \(Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
         
@@ -283,9 +285,10 @@ struct millioApp: App {
 
         let targetContainer = Self.makeModelContainer(for: targetScope)
         if let targetContainer {
-            migrateLegacyStoreIfNeeded(
+            migrateExistingStoresIfNeeded(
                 into: targetContainer,
-                targetScope: targetScope
+                targetScope: targetScope,
+                currentScope: activeDataScope
             )
         }
 
@@ -384,28 +387,59 @@ struct millioApp: App {
     }
 
     @MainActor
-    private func migrateLegacyStoreIfNeeded(into targetContainer: ModelContainer, targetScope: DataScope) {
+    private func migrateExistingStoresIfNeeded(
+        into targetContainer: ModelContainer,
+        targetScope: DataScope,
+        currentScope: DataScope
+    ) {
         guard case .user = targetScope else { return }
         guard Self.exportedModelCount(in: targetContainer) == 0 else { return }
-        guard let legacyContainer = Self.makeLegacyDefaultModelContainer() else { return }
-        guard Self.exportedModelCount(in: legacyContainer) > 0 else { return }
-
-        let legacyRepository = DataRepository(
-            modelContext: legacyContainer.mainContext,
-            modelContainer: legacyContainer
-        )
         let targetRepository = DataRepository(
             modelContext: targetContainer.mainContext,
             modelContainer: targetContainer
         )
 
-        do {
-            let payload = try legacyRepository.exportAllData()
-            try targetRepository.importAllData(payload)
-            logger.info("Migrated legacy SwiftData store to user-scoped store")
-        } catch {
-            logger.error("Failed to migrate legacy SwiftData store: \(error.localizedDescription, privacy: .public)")
+        let sourceContainers = candidateMigrationSources(
+            for: targetScope,
+            currentScope: currentScope
+        )
+
+        for source in sourceContainers {
+            guard Self.exportedModelCount(in: source.container) > 0 else { continue }
+
+            let sourceRepository = DataRepository(
+                modelContext: source.container.mainContext,
+                modelContainer: source.container
+            )
+
+            do {
+                let payload = try sourceRepository.exportAllData()
+                try targetRepository.importAllData(payload)
+                logger.info("Migrated data into user-scoped store from \(source.label, privacy: .public)")
+                return
+            } catch {
+                logger.error("Failed to migrate data from \(source.label, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
         }
+    }
+
+    private func candidateMigrationSources(
+        for targetScope: DataScope,
+        currentScope: DataScope
+    ) -> [(label: String, container: ModelContainer)] {
+        var sources: [(label: String, container: ModelContainer)] = []
+
+        if let legacyContainer = Self.makeLegacyDefaultModelContainer() {
+            sources.append(("legacy_default", legacyContainer))
+        }
+
+        if case .guest = currentScope,
+           case .user = targetScope,
+           let guestContainer = Self.makeModelContainer(for: .guest) {
+            sources.append(("guest_scope", guestContainer))
+        }
+
+        return sources
     }
 
     private static func exportedModelCount(in container: ModelContainer) -> Int {
@@ -440,6 +474,25 @@ struct millioApp: App {
                 AppLogger.log(.error, category: "App", "Background backup failed: \(error.localizedDescription)")
             }
         }
+    }
+
+    @MainActor
+    private func presentRestoreFlowIfNeeded() async {
+        guard let diContainer, let activeModelContainer else { return }
+
+        let localDataCount = Self.exportedModelCount(in: activeModelContainer)
+        let latestBackupInfo = await diContainer.backupManager.lastBackupInfo()
+        let shouldPresentRestore = LaunchRecoveryPolicy.shouldPresentRestore(
+            lifecycle: appState.lifecycle,
+            hasCompletedOnboarding: lifecycleUseCase?.checkOnboardingStatus() ?? false,
+            localDataCount: localDataCount,
+            latestBackupInfo: latestBackupInfo
+        )
+
+        guard shouldPresentRestore else { return }
+        appState.isICloudAvailable = await diContainer.backupManager.isAvailable()
+        appState.lastBackupDate = latestBackupInfo?.date
+        appState.lifecycle = .restoring
     }
 
     @MainActor

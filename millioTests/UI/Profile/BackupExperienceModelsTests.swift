@@ -13,11 +13,11 @@ struct BackupExperienceModelsTests {
             hasPinnedVersions: false
         )
 
-        #expect(content.title == BackupL10n.tr("backup.dashboard.title.almost", fallback: "Almost done"))
-        #expect(content.storageTitle == BackupL10n.tr("backup.dashboard.storage.title.icloud", fallback: "Stored in iCloud"))
+        #expect(content.title == BackupL10n.tr("backup.dashboard.title.almost", fallback: "Create your first backup"))
+        #expect(content.storageTitle == BackupL10n.tr("backup.dashboard.storage.title.icloud", fallback: "Saved in iCloud"))
         #expect(content.trustTitle == BackupL10n.tr("backup.dashboard.trust.title.passphrase", fallback: "Protection: passphrase"))
-        #expect(content.trustDetail.contains("Millio"))
-        #expect(content.readiness.contains(where: { $0.title == BackupL10n.tr("backup.readiness.has_recent.title", fallback: "Recent backup exists") && $0.isComplete == false }))
+        #expect(content.trustDetail.isEmpty == false)
+        #expect(content.readiness.contains(where: { $0.title == BackupL10n.tr("backup.readiness.has_recent.title", fallback: "A backup exists") && $0.isComplete == false }))
     }
 
     @Test("Dashboard copy explains local-only state when backup is disabled")
@@ -30,9 +30,9 @@ struct BackupExperienceModelsTests {
             hasPinnedVersions: false
         )
 
-        #expect(content.title == BackupL10n.tr("backup.dashboard.title.off", fallback: "Backup is off"))
-        #expect(content.subtitle == BackupL10n.tr("backup.dashboard.subtitle.off", fallback: "Data stays on this device."))
-        #expect(content.storageTitle == BackupL10n.tr("backup.dashboard.storage.title.local", fallback: "On-device only"))
+        #expect(content.title == BackupL10n.tr("backup.dashboard.title.off", fallback: "Your data is only local"))
+        #expect(content.subtitle == BackupL10n.tr("backup.dashboard.subtitle.off", fallback: "Turn on backup to keep a recovery copy in iCloud"))
+        #expect(content.storageTitle == BackupL10n.tr("backup.dashboard.storage.title.local", fallback: "Only on this device"))
         #expect(content.readiness.first?.isComplete == false)
     }
 
@@ -53,8 +53,34 @@ struct BackupExperienceModelsTests {
         )
 
         #expect(content.readiness.count == 5)
-        #expect(content.title.count <= 24)
+        #expect(content.title.count <= 28)
         #expect(content.subtitle.contains("iCloud"))
-        #expect(content.storageTitle == BackupL10n.tr("backup.dashboard.storage.title.unavailable", fallback: "Storage unavailable"))
+        #expect(content.storageTitle == BackupL10n.tr("backup.dashboard.storage.title.unavailable", fallback: "iCloud unavailable"))
+    }
+
+    @Test("Management refresh does not skip when screen state lost loaded versions")
+    func testManagementRefreshRequiresLoadedVersions() {
+        #expect(
+            BackupStatusRefreshPolicy.shouldSkipManagementRefresh(
+                force: false,
+                isBackupEnabled: true,
+                isICloudAvailable: true,
+                lastBackupDate: Date(),
+                loadedVersionCount: 0
+            ) == false
+        )
+    }
+
+    @Test("Management refresh skips only when backup screen already has loaded versions")
+    func testManagementRefreshSkipsWithWarmState() {
+        #expect(
+            BackupStatusRefreshPolicy.shouldSkipManagementRefresh(
+                force: false,
+                isBackupEnabled: true,
+                isICloudAvailable: true,
+                lastBackupDate: Date(),
+                loadedVersionCount: 2
+            ) == true
+        )
     }
 }

@@ -49,6 +49,8 @@ struct CashflowTransactionEditorView: View {
     @State private var availableCurrencies: [String] = []
     @State private var isLoadingCurrencies: Bool = false
     @State private var isAmountOverBalance: Bool = false
+    @State private var isSavingTransaction: Bool = false
+    @State private var showSaveErrorAlert: Bool = false
     @State private var validationTask: Task<Void, Never>? = nil
     
     @State private var showCurrencyPicker: Bool = false
@@ -56,6 +58,7 @@ struct CashflowTransactionEditorView: View {
     @State private var showCategorySheet: Bool = false
     @State private var showRecurrenceRulePicker: Bool = false
     @State private var showCryptoProAlert: Bool = false
+    @State private var showAffectBalanceHelpAlert: Bool = false
     @FocusState private var isAmountFieldFocused: Bool
 
     private let primarySecondaryText = Color.white.opacity(0.78)
@@ -192,12 +195,52 @@ struct CashflowTransactionEditorView: View {
                 } label: {
                     Image(systemName: "checkmark")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(isValid ? Color(hex: "6DFFC7") : AppColors.textSecondary.opacity(0.6))
+                        .foregroundStyle((isValid && !isSavingTransaction) ? Color(hex: "6DFFC7") : AppColors.textSecondary.opacity(0.6))
                         .frame(width: 44, height: 44)
                 }
-                .disabled(!isValid)
+                .disabled(!isValid || isSavingTransaction)
                 .buttonStyle(.plain)
             }
+        }
+        .alert(
+            String(
+                localized: "cashflow.editor.save_failed.title",
+                defaultValue: "Could not save transaction",
+                comment: "Title for failed cashflow transaction save alert"
+            ),
+            isPresented: $showSaveErrorAlert
+        ) {
+            Button(
+                String(
+                    localized: "cashflow.common.ok",
+                    defaultValue: "OK",
+                    comment: "Confirmation button title"
+                ),
+                role: .cancel
+            ) {}
+        } message: {
+            Text(
+                String(
+                    localized: "cashflow.editor.save_failed.message",
+                    defaultValue: "The transaction was not saved. Check the selected account, date, and available balance, then try again.",
+                    comment: "Message for failed cashflow transaction save alert"
+                )
+            )
+        }
+        .alert(
+            autoApplyToggleTitle,
+            isPresented: $showAffectBalanceHelpAlert
+        ) {
+            Button(
+                String(
+                    localized: "cashflow.common.ok",
+                    defaultValue: "OK",
+                    comment: "Confirmation button title"
+                ),
+                role: .cancel
+            ) {}
+        } message: {
+            Text(autoApplyToggleHelpMessage)
         }
         .onAppear {
             loadAvailableCurrencies()
@@ -468,37 +511,9 @@ struct CashflowTransactionEditorView: View {
                         FinancesRowDivider()
                     } else {
                         FinancesRowDivider()
+                        standaloneCurrencyRow
+                        FinancesRowDivider()
                     }
-
-                    HStack {
-                        Text("cashflow.editor.currency")
-                            .foregroundStyle(AppColors.textPrimary)
-                        Spacer()
-                        if isLoadingCurrencies {
-                            ProgressView()
-                                .scaleEffect(0.8)
-                                .tint(AppColors.textTertiary)
-                        } else {
-                            Button {
-                                showCurrencyPicker = true
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Text(selectedCurrency)
-                                        .font(.system(size: 17))
-                                        .foregroundStyle(AppColors.textPrimary)
-                                    
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundStyle(AppColors.textTertiary)
-                                }
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 16)
-
-                    FinancesRowDivider()
 
                     HStack {
                         Text("cashflow.editor.date")
@@ -513,6 +528,36 @@ struct CashflowTransactionEditorView: View {
                 }
             }
         }
+    }
+
+    private var standaloneCurrencyRow: some View {
+        HStack {
+            Text("cashflow.editor.currency")
+                .foregroundStyle(AppColors.textPrimary)
+            Spacer()
+            if isLoadingCurrencies {
+                ProgressView()
+                    .scaleEffect(0.8)
+                    .tint(AppColors.textTertiary)
+            } else {
+                Button {
+                    showCurrencyPicker = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(selectedCurrency)
+                            .font(.system(size: 17))
+                            .foregroundStyle(AppColors.textPrimary)
+
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppColors.textTertiary)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 16)
     }
 
     private var selectedCategorySummarySection: some View {
@@ -581,76 +626,169 @@ struct CashflowTransactionEditorView: View {
 
     @ViewBuilder
     private var incomeExpenseCardContent: some View {
-        if selectableAccountsForCurrentSelection.isEmpty {
-            VStack(spacing: 10) {
-                Text("cashflow.editor.no_cards_in_currency")
-                    .font(.system(size: 14))
-                    .foregroundStyle(AppColors.textTertiary)
-                    .frame(maxWidth: .infinity, alignment: .center)
+        VStack(spacing: 10) {
+            compactCurrencyAndAccountRow
 
-                Button {
-                    openFinancesAddCard()
-                } label: {
-                    Text("cashflow.editor.add_card_in_finances")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(Color.white.opacity(0.08))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                                )
-                        )
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.vertical, 14)
-            .padding(.horizontal, 16)
-        } else {
-            HStack {
-                Text("cashflow.editor.card")
-                    .foregroundStyle(AppColors.textPrimary)
-                    .layoutPriority(1)
-                Spacer()
-                Picker(String(localized: "cashflow.editor.card"), selection: Binding(
-                    get: { selectedAccountPickerID },
-                    set: { updateSelectedAccount(using: $0) }
-                )) {
-                    Text("cashflow.editor.select_card").tag("")
-                    ForEach(selectableAccountsForCurrentSelection) { account in
-                        Text(account.title).tag(account.id)
+            if selectableAccountsForCurrentSelection.isEmpty {
+                VStack(spacing: 10) {
+                    Text("cashflow.editor.no_cards_in_currency")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(AppColors.textTertiary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, alignment: .center)
+
+                    Button {
+                        openFinancesAddCard()
+                    } label: {
+                        Text("cashflow.editor.add_card_in_finances")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(Color.white.opacity(0.08))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                    )
+                            )
                     }
+                    .buttonStyle(.plain)
                 }
-                .tint(AppColors.textTertiary)
-                .lineLimit(1)
-                .truncationMode(.tail)
             }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 16)
 
             if shouldValidateBalance, let availableText = availableBalanceText {
-                FinancesRowDivider()
                 Text(availableText)
-                    .font(.caption)
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(AppColors.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 16)
             }
 
             if isAmountOverBalance {
-                FinancesRowDivider()
                 Text("cashflow.editor.insufficient_funds")
-                    .font(.caption)
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(AppColors.error)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 16)
             }
         }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+    }
+
+    private var compactCurrencyAndAccountRow: some View {
+        HStack(spacing: 10) {
+            compactSelectorButton(
+                title: String(localized: "cashflow.editor.currency"),
+                value: selectedCurrency,
+                isLoading: isLoadingCurrencies
+            ) {
+                showCurrencyPicker = true
+            }
+
+            compactAccountSelector
+        }
+    }
+
+    private var compactAccountSelector: some View {
+        Menu {
+            ForEach(selectableAccountsForCurrentSelection) { account in
+                Button(account.pickerTitle) {
+                    updateSelectedAccount(using: account.id)
+                }
+            }
+        } label: {
+            compactSelectorLabel(
+                title: compactAccountLabel,
+                value: selectedAccountTitle,
+                usesPlaceholderStyle: selectableAccountsForCurrentSelection.isEmpty || selectedAccountPickerID.isEmpty
+            )
+        }
+        .disabled(selectableAccountsForCurrentSelection.isEmpty)
+        .opacity(selectableAccountsForCurrentSelection.isEmpty ? 0.55 : 1)
+        .frame(maxWidth: .infinity)
+    }
+
+    private func compactSelectorButton(
+        title: String,
+        value: String,
+        isLoading: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            if isLoading {
+                compactSelectorLabel(
+                    title: title,
+                    customValue: {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                            .tint(AppColors.textTertiary)
+                    }
+                )
+            } else {
+                compactSelectorLabel(title: title, value: value)
+            }
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
+    }
+
+    private func compactSelectorLabel<CustomValue: View>(
+        title: String,
+        value: String? = nil,
+        usesPlaceholderStyle: Bool = false,
+        @ViewBuilder customValue: () -> CustomValue = { EmptyView() }
+    ) -> some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppColors.textTertiary)
+                    .textCase(.uppercase)
+                    .lineLimit(1)
+
+                if let value {
+                    Text(value)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(usesPlaceholderStyle ? AppColors.textSecondary : AppColors.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                } else {
+                    customValue()
+                }
+            }
+
+            Spacer(minLength: 6)
+
+            Image(systemName: "chevron.down")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(AppColors.textTertiary.opacity(0.9))
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                )
+        )
+    }
+
+    private var compactAccountLabel: String {
+        selectedTransactionType == .income
+            ? String(localized: "cashflow.editor.account")
+            : String(localized: "cashflow.editor.card")
+    }
+
+    private var selectedAccountTitle: String {
+        if let selected = selectableAccountsForCurrentSelection.first(where: { $0.id == selectedAccountPickerID }) {
+            return selected.pickerTitle
+        }
+        return selectedTransactionType == .income
+            ? String(localized: "cashflow.editor.select_account")
+            : String(localized: "cashflow.editor.select_card")
     }
 
     @ViewBuilder
@@ -674,7 +812,7 @@ struct CashflowTransactionEditorView: View {
                 )) {
                     Text("cashflow.editor.select_card").tag("")
                     ForEach(transferCardOptions.filter { $0.cardID != selectedToCardID }) { account in
-                        Text(account.title).tag(account.cardID ?? "")
+                        Text(account.pickerTitle).tag(account.cardID ?? "")
                     }
                 }
                 .tint(AppColors.textTertiary)
@@ -717,7 +855,7 @@ struct CashflowTransactionEditorView: View {
                 )) {
                     Text("cashflow.editor.select_card").tag("")
                     ForEach(transferCardOptions.filter { $0.cardID != selectedCardID }) { account in
-                        Text(account.title).tag(account.cardID ?? "")
+                        Text(account.pickerTitle).tag(account.cardID ?? "")
                     }
                 }
                 .tint(AppColors.textTertiary)
@@ -733,14 +871,19 @@ struct CashflowTransactionEditorView: View {
         Toggle(
             isOn: $shouldAffectCardBalance,
             label: {
-                VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .center, spacing: 6) {
                     Text(autoApplyToggleTitle)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
 
-                    Text(autoApplyToggleSubtitle)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(AppColors.textSecondary)
+                    Button {
+                        showAffectBalanceHelpAlert = true
+                    } label: {
+                        Image(systemName: "questionmark.circle")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(AppColors.textSecondary)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         )
@@ -751,20 +894,17 @@ struct CashflowTransactionEditorView: View {
     }
 
     private var autoApplyToggleTitle: String {
-        switch LanguageManager.shared.currentLanguage {
-        case .russian:
-            return "Списывать автоматически в дату операции"
-        case .english, .system:
-            return "Auto apply on operation date"
-        }
+        String(localized: "cashflow.bulk_expense.affect_balance")
     }
 
-    private var autoApplyToggleSubtitle: String {
-        switch LanguageManager.shared.currentLanguage {
-        case .russian:
-            return "Выключи, если хочешь выполнить операцию вручную без автосписания по дате."
-        case .english, .system:
-            return "Turn off to keep this operation manual, without automatic balance change on date."
+    private var autoApplyToggleHelpMessage: String {
+        switch selectedTransactionType {
+        case .income:
+            return String(localized: "cashflow.editor.affect_balance.subtitle.income")
+        case .expense:
+            return String(localized: "cashflow.editor.affect_balance.subtitle.expense")
+        default:
+            return String(localized: "cashflow.editor.affect_balance.subtitle.expense")
         }
     }
 
@@ -825,6 +965,7 @@ struct CashflowTransactionEditorView: View {
         Self.selectableAccounts(
             cards: viewModel.state.availableCards,
             investments: viewModel.state.availableInvestments,
+            financeAccounts: viewModel.state.availableFinanceAccounts,
             transactionType: selectedTransactionType,
             currency: selectedCurrency
         )
@@ -844,6 +985,7 @@ struct CashflowTransactionEditorView: View {
         Self.selectableAccounts(
             cards: viewModel.state.availableCards,
             investments: [],
+            financeAccounts: viewModel.state.availableFinanceAccounts,
             transactionType: .transfer,
             currency: selectedCurrency
         )
@@ -1006,12 +1148,23 @@ struct CashflowTransactionEditorView: View {
         transaction.recurrenceSeriesID = resolvedRecurrenceSeriesID
         transaction.affectsCardBalance = showsAffectCardBalanceToggle ? shouldAffectCardBalance : true
 
-        viewModel.handle(.updateTransaction(transaction))
-        fireSuccessHaptic()
-        if let onSave {
-            onSave()
-        } else {
-            dismiss()
+        isSavingTransaction = true
+        Task {
+            let didSave = await viewModel.persistTransaction(transaction)
+            await MainActor.run {
+                isSavingTransaction = false
+                guard didSave else {
+                    showSaveErrorAlert = true
+                    return
+                }
+
+                fireSuccessHaptic()
+                if let onSave {
+                    onSave()
+                } else {
+                    dismiss()
+                }
+            }
         }
     }
 
@@ -1050,7 +1203,11 @@ struct CashflowTransactionEditorView: View {
         }
 
         let formatted = formatNumberForDisplay(card.balance)
-        return "Available: \(formatted) \(card.currency)"
+        return String(
+            format: String(localized: "cashflow.editor.available_format"),
+            formatted,
+            card.currency
+        )
     }
 
     private func parseAmount() -> Double? {
@@ -1176,9 +1333,9 @@ extension CashflowTransactionEditorView {
     static func mainInfoRows(for transactionType: CashflowTransactionType) -> [CashflowEditorMainInfoRow] {
         switch transactionType {
         case .income, .expense:
-            return [.amount, .fromCard, .currency, .date]
+            return [.amount, .currency, .fromCard, .date]
         case .transfer:
-            return [.amount, .fromCard, .toCard, .currency, .date]
+            return [.amount, .currency, .fromCard, .toCard, .date]
         case .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
             return [.amount, .currency, .date]
         }
@@ -1187,12 +1344,14 @@ extension CashflowTransactionEditorView {
     static func selectableAccounts(
         cards: [Card],
         investments: [Investment],
+        financeAccounts: [FinanceAccount] = [],
         transactionType: CashflowTransactionType,
         currency: String
     ) -> [CashflowSelectableAccount] {
         CashflowSelectableAccountResolver.options(
             cards: cards,
             investments: investments,
+            financeAccounts: financeAccounts,
             transactionType: transactionType,
             currency: currency
         )
@@ -1429,29 +1588,24 @@ private struct CashflowRecurrenceRulePickerSheet: View {
     @Binding var selection: CashflowRecurrenceRule
     @Environment(\.dismiss) private var dismiss
 
+    private let recurringRules: [CashflowRecurrenceRule] = [
+        .monthly,
+        .quarterly,
+        .semiannual,
+        .yearly
+    ]
+
     var body: some View {
         NavigationStack {
             List {
-                ForEach(CashflowRecurrenceRule.allCases, id: \.self) { rule in
-                    Button {
-                        selection = rule
-                        dismiss()
-                    } label: {
-                        HStack {
-                            Text(rule.displayName)
-                                .foregroundStyle(AppColors.textPrimary)
-                            Spacer()
-                            if selection == rule {
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(AppColors.textPrimary)
-                            }
-                        }
-                        .contentShape(Rectangle())
+                Section {
+                    recurrenceRow(for: .none)
+                }
+
+                Section {
+                    ForEach(recurringRules, id: \.self) { rule in
+                        recurrenceRow(for: rule)
                     }
-                    .buttonStyle(.plain)
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
                 }
             }
             .listStyle(.plain)
@@ -1470,6 +1624,28 @@ private struct CashflowRecurrenceRulePickerSheet: View {
         }
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
+    }
+
+    private func recurrenceRow(for rule: CashflowRecurrenceRule) -> some View {
+        Button {
+            selection = rule
+            dismiss()
+        } label: {
+            HStack {
+                Text(rule.displayName)
+                    .foregroundStyle(AppColors.textPrimary)
+                Spacer()
+                if selection == rule {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
     }
 }
 

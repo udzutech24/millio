@@ -27,6 +27,7 @@ struct CashflowLocalizationRegressionTests {
         #expect(AppLocalization.string("cashflow.editor.transaction_type", locale: locale) == "Тип операции")
         #expect(AppLocalization.string("cashflow.operation.total", locale: locale) == "Итого")
         #expect(AppLocalization.string("cashflow.scheduled.monthly_badge", locale: locale) == "Ежемесячно")
+        #expect(AppLocalization.string("cashflow.scheduled.section.recurring", locale: locale) == "Регулярно")
         #expect(AppLocalization.string("cashflow.scheduled.planner_expenses", locale: locale) == "Планировщик платежей")
         #expect(AppLocalization.string("cashflow.scheduled.display.calendar", locale: locale) == "Календарь")
         #expect(AppLocalization.string("cashflow.scheduled.display.list", locale: locale) == "Список")
@@ -36,6 +37,11 @@ struct CashflowLocalizationRegressionTests {
         #expect(AppLocalization.string("cashflow.scheduled.day_agenda.empty.add_here", locale: locale) == "Добавить")
         #expect(AppLocalization.string("cashflow.editor.category_sheet.title.expense", locale: locale) == "Категории расходов")
         #expect(AppLocalization.string("cashflow.editor.category_sheet.create.expense", locale: locale) == "Создать категорию расходов")
+        #expect(AppLocalization.string("cashflow.editor.account", locale: locale) == "Счет")
+        #expect(AppLocalization.string("cashflow.editor.affect_balance.subtitle.expense", locale: locale) == "Выключи, если текущий остаток уже верный и нужно только дозанести траты за выбранный период в историю")
+        #expect(AppLocalization.string("cashflow.recurrence.quarterly", locale: locale) == "Каждые 3 месяца")
+        #expect(AppLocalization.string("cashflow.recurrence.semiannual", locale: locale) == "Каждые 6 месяцев")
+        #expect(AppLocalization.string("cashflow.recurrence.yearly", locale: locale) == "Каждый год")
 
         #expect(AppLocalization.string("Income", locale: locale) == "Доход")
         #expect(AppLocalization.string("Expense", locale: locale) == "Расход")
@@ -62,6 +68,17 @@ struct CashflowLocalizationRegressionTests {
         #expect(AppLocalization.string("Result", locale: locale) == "Результат")
         #expect(AppLocalization.string("Week", locale: locale) == "Неделя")
         #expect(AppLocalization.string("Visible range", locale: locale) == "Диапазон")
+    }
+
+    @Test("English locale contains new compact cashflow helper copy")
+    func englishLocaleHasNewCashflowHelperTranslations() {
+        let locale = Locale(identifier: "en_US")
+
+        #expect(AppLocalization.string("cashflow.editor.account", locale: locale) == "Account")
+        #expect(AppLocalization.string("cashflow.editor.affect_balance.subtitle.expense", locale: locale) == "Turn off if the current balance is already correct and you only need to backfill expense history for the selected period")
+        #expect(AppLocalization.string("cashflow.recurrence.quarterly", locale: locale) == "Every 3 months")
+        #expect(AppLocalization.string("cashflow.recurrence.semiannual", locale: locale) == "Every 6 months")
+        #expect(AppLocalization.string("cashflow.recurrence.yearly", locale: locale) == "Every year")
     }
 
     @Test("Period title uses localized quarter format")

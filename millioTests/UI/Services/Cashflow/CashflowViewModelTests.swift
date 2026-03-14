@@ -145,6 +145,18 @@ extension CashflowViewModelTests {
         #expect(viewModel.state.displayCurrency == "USD")
     }
 
+    @Test("CashflowViewModel подтягивает текущую primary валюту при повторном открытии модуля")
+    func testSyncDisplayCurrencyWithPrimaryRefreshesStaleDisplayCurrency() throws {
+        let modelContext = try createTestModelContext()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+        #expect(viewModel.state.displayCurrency == "RUB")
+
+        viewModel.handle(.syncDisplayCurrencyWithPrimary("USD"))
+
+        #expect(viewModel.state.displayCurrency == "USD")
+    }
+
     @Test("Расход не превышает доступный баланс карты")
     func testExpenseCannotExceedBalance() async throws {
         let modelContext = try createTestModelContext()
@@ -808,6 +820,18 @@ extension CashflowViewModelTests {
         #expect(!options.contains(where: { $0.rawValue == ExpenseCategory.shopping.rawValue }))
     }
 
+    @Test("Категорию Другое в доходах нельзя удалить")
+    func testCannotDeleteIncomeFallbackCategory() throws {
+        let modelContext = try createTestModelContext()
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+
+        #expect(!viewModel.canDeleteCategory(rawValue: IncomeCategory.other.rawValue, kind: .income))
+        #expect(!viewModel.deleteCategory(rawValue: IncomeCategory.other.rawValue, kind: .income))
+
+        let options = viewModel.categoryOptions(for: .income)
+        #expect(options.contains(where: { $0.rawValue == IncomeCategory.other.rawValue }))
+    }
+
     @Test("Ежемесячный автоповтор создаёт пропущенные операции и не дублирует месяцы")
     func testMonthlyRecurringGeneratesMissingTransactions() async throws {
         let modelContext = try createTestModelContext()
@@ -909,6 +933,47 @@ extension CashflowViewModelTests {
 
         #expect(dayByMonth.map(\.month) == [1, 2, 3])
         #expect(dayByMonth.map(\.day) == [31, 28, 31])
+    }
+
+    @Test("Квартальный автоповтор создаёт только квартальные вхождения")
+    func testQuarterlyRecurringGeneratesQuarterlyTransactions() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 10, day: 5)) ?? Date()
+        let template = CashflowTransaction(
+            transactionType: .income,
+            amount: 500,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 1, day: 31)) ?? fixedNow,
+            incomeCategory: .business,
+            recurrenceRule: .quarterly,
+            recurrenceSeriesID: "series-quarterly-income"
+        )
+        modelContext.insert(template)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        viewModel.handle(.loadTransactions)
+
+        try await waitUntil(timeoutNanoseconds: 5_000_000_000) {
+            viewModel.state.transactions.count == 3
+        }
+
+        let monthDayPairs = viewModel.state.transactions
+            .map {
+                (
+                    month: calendar.component(.month, from: $0.transactionDate),
+                    day: calendar.component(.day, from: $0.transactionDate)
+                )
+            }
+            .sorted { $0.month < $1.month }
+
+        #expect(monthDayPairs.map(\.month) == [1, 4, 7])
+        #expect(monthDayPairs.map(\.day) == [31, 30, 31])
+
+        let nextOccurrence = viewModel.nextOccurrenceDate(for: template, relativeTo: fixedNow)
+        #expect(calendar.component(.month, from: nextOccurrence ?? fixedNow) == 10)
+        #expect(calendar.component(.day, from: nextOccurrence ?? fixedNow) == 31)
     }
 
     @Test("Регулярные шаблоны фильтруются по типу и сортируются по ближайшей дате")
@@ -1330,6 +1395,83 @@ extension CashflowViewModelTests {
         try await Task.sleep(nanoseconds: 400_000_000)
 
         #expect(abs(card.balance - 1_000) < 0.01)
+    }
+
+    @Test("Ручной расход за прошлый месяц сохраняется без изменения баланса")
+    func testManualPastExpensePersistsWithoutBalanceChange() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 14, hour: 12)) ?? Date()
+        let pastDate = calendar.date(from: DateComponents(year: 2026, month: 2, day: 20, hour: 9)) ?? fixedNow
+
+        let card = Card(
+            name: "Archive",
+            cardNumber: "4455",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 12_000
+        )
+        modelContext.insert(card)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        let expense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 1_750,
+            currency: "RUB",
+            transactionDate: pastDate,
+            cardID: card.cardUniqueID,
+            expenseCategory: .cafe,
+            affectsCardBalance: false
+        )
+
+        let didSave = await viewModel.persistTransaction(expense)
+
+        #expect(didSave)
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            viewModel.state.transactions.contains {
+                $0.cardID == card.cardUniqueID
+                    && abs($0.amount - 1_750) < 0.01
+                    && Calendar.current.isDate($0.transactionDate, inSameDayAs: pastDate)
+                    && $0.affectsCardBalance == false
+            }
+        }
+        #expect(abs(card.balance - 12_000) < 0.01)
+    }
+
+    @Test("Сохранение расхода возвращает false, если не хватает денег на карте")
+    func testPersistTransactionFailsWhenFundsAreInsufficient() async throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 14, hour: 12)) ?? Date()
+
+        let card = Card(
+            name: "Main",
+            cardNumber: "7788",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 500
+        )
+        modelContext.insert(card)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        let expense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 1_200,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: card.cardUniqueID,
+            expenseCategory: .groceries,
+            affectsCardBalance: true
+        )
+
+        let didSave = await viewModel.persistTransaction(expense)
+
+        #expect(didSave == false)
+        #expect(viewModel.state.transactions.isEmpty)
+        #expect(abs(card.balance - 500) < 0.01)
     }
 
     @Test("Удаление операции исключает ее из регулярных и запланированных списков")

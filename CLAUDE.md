@@ -93,9 +93,9 @@ final class ViewModel: ObservableObject {
 ## Backup/Restore — фактическое поведение
 
 - Backup запускается **руками** в профиле.
-- Backup хранится в **CloudKit Private DB** (`AppBackup` / `latest_backup`).
+- Backup хранится в **CloudKit Private DB** (`AppBackup` snapshot history + legacy `latest_backup`).
 - Restore запускается **вручную** из профиля (экран `RestoreView`).
-- Авто-restore при старте **не используется** (есть задел в `AppLifecycleUseCase`).
+- Авто-restore как silent-операция при старте не используется, но launch-time recovery flow должен переводить пользователя в экран восстановления, если локальный store пуст, а backup найден.
 - В профиле есть экран управления backup: включение, статус, ручной backup/restore, выбор режима шифрования.
 - Шифрование backup поддерживает режимы **device-key** (Keychain) и **passphrase** (переносимый backup).
 - В Release ошибки backup/restore отправляются как non-fatal в Crashlytics через `CrashReporting.record(error:)`.

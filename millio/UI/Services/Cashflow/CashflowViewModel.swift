@@ -78,6 +78,9 @@ struct CashflowState {
     /// Доступные счета из инвестиций для выбора в доходах.
     var availableInvestments: [Investment] = []
 
+    /// Связи счетов, реально добавленных в Финансы.
+    var availableFinanceAccounts: [FinanceAccount] = []
+
     /// Пользовательские категории операций
     var customCategories: [CashflowCustomCategory] = []
 
@@ -155,6 +158,15 @@ struct CashflowState {
 
     /// Конвертированные доходы/расходы по операциям для агрегированного графика
     var convertedTransactions: [CashflowConvertedTransaction] = []
+
+    /// Активный бюджет для текущего периода.
+    var activeBudgetPlan: BudgetPlan? = nil
+
+    /// Лимиты категорий активного бюджета.
+    var activeBudgetCategoryLimits: [BudgetCategoryLimit] = []
+
+    /// Сводка прогресса бюджета для текущего периода.
+    var budgetSnapshot: BudgetProgressSnapshot? = nil
     
     /// Флаг загрузки данных
     var isLoading: Bool = false
@@ -285,6 +297,7 @@ enum CashflowAction {
     case showCurrencySelector
     case hideCurrencySelector
     case setDisplayCurrency(String)
+    case syncDisplayCurrencyWithPrimary(String)
     case syncPrimaryCurrencyChange(old: String, new: String)
     case loadCards
 }
@@ -329,9 +342,11 @@ final class CashflowViewModel: ViewModelProtocol {
         resetToDefaultPeriodInternal(referenceDate: nowDate)
         loadCards()
         loadInvestments()
+        loadFinanceAccounts()
         loadTransactions()
         loadCustomCategories()
         loadSystemCategoryOverrides()
+        loadBudgetPlanForCurrentPeriod()
         loadAvailableCurrencies()
         subscribeToFinanceEvents()
     }
@@ -353,6 +368,7 @@ final class CashflowViewModel: ViewModelProtocol {
             // Обновляем список карт перед открытием редактора, чтобы видеть актуальные данные
             loadCards()
             loadInvestments()
+            loadFinanceAccounts()
             state.creatingTransactionType = type
             state.editingTransaction = nil
             state.showTransactionEditor = true
@@ -361,6 +377,7 @@ final class CashflowViewModel: ViewModelProtocol {
             // Обновляем список карт перед редактированием на случай изменений в финансах
             loadCards()
             loadInvestments()
+            loadFinanceAccounts()
             state.editingTransaction = transaction
             state.creatingTransactionType = nil
             state.showTransactionEditor = true
@@ -388,10 +405,12 @@ final class CashflowViewModel: ViewModelProtocol {
             
         case .setChartPeriod(let period):
             state.chartPeriod = period
+            loadBudgetPlanForCurrentPeriod()
             updateChartData()
 
         case .resetToDefaultPeriod:
             resetToDefaultPeriodInternal(referenceDate: now())
+            loadBudgetPlanForCurrentPeriod()
             updateChartData()
 
         case .setCustomPeriod(let start, let end):
@@ -399,21 +418,25 @@ final class CashflowViewModel: ViewModelProtocol {
             state.customStartDate = calendar.startOfDay(for: start)
             state.customEndDate = calendar.startOfDay(for: end)
             state.chartPeriod = .custom
+            loadBudgetPlanForCurrentPeriod()
             updateChartData()
             
         case .setSelectedMonth(let date):
             state.selectedMonth = date
             state.chartPeriod = .specificMonth
+            loadBudgetPlanForCurrentPeriod()
             updateChartData()
             
         case .setSelectedQuarter(let date):
             state.selectedQuarter = date
             state.chartPeriod = .specificQuarter
+            loadBudgetPlanForCurrentPeriod()
             updateChartData()
             
         case .setSelectedYear(let date):
             state.selectedYear = date
             state.chartPeriod = .specificYear
+            loadBudgetPlanForCurrentPeriod()
             updateChartData()
             
         case .showPeriodSelector:
@@ -436,6 +459,13 @@ final class CashflowViewModel: ViewModelProtocol {
             
         case .setDisplayCurrency(let currency):
             state.displayCurrency = currency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            updateChartData()
+
+        case .syncDisplayCurrencyWithPrimary(let primaryCurrency):
+            let normalized = primaryCurrency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            guard !normalized.isEmpty else { return }
+            guard state.displayCurrency != normalized else { return }
+            state.displayCurrency = normalized
             updateChartData()
 
         case .syncPrimaryCurrencyChange(let old, let new):
@@ -513,6 +543,98 @@ final class CashflowViewModel: ViewModelProtocol {
         state.availableInvestments = allInvestments.filter { $0.archivedAt == nil }
     }
 
+    private func loadBudgetPlanForCurrentPeriod() {
+        let descriptor = currentBudgetPeriodDescriptor()
+        let budgetFetch = FetchDescriptor<BudgetPlan>(
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+        let plans = (try? modelContext.fetch(budgetFetch)) ?? []
+        let activePlan = plans.first(where: { $0.matches(descriptor) })
+        state.activeBudgetPlan = activePlan
+        if let activePlan {
+            state.activeBudgetCategoryLimits = fetchBudgetCategoryLimits(for: activePlan.budgetID)
+        } else {
+            state.activeBudgetCategoryLimits = []
+        }
+    }
+
+    private func fetchBudgetCategoryLimits(for budgetID: String) -> [BudgetCategoryLimit] {
+        let descriptor = FetchDescriptor<BudgetCategoryLimit>(
+            predicate: #Predicate { $0.budgetID == budgetID },
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+        return (try? modelContext.fetch(descriptor)) ?? []
+    }
+
+    private func fetchBudgetPlan(matching descriptor: BudgetPeriodDescriptor) -> BudgetPlan? {
+        let budgetFetch = FetchDescriptor<BudgetPlan>(
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+        let plans = (try? modelContext.fetch(budgetFetch)) ?? []
+        return plans.first(where: { $0.matches(descriptor) })
+    }
+
+    private func currentBudgetPeriodDescriptor(calendar: Calendar = .current) -> BudgetPeriodDescriptor {
+        let range = getDateRange()
+        let start = calendar.startOfDay(for: min(range.0, range.1))
+        let end = calendar.startOfDay(for: max(range.0, range.1))
+
+        switch state.chartPeriod {
+        case .year, .specificYear:
+            return BudgetPeriodDescriptor(
+                type: .year,
+                startDate: start,
+                endDate: end,
+                anchorYear: calendar.component(.year, from: state.selectedYear),
+                anchorMonth: 1
+            )
+        case .quarter, .specificQuarter:
+            let month = calendar.component(.month, from: state.selectedQuarter)
+            let quarterStartMonth = ((max(1, month) - 1) / 3) * 3 + 1
+            return BudgetPeriodDescriptor(
+                type: .quarter,
+                startDate: start,
+                endDate: end,
+                anchorYear: calendar.component(.year, from: state.selectedQuarter),
+                anchorMonth: quarterStartMonth
+            )
+        case .custom:
+            return BudgetPeriodDescriptor(
+                type: .custom,
+                startDate: start,
+                endDate: end,
+                anchorYear: calendar.component(.year, from: start),
+                anchorMonth: calendar.component(.month, from: start)
+            )
+        case .month, .specificMonth:
+            return BudgetPeriodDescriptor(
+                type: .month,
+                startDate: start,
+                endDate: end,
+                anchorYear: calendar.component(.year, from: state.selectedMonth),
+                anchorMonth: calendar.component(.month, from: state.selectedMonth)
+            )
+        }
+    }
+
+    private func monthlyBudgetPeriodDescriptor(for month: Date, calendar: Calendar = .current) -> BudgetPeriodDescriptor {
+        let monthStart = Self.monthStart(for: month, calendar: calendar)
+        let monthEnd = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: monthStart) ?? monthStart
+        return BudgetPeriodDescriptor(
+            type: .month,
+            startDate: monthStart,
+            endDate: calendar.startOfDay(for: monthEnd),
+            anchorYear: calendar.component(.year, from: monthStart),
+            anchorMonth: calendar.component(.month, from: monthStart)
+        )
+    }
+
+    private func loadFinanceAccounts() {
+        let descriptor = FetchDescriptor<FinanceAccount>()
+        let allAccounts = (try? modelContext.fetch(descriptor)) ?? []
+        state.availableFinanceAccounts = allAccounts.filter { $0.group != nil }
+    }
+
     private func loadCustomCategories() {
         let descriptor = FetchDescriptor<CashflowCustomCategory>(
             sortBy: [SortDescriptor(\.createdAt, order: .forward)]
@@ -533,14 +655,17 @@ final class CashflowViewModel: ViewModelProtocol {
             switch event {
             case FinanceEvent.cardsUpdated:
                 self.loadCards()
+                self.loadFinanceAccounts()
             case FinanceEvent.investmentsUpdated:
                 self.loadInvestments()
+                self.loadFinanceAccounts()
             case FinanceEvent.transactionsUpdated:
                 self.loadTransactions()
             case BackupEvent.restoreCompleted:
                 self.loadTransactions()
                 self.loadCards()
                 self.loadInvestments()
+                self.loadFinanceAccounts()
                 self.loadCustomCategories()
                 self.loadSystemCategoryOverrides()
             default:
@@ -665,6 +790,7 @@ final class CashflowViewModel: ViewModelProtocol {
     }
     
     private func updateChartDataAsync() async {
+        loadBudgetPlanForCurrentPeriod()
         let (startDate, endDate) = getDateRange()
         let calendar = Calendar.current
         let startDay = calendar.startOfDay(for: startDate)
@@ -676,6 +802,7 @@ final class CashflowViewModel: ViewModelProtocol {
         var totalExpense: Double = 0.0
         var incomeByCategory: [String: Double] = [:]
         var expenseByCategory: [String: Double] = [:]
+        var expenseByCategoryRaw: [String: Double] = [:]
         var incomeByDay: [Date: Double] = [:]
         var expenseByDay: [Date: Double] = [:]
         var convertedTransactions: [CashflowConvertedTransaction] = []
@@ -722,6 +849,8 @@ final class CashflowViewModel: ViewModelProtocol {
                     expenseByDay[day, default: 0.0] += converted
                     let title = expenseCategoryDisplayName(for: transaction.expenseCategoryRaw)
                     expenseByCategory[title, default: 0.0] += converted
+                    let raw = transaction.expenseCategoryRaw ?? ExpenseCategory.other.rawValue
+                    expenseByCategoryRaw[raw, default: 0.0] += converted
                 }
                 
             case .transfer, .balanceAdjustment:
@@ -740,6 +869,19 @@ final class CashflowViewModel: ViewModelProtocol {
         state.expenseBreakdown = expenseByCategory
             .map { CashflowCategoryBreakdownEntry(title: $0.key, convertedAmount: $0.value) }
             .sorted { $0.convertedAmount > $1.convertedAmount }
+        if let plan = state.activeBudgetPlan {
+            state.budgetSnapshot = BudgetProgressCalculator.calculate(
+                totalSpent: totalExpense,
+                totalLimit: plan.totalLimitAmount,
+                categorySpentByRawValue: expenseByCategoryRaw,
+                categoryLimits: state.activeBudgetCategoryLimits,
+                categoryTitleResolver: { [weak self] raw in
+                    self?.expenseCategoryDisplayName(for: raw) ?? raw
+                }
+            )
+        } else {
+            state.budgetSnapshot = nil
+        }
 
         let normalizedStart = startDay
         let normalizedEnd = endDay
@@ -835,6 +977,135 @@ final class CashflowViewModel: ViewModelProtocol {
 
     func monthlyExpenseTotal(for month: Date, in currency: String? = nil) async -> Double {
         await monthlyTotal(for: .expense, month: month, in: currency)
+    }
+
+    func expenseBudgetSummary(
+        for month: Date,
+        in currency: String? = nil
+    ) async -> (plan: BudgetPlan?, snapshot: BudgetProgressSnapshot?, categoryLimits: [String: Double]) {
+        let descriptor = monthlyBudgetPeriodDescriptor(for: month)
+        let targetCurrency = currency ?? state.displayCurrency
+        let plan = fetchBudgetPlan(matching: descriptor)
+        guard let plan else {
+            return (nil, nil, [:])
+        }
+
+        let limits = fetchBudgetCategoryLimits(for: plan.budgetID)
+        let categoryLimits = Dictionary(uniqueKeysWithValues: limits.map { ($0.categoryRawValue, $0.limitAmount) })
+        let totals = await monthlyCategoryTotals(for: .expense, month: month, in: targetCurrency)
+        let totalSpent = totals.values.reduce(0, +)
+        let snapshot = BudgetProgressCalculator.calculate(
+            totalSpent: totalSpent,
+            totalLimit: plan.totalLimitAmount,
+            categorySpentByRawValue: totals,
+            categoryLimits: limits,
+            categoryTitleResolver: { [weak self] raw in
+                self?.expenseCategoryDisplayName(for: raw) ?? raw
+            }
+        )
+        return (plan, snapshot, categoryLimits)
+    }
+
+    func saveMonthlyBudgetConfiguration(
+        month: Date,
+        totalAmount: Double,
+        categoryLimits: [String: Double],
+        currency: String? = nil
+    ) {
+        saveBudgetConfiguration(
+            descriptor: monthlyBudgetPeriodDescriptor(for: month),
+            currencyCode: currency ?? state.displayCurrency,
+            totalAmount: totalAmount,
+            categoryLimits: categoryLimits
+        )
+    }
+
+    func saveBudgetConfiguration(totalAmount: Double, categoryLimits: [String: Double]) {
+        saveBudgetConfiguration(
+            descriptor: currentBudgetPeriodDescriptor(),
+            currencyCode: state.displayCurrency,
+            totalAmount: totalAmount,
+            categoryLimits: categoryLimits
+        )
+    }
+
+    private func saveBudgetConfiguration(
+        descriptor: BudgetPeriodDescriptor,
+        currencyCode: String,
+        totalAmount: Double,
+        categoryLimits: [String: Double]
+    ) {
+        let normalizedTotal = max(0, totalAmount)
+        let normalizedCategoryLimits = categoryLimits
+            .mapValues { max(0, $0) }
+            .filter { $0.value > 0.0000001 }
+
+        let existingPlan = fetchBudgetPlan(matching: descriptor)
+        let plan = existingPlan ?? BudgetPlan(
+            descriptor: descriptor,
+            currencyCode: currencyCode,
+            totalLimitAmount: normalizedTotal,
+            isCategoryBudgetingEnabled: !normalizedCategoryLimits.isEmpty
+        )
+        if existingPlan == nil {
+            modelContext.insert(plan)
+        }
+        plan.apply(
+            descriptor: descriptor,
+            currencyCode: currencyCode,
+            totalLimitAmount: normalizedTotal,
+            isCategoryBudgetingEnabled: !normalizedCategoryLimits.isEmpty
+        )
+
+        let existingLimits = fetchBudgetCategoryLimits(for: plan.budgetID)
+        let existingByRaw = Dictionary(uniqueKeysWithValues: existingLimits.map { ($0.categoryRawValue, $0) })
+
+        for limit in existingLimits where normalizedCategoryLimits[limit.categoryRawValue] == nil {
+            modelContext.delete(limit)
+        }
+
+        for (rawValue, amount) in normalizedCategoryLimits {
+            if let existing = existingByRaw[rawValue] {
+                existing.limitAmount = amount
+                existing.updatedAt = Date()
+            } else {
+                let limit = BudgetCategoryLimit(
+                    budgetID: plan.budgetID,
+                    categoryKind: .expense,
+                    categoryRawValue: rawValue,
+                    limitAmount: amount
+                )
+                modelContext.insert(limit)
+            }
+        }
+
+        try? modelContext.save()
+        loadBudgetPlanForCurrentPeriod()
+        updateChartData()
+    }
+
+    func deleteBudgetLimit() {
+        guard let plan = state.activeBudgetPlan else { return }
+        deleteBudgetPlan(plan)
+    }
+
+    func deleteMonthlyBudgetLimit(month: Date) {
+        let descriptor = monthlyBudgetPeriodDescriptor(for: month)
+        guard let plan = fetchBudgetPlan(matching: descriptor) else { return }
+        deleteBudgetPlan(plan)
+    }
+
+    private func deleteBudgetPlan(_ plan: BudgetPlan) {
+        let limits = fetchBudgetCategoryLimits(for: plan.budgetID)
+        for limit in limits {
+            modelContext.delete(limit)
+        }
+        modelContext.delete(plan)
+        try? modelContext.save()
+        state.activeBudgetPlan = nil
+        state.activeBudgetCategoryLimits = []
+        state.budgetSnapshot = nil
+        updateChartData()
     }
 
     func persistBulkExpenseImport(_ request: CashflowBulkExpensePersistRequest) async throws -> Int {
@@ -1094,13 +1365,13 @@ final class CashflowViewModel: ViewModelProtocol {
                 guard transaction.transactionType == targetType else { return nil }
 
                 if transaction.isRecurringTemplate {
-                    let anchorDay = calendar.component(.day, from: transaction.transactionDate)
-                    let scheduledDate = Self.makeMonthlyDate(
-                        monthStart: monthStart,
-                        day: anchorDay,
-                        calendar: calendar
-                    )
-
+                    let rangeStart = max(baseline, monthStart)
+                    guard let scheduledDate = nextOccurrenceDate(for: transaction, relativeTo: rangeStart) else {
+                        return nil
+                    }
+                    guard calendar.isDate(scheduledDate, equalTo: monthStart, toGranularity: .month) else {
+                        return nil
+                    }
                     guard scheduledDate >= baseline else { return nil }
                     return CashflowScheduledEntry(
                         transaction: transaction,
@@ -1132,24 +1403,22 @@ final class CashflowViewModel: ViewModelProtocol {
 
         let calendar = Calendar.current
         let baseline = calendar.startOfDay(for: referenceDate ?? now())
-        let baselineMonthStart = Self.monthStart(for: baseline, calendar: calendar)
-        let anchorDay = calendar.component(.day, from: template.transactionDate)
-        var candidate = Self.makeMonthlyDate(
-            monthStart: baselineMonthStart,
-            day: anchorDay,
-            calendar: calendar
-        )
+        let templateDate = calendar.startOfDay(for: template.transactionDate)
+        var occurrenceIndex = 0
 
-        if candidate < baseline,
-           let nextMonth = calendar.date(byAdding: .month, value: 1, to: baselineMonthStart) {
-            candidate = Self.makeMonthlyDate(
-                monthStart: nextMonth,
-                day: anchorDay,
-                calendar: calendar
-            )
+        while let candidate = Self.recurrenceOccurrenceDate(
+            templateDate: templateDate,
+            rule: template.recurrenceRule,
+            occurrenceIndex: occurrenceIndex,
+            calendar: calendar
+        ) {
+            if candidate >= baseline {
+                return candidate
+            }
+            occurrenceIndex += 1
         }
 
-        return candidate
+        return nil
     }
 
     private func scheduledTransactionType(for kind: CashflowCategoryKind) -> CashflowTransactionType {
@@ -1363,8 +1632,7 @@ final class CashflowViewModel: ViewModelProtocol {
             }
         }
 
-        let fallbackRaw = fallbackCategoryRaw(for: kind)
-        if rawValue == fallbackRaw {
+        if isProtectedFallbackCategory(rawValue: rawValue, kind: kind) {
             return false
         }
         return baseSystemCategoryOption(for: rawValue, kind: kind) != nil
@@ -1679,7 +1947,6 @@ final class CashflowViewModel: ViewModelProtocol {
 
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: now())
-        let currentMonthStart = Self.monthStart(for: today, calendar: calendar)
         var didInsert = false
         let seriesKey = { (transaction: CashflowTransaction) -> String? in
             guard let recurrenceSeriesID = transaction.recurrenceSeriesID else { return nil }
@@ -1692,34 +1959,28 @@ final class CashflowViewModel: ViewModelProtocol {
                 continue
             }
 
-            switch template.recurrenceRule {
-            case .none:
-                continue
-            case .monthly:
-                break
-            }
+            guard template.recurrenceRule != .none else { continue }
 
             let templateDate = calendar.startOfDay(for: template.transactionDate)
-            let templateMonthStart = Self.monthStart(for: templateDate, calendar: calendar)
-            guard templateMonthStart < currentMonthStart else { continue }
-
-            let anchorDay = calendar.component(.day, from: templateDate)
+            guard templateDate < today else { continue }
             let expectedSeriesKey = "\(templateSeriesID)|\(template.transactionTypeRaw)"
-            var monthCursor = calendar.date(byAdding: .month, value: 1, to: templateMonthStart) ?? templateMonthStart
+            var occurrenceIndex = 1
 
-            while monthCursor <= currentMonthStart {
-                let expectedDate = Self.makeMonthlyDate(
-                    monthStart: monthCursor,
-                    day: anchorDay,
-                    calendar: calendar
-                )
-                if expectedDate > today {
-                    break
+            while let expectedDate = Self.recurrenceOccurrenceDate(
+                templateDate: templateDate,
+                rule: template.recurrenceRule,
+                occurrenceIndex: occurrenceIndex,
+                calendar: calendar
+            ) {
+                guard expectedDate > templateDate else {
+                    occurrenceIndex += 1
+                    continue
                 }
+                if expectedDate > today { break }
 
                 let existsInMonth = allTransactions.contains {
                     guard seriesKey($0) == expectedSeriesKey else { return false }
-                    return Self.isSameMonth($0.transactionDate, expectedDate, calendar: calendar)
+                    return calendar.isDate($0.transactionDate, inSameDayAs: expectedDate)
                 }
 
                 if !existsInMonth {
@@ -1749,11 +2010,7 @@ final class CashflowViewModel: ViewModelProtocol {
                     didInsert = true
                 }
 
-                guard let nextMonth = calendar.date(byAdding: .month, value: 1, to: monthCursor),
-                      nextMonth > monthCursor else {
-                    break
-                }
-                monthCursor = nextMonth
+                occurrenceIndex += 1
             }
         }
 
@@ -2083,7 +2340,29 @@ final class CashflowViewModel: ViewModelProtocol {
         let clampedDay = min(max(day, 1), maxDay)
         return calendar.date(byAdding: .day, value: clampedDay - 1, to: monthStart) ?? monthStart
     }
-    
+
+    private static func recurrenceOccurrenceDate(
+        templateDate: Date,
+        rule: CashflowRecurrenceRule,
+        occurrenceIndex: Int,
+        calendar: Calendar
+    ) -> Date? {
+        guard occurrenceIndex >= 0 else { return nil }
+        guard let monthInterval = rule.monthInterval else { return occurrenceIndex == 0 ? templateDate : nil }
+
+        let monthStart = Self.monthStart(for: templateDate, calendar: calendar)
+        guard let targetMonthStart = calendar.date(
+            byAdding: .month,
+            value: monthInterval * occurrenceIndex,
+            to: monthStart
+        ) else {
+            return nil
+        }
+
+        let anchorDay = calendar.component(.day, from: templateDate)
+        return Self.makeMonthlyDate(monthStart: targetMonthStart, day: anchorDay, calendar: calendar)
+    }
+
     private func convertAmount(value: Double, from: String, to: String) async -> Double {
         if from == to {
             return value
@@ -2254,19 +2533,24 @@ final class CashflowViewModel: ViewModelProtocol {
             AppLogger.log(.error, category: "Cashflow", "Failed to delete transaction without recalculation: \(error.localizedDescription)")
         }
     }
+
+    @discardableResult
+    func persistTransaction(_ transaction: CashflowTransaction) async -> Bool {
+        await updateTransactionAsync(transaction)
+    }
     
-    private func updateTransactionAsync(_ transaction: CashflowTransaction) async {
+    private func updateTransactionAsync(_ transaction: CashflowTransaction) async -> Bool {
         let exchangeInfo = await resolveExchangeInfo(for: transaction)
 
         do {
             let isAvailable = try await canPersistTransaction(transaction, replacing: state.editingTransaction)
             if !isAvailable {
                 AppLogger.log(.warning, category: "Cashflow", "Insufficient funds for transaction")
-                return
+                return false
             }
         } catch {
             AppLogger.log(.error, category: "Cashflow", "Balance validation failed: \(error.localizedDescription)")
-            return
+            return false
         }
         
         if let existing = state.editingTransaction {
@@ -2279,7 +2563,7 @@ final class CashflowViewModel: ViewModelProtocol {
                 }
             } catch {
                 AppLogger.log(.error, category: "Cashflow", "Failed to update card balance effect: \(error.localizedDescription)")
-                return
+                return false
             }
 
             // Обновляем существующую транзакцию
@@ -2330,7 +2614,7 @@ final class CashflowViewModel: ViewModelProtocol {
             } catch {
                 AppLogger.log(.error, category: "Cashflow", "Failed to apply card balance effect: \(error.localizedDescription)")
                 modelContext.delete(newTransaction)
-                return
+                return false
             }
         }
         
@@ -2340,8 +2624,10 @@ final class CashflowViewModel: ViewModelProtocol {
             state.showTransactionEditor = false
             state.editingTransaction = nil
             state.creatingTransactionType = nil
+            return true
         } catch {
             AppLogger.log(.error, category: "Cashflow", "Failed to save transaction: \(error.localizedDescription)")
+            return false
         }
     }
     
@@ -2444,6 +2730,12 @@ final class CashflowViewModel: ViewModelProtocol {
         case .income: return IncomeCategory.other.rawValue
         case .expense: return ExpenseCategory.other.rawValue
         }
+    }
+
+    /// Fallback category is the last-resort bucket for migration and import recovery,
+    /// so deleting it would leave the model without a safe destination.
+    private func isProtectedFallbackCategory(rawValue: String, kind: CashflowCategoryKind) -> Bool {
+        rawValue == fallbackCategoryRaw(for: kind)
     }
 
     private func systemCategoryRaws(for kind: CashflowCategoryKind) -> [String] {

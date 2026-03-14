@@ -112,4 +112,26 @@ struct ProfileLocalizationTests {
         #expect(localizedString("profile.auth.not_signed_in", languageCode: "en") == "Not signed in")
         #expect(localizedString("profile.auth.not_signed_in.subtitle", languageCode: "en") == "Sign in with Apple to enable sync and restore.")
     }
+
+    @Test("Backup screen key strings are localized and do not end with a period")
+    func testBackupScreenLocalizationWithoutTrailingPeriod() {
+        let keys = [
+            "backup.screen.subtitle",
+            "backup.dashboard.subtitle.last_backup_format",
+            "backup.dashboard.trust.detail.passphrase",
+            "backup.actions.create.subtitle.safety",
+            "backup.actions.auto_schedule.note",
+            "backup.limit.reached.message",
+            "backup.statusline.ready"
+        ]
+
+        for key in keys {
+            let en = localizedString(key, languageCode: "en")
+            let ru = localizedString(key, languageCode: "ru")
+            #expect(en != key, "Missing English localization for \(key)")
+            #expect(ru != key, "Missing Russian localization for \(key)")
+            #expect(en.hasSuffix(".") == false, "English text for \(key) should not end with a period")
+            #expect(ru.hasSuffix(".") == false, "Russian text for \(key) should not end with a period")
+        }
+    }
 }

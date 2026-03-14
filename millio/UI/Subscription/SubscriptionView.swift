@@ -428,11 +428,6 @@ struct SubscriptionView: View {
                 Text("subscription.features.title")
                     .font(.system(size: 30, weight: .bold))
                     .foregroundStyle(.white)
-
-                Text("subscription.features.subtitle")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.64))
-                    .fixedSize(horizontal: false, vertical: true)
             }
 
             VStack(spacing: 0) {

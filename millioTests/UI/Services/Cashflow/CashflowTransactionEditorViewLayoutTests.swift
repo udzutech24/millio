@@ -10,14 +10,17 @@ import Testing
 @testable import millio
 
 struct CashflowTransactionEditorViewLayoutTests {
-    @Test("Для дохода показываются только карты в выбранной валюте")
-    func incomeFiltersCardsByCurrency() {
+    @Test("Для дохода показываются только карты из финансов в выбранной валюте")
+    func incomeShowsOnlyFinanceCardsInSelectedCurrency() {
         let rubCard = Card(name: "RUB", cardNumber: "1111", bank: .sberbank, cardType: .debit, priority: .normal, currency: "RUB")
         let usdCard = Card(name: "USD", cardNumber: "2222", bank: .tinkoff, cardType: .debit, priority: .normal, currency: "USD")
+        let rubLink = FinanceAccount(accountType: .card, accountID: rubCard.cardUniqueID)
+        let usdLink = FinanceAccount(accountType: .card, accountID: usdCard.cardUniqueID)
 
         let accounts = CashflowTransactionEditorView.selectableAccounts(
             cards: [rubCard, usdCard],
             investments: [],
+            financeAccounts: [rubLink, usdLink],
             transactionType: .income,
             currency: "usd"
         )
@@ -27,22 +30,25 @@ struct CashflowTransactionEditorViewLayoutTests {
         #expect(accounts.first?.cardID == usdCard.cardUniqueID)
     }
 
-    @Test("Для расхода приоритет продукта важнее избранного")
-    func expensePrioritizesProductPriorityBeforeFavoriteFlag() {
+    @Test("Для расхода показываются только карты из финансов и сортировка идет по приоритету продукта")
+    func expenseUsesFinanceCardsAndProductPriority() {
         let lowFavorite = Card(name: "Low Favorite", cardNumber: "1111", bank: .sberbank, cardType: .debit, priority: .low, currency: "EUR", isFavorite: true)
         let highRegular = Card(name: "High Regular", cardNumber: "2222", bank: .tinkoff, cardType: .debit, priority: .high, currency: "EUR")
         let usdCard = Card(name: "USD", cardNumber: "3333", bank: .tinkoff, cardType: .debit, priority: .high, currency: "USD", isFavorite: true)
+        let lowLink = FinanceAccount(accountType: .card, accountID: lowFavorite.cardUniqueID)
+        let highLink = FinanceAccount(accountType: .card, accountID: highRegular.cardUniqueID)
 
         let accounts = CashflowTransactionEditorView.selectableAccounts(
             cards: [lowFavorite, highRegular, usdCard],
             investments: [],
+            financeAccounts: [lowLink, highLink],
             transactionType: .expense,
             currency: "eur"
         )
 
         #expect(accounts.count == 2)
         #expect(accounts.map(\.cardID) == [highRegular.cardUniqueID, lowFavorite.cardUniqueID])
-        #expect(Set(accounts.map(\.currency)) == Set(["EUR"]))
+        #expect(!accounts.contains { $0.cardID == usdCard.cardUniqueID })
     }
 
     @Test("Для дохода показываются счета из финансов вместе с картами")
@@ -68,10 +74,14 @@ struct CashflowTransactionEditorViewLayoutTests {
             priority: .high,
             isFavorite: true
         )
+        let cardLink = FinanceAccount(accountType: .card, accountID: debitCard.cardUniqueID)
+        let accountLink = FinanceAccount(accountType: .investment, accountID: account.investmentUniqueID)
+        let assetLink = FinanceAccount(accountType: .investment, accountID: asset.investmentUniqueID)
 
         let accounts = CashflowTransactionEditorView.selectableAccounts(
             cards: [debitCard],
             investments: [account, asset],
+            financeAccounts: [cardLink, accountLink, assetLink],
             transactionType: .income,
             currency: "RUB"
         )
@@ -80,14 +90,94 @@ struct CashflowTransactionEditorViewLayoutTests {
         #expect(accounts.map(\.id) == ["investment:\(account.investmentUniqueID)", "card:\(debitCard.cardUniqueID)"])
     }
 
+    @Test("Для дохода счета тоже фильтруются по валюте операции")
+    func incomeFiltersCashAccountsBySelectedCurrency() {
+        let rubAccount = Investment(
+            name: "RUB Cash",
+            investmentType: .positive,
+            category: .other,
+            amount: 500,
+            currency: "RUB",
+            includeInTotal: true,
+            priority: .normal,
+            isFavorite: false
+        )
+        let usdAccount = Investment(
+            name: "USD Cash",
+            investmentType: .positive,
+            category: .other,
+            amount: 300,
+            currency: "USD",
+            includeInTotal: true,
+            priority: .high,
+            isFavorite: false
+        )
+        let links = [
+            FinanceAccount(accountType: .investment, accountID: rubAccount.investmentUniqueID),
+            FinanceAccount(accountType: .investment, accountID: usdAccount.investmentUniqueID)
+        ]
+
+        let accounts = CashflowTransactionEditorView.selectableAccounts(
+            cards: [],
+            investments: [rubAccount, usdAccount],
+            financeAccounts: links,
+            transactionType: .income,
+            currency: "USD"
+        )
+
+        #expect(accounts.count == 1)
+        #expect(accounts.first?.investmentID == usdAccount.investmentUniqueID)
+        #expect(accounts.first?.currency == "USD")
+    }
+
+    @Test("Избранные карты и счета помечаются звездочкой в picker")
+    func favoriteAccountsUseStarInPickerTitle() {
+        let favoriteCard = Card(
+            name: "Main",
+            cardNumber: "1111",
+            bank: .sberbank,
+            cardType: .debit,
+            priority: .normal,
+            currency: "RUB",
+            isFavorite: true
+        )
+        let regularCard = Card(
+            name: "Reserve",
+            cardNumber: "2222",
+            bank: .tinkoff,
+            cardType: .debit,
+            priority: .normal,
+            currency: "RUB",
+            isFavorite: false
+        )
+        let links = [
+            FinanceAccount(accountType: .card, accountID: favoriteCard.cardUniqueID),
+            FinanceAccount(accountType: .card, accountID: regularCard.cardUniqueID)
+        ]
+
+        let accounts = CashflowTransactionEditorView.selectableAccounts(
+            cards: [favoriteCard, regularCard],
+            investments: [],
+            financeAccounts: links,
+            transactionType: .expense,
+            currency: "RUB"
+        )
+
+        #expect(accounts.first?.pickerTitle == "★ Main")
+        #expect(accounts.last?.pickerTitle == "Reserve")
+    }
+
     @Test("Для перевода фильтрации по валюте нет")
     func transferDoesNotFilterCardsByCurrency() {
         let rubCard = Card(name: "RUB", cardNumber: "1111", bank: .sberbank, cardType: .debit, priority: .normal, currency: "RUB")
         let usdCard = Card(name: "USD", cardNumber: "2222", bank: .tinkoff, cardType: .debit, priority: .normal, currency: "USD")
+        let rubLink = FinanceAccount(accountType: .card, accountID: rubCard.cardUniqueID)
+        let usdLink = FinanceAccount(accountType: .card, accountID: usdCard.cardUniqueID)
 
         let accounts = CashflowTransactionEditorView.selectableAccounts(
             cards: [rubCard, usdCard],
             investments: [],
+            financeAccounts: [rubLink, usdLink],
             transactionType: .transfer,
             currency: "RUB"
         )
@@ -98,19 +188,19 @@ struct CashflowTransactionEditorViewLayoutTests {
     @Test("Основная информация для дохода: карта между суммой и валютой")
     func incomeMainInfoRows() {
         let rows = CashflowTransactionEditorView.mainInfoRows(for: .income)
-        #expect(rows == [.amount, .fromCard, .currency, .date])
+        #expect(rows == [.amount, .currency, .fromCard, .date])
     }
 
-    @Test("Основная информация для расхода: карта между суммой и валютой")
+    @Test("Основная информация для расхода: валюта перед картой")
     func expenseMainInfoRows() {
         let rows = CashflowTransactionEditorView.mainInfoRows(for: .expense)
-        #expect(rows == [.amount, .fromCard, .currency, .date])
+        #expect(rows == [.amount, .currency, .fromCard, .date])
     }
 
-    @Test("Основная информация для перевода: обе карты между суммой и валютой")
+    @Test("Основная информация для перевода: валюта выбирается раньше карт")
     func transferMainInfoRows() {
         let rows = CashflowTransactionEditorView.mainInfoRows(for: .transfer)
-        #expect(rows == [.amount, .fromCard, .toCard, .currency, .date])
+        #expect(rows == [.amount, .currency, .fromCard, .toCard, .date])
     }
 
     @Test("Конфигурация cashflow-листа для дохода")

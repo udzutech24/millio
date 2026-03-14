@@ -114,6 +114,7 @@ struct CashflowView: View {
             if viewModel == nil {
                 viewModel = CashflowViewModel(modelContext: modelContext)
             }
+            viewModel?.handle(.syncDisplayCurrencyWithPrimary(appState.primaryCurrencyCode))
             // Перезагружаем данные при каждом появлении экрана
             viewModel?.handle(.loadCards)
             viewModel?.handle(.loadTransactions)
@@ -122,7 +123,7 @@ struct CashflowView: View {
             viewModel?.handle(.syncPrimaryCurrencyChange(old: oldValue, new: newValue))
         }
         .onDisappear {
-            viewModel?.handle(.setDisplayCurrency(appState.primaryCurrencyCode))
+            viewModel?.handle(.syncDisplayCurrencyWithPrimary(appState.primaryCurrencyCode))
         }
     }
 }
@@ -587,7 +588,7 @@ private struct CashflowContentView: View {
         }
         .accessibilityLabel(Text(text))
     }
-    
+
     // MARK: - Period Selection Section
 
     private var periodSelectionHeader: some View {

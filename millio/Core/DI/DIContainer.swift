@@ -60,14 +60,8 @@ final class DIContainer {
                 disabled: disabledBackupManager
             )
         }
-        let authService: any AuthServiceProtocol
-        do {
-            let apiClientFactory = APIClientFactory(runtime: backendRuntime)
-            authService = apiClientFactory.makeAuthService()
-        } catch {
-            AppLogger.log(.error, category: "Auth", "Failed to initialize auth service: \(error.localizedDescription)")
-            authService = UnconfiguredAuthService()
-        }
+        let apiClientFactory = APIClientFactory(runtime: backendRuntime)
+        let authService: any AuthServiceProtocol = apiClientFactory.makeAuthService()
         
         return DIContainer(
             appState: appState,

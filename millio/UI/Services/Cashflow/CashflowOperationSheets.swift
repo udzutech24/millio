@@ -65,6 +65,11 @@ private struct CashflowCategoryTransactionSheet: View {
     @State private var searchText: String = ""
     @State private var monthlyTotal: Double = 0
     @State private var categoryTotals: [String: Double] = [:]
+    @State private var budgetSnapshot: BudgetProgressSnapshot?
+    @State private var categoryBudgetLimits: [String: Double] = [:]
+    @State private var budgetTotalLimit: Double?
+    @State private var lastBudgetHapticStep: Int = -1
+    @State private var lastCategoryBudgetSteps: [String: Int] = [:]
     @State private var isLoadingMonthlyTotal: Bool = false
     @State private var monthTotalTask: Task<Void, Never>?
     @State private var showRecurringManagement: Bool = false
@@ -72,6 +77,7 @@ private struct CashflowCategoryTransactionSheet: View {
     @State private var showTransactionsHistory: Bool = false
     @State private var showHelpSheet: Bool = false
     @State private var showBulkExpenseImportSheet: Bool = false
+    @State private var showBudgetSetupSheet: Bool = false
 
     @State private var showCreateCategorySheet: Bool = false
     @State private var newCategoryName: String = ""
@@ -180,6 +186,29 @@ private struct CashflowCategoryTransactionSheet: View {
                     viewModel: viewModel,
                     month: selectedMonth,
                     onComplete: reloadMonthlyTotal
+                )
+            }
+            .sheet(isPresented: $showBudgetSetupSheet) {
+                BudgetSetupSheet(
+                    periodTitle: monthTitle,
+                    currencyCode: cashflowCurrencyCodeLabel(viewModel.state.displayCurrency),
+                    existingAmount: budgetTotalLimit,
+                    categoryOptions: viewModel.categoryOptions(for: .expense),
+                    existingCategoryLimits: categoryBudgetLimits,
+                    categorySnapshots: budgetSnapshot?.categorySnapshots ?? [],
+                    onSave: { amount, limits in
+                        viewModel.saveMonthlyBudgetConfiguration(
+                            month: selectedMonth,
+                            totalAmount: amount,
+                            categoryLimits: limits,
+                            currency: viewModel.state.displayCurrency
+                        )
+                        reloadMonthlyTotal()
+                    },
+                    onDelete: budgetTotalLimit == nil ? nil : {
+                        viewModel.deleteMonthlyBudgetLimit(month: selectedMonth)
+                        reloadMonthlyTotal()
+                    }
                 )
             }
             .fullScreenCover(isPresented: $showCategoryEditorSheet) {
@@ -340,10 +369,26 @@ private struct CashflowCategoryTransactionSheet: View {
 
     private var monthlyTotalSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(kind.monthlyTotalTitle)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(AppColors.textSecondary)
-                .padding(.horizontal, 2)
+            HStack {
+                Text(kind.monthlyTotalTitle)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(AppColors.textSecondary)
+                Spacer()
+                if kind == .expense {
+                    Button {
+                        showBudgetSetupSheet = true
+                    } label: {
+                        Text(budgetSnapshot == nil ? budgetLocalized(ru: "Добавить лимит", en: "Add limit") : budgetLocalized(ru: "Лимиты", en: "Limits"))
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                            .background(innerPanelBackground)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 2)
 
             HStack {
                 Text("cashflow.operation.total")
@@ -365,9 +410,83 @@ private struct CashflowCategoryTransactionSheet: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 16)
             .background(innerPanelBackground)
+
+            if kind == .expense {
+                monthlyBudgetInlineSection
+            }
         }
         .padding(12)
         .background(outerPanelBackground)
+    }
+
+    @ViewBuilder
+    private var monthlyBudgetInlineSection: some View {
+        if let snapshot = budgetSnapshot {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text(budgetLocalized(ru: "Лимит месяца", en: "Monthly limit"))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary.opacity(0.92))
+                    Spacer()
+                    Text("\(formattedAmount(snapshot.spent)) / \(formattedAmount(snapshot.limit))")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(budgetStatusColor(snapshot.status))
+                }
+
+                GeometryReader { proxy in
+                    let progress = min(max(snapshot.progress, 0), 1)
+                    ZStack(alignment: .leading) {
+                        Capsule(style: .continuous)
+                            .fill(Color.white.opacity(0.08))
+                        Capsule(style: .continuous)
+                            .fill(budgetStatusColor(snapshot.status))
+                            .frame(width: max(12, proxy.size.width * progress))
+                    }
+                }
+                .frame(height: 8)
+
+                Text(monthlyBudgetStatusText(snapshot))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(budgetStatusColor(snapshot.status))
+
+                if snapshot.categoriesLimitOverflow > 0.0000001 {
+                    Text(
+                        budgetLocalized(
+                            ru: "Сумма лимитов категорий больше общего на \(formattedAmount(snapshot.categoriesLimitOverflow))",
+                            en: "Category limits exceed total by \(formattedAmount(snapshot.categoriesLimitOverflow))"
+                        )
+                    )
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Color.orange.opacity(0.92))
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(innerPanelBackground)
+        } else {
+            Button {
+                showBudgetSetupSheet = true
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "target")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                    Text(
+                        budgetLocalized(
+                            ru: "Добавить лимит на месяц и по категориям",
+                            en: "Add monthly and category limits"
+                        )
+                    )
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(innerPanelBackground)
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     private var searchSection: some View {
@@ -491,36 +610,84 @@ private struct CashflowCategoryTransactionSheet: View {
                 Button {
                     selectedCategory = option
                 } label: {
-                    VStack(spacing: 8) {
-                        CashflowCategoryIconView(
-                            icon: option.icon,
-                            fontSize: 18,
-                            fontWeight: .semibold,
-                            tint: AnyShapeStyle(AppColors.textPrimary)
-                        )
+                    let summary = categoryBudgetSummary(for: option)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .top) {
+                            CashflowCategoryIconView(
+                                icon: option.icon,
+                                fontSize: 18,
+                                fontWeight: .semibold,
+                                tint: AnyShapeStyle(AppColors.textPrimary)
+                            )
+                            Spacer(minLength: 6)
+                            if let summary, let badge = categoryBudgetBadgeText(summary.status) {
+                                Text(badge)
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(budgetStatusColor(summary.status))
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 4)
+                                    .background(
+                                        Capsule(style: .continuous)
+                                            .fill(budgetStatusColor(summary.status).opacity(0.14))
+                                    )
+                            }
+                        }
+
                         Text(option.displayName)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
-                            .multilineTextAlignment(.center)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.62)
-                            .truncationMode(.tail)
-                            .frame(maxWidth: .infinity, minHeight: 18, alignment: .center)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.72)
+                            .frame(maxWidth: .infinity, minHeight: 30, alignment: .topLeading)
+
+                        Spacer(minLength: 0)
 
                         Text(formattedCategoryTotal(for: option))
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(AppColors.textSecondary)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(summary == nil ? AppColors.textSecondary : AppColors.textPrimary.opacity(0.95))
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
+
+                        if let summary {
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                    Text(formattedAmount(summary.spent))
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(budgetStatusColor(summary.status))
+                                        .lineLimit(1)
+                                    Text("/")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundStyle(Color.white.opacity(0.42))
+                                    Text(formattedAmount(summary.limit))
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundStyle(Color.white.opacity(0.68))
+                                        .lineLimit(1)
+                                    Spacer(minLength: 0)
+                                }
+
+                                GeometryReader { proxy in
+                                    let progress = min(max(summary.progress, 0), 1)
+                                    ZStack(alignment: .leading) {
+                                        Capsule(style: .continuous)
+                                            .fill(Color.white.opacity(0.08))
+                                        Capsule(style: .continuous)
+                                            .fill(budgetStatusColor(summary.status))
+                                            .frame(width: max(8, proxy.size.width * progress))
+                                    }
+                                }
+                                .frame(height: 5)
+                            }
+                        }
                     }
-                    .frame(maxWidth: .infinity, minHeight: 112)
-                    .padding(.horizontal, 8)
+                    .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 10)
                     .background(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .fill(Color.black.opacity(0.28))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(kind.strokeGradient.opacity(0.62), lineWidth: 1.1)
+                                    .stroke(categoryStrokeStyle(for: option), lineWidth: 1.1)
                             )
                     )
                 }
@@ -639,12 +806,26 @@ private struct CashflowCategoryTransactionSheet: View {
                 month: selectedMonth,
                 in: viewModel.state.displayCurrency
             )
+            let budgetSummary: (plan: BudgetPlan?, snapshot: BudgetProgressSnapshot?, categoryLimits: [String: Double]) =
+                kind == .expense
+                ? await viewModel.expenseBudgetSummary(for: selectedMonth, in: viewModel.state.displayCurrency)
+                : (nil, nil, [:])
 
             guard !Task.isCancelled else { return }
             await MainActor.run {
+                let previousBudgetSnapshot = budgetSnapshot
+                let previousCategorySteps = lastCategoryBudgetSteps
                 monthlyTotal = total
                 categoryTotals = totalsByCategory
+                budgetSnapshot = budgetSummary.snapshot
+                categoryBudgetLimits = budgetSummary.categoryLimits
+                budgetTotalLimit = budgetSummary.plan?.totalLimitAmount
                 isLoadingMonthlyTotal = false
+                handleBudgetThresholdHaptics(
+                    previousSnapshot: previousBudgetSnapshot,
+                    newSnapshot: budgetSummary.snapshot,
+                    previousCategorySteps: previousCategorySteps
+                )
             }
         }
     }
@@ -652,6 +833,11 @@ private struct CashflowCategoryTransactionSheet: View {
     private func formattedCategoryTotal(for option: CashflowCategoryOption) -> String {
         let value = categoryTotals[option.rawValue] ?? 0
         return formattedAmount(value)
+    }
+
+    private func categoryBudgetSummary(for option: CashflowCategoryOption) -> BudgetCategoryProgressSnapshot? {
+        guard kind == .expense else { return nil }
+        return budgetSnapshot?.categorySnapshots.first(where: { $0.categoryRawValue == option.rawValue })
     }
 
     private func formattedAmount(_ value: Double) -> String {
@@ -744,6 +930,113 @@ private struct CashflowCategoryTransactionSheet: View {
         guard abs(rounded - categoryGridWidth) >= 1 else { return }
         categoryGridWidth = rounded
     }
+
+    private func budgetStatusColor(_ status: BudgetStatus) -> Color {
+        switch status {
+        case .normal:
+            return Color(hex: "6DFFC7")
+        case .warning:
+            return Color(hex: "FFD66D")
+        case .critical:
+            return Color(hex: "FF9B6A")
+        case .exceeded:
+            return Color(hex: "FF6666")
+        }
+    }
+
+    private func categoryBudgetBadgeText(_ status: BudgetStatus) -> String? {
+        switch status {
+        case .warning, .critical:
+            return budgetLocalized(ru: "ПОЧТИ", en: "NEAR")
+        case .exceeded:
+            return budgetLocalized(ru: "СВЕРХ", en: "OVER")
+        case .normal:
+            return nil
+        }
+    }
+
+    private func monthlyBudgetStatusText(_ snapshot: BudgetProgressSnapshot) -> String {
+        if snapshot.remaining >= 0 {
+            return budgetLocalized(
+                ru: "Осталось \(formattedAmount(snapshot.remaining)) \(cashflowCurrencyCodeLabel(viewModel.state.displayCurrency))",
+                en: "\(formattedAmount(snapshot.remaining)) \(cashflowCurrencyCodeLabel(viewModel.state.displayCurrency)) remaining"
+            )
+        }
+        return budgetLocalized(
+            ru: "Перерасход \(formattedAmount(abs(snapshot.remaining))) \(cashflowCurrencyCodeLabel(viewModel.state.displayCurrency))",
+            en: "Over by \(formattedAmount(abs(snapshot.remaining))) \(cashflowCurrencyCodeLabel(viewModel.state.displayCurrency))"
+        )
+    }
+
+    private func categoryStrokeStyle(for option: CashflowCategoryOption) -> AnyShapeStyle {
+        if let summary = categoryBudgetSummary(for: option) {
+            return AnyShapeStyle(budgetStatusColor(summary.status).opacity(0.8))
+        }
+        return AnyShapeStyle(kind.strokeGradient.opacity(0.62))
+    }
+
+    private func handleBudgetThresholdHaptics(
+        previousSnapshot: BudgetProgressSnapshot?,
+        newSnapshot: BudgetProgressSnapshot?,
+        previousCategorySteps: [String: Int]
+    ) {
+        handleMonthlyBudgetHaptic(previousSnapshot: previousSnapshot, newSnapshot: newSnapshot)
+        handleCategoryBudgetHaptics(newSnapshot: newSnapshot, previousSteps: previousCategorySteps)
+    }
+
+    private func handleMonthlyBudgetHaptic(
+        previousSnapshot: BudgetProgressSnapshot?,
+        newSnapshot: BudgetProgressSnapshot?
+    ) {
+        guard kind == .expense else { return }
+        guard let newSnapshot else {
+            lastBudgetHapticStep = -1
+            return
+        }
+
+        let previousStep = previousSnapshot.map { BudgetThresholdHapticsPlan.step(for: $0.progress) } ?? -1
+        let newStep = BudgetThresholdHapticsPlan.step(for: newSnapshot.progress)
+        lastBudgetHapticStep = newStep
+        guard newStep > previousStep else { return }
+
+        if newStep >= 2 {
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+        } else {
+            UIImpactFeedbackGenerator(style: newStep == 1 ? .medium : .light).impactOccurred()
+        }
+    }
+
+    private func handleCategoryBudgetHaptics(
+        newSnapshot: BudgetProgressSnapshot?,
+        previousSteps: [String: Int]
+    ) {
+        guard kind == .expense else { return }
+        guard let newSnapshot else {
+            lastCategoryBudgetSteps = [:]
+            return
+        }
+
+        var updatedSteps: [String: Int] = [:]
+        var strongestEscalation: Int = -1
+
+        for item in newSnapshot.categorySnapshots {
+            let newStep = BudgetThresholdHapticsPlan.step(for: item.progress)
+            let previousStep = previousSteps[item.categoryRawValue] ?? -1
+            updatedSteps[item.categoryRawValue] = newStep
+            if newStep > previousStep {
+                strongestEscalation = max(strongestEscalation, newStep)
+            }
+        }
+
+        lastCategoryBudgetSteps = updatedSteps
+
+        guard strongestEscalation >= 0 else { return }
+        if strongestEscalation >= 2 {
+            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+        } else {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+    }
 }
 
 struct CashflowManagementEntry: Identifiable, Equatable {
@@ -814,32 +1107,14 @@ enum CashflowManagementDestination: Hashable {
 /// Тестируемый источник кратких подсказок для экранов "Новый доход/расход".
 struct CashflowCategoryHelpContent {
     let title: String
-    let lines: [String]
+    let notes: [String]
 
     static func make(for kind: CashflowCategoryTransactionSheetKind) -> CashflowCategoryHelpContent {
-        let intro = switch kind {
-        case .income:
-            String(localized: "cashflow.operation.help.income_intro")
-        case .expense:
-            String(localized: "cashflow.operation.help.expense_intro")
-        }
-
-        let totalHint = switch kind {
-        case .income:
-            String(localized: "cashflow.operation.help.income_total_hint")
-        case .expense:
-            String(localized: "cashflow.operation.help.expense_total_hint")
-        }
-
         return CashflowCategoryHelpContent(
             title: String(localized: "cashflow.operation.help.title"),
-            lines: [
-                intro,
-                totalHint,
-                String(localized: "cashflow.operation.help.tap_category"),
-                String(localized: "cashflow.operation.help.tap_plus"),
-                String(localized: "cashflow.operation.help.long_press"),
-                String(localized: "cashflow.operation.help.safe_migration")
+            notes: [
+                String(localized: "cashflow.operation.help.note.currency_first"),
+                String(localized: "cashflow.operation.help.note.category_month")
             ]
         )
     }
@@ -859,29 +1134,29 @@ private struct CashflowCategoryHelpSheet: View {
                 Color.black.ignoresSafeArea()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
-                        ForEach(Array(content.lines.enumerated()), id: \.offset) { index, line in
+                        ForEach(Array(content.notes.enumerated()), id: \.offset) { _, line in
                             HStack(alignment: .top, spacing: 10) {
-                                Text("\(index + 1).")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundStyle(AppColors.textSecondary)
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(AppColors.brandPrimary)
                                     .padding(.top, 1)
                                 Text(line)
-                                    .font(.system(size: 15, weight: .regular))
+                                    .font(.system(size: 14, weight: .medium))
                                     .foregroundStyle(AppColors.textPrimary)
                                     .multilineTextAlignment(.leading)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(Color.white.opacity(0.04))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                                    )
+                            )
                         }
                     }
-                    .padding(16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .fill(Color.white.opacity(0.06))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .stroke(Color.white.opacity(0.16), lineWidth: 1)
-                            )
-                    )
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
                     .padding(.bottom, 24)

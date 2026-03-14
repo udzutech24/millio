@@ -21,7 +21,9 @@ struct BackupManagementView: View {
     @State private var isPassphraseVisible = false
     @State private var isPassphraseConfirmed = false
     @State private var isPassphraseEditorExpanded = true
+    @State private var isProtectionExpanded = BackupProtectionDisclosureStore.load()
     @State private var isHydratingStoredPassphrase = false
+    @State private var hydratedStoredPassphrase: String?
     @State private var encryptionMode: BackupEncryptionMode = .deviceKey
     @State private var backupVersions: [BackupVersionInfo] = []
     @State private var deletingRecordName: String?
@@ -32,6 +34,7 @@ struct BackupManagementView: View {
     @State private var isExportingVersion = false
     @State private var exportDocument: BackupTransferFileDocument?
     @State private var exportFilename = "millio-backup.milliobackup"
+    @State private var showPinnedLimitDialog = false
     @FocusState private var focusedField: PassphraseField?
 
     private enum PassphraseField {
@@ -73,6 +76,10 @@ struct BackupManagementView: View {
         isPassphraseConfirmed && !trimmedPassphrase.isEmpty
     }
 
+    private var isProtectionConfigured: Bool {
+        encryptionMode == .deviceKey || hasConfirmedPassphrase
+    }
+
     private var isBackupOperational: Bool {
         appState.isBackupEnabled && appState.isICloudAvailable
     }
@@ -107,20 +114,89 @@ struct BackupManagementView: View {
         return backupVersions.first(where: { $0.recordName == selectedRestoreRecordName })
     }
 
+    private var maxManualVersionCount: Int { 5 }
+
+    private var pinnedVersionsCount: Int {
+        backupVersions.filter(\.isPinned).count
+    }
+
+    private var hasReachedPinnedVersionLimit: Bool {
+        pinnedVersionsCount >= maxManualVersionCount
+    }
+
+    private var oldestPinnedVersion: BackupVersionInfo? {
+        backupVersions
+            .filter(\.isPinned)
+            .min(by: { $0.date < $1.date })
+    }
+
+    private var preferredMode: BackupEncryptionMode {
+        .passphrase
+    }
+
+    private var primaryStatusLine: String {
+        if !appState.isBackupEnabled {
+            return BackupL10n.tr("backup.statusline.off", fallback: "Turn on backup to keep a recovery copy in iCloud")
+        }
+        if !appState.isICloudAvailable {
+            return BackupL10n.tr("backup.statusline.icloud", fallback: "Millio is ready, but iCloud is not responding yet")
+        }
+        if backupVersions.isEmpty {
+            return BackupL10n.tr("backup.statusline.first", fallback: "Create your first backup now")
+        }
+        return BackupL10n.tr("backup.statusline.ready", fallback: "Everything is ready for restore")
+    }
+
+    private var protectionHeadline: String {
+        encryptionMode == .passphrase
+            ? BackupL10n.tr("backup.protection.headline.passphrase", fallback: "Best for moving to a new device")
+            : BackupL10n.tr("backup.protection.headline.device", fallback: "Fastest, but limited to this iPhone")
+    }
+
+    private var protectionCollapsedSummary: String {
+        switch encryptionMode {
+        case .deviceKey:
+            return BackupL10n.tr("backup.protection.summary.device", fallback: "Device-only protection is selected")
+        case .passphrase:
+            return hasConfirmedPassphrase
+                ? BackupL10n.tr("backup.protection.summary.passphrase", fallback: "Passphrase is saved and ready for restore")
+                : BackupL10n.tr("backup.protection.summary.passphrase_pending", fallback: "Finish passphrase setup to use portable restore")
+        }
+    }
+
+    private var passphraseHelperText: String {
+        hasConfirmedPassphrase && !isPassphraseEditorExpanded
+            ? BackupL10n.tr("backup.passphrase.helper.saved", fallback: "Saved locally for convenience, keep your own copy somewhere safe")
+            : BackupL10n.tr("backup.passphrase.helper.edit", fallback: "Choose a phrase you can type again later on another device")
+    }
+
+    private var createButtonTitle: String {
+        backupVersions.isEmpty
+            ? BackupL10n.tr("backup.actions.create.primary.first", fallback: "Create first backup")
+            : BackupL10n.tr("backup.actions.create.primary.next", fallback: "Save new backup")
+    }
+
+    private var restoreButtonTitle: String {
+        selectedRestoreVersion == nil
+            ? BackupL10n.tr("backup.actions.restore.primary.select", fallback: "Choose a backup to restore")
+            : BackupL10n.tr("backup.actions.restore.primary.go", fallback: "Restore selected backup")
+    }
+
     private var createSliderSubtitle: String {
         if isBusy {
             return BackupL10n.tr("backup.actions.create.subtitle.busy", fallback: "Another backup operation is already running")
+        }
+        if hasReachedPinnedVersionLimit {
+            return BackupL10n.format(
+                "backup.actions.create.subtitle.limit",
+                fallback: "Maximum of %lld manual versions reached, delete one old version to save a new one",
+                maxManualVersionCount
+            )
         }
         if !isBackupOperational {
             return BackupL10n.tr("backup.actions.create.subtitle.requirements", fallback: "Turn on backup and iCloud first")
         }
         return BackupL10n.tr("backup.actions.create.subtitle.safety", fallback: "Creates a saved version that stays until you delete it")
-    }
-
-    private var restoreSliderTitle: String {
-        selectedRestoreVersion == nil
-            ? BackupL10n.tr("backup.actions.restore.title.select", fallback: "Select a version to restore")
-            : BackupL10n.tr("backup.actions.restore.title.slide", fallback: "Slide to restore selected version")
     }
 
     private var restoreSliderSubtitle: String {
@@ -132,22 +208,22 @@ struct BackupManagementView: View {
 
     private var primaryActionHint: String? {
         guard appState.isBackupEnabled else {
-            return BackupL10n.tr("backup.hint.enable_backup", fallback: "Enable backup.")
+            return BackupL10n.tr("backup.hint.enable_backup", fallback: "Enable backup")
         }
         guard appState.isICloudAvailable else {
-            return BackupL10n.tr("backup.hint.enable_icloud", fallback: "iCloud access is required.")
+            return BackupL10n.tr("backup.hint.enable_icloud", fallback: "iCloud access is required")
         }
         guard encryptionMode != .passphrase || !trimmedPassphrase.isEmpty else {
-            return BackupL10n.tr("backup.hint.enter_passphrase", fallback: "Enter a passphrase.")
+            return BackupL10n.tr("backup.hint.enter_passphrase", fallback: "Enter a passphrase")
         }
         guard encryptionMode != .passphrase || trimmedPassphrase == trimmedConfirmation else {
-            return BackupL10n.tr("backup.hint.passphrase_mismatch", fallback: "Passphrases do not match.")
+            return BackupL10n.tr("backup.hint.passphrase_mismatch", fallback: "Passphrases do not match")
         }
         guard encryptionMode != .passphrase || isPassphraseConfirmed else {
-            return BackupL10n.tr("backup.hint.confirm_passphrase", fallback: "Tap Done to confirm the passphrase.")
+            return BackupL10n.tr("backup.hint.confirm_passphrase", fallback: "Tap Done to confirm the passphrase")
         }
         guard selectedRestoreRecordName != nil else {
-            return BackupL10n.tr("backup.hint.select_restore_version", fallback: "Select a version to restore.")
+            return BackupL10n.tr("backup.hint.select_restore_version", fallback: "Select a version to restore")
         }
         return nil
     }
@@ -191,7 +267,25 @@ struct BackupManagementView: View {
             }
             Button(BackupL10n.tr("common.cancel", fallback: "Cancel"), role: .cancel) {}
         } message: {
-            Text(BackupL10n.tr("backup.restore.confirm.message", fallback: "Current local data will be fully replaced by the selected backup."))
+            Text(BackupL10n.tr("backup.restore.confirm.message", fallback: "Current local data will be fully replaced by the selected backup"))
+        }
+        .confirmationDialog(
+            BackupL10n.format(
+                "backup.limit.reached.title",
+                fallback: "Maximum of %lld manual versions reached",
+                maxManualVersionCount
+            ),
+            isPresented: $showPinnedLimitDialog,
+            titleVisibility: .visible
+        ) {
+            if let oldestPinnedVersion {
+                Button(BackupL10n.tr("backup.limit.reached.action.delete_oldest", fallback: "Delete oldest version"), role: .destructive) {
+                    Task { await deleteVersion(recordName: oldestPinnedVersion.recordName) }
+                }
+            }
+            Button(BackupL10n.tr("common.cancel", fallback: "Cancel"), role: .cancel) {}
+        } message: {
+            Text(BackupL10n.tr("backup.limit.reached.message", fallback: "Delete one manual version and try again"))
         }
         .fileExporter(
             isPresented: $isExportingVersion,
@@ -220,8 +314,11 @@ struct BackupManagementView: View {
             let isDeviceKeyEnabled = SettingsManager.shared.isEncryptionEnabled
             encryptionMode = isDeviceKeyEnabled ? .deviceKey : .passphrase
 
-            if !hydrateStoredPassphrase() {
+            let didHydrateStoredPassphrase = hydrateStoredPassphrase()
+            if !didHydrateStoredPassphrase {
                 isPassphraseEditorExpanded = true
+            } else if !BackupProtectionDisclosureStore.hasStoredPreference {
+                collapseProtectionIfConfigured()
             }
 
             Task { await refreshStatusIfNeeded() }
@@ -237,12 +334,12 @@ struct BackupManagementView: View {
             }
         }
         .onChange(of: passphrase) { _, _ in
-            guard !isHydratingStoredPassphrase else { return }
+            guard !shouldIgnorePassphraseStateChange() else { return }
             isPassphraseConfirmed = false
             isPassphraseEditorExpanded = true
         }
         .onChange(of: passphraseConfirmation) { _, _ in
-            guard !isHydratingStoredPassphrase else { return }
+            guard !shouldIgnorePassphraseStateChange() else { return }
             isPassphraseConfirmed = false
             isPassphraseEditorExpanded = true
         }
@@ -253,7 +350,7 @@ struct BackupManagementView: View {
             Text(BackupL10n.tr("backup.screen.title", fallback: "Backup"))
                 .font(.system(size: 26, weight: .bold, design: .rounded))
                 .foregroundStyle(AppColors.textPrimary)
-            Text(BackupL10n.tr("backup.screen.subtitle", fallback: "Saved versions stay until deletion. Auto backup refreshes about every 3 days."))
+            Text(BackupL10n.tr("backup.screen.subtitle", fallback: "Protect your data, restore it quickly, and keep manual versions before risky changes"))
                 .font(.system(size: 13, weight: .regular))
                 .foregroundStyle(AppColors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -318,7 +415,7 @@ struct BackupManagementView: View {
 
                 HStack(spacing: 10) {
                     metricTile(
-                        title: BackupL10n.tr("backup.metrics.storage", fallback: "Storage"),
+                        title: BackupL10n.tr("backup.metrics.storage", fallback: "Where"),
                         value: appState.isBackupEnabled
                             ? (appState.isICloudAvailable
                                 ? BackupL10n.tr("backup.storage.icloud", fallback: "iCloud")
@@ -330,6 +427,11 @@ struct BackupManagementView: View {
                         value: formattedBackupDate(appState.lastBackupDate) ?? BackupL10n.tr("backup.metrics.last.none", fallback: "None yet")
                     )
                 }
+
+                Text(primaryStatusLine)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppColors.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -349,29 +451,44 @@ struct BackupManagementView: View {
                             Text(dashboardContent.trustTitle)
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundStyle(AppColors.textPrimary)
+                            Text(protectionHeadline)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(AppColors.brandPrimary)
                             Text(dashboardContent.trustDetail)
                                 .font(.system(size: 12, weight: .regular))
                                 .foregroundStyle(AppColors.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                    }
 
-                    Picker(BackupL10n.tr("backup.protection.picker.label", fallback: "Protection method"), selection: $encryptionMode) {
-                        ForEach(BackupEncryptionMode.allCases) { mode in
-                            Text(mode.shortTitle).tag(mode)
+                        Spacer(minLength: 8)
+
+                        if isProtectionConfigured {
+                            Button {
+                                isProtectionExpanded.toggle()
+                                BackupProtectionDisclosureStore.save(isProtectionExpanded)
+                            } label: {
+                                Image(systemName: isProtectionExpanded ? "chevron.up" : "chevron.down")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(AppColors.textTertiary)
+                                    .frame(width: 30, height: 30)
+                                    .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
-                    .pickerStyle(.segmented)
-                    .disabled(!appState.isBackupEnabled || isBusy)
 
-                    subtleCallout(
-                        title: encryptionMode == .passphrase
-                            ? BackupL10n.tr("backup.protection.callout.important", fallback: "Important")
-                            : BackupL10n.tr("backup.protection.callout.limitation", fallback: "Limitation"),
-                        text: encryptionMode == .passphrase
-                            ? BackupL10n.tr("backup.protection.callout.important.text", fallback: "Without the passphrase, restore is impossible.")
-                            : BackupL10n.tr("backup.protection.callout.limitation.text", fallback: "The key is tied to this device.")
-                    )
+                    if !isProtectionExpanded && isProtectionConfigured {
+                        Text(protectionCollapsedSummary)
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(AppColors.textTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        VStack(spacing: 10) {
+                            ForEach(BackupEncryptionMode.allCases) { mode in
+                                protectionModeRow(mode: mode)
+                            }
+                        }
+                    }
                 }
                 .padding(.vertical, 14)
                 .padding(.horizontal, 14)
@@ -380,27 +497,30 @@ struct BackupManagementView: View {
                     case .deviceKey:
                         SettingsManager.shared.isEncryptionEnabled = true
                         focusedField = nil
+                        collapseProtectionIfConfigured()
                     case .passphrase:
                         SettingsManager.shared.isEncryptionEnabled = false
                         if !hydrateStoredPassphrase() {
                             isPassphraseEditorExpanded = true
+                            isProtectionExpanded = true
+                            BackupProtectionDisclosureStore.save(true)
                         }
                     }
                 }
 
-                if encryptionMode == .passphrase {
+                if encryptionMode == .passphrase && isProtectionExpanded {
                     FinancesRowDivider()
 
-                    VStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: 0) {
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(BackupL10n.tr("backup.passphrase.section.title", fallback: "Passphrase"))
+                                Text(BackupL10n.tr("backup.passphrase.section.title", fallback: "Your passphrase"))
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundStyle(AppColors.textPrimary)
                                 Text(
                                     hasConfirmedPassphrase && !isPassphraseEditorExpanded
-                                        ? BackupL10n.tr("backup.passphrase.section.subtitle.confirmed", fallback: "Saved and ready to use")
-                                        : BackupL10n.tr("backup.passphrase.section.subtitle.input", fallback: "Enter and confirm")
+                                        ? BackupL10n.tr("backup.passphrase.section.subtitle.confirmed", fallback: "Ready for backup and restore")
+                                        : BackupL10n.tr("backup.passphrase.section.subtitle.input", fallback: "Create it once, then reuse it")
                                 )
                                     .font(.system(size: 12, weight: .regular))
                                     .foregroundStyle(AppColors.textSecondary)
@@ -410,7 +530,7 @@ struct BackupManagementView: View {
                             Spacer()
 
                             if hasConfirmedPassphrase {
-                                Button(BackupL10n.tr("backup.passphrase.edit", fallback: "Change passphrase")) {
+                                Button(BackupL10n.tr("backup.passphrase.edit", fallback: "Edit")) {
                                     isPassphraseEditorExpanded = true
                                     focusedField = .passphrase
                                 }
@@ -420,7 +540,14 @@ struct BackupManagementView: View {
                         }
                         .padding(.horizontal, 14)
                         .padding(.top, 12)
-                        .padding(.bottom, 8)
+                        .padding(.bottom, 6)
+
+                        Text(passphraseHelperText)
+                            .font(.system(size: 11, weight: .regular))
+                            .foregroundStyle(AppColors.textTertiary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 14)
+                            .padding(.bottom, 8)
 
                         if hasConfirmedPassphrase && !isPassphraseEditorExpanded {
                             passphraseCollapsedSummary
@@ -481,7 +608,7 @@ struct BackupManagementView: View {
                                 Button {
                                     confirmPassphraseIfPossible()
                                 } label: {
-                                    Text(BackupL10n.tr("common.done", fallback: "Done"))
+                                    Text(BackupL10n.tr("backup.passphrase.save", fallback: "Save passphrase"))
                                         .font(.system(size: 14, weight: .semibold))
                                         .foregroundStyle(AppColors.textPrimary)
                                         .padding(.horizontal, 14)
@@ -496,8 +623,8 @@ struct BackupManagementView: View {
                                 if !trimmedPassphrase.isEmpty || !trimmedConfirmation.isEmpty {
                                     Text(
                                         isPassphraseValid
-                                            ? BackupL10n.tr("backup.passphrase.hint.valid", fallback: "Passphrase will be saved and can be changed later.")
-                                            : BackupL10n.tr("backup.passphrase.hint.invalid", fallback: "Enter the same passphrase in both fields.")
+                                            ? BackupL10n.tr("backup.passphrase.hint.valid", fallback: "Looks good, this will be used for backup and restore")
+                                            : BackupL10n.tr("backup.passphrase.hint.invalid", fallback: "Both fields should match")
                                     )
                                         .font(.system(size: 12, weight: .regular))
                                         .foregroundStyle(isPassphraseValid ? AppColors.textSecondary : AppColors.error)
@@ -518,33 +645,29 @@ struct BackupManagementView: View {
     private var actionsCard: some View {
         FinancesGlassCard(accentColor: AppColors.brandPrimary, cornerRadius: 22, contentPadding: EdgeInsets(top: 14, leading: 14, bottom: 14, trailing: 14)) {
             VStack(alignment: .leading, spacing: 10) {
-                Text(BackupL10n.tr("backup.actions.title", fallback: "Actions"))
+                Text(BackupL10n.tr("backup.actions.title", fallback: "Do this next"))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppColors.textSecondary)
 
-                SlideToConfirmControl(
-                    title: BackupL10n.tr("backup.actions.create.title", fallback: "Slide to save version"),
+                primaryActionButton(
+                    title: createButtonTitle,
                     subtitle: createSliderSubtitle,
-                    icon: "arrow.up",
-                    gradientColors: AppColors.financesGradient,
-                    isEnabled: canCreateBackup,
-                    isLoading: isBusy
+                    icon: "arrow.clockwise.circle.fill",
+                    isEnabled: canCreateBackup
                 ) {
                     Task { await createBackupNow() }
                 }
 
-                SlideToConfirmControl(
-                    title: restoreSliderTitle,
+                primaryActionButton(
+                    title: restoreButtonTitle,
                     subtitle: restoreSliderSubtitle,
-                    icon: "arrow.down",
-                    gradientColors: AppColors.financesGradient,
-                    isEnabled: canRestoreSelectedVersion,
-                    isLoading: isBusy
+                    icon: "arrow.down.circle.fill",
+                    isEnabled: canRestoreSelectedVersion
                 ) {
                     showRestoreConfirmation = true
                 }
 
-                Text(BackupL10n.tr("backup.actions.auto_schedule.note", fallback: "Auto backup keeps one current version and refreshes about every 3 days."))
+                Text(BackupL10n.tr("backup.actions.auto_schedule.note", fallback: "Millio also refreshes backup automatically in the background while you keep using the app"))
                     .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(AppColors.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -570,7 +693,7 @@ struct BackupManagementView: View {
                 if let primaryActionHint {
                     Text(primaryActionHint)
                         .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(primaryActionHint == BackupL10n.tr("backup.hint.passphrase_mismatch", fallback: "Passphrases do not match.") ? AppColors.error : AppColors.textSecondary)
+                        .foregroundStyle(primaryActionHint == BackupL10n.tr("backup.hint.passphrase_mismatch", fallback: "Passphrases do not match") ? AppColors.error : AppColors.textSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
@@ -591,7 +714,7 @@ struct BackupManagementView: View {
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(AppColors.textPrimary)
                             Text(backupVersions.isEmpty
-                                ? BackupL10n.tr("backup.versions.empty.short", fallback: "No versions yet")
+                                ? BackupL10n.tr("backup.versions.empty.short", fallback: "Nothing saved yet")
                                 : BackupL10n.format("backup.versions.count_format", fallback: "%lld", backupVersions.count)
                             )
                                 .font(.system(size: 12, weight: .regular))
@@ -610,7 +733,7 @@ struct BackupManagementView: View {
 
                 if isVersionsExpanded {
                     if backupVersions.isEmpty {
-                        Text(BackupL10n.tr("backup.versions.empty.full", fallback: "No versions yet. Save one manually or wait for auto backup."))
+                        Text(BackupL10n.tr("backup.versions.empty.full", fallback: "Create your first backup above, new automatic snapshots will also appear here"))
                             .font(.system(size: 12, weight: .regular))
                             .foregroundStyle(AppColors.textTertiary)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -687,8 +810,15 @@ struct BackupManagementView: View {
 
     @MainActor
     private func refreshStatusIfNeeded(force: Bool = false) async {
-        guard appState.isBackupEnabled else { return }
-        if !force, appState.isICloudAvailable, appState.lastBackupDate != nil { return }
+        guard BackupStatusRefreshPolicy.shouldSkipManagementRefresh(
+            force: force,
+            isBackupEnabled: appState.isBackupEnabled,
+            isICloudAvailable: appState.isICloudAvailable,
+            lastBackupDate: appState.lastBackupDate,
+            loadedVersionCount: backupVersions.count
+        ) == false else {
+            return
+        }
 
         backupError = nil
 
@@ -708,6 +838,10 @@ struct BackupManagementView: View {
     private func createBackupNow() async {
         guard let backupManager else {
             backupError = .iCloudUnavailable
+            return
+        }
+        guard hasReachedPinnedVersionLimit == false else {
+            showPinnedLimitDialog = true
             return
         }
 
@@ -734,7 +868,7 @@ struct BackupManagementView: View {
     @MainActor
     private func restoreSelectedVersion() async {
         guard let backupManager, let selectedRestoreRecordName else {
-            backupError = .restoreFailed(BackupL10n.tr("backup.hint.select_restore_version", fallback: "Select a version to restore."))
+            backupError = .restoreFailed(BackupL10n.tr("backup.hint.select_restore_version", fallback: "Select a version to restore"))
             return
         }
 
@@ -778,7 +912,7 @@ struct BackupManagementView: View {
     @MainActor
     private func exportSelectedVersion() async {
         guard let backupManager, let selectedRestoreRecordName else {
-            backupError = .backupFailed(BackupL10n.tr("backup.hint.select_restore_version", fallback: "Select a version to restore."))
+            backupError = .backupFailed(BackupL10n.tr("backup.hint.select_restore_version", fallback: "Select a version to restore"))
             return
         }
 
@@ -839,15 +973,20 @@ struct BackupManagementView: View {
     @discardableResult
     private func hydrateStoredPassphrase() -> Bool {
         guard let stored = BackupPassphraseStore.load(), !stored.isEmpty else {
+            hydratedStoredPassphrase = nil
             return false
         }
 
         isHydratingStoredPassphrase = true
+        hydratedStoredPassphrase = stored
         passphrase = stored
         passphraseConfirmation = stored
         isPassphraseConfirmed = true
         isPassphraseEditorExpanded = false
-        isHydratingStoredPassphrase = false
+        Task { @MainActor in
+            hydratedStoredPassphrase = nil
+            isHydratingStoredPassphrase = false
+        }
         return true
     }
 
@@ -857,6 +996,25 @@ struct BackupManagementView: View {
         isPassphraseEditorExpanded = false
         focusedField = nil
         _ = BackupPassphraseStore.save(trimmedPassphrase)
+        collapseProtectionIfConfigured()
+    }
+
+    private func shouldIgnorePassphraseStateChange() -> Bool {
+        if isHydratingStoredPassphrase {
+            return true
+        }
+
+        guard let hydratedStoredPassphrase else {
+            return false
+        }
+
+        return passphrase == hydratedStoredPassphrase && passphraseConfirmation == hydratedStoredPassphrase
+    }
+
+    private func collapseProtectionIfConfigured() {
+        guard isProtectionConfigured else { return }
+        isProtectionExpanded = false
+        BackupProtectionDisclosureStore.save(false)
     }
 
     @ViewBuilder
@@ -904,6 +1062,108 @@ struct BackupManagementView: View {
     }
 
     @ViewBuilder
+    private func protectionModeRow(mode: BackupEncryptionMode) -> some View {
+        let isSelected = encryptionMode == mode
+        Button {
+            encryptionMode = mode
+        } label: {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(isSelected ? AppColors.brandPrimary : AppColors.textTertiary)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(mode.title)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+
+                        if mode == preferredMode {
+                            Text(BackupL10n.tr("backup.protection.recommended", fallback: "Recommended"))
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(AppColors.brandPrimary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(AppColors.brandPrimary.opacity(0.16), in: Capsule())
+                        }
+                    }
+
+                    Text(mode.summary)
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(mode.restoreRisk)
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundStyle(mode == .passphrase ? AppColors.textTertiary : AppColors.warning)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(isSelected ? Color.white.opacity(0.09) : Color.white.opacity(0.04))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(isSelected ? AppColors.brandPrimary.opacity(0.55) : Color.white.opacity(0.05), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(!appState.isBackupEnabled || isBusy)
+    }
+
+    @ViewBuilder
+    private func primaryActionButton(
+        title: String,
+        subtitle: String,
+        icon: String,
+        isEnabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(isEnabled ? AppColors.textPrimary : AppColors.textTertiary)
+                    .frame(width: 38, height: 38)
+                    .background(Color.white.opacity(isEnabled ? 0.12 : 0.05), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(isEnabled ? AppColors.textPrimary : AppColors.textTertiary)
+                    Text(subtitle)
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer()
+
+                if isBusy {
+                    ProgressView()
+                        .tint(AppColors.textPrimary)
+                } else {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(isEnabled ? AppColors.textTertiary : AppColors.textTertiary.opacity(0.7))
+                }
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.white.opacity(isEnabled ? 0.08 : 0.04))
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled || isBusy)
+    }
+
+    @ViewBuilder
     private func compactActionButton(title: String, icon: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 8) {
@@ -936,7 +1196,7 @@ struct BackupManagementView: View {
                 Text(BackupL10n.tr("backup.passphrase.summary.title", fallback: "Saved"))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
-                Text(BackupL10n.tr("backup.passphrase.summary.subtitle", fallback: "Used for backup and restore. Change it only if needed."))
+                Text(BackupL10n.tr("backup.passphrase.summary.subtitle", fallback: "Used for backup and restore, change it only if needed"))
                     .font(.system(size: 11, weight: .regular))
                     .foregroundStyle(AppColors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -990,5 +1250,25 @@ private enum BackupPassphraseStore {
         var newQuery = query
         newQuery[kSecValueData as String] = data
         return SecItemAdd(newQuery as CFDictionary, nil) == errSecSuccess
+    }
+}
+
+private enum BackupProtectionDisclosureStore {
+    private static let key = "backup.protectionDisclosureExpanded"
+
+    static var hasStoredPreference: Bool {
+        UserDefaults.standard.object(forKey: key) != nil
+    }
+
+    static func load(defaultValue: Bool = true) -> Bool {
+        let defaults = UserDefaults.standard
+        guard hasStoredPreference else {
+            return defaultValue
+        }
+        return defaults.bool(forKey: key)
+    }
+
+    static func save(_ isExpanded: Bool) {
+        UserDefaults.standard.set(isExpanded, forKey: key)
     }
 }

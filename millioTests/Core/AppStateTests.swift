@@ -452,6 +452,37 @@ struct AppLifecycleUseCaseTests {
         #expect(didUpdate == true)
     }
 
+    @Test("initialize обновляет iCloud статус даже при выключенном backup для recovery после reinstall")
+    func testInitializeRefreshesICloudStatusWhenBackupDisabled() async throws {
+        let defaults = UserDefaults.standard
+        let key = "hasCompletedOnboarding"
+        let previous = defaults.object(forKey: key)
+        defer {
+            if let previous { defaults.set(previous, forKey: key) } else { defaults.removeObject(forKey: key) }
+        }
+        defaults.set(true, forKey: key)
+
+        let expectedDate = Date(timeIntervalSince1970: 456)
+        let backupManager = FakeBackupManager(isAvailableResult: true, lastBackupInfoResult: BackupInfo(date: expectedDate, size: 1, version: "2.0.0"))
+
+        let appState = AppState()
+        appState.isBackupEnabled = false
+
+        let useCase = AppLifecycleUseCase(appState: appState, backupManager: backupManager)
+        await useCase.initialize()
+
+        var didUpdate = false
+        for _ in 0..<50 {
+            if appState.isICloudAvailable == true, appState.lastBackupDate == expectedDate {
+                didUpdate = true
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        #expect(didUpdate == true)
+    }
+
     @Test("initialize удерживает launching минимум указанное время")
     func testInitializeRespectsMinimumLaunchDuration() async throws {
         let defaults = UserDefaults.standard

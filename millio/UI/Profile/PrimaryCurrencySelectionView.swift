@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct PrimaryCurrencySelectionView: View {
+    @Environment(AppState.self) private var appState
     @Binding var primaryCurrencyCode: String
     @State private var searchText = ""
     @State private var favoriteCurrencyCodes: [String] = SettingsManager.shared.favoriteCurrencyCodes
@@ -40,21 +41,12 @@ struct PrimaryCurrencySelectionView: View {
         .onChange(of: primaryCurrencyCode) { _, _ in
             favoriteCurrencyCodes = SettingsManager.shared.favoriteCurrencyCodes
         }
-        .confirmationDialog(
-            "Change primary currency?",
+        .primaryCurrencyConfirmationAlert(
             isPresented: $showPrimaryCurrencyConfirmation,
-            presenting: pendingPrimaryCurrencyCode
-        ) { pendingCode in
-            Button(String(format: String(localized: "profile.primary_currency.change_to_format"), pendingCode)) {
-                primaryCurrencyCode = pendingCode
-                pendingPrimaryCurrencyCode = nil
-            }
-            Button("Cancel", role: .cancel) {
-                pendingPrimaryCurrencyCode = nil
-            }
-        } message: { _ in
-            Text("This updates the app primary currency and display currencies that follow the primary currency.")
-        }
+            content: primaryCurrencyConfirmationContent,
+            onConfirm: applyPendingPrimaryCurrencyChange,
+            onCancel: resetPendingPrimaryCurrencyChange
+        )
     }
 
     private func requestPrimaryCurrencyChange(_ code: String) {
@@ -64,7 +56,9 @@ struct PrimaryCurrencySelectionView: View {
             return
         }
         pendingPrimaryCurrencyCode = normalized
-        showPrimaryCurrencyConfirmation = true
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+            showPrimaryCurrencyConfirmation = true
+        }
     }
 
     private func toggleFavorite(_ code: String) {
@@ -86,6 +80,24 @@ struct PrimaryCurrencySelectionView: View {
             primaryCode: primaryCurrencyCode
         )
         SettingsManager.shared.favoriteCurrencyCodes = favoriteCurrencyCodes
+    }
+
+    private var primaryCurrencyConfirmationContent: PrimaryCurrencyConfirmationContent? {
+        guard let pendingPrimaryCurrencyCode else { return nil }
+        return PrimaryCurrencyConfirmationContent(
+            locale: appState.selectedLanguage.locale ?? Locale.current,
+            pendingCode: pendingPrimaryCurrencyCode
+        )
+    }
+
+    private func applyPendingPrimaryCurrencyChange() {
+        guard let pendingPrimaryCurrencyCode else { return }
+        primaryCurrencyCode = pendingPrimaryCurrencyCode
+        resetPendingPrimaryCurrencyChange()
+    }
+
+    private func resetPendingPrimaryCurrencyChange() {
+        pendingPrimaryCurrencyCode = nil
     }
 }
 

@@ -958,7 +958,7 @@ struct CloudBackupStoreTests {
         #expect(info?.version == "2.0.0")
     }
 
-    @Test("uploadBackup хранит историю snapshot и удаляет устаревшие записи по retention")
+    @Test("uploadBackup хранит историю auto-snapshot и удаляет устаревшие записи по retention")
     func testUploadBackupKeepsSnapshotHistoryWithRetention() async throws {
         let db = FakeCloudBackupDatabase()
         let store = CloudBackupStore(
@@ -971,16 +971,16 @@ struct CloudBackupStoreTests {
         }
 
         let versions = try await store.listBackupVersions()
-        #expect(versions.count == 1)
-        #expect(versions.first?.recordName == "latest_backup")
-        #expect(db.deletedRecordNames.isEmpty)
+        #expect(versions.count == 3)
+        #expect(versions.allSatisfy { $0.recordName != "latest_backup" })
+        #expect(db.deletedRecordNames.count == 1)
 
         let latest = try await store.downloadLatestBackup()
         #expect(latest == Data("payload-4".utf8))
     }
 
-    @Test("uploadBackup keeps a single overwritable auto backup version")
-    func testUploadBackupKeepsSingleAutoBackupVersion() async throws {
+    @Test("uploadBackup keeps multiple auto backup versions by default")
+    func testUploadBackupKeepsMultipleAutoBackupVersionsByDefault() async throws {
         let db = FakeCloudBackupDatabase()
         let store = CloudBackupStore(
             container: FakeCloudBackupContainer(accountStatusResult: .available, database: db)
@@ -991,8 +991,8 @@ struct CloudBackupStoreTests {
         }
 
         let versions = try await store.listBackupVersions()
-        #expect(versions.count == 1)
-        #expect(versions.first?.recordName == "latest_backup")
+        #expect(versions.count == 4)
+        #expect(versions.allSatisfy { $0.recordName != "latest_backup" })
         #expect(db.deletedRecordNames.isEmpty)
     }
 
@@ -1023,8 +1023,8 @@ struct CloudBackupStoreTests {
         #expect(saved?["isPinned"] as? Int == 1)
     }
 
-    @Test("uploadBackup keeps pinned versions and updates current auto backup separately")
-    func testUploadBackupKeepsPinnedVersionsAlongsideCurrentAutoBackup() async throws {
+    @Test("uploadBackup keeps pinned versions alongside retained auto snapshots")
+    func testUploadBackupKeepsPinnedVersionsAlongsideRetainedAutoSnapshots() async throws {
         let db = FakeCloudBackupDatabase()
         let store = CloudBackupStore(
             container: FakeCloudBackupContainer(accountStatusResult: .available, database: db),
@@ -1037,11 +1037,56 @@ struct CloudBackupStoreTests {
         try await store.uploadBackup(Data("auto-3".utf8), isPinned: false)
 
         let versions = try await store.listBackupVersions()
-        #expect(versions.count == 2)
+        #expect(versions.count == 3)
         #expect(versions.filter(\.isPinned).count == 1)
-        #expect(versions.filter { !$0.isPinned }.count == 1)
-        #expect(versions.contains(where: { $0.recordName == "latest_backup" }))
-        #expect(db.deletedRecordNames.isEmpty)
+        #expect(versions.filter { !$0.isPinned }.count == 2)
+        #expect(versions.contains(where: { $0.recordName == "latest_backup" }) == false)
+        #expect(db.deletedRecordNames.count == 1)
+    }
+
+    @Test("uploadBackup limits pinned versions to five most recent snapshots")
+    func testUploadBackupLimitsPinnedVersionsToFiveMostRecentSnapshots() async throws {
+        let db = FakeCloudBackupDatabase()
+        let store = CloudBackupStore(
+            container: FakeCloudBackupContainer(accountStatusResult: .available, database: db),
+            maxSnapshots: 3,
+            maxPinnedSnapshots: 5
+        )
+
+        for index in 1...6 {
+            try await store.uploadBackup(Data("pinned-\(index)".utf8), isPinned: true)
+        }
+
+        let versions = try await store.listBackupVersions()
+        let pinnedVersions = versions.filter(\.isPinned)
+
+        #expect(pinnedVersions.count == 5)
+        #expect(versions.filter { !$0.isPinned }.isEmpty)
+        #expect(db.deletedRecordNames.count == 1)
+    }
+
+    @Test("uploadBackup applies pinned and auto retention independently")
+    func testUploadBackupAppliesPinnedAndAutoRetentionIndependently() async throws {
+        let db = FakeCloudBackupDatabase()
+        let store = CloudBackupStore(
+            container: FakeCloudBackupContainer(accountStatusResult: .available, database: db),
+            maxSnapshots: 2,
+            maxPinnedSnapshots: 5
+        )
+
+        for index in 1...6 {
+            try await store.uploadBackup(Data("pinned-\(index)".utf8), isPinned: true)
+        }
+
+        for index in 1...3 {
+            try await store.uploadBackup(Data("auto-\(index)".utf8), isPinned: false)
+        }
+
+        let versions = try await store.listBackupVersions()
+        #expect(versions.filter(\.isPinned).count == 5)
+        #expect(versions.filter { !$0.isPinned }.count == 2)
+        #expect(versions.count == 7)
+        #expect(db.deletedRecordNames.count == 2)
     }
 
     @Test("downloadLatestBackup fallback к legacy latest, если index указывает на отсутствующие snapshots")
@@ -1128,7 +1173,7 @@ struct CloudBackupStoreTests {
         let downloaded = try await store.downloadLatestBackup()
 
         #expect(versions.count == 1)
-        #expect(versions.first?.recordName == "latest_backup")
+        #expect(versions.first?.recordName.hasPrefix("snapshot_") == true)
         #expect(downloaded == payload)
     }
 
@@ -1154,7 +1199,7 @@ struct CloudBackupStoreTests {
         let downloaded = try await store.downloadLatestBackup()
 
         #expect(versions.count == 1)
-        #expect(versions.first?.recordName == "latest_backup")
+        #expect(versions.first?.recordName.hasPrefix("snapshot_") == true)
         #expect(downloaded == payload)
     }
 

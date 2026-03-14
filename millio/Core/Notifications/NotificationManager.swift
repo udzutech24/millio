@@ -260,18 +260,27 @@ final class NotificationManager: NotificationManagerProtocol {
 
     private func nextOccurrenceDate(for transaction: CashflowTransaction, relativeTo referenceDate: Date) -> Date? {
         guard transaction.isRecurringTemplate else { return nil }
-        guard transaction.recurrenceRule == .monthly else { return nil }
+        guard let monthInterval = transaction.recurrenceRule.monthInterval else { return nil }
 
         let baseline = calendar.startOfDay(for: referenceDate)
-        let baselineMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: baseline)) ?? baseline
+        let templateDate = calendar.startOfDay(for: transaction.transactionDate)
+        let templateMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: templateDate)) ?? templateDate
         let anchorDay = calendar.component(.day, from: transaction.transactionDate)
-        var candidate = makeMonthlyDate(monthStart: baselineMonthStart, day: anchorDay)
+        var occurrenceIndex = 0
 
-        if candidate <= baseline,
-           let nextMonth = calendar.date(byAdding: .month, value: 1, to: baselineMonthStart) {
-            candidate = makeMonthlyDate(monthStart: nextMonth, day: anchorDay)
+        while let targetMonthStart = calendar.date(
+            byAdding: .month,
+            value: monthInterval * occurrenceIndex,
+            to: templateMonthStart
+        ) {
+            let candidate = makeMonthlyDate(monthStart: targetMonthStart, day: anchorDay)
+            if candidate > baseline {
+                return candidate
+            }
+            occurrenceIndex += 1
         }
-        return candidate
+
+        return nil
     }
 
     private func makeMonthlyDate(monthStart: Date, day: Int) -> Date {

@@ -18,6 +18,10 @@ struct CashflowSelectableAccount: Identifiable, Equatable {
     let prioritySortOrder: Int
     let updatedAt: Date
 
+    var pickerTitle: String {
+        isFavorite ? "★ \(title)" : title
+    }
+
     var id: String {
         switch kind {
         case .card(let cardID):
@@ -42,10 +46,18 @@ enum CashflowSelectableAccountResolver {
     static func options(
         cards: [Card],
         investments: [Investment],
+        financeAccounts: [FinanceAccount],
         transactionType: CashflowTransactionType,
         currency: String
     ) -> [CashflowSelectableAccount] {
         let normalizedCurrency = currency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let linkedCardIDs = Set(financeAccounts.compactMap { account in
+            account.accountType == .card ? account.accountID : nil
+        })
+        let linkedInvestmentIDs = Set(financeAccounts.compactMap { account in
+            account.accountType == .investment ? account.accountID : nil
+        })
+        let restrictToFinances = !financeAccounts.isEmpty
 
         let cardOptions = cards.map {
             CashflowSelectableAccount(
@@ -56,6 +68,10 @@ enum CashflowSelectableAccountResolver {
                 prioritySortOrder: $0.priority.sortOrder,
                 updatedAt: $0.updatedAt
             )
+        }
+        .filter { option in
+            guard restrictToFinances, let cardID = option.cardID else { return true }
+            return linkedCardIDs.contains(cardID)
         }
 
         let investmentOptions = investments
@@ -69,6 +85,10 @@ enum CashflowSelectableAccountResolver {
                     prioritySortOrder: $0.priority.sortOrder,
                     updatedAt: $0.updatedAt
                 )
+            }
+            .filter { option in
+                guard restrictToFinances, let investmentID = option.investmentID else { return true }
+                return linkedInvestmentIDs.contains(investmentID)
             }
 
         let combinedOptions: [CashflowSelectableAccount]

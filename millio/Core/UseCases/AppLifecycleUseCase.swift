@@ -81,30 +81,26 @@ final class AppLifecycleUseCase: AppLifecycleUseCaseProtocol {
             "App initialized in \(Double(DispatchTime.now().uptimeNanoseconds - overallStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms, lifecycle: \(String(describing: self.appState.lifecycle))"
         )
         
-        // Проверяем iCloud только если backup включен (в фоне, не блокируя lifecycle)
-        if appState.isBackupEnabled {
-            let backupManager = self.backupManager
-            Task.detached {
-                let iCloudStart = DispatchTime.now()
-                let result = await withTimeout(seconds: 3, operation: {
-                    async let available = backupManager.isAvailable()
-                    async let info = backupManager.lastBackupInfo()
-                    return await (available, info)
-                })
-                
-                let available = result?.0 ?? false
-                let info = result?.1 ?? nil
-                
-                await MainActor.run {
-                    self.appState.isICloudAvailable = available
-                    self.appState.lastBackupDate = info?.date
-                }
-                
-                self.logger.info("iCloud status refresh finished in \(Double(DispatchTime.now().uptimeNanoseconds - iCloudStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
+        // Проверяем iCloud всегда: после reinstall toggle в UserDefaults мог сброситься,
+        // но recovery данные в CloudKit все еще существуют и должны быть обнаружены.
+        let backupManager = self.backupManager
+        Task.detached {
+            let iCloudStart = DispatchTime.now()
+            let result = await withTimeout(seconds: 5, operation: {
+                async let available = backupManager.isAvailable()
+                async let info = backupManager.lastBackupInfo()
+                return await (available, info)
+            })
+
+            let available = result?.0 ?? false
+            let info = result?.1 ?? nil
+
+            await MainActor.run {
+                self.appState.isICloudAvailable = available
+                self.appState.lastBackupDate = info?.date
             }
-        } else {
-            appState.isICloudAvailable = false
-            appState.lastBackupDate = nil
+
+            self.logger.info("iCloud status refresh finished in \(Double(DispatchTime.now().uptimeNanoseconds - iCloudStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
         }
     }
 

@@ -16,6 +16,8 @@
 	<string>$(AUTH_BASE_PORT)</string>
 	<key>AUTH_BASE_PATH</key>
 	<string>$(AUTH_BASE_PATH)</string>
+	<key>AppStoreID</key>
+	<string>6757660504</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSAppTransportSecurity</key>

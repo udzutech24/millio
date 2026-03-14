@@ -670,7 +670,7 @@ struct CashflowScheduledTransactionsView: View {
                             .foregroundStyle(AppColors.textPrimary)
                             .multilineTextAlignment(.leading)
 
-                        if let badgeTitle = badgeTitle(for: resolvedKind) {
+                        if let badgeTitle = badgeTitle(for: resolvedKind, transaction: transaction) {
                             Text(badgeTitle)
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundStyle(AppColors.textSecondary)
@@ -841,10 +841,10 @@ struct CashflowScheduledTransactionsView: View {
         return parts.joined(separator: " • ")
     }
 
-    private func badgeTitle(for kind: CashflowScheduledEntryKind) -> String? {
+    private func badgeTitle(for kind: CashflowScheduledEntryKind, transaction: CashflowTransaction) -> String? {
         switch kind {
         case .recurringMonthly:
-            return String(localized: "cashflow.scheduled.monthly_badge")
+            return transaction.recurrenceRule.displayName
         case .oneTimePlanned:
             return String(
                 localized: "cashflow.scheduled.one_time_badge",
@@ -898,11 +898,7 @@ struct CashflowScheduledTransactionsView: View {
         let category = title(for: entry.transaction)
         let date = shortDate(entry.scheduledDate)
         let prefix: String = entry.kind == .recurringMonthly
-            ? String(
-                localized: "cashflow.scheduled.overview.monthly_prefix",
-                defaultValue: "Monthly",
-                comment: "Prefix for monthly item in planner overview"
-            )
+            ? entry.transaction.recurrenceRule.displayName
             : String(
                 localized: "cashflow.scheduled.overview.one_time_prefix",
                 defaultValue: "One-time",
@@ -930,9 +926,9 @@ struct CashflowScheduledTransactionsView: View {
 
     private var plannerMonthlySectionTitle: String {
         String(
-            localized: "cashflow.scheduled.section.monthly",
-            defaultValue: "Every month",
-            comment: "Section title for monthly recurring scheduled transactions"
+            localized: "cashflow.scheduled.section.recurring",
+            defaultValue: "Recurring",
+            comment: "Section title for recurring scheduled transactions"
         )
     }
 
@@ -1084,14 +1080,19 @@ enum CashflowScheduledTransactionsMode: Hashable {
     }
 
     func createNavigationTitle(for kind: CashflowCategoryKind, recurrenceRule: CashflowRecurrenceRule) -> String {
-        switch (self, kind, recurrenceRule) {
-        case (.recurring, .income, _), (.planner, .income, .monthly):
-            return String(localized: "cashflow.scheduled.new_recurring_income")
-        case (.recurring, .expense, _), (.planner, .expense, .monthly):
-            return String(localized: "cashflow.scheduled.new_recurring_expense")
-        case (.planner, .income, .none):
+        if self == .recurring || recurrenceRule != .none {
+            switch kind {
+            case .income:
+                return String(localized: "cashflow.scheduled.new_recurring_income")
+            case .expense:
+                return String(localized: "cashflow.scheduled.new_recurring_expense")
+            }
+        }
+
+        switch kind {
+        case .income:
             return String(localized: "cashflow.scheduled.new_planned_income")
-        case (.planner, .expense, .none):
+        case .expense:
             return String(localized: "cashflow.scheduled.new_planned_expense")
         }
     }

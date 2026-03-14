@@ -176,7 +176,7 @@ enum SmartDataResetL10n {
     }
 
     static func estimateLabelCashflowCustomCategories(locale: Locale) -> String {
-        text(locale: locale, ru: "Пользовательские категории Cashflow", en: "Custom cashflow categories")
+        text(locale: locale, ru: "Пользовательские категории Кэшфлоу", en: "Custom cashflow categories")
     }
 
     static func estimateLabelCashflowSystemOverrides(locale: Locale) -> String {

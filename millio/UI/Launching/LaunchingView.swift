@@ -159,7 +159,7 @@ private struct SplashWordmarkShimmer: View {
 
 private struct BrandWordmarkView: View {
     var body: some View {
-        Text("Millio")
+        Text("millio")
             .font(.system(size: 56, weight: .bold, design: .rounded))
             .lineLimit(1)
             .minimumScaleFactor(0.45)

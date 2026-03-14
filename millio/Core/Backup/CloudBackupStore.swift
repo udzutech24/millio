@@ -140,7 +140,15 @@ protocol CloudBackupStoreProtocol {
     func deleteBackup(recordName: String) async throws
 }
 
+private protocol BackupRecordNameProviding {
+    var recordName: String { get }
+}
+
+extension BackupVersionInfo: BackupRecordNameProviding {}
+
 final class CloudBackupStore: CloudBackupStoreProtocol {
+    private static let defaultAutoSnapshotRetention = 6
+    private static let defaultPinnedSnapshotRetention = 5
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "CloudBackupStore")
     private let container: CloudBackupContainerProtocol
     private let snapshotRecordType = "AppBackup"
@@ -153,9 +161,10 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
     private let snapshotSizeField = "backupSize"
     private let snapshotPinnedField = "isPinned"
     private let maxSnapshots: Int?
+    private let maxPinnedSnapshots: Int
     private let now: () -> Date
 
-    private struct BackupIndexEntry: Codable {
+    private struct BackupIndexEntry: Codable, BackupRecordNameProviding {
         let recordName: String
         let date: Date
         let size: Int64
@@ -190,21 +199,25 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
     
     init(
         container: CKContainer = .default(),
-        maxSnapshots: Int? = nil,
+        maxSnapshots: Int? = defaultAutoSnapshotRetention,
+        maxPinnedSnapshots: Int = defaultPinnedSnapshotRetention,
         now: @escaping () -> Date = Date.init
     ) {
         self.container = CKContainerAdapter(container: container)
         self.maxSnapshots = maxSnapshots.map { max(1, $0) }
+        self.maxPinnedSnapshots = max(1, maxPinnedSnapshots)
         self.now = now
     }
     
     init(
         container: CloudBackupContainerProtocol,
-        maxSnapshots: Int? = nil,
+        maxSnapshots: Int? = defaultAutoSnapshotRetention,
+        maxPinnedSnapshots: Int = defaultPinnedSnapshotRetention,
         now: @escaping () -> Date = Date.init
     ) {
         self.container = container
         self.maxSnapshots = maxSnapshots.map { max(1, $0) }
+        self.maxPinnedSnapshots = max(1, maxPinnedSnapshots)
         self.now = now
     }
     
@@ -332,17 +345,54 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         defer { try? FileManager.default.removeItem(at: tempURL) }
 
         do {
-            try await saveLegacyLatestRecord(
-                dataSize: Int64(data.count),
-                backupDate: backupDate,
-                backupVersion: backupVersion,
-                assetURL: tempURL,
-                database: privateDB
+            let snapshotRecordID = CKRecord.ID(recordName: makeSnapshotRecordName(on: backupDate))
+            let snapshotRecord = CKRecord(recordType: snapshotRecordType, recordID: snapshotRecordID)
+            snapshotRecord["backupData"] = CKAsset(fileURL: tempURL)
+            snapshotRecord[snapshotDateField] = backupDate
+            snapshotRecord[snapshotVersionField] = backupVersion
+            snapshotRecord[snapshotSizeField] = Int64(data.count)
+            snapshotRecord[snapshotPinnedField] = 0
+            _ = try await privateDB.save(snapshotRecord)
+
+            let newEntry = BackupIndexEntry(
+                recordName: snapshotRecordID.recordName,
+                date: backupDate,
+                size: Int64(data.count),
+                version: backupVersion,
+                isPinned: false
             )
+            let existingEntries = try await loadIndexEntries(from: privateDB)
+            let indexUpdate = mergeIndexEntries(existingEntries, appending: newEntry)
+
+            for stale in indexUpdate.staleEntries {
+                do {
+                    try await privateDB.deleteRecord(withID: CKRecord.ID(recordName: stale.recordName))
+                } catch {
+                    logger.warning("Failed to delete stale auto snapshot '\(stale.recordName, privacy: .public)': \(self.descriptiveCloudKitError(error), privacy: .public)")
+                }
+            }
+
+            do {
+                try await saveIndexEntries(indexUpdate.retainedEntries, to: privateDB)
+            } catch {
+                logger.warning("Failed to save backup index cache: \(self.descriptiveCloudKitError(error), privacy: .public)")
+            }
+
+            do {
+                try await saveLegacyLatestRecord(
+                    dataSize: Int64(data.count),
+                    backupDate: backupDate,
+                    backupVersion: backupVersion,
+                    assetURL: tempURL,
+                    database: privateDB
+                )
+            } catch {
+                logger.warning("Failed to update legacy latest backup: \(self.descriptiveCloudKitError(error), privacy: .public)")
+            }
 
             logger.info("Auto backup uploaded successfully")
             return BackupVersionInfo(
-                recordName: legacyLatestRecordID.recordName,
+                recordName: snapshotRecordID.recordName,
                 date: backupDate,
                 size: Int64(data.count),
                 version: backupVersion,
@@ -380,7 +430,8 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
             }
         }
 
-        if seen.contains(legacyLatestRecordID.recordName) == false,
+        if seen.isEmpty,
+           seen.contains(legacyLatestRecordID.recordName) == false,
            try await hasLegacyBackupPayload(using: privateDB) {
             orderedNames.append(legacyLatestRecordID.recordName)
         }
@@ -414,7 +465,7 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
         var versions = try await listSnapshotVersions(using: privateDB)
 
         if let autoVersion = try await autoBackupVersion(using: privateDB),
-           versions.contains(where: { $0.recordName == autoVersion.recordName }) == false {
+           shouldAppendLegacyAutoVersion(autoVersion, to: versions) {
             versions.append(autoVersion)
         }
 
@@ -515,40 +566,58 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
     ) -> (retainedEntries: [BackupIndexEntry], staleEntries: [BackupIndexEntry]) {
         let dedupedEntries = [newEntry] + existingEntries.filter { $0.recordName != newEntry.recordName }
         let sortedEntries = dedupedEntries.sorted { $0.date > $1.date }
-        guard let maxSnapshots else {
-            return (sortedEntries, [])
-        }
-
-        let pinnedEntries = sortedEntries.filter(\.isPinned)
-        let rollingEntries = sortedEntries.filter { !$0.isPinned }
-        let retainedNames = Set(
-            pinnedEntries.map(\.recordName) +
-            rollingEntries.prefix(maxSnapshots).map(\.recordName)
+        let retainedNames = retainedRecordNames(
+            pinnedEntries: sortedEntries.filter(\.isPinned),
+            autoEntries: sortedEntries.filter { !$0.isPinned }
         )
 
         let retainedEntries = sortedEntries.filter { retainedNames.contains($0.recordName) }
         let staleEntries = sortedEntries.filter {
-            !$0.isPinned && !retainedNames.contains($0.recordName)
+            !retainedNames.contains($0.recordName)
         }
 
         return (retainedEntries, staleEntries)
     }
 
     private func staleSnapshotEntries(from versions: [BackupVersionInfo]) -> [BackupVersionInfo] {
-        guard let maxSnapshots else {
-            return []
-        }
-
-        let pinnedEntries = versions.filter(\.isPinned)
-        let rollingEntries = versions.filter { !$0.isPinned }
-        let retainedRecordNames = Set(
-            pinnedEntries.map(\.recordName) +
-            rollingEntries.prefix(maxSnapshots).map(\.recordName)
+        let retainedRecordNames = retainedRecordNames(
+            pinnedEntries: versions.filter(\.isPinned),
+            autoEntries: versions.filter { !$0.isPinned }
         )
 
         return versions.filter {
-            !$0.isPinned && !retainedRecordNames.contains($0.recordName)
+            !retainedRecordNames.contains($0.recordName)
         }
+    }
+
+    private func retainedRecordNames<T>(
+        pinnedEntries: [T],
+        autoEntries: [T]
+    ) -> Set<String> where T: BackupRecordNameProviding {
+        let retainedPinned = pinnedEntries.prefix(maxPinnedSnapshots).map(\.recordName)
+        let retainedAuto = if let maxSnapshots {
+            Array(autoEntries.prefix(maxSnapshots).map(\.recordName))
+        } else {
+            autoEntries.map(\.recordName)
+        }
+
+        return Set(retainedPinned + retainedAuto)
+    }
+
+    private func shouldAppendLegacyAutoVersion(
+        _ autoVersion: BackupVersionInfo,
+        to versions: [BackupVersionInfo]
+    ) -> Bool {
+        guard versions.contains(where: { $0.recordName == autoVersion.recordName }) == false else {
+            return false
+        }
+
+        return versions.contains {
+            !$0.isPinned &&
+            $0.date == autoVersion.date &&
+            $0.size == autoVersion.size &&
+            $0.version == autoVersion.version
+        } == false
     }
 
     private func loadIndexEntries(from database: CloudBackupDatabaseProtocol) async throws -> [BackupIndexEntry] {

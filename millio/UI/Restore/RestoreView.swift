@@ -19,6 +19,7 @@ struct RestoreView: View {
     @State private var backupVersions: [BackupVersionInfo] = []
     @State private var selectedRecordName: String?
     @State private var isVersionsExpanded = false
+    @State private var backupLookupTimedOut = false
 
     private var backupManager: BackupManagerProtocol? {
         diContainer?.backupManager
@@ -254,8 +255,8 @@ struct RestoreView: View {
             FinancesGlassCard(accentColor: AppColors.warning, cornerRadius: 22, contentPadding: EdgeInsets(top: 14, leading: 14, bottom: 14, trailing: 14)) {
                 VStack(alignment: .leading, spacing: 8) {
                     statusPill(
-                        title: appState.isICloudAvailable ? "Копия не найдена" : "iCloud недоступен",
-                        icon: appState.isICloudAvailable ? "exclamationmark.circle.fill" : "icloud.slash.fill",
+                        title: backupLookupTimedOut ? "Поиск еще идет" : (appState.isICloudAvailable ? "Копия не найдена" : "iCloud недоступен"),
+                        icon: backupLookupTimedOut ? "hourglass.circle.fill" : (appState.isICloudAvailable ? "exclamationmark.circle.fill" : "icloud.slash.fill"),
                         color: AppColors.warning
                     )
 
@@ -332,23 +333,33 @@ struct RestoreView: View {
     @MainActor
     private func refreshBackupStatusIfNeeded() async {
         guard !isRestoring else { return }
+        backupLookupTimedOut = false
+        restoreError = nil
 
-        let available = await withTimeout(seconds: 3) {
+        let available = await withTimeout(seconds: 8) {
             await CloudBackupStore().isAvailable()
         }
-        appState.isICloudAvailable = available ?? false
+        guard let available else {
+            backupLookupTimedOut = true
+            restoreError = .restoreFailed("Backup lookup timed out. iCloud may still be syncing. Try again.")
+            return
+        }
+        appState.isICloudAvailable = available
 
         guard appState.isICloudAvailable, let backupManager else { return }
-        let versions = await withTimeout(seconds: 3) {
+        let versions = await withTimeout(seconds: 8) {
             await backupManager.listBackupVersions()
         }
-        if let versions {
-            backupVersions = versions
-            if selectedRecordName == nil || versions.contains(where: { $0.recordName == selectedRecordName }) == false {
-                selectedRecordName = versions.first?.recordName
-            }
-            appState.lastBackupDate = versions.first?.date
+        guard let versions else {
+            backupLookupTimedOut = true
+            restoreError = .restoreFailed("Backup lookup timed out. iCloud may still be syncing. Try again.")
+            return
         }
+        backupVersions = versions
+        if selectedRecordName == nil || versions.contains(where: { $0.recordName == selectedRecordName }) == false {
+            selectedRecordName = versions.first?.recordName
+        }
+        appState.lastBackupDate = versions.first?.date
     }
 
     private func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async -> T) async -> T? {

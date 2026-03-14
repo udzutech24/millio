@@ -13,7 +13,7 @@
 - Restore всегда заменяет локальные данные целиком. Merge-restore не поддерживается.
 - Source of truth в CloudKit: immutable snapshot records типа `AppBackup`.
 - `backup_index` больше не считается источником истины. Это best-effort cache, который можно потерять или пересобрать.
-- `latest_backup` сохраняется только как legacy fallback и совместимость.
+- `latest_backup` сохраняется как legacy fallback и совместимость, но больше не является основной auto-backup точкой восстановления.
 
 ---
 
@@ -40,8 +40,9 @@
 
 ### 2.2. Правила retention
 
-- Автобэкап хранится в одном перезаписываемом record `latest_backup`.
+- Автобэкап хранится как history из snapshot records `AppBackup` c retention для non-pinned snapshot-ов.
 - Автобэкап обновляется не чаще одного раза в 3 дня, когда приложение уходит в фон и backup включён.
+- Для legacy-совместимости параллельно best-effort обновляется `latest_backup`.
 - Сохранённые пользователем версии создаются как отдельные snapshot records.
 - Закреплённые (`isPinned == true`) snapshot-ы не удаляются автоматически и остаются в истории до явного удаления пользователем.
 - Retention считается по snapshot records, а не по `backup_index`.
@@ -105,7 +106,7 @@
 `CloudBackupStore.listBackupRecordNamesForRestore()` возвращает:
 
 1. snapshot records, отсортированные по `backupDate` от новых к старым
-2. `latest_backup` как legacy fallback
+2. `latest_backup` как legacy fallback, только если snapshot history недоступна
 
 Restore больше не зависит от `backup_index` для выбора кандидатов.
 

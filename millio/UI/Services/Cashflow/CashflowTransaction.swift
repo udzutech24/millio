@@ -51,11 +51,47 @@ enum CashflowTransactionType: String, Codable, CaseIterable {
 enum CashflowRecurrenceRule: String, Codable, CaseIterable {
     case none = "none"
     case monthly = "monthly"
+    case quarterly = "quarterly"
+    case semiannual = "semiannual"
+    case yearly = "yearly"
 
     var displayName: String {
         switch self {
         case .none: return String(localized: "Do not repeat")
         case .monthly: return String(localized: "Monthly")
+        case .quarterly:
+            return String(
+                localized: "cashflow.recurrence.quarterly",
+                defaultValue: "Every 3 months",
+                comment: "Quarterly recurrence rule label"
+            )
+        case .semiannual:
+            return String(
+                localized: "cashflow.recurrence.semiannual",
+                defaultValue: "Every 6 months",
+                comment: "Semiannual recurrence rule label"
+            )
+        case .yearly:
+            return String(
+                localized: "cashflow.recurrence.yearly",
+                defaultValue: "Every year",
+                comment: "Yearly recurrence rule label"
+            )
+        }
+    }
+
+    var monthInterval: Int? {
+        switch self {
+        case .none:
+            return nil
+        case .monthly:
+            return 1
+        case .quarterly:
+            return 3
+        case .semiannual:
+            return 6
+        case .yearly:
+            return 12
         }
     }
 }

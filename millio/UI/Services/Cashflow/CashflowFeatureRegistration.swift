@@ -18,11 +18,15 @@ struct CashflowFeatureRegistration {
             CashflowSystemCategoryOverride.self,
             typeName: "CashflowSystemCategoryOverride"
         )
+        ModelTypeRegistry.shared.register(BudgetPlan.self, typeName: "BudgetPlan")
+        ModelTypeRegistry.shared.register(BudgetCategoryLimit.self, typeName: "BudgetCategoryLimit")
         
         // Регистрируем импортеры
         ModelTypeRegistry.shared.registerImporter(CashflowTransactionImporter.self)
         ModelTypeRegistry.shared.registerImporter(CashflowCustomCategoryImporter.self)
         ModelTypeRegistry.shared.registerImporter(CashflowSystemCategoryOverrideImporter.self)
+        ModelTypeRegistry.shared.registerImporter(BudgetPlanImporter.self)
+        ModelTypeRegistry.shared.registerImporter(BudgetCategoryLimitImporter.self)
     }
 }
 
@@ -167,5 +171,88 @@ struct CashflowSystemCategoryOverrideImporter: ModelImporter {
         override.updatedAt = Date(timeIntervalSince1970: updatedAt)
 
         context.insert(override)
+    }
+}
+
+struct BudgetPlanImporter: ModelImporter {
+    static func importType() -> String {
+        "BudgetPlan"
+    }
+
+    static var importPriority: Int { 22 }
+
+    static func `import`(from data: [String : Any], context: ModelContext) throws {
+        guard let budgetID = data["budgetID"] as? String,
+              let periodTypeRaw = data["periodTypeRaw"] as? String,
+              let anchorYear = data["anchorYear"] as? Int,
+              let anchorMonth = data["anchorMonth"] as? Int,
+              let currencyCode = data["currencyCode"] as? String,
+              let totalLimitAmount = data["totalLimitAmount"] as? Double,
+              let isCategoryBudgetingEnabled = data["isCategoryBudgetingEnabled"] as? Bool,
+              let createdAt = data["createdAt"] as? TimeInterval,
+              let updatedAt = data["updatedAt"] as? TimeInterval else {
+            throw AppError.backupCorrupted
+        }
+
+        let descriptor = BudgetPeriodDescriptor(
+            type: BudgetPeriodType(rawValue: periodTypeRaw) ?? .month,
+            startDate: (data["customStartDate"] as? TimeInterval).map { Date(timeIntervalSince1970: $0) } ?? Date(),
+            endDate: (data["customEndDate"] as? TimeInterval).map { Date(timeIntervalSince1970: $0) } ?? Date(),
+            anchorYear: anchorYear,
+            anchorMonth: anchorMonth
+        )
+        let plan = BudgetPlan(
+            descriptor: descriptor,
+            currencyCode: currencyCode,
+            totalLimitAmount: totalLimitAmount,
+            isCategoryBudgetingEnabled: isCategoryBudgetingEnabled
+        )
+        plan.budgetID = budgetID
+        plan.periodTypeRaw = periodTypeRaw
+        plan.anchorYear = anchorYear
+        plan.anchorMonth = anchorMonth
+        plan.customStartDate = (data["customStartDate"] as? TimeInterval).map { Date(timeIntervalSince1970: $0) }
+        plan.customEndDate = (data["customEndDate"] as? TimeInterval).map { Date(timeIntervalSince1970: $0) }
+        plan.currencyCode = currencyCode
+        plan.totalLimitAmount = totalLimitAmount
+        plan.isCategoryBudgetingEnabled = isCategoryBudgetingEnabled
+        plan.createdAt = Date(timeIntervalSince1970: createdAt)
+        plan.updatedAt = Date(timeIntervalSince1970: updatedAt)
+        context.insert(plan)
+    }
+}
+
+struct BudgetCategoryLimitImporter: ModelImporter {
+    static func importType() -> String {
+        "BudgetCategoryLimit"
+    }
+
+    static var importPriority: Int { 23 }
+
+    static func `import`(from data: [String : Any], context: ModelContext) throws {
+        guard let categoryLimitID = data["categoryLimitID"] as? String,
+              let budgetID = data["budgetID"] as? String,
+              let categoryKindRaw = data["categoryKindRaw"] as? String,
+              let categoryRawValue = data["categoryRawValue"] as? String,
+              let limitAmount = data["limitAmount"] as? Double,
+              let createdAt = data["createdAt"] as? TimeInterval,
+              let updatedAt = data["updatedAt"] as? TimeInterval else {
+            throw AppError.backupCorrupted
+        }
+
+        let limit = BudgetCategoryLimit(
+            budgetID: budgetID,
+            categoryKind: CashflowCategoryKind(rawValue: categoryKindRaw) ?? .expense,
+            categoryRawValue: categoryRawValue,
+            limitAmount: limitAmount
+        )
+        limit.categoryLimitID = categoryLimitID
+        limit.budgetID = budgetID
+        limit.categoryKindRaw = categoryKindRaw
+        limit.categoryRawValue = categoryRawValue
+        limit.limitAmount = limitAmount
+        limit.createdAt = Date(timeIntervalSince1970: createdAt)
+        limit.updatedAt = Date(timeIntervalSince1970: updatedAt)
+        context.insert(limit)
     }
 }
