@@ -493,7 +493,14 @@ struct AuthAPIClient: AuthAPIClientProtocol {
                     operation: operation,
                     requestId: clientRequestId,
                     backendRequestId: responseRequestId,
-                    details: errorLogDetails(for: serviceError, durationSince: startedAt)
+                    details: httpFailureLogDetails(
+                        operation: operation,
+                        response: httpResponse,
+                        responseData: data,
+                        error: serviceError,
+                        clientRequestId: clientRequestId,
+                        durationSince: startedAt
+                    )
                 )
                 throw serviceError
             }
@@ -663,8 +670,60 @@ struct AuthAPIClient: AuthAPIClientProtocol {
     private func errorLogDetails(for error: AuthServiceError, durationSince startedAt: Date) -> [String: String] {
         [
             "durationMs": String(durationMilliseconds(since: startedAt)),
-            "errorType": String(describing: AuthErrorMapper.category(for: error).rawValue)
+            "errorType": String(describing: AuthErrorMapper.category(for: error).rawValue),
+            "message": error.localizedDescription
         ]
+    }
+
+    private func httpFailureLogDetails(
+        operation: AuthRequestOperation,
+        response: HTTPURLResponse,
+        responseData: Data,
+        error: AuthServiceError,
+        clientRequestId: String,
+        durationSince startedAt: Date
+    ) -> [String: String] {
+        let backendRequestId = response.value(forHTTPHeaderField: "x-request-id")
+        let backendRegion = response.value(forHTTPHeaderField: "x-millio-region")
+        let backendPublicAPIBaseURL = response.value(forHTTPHeaderField: "x-millio-public-api-base-url")
+        let rawBody = String(data: responseData, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let sanitizedBody = rawBody?
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "\r", with: " ")
+        let truncatedBody = sanitizedBody.map { String($0.prefix(600)) }
+
+        let envelope = try? decoder.decode(ErrorEnvelope.self, from: responseData)
+        let message = envelope?.resolvedMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedMessage = (message?.isEmpty == false)
+            ? message!
+            : HTTPURLResponse.localizedString(forStatusCode: response.statusCode)
+
+        var details = diagnosticsContext.fields(
+            endpoint: "/" + operation.path,
+            statusCode: response.statusCode,
+            requestId: backendRequestId ?? clientRequestId,
+            errorType: AuthErrorMapper.category(for: error).rawValue,
+            reason: resolvedMessage
+        )
+
+        details["durationMs"] = String(durationMilliseconds(since: startedAt))
+        details["status"] = String(response.statusCode)
+        details["message"] = resolvedMessage
+        if let backendRequestId, !backendRequestId.isEmpty {
+            details["x-request-id"] = backendRequestId
+        }
+        if let backendRegion, !backendRegion.isEmpty {
+            details["x-millio-region"] = backendRegion
+        }
+        if let backendPublicAPIBaseURL, !backendPublicAPIBaseURL.isEmpty {
+            details["x-millio-public-api-base-url"] = backendPublicAPIBaseURL
+        }
+        if let truncatedBody, !truncatedBody.isEmpty {
+            details["responseBody"] = truncatedBody
+        }
+
+        return details
     }
 
     private func durationMilliseconds(since startedAt: Date) -> Int {
@@ -1328,7 +1387,7 @@ final class AuthManager {
     }
 
     private func present(_ error: Error, operation: AuthRequestOperation?) {
-        let presentation = AuthErrorMapper.presentation(for: error)
+        let presentation = AuthErrorMapper.presentation(for: error, operation: operation)
         errorMessage = presentation.message
 
         if presentation.shouldPresentToast, let message = presentation.message {

@@ -331,6 +331,17 @@
         }
       }
     },
+    "auth.error.apple_service_unavailable" : {
+      "comment" : "Apple auth service unavailable toast",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сервис Apple временно недоступен. Попробуйте позже."
+          }
+        }
+      }
+    },
     "auth.error.forbidden" : {
       "comment" : "Forbidden auth toast",
       "extractionState" : "extracted_with_value",
@@ -4961,24 +4972,34 @@
     },
     "cashflow.history.detail.delete.balance_update_failed.message" : {
       "comment" : "Message shown when deleting a cashflow transaction with balance recalculation would make an account negative",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cannot update balances for \"%1$@\". Required: %2$@ %4$@. Available: %3$@ %4$@."
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Cannot update balances for \"%1$@\". Required: %2$@ %4$@. Available: %3$@ %4$@."
+            "state" : "translated",
+            "value" : "Не удалось обновить балансы для \"%1$@\". Нужно: %2$@ %4$@. Доступно: %3$@ %4$@."
           }
         }
       }
     },
     "cashflow.history.detail.delete.balance_update_failed.title" : {
       "comment" : "Title for failed balance recalculation after deleting a cashflow transaction",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cannot update balances"
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Cannot update balances"
+            "state" : "translated",
+            "value" : "Не удалось обновить балансы"
           }
         }
       }
@@ -16525,13 +16546,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sync and restore are enabled for this account."
+            "value" : "Account sync is enabled for this account. iCloud backup uses the current Apple account on this device."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Для этого аккаунта включены синхронизация и восстановление."
+            "value" : "Для этого аккаунта включена синхронизация. Резервные копии iCloud используют текущий Apple ID на этом устройстве."
           }
         }
       }
@@ -16712,13 +16733,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sign in with Apple to enable sync and restore."
+            "value" : "Sign in with Apple to enable account sync. iCloud backup works separately."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Войдите через Apple ID, чтобы включить синхронизацию и восстановление."
+            "value" : "Войдите через Apple ID, чтобы включить синхронизацию аккаунта. Резервные копии iCloud работают отдельно."
           }
         }
       }

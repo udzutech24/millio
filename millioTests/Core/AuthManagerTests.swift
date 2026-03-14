@@ -169,6 +169,38 @@ struct AuthManagerTests {
         #expect(manager.errorMessage == "Auth response parse failed. Try again.")
     }
 
+    @Test("401 on auth apple shows Apple verification failure instead of session expired")
+    func testSignInUnauthorizedShowsAppleVerificationMessage() async {
+        let toastCenter = ToastCenter()
+        let manager = AuthManager(
+            service: SignInAuthService(result: .failure(AuthServiceError.unauthorized(requestId: "backend-auth-401"))),
+            toastCenter: toastCenter,
+            authorizationExtractor: StubAppleAuthorizationExtractor()
+        )
+
+        manager.markAppleSignInStarted()
+        await manager.signIn(with: .failure(AuthServiceError.unconfigured))
+
+        #expect(toastCenter.message == "Could not verify your Apple account. Try again.")
+        #expect(manager.errorMessage == "Could not verify your Apple account. Try again.")
+    }
+
+    @Test("503 on auth apple shows Apple service unavailable message")
+    func testSignInServiceUnavailableShowsAppleServiceMessage() async {
+        let toastCenter = ToastCenter()
+        let manager = AuthManager(
+            service: SignInAuthService(result: .failure(AuthServiceError.server(statusCode: 503, message: "JWKS unavailable", requestId: "backend-auth-503"))),
+            toastCenter: toastCenter,
+            authorizationExtractor: StubAppleAuthorizationExtractor()
+        )
+
+        manager.markAppleSignInStarted()
+        await manager.signIn(with: .failure(AuthServiceError.unconfigured))
+
+        #expect(toastCenter.message == "Apple sign-in service is temporarily unavailable. Try again later.")
+        #expect(manager.errorMessage == "Apple sign-in service is temporarily unavailable. Try again later.")
+    }
+
     @Test("token persistence failure after 200 is not mapped as no internet")
     func testSignInTokenPersistenceFailureIsNotOffline() async {
         let toastCenter = ToastCenter()

@@ -93,8 +93,8 @@ struct ProfileLocalizationTests {
         #expect(localizedString("profile.auth.connected", languageCode: "en") == "Signed in with Apple")
         #expect(localizedString("profile.auth.connected", languageCode: "ru") == "Вход через Apple ID")
 
-        #expect(localizedString("profile.auth.connected.subtitle", languageCode: "en") == "Sync and restore are enabled for this account.")
-        #expect(localizedString("profile.auth.connected.subtitle", languageCode: "ru") == "Для этого аккаунта включены синхронизация и восстановление.")
+        #expect(localizedString("profile.auth.connected.subtitle", languageCode: "en") == "Account sync is enabled for this account. iCloud backup uses the current Apple account on this device.")
+        #expect(localizedString("profile.auth.connected.subtitle", languageCode: "ru") == "Для этого аккаунта включена синхронизация. Резервные копии iCloud используют текущий Apple ID на этом устройстве.")
 
         #expect(localizedString("profile.auth.details", languageCode: "en") == "View details")
         #expect(localizedString("profile.auth.details", languageCode: "ru") == "Подробнее")
@@ -110,7 +110,7 @@ struct ProfileLocalizationTests {
         #expect(localizedString("profile.auth.logout", languageCode: "en") == "Sign out")
 
         #expect(localizedString("profile.auth.not_signed_in", languageCode: "en") == "Not signed in")
-        #expect(localizedString("profile.auth.not_signed_in.subtitle", languageCode: "en") == "Sign in with Apple to enable sync and restore.")
+        #expect(localizedString("profile.auth.not_signed_in.subtitle", languageCode: "en") == "Sign in with Apple to enable account sync. iCloud backup works separately.")
     }
 
     @Test("Backup screen key strings are localized and do not end with a period")

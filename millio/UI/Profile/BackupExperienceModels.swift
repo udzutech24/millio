@@ -194,7 +194,7 @@ enum BackupExperiencePresenter {
         if isICloudAvailable {
             return BackupL10n.tr(
                 "backup.restore.empty.message.not_found",
-                fallback: "No saved backups were found in your private CloudKit container for this Apple ID"
+                fallback: "No saved backups were found in the private CloudKit container for the current iCloud account"
             )
         }
         return BackupL10n.tr(

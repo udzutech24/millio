@@ -27,7 +27,7 @@ struct AuthErrorPresentation: Equatable, Sendable {
 }
 
 enum AuthErrorMapper {
-    static func presentation(for error: Error) -> AuthErrorPresentation {
+    static func presentation(for error: Error, operation: AuthRequestOperation? = nil) -> AuthErrorPresentation {
         if let flowError = error as? AuthFlowError {
             return presentation(for: flowError)
         }
@@ -66,6 +66,17 @@ enum AuthErrorMapper {
                 shouldPresentToast: true
             )
         case .notAuthenticated, .unauthorized:
+            if operation == .appleSignIn {
+                return .init(
+                    category: .appleCredentials,
+                    message: String(
+                        localized: "auth.error.apple_credentials",
+                        defaultValue: "Could not verify your Apple account. Try again.",
+                        comment: "Invalid Apple credentials toast"
+                    ),
+                    shouldPresentToast: true
+                )
+            }
             return .init(
                 category: .unauthorized,
                 message: String(
@@ -98,7 +109,18 @@ enum AuthErrorMapper {
                 ),
                 shouldPresentToast: true
             )
-        case .server:
+        case .server(let statusCode, _, _):
+            if operation == .appleSignIn, statusCode == 503 {
+                return .init(
+                    category: .serverUnavailable,
+                    message: String(
+                        localized: "auth.error.apple_service_unavailable",
+                        defaultValue: "Apple sign-in service is temporarily unavailable. Try again later.",
+                        comment: "Apple auth service unavailable toast"
+                    ),
+                    shouldPresentToast: true
+                )
+            }
             return .init(
                 category: .serverUnavailable,
                 message: String(

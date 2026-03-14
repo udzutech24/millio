@@ -130,6 +130,49 @@ struct AuthAPIClientTests {
         }
     }
 
+    @Test("auth apple failure logs backend status body and response headers")
+    func testAppleSignInFailureLogsBackendDetails() async throws {
+        let diagnostics = RecordingAuthDiagnostics()
+        URLProtocolStub.setHandler { request in
+            let response = HTTPURLResponse(
+                url: try #require(request.url),
+                statusCode: 401,
+                httpVersion: nil,
+                headerFields: [
+                    "x-request-id": "backend-auth-401",
+                    "x-millio-region": "de",
+                    "x-millio-public-api-base-url": "https://public.example.com/api/v1"
+                ]
+            )!
+            let data = Data(#"{"message":"Invalid Apple identity token"}"#.utf8)
+            return (response, data)
+        }
+        defer { URLProtocolStub.reset() }
+
+        let client = makeClient(diagnostics: diagnostics)
+
+        await #expect(throws: AuthServiceError.unauthorized(requestId: "backend-auth-401")) {
+            _ = try await client.signInWithApple(
+                request: AppleAuthRequest(
+                    identityToken: "raw-identity-token",
+                    email: nil,
+                    firstName: nil,
+                    lastName: nil
+                )
+            )
+        }
+
+        let failed = try #require(diagnostics.snapshot().first(where: { $0.phase == "auth.request.failed" }))
+        #expect(failed.operation == .appleSignIn)
+        #expect(failed.details["endpoint"] == "/auth/apple")
+        #expect(failed.details["status"] == "401")
+        #expect(failed.details["message"] == "Invalid Apple identity token")
+        #expect(failed.details["x-request-id"] == "backend-auth-401")
+        #expect(failed.details["x-millio-region"] == "de")
+        #expect(failed.details["x-millio-public-api-base-url"] == "https://public.example.com/api/v1")
+        #expect(failed.details["responseBody"]?.contains("Invalid Apple identity token") == true)
+    }
+
     private func makeClient(diagnostics: any AuthDiagnosticsLogging = RecordingAuthDiagnostics()) -> AuthAPIClient {
         AuthAPIClient(
             configuration: AuthConfiguration(baseURL: URL(string: "https://example.com/api/v1")!),
