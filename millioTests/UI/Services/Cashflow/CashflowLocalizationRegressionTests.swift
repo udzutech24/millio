@@ -79,6 +79,18 @@ struct CashflowLocalizationRegressionTests {
         #expect(AppLocalization.string("cashflow.recurrence.quarterly", locale: locale) == "Every 3 months")
         #expect(AppLocalization.string("cashflow.recurrence.semiannual", locale: locale) == "Every 6 months")
         #expect(AppLocalization.string("cashflow.recurrence.yearly", locale: locale) == "Every year")
+        #expect(AppLocalization.string("cashflow.scheduled.day_agenda.summary.empty", locale: locale) == "You can add another planned item directly to this date.")
+    }
+
+    @Test("Planner helper copy stays localized for both locales")
+    func plannerHelperCopyIsLocalizedForBothLocales() {
+        let english = Locale(identifier: "en_US")
+        let russian = Locale(identifier: "ru_RU")
+
+        #expect(AppLocalization.string("cashflow.scheduled.day_agenda.summary.count", locale: english).contains("scheduled item"))
+        #expect(AppLocalization.string("cashflow.scheduled.day_agenda.summary.empty", locale: english) == "You can add another planned item directly to this date.")
+        #expect(AppLocalization.string("cashflow.scheduled.day_agenda.summary.count", locale: russian).contains("запланирован"))
+        #expect(AppLocalization.string("cashflow.scheduled.day_agenda.summary.empty", locale: russian) == "Можно сразу добавить ещё одну запланированную операцию на эту дату.")
     }
 
     @Test("Period title uses localized quarter format")

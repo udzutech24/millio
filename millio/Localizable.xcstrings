@@ -6181,6 +6181,18 @@
         }
       }
     },
+    "cashflow.recurrence.weekly.none_selected" : {
+      "comment" : "Weekly recurrence placeholder when no weekdays selected",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Select days"
+          }
+        }
+      }
+    },
     "cashflow.recurrence.yearly" : {
       "comment" : "Yearly recurrence rule label",
       "localizations" : {
@@ -6396,6 +6408,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Добавить"
+          }
+        }
+      }
+    },
+    "cashflow.scheduled.day_agenda.summary.count" : {
+      "comment" : "Helper text for selected planner date when there are scheduled items",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld scheduled item(s) on this date. Add another without leaving the calendar."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld запланирован(а/о) на эту дату. Можно сразу добавить ещё одну операцию."
+          }
+        }
+      }
+    },
+    "cashflow.scheduled.day_agenda.summary.empty" : {
+      "comment" : "Helper text for selected planner date when there are no items",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You can add another planned item directly to this date."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Можно сразу добавить ещё одну запланированную операцию на эту дату."
           }
         }
       }
@@ -7170,7 +7216,6 @@
       }
     },
     "Close" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {

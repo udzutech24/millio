@@ -14,12 +14,15 @@ struct BudgetSetupSheet: View {
     let categoryOptions: [CashflowCategoryOption]
     let existingCategoryLimits: [String: Double]
     let categorySnapshots: [BudgetCategoryProgressSnapshot]
+    let repeatSuggestion: BudgetRepeatSuggestion?
     let onSave: (Double, [String: Double]) -> Void
+    let onAutoRepeatChanged: (Bool) -> Void
     let onDelete: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @State private var rawAmount: String = ""
     @State private var categoryDrafts: [String: String]
+    @State private var isAutoRepeatEnabled: Bool
 
     init(
         periodTitle: String,
@@ -28,7 +31,10 @@ struct BudgetSetupSheet: View {
         categoryOptions: [CashflowCategoryOption],
         existingCategoryLimits: [String: Double],
         categorySnapshots: [BudgetCategoryProgressSnapshot],
+        repeatSuggestion: BudgetRepeatSuggestion?,
+        isAutoRepeatEnabled: Bool,
         onSave: @escaping (Double, [String: Double]) -> Void,
+        onAutoRepeatChanged: @escaping (Bool) -> Void,
         onDelete: (() -> Void)? = nil
     ) {
         self.periodTitle = periodTitle
@@ -37,12 +43,31 @@ struct BudgetSetupSheet: View {
         self.categoryOptions = categoryOptions
         self.existingCategoryLimits = existingCategoryLimits
         self.categorySnapshots = categorySnapshots
+        self.repeatSuggestion = repeatSuggestion
         self.onSave = onSave
+        self.onAutoRepeatChanged = onAutoRepeatChanged
         self.onDelete = onDelete
-        _rawAmount = State(initialValue: existingAmount.map(AmountInputFormatter.plainString(from:)) ?? "")
-        _categoryDrafts = State(
-            initialValue: existingCategoryLimits.mapValues { AmountInputFormatter.plainString(from: $0) }
+        let initialTotalAmount = Self.initialTotalAmount(
+            existingAmount: existingAmount,
+            repeatSuggestion: repeatSuggestion,
+            isAutoRepeatEnabled: isAutoRepeatEnabled
         )
+        let initialCategoryLimits = Self.initialCategoryLimits(
+            existingCategoryLimits: existingCategoryLimits,
+            repeatSuggestion: repeatSuggestion,
+            isAutoRepeatEnabled: isAutoRepeatEnabled
+        )
+        _rawAmount = State(
+            initialValue: initialTotalAmount.map {
+                AmountInputFormatter.integerInput(AmountInputFormatter.plainString(from: $0))
+            } ?? ""
+        )
+        _categoryDrafts = State(
+            initialValue: initialCategoryLimits.mapValues {
+                AmountInputFormatter.integerInput(AmountInputFormatter.plainString(from: $0))
+            }
+        )
+        _isAutoRepeatEnabled = State(initialValue: isAutoRepeatEnabled)
     }
 
     var body: some View {
@@ -53,6 +78,7 @@ struct BudgetSetupSheet: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         headerSection
+                        repeatControlsSection
                         totalLimitSection
                         categoryLimitsSection
                         footerHint
@@ -77,6 +103,9 @@ struct BudgetSetupSheet: View {
                     .foregroundStyle(AppColors.textPrimary)
                 }
             }
+        }
+        .onChange(of: isAutoRepeatEnabled) { _, newValue in
+            onAutoRepeatChanged(newValue)
         }
     }
 
@@ -103,6 +132,10 @@ struct BudgetSetupSheet: View {
         parsedTotal > 0 && !hasOverflowConflict
     }
 
+    private var shouldShowRepeatControls: Bool {
+        existingAmount == nil && repeatSuggestion != nil
+    }
+
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(budgetLocalized(ru: "Лимит бюджета", en: "Budget limit"))
@@ -111,6 +144,60 @@ struct BudgetSetupSheet: View {
             Text(periodTitle)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(Color.white.opacity(0.72))
+        }
+    }
+
+    @ViewBuilder
+    private var repeatControlsSection: some View {
+        if shouldShowRepeatControls, let repeatSuggestion {
+            VStack(alignment: .leading, spacing: 12) {
+                Button {
+                    applyRepeatSuggestion(repeatSuggestion)
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Color.black)
+                            .frame(width: 34, height: 34)
+                            .background(
+                                Circle()
+                                    .fill(Color(hex: "6DFFC7"))
+                            )
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(budgetLocalized(ru: "Повторить прошлые лимиты", en: "Repeat previous limits"))
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(AppColors.textPrimary)
+                            Text(repeatSuggestionTitle(repeatSuggestion))
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(Color.white.opacity(0.68))
+                        }
+
+                        Spacer()
+                    }
+                    .padding(14)
+                    .background(cardBackground(stroke: Color(hex: "6DFFC7").opacity(0.35)))
+                }
+                .buttonStyle(.plain)
+
+                Toggle(isOn: $isAutoRepeatEnabled) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(budgetLocalized(ru: "Автоматически повторять в новом месяце", en: "Repeat automatically in a new month"))
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                        Text(
+                            budgetLocalized(
+                                ru: "Если у нового месяца лимитов еще нет, форма сразу заполнится по прошлому месяцу.",
+                                en: "If the new month has no limits yet, the form will be prefilled from the previous month."
+                            )
+                        )
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.68))
+                    }
+                }
+                .toggleStyle(.switch)
+                .tint(Color(hex: "6DFFC7"))
+            }
         }
     }
 
@@ -124,10 +211,16 @@ struct BudgetSetupSheet: View {
                 TextField(
                     "0",
                     text: Binding(
-                        get: { AmountInputFormatter.display(rawAmount, maxFractionDigits: 0) },
-                        set: { rawAmount = AmountInputFormatter.sanitize($0, maxFractionDigits: 0) }
+                        get: { rawAmount },
+                        set: { rawAmount = $0 }
                     )
                 )
+                .onChange(of: rawAmount) { _, newValue in
+                    let formatted = AmountInputFormatter.integerInput(newValue)
+                    if formatted != newValue {
+                        rawAmount = formatted
+                    }
+                }
                 .keyboardType(.decimalPad)
                 .font(.system(size: 28, weight: .bold))
                 .foregroundStyle(AppColors.textPrimary)
@@ -204,7 +297,7 @@ struct BudgetSetupSheet: View {
                         currencyCode: currencyCode,
                         rawValue: Binding(
                             get: { categoryDrafts[option.rawValue] ?? "" },
-                            set: { categoryDrafts[option.rawValue] = AmountInputFormatter.sanitize($0, maxFractionDigits: 0) }
+                            set: { categoryDrafts[option.rawValue] = $0 }
                         ),
                         snapshot: categorySnapshots.first(where: { $0.categoryRawValue == option.rawValue }),
                         onClear: {
@@ -272,6 +365,48 @@ struct BudgetSetupSheet: View {
                     .stroke(stroke, lineWidth: 1)
             )
     }
+
+    private func applyRepeatSuggestion(_ suggestion: BudgetRepeatSuggestion) {
+        rawAmount = AmountInputFormatter.integerInput(AmountInputFormatter.plainString(from: suggestion.totalAmount))
+        categoryDrafts = suggestion.categoryLimits.mapValues {
+            AmountInputFormatter.integerInput(AmountInputFormatter.plainString(from: $0))
+        }
+    }
+
+    private func repeatSuggestionTitle(_ suggestion: BudgetRepeatSuggestion) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = .autoupdatingCurrent
+        formatter.setLocalizedDateFormatFromTemplate("LLLL y")
+        let monthTitle = formatter.string(from: suggestion.sourceMonth).localizedCapitalized
+        return budgetLocalized(
+            ru: "Подтянуть из \(monthTitle)",
+            en: "Use \(monthTitle)"
+        )
+    }
+
+    private static func initialTotalAmount(
+        existingAmount: Double?,
+        repeatSuggestion: BudgetRepeatSuggestion?,
+        isAutoRepeatEnabled: Bool
+    ) -> Double? {
+        if let existingAmount {
+            return existingAmount
+        }
+        guard isAutoRepeatEnabled else { return nil }
+        return repeatSuggestion?.totalAmount
+    }
+
+    private static func initialCategoryLimits(
+        existingCategoryLimits: [String: Double],
+        repeatSuggestion: BudgetRepeatSuggestion?,
+        isAutoRepeatEnabled: Bool
+    ) -> [String: Double] {
+        if !existingCategoryLimits.isEmpty {
+            return existingCategoryLimits
+        }
+        guard isAutoRepeatEnabled else { return [:] }
+        return repeatSuggestion?.categoryLimits ?? [:]
+    }
 }
 
 private struct BudgetCategoryLimitDraftRow: View {
@@ -317,10 +452,16 @@ private struct BudgetCategoryLimitDraftRow: View {
                     TextField(
                         "0",
                         text: Binding(
-                            get: { AmountInputFormatter.display(rawValue, maxFractionDigits: 0) },
-                            set: { rawValue = AmountInputFormatter.sanitize($0, maxFractionDigits: 0) }
+                            get: { rawValue },
+                            set: { rawValue = $0 }
                         )
                     )
+                    .onChange(of: rawValue) { _, newValue in
+                        let formatted = AmountInputFormatter.integerInput(newValue)
+                        if formatted != newValue {
+                            rawValue = formatted
+                        }
+                    }
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.trailing)
                     .font(.system(size: 16, weight: .bold))

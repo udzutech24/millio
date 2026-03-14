@@ -255,6 +255,44 @@ struct CashflowBulkExpensePersistRequest: Equatable {
     let entries: [CashflowBulkExpensePersistEntry]
 }
 
+struct CashflowBulkExpenseImportSelectionPolicy {
+    static func availableCurrencies(
+        cards: [Card],
+        preferredCurrency: String
+    ) -> [String] {
+        let unique = Set(cards.map(\.currency))
+        guard !unique.isEmpty else { return [preferredCurrency] }
+        return unique.sorted { lhs, rhs in
+            if lhs == preferredCurrency { return true }
+            if rhs == preferredCurrency { return false }
+            return lhs < rhs
+        }
+    }
+
+    static func normalizeSelection(
+        cards: [Card],
+        selectedCurrency: String,
+        selectedCardID: String?,
+        preferredCurrency: String
+    ) -> (currency: String, cardID: String?) {
+        guard !cards.isEmpty else {
+            return (selectedCurrency.isEmpty ? preferredCurrency : selectedCurrency, nil)
+        }
+
+        let currencies = availableCurrencies(cards: cards, preferredCurrency: preferredCurrency)
+        let effectiveCurrency = currencies.contains(selectedCurrency)
+            ? selectedCurrency
+            : (currencies.first ?? preferredCurrency)
+        let compatibleCards = cards.filter { $0.currency == effectiveCurrency }
+        let selectedCard = compatibleCards.first { $0.cardUniqueID == selectedCardID }
+        let effectiveCardID = selectedCard?.cardUniqueID
+            ?? compatibleCards.first(where: \.isFavorite)?.cardUniqueID
+            ?? compatibleCards.first?.cardUniqueID
+
+        return (effectiveCurrency, effectiveCardID)
+    }
+}
+
 enum CashflowBulkExpenseImportError: LocalizedError {
     case invalidImage
     case noTextFound

@@ -54,6 +54,36 @@ private final class CashflowTestNotificationManager: NotificationManagerProtocol
 }
 
 extension CashflowViewModelTests {
+    @Test("Текст предупреждения об оценочном курсе содержит дату для ru_RU")
+    func estimatedRateWarningTextIncludesDateForRussianLocale() {
+        let calendar = Calendar(identifier: .gregorian)
+        let date = calendar.date(from: DateComponents(year: 2026, month: 3, day: 14)) ?? Date()
+
+        let text = CashflowViewModel.estimatedRateWarningText(
+            asOf: date,
+            locale: Locale(identifier: "ru_RU")
+        )
+
+        #expect(text.contains("оценочному курсу"))
+        #expect(text.contains("14.03.2026"))
+        #expect(!text.hasSuffix("."))
+    }
+
+    @Test("Текст предупреждения об оценочном курсе содержит as of для en_US")
+    func estimatedRateWarningTextIncludesAsOfForEnglishLocale() {
+        let calendar = Calendar(identifier: .gregorian)
+        let date = calendar.date(from: DateComponents(year: 2026, month: 3, day: 14)) ?? Date()
+
+        let text = CashflowViewModel.estimatedRateWarningText(
+            asOf: date,
+            locale: Locale(identifier: "en_US")
+        )
+
+        #expect(text.localizedLowercase.contains("as of"))
+        #expect(text.contains("3/14/2026"))
+        #expect(!text.hasSuffix("."))
+    }
+
     @Test("Заголовок месяца в Cashflow учитывает locale (en_US)")
     func periodHeaderTitleUsesProvidedLocaleForMonthPeriod() {
         let calendar = Calendar(identifier: .gregorian)
@@ -933,6 +963,73 @@ extension CashflowViewModelTests {
 
         #expect(dayByMonth.map(\.month) == [1, 2, 3])
         #expect(dayByMonth.map(\.day) == [31, 28, 31])
+    }
+
+    @Test("Еженедельный автоповтор учитывает выбранные дни недели")
+    func testWeeklyRecurringUsesSelectedWeekdays() throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 11)) ?? Date()
+
+        let template = CashflowTransaction(
+            transactionType: .expense,
+            amount: 200,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 10)) ?? fixedNow,
+            expenseCategory: .bills,
+            recurrenceRule: .weekly,
+            recurrenceWeekdays: [.monday, .thursday],
+            recurrenceSeriesID: "series-weekly-bills"
+        )
+        modelContext.insert(template)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        let next = viewModel.nextOccurrenceDate(
+            for: template,
+            relativeTo: calendar.date(from: DateComponents(year: 2026, month: 3, day: 11)) ?? fixedNow
+        )
+
+        let components = next.map { calendar.dateComponents([.year, .month, .day], from: $0) }
+        #expect(components?.year == 2026)
+        #expect(components?.month == 3)
+        #expect(components?.day == 12)
+    }
+
+    @Test("Еженедельный автоповтор догоняет пропущенные дни без дублей")
+    func testWeeklyRecurringGeneratesMissingDays() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 10)) ?? Date()
+
+        let template = CashflowTransaction(
+            transactionType: .income,
+            amount: 50,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 3)) ?? fixedNow,
+            incomeCategory: .salary,
+            recurrenceRule: .weekly,
+            recurrenceWeekdays: [.tuesday, .thursday],
+            recurrenceSeriesID: "series-weekly-income"
+        )
+        modelContext.insert(template)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        viewModel.handle(.loadTransactions)
+
+        try await waitUntil(timeoutNanoseconds: 5_000_000_000) {
+            viewModel.state.transactions.count == 3
+        }
+
+        let days = viewModel.state.transactions
+            .map { calendar.component(.day, from: $0.transactionDate) }
+            .sorted()
+        #expect(days == [3, 5, 10])
+
+        viewModel.handle(.loadTransactions)
+        try await Task.sleep(nanoseconds: 300_000_000)
+        #expect(viewModel.state.transactions.count == 3)
     }
 
     @Test("Квартальный автоповтор создаёт только квартальные вхождения")

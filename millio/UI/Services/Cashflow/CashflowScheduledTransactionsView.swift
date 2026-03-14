@@ -240,11 +240,11 @@ struct CashflowScheduledTransactionsView: View {
 
         if plannerDisplayMode == .calendar {
             listCard(plannerCalendarSection)
+            listCard(selectedDaySummarySection)
 
             if selectedDayEntries.isEmpty {
                 listCard(dayAgendaEmptyState)
             } else {
-                agendaHeaderRow
                 ForEach(selectedDayEntries) { entry in
                     transactionRow(entry.transaction, entryKind: entry.kind, scheduledDate: entry.scheduledDate)
                         .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
@@ -295,16 +295,6 @@ struct CashflowScheduledTransactionsView: View {
             .listRowInsets(EdgeInsets(top: 18, leading: 18, bottom: 4, trailing: 16))
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
-    }
-
-    private var agendaHeaderRow: some View {
-        plannerSectionHeader(
-            String(
-                localized: "cashflow.scheduled.day_agenda.title",
-                defaultValue: "Due on \(formatDayHeader(selectedPlannerDate))",
-                comment: "Header for scheduled items due on the selected planner day"
-            )
-        )
     }
 
     private var searchSection: some View {
@@ -569,20 +559,55 @@ struct CashflowScheduledTransactionsView: View {
     private var dayAgendaEmptyState: some View {
         FinancesGlassCard(cornerRadius: 20, contentPadding: EdgeInsets(top: 18, leading: 16, bottom: 18, trailing: 16)) {
             VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .top, spacing: 10) {
-                    Text(
-                        String(
-                            localized: "cashflow.scheduled.day_agenda.empty_title",
-                            defaultValue: "Nothing due on this day",
-                            comment: "Empty state title for selected planner day"
-                        )
+                Text(
+                    String(
+                        localized: "cashflow.scheduled.day_agenda.empty_title",
+                        defaultValue: "Nothing due on this day",
+                        comment: "Empty state title for selected planner day"
                     )
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .layoutPriority(1)
+                )
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(AppColors.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
 
-                    Spacer()
+                Text(
+                    String(
+                        localized: "cashflow.scheduled.day_agenda.empty_subtitle",
+                        defaultValue: "Pick another date or switch to the list to review all monthly and one-time items.",
+                        comment: "Empty state subtitle for selected planner day"
+                    )
+                )
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(AppColors.textSecondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var selectedDaySummarySection: some View {
+        FinancesGlassCard(accentColor: kind.accentColor, cornerRadius: 20, contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(
+                            String(
+                                localized: "cashflow.scheduled.day_agenda.title",
+                                defaultValue: "Due on \(formatDayHeader(selectedPlannerDate))",
+                                comment: "Header for scheduled items due on the selected planner day"
+                            )
+                        )
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                        Text(selectedDaySummaryText)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(AppColors.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer(minLength: 8)
 
                     Button {
                         createPlannedForSelectedDate()
@@ -600,21 +625,11 @@ struct CashflowScheduledTransactionsView: View {
                         .fixedSize(horizontal: true, vertical: false)
                         .background(
                             Capsule(style: .continuous)
-                                .fill(Color.white.opacity(0.10))
+                                .fill(kind.accentColor.opacity(0.18))
                         )
                     }
                     .buttonStyle(.plain)
                 }
-
-                Text(
-                    String(
-                        localized: "cashflow.scheduled.day_agenda.empty_subtitle",
-                        defaultValue: "Pick another date or switch to the list to review all monthly and one-time items.",
-                        comment: "Empty state subtitle for selected planner day"
-                    )
-                )
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(AppColors.textSecondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -887,6 +902,10 @@ struct CashflowScheduledTransactionsView: View {
         return formatter.string(from: date)
     }
 
+    private var selectedDaySummaryText: String {
+        CashflowScheduledPlannerCopy.daySummaryText(entryCount: selectedDayEntries.count)
+    }
+
     private var plannerMonthTitle: String {
         let formatter = DateFormatter()
         formatter.locale = .autoupdatingCurrent
@@ -1029,6 +1048,24 @@ struct CashflowScheduledTransactionsView: View {
     private static func monthStart(for date: Date) -> Date {
         let calendar = Calendar.current
         return calendar.date(from: calendar.dateComponents([.year, .month], from: date)) ?? date
+    }
+}
+
+enum CashflowScheduledPlannerCopy {
+    static func daySummaryText(entryCount: Int) -> String {
+        if entryCount == 0 {
+            return String(
+                localized: "cashflow.scheduled.day_agenda.summary.empty",
+                defaultValue: "You can add another planned item directly to this date.",
+                comment: "Helper text for selected planner date when there are no items"
+            )
+        }
+
+        return String(
+            localized: "cashflow.scheduled.day_agenda.summary.count",
+            defaultValue: "\(entryCount) scheduled item(s) on this date. Add another without leaving the calendar.",
+            comment: "Helper text for selected planner date when there are scheduled items"
+        )
     }
 }
 

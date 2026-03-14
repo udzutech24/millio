@@ -146,6 +146,10 @@ struct CashflowState {
 
     /// Предупреждение о конвертации валют в истории
     var currencyConversionWarning: String? = nil
+    /// Дата, на которую опирается оценочный курс в предупреждении.
+    var currencyConversionWarningDate: Date? = nil
+    /// Признак ручного обновления курсов для CTA в баннере.
+    var isRefreshingExchangeRates: Bool = false
 
     /// Детализация доходов по категориям за период (по убыванию суммы)
     var incomeBreakdown: [CashflowCategoryBreakdownEntry] = []
@@ -300,6 +304,8 @@ enum CashflowAction {
     case syncDisplayCurrencyWithPrimary(String)
     case syncPrimaryCurrencyChange(old: String, new: String)
     case loadCards
+    case refreshExchangeRates
+    case dismissCurrencyConversionWarning
 }
 
 // MARK: - Cashflow ViewModel
@@ -317,6 +323,7 @@ final class CashflowViewModel: ViewModelProtocol {
     private let now: () -> Date
     private let assetsSnapshotProvider: ((Date, Date, String) async -> (start: Double, end: Double)?)?
     private let defaults = UserDefaults.standard
+    private let budgetAutoRepeatPrefs = BudgetAutoRepeatPrefs()
     
     private var eventSubscriptionID: UUID?
     private var isRecurringGenerationInProgress: Bool = false
@@ -477,6 +484,20 @@ final class CashflowViewModel: ViewModelProtocol {
             
         case .loadCards:
             loadCards()
+
+        case .refreshExchangeRates:
+            guard !state.isRefreshingExchangeRates else { return }
+            state.isRefreshingExchangeRates = true
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                await CurrencyRateService.shared.forceRefreshRates()
+                self.state.isRefreshingExchangeRates = false
+                self.updateChartData()
+            }
+
+        case .dismissCurrencyConversionWarning:
+            state.currencyConversionWarning = nil
+            state.currencyConversionWarningDate = nil
         }
     }
     
@@ -783,6 +804,7 @@ final class CashflowViewModel: ViewModelProtocol {
     
     private func updateChartData() {
         state.currencyConversionWarning = nil
+        state.currencyConversionWarningDate = nil
         Task { @MainActor [weak self] in
             guard let self else { return }
             await self.updateChartDataAsync()
@@ -1004,6 +1026,27 @@ final class CashflowViewModel: ViewModelProtocol {
             }
         )
         return (plan, snapshot, categoryLimits)
+    }
+
+    var isMonthlyBudgetAutoRepeatEnabled: Bool {
+        get { budgetAutoRepeatPrefs.isEnabled }
+        set { budgetAutoRepeatPrefs.isEnabled = newValue }
+    }
+
+    func previousMonthlyBudgetSuggestion(for month: Date) -> BudgetRepeatSuggestion? {
+        let calendar = Calendar.current
+        guard let previousMonth = calendar.date(byAdding: .month, value: -1, to: month) else { return nil }
+        let descriptor = monthlyBudgetPeriodDescriptor(for: previousMonth, calendar: calendar)
+        guard let plan = fetchBudgetPlan(matching: descriptor) else { return nil }
+
+        let limits = fetchBudgetCategoryLimits(for: plan.budgetID)
+        let categoryLimits = Dictionary(uniqueKeysWithValues: limits.map { ($0.categoryRawValue, $0.limitAmount) })
+
+        return BudgetRepeatSuggestion(
+            totalAmount: plan.totalLimitAmount,
+            categoryLimits: categoryLimits,
+            sourceMonth: descriptor.startDate
+        )
     }
 
     func saveMonthlyBudgetConfiguration(
@@ -1247,7 +1290,11 @@ final class CashflowViewModel: ViewModelProtocol {
         let filtered = monthlyTransactions(for: targetType, month: month)
 
         let previousWarning = state.currencyConversionWarning
-        defer { state.currencyConversionWarning = previousWarning }
+        let previousWarningDate = state.currencyConversionWarningDate
+        defer {
+            state.currencyConversionWarning = previousWarning
+            state.currencyConversionWarningDate = previousWarningDate
+        }
 
         var totals: [String: Double] = [:]
         for transaction in filtered {
@@ -1409,6 +1456,7 @@ final class CashflowViewModel: ViewModelProtocol {
         while let candidate = Self.recurrenceOccurrenceDate(
             templateDate: templateDate,
             rule: template.recurrenceRule,
+            weekdays: template.recurrenceWeekdays,
             occurrenceIndex: occurrenceIndex,
             calendar: calendar
         ) {
@@ -1449,7 +1497,11 @@ final class CashflowViewModel: ViewModelProtocol {
         let filtered = monthlyTransactions(for: type, month: month)
 
         let previousWarning = state.currencyConversionWarning
-        defer { state.currencyConversionWarning = previousWarning }
+        let previousWarningDate = state.currencyConversionWarningDate
+        defer {
+            state.currencyConversionWarning = previousWarning
+            state.currencyConversionWarningDate = previousWarningDate
+        }
 
         var total: Double = 0
         for transaction in filtered {
@@ -1969,6 +2021,7 @@ final class CashflowViewModel: ViewModelProtocol {
             while let expectedDate = Self.recurrenceOccurrenceDate(
                 templateDate: templateDate,
                 rule: template.recurrenceRule,
+                weekdays: template.recurrenceWeekdays,
                 occurrenceIndex: occurrenceIndex,
                 calendar: calendar
             ) {
@@ -1997,6 +2050,7 @@ final class CashflowViewModel: ViewModelProtocol {
                         expenseCategoryRaw: template.expenseCategoryRaw,
                         note: template.note,
                         recurrenceRule: .none,
+                        recurrenceWeekdays: [],
                         recurrenceSeriesID: templateSeriesID,
                         affectsCardBalance: template.affectsCardBalance
                     )
@@ -2344,10 +2398,37 @@ final class CashflowViewModel: ViewModelProtocol {
     private static func recurrenceOccurrenceDate(
         templateDate: Date,
         rule: CashflowRecurrenceRule,
+        weekdays: Set<CashflowRecurrenceWeekday>,
         occurrenceIndex: Int,
         calendar: Calendar
     ) -> Date? {
         guard occurrenceIndex >= 0 else { return nil }
+        if rule == .weekly {
+            var selectedWeekdays = weekdays
+            if selectedWeekdays.isEmpty,
+               let templateWeekday = CashflowRecurrenceWeekday.from(calendarWeekday: calendar.component(.weekday, from: templateDate)) {
+                selectedWeekdays.insert(templateWeekday)
+            }
+            let normalized = Set(selectedWeekdays.compactMap { CashflowRecurrenceWeekday(rawValue: $0.rawValue) })
+            guard !normalized.isEmpty else { return occurrenceIndex == 0 ? templateDate : nil }
+
+            var candidate = templateDate
+            var matchesCount = 0
+            let maxIterations = 366 * 6
+            for _ in 0..<maxIterations {
+                let weekday = calendar.component(.weekday, from: candidate)
+                if normalized.contains(where: { $0.rawValue == weekday }) {
+                    if matchesCount == occurrenceIndex {
+                        return candidate
+                    }
+                    matchesCount += 1
+                }
+                guard let nextDay = calendar.date(byAdding: .day, value: 1, to: candidate) else { break }
+                candidate = nextDay
+            }
+
+            return nil
+        }
         guard let monthInterval = rule.monthInterval else { return occurrenceIndex == 0 ? templateDate : nil }
 
         let monthStart = Self.monthStart(for: templateDate, calendar: calendar)
@@ -2479,9 +2560,7 @@ final class CashflowViewModel: ViewModelProtocol {
         )
 
         if result.resolution != .exact {
-            if state.currencyConversionWarning == nil {
-                state.currencyConversionWarning = "Some values were calculated using an estimated exchange rate."
-            }
+            markEstimatedRateWarning(on: result.rateDate ?? transaction.transactionDate)
         }
         
         if let rate = result.rate {
@@ -2493,13 +2572,47 @@ final class CashflowViewModel: ViewModelProtocol {
             from: transaction.currency,
             to: currency
         ) {
-            if state.currencyConversionWarning == nil {
-                state.currencyConversionWarning = "Some values were calculated using an estimated exchange rate."
-            }
+            markEstimatedRateWarning(on: now())
             return converted
         }
 
         return transaction.amount
+    }
+
+    private func markEstimatedRateWarning(on date: Date) {
+        let day = Calendar.current.startOfDay(for: date)
+        if let existing = state.currencyConversionWarningDate {
+            state.currencyConversionWarningDate = max(existing, day)
+        } else {
+            state.currencyConversionWarningDate = day
+        }
+
+        let warningDate = state.currencyConversionWarningDate ?? day
+        state.currencyConversionWarning = Self.estimatedRateWarningText(asOf: warningDate)
+    }
+
+    static func estimatedRateWarningText(
+        asOf date: Date,
+        locale: Locale = .autoupdatingCurrent
+    ) -> String {
+        let base = AppLocalization.string("finances.dynamics.warning.estimated_rate", locale: locale)
+        let baseWithoutTrailingDot = base
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.setLocalizedDateFormatFromTemplate("dMMyyyy")
+        let dateText = formatter.string(from: date)
+
+        let languageCode = locale.identifier
+            .split(separator: "_")
+            .first
+            .map { String($0).lowercased() } ?? "en"
+        if languageCode == "ru" {
+            return "\(baseWithoutTrailingDot) на \(dateText)"
+        }
+        return "\(baseWithoutTrailingDot) as of \(dateText)"
     }
     
     private func deleteTransactionAsync(_ transaction: CashflowTransaction, recalculate: Bool) async {
@@ -2579,6 +2692,7 @@ final class CashflowViewModel: ViewModelProtocol {
             existing.expenseCategoryRaw = transaction.expenseCategoryRaw
             existing.note = transaction.note
             existing.recurrenceRuleRaw = transaction.recurrenceRuleRaw
+            existing.recurrenceWeekdaysRaw = transaction.recurrenceWeekdaysRaw
             existing.recurrenceSeriesID = transaction.recurrenceSeriesID
             existing.affectsCardBalance = transaction.affectsCardBalance
             existing.exchangeRate = exchangeInfo.rate
@@ -2600,6 +2714,7 @@ final class CashflowViewModel: ViewModelProtocol {
                 expenseCategoryRaw: transaction.expenseCategoryRaw,
                 note: transaction.note,
                 recurrenceRule: transaction.recurrenceRule,
+                recurrenceWeekdays: transaction.recurrenceWeekdays,
                 recurrenceSeriesID: transaction.recurrenceSeriesID,
                 affectsCardBalance: transaction.affectsCardBalance
             )

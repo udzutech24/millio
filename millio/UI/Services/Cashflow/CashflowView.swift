@@ -187,7 +187,15 @@ private struct CashflowContentView: View {
                     assetBreakdownSection
 
                     if let warning = viewModel.state.currencyConversionWarning {
-                        currencyWarningView(text: warning)
+                        currencyWarningView(
+                            text: warning,
+                            isRefreshing: viewModel.state.isRefreshingExchangeRates,
+                            onDismissTapped: {
+                                viewModel.handle(.dismissCurrencyConversionWarning)
+                            }
+                        ) {
+                            viewModel.handle(.refreshExchangeRates)
+                        }
                     }
                 }
                 .padding(.horizontal, 12)
@@ -563,16 +571,63 @@ private struct CashflowContentView: View {
         .padding(.vertical, 2)
     }
 
-    private func currencyWarningView(text: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(AppColors.warning)
+    private func currencyWarningView(
+        text: String,
+        isRefreshing: Bool,
+        onDismissTapped: @escaping () -> Void,
+        onRefreshTapped: @escaping () -> Void
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppColors.warning)
 
-            Text(text)
-                .font(.system(size: 12))
-                .foregroundStyle(primarySecondaryText)
-                .lineLimit(3)
+                Text(text)
+                    .font(.system(size: 12))
+                    .foregroundStyle(primarySecondaryText)
+                    .lineLimit(3)
+
+                Spacer(minLength: 8)
+
+                Button(action: onDismissTapped) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(primarySecondaryText.opacity(0.85))
+                        .padding(6)
+                        .background(
+                            Circle()
+                                .fill(Color.white.opacity(0.06))
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("Close"))
+            }
+
+            Button(action: onRefreshTapped) {
+                HStack(spacing: 6) {
+                    if isRefreshing {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(AppColors.warning)
+                    }
+                    Text(isRefreshing ? "converter.settings.refreshing_rates" : "converter.settings.refresh_rates")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppColors.warning)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(AppColors.warning.opacity(0.12))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(AppColors.warning.opacity(0.35), lineWidth: 1)
+                        )
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(isRefreshing)
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
@@ -586,6 +641,7 @@ private struct CashflowContentView: View {
             RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
                 .stroke(AppColors.warning.opacity(0.45), lineWidth: 1)
         }
+        .accessibilityElement(children: .combine)
         .accessibilityLabel(Text(text))
     }
 

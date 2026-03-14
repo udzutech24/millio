@@ -73,6 +73,64 @@ struct CashflowBulkExpenseImportTests {
         #expect(AmountInputFormatter.display("22222", maxFractionDigits: 0) == "22 222")
     }
 
+    @Test("Политика выбора фиксирует валюту и карту в одном валютном контексте")
+    func selectionPolicyKeepsCurrencyAndCardAligned() {
+        let rubFavorite = Card(
+            name: "RUB main",
+            cardNumber: "1000",
+            bank: .tinkoff,
+            currency: "RUB",
+            balance: 1_000,
+            isFavorite: true
+        )
+        let usdCard = Card(
+            name: "USD",
+            cardNumber: "2000",
+            bank: .alfa,
+            currency: "USD",
+            balance: 200
+        )
+
+        let normalized = CashflowBulkExpenseImportSelectionPolicy.normalizeSelection(
+            cards: [rubFavorite, usdCard],
+            selectedCurrency: "EUR",
+            selectedCardID: usdCard.cardUniqueID,
+            preferredCurrency: "RUB"
+        )
+
+        #expect(normalized.currency == "RUB")
+        #expect(normalized.cardID == rubFavorite.cardUniqueID)
+    }
+
+    @Test("Политика выбора сохраняет карту если она уже в выбранной валюте")
+    func selectionPolicyPreservesMatchingCard() {
+        let rubCard = Card(
+            name: "RUB",
+            cardNumber: "1111",
+            bank: .tinkoff,
+            currency: "RUB",
+            balance: 700
+        )
+        let usdFavorite = Card(
+            name: "USD fav",
+            cardNumber: "2222",
+            bank: .alfa,
+            currency: "USD",
+            balance: 300,
+            isFavorite: true
+        )
+
+        let normalized = CashflowBulkExpenseImportSelectionPolicy.normalizeSelection(
+            cards: [rubCard, usdFavorite],
+            selectedCurrency: "USD",
+            selectedCardID: usdFavorite.cardUniqueID,
+            preferredCurrency: "RUB"
+        )
+
+        #expect(normalized.currency == "USD")
+        #expect(normalized.cardID == usdFavorite.cardUniqueID)
+    }
+
     @Test("Пакетный импорт расходов сохраняет операции и уменьшает баланс карты")
     func bulkPersistUpdatesCardBalance() async throws {
         let context = try makeContext()
