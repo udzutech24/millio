@@ -951,6 +951,7 @@ final class AuthManager {
     var currentUser: AuthUser?
     var errorMessage: String?
     var isBusy: Bool = false
+    var isLogoutInProgress: Bool = false
     var accessTokenExpiresAt: Date?
 
     var isAuthenticated: Bool {
@@ -1086,8 +1087,18 @@ final class AuthManager {
         defer { isBusy = false }
 
         do {
-            currentUser = try await service.currentUser()
-            accessTokenExpiresAt = await service.accessTokenExpiryDate()
+            let user = try await service.currentUser()
+            let tokenExpiryDate = await service.accessTokenExpiryDate()
+
+            // If session changed while request was in-flight (e.g. user logged out),
+            // do not restore stale authenticated state.
+            guard isAuthenticated else {
+                diagnostics.log(.info, phase: "auth.me.ignored_after_state_change", operation: .me, requestId: lastAuthRequestId, backendRequestId: nil, details: [:])
+                return
+            }
+
+            currentUser = user
+            accessTokenExpiresAt = tokenExpiryDate
             diagnostics.log(.info, phase: "auth.me.completed", operation: .me, requestId: lastAuthRequestId, backendRequestId: nil, details: [:])
         } catch {
             present(error, operation: .me)
@@ -1098,11 +1109,18 @@ final class AuthManager {
     }
 
     func logout() async {
-        guard !isBusy else { return }
+        guard isAuthenticated, !isLogoutInProgress else { return }
 
+        let wasBusy = isBusy
         isBusy = true
+        isLogoutInProgress = true
         diagnostics.log(.info, phase: "auth.logout.started", operation: .logout, requestId: lastAuthRequestId, backendRequestId: nil, details: [:])
-        defer { isBusy = false }
+        defer {
+            isLogoutInProgress = false
+            if !wasBusy {
+                isBusy = false
+            }
+        }
 
         await service.logout()
         clearState()

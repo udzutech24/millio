@@ -92,7 +92,7 @@ struct ProfileAccountDetailsView: View {
             )
             .foregroundStyle(Color.red.opacity(0.9))
             .buttonStyle(.plain)
-            .disabled(authManager.isBusy)
+            .disabled(authManager.isLogoutInProgress)
         }
     }
 

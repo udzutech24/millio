@@ -87,6 +87,9 @@ struct AuthManagerTests {
         var callbackArgument: AuthUser?
         var callbackCalls = 0
 
+        manager.status = .authenticated
+        manager.currentUser = .fixture
+
         manager.configure(onSessionChanged: { user in
             callbackCalls += 1
             callbackArgument = user
@@ -97,6 +100,38 @@ struct AuthManagerTests {
         #expect(await service.logoutCalls == 1)
         #expect(callbackCalls == 1)
         #expect(callbackArgument == nil)
+    }
+
+    @Test("logout proceeds while busy if session is authenticated")
+    func testLogoutProceedsWhenBusyAuthenticated() async {
+        let service = LogoutTrackingAuthService()
+        let manager = AuthManager(service: service, toastCenter: ToastCenter())
+        manager.status = .authenticated
+        manager.currentUser = .fixture
+        manager.isBusy = true
+
+        await manager.logout()
+
+        #expect(await service.logoutCalls == 1)
+        #expect(manager.status == .signedOut)
+        #expect(manager.currentUser == nil)
+    }
+
+    @Test("reload current user result is ignored after logout")
+    func testReloadCurrentUserResultIgnoredAfterLogout() async {
+        let service = SuspendedCurrentUserAuthService()
+        let manager = AuthManager(service: service, toastCenter: ToastCenter())
+        manager.status = .authenticated
+        manager.currentUser = .fixture
+
+        let reloadTask = Task { await manager.reloadCurrentUser() }
+        await service.waitUntilCurrentUserRequested()
+        await manager.logout()
+        await service.resumeCurrentUser(with: .otherFixture)
+        await reloadTask.value
+
+        #expect(manager.status == .signedOut)
+        #expect(manager.currentUser == nil)
     }
 }
 
@@ -207,4 +242,77 @@ private actor LogoutTrackingAuthService: AuthServiceProtocol {
     func accessToken(forceRefresh: Bool) async throws -> String {
         throw AuthServiceError.unconfigured
     }
+}
+
+private actor SuspendedCurrentUserAuthService: AuthServiceProtocol {
+    private var didRequestCurrentUser = false
+    private var currentUserStartedContinuation: CheckedContinuation<Void, Never>?
+    private var currentUserResultContinuation: CheckedContinuation<AuthUser, Never>?
+    private(set) var logoutCalls = 0
+
+    func signInWithApple(identityToken: String, email: String?, firstName: String?, lastName: String?) async throws -> AuthSession {
+        throw AuthServiceError.unconfigured
+    }
+
+    func restoreSession() async throws -> AuthSession? {
+        nil
+    }
+
+    func currentUser() async throws -> AuthUser {
+        didRequestCurrentUser = true
+        currentUserStartedContinuation?.resume()
+        return await withCheckedContinuation { continuation in
+            currentUserResultContinuation = continuation
+        }
+    }
+
+    func logout() async {
+        logoutCalls += 1
+    }
+
+    func accessTokenExpiryDate() async -> Date? {
+        Date().addingTimeInterval(600)
+    }
+
+    func accessToken(forceRefresh: Bool) async throws -> String {
+        throw AuthServiceError.unconfigured
+    }
+
+    func waitUntilCurrentUserRequested() async {
+        if didRequestCurrentUser {
+            return
+        }
+        await withCheckedContinuation { continuation in
+            currentUserStartedContinuation = continuation
+        }
+    }
+
+    func resumeCurrentUser(with user: AuthUser) {
+        currentUserResultContinuation?.resume(returning: user)
+        currentUserResultContinuation = nil
+    }
+}
+
+private extension AuthUser {
+    static let fixture = AuthUser(
+        id: "user-1",
+        email: "sid@example.com",
+        emailVerified: true,
+        firstName: "Sid",
+        lastName: "Orkin",
+        fullName: "Sid Orkin",
+        avatarUrl: nil,
+        lastLoginAt: nil
+    )
+
+    static let otherFixture = AuthUser(
+        id: "user-2",
+        email: "other@example.com",
+        emailVerified: true,
+        firstName: "Other",
+        lastName: "User",
+        fullName: "Other User",
+        avatarUrl: nil,
+        lastLoginAt: nil
+    )
 }
