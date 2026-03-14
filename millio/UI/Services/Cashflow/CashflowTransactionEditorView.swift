@@ -1163,7 +1163,10 @@ struct CashflowTransactionEditorView: View {
 
         isSavingTransaction = true
         Task {
-            let didSave = await viewModel.persistTransaction(transaction)
+            let didSave = await viewModel.persistTransaction(
+                transaction,
+                replacing: editingTransaction
+            )
             await MainActor.run {
                 isSavingTransaction = false
                 guard didSave else {

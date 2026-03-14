@@ -229,32 +229,37 @@ struct BackupManagementView: View {
     }
 
     var body: some View {
-        ZStack {
-            GradientBackground()
+        GeometryReader { geometry in
+            let availableWidth = max(geometry.size.width - 40, 0)
 
-            ScrollView {
-                VStack(spacing: 14) {
-                    header
-                    overviewCard
-                    protectionCard
-                    actionsCard
-                    versionsCard
+            ZStack {
+                GradientBackground()
 
-                    if let backupError {
-                        Text(backupError.localizedDescription)
-                            .font(.system(size: 13, weight: .regular))
-                            .foregroundStyle(AppColors.error)
-                            .multilineTextAlignment(.leading)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                ScrollView {
+                    VStack(spacing: 14) {
+                        header
+                        overviewCard(availableWidth: availableWidth)
+                        protectionCard
+                        actionsCard(availableWidth: availableWidth)
+                        versionsCard
+
+                        if let backupError {
+                            Text(backupError.localizedDescription)
+                                .font(.system(size: 13, weight: .regular))
+                                .foregroundStyle(AppColors.error)
+                                .multilineTextAlignment(.leading)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 24)
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 24)
-            }
-            .scrollDismissesKeyboard(.immediately)
-            .dismissKeyboardOnTap()
-            .refreshable {
-                await refreshStatusIfNeeded(force: true)
+                .scrollDismissesKeyboard(.immediately)
+                .dismissKeyboardOnTap()
+                .refreshable {
+                    await refreshStatusIfNeeded(force: true)
+                }
             }
         }
         .confirmationDialog(
@@ -359,7 +364,7 @@ struct BackupManagementView: View {
         .padding(.top, 14)
     }
 
-    private var overviewCard: some View {
+    private func overviewCard(availableWidth: CGFloat) -> some View {
         FinancesGlassCard(
             accentColor: AppColors.brandPrimary,
             cornerRadius: 22,
@@ -413,19 +418,16 @@ struct BackupManagementView: View {
                     .disabled(isBusy)
                 }
 
-                HStack(spacing: 10) {
-                    metricTile(
-                        title: BackupL10n.tr("backup.metrics.storage", fallback: "Where"),
-                        value: appState.isBackupEnabled
-                            ? (appState.isICloudAvailable
-                                ? BackupL10n.tr("backup.storage.icloud", fallback: "iCloud")
-                                : BackupL10n.tr("backup.storage.unavailable", fallback: "Unavailable"))
-                            : BackupL10n.tr("backup.storage.local", fallback: "Local")
-                    )
-                    metricTile(
-                        title: BackupL10n.tr("backup.metrics.last", fallback: "Last"),
-                        value: formattedBackupDate(appState.lastBackupDate) ?? BackupL10n.tr("backup.metrics.last.none", fallback: "None yet")
-                    )
+                if BackupManagementLayout.shouldStackMetrics(availableWidth: availableWidth) {
+                    VStack(spacing: 10) {
+                        storageMetricTile
+                        lastBackupMetricTile
+                    }
+                } else {
+                    HStack(spacing: 10) {
+                        storageMetricTile
+                        lastBackupMetricTile
+                    }
                 }
 
                 Text(primaryStatusLine)
@@ -642,7 +644,7 @@ struct BackupManagementView: View {
         }
     }
 
-    private var actionsCard: some View {
+    private func actionsCard(availableWidth: CGFloat) -> some View {
         FinancesGlassCard(accentColor: AppColors.brandPrimary, cornerRadius: 22, contentPadding: EdgeInsets(top: 14, leading: 14, bottom: 14, trailing: 14)) {
             VStack(alignment: .leading, spacing: 10) {
                 Text(BackupL10n.tr("backup.actions.title", fallback: "Do this next"))
@@ -672,21 +674,15 @@ struct BackupManagementView: View {
                     .foregroundStyle(AppColors.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                HStack(spacing: 10) {
-                    compactActionButton(
-                        title: BackupL10n.tr("backup.actions.export.title", fallback: "Export selected"),
-                        icon: "square.and.arrow.up",
-                        isEnabled: canExportSelectedVersion
-                    ) {
-                        Task { await exportSelectedVersion() }
+                if BackupManagementLayout.shouldStackActionButtons(availableWidth: availableWidth) {
+                    VStack(spacing: 10) {
+                        exportActionButton
+                        importActionButton
                     }
-
-                    compactActionButton(
-                        title: BackupL10n.tr("backup.actions.import.title", fallback: "Import file"),
-                        icon: "square.and.arrow.down",
-                        isEnabled: canImportVersion
-                    ) {
-                        isImportingVersion = true
+                } else {
+                    HStack(spacing: 10) {
+                        exportActionButton
+                        importActionButton
                     }
                 }
 
@@ -1046,6 +1042,24 @@ struct BackupManagementView: View {
         .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
+    private var storageMetricTile: some View {
+        metricTile(
+            title: BackupL10n.tr("backup.metrics.storage", fallback: "Where"),
+            value: appState.isBackupEnabled
+                ? (appState.isICloudAvailable
+                    ? BackupL10n.tr("backup.storage.icloud", fallback: "iCloud")
+                    : BackupL10n.tr("backup.storage.unavailable", fallback: "Unavailable"))
+                : BackupL10n.tr("backup.storage.local", fallback: "Local")
+        )
+    }
+
+    private var lastBackupMetricTile: some View {
+        metricTile(
+            title: BackupL10n.tr("backup.metrics.last", fallback: "Last"),
+            value: formattedBackupDate(appState.lastBackupDate) ?? BackupL10n.tr("backup.metrics.last.none", fallback: "None yet")
+        )
+    }
+
     @ViewBuilder
     private func subtleCallout(title: String, text: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -1182,6 +1196,26 @@ struct BackupManagementView: View {
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
+    }
+
+    private var exportActionButton: some View {
+        compactActionButton(
+            title: BackupL10n.tr("backup.actions.export.title", fallback: "Export selected"),
+            icon: "square.and.arrow.up",
+            isEnabled: canExportSelectedVersion
+        ) {
+            Task { await exportSelectedVersion() }
+        }
+    }
+
+    private var importActionButton: some View {
+        compactActionButton(
+            title: BackupL10n.tr("backup.actions.import.title", fallback: "Import file"),
+            icon: "square.and.arrow.down",
+            isEnabled: canImportVersion
+        ) {
+            isImportingVersion = true
+        }
     }
 
     private var passphraseCollapsedSummary: some View {

@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 func cashflowHistoryAmountText(_ amount: Double) -> String {
     let formatter = NumberFormatter()
@@ -19,6 +20,13 @@ func cashflowHistoryAmountText(_ amount: Double) -> String {
     formatter.minimumFractionDigits = 0
     formatter.maximumFractionDigits = 2
     return formatter.string(from: NSNumber(value: amount)) ?? "0"
+}
+
+func cashflowHistoryResolvedTransaction(
+    for transaction: CashflowTransaction,
+    in transactions: [CashflowTransaction]
+) -> CashflowTransaction {
+    transactions.first(where: { $0.persistentModelID == transaction.persistentModelID }) ?? transaction
 }
 
 // MARK: - History View
@@ -681,6 +689,10 @@ private struct HistoryTransactionDetailView: View {
         Dictionary(uniqueKeysWithValues: viewModel.state.allCards.map { ($0.cardUniqueID, $0.name) })
     }
 
+    private var currentTransaction: CashflowTransaction {
+        cashflowHistoryResolvedTransaction(for: transaction, in: viewModel.state.transactions)
+    }
+
     var body: some View {
         ZStack {
             GradientBackground()
@@ -708,13 +720,33 @@ private struct HistoryTransactionDetailView: View {
         } message: {
             Text(String(localized: "cashflow.history.detail.delete.message"))
         }
+        .alert(
+            String(
+                localized: "cashflow.history.detail.delete.balance_update_failed.title",
+                defaultValue: "Cannot update balances",
+                comment: "Title for failed balance recalculation after deleting a cashflow transaction"
+            ),
+            isPresented: Binding(
+                get: { viewModel.state.deleteBalanceUpdateErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        viewModel.handle(.dismissDeleteBalanceUpdateError)
+                    }
+                }
+            )
+        ) {
+            Button(String(localized: "cashflow.common.ok"), role: .cancel) {
+                viewModel.handle(.dismissDeleteBalanceUpdateError)
+            }
+        } message: {
+            Text(viewModel.state.deleteBalanceUpdateErrorMessage ?? "")
+        }
         .sheet(isPresented: $showEditSheet) {
             CashflowTransactionEditorView(
                 viewModel: viewModel,
-                transaction: transaction,
+                transaction: currentTransaction,
                 onSave: {
                     showEditSheet = false
-                    dismiss()
                 }
             )
         }
@@ -728,7 +760,7 @@ private struct HistoryTransactionDetailView: View {
             )
             detailRow(
                 title: String(localized: "cashflow.history.detail.type"),
-                value: transaction.transactionType.displayName
+                value: currentTransaction.transactionType.displayName
             )
             detailRow(
                 title: String(localized: "cashflow.history.detail.date"),
@@ -742,21 +774,21 @@ private struct HistoryTransactionDetailView: View {
                 )
             }
 
-            if let fromCard = cardName(for: transaction.cardID) {
+            if let fromCard = cardName(for: currentTransaction.cardID) {
                 detailRow(
                     title: String(localized: "cashflow.history.detail.from_account"),
                     value: fromCard
                 )
             }
 
-            if let toCard = cardName(for: transaction.toCardID) {
+            if let toCard = cardName(for: currentTransaction.toCardID) {
                 detailRow(
                     title: String(localized: "cashflow.history.detail.to_account"),
                     value: toCard
                 )
             }
 
-            if let note = transaction.note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
+            if let note = currentTransaction.note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
                 detailRow(
                     title: String(localized: "cashflow.history.detail.note"),
                     value: note
@@ -832,27 +864,27 @@ private struct HistoryTransactionDetailView: View {
         let formatter = DateFormatter()
         formatter.locale = .autoupdatingCurrent
         formatter.setLocalizedDateFormatFromTemplate("d MMMM y, HH:mm")
-        return formatter.string(from: transaction.transactionDate)
+        return formatter.string(from: currentTransaction.transactionDate)
     }
 
     private var categoryTitle: String? {
-        switch transaction.transactionType {
+        switch currentTransaction.transactionType {
         case .income:
-            return viewModel.incomeCategoryDisplayName(for: transaction.incomeCategoryRaw)
+            return viewModel.incomeCategoryDisplayName(for: currentTransaction.incomeCategoryRaw)
         case .expense:
-            return viewModel.expenseCategoryDisplayName(for: transaction.expenseCategoryRaw)
+            return viewModel.expenseCategoryDisplayName(for: currentTransaction.expenseCategoryRaw)
         case .transfer, .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
             return nil
         }
     }
 
     private var formattedAmount: String {
-        let amount = cashflowHistoryAmountText(transaction.amount)
+        let amount = cashflowHistoryAmountText(currentTransaction.amount)
         return "\(amount) \(resolvedCurrencyCode)"
     }
 
     private var resolvedCurrencyCode: String {
-        let rawCurrency = transaction.currency
+        let rawCurrency = currentTransaction.currency
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .uppercased()
         if !rawCurrency.isEmpty {
@@ -869,7 +901,7 @@ private struct HistoryTransactionDetailView: View {
     }
 
     private func deleteTransaction(recalculate: Bool) {
-        viewModel.handle(.deleteTransaction(transaction, recalculate: recalculate))
+        viewModel.handle(.deleteTransaction(currentTransaction, recalculate: recalculate))
         dismiss()
     }
 }

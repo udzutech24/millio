@@ -17,7 +17,7 @@ struct CashflowCategoryGridLayoutTests {
             containerWidth: CGFloat(320)
         )
 
-        #expect(count == CashflowCategoryGridLayout.compactExpenseColumns)
+        #expect(count == CashflowCategoryGridLayout.compactColumns)
     }
 
     @Test("На обычном экране у расходов 4 колонки")
@@ -38,7 +38,7 @@ struct CashflowCategoryGridLayoutTests {
             showsBudgetDetails: true
         )
 
-        #expect(count == CashflowCategoryGridLayout.compactExpenseColumns)
+        #expect(count == CashflowCategoryGridLayout.compactColumns)
     }
 
     @Test("При включенных лимитах на широком экране у расходов остается 4 колонки")
@@ -52,13 +52,24 @@ struct CashflowCategoryGridLayoutTests {
         #expect(count == CashflowCategoryGridLayout.regularColumns)
     }
 
-    @Test("Доходы сохраняют 4 колонки даже на узкой ширине")
-    func incomeStaysFourColumnsOnCompactWidth() {
+    @Test("На узком экране доходы тоже переходят на 3 колонки")
+    func incomeUsesThreeColumnsOnCompactWidth() {
         let count = CashflowCategoryGridLayout.columnCount(
             for: .income,
             containerWidth: CGFloat(320)
         )
 
-        #expect(count == CashflowCategoryGridLayout.regularColumns)
+        #expect(count == CashflowCategoryGridLayout.compactColumns)
+    }
+
+    @Test("Карточки без лимитов компактнее карточек с лимитами")
+    func cardsWithoutBudgetAreShorter() {
+        let compact = CashflowCategoryGridLayout.cardMetrics(showsBudgetDetails: false)
+        let budget = CashflowCategoryGridLayout.cardMetrics(showsBudgetDetails: true)
+
+        #expect(compact.cardMinHeight < budget.cardMinHeight)
+        #expect(compact.cardMinHeight <= 100)
+        #expect(compact.usesFlexibleSpacer == false)
+        #expect(compact.titleMinHeight < budget.titleMinHeight)
     }
 }

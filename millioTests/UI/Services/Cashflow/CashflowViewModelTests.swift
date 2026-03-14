@@ -1571,8 +1571,63 @@ extension CashflowViewModelTests {
         #expect(abs(card.balance - 500) < 0.01)
     }
 
+    @Test("Редактирование операции обновляет существующую запись, а не создает дубль")
+    func testPersistTransactionReplacingExistingUpdatesInsteadOfDuplicating() async throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 14, hour: 12)) ?? Date()
+
+        let card = Card(
+            name: "Main",
+            cardNumber: "9900",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 10_000
+        )
+        modelContext.insert(card)
+
+        let existing = CashflowTransaction(
+            transactionType: .income,
+            amount: 555,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: card.cardUniqueID,
+            incomeCategory: .business,
+            affectsCardBalance: true
+        )
+        modelContext.insert(existing)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+
+        let updated = CashflowTransaction(
+            transactionType: .income,
+            amount: 55_222,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: card.cardUniqueID,
+            incomeCategory: .business,
+            affectsCardBalance: true
+        )
+
+        let didSave = await viewModel.persistTransaction(updated, replacing: existing)
+
+        #expect(didSave)
+
+        let transactions = try modelContext.fetch(
+            FetchDescriptor<CashflowTransaction>(
+                sortBy: [SortDescriptor(\.createdAt, order: .forward)]
+            )
+        )
+
+        #expect(transactions.count == 1)
+        let saved = try #require(transactions.first)
+        #expect(saved.persistentModelID == existing.persistentModelID)
+        #expect(abs(saved.amount - 55_222) < 0.01)
+    }
+
     @Test("Удаление операции исключает ее из регулярных и запланированных списков")
-    func testDeleteTransactionRemovesItFromScheduledCollections() throws {
+    func testDeleteTransactionRemovesItFromScheduledCollections() async throws {
         let modelContext = try createTestModelContext()
         let calendar = Calendar.current
         let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 10)) ?? Date()
@@ -1605,15 +1660,30 @@ extension CashflowViewModelTests {
         viewModel.handle(.deleteTransaction(recurringIncome, recalculate: true))
         viewModel.handle(.deleteTransaction(plannedExpense, recalculate: true))
 
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            viewModel.recurringTemplates(for: .income, relativeTo: fixedNow).isEmpty
+                && viewModel.plannedOneTimeTransactions(for: .expense, relativeTo: fixedNow).isEmpty
+        }
+
         #expect(viewModel.recurringTemplates(for: .income, relativeTo: fixedNow).isEmpty)
         #expect(viewModel.plannedOneTimeTransactions(for: .expense, relativeTo: fixedNow).isEmpty)
     }
 
-    @Test("Удаление без пересчета удаляет операцию из истории, но не трогает агрегаты до reload")
-    func testDeleteTransactionWithoutRecalculationKeepsAggregatesUntilReload() async throws {
+    @Test("Удаление без пересчета обновляет историю и агрегаты, но не трогает остатки")
+    func testDeleteTransactionWithoutRecalculationRefreshesAggregatesButKeepsBalances() async throws {
         let modelContext = try createTestModelContext()
         let calendar = Calendar.current
         let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 10)) ?? Date()
+
+        let card = Card(
+            name: "Main",
+            cardNumber: "1111",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 800
+        )
+        modelContext.insert(card)
 
         let income = CashflowTransaction(
             transactionType: .income,
@@ -1627,7 +1697,7 @@ extension CashflowViewModelTests {
             amount: 200,
             currency: "RUB",
             transactionDate: fixedNow,
-            cardID: nil
+            cardID: card.cardUniqueID
         )
         modelContext.insert(income)
         modelContext.insert(expense)
@@ -1648,16 +1718,14 @@ extension CashflowViewModelTests {
 
         viewModel.handle(.deleteTransaction(expense, recalculate: false))
 
-        #expect(viewModel.state.transactions.count == 1)
-        #expect(abs(viewModel.state.totalIncome - 1_000) < 0.01)
-        #expect(abs(viewModel.state.totalExpense - 200) < 0.01)
-
-        viewModel.handle(.loadTransactions)
         try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
-            abs(viewModel.state.totalExpense) < 0.01
+            viewModel.state.transactions.count == 1
+            && abs(viewModel.state.totalIncome - 1_000) < 0.01
+            && abs(viewModel.state.totalExpense) < 0.01
         }
 
         #expect(abs(viewModel.state.totalExpense) < 0.01)
+        #expect(abs(card.balance - 800) < 0.01)
     }
 
     @Test("История фильтруется по диапазону дат включительно и сохраняет сортировку по дате")
@@ -1920,6 +1988,56 @@ extension CashflowViewModelTests {
         }
 
         #expect(abs(card.balance - 1_000) < 0.01)
+    }
+
+    @Test("Удаление с пересчетом остатков не проходит при нехватке денег для отката")
+    func testDeleteTransactionWithRecalculationFailsWhenRevertWouldOverdrawCard() async throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 10, hour: 12)) ?? Date()
+
+        let card = Card(
+            name: "Main",
+            cardNumber: "2233",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 500
+        )
+        modelContext.insert(card)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        let income = CashflowTransaction(
+            transactionType: .income,
+            amount: 500,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: card.cardUniqueID,
+            incomeCategoryRaw: IncomeCategory.business.rawValue
+        )
+        viewModel.handle(.updateTransaction(income))
+
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            abs(card.balance - 1_000) < 0.01 && viewModel.state.transactions.count == 1
+        }
+
+        card.balance = 100
+        try modelContext.save()
+
+        guard let existing = viewModel.state.transactions.first else {
+            Issue.record("Expected saved transaction")
+            return
+        }
+
+        viewModel.handle(.deleteTransaction(existing, recalculate: true))
+
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            viewModel.state.deleteBalanceUpdateErrorMessage != nil
+        }
+
+        #expect(viewModel.state.transactions.count == 1)
+        #expect(abs(card.balance - 100) < 0.01)
+        #expect(viewModel.state.deleteBalanceUpdateErrorMessage?.isEmpty == false)
     }
 
     private func waitUntil(

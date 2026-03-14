@@ -9,10 +9,20 @@ import SwiftUI
 import UIKit
 
 /// Единая политика сетки категорий для экранов создания дохода/расхода.
-/// Для расходов на узких экранах уменьшаем количество колонок до 3,
-/// а при включенных лимитах делаем это раньше, чтобы карточки не переполнялись.
+/// На узких экранах обе сетки переключаются на 3 колонки, чтобы размещение
+/// категорий в доходах и расходах оставалось консистентным. Для расходов с
+/// лимитами делаем это раньше, потому что карточки становятся плотнее.
 struct CashflowCategoryGridLayout {
-    static let compactExpenseColumns = 3
+    struct CardMetrics {
+        let contentSpacing: CGFloat
+        let titleMinHeight: CGFloat
+        let cardMinHeight: CGFloat
+        let verticalPadding: CGFloat
+        let amountTopPadding: CGFloat
+        let usesFlexibleSpacer: Bool
+    }
+
+    static let compactColumns = 3
     static let regularColumns = 4
     static let compactWidthThreshold: CGFloat = 330
     static let budgetCompactWidthThreshold: CGFloat = 430
@@ -24,10 +34,10 @@ struct CashflowCategoryGridLayout {
         showsBudgetDetails: Bool = false
     ) -> Int {
         if kind == .expense, showsBudgetDetails, containerWidth < budgetCompactWidthThreshold {
-            return compactExpenseColumns
+            return compactColumns
         }
-        if kind == .expense, containerWidth < compactWidthThreshold {
-            return compactExpenseColumns
+        if containerWidth < compactWidthThreshold {
+            return compactColumns
         }
         return regularColumns
     }
@@ -44,6 +54,28 @@ struct CashflowCategoryGridLayout {
                 containerWidth: containerWidth,
                 showsBudgetDetails: showsBudgetDetails
             )
+        )
+    }
+
+    static func cardMetrics(showsBudgetDetails: Bool) -> CardMetrics {
+        if showsBudgetDetails {
+            return CardMetrics(
+                contentSpacing: 6,
+                titleMinHeight: 26,
+                cardMinHeight: 124,
+                verticalPadding: 9,
+                amountTopPadding: 0,
+                usesFlexibleSpacer: true
+            )
+        }
+
+        return CardMetrics(
+            contentSpacing: 5,
+            titleMinHeight: 24,
+            cardMinHeight: 98,
+            verticalPadding: 8,
+            amountTopPadding: 2,
+            usesFlexibleSpacer: false
         )
     }
 }
@@ -613,10 +645,10 @@ private struct CashflowCategoryTransactionSheet: View {
                 } label: {
                     let summary = categoryBudgetSummary(for: option)
                     let cardHasBudgetDetails = summary != nil
-                    let contentSpacing: CGFloat = cardHasBudgetDetails ? 6 : 8
-                    let titleMinHeight: CGFloat = cardHasBudgetDetails ? 26 : 30
-                    let cardMinHeight: CGFloat = cardHasBudgetDetails ? 124 : 132
-                    VStack(alignment: .leading, spacing: contentSpacing) {
+                    let metrics = CashflowCategoryGridLayout.cardMetrics(
+                        showsBudgetDetails: cardHasBudgetDetails
+                    )
+                    VStack(alignment: .leading, spacing: metrics.contentSpacing) {
                         HStack(alignment: .top) {
                             CashflowCategoryIconView(
                                 icon: option.icon,
@@ -645,18 +677,21 @@ private struct CashflowCategoryTransactionSheet: View {
                             .foregroundStyle(AppColors.textPrimary)
                             .lineLimit(2)
                             .minimumScaleFactor(0.72)
-                            .frame(maxWidth: .infinity, minHeight: titleMinHeight, alignment: .topLeading)
+                            .frame(maxWidth: .infinity, minHeight: metrics.titleMinHeight, alignment: .topLeading)
 
-                        Spacer(minLength: 0)
+                        if metrics.usesFlexibleSpacer {
+                            Spacer(minLength: 0)
+                        }
 
                         Text(formattedCategoryTotal(for: option))
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(summary == nil ? AppColors.textSecondary : AppColors.textPrimary.opacity(0.95))
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
+                            .padding(.top, metrics.amountTopPadding)
 
                         if let summary {
-                            VStack(alignment: .leading, spacing: contentSpacing) {
+                            VStack(alignment: .leading, spacing: metrics.contentSpacing) {
                                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                                     Text(formattedAmount(summary.spent))
                                         .font(.system(size: 10, weight: .bold))
@@ -688,9 +723,9 @@ private struct CashflowCategoryTransactionSheet: View {
                             }
                         }
                     }
-                    .frame(maxWidth: .infinity, minHeight: cardMinHeight, alignment: .topLeading)
+                    .frame(maxWidth: .infinity, minHeight: metrics.cardMinHeight, alignment: .topLeading)
                     .padding(.horizontal, 10)
-                    .padding(.vertical, cardHasBudgetDetails ? 9 : 10)
+                    .padding(.vertical, metrics.verticalPadding)
                     .background(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .fill(Color.black.opacity(0.28))

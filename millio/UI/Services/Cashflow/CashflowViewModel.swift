@@ -51,6 +51,35 @@ extension ConversionError: LocalizedError {
     }
 }
 
+enum CashflowBalanceUpdateError: Error {
+    case insufficientFundsToRevert(accountName: String, required: Double, available: Double, currency: String)
+}
+
+extension CashflowBalanceUpdateError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case let .insufficientFundsToRevert(accountName, required, available, currency):
+            let formatter = NumberFormatter()
+            formatter.numberStyle = .decimal
+            formatter.locale = .autoupdatingCurrent
+            formatter.maximumFractionDigits = 2
+
+            let requiredText = formatter.string(from: NSNumber(value: required)) ?? "\(required)"
+            let availableText = formatter.string(from: NSNumber(value: available)) ?? "\(available)"
+
+            return String(
+                localized: "cashflow.history.detail.delete.balance_update_failed.message",
+                defaultValue: "Cannot update balances for \"%1$@\". Required: %2$@ %4$@. Available: %3$@ %4$@.",
+                comment: "Message shown when deleting a cashflow transaction with balance recalculation would make an account negative"
+            )
+            .replacingOccurrences(of: "%1$@", with: accountName)
+            .replacingOccurrences(of: "%2$@", with: requiredText)
+            .replacingOccurrences(of: "%3$@", with: availableText)
+            .replacingOccurrences(of: "%4$@", with: currency)
+        }
+    }
+}
+
 // MARK: - Cashflow State
 
 struct CashflowState {
@@ -150,6 +179,9 @@ struct CashflowState {
     var currencyConversionWarningDate: Date? = nil
     /// Признак ручного обновления курсов для CTA в баннере.
     var isRefreshingExchangeRates: Bool = false
+
+    /// Ошибка пересчета остатков при удалении операции.
+    var deleteBalanceUpdateErrorMessage: String? = nil
 
     /// Детализация доходов по категориям за период (по убыванию суммы)
     var incomeBreakdown: [CashflowCategoryBreakdownEntry] = []
@@ -306,6 +338,7 @@ enum CashflowAction {
     case loadCards
     case refreshExchangeRates
     case dismissCurrencyConversionWarning
+    case dismissDeleteBalanceUpdateError
 }
 
 // MARK: - Cashflow ViewModel
@@ -390,8 +423,7 @@ final class CashflowViewModel: ViewModelProtocol {
             state.showTransactionEditor = true
             
         case .deleteTransaction(let transaction, let recalculate):
-            state.transactions.removeAll(where: { $0.persistentModelID == transaction.persistentModelID })
-            state.filteredTransactions.removeAll(where: { $0.persistentModelID == transaction.persistentModelID })
+            state.deleteBalanceUpdateErrorMessage = nil
             if recalculate {
                 Task { @MainActor in
                     await deleteTransactionAsync(transaction, recalculate: true)
@@ -498,6 +530,9 @@ final class CashflowViewModel: ViewModelProtocol {
         case .dismissCurrencyConversionWarning:
             state.currencyConversionWarning = nil
             state.currencyConversionWarningDate = nil
+
+        case .dismissDeleteBalanceUpdateError:
+            state.deleteBalanceUpdateErrorMessage = nil
         }
     }
     
@@ -2254,7 +2289,16 @@ final class CashflowViewModel: ViewModelProtocol {
                 direction: direction
             )
             guard abs(delta) > 0.0000001 else { continue }
-            card.balance = max(0, card.balance + delta)
+            let updatedBalance = card.balance + delta
+            if updatedBalance < -0.0001 {
+                throw CashflowBalanceUpdateError.insufficientFundsToRevert(
+                    accountName: card.name,
+                    required: abs(delta),
+                    available: card.balance,
+                    currency: card.currency
+                )
+            }
+            card.balance = max(0, updatedBalance)
             card.updatedAt = now()
         }
     }
@@ -2621,6 +2665,8 @@ final class CashflowViewModel: ViewModelProtocol {
                 try await applyAccountBalanceEffect(for: transaction, direction: .revert)
             } catch {
                 AppLogger.log(.error, category: "Cashflow", "Failed to revert card balance on delete: \(error.localizedDescription)")
+                state.deleteBalanceUpdateErrorMessage = error.localizedDescription
+                loadTransactions()
                 return
             }
         }
@@ -2642,21 +2688,29 @@ final class CashflowViewModel: ViewModelProtocol {
 
         do {
             try modelContext.save()
+            loadTransactions()
         } catch {
             AppLogger.log(.error, category: "Cashflow", "Failed to delete transaction without recalculation: \(error.localizedDescription)")
         }
     }
 
     @discardableResult
-    func persistTransaction(_ transaction: CashflowTransaction) async -> Bool {
-        await updateTransactionAsync(transaction)
+    func persistTransaction(
+        _ transaction: CashflowTransaction,
+        replacing existingTransaction: CashflowTransaction? = nil
+    ) async -> Bool {
+        await updateTransactionAsync(transaction, replacing: existingTransaction)
     }
     
-    private func updateTransactionAsync(_ transaction: CashflowTransaction) async -> Bool {
+    private func updateTransactionAsync(
+        _ transaction: CashflowTransaction,
+        replacing explicitExistingTransaction: CashflowTransaction? = nil
+    ) async -> Bool {
+        let existingTransaction = explicitExistingTransaction ?? state.editingTransaction
         let exchangeInfo = await resolveExchangeInfo(for: transaction)
 
         do {
-            let isAvailable = try await canPersistTransaction(transaction, replacing: state.editingTransaction)
+            let isAvailable = try await canPersistTransaction(transaction, replacing: existingTransaction)
             if !isAvailable {
                 AppLogger.log(.warning, category: "Cashflow", "Insufficient funds for transaction")
                 return false
@@ -2666,7 +2720,7 @@ final class CashflowViewModel: ViewModelProtocol {
             return false
         }
         
-        if let existing = state.editingTransaction {
+        if let existing = existingTransaction {
             do {
                 if shouldApplyCardBalanceImmediately(for: existing) {
                     try await applyAccountBalanceEffect(for: existing, direction: .revert)
@@ -2737,7 +2791,9 @@ final class CashflowViewModel: ViewModelProtocol {
             try modelContext.save()
             loadTransactions()
             state.showTransactionEditor = false
-            state.editingTransaction = nil
+            if explicitExistingTransaction == nil || state.editingTransaction?.persistentModelID == explicitExistingTransaction?.persistentModelID {
+                state.editingTransaction = nil
+            }
             state.creatingTransactionType = nil
             return true
         } catch {

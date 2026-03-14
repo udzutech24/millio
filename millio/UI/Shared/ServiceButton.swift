@@ -15,9 +15,7 @@ struct ServiceButton: View {
     
     var body: some View {
         Button(action: action) {
-            ZStack(alignment: .topLeading) {
-                
-                // Фон
+            ZStack {
                 RoundedRectangle(cornerRadius: 14)
                     .fill(
                         LinearGradient(
@@ -43,31 +41,41 @@ struct ServiceButton: View {
                                 lineWidth: 1
                             )
                     }
-                
-                // Текст
-                Text(title)
-                    .font(.system(size: 15, weight: .regular))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                    .padding(.leading, 16)
-                    .padding(.top, 12)
-                
-                // Иконка снизу справа
-                VStack {
-                    Spacer()
-                    
-                    HStack {
-                        Spacer()
-                        
-                        Image(icon)
-                            .offset(x: 6, y: 6) // <-- выход за бордер
+                    .overlay(alignment: .top) {
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.06),
+                                        Color.white.opacity(0.0)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
                     }
+
+                HStack(spacing: 12) {
+                    ZStack {
+                        Image(icon)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 48, height: 48)
+                    }
+                    .frame(width: 76, height: 68, alignment: .center)
+
+                    Text(title)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .offset(y: -0.5)
                 }
+                .padding(.horizontal, 18)
             }
             .frame(height: 68)
         }
         .buttonStyle(.plain)
     }
 }
-

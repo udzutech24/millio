@@ -5,6 +5,7 @@
 //  Created by Codex on 06.03.2026.
 //
 
+import CoreGraphics
 import Foundation
 
 enum BackupEncryptionMode: String, CaseIterable, Identifiable {
@@ -84,6 +85,17 @@ enum BackupStatusRefreshPolicy {
         guard isBackupEnabled else { return true }
 
         return isICloudAvailable && lastBackupDate != nil && loadedVersionCount > 0
+    }
+}
+
+enum BackupManagementLayout {
+    // Narrow screens and long localized strings need a single-column layout.
+    static func shouldStackMetrics(availableWidth: CGFloat) -> Bool {
+        availableWidth < 360
+    }
+
+    static func shouldStackActionButtons(availableWidth: CGFloat) -> Bool {
+        availableWidth < 390
     }
 }
 

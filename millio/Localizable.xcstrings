@@ -4959,6 +4959,30 @@
         }
       }
     },
+    "cashflow.history.detail.delete.balance_update_failed.message" : {
+      "comment" : "Message shown when deleting a cashflow transaction with balance recalculation would make an account negative",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cannot update balances for \"%1$@\". Required: %2$@ %4$@. Available: %3$@ %4$@."
+          }
+        }
+      }
+    },
+    "cashflow.history.detail.delete.balance_update_failed.title" : {
+      "comment" : "Title for failed balance recalculation after deleting a cashflow transaction",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cannot update balances"
+          }
+        }
+      }
+    },
     "cashflow.history.detail.delete.message" : {
       "extractionState" : "manual",
       "localizations" : {

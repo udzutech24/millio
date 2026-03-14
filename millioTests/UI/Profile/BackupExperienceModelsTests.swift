@@ -83,4 +83,16 @@ struct BackupExperienceModelsTests {
             ) == true
         )
     }
+
+    @Test("Backup layout stacks metric tiles on narrow screens")
+    func testBackupLayoutStacksMetricsOnNarrowScreens() {
+        #expect(BackupManagementLayout.shouldStackMetrics(availableWidth: 359) == true)
+        #expect(BackupManagementLayout.shouldStackMetrics(availableWidth: 360) == false)
+    }
+
+    @Test("Backup layout stacks compact actions before content can overflow")
+    func testBackupLayoutStacksActionsOnCompactWidths() {
+        #expect(BackupManagementLayout.shouldStackActionButtons(availableWidth: 389) == true)
+        #expect(BackupManagementLayout.shouldStackActionButtons(availableWidth: 390) == false)
+    }
 }
