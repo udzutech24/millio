@@ -1052,20 +1052,21 @@ struct CashflowScheduledTransactionsView: View {
 }
 
 enum CashflowScheduledPlannerCopy {
-    static func daySummaryText(entryCount: Int) -> String {
+    static func daySummaryText(entryCount: Int, locale: Locale = .autoupdatingCurrent) -> String {
         if entryCount == 0 {
-            return String(
-                localized: "cashflow.scheduled.day_agenda.summary.empty",
-                defaultValue: "You can add another planned item directly to this date.",
-                comment: "Helper text for selected planner date when there are no items"
+            return AppLocalization.string(
+                "cashflow.scheduled.day_agenda.summary.empty",
+                locale: locale,
+                fallback: "You can add another planned item directly to this date."
             )
         }
 
-        return String(
-            localized: "cashflow.scheduled.day_agenda.summary.count",
-            defaultValue: "\(entryCount) scheduled item(s) on this date. Add another without leaving the calendar.",
-            comment: "Helper text for selected planner date when there are scheduled items"
+        let format = AppLocalization.string(
+            "cashflow.scheduled.day_agenda.summary.count",
+            locale: locale,
+            fallback: "%lld scheduled item(s) on this date. Add another without leaving the calendar."
         )
+        return String(format: format, locale: locale, Int64(entryCount))
     }
 }
 

@@ -94,7 +94,6 @@ struct AuthWelcomeView: View {
                 .padding(.horizontal, screenHorizontalPadding)
                 .padding(.bottom, max(proxy.safeAreaInsets.bottom, screenBottomPadding))
 
-                BackendDebugStatusView()
             }
         }
     }

@@ -362,7 +362,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Server returned an invalid response. Try again later."
+            "value" : "Auth response parse failed. Try again."
           }
         }
       }
@@ -387,6 +387,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "No internet connection. Check your network and try again."
+          }
+        }
+      }
+    },
+    "auth.error.post_login_bootstrap" : {
+      "comment" : "Post-login bootstrap failure toast",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Post-login bootstrap failed. Your session is active."
           }
         }
       }
@@ -427,18 +439,6 @@
         }
       }
     },
-    "auth.error.timeout" : {
-      "comment" : "Timed out auth toast",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Server is taking too long to respond. Try again."
-          }
-        }
-      }
-    },
     "auth.error.tls" : {
       "comment" : "TLS auth toast",
       "extractionState" : "extracted_with_value",
@@ -458,7 +458,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Signed in, but failed to save your session. Try again."
+            "value" : "Token persistence failed. Signed in, but failed to save your session."
           }
         }
       }
@@ -471,6 +471,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Sign in is temporarily unavailable."
+          }
+        }
+      }
+    },
+    "auth.error.wrong_session_namespace" : {
+      "comment" : "Wrong backend/session namespace toast",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Signed in, but the session belongs to a different backend or region."
           }
         }
       }
@@ -6183,12 +6195,17 @@
     },
     "cashflow.recurrence.weekly.none_selected" : {
       "comment" : "Weekly recurrence placeholder when no weekdays selected",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select days"
+          }
+        },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Select days"
+            "state" : "translated",
+            "value" : "Выберите дни"
           }
         }
       }
@@ -6414,6 +6431,7 @@
     },
     "cashflow.scheduled.day_agenda.summary.count" : {
       "comment" : "Helper text for selected planner date when there are scheduled items",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6431,6 +6449,7 @@
     },
     "cashflow.scheduled.day_agenda.summary.empty" : {
       "comment" : "Helper text for selected planner date when there are no items",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
