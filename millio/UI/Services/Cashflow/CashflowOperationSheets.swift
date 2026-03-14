@@ -10,17 +10,22 @@ import UIKit
 
 /// Единая политика сетки категорий для экранов создания дохода/расхода.
 /// Для расходов на узких экранах уменьшаем количество колонок до 3,
-/// чтобы подписи категорий оставались читаемыми в одну строку.
+/// а при включенных лимитах делаем это раньше, чтобы карточки не переполнялись.
 struct CashflowCategoryGridLayout {
     static let compactExpenseColumns = 3
     static let regularColumns = 4
     static let compactWidthThreshold: CGFloat = 330
+    static let budgetCompactWidthThreshold: CGFloat = 430
     static let columnSpacing: CGFloat = 8
 
     static func columnCount(
         for kind: CashflowCategoryTransactionSheetKind,
-        containerWidth: CGFloat
+        containerWidth: CGFloat,
+        showsBudgetDetails: Bool = false
     ) -> Int {
+        if kind == .expense, showsBudgetDetails, containerWidth < budgetCompactWidthThreshold {
+            return compactExpenseColumns
+        }
         if kind == .expense, containerWidth < compactWidthThreshold {
             return compactExpenseColumns
         }
@@ -29,11 +34,16 @@ struct CashflowCategoryGridLayout {
 
     static func columns(
         for kind: CashflowCategoryTransactionSheetKind,
-        containerWidth: CGFloat
+        containerWidth: CGFloat,
+        showsBudgetDetails: Bool = false
     ) -> [GridItem] {
         Array(
             repeating: GridItem(.flexible(), spacing: columnSpacing),
-            count: columnCount(for: kind, containerWidth: containerWidth)
+            count: columnCount(
+                for: kind,
+                containerWidth: containerWidth,
+                showsBudgetDetails: showsBudgetDetails
+            )
         )
     }
 }
@@ -93,10 +103,15 @@ private struct CashflowCategoryTransactionSheet: View {
     private let outerCornerRadius: CGFloat = 22
     private let innerCornerRadius: CGFloat = 16
 
+    private var showsBudgetDetails: Bool {
+        kind == .expense && budgetSnapshot != nil
+    }
+
     private var categoryColumns: [GridItem] {
         CashflowCategoryGridLayout.columns(
             for: kind,
-            containerWidth: categoryGridWidth
+            containerWidth: categoryGridWidth,
+            showsBudgetDetails: showsBudgetDetails
         )
     }
 
@@ -155,7 +170,10 @@ private struct CashflowCategoryTransactionSheet: View {
                     customNavigationTitle: kind.navigationTitle,
                     preselectedIncomeCategoryRaw: kind.categoryKind == .income ? option.rawValue : nil,
                     preselectedExpenseCategoryRaw: kind.categoryKind == .expense ? option.rawValue : nil,
-                    onSave: { dismiss() }
+                    onSave: {
+                        selectedCategory = nil
+                        reloadMonthlyTotal()
+                    }
                 )
             }
             .navigationDestination(isPresented: $showTransactionsHistory) {
@@ -189,6 +207,7 @@ private struct CashflowCategoryTransactionSheet: View {
                 )
             }
             .sheet(isPresented: $showBudgetSetupSheet) {
+                let repeatSuggestion = viewModel.previousMonthlyBudgetSuggestion(for: selectedMonth)
                 BudgetSetupSheet(
                     periodTitle: monthTitle,
                     currencyCode: cashflowCurrencyCodeLabel(viewModel.state.displayCurrency),
@@ -196,6 +215,8 @@ private struct CashflowCategoryTransactionSheet: View {
                     categoryOptions: viewModel.categoryOptions(for: .expense),
                     existingCategoryLimits: categoryBudgetLimits,
                     categorySnapshots: budgetSnapshot?.categorySnapshots ?? [],
+                    repeatSuggestion: repeatSuggestion,
+                    isAutoRepeatEnabled: viewModel.isMonthlyBudgetAutoRepeatEnabled,
                     onSave: { amount, limits in
                         viewModel.saveMonthlyBudgetConfiguration(
                             month: selectedMonth,
@@ -204,6 +225,9 @@ private struct CashflowCategoryTransactionSheet: View {
                             currency: viewModel.state.displayCurrency
                         )
                         reloadMonthlyTotal()
+                    },
+                    onAutoRepeatChanged: { isEnabled in
+                        viewModel.isMonthlyBudgetAutoRepeatEnabled = isEnabled
                     },
                     onDelete: budgetTotalLimit == nil ? nil : {
                         viewModel.deleteMonthlyBudgetLimit(month: selectedMonth)
@@ -378,7 +402,7 @@ private struct CashflowCategoryTransactionSheet: View {
                     Button {
                         showBudgetSetupSheet = true
                     } label: {
-                        Text(budgetSnapshot == nil ? budgetLocalized(ru: "Добавить лимит", en: "Add limit") : budgetLocalized(ru: "Лимиты", en: "Limits"))
+                        Text(budgetSnapshot == nil ? budgetLocalized(ru: "Добавить лимиты", en: "Add limits") : budgetLocalized(ru: "Лимиты", en: "Limits"))
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
                             .padding(.horizontal, 10)
@@ -463,29 +487,6 @@ private struct CashflowCategoryTransactionSheet: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
             .background(innerPanelBackground)
-        } else {
-            Button {
-                showBudgetSetupSheet = true
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "target")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                    Text(
-                        budgetLocalized(
-                            ru: "Добавить лимит на месяц и по категориям",
-                            en: "Add monthly and category limits"
-                        )
-                    )
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-                .background(innerPanelBackground)
-            }
-            .buttonStyle(.plain)
         }
     }
 
@@ -611,7 +612,11 @@ private struct CashflowCategoryTransactionSheet: View {
                     selectedCategory = option
                 } label: {
                     let summary = categoryBudgetSummary(for: option)
-                    VStack(alignment: .leading, spacing: 8) {
+                    let cardHasBudgetDetails = summary != nil
+                    let contentSpacing: CGFloat = cardHasBudgetDetails ? 6 : 8
+                    let titleMinHeight: CGFloat = cardHasBudgetDetails ? 26 : 30
+                    let cardMinHeight: CGFloat = cardHasBudgetDetails ? 124 : 132
+                    VStack(alignment: .leading, spacing: contentSpacing) {
                         HStack(alignment: .top) {
                             CashflowCategoryIconView(
                                 icon: option.icon,
@@ -623,6 +628,8 @@ private struct CashflowCategoryTransactionSheet: View {
                             if let summary, let badge = categoryBudgetBadgeText(summary.status) {
                                 Text(badge)
                                     .font(.system(size: 9, weight: .bold))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
                                     .foregroundStyle(budgetStatusColor(summary.status))
                                     .padding(.horizontal, 7)
                                     .padding(.vertical, 4)
@@ -638,7 +645,7 @@ private struct CashflowCategoryTransactionSheet: View {
                             .foregroundStyle(AppColors.textPrimary)
                             .lineLimit(2)
                             .minimumScaleFactor(0.72)
-                            .frame(maxWidth: .infinity, minHeight: 30, alignment: .topLeading)
+                            .frame(maxWidth: .infinity, minHeight: titleMinHeight, alignment: .topLeading)
 
                         Spacer(minLength: 0)
 
@@ -649,12 +656,13 @@ private struct CashflowCategoryTransactionSheet: View {
                             .minimumScaleFactor(0.8)
 
                         if let summary {
-                            VStack(alignment: .leading, spacing: 6) {
+                            VStack(alignment: .leading, spacing: contentSpacing) {
                                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                                     Text(formattedAmount(summary.spent))
                                         .font(.system(size: 10, weight: .bold))
                                         .foregroundStyle(budgetStatusColor(summary.status))
                                         .lineLimit(1)
+                                        .minimumScaleFactor(0.72)
                                     Text("/")
                                         .font(.system(size: 10, weight: .semibold))
                                         .foregroundStyle(Color.white.opacity(0.42))
@@ -662,6 +670,7 @@ private struct CashflowCategoryTransactionSheet: View {
                                         .font(.system(size: 10, weight: .medium))
                                         .foregroundStyle(Color.white.opacity(0.68))
                                         .lineLimit(1)
+                                        .minimumScaleFactor(0.72)
                                     Spacer(minLength: 0)
                                 }
 
@@ -679,9 +688,9 @@ private struct CashflowCategoryTransactionSheet: View {
                             }
                         }
                     }
-                    .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
+                    .frame(maxWidth: .infinity, minHeight: cardMinHeight, alignment: .topLeading)
                     .padding(.horizontal, 10)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, cardHasBudgetDetails ? 9 : 10)
                     .background(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .fill(Color.black.opacity(0.28))

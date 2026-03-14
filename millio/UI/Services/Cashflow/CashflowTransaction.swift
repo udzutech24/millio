@@ -50,6 +50,7 @@ enum CashflowTransactionType: String, Codable, CaseIterable {
 
 enum CashflowRecurrenceRule: String, Codable, CaseIterable {
     case none = "none"
+    case weekly = "weekly"
     case monthly = "monthly"
     case quarterly = "quarterly"
     case semiannual = "semiannual"
@@ -58,6 +59,11 @@ enum CashflowRecurrenceRule: String, Codable, CaseIterable {
     var displayName: String {
         switch self {
         case .none: return String(localized: "Do not repeat")
+        case .weekly:
+            if Locale.autoupdatingCurrent.identifier.lowercased().hasPrefix("ru") {
+                return "Еженедельно"
+            }
+            return "Weekly"
         case .monthly: return String(localized: "Monthly")
         case .quarterly:
             return String(
@@ -84,6 +90,8 @@ enum CashflowRecurrenceRule: String, Codable, CaseIterable {
         switch self {
         case .none:
             return nil
+        case .weekly:
+            return nil
         case .monthly:
             return 1
         case .quarterly:
@@ -93,6 +101,37 @@ enum CashflowRecurrenceRule: String, Codable, CaseIterable {
         case .yearly:
             return 12
         }
+    }
+}
+
+enum CashflowRecurrenceWeekday: Int, Codable, CaseIterable, Hashable {
+    case sunday = 1
+    case monday = 2
+    case tuesday = 3
+    case wednesday = 4
+    case thursday = 5
+    case friday = 6
+    case saturday = 7
+
+    var shortDisplayName: String {
+        let symbols = DateFormatter().veryShortStandaloneWeekdaySymbols ?? DateFormatter().shortWeekdaySymbols
+        let index = rawValue - 1
+        guard let symbols, symbols.indices.contains(index) else {
+            return "\(rawValue)"
+        }
+        return symbols[index]
+    }
+
+    static func from(calendarWeekday value: Int) -> CashflowRecurrenceWeekday? {
+        Self(rawValue: value)
+    }
+
+    static func orderedForCurrentLocale(calendar: Calendar = .autoupdatingCurrent) -> [CashflowRecurrenceWeekday] {
+        let first = max(1, min(calendar.firstWeekday, 7))
+        let orderedRaw = (0..<7).map { offset in
+            ((first - 1 + offset) % 7) + 1
+        }
+        return orderedRaw.compactMap(CashflowRecurrenceWeekday.init(rawValue:))
     }
 }
 
@@ -522,8 +561,11 @@ final class CashflowTransaction: Persistable {
     /// Уникальный ключ импортной записи внутри её источника.
     var importReferenceKey: String?
 
-    /// Правило автоповтора (none/monthly)
+    /// Правило автоповтора (none/weekly/monthly/legacy)
     var recurrenceRuleRaw: String = CashflowRecurrenceRule.none.rawValue
+
+    /// Дни недели для weekly-повтора. Формат: "2,4,6" (понедельник/среда/пятница)
+    var recurrenceWeekdaysRaw: String?
 
     /// ID серии автоповтора (общий для всех операций серии)
     var recurrenceSeriesID: String?
@@ -563,6 +605,24 @@ final class CashflowTransaction: Persistable {
         set { recurrenceRuleRaw = newValue.rawValue }
     }
 
+    var recurrenceWeekdays: Set<CashflowRecurrenceWeekday> {
+        get {
+            guard let recurrenceWeekdaysRaw,
+                  !recurrenceWeekdaysRaw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return []
+            }
+            let values = recurrenceWeekdaysRaw
+                .split(separator: ",")
+                .compactMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                .compactMap(CashflowRecurrenceWeekday.init(rawValue:))
+            return Set(values)
+        }
+        set {
+            let values = newValue.map(\.rawValue).sorted()
+            recurrenceWeekdaysRaw = values.isEmpty ? nil : values.map(String.init).joined(separator: ",")
+        }
+    }
+
     var isRecurringTemplate: Bool {
         recurrenceRule != .none
         && (transactionType == .income || transactionType == .expense)
@@ -586,6 +646,7 @@ final class CashflowTransaction: Persistable {
         importSourceRaw: String? = nil,
         importReferenceKey: String? = nil,
         recurrenceRule: CashflowRecurrenceRule = .none,
+        recurrenceWeekdays: Set<CashflowRecurrenceWeekday> = [],
         recurrenceSeriesID: String? = nil,
         affectsCardBalance: Bool = true
     ) {
@@ -603,6 +664,7 @@ final class CashflowTransaction: Persistable {
         self.importSourceRaw = importSourceRaw
         self.importReferenceKey = importReferenceKey
         self.recurrenceRuleRaw = recurrenceRule.rawValue
+        self.recurrenceWeekdays = recurrenceWeekdays
         self.recurrenceSeriesID = recurrenceSeriesID
         self.affectsCardBalance = affectsCardBalance
         self.createdAt = Date()
@@ -665,6 +727,9 @@ final class CashflowTransaction: Persistable {
         }
         if recurrenceRule != .none {
             dict["recurrenceRuleRaw"] = recurrenceRuleRaw
+        }
+        if let recurrenceWeekdaysRaw, recurrenceRule == .weekly {
+            dict["recurrenceWeekdaysRaw"] = recurrenceWeekdaysRaw
         }
         if let recurrenceSeriesID = recurrenceSeriesID {
             dict["recurrenceSeriesID"] = recurrenceSeriesID

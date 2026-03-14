@@ -28,19 +28,24 @@ struct CashflowTransactionImporterTests {
             "createdAt": now.timeIntervalSince1970,
             "updatedAt": now.timeIntervalSince1970,
             "transactionUniqueID": "expense|\(now.timeIntervalSince1970)|123.45|\(now.timeIntervalSince1970)",
-            "recurrenceRuleRaw": "monthly",
+            "recurrenceRuleRaw": "weekly",
+            "recurrenceWeekdaysRaw": "2,4",
             "recurrenceSeriesID": "series-001",
             "affectsCardBalance": false
         ]
         
         let context = makeContext()
+        try context.deleteAll(CashflowTransaction.self)
+        try context.save()
+
         try CashflowTransactionImporter.import(from: dict, context: context)
         try context.save()
-        
+
         let fetched = try context.fetch(FetchDescriptor<CashflowTransaction>())
         #expect(fetched.count == 1)
         #expect(fetched.first?.amount == 123.45)
-        #expect(fetched.first?.recurrenceRule == .monthly)
+        #expect(fetched.first?.recurrenceRule == .weekly)
+        #expect(fetched.first?.recurrenceWeekdays == [.monday, .wednesday])
         #expect(fetched.first?.recurrenceSeriesID == "series-001")
         #expect(fetched.first?.affectsCardBalance == false)
     }

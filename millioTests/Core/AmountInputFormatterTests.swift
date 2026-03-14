@@ -53,6 +53,18 @@ struct AmountInputFormatterTests {
         #expect(displayed == "33 333")
     }
 
+    @Test("integerInput applies grouping immediately for plain digits")
+    func integerInputFormatsPlainDigits() {
+        let formatted = AmountInputFormatter.integerInput("33333")
+        #expect(formatted == "33 333")
+    }
+
+    @Test("integerInput normalizes already-formatted input without drift")
+    func integerInputIsStableForFormattedText() {
+        let formatted = AmountInputFormatter.integerInput("22 223")
+        #expect(formatted == "22 223")
+    }
+
     @Test("parse accepts both comma and dot decimal separators")
     func parseAcceptsCommaAndDot() {
         let parsedComma = AmountInputFormatter.parse("11 111,25")

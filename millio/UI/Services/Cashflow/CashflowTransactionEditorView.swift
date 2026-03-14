@@ -45,6 +45,7 @@ struct CashflowTransactionEditorView: View {
     @State private var selectedExpenseCategoryRaw: String? = nil
     @State private var note: String = ""
     @State private var recurrenceRule: CashflowRecurrenceRule = .none
+    @State private var recurrenceWeekdays: Set<CashflowRecurrenceWeekday> = []
     @State private var shouldAffectCardBalance: Bool = true
     @State private var availableCurrencies: [String] = []
     @State private var isLoadingCurrencies: Bool = false
@@ -106,6 +107,7 @@ struct CashflowTransactionEditorView: View {
             _selectedExpenseCategoryRaw = State(initialValue: transaction.expenseCategoryRaw)
             _note = State(initialValue: transaction.note ?? "")
             _recurrenceRule = State(initialValue: transaction.recurrenceRule)
+            _recurrenceWeekdays = State(initialValue: transaction.recurrenceWeekdays)
             _shouldAffectCardBalance = State(initialValue: transaction.affectsCardBalance)
         } else if let type = transactionType {
             _selectedTransactionType = State(initialValue: type)
@@ -116,11 +118,13 @@ struct CashflowTransactionEditorView: View {
                 _selectedExpenseCategoryRaw = State(initialValue: preselectedExpenseCategoryRaw ?? ExpenseCategory.groceries.rawValue)
             }
             _recurrenceRule = State(initialValue: initialRecurrenceRule ?? .none)
+            _recurrenceWeekdays = State(initialValue: [])
             _shouldAffectCardBalance = State(initialValue: true)
         } else {
             _selectedTransactionType = State(initialValue: .expense)
             _transactionDate = State(initialValue: initialTransactionDate ?? Date())
             _recurrenceRule = State(initialValue: initialRecurrenceRule ?? .none)
+            _recurrenceWeekdays = State(initialValue: [])
             _shouldAffectCardBalance = State(initialValue: true)
         }
     }
@@ -361,7 +365,9 @@ struct CashflowTransactionEditorView: View {
         }
         .sheet(isPresented: $showRecurrenceRulePicker) {
             CashflowRecurrenceRulePickerSheet(
-                selection: $recurrenceRule
+                selection: $recurrenceRule,
+                selectedWeekdays: $recurrenceWeekdays,
+                defaultWeekday: defaultWeeklyRecurrenceWeekday
             )
         }
     }
@@ -411,6 +417,7 @@ struct CashflowTransactionEditorView: View {
                     selectedIncomeCategoryRaw = nil
                     selectedExpenseCategoryRaw = nil
                     recurrenceRule = .none
+                    recurrenceWeekdays = []
                 }
             }
         }
@@ -1108,6 +1115,10 @@ struct CashflowTransactionEditorView: View {
             ? (selectedExpenseCategoryRaw ?? ExpenseCategory.groceries.rawValue)
             : nil
         let effectiveRecurrenceRule: CashflowRecurrenceRule = showsRecurrenceSection ? recurrenceRule : .none
+        let effectiveRecurrenceWeekdays: Set<CashflowRecurrenceWeekday> = {
+            guard effectiveRecurrenceRule == .weekly else { return [] }
+            return recurrenceWeekdays.isEmpty ? [defaultWeeklyRecurrenceWeekday] : recurrenceWeekdays
+        }()
         let resolvedRecurrenceSeriesID: String? = {
             if effectiveRecurrenceRule == .none {
                 if editingTransaction?.isRecurringTemplate == true {
@@ -1130,6 +1141,7 @@ struct CashflowTransactionEditorView: View {
             expenseCategoryRaw: resolvedExpenseCategoryRaw,
             note: note.isEmpty ? nil : note,
             recurrenceRule: effectiveRecurrenceRule,
+            recurrenceWeekdays: effectiveRecurrenceWeekdays,
             recurrenceSeriesID: resolvedRecurrenceSeriesID,
             affectsCardBalance: showsAffectCardBalanceToggle ? shouldAffectCardBalance : true
         )
@@ -1145,6 +1157,7 @@ struct CashflowTransactionEditorView: View {
         transaction.expenseCategoryRaw = resolvedExpenseCategoryRaw
         transaction.note = note.isEmpty ? nil : note
         transaction.recurrenceRuleRaw = effectiveRecurrenceRule.rawValue
+        transaction.recurrenceWeekdays = effectiveRecurrenceWeekdays
         transaction.recurrenceSeriesID = resolvedRecurrenceSeriesID
         transaction.affectsCardBalance = showsAffectCardBalanceToggle ? shouldAffectCardBalance : true
 
@@ -1297,6 +1310,11 @@ struct CashflowTransactionEditorView: View {
             selectedInvestmentID = selectableAccounts.first?.investmentID
         }
         selectedToCardID = nil
+    }
+
+    private var defaultWeeklyRecurrenceWeekday: CashflowRecurrenceWeekday {
+        let weekday = Calendar.current.component(.weekday, from: transactionDate)
+        return CashflowRecurrenceWeekday(rawValue: weekday) ?? .monday
     }
 }
 
@@ -1586,13 +1604,13 @@ private struct CashflowCategorySelectionSheet: View {
 
 private struct CashflowRecurrenceRulePickerSheet: View {
     @Binding var selection: CashflowRecurrenceRule
+    @Binding var selectedWeekdays: Set<CashflowRecurrenceWeekday>
+    let defaultWeekday: CashflowRecurrenceWeekday
     @Environment(\.dismiss) private var dismiss
 
     private let recurringRules: [CashflowRecurrenceRule] = [
+        .weekly,
         .monthly,
-        .quarterly,
-        .semiannual,
-        .yearly
     ]
 
     var body: some View {
@@ -1607,6 +1625,16 @@ private struct CashflowRecurrenceRulePickerSheet: View {
                         recurrenceRow(for: rule)
                     }
                 }
+
+                if selection == .weekly {
+                    Section {
+                        weekdaySelectorRow
+                    } header: {
+                        Text(weeklyDaysTitle)
+                    } footer: {
+                        Text(weeklyDaysHint)
+                    }
+                }
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
@@ -1615,7 +1643,7 @@ private struct CashflowRecurrenceRulePickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "cashflow.common.close")) {
+                    Button(okButtonTitle) {
                         dismiss()
                     }
                     .foregroundStyle(AppColors.textPrimary)
@@ -1629,12 +1657,23 @@ private struct CashflowRecurrenceRulePickerSheet: View {
     private func recurrenceRow(for rule: CashflowRecurrenceRule) -> some View {
         Button {
             selection = rule
-            dismiss()
+            if rule == .weekly, selectedWeekdays.isEmpty {
+                selectedWeekdays = [defaultWeekday]
+            }
+            if rule != .weekly {
+                dismiss()
+            }
         } label: {
             HStack {
                 Text(rule.displayName)
                     .foregroundStyle(AppColors.textPrimary)
                 Spacer()
+                if rule == .weekly {
+                    Text(weeklySelectionSummary)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .lineLimit(1)
+                }
                 if selection == rule {
                     Image(systemName: "checkmark")
                         .font(.system(size: 13, weight: .semibold))
@@ -1646,6 +1685,73 @@ private struct CashflowRecurrenceRulePickerSheet: View {
         .buttonStyle(.plain)
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
+    }
+
+    private var weekdaySelectorRow: some View {
+        let ordered = CashflowRecurrenceWeekday.orderedForCurrentLocale()
+        return HStack(spacing: 8) {
+            ForEach(ordered, id: \.rawValue) { weekday in
+                let isSelected = selectedWeekdays.contains(weekday)
+                Button {
+                    toggleWeekday(weekday)
+                } label: {
+                    Text(weekday.shortDisplayName)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(isSelected ? Color.white.opacity(0.95) : AppColors.textSecondary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 34)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(isSelected ? (AppColors.cashflowGradient.first ?? Color.blue).opacity(0.75) : Color.white.opacity(0.06))
+                                .overlay(
+                                    Capsule(style: .continuous)
+                                        .stroke(Color.white.opacity(isSelected ? 0.55 : 0.16), lineWidth: 1)
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func toggleWeekday(_ weekday: CashflowRecurrenceWeekday) {
+        if selectedWeekdays.contains(weekday) {
+            if selectedWeekdays.count > 1 {
+                selectedWeekdays.remove(weekday)
+            }
+            return
+        }
+        selectedWeekdays.insert(weekday)
+    }
+
+    private var weeklySelectionSummary: String {
+        let ordered = CashflowRecurrenceWeekday.orderedForCurrentLocale()
+        let selected = ordered.filter { selectedWeekdays.contains($0) }
+        guard !selected.isEmpty else {
+            return String(
+                localized: "cashflow.recurrence.weekly.none_selected",
+                defaultValue: "Select days",
+                comment: "Weekly recurrence placeholder when no weekdays selected"
+            )
+        }
+        return selected.map(\.shortDisplayName).joined(separator: ", ")
+    }
+
+    private var isRussianLocale: Bool {
+        Locale.autoupdatingCurrent.identifier.lowercased().hasPrefix("ru")
+    }
+
+    private var okButtonTitle: String {
+        isRussianLocale ? "Ок" : "OK"
+    }
+
+    private var weeklyDaysTitle: String {
+        isRussianLocale ? "Дни недели" : "Days of week"
+    }
+
+    private var weeklyDaysHint: String {
+        isRussianLocale ? "Можно выбрать несколько дней" : "You can choose several days"
     }
 }
 

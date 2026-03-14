@@ -64,6 +64,15 @@ struct CashflowTransactionImporter: ModelImporter {
         let exchangeRateCurrency = dict["exchangeRateCurrency"] as? String
         let recurrenceRuleRaw = dict["recurrenceRuleRaw"] as? String
         let recurrenceRule = recurrenceRuleRaw.flatMap(CashflowRecurrenceRule.init(rawValue:)) ?? .none
+        let recurrenceWeekdaysRaw = dict["recurrenceWeekdaysRaw"] as? String
+        let recurrenceWeekdays: Set<CashflowRecurrenceWeekday> = {
+            guard let recurrenceWeekdaysRaw, !recurrenceWeekdaysRaw.isEmpty else { return [] }
+            let weekdays = recurrenceWeekdaysRaw
+                .split(separator: ",")
+                .compactMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                .compactMap(CashflowRecurrenceWeekday.init(rawValue:))
+            return Set(weekdays)
+        }()
         let recurrenceSeriesID = dict["recurrenceSeriesID"] as? String
         let affectsCardBalance = dict["affectsCardBalance"] as? Bool ?? true
         
@@ -81,6 +90,7 @@ struct CashflowTransactionImporter: ModelImporter {
             expenseCategoryRaw: expenseCategoryRaw,
             note: note,
             recurrenceRule: recurrenceRule,
+            recurrenceWeekdays: recurrenceWeekdays,
             recurrenceSeriesID: recurrenceSeriesID,
             affectsCardBalance: affectsCardBalance
         )

@@ -6,6 +6,13 @@
 import Foundation
 
 enum AmountInputFormatter {
+    /// Formats integer-only monetary input on each keystroke.
+    /// Useful for live-edit fields that must show grouping separators immediately.
+    static func integerInput(_ text: String) -> String {
+        let sanitized = sanitize(text, maxFractionDigits: 0)
+        return display(sanitized, maxFractionDigits: 0)
+    }
+
     static func sanitize(_ text: String, maxFractionDigits: Int = 2) -> String {
         let normalized = text
             .replacingOccurrences(of: " ", with: "")

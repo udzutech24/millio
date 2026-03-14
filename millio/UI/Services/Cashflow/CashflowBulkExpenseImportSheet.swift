@@ -15,6 +15,7 @@ struct CashflowBulkExpenseImportSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var mode: CashflowBulkExpenseImportMode = .manual
+    @State private var selectedCurrency: String = SettingsManager.shared.primaryCurrencyCode
     @State private var selectedCardID: String?
     @State private var selectedMonth: Date
     @State private var categoryDrafts: [CashflowBulkExpenseCategoryDraft] = []
@@ -43,6 +44,7 @@ struct CashflowBulkExpenseImportSheet: View {
     private let positive = Color(hex: "6DFFC7")
     private let warning = Color(hex: "FFB454")
     private let danger = Color(hex: "FF5A5F")
+    private let preferredCurrency = SettingsManager.shared.primaryCurrencyCode
     private let categoryGridColumns = [
         GridItem(.flexible(), spacing: 8),
         GridItem(.flexible(), spacing: 8),
@@ -138,6 +140,15 @@ struct CashflowBulkExpenseImportSheet: View {
                     await analyzePhotos(items: newItems)
                 }
             }
+            .onChange(of: selectedCurrency) { _, _ in
+                let previousCardID = selectedCardID
+                syncSelectionWithCurrency()
+                if selectedCardID == previousCardID {
+                    Task {
+                        await reloadDrafts()
+                    }
+                }
+            }
             .onChange(of: selectedCardID) { _, _ in
                 Task {
                     await reloadDrafts()
@@ -147,6 +158,9 @@ struct CashflowBulkExpenseImportSheet: View {
                 Task {
                     await reloadDrafts()
                 }
+            }
+            .onChange(of: viewModel.state.availableCards.map { "\($0.cardUniqueID)_\($0.currency)_\($0.isFavorite)" }) { _, _ in
+                syncSelectionWithCurrency()
             }
             .onDisappear {
                 showMonthPickerSheet = false
@@ -259,19 +273,23 @@ struct CashflowBulkExpenseImportSheet: View {
 
     private var controlsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(
-                    String(
-                        localized: "cashflow.bulk_expense.card_title",
-                        defaultValue: "Card",
-                        comment: "Card picker title in bulk expense import"
+            HStack(spacing: 8) {
+                Menu {
+                    ForEach(availableCurrencies, id: \.self) { currency in
+                        Button(currency) {
+                            selectedCurrency = currency
+                        }
+                    }
+                } label: {
+                    compactSelectorLabel(
+                        title: String(localized: "cashflow.editor.currency"),
+                        value: selectedCurrency
                     )
-                )
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Color.white.opacity(0.64))
+                }
+                .buttonStyle(.plain)
 
                 Menu {
-                    ForEach(viewModel.state.availableCards, id: \.cardUniqueID) { card in
+                    ForEach(cardsInSelectedCurrency, id: \.cardUniqueID) { card in
                         Button {
                             selectedCardID = card.cardUniqueID
                         } label: {
@@ -279,44 +297,46 @@ struct CashflowBulkExpenseImportSheet: View {
                         }
                     }
                 } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: selectedCard?.cardType.icon ?? "creditcard.fill")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(accent)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(selectedCard?.name ?? String(
-                                localized: "cashflow.bulk_expense.pick_card",
-                                defaultValue: "Choose card",
-                                comment: "Placeholder text for picking a card"
-                            ))
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Color.white.opacity(0.94))
-
-                            if let selectedCard {
-                                Text("\(CashflowBulkExpenseRowDraft.formatAmount(selectedCard.balance)) \(selectedCard.currency)")
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundStyle(Color.white.opacity(0.58))
-                            }
-                        }
-
-                        Spacer()
-
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(Color.white.opacity(0.54))
-                    }
-                    .padding(.horizontal, 12)
-                    .frame(height: 46)
-                    .background(innerBackground)
+                    compactSelectorLabel(
+                        title: String(
+                            localized: "cashflow.bulk_expense.card_title",
+                            defaultValue: "Card",
+                            comment: "Card picker title in bulk expense import"
+                        ),
+                        value: selectedCard?.name ?? String(
+                            localized: "cashflow.bulk_expense.pick_card",
+                            defaultValue: "Choose card",
+                            comment: "Placeholder text for picking a card"
+                        ),
+                        icon: selectedCard?.cardType.icon ?? "creditcard.fill",
+                        usesPlaceholderStyle: selectedCard == nil
+                    )
                 }
                 .buttonStyle(.plain)
+                .disabled(cardsInSelectedCurrency.isEmpty)
+                .opacity(cardsInSelectedCurrency.isEmpty ? 0.55 : 1)
+            }
+
+            if let selectedCard {
+                Text(
+                    String(
+                        format: String(localized: "cashflow.editor.available_format"),
+                        CashflowBulkExpenseRowDraft.formatAmount(selectedCard.balance),
+                        selectedCard.currency
+                    )
+                )
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.68))
+            } else if cardsInSelectedCurrency.isEmpty {
+                Text(String(localized: "cashflow.editor.no_cards_in_currency"))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.58))
             }
 
             Toggle(
                 isOn: $shouldAffectCardBalance,
                 label: {
-                    VStack(alignment: .leading, spacing: 2) {
+                    HStack(alignment: .center, spacing: 6) {
                         Text(
                             String(
                                 localized: "cashflow.bulk_expense.affect_balance",
@@ -324,9 +344,23 @@ struct CashflowBulkExpenseImportSheet: View {
                                 comment: "Toggle title for applying card balance changes"
                             )
                         )
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Color.white.opacity(0.92))
 
+                        Button {
+                            showHelpSheet = true
+                        } label: {
+                            Image(systemName: "questionmark.circle")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(Color.white.opacity(0.66))
+                        }
+                        .buttonStyle(.plain)
+
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.bottom, 2)
+
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(
                             String(
                                 localized: "cashflow.bulk_expense.affect_balance.subtitle",
@@ -345,6 +379,44 @@ struct CashflowBulkExpenseImportSheet: View {
         }
         .padding(12)
         .background(cardBackground)
+    }
+
+    private func compactSelectorLabel(
+        title: String,
+        value: String,
+        icon: String? = nil,
+        usesPlaceholderStyle: Bool = false
+    ) -> some View {
+        HStack(spacing: 8) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(accent)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.58))
+                    .textCase(.uppercase)
+                    .lineLimit(1)
+                Text(value)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(usesPlaceholderStyle ? Color.white.opacity(0.58) : Color.white.opacity(0.94))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+
+            Spacer(minLength: 0)
+
+            Image(systemName: "chevron.down")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.54))
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 52)
+        .background(innerBackground)
+        .frame(maxWidth: .infinity)
     }
 
     private func monthNavButton(systemImage: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
@@ -1065,17 +1137,26 @@ struct CashflowBulkExpenseImportSheet: View {
     }
 
     private var preferredCard: Card? {
-        let cards = viewModel.state.availableCards
-        if let selectedCardID,
-           let selected = cards.first(where: { $0.cardUniqueID == selectedCardID }) {
-            return selected
-        }
-        return cards.first(where: \.isFavorite) ?? cards.first
+        cardsInSelectedCurrency.first(where: { $0.cardUniqueID == selectedCardID })
+            ?? cardsInSelectedCurrency.first(where: \.isFavorite)
+            ?? cardsInSelectedCurrency.first
     }
 
     private var selectedCard: Card? {
         guard let selectedCardID else { return nil }
-        return viewModel.state.availableCards.first(where: { $0.cardUniqueID == selectedCardID })
+        return cardsInSelectedCurrency.first(where: { $0.cardUniqueID == selectedCardID })
+    }
+
+    private var availableCurrencies: [String] {
+        CashflowBulkExpenseImportSelectionPolicy.availableCurrencies(
+            cards: viewModel.state.availableCards,
+            preferredCurrency: preferredCurrency
+        )
+    }
+
+    private var cardsInSelectedCurrency: [Card] {
+        viewModel.state.availableCards
+            .filter { $0.currency == selectedCurrency }
     }
 
     private var filledDrafts: [CashflowBulkExpenseCategoryDraft] {
@@ -1133,19 +1214,28 @@ struct CashflowBulkExpenseImportSheet: View {
     }
 
     private var totalAmountLabel: String {
-        "\(CashflowBulkExpenseRowDraft.formatAmount(totalAmount)) \(selectedCard?.currency ?? "RUB")"
+        "\(CashflowBulkExpenseRowDraft.formatAmount(totalAmount)) \(selectedCurrency)"
     }
 
     private func configureInitialStateIfNeeded() {
-        if selectedCardID == nil {
-            selectedCardID = preferredCard?.cardUniqueID
-        }
+        syncSelectionWithCurrency()
         if categoryDrafts.isEmpty {
             categoryDrafts = makeEmptyCategoryDrafts()
         }
         Task {
             await reloadDrafts()
         }
+    }
+
+    private func syncSelectionWithCurrency() {
+        let normalized = CashflowBulkExpenseImportSelectionPolicy.normalizeSelection(
+            cards: viewModel.state.availableCards,
+            selectedCurrency: selectedCurrency,
+            selectedCardID: selectedCardID,
+            preferredCurrency: preferredCurrency
+        )
+        selectedCurrency = normalized.currency
+        selectedCardID = normalized.cardID
     }
 
     private func shiftMonth(by value: Int) {
