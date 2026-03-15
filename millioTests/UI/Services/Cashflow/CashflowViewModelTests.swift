@@ -226,6 +226,33 @@ extension CashflowViewModelTests {
         #expect(viewModel.state.displayCurrency == "USD")
     }
 
+    @Test("Сигнатура синхронизации карт меняется при обновлении остатка и лимита")
+    func testCardSyncSignatureTracksBalanceRelevantFields() {
+        let card = Card(
+            name: "Основная",
+            cardNumber: "1234",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 1_000
+        )
+
+        let initialSignature = CashflowViewModel.cardSyncSignature(for: [card])
+
+        card.balance = 1_250
+        card.updatedAt = Date(timeIntervalSince1970: 123)
+        let balanceSignature = CashflowViewModel.cardSyncSignature(for: [card])
+
+        #expect(initialSignature != balanceSignature)
+
+        card.cardType = .credit
+        card.creditLimit = 5_000
+        card.updatedAt = Date(timeIntervalSince1970: 456)
+        let creditSignature = CashflowViewModel.cardSyncSignature(for: [card])
+
+        #expect(balanceSignature != creditSignature)
+    }
+
     @Test("Расход не превышает доступный баланс карты")
     func testExpenseCannotExceedBalance() async throws {
         let modelContext = try createTestModelContext()
@@ -278,6 +305,73 @@ extension CashflowViewModelTests {
         #expect(available)
     }
 
+    @Test("Для кредитной карты snapshot возвращает долг и остаток лимита")
+    func testCreditCardBalanceSnapshotReturnsDebtAndRemainingLimit() throws {
+        let modelContext = try createTestModelContext()
+        let card = Card(
+            name: "Кредитка",
+            cardNumber: "5555",
+            bank: .tinkoff,
+            cardType: .credit,
+            currency: "RUB",
+            balance: 253_641,
+            creditLimit: 560_000
+        )
+        modelContext.insert(card)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+
+        let snapshot = viewModel.cardBalanceSnapshot(for: card.cardUniqueID)
+
+        #expect(snapshot?.isCreditCard == true)
+        #expect(abs((snapshot?.availableAmount ?? 0) - 253_641) < 0.01)
+        #expect(abs((snapshot?.debtAmount ?? 0) - 306_359) < 0.01)
+        #expect(snapshot?.currency == "RUB")
+    }
+
+    @Test("Для дубликатов карты snapshot берет самую новую запись")
+    func testCardBalanceSnapshotUsesNewestDuplicateCard() throws {
+        let modelContext = try createTestModelContext()
+        let sharedID = "DUPLICATE-CARD-ID"
+
+        let stale = Card(
+            name: "T-Bank Кредитная",
+            cardNumber: "1111",
+            bank: .tinkoff,
+            cardType: .credit,
+            currency: "RUB",
+            balance: 253_641,
+            creditLimit: 560_000
+        )
+        stale.uniqueID = sharedID
+        stale.updatedAt = Date(timeIntervalSince1970: 1)
+
+        let fresh = Card(
+            name: "T-Bank Кредитная",
+            cardNumber: "1111",
+            bank: .tinkoff,
+            cardType: .credit,
+            currency: "RUB",
+            balance: 559_999,
+            creditLimit: 560_000
+        )
+        fresh.uniqueID = sharedID
+        fresh.updatedAt = Date(timeIntervalSince1970: 2)
+
+        modelContext.insert(stale)
+        modelContext.insert(fresh)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+        viewModel.handle(.loadCards)
+
+        let snapshot = viewModel.cardBalanceSnapshot(for: sharedID)
+
+        #expect(abs((snapshot?.availableAmount ?? 0) - 559_999) < 0.01)
+        #expect(abs((snapshot?.debtAmount ?? 0) - 1) < 0.01)
+    }
+
     @Test("Cashflow обновляет историю по событию transactionsUpdated")
     func testTransactionsUpdatedEventReloadsTransactions() async throws {
         let modelContext = try createTestModelContext()
@@ -300,6 +394,42 @@ extension CashflowViewModelTests {
 
         #expect(viewModel.state.transactions.count == 1)
         #expect(viewModel.state.transactions.first?.note == "Тест")
+    }
+
+    @Test("Cashflow обновляет список карт по событию cardsUpdated")
+    func testCardsUpdatedEventReloadsCards() async throws {
+        let modelContext = try createTestModelContext()
+
+        let initialCard = Card(
+            name: "Основная",
+            cardNumber: "1111",
+            bank: .sberbank,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 1_000
+        )
+        modelContext.insert(initialCard)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+        #expect(viewModel.state.availableCards.count == 1)
+
+        let secondCard = Card(
+            name: "Резерв",
+            cardNumber: "2222",
+            bank: .tinkoff,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 2_000
+        )
+        modelContext.insert(secondCard)
+        try modelContext.save()
+
+        EventBus.shared.publish(FinanceEvent.cardsUpdated)
+
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            viewModel.state.availableCards.count == 2
+        }
     }
 
     @Test("Дефолтный период Cashflow — текущий месяц до сегодняшнего дня")
@@ -1451,6 +1581,54 @@ extension CashflowViewModelTests {
         #expect(abs(card.balance - 880) < 0.01)
     }
 
+    @Test("Текущий расход не применяется повторно через due auto-apply")
+    func testCurrentExpenseDoesNotDoubleApplyViaDueAutoApply() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 10, hour: 12)) ?? Date()
+        let suite = "CashflowCurrentExpenseAutoApply.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(calendar.date(from: DateComponents(year: 2026, month: 3, day: 1, hour: 12)), forKey: "cashflow_due_auto_apply_checkpoint_v1")
+
+        let card = Card(
+            name: "Main",
+            cardNumber: "0102",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 1_000
+        )
+        modelContext.insert(card)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(
+            modelContext: modelContext,
+            now: { fixedNow },
+            defaults: defaults
+        )
+
+        let expense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 100,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: card.cardUniqueID,
+            expenseCategory: .groceries,
+            affectsCardBalance: true
+        )
+
+        let didSave = await viewModel.persistTransaction(expense)
+
+        #expect(didSave)
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            abs(card.balance - 900) < 0.01
+                && viewModel.state.transactions.count == 1
+                && (viewModel.state.transactions.first?.hasAppliedBalanceEffect == true)
+        }
+        #expect(abs(card.balance - 900) < 0.01)
+    }
+
     @Test("Запланированный расход с включенным тумблером списывается автоматически в дату")
     func testPlannedExpenseAutoAppliesOnDueDate() async throws {
         let modelContext = try createTestModelContext()
@@ -1610,6 +1788,50 @@ extension CashflowViewModelTests {
         #expect(abs(card.balance - 500) < 0.01)
     }
 
+    @Test("Сохранение расхода по кредитной карте публикует обновление карты")
+    func testPersistCreditCardExpensePublishesCardsUpdated() async throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 15, hour: 8)) ?? Date()
+
+        let card = Card(
+            name: "T-Bank",
+            cardNumber: "1122",
+            bank: .tinkoff,
+            cardType: .credit,
+            currency: "RUB",
+            balance: 560_000,
+            creditLimit: 560_000
+        )
+        modelContext.insert(card)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+
+        var didPublishCardsUpdated = false
+        let subscriptionID = EventBus.shared.subscribe { event in
+            if case FinanceEvent.cardsUpdated = event {
+                didPublishCardsUpdated = true
+            }
+        }
+        defer { EventBus.shared.unsubscribe(subscriptionID) }
+
+        let expense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 100_000,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: card.cardUniqueID,
+            expenseCategory: .transport,
+            affectsCardBalance: true
+        )
+
+        let didSave = await viewModel.persistTransaction(expense)
+
+        #expect(didSave)
+        #expect(abs(card.balance - 460_000) < 0.01)
+        #expect(didPublishCardsUpdated)
+    }
+
     @Test("Редактирование операции обновляет существующую запись, а не создает дубль")
     func testPersistTransactionReplacingExistingUpdatesInsteadOfDuplicating() async throws {
         let modelContext = try createTestModelContext()
@@ -1663,6 +1885,91 @@ extension CashflowViewModelTests {
         let saved = try #require(transactions.first)
         #expect(saved.persistentModelID == existing.persistentModelID)
         #expect(abs(saved.amount - 55_222) < 0.01)
+    }
+
+    @Test("Удаление расхода с пересчетом публикует обновление карты")
+    func testDeleteTransactionWithRecalculationPublishesCardsUpdated() async throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 15, hour: 9)) ?? Date()
+
+        let card = Card(
+            name: "T-Bank",
+            cardNumber: "3344",
+            bank: .tinkoff,
+            cardType: .credit,
+            currency: "RUB",
+            balance: 460_000,
+            creditLimit: 560_000
+        )
+        modelContext.insert(card)
+
+        let existing = CashflowTransaction(
+            transactionType: .expense,
+            amount: 100_000,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: card.cardUniqueID,
+            expenseCategory: .transport,
+            affectsCardBalance: true
+        )
+        modelContext.insert(existing)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+
+        var didPublishCardsUpdated = false
+        let subscriptionID = EventBus.shared.subscribe { event in
+            if case FinanceEvent.cardsUpdated = event {
+                didPublishCardsUpdated = true
+            }
+        }
+        defer { EventBus.shared.unsubscribe(subscriptionID) }
+
+        viewModel.handle(.deleteTransaction(existing, recalculate: true))
+
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            didPublishCardsUpdated
+        }
+
+        #expect(abs(card.balance - 560_000) < 0.01)
+    }
+
+    @Test("Удаление корректировки долга кредитной карты откатывает остаток карты")
+    func testDeleteCreditDebtAdjustmentRevertsCardBalance() async throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 15, hour: 10)) ?? Date()
+
+        let card = Card(
+            name: "Credit",
+            cardNumber: "5566",
+            bank: .tinkoff,
+            cardType: .credit,
+            currency: "RUB",
+            balance: 460_000,
+            creditLimit: 560_000
+        )
+        modelContext.insert(card)
+
+        let adjustment = CashflowTransaction(
+            transactionType: .creditDebtAdjustment,
+            amount: -100_000,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: card.cardUniqueID,
+            note: "Manual debt change"
+        )
+        modelContext.insert(adjustment)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+
+        viewModel.handle(.deleteTransaction(adjustment, recalculate: true))
+
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            abs(card.balance - 560_000) < 0.01 && viewModel.state.transactions.isEmpty
+        }
+
+        #expect(abs(card.balance - 560_000) < 0.01)
     }
 
     @Test("Удаление операции исключает ее из регулярных и запланированных списков")
@@ -1765,6 +2072,69 @@ extension CashflowViewModelTests {
 
         #expect(abs(viewModel.state.totalExpense) < 0.01)
         #expect(abs(card.balance - 800) < 0.01)
+    }
+
+    @Test("Удаление без пересчета не запускает due-auto-apply и не меняет уже примененный остаток")
+    func testDeleteWithoutRecalculationDoesNotTriggerDueAutoApply() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 10, hour: 12)) ?? Date()
+
+        let card = Card(
+            name: "Main",
+            cardNumber: "1111",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 800
+        )
+        modelContext.insert(card)
+        try modelContext.save()
+
+        let suiteName = "CashflowDeleteWithoutRecalculationAutoApply_\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName) ?? .standard
+        defaults.set(
+            calendar.date(byAdding: .day, value: -3, to: fixedNow),
+            forKey: "cashflow_due_auto_apply_checkpoint_v1"
+        )
+
+        let viewModel = CashflowViewModel(
+            modelContext: modelContext,
+            now: { fixedNow },
+            defaults: defaults
+        )
+
+        let expense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 200,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: card.cardUniqueID,
+            affectsCardBalance: true
+        )
+
+        let didSave = await viewModel.persistTransaction(expense)
+        #expect(didSave)
+
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            abs(card.balance - 600) < 0.01
+                && viewModel.state.transactions.count == 1
+                && (viewModel.state.transactions.first?.hasAppliedBalanceEffect == true)
+        }
+
+        guard let savedExpense = viewModel.state.transactions.first else {
+            Issue.record("Expected saved expense to be present in state")
+            return
+        }
+
+        viewModel.handle(.deleteTransaction(savedExpense, recalculate: false))
+
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            viewModel.state.transactions.isEmpty
+                && abs(card.balance - 600) < 0.01
+        }
+
+        #expect(abs(card.balance - 600) < 0.01)
     }
 
     @Test("История фильтруется по диапазону дат включительно и сохраняет сортировку по дате")

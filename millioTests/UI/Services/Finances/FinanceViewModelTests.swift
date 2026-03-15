@@ -1313,9 +1313,15 @@ struct FinanceViewModelTests {
         #expect(abs(oldDebt - 3000) < 0.01)
 
         var didPublishTransactionsUpdated = false
+        var didPublishCardsUpdated = false
         let subscriptionID = EventBus.shared.subscribe { event in
-            if case FinanceEvent.transactionsUpdated = event {
+            switch event {
+            case FinanceEvent.transactionsUpdated:
                 didPublishTransactionsUpdated = true
+            case FinanceEvent.cardsUpdated:
+                didPublishCardsUpdated = true
+            default:
+                break
             }
         }
         defer { EventBus.shared.unsubscribe(subscriptionID) }
@@ -1325,6 +1331,7 @@ struct FinanceViewModelTests {
         #expect(abs((card.creditLimit ?? 0) - 12_000) < 0.01)
         #expect(abs(card.balance - 7_500) < 0.01)
         #expect(didPublishTransactionsUpdated)
+        #expect(didPublishCardsUpdated)
 
         let descriptor = FetchDescriptor<CashflowTransaction>()
         let transactions = try modelContext.fetch(descriptor)
@@ -1334,6 +1341,62 @@ struct FinanceViewModelTests {
         #expect(transaction.transactionType == .creditDebtAdjustment)
         #expect(abs(transaction.amount + 1_500) < 0.01)
         #expect(transaction.cardID == card.cardUniqueID)
+    }
+
+    @Test("Быстрое редактирование лимита кредитной карты публикует обновление карты даже без транзакции")
+    func testQuickEditCreditCardFieldsPublishesCardsUpdatedWithoutDebtChange() throws {
+        let modelContext = try createTestModelContext()
+
+        let group = FinanceGroup(name: "Карты", colorHex: "#22AAFF")
+        modelContext.insert(group)
+
+        let card = Card(
+            name: "Кредитка",
+            cardNumber: "5678",
+            bank: .tinkoff,
+            cardType: .credit,
+            currency: "RUB",
+            balance: 560_000,
+            creditLimit: 560_000
+        )
+        modelContext.insert(card)
+
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadGroups)
+        viewModel.handle(.loadAccounts)
+
+        var didPublishCardsUpdated = false
+        var didPublishTransactionsUpdated = false
+        let subscriptionID = EventBus.shared.subscribe { event in
+            switch event {
+            case FinanceEvent.cardsUpdated:
+                didPublishCardsUpdated = true
+            case FinanceEvent.transactionsUpdated:
+                didPublishTransactionsUpdated = true
+            default:
+                break
+            }
+        }
+        defer { EventBus.shared.unsubscribe(subscriptionID) }
+
+        viewModel.handle(.updateCreditCardQuickFields(account: account, creditLimit: 700_000, debt: 0))
+
+        #expect(abs((card.creditLimit ?? 0) - 700_000) < 0.01)
+        #expect(abs(card.balance - 700_000) < 0.01)
+        #expect(didPublishCardsUpdated)
+        #expect(!didPublishTransactionsUpdated)
+
+        let transactions = try modelContext.fetch(FetchDescriptor<CashflowTransaction>())
+        #expect(transactions.isEmpty)
     }
 
     @Test("Для кредитной карты возвращается остаток лимита")
@@ -1370,6 +1433,103 @@ struct FinanceViewModelTests {
         #expect(limitInfo != nil)
         #expect(abs((limitInfo?.amount ?? 0) - 7_778) < 0.01)
         #expect(limitInfo?.currency == "RUB")
+    }
+
+    @Test("Для кредитной карты в списке показывается остаток лимита, а долг доступен отдельно")
+    func testCreditCardAccountInfoUsesRemainingLimitForPrimaryAmount() throws {
+        let modelContext = try createTestModelContext()
+
+        let group = FinanceGroup(name: "Карты", colorHex: "#22AAFF")
+        modelContext.insert(group)
+
+        let card = Card(
+            name: "T-Bank Кредитная",
+            cardNumber: "8888",
+            bank: .tinkoff,
+            cardType: .credit,
+            currency: "RUB",
+            balance: 213_641,
+            creditLimit: 560_000
+        )
+        modelContext.insert(card)
+
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadAccounts)
+
+        let info = viewModel.getAccountInfo(account: account)
+        let debtInfo = viewModel.getCreditCardDebt(account: account)
+
+        #expect(info != nil)
+        #expect(abs((info?.amount ?? 0) - 213_641) < 0.01)
+        #expect(info?.isCreditCardDebt == false)
+        #expect(abs((debtInfo?.amount ?? 0) - 346_359) < 0.01)
+        #expect(debtInfo?.currency == "RUB")
+    }
+
+    @Test("FinanceViewModel для дубликатов карты использует самую новую запись")
+    func testFinanceViewModelUsesNewestDuplicateCardForAccountInfo() throws {
+        let modelContext = try createTestModelContext()
+
+        let group = FinanceGroup(name: "Карты", colorHex: "#22AAFF")
+        modelContext.insert(group)
+
+        let sharedID = "DUPLICATE-CREDIT-CARD-ID"
+
+        let stale = Card(
+            name: "T-Bank Кредитная",
+            cardNumber: "1111",
+            bank: .tinkoff,
+            cardType: .credit,
+            currency: "RUB",
+            balance: 560_000,
+            creditLimit: 560_000
+        )
+        stale.uniqueID = sharedID
+        stale.updatedAt = Date(timeIntervalSince1970: 1)
+
+        let fresh = Card(
+            name: "T-Bank Кредитная",
+            cardNumber: "1111",
+            bank: .tinkoff,
+            cardType: .credit,
+            currency: "RUB",
+            balance: 213_641,
+            creditLimit: 560_000
+        )
+        fresh.uniqueID = sharedID
+        fresh.updatedAt = Date(timeIntervalSince1970: 2)
+
+        modelContext.insert(stale)
+        modelContext.insert(fresh)
+
+        let account = FinanceAccount(accountType: .card, accountID: sharedID)
+        account.group = group
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadAccounts)
+
+        let info = viewModel.getAccountInfo(account: account)
+        let limitInfo = viewModel.getCreditCardLimitRemaining(account: account)
+        let debtInfo = viewModel.getCreditCardDebt(account: account)
+
+        #expect(abs((info?.amount ?? 0) - 213_641) < 0.01)
+        #expect(abs((limitInfo?.amount ?? 0) - 213_641) < 0.01)
+        #expect(abs((debtInfo?.amount ?? 0) - 346_359) < 0.01)
     }
 
     @Test("Для дебетовой карты остаток лимита не возвращается")
@@ -1517,6 +1677,61 @@ struct FinanceViewModelTests {
         #expect(accountIDs.contains(card.cardUniqueID))
         #expect(accountIDs.contains(credit.creditUniqueID))
         #expect(accountIDs.contains(investment.investmentUniqueID))
+    }
+
+    @Test("Дубликаты FinanceAccount для одной карты удаляются и не удваивают итоги")
+    func testCleanupDeduplicatesFinanceAccountLinksForSingleCard() async throws {
+        let modelContext = try createTestModelContext()
+        let currencyService = MockCurrencyRateService()
+
+        let primaryGroup = FinanceGroup(name: "Основная", colorHex: "#123456")
+        let staleGroup = FinanceGroup(name: String(localized: "finances.group.ungrouped"), colorHex: "#654321")
+        modelContext.insert(primaryGroup)
+        modelContext.insert(staleGroup)
+
+        let card = Card(
+            name: "Карта",
+            cardNumber: "9999",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 1_000
+        )
+        modelContext.insert(card)
+
+        let staleLink = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        staleLink.group = staleGroup
+        staleLink.updatedAt = Date(timeIntervalSince1970: 1)
+        modelContext.insert(staleLink)
+
+        let currentLink = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        currentLink.group = primaryGroup
+        currentLink.updatedAt = Date(timeIntervalSince1970: 2)
+        modelContext.insert(currentLink)
+
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: currencyService,
+            skipInitialLoad: true
+        )
+
+        viewModel.handle(.loadGroups)
+        viewModel.handle(.loadAccounts)
+
+        let didPropagate = await waitForAsyncStatePropagation {
+            viewModel.state.totalAmount == 1_000
+                && viewModel.state.groupTotals[primaryGroup.groupUniqueID] == 1_000
+        }
+
+        #expect(didPropagate)
+
+        let accounts = try modelContext.fetch(FetchDescriptor<FinanceAccount>())
+        #expect(accounts.count == 1)
+        #expect(accounts.first?.group?.groupUniqueID == primaryGroup.groupUniqueID)
+        #expect(viewModel.state.totalAmount == 1_000)
+        #expect(viewModel.state.groupTotals[primaryGroup.groupUniqueID] == 1_000)
     }
 
     @Test("Событие обновления кредитов пересчитывает суммы групп")

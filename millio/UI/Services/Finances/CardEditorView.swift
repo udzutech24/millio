@@ -51,10 +51,15 @@ struct CardEditorView: View {
             )
             newCard.uniqueID = editing.uniqueID
             _card = State(initialValue: newCard)
-            _balanceText = State(initialValue: AmountInputFormatter.plainString(from: editing.balance))
-            _creditLimitText = State(initialValue: editing.creditLimit.map { AmountInputFormatter.plainString(from: $0) } ?? "")
+            _balanceText = State(initialValue: AmountInputFormatter.display(AmountInputFormatter.plainString(from: editing.balance)))
+            _creditLimitText = State(initialValue: editing.creditLimit.map {
+                AmountInputFormatter.display(AmountInputFormatter.plainString(from: $0))
+            } ?? "")
             let editingDebt = max(0, (editing.creditLimit ?? 0) - editing.balance)
-            _creditDebtText = State(initialValue: editing.cardType == .credit ? AmountInputFormatter.plainString(from: editingDebt) : "")
+            _creditDebtText = State(initialValue: editing.cardType == .credit
+                ? AmountInputFormatter.display(AmountInputFormatter.plainString(from: editingDebt))
+                : ""
+            )
             _isNewCard = State(initialValue: false)
         } else {
             _card = State(initialValue: Card(
@@ -142,7 +147,9 @@ struct CardEditorView: View {
                     card.includeInTotal = true
                     if creditDebtText.isEmpty {
                         let debt = max(0, (AmountInputFormatter.parse(creditLimitText) ?? 0) - card.balance)
-                        creditDebtText = AmountInputFormatter.plainString(from: debt)
+                        creditDebtText = AmountInputFormatter.display(
+                            AmountInputFormatter.plainString(from: debt)
+                        )
                     }
                 }
             }
@@ -241,10 +248,14 @@ struct CardEditorView: View {
                                 card.includeInTotal = true
                                 let limit = AmountInputFormatter.parse(creditLimitText) ?? card.creditLimit ?? 0
                                 if creditLimitText.isEmpty {
-                                    creditLimitText = AmountInputFormatter.plainString(from: limit)
+                                    creditLimitText = AmountInputFormatter.display(
+                                        AmountInputFormatter.plainString(from: limit)
+                                    )
                                 }
                                 let debt = max(0, limit - card.balance)
-                                creditDebtText = AmountInputFormatter.plainString(from: debt)
+                                creditDebtText = AmountInputFormatter.display(
+                                    AmountInputFormatter.plainString(from: debt)
+                                )
                             }
                         }
                     }
@@ -294,10 +305,9 @@ struct CardEditorView: View {
                                 .foregroundStyle(AppColors.textPrimary)
                             Spacer()
                             TextField("0", text: Binding(
-                                get: { AmountInputFormatter.display(creditLimitText) },
+                                get: { creditLimitText },
                                 set: { newValue in
-                                    let sanitized = AmountInputFormatter.sanitize(newValue)
-                                    creditLimitText = sanitized
+                                    creditLimitText = AmountInputFormatter.display(newValue)
                                     let limit = AmountInputFormatter.parse(creditLimitText) ?? 0
                                     let debt = AmountInputFormatter.parse(creditDebtText) ?? 0
                                     card.creditLimit = creditLimitText.isEmpty ? nil : limit
@@ -319,10 +329,9 @@ struct CardEditorView: View {
                                 .foregroundStyle(AppColors.textPrimary)
                             Spacer()
                             TextField("0", text: Binding(
-                                get: { AmountInputFormatter.display(creditDebtText) },
+                                get: { creditDebtText },
                                 set: { newValue in
-                                    let sanitized = AmountInputFormatter.sanitize(newValue)
-                                    creditDebtText = sanitized
+                                    creditDebtText = AmountInputFormatter.display(newValue)
                                     let limit = AmountInputFormatter.parse(creditLimitText) ?? 0
                                     let debt = AmountInputFormatter.parse(creditDebtText) ?? 0
                                     card.balance = max(0, limit - debt)
@@ -355,10 +364,9 @@ struct CardEditorView: View {
                                 .foregroundStyle(AppColors.textPrimary)
                             Spacer()
                             TextField("0", text: Binding(
-                                get: { AmountInputFormatter.display(balanceText) },
+                                get: { balanceText },
                                 set: { newValue in
-                                    let sanitized = AmountInputFormatter.sanitize(newValue)
-                                    balanceText = sanitized
+                                    balanceText = AmountInputFormatter.display(newValue)
                                     card.balance = AmountInputFormatter.parse(balanceText) ?? 0
                                 }
                             ))

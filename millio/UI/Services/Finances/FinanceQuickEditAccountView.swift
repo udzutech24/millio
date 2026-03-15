@@ -76,20 +76,7 @@ struct FinanceQuickEditAccountView: View {
                                         .foregroundStyle(AppColors.textSecondary)
 
                                     HStack(spacing: 8) {
-                                        TextField("", text: Binding(
-                                            get: {
-                                                AmountInputFormatter.display(
-                                                    amountText,
-                                                    maxFractionDigits: maxFractionDigitsForInput
-                                                )
-                                            },
-                                            set: { newValue in
-                                                amountText = AmountInputFormatter.sanitize(
-                                                    newValue,
-                                                    maxFractionDigits: maxFractionDigitsForInput
-                                                )
-                                            }
-                                        ))
+                                        TextField("", text: $amountText)
                                             .font(.system(size: 32, weight: .bold))
                                             .foregroundStyle(AppColors.textPrimary)
                                             .keyboardType(.decimalPad)
@@ -97,6 +84,13 @@ struct FinanceQuickEditAccountView: View {
                                             .focused($isAmountFieldFocused)
                                             .autocorrectionDisabled()
                                             .textInputAutocapitalization(.never)
+                                            .onChange(of: amountText) { _, newValue in
+                                                syncFormattedText(
+                                                    newValue,
+                                                    text: $amountText,
+                                                    maxFractionDigits: maxFractionDigitsForInput
+                                                )
+                                            }
 
                                         Text(valueSuffix(for: info))
                                             .font(.system(size: 20, weight: .semibold))
@@ -175,8 +169,8 @@ struct FinanceQuickEditAccountView: View {
             quickRow(
                 title: String(localized: "finances.add_account.card.credit_limit"),
                 text: Binding(
-                    get: { AmountInputFormatter.display(creditLimitText) },
-                    set: { creditLimitText = AmountInputFormatter.sanitize($0) }
+                    get: { creditLimitText },
+                    set: { creditLimitText = $0 }
                 ),
                 suffix: currency
             )
@@ -184,8 +178,8 @@ struct FinanceQuickEditAccountView: View {
             quickRow(
                 title: String(localized: "finances.add_account.card.total_debt"),
                 text: Binding(
-                    get: { AmountInputFormatter.display(creditDebtText) },
-                    set: { creditDebtText = AmountInputFormatter.sanitize($0) }
+                    get: { creditDebtText },
+                    set: { creditDebtText = $0 }
                 ),
                 suffix: currency
             )
@@ -226,6 +220,9 @@ struct FinanceQuickEditAccountView: View {
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(AppColors.textPrimary)
                 .frame(maxWidth: 140)
+                .onChange(of: text.wrappedValue) { _, newValue in
+                    syncFormattedText(newValue, text: text)
+                }
             Text(suffix)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary)
@@ -272,18 +269,20 @@ struct FinanceQuickEditAccountView: View {
     }
 
     private func plainAmountForInput(_ amount: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.decimalSeparator = "."
-        formatter.usesGroupingSeparator = false
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = maxFractionDigitsForInput
-        return formatter.string(from: NSNumber(value: amount)) ?? "0"
+        AmountInputFormatter.plainString(from: amount, maxFractionDigits: maxFractionDigitsForInput)
     }
 
     private func parseAmount(_ text: String) -> Double? {
         AmountInputFormatter.parse(text)
+    }
+
+    private func syncFormattedText(_ newValue: String, text: Binding<String>, maxFractionDigits: Int = 2) {
+        let sanitized = AmountInputFormatter.sanitize(newValue, maxFractionDigits: maxFractionDigits)
+        let formatted = AmountInputFormatter.display(sanitized, maxFractionDigits: maxFractionDigits)
+
+        if text.wrappedValue != formatted {
+            text.wrappedValue = formatted
+        }
     }
     
     private func save() {
@@ -312,16 +311,21 @@ struct FinanceQuickEditAccountView: View {
         guard let info = accountInfo else { return }
         if isCreditCard, let card = currentCreditCard {
             if creditLimitText.isEmpty {
-                creditLimitText = plainAmountForInput(card.creditLimit ?? 0)
+                creditLimitText = AmountInputFormatter.display(
+                    plainAmountForInput(card.creditLimit ?? 0)
+                )
             }
             if creditDebtText.isEmpty {
                 let debt = max(0, (card.creditLimit ?? 0) - card.balance)
-                creditDebtText = plainAmountForInput(debt)
+                creditDebtText = AmountInputFormatter.display(plainAmountForInput(debt))
             }
             return
         }
         if amountText.isEmpty {
-            amountText = plainAmountForInput(currentEditableValue(fallbackAmount: info.amount))
+            amountText = AmountInputFormatter.display(
+                plainAmountForInput(currentEditableValue(fallbackAmount: info.amount)),
+                maxFractionDigits: maxFractionDigitsForInput
+            )
         }
     }
 

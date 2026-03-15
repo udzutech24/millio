@@ -14,12 +14,20 @@ import UIKit
 /// лимитами делаем это раньше, потому что карточки становятся плотнее.
 struct CashflowCategoryGridLayout {
     struct CardMetrics {
+        let topRowMinHeight: CGFloat
         let contentSpacing: CGFloat
         let titleMinHeight: CGFloat
         let cardMinHeight: CGFloat
         let verticalPadding: CGFloat
         let amountTopPadding: CGFloat
         let usesFlexibleSpacer: Bool
+        let footerMinHeight: CGFloat
+    }
+
+    enum PinAffordanceStyle {
+        case hidden
+        case compactBadge
+        case regularButton
     }
 
     static let compactColumns = 3
@@ -27,6 +35,9 @@ struct CashflowCategoryGridLayout {
     static let compactWidthThreshold: CGFloat = 330
     static let budgetCompactWidthThreshold: CGFloat = 430
     static let columnSpacing: CGFloat = 8
+    static let unifiedCardMinHeight: CGFloat = 124
+    static let unifiedTopRowMinHeight: CGFloat = 22
+    static let unifiedFooterMinHeight: CGFloat = 24
 
     static func columnCount(
         for kind: CashflowCategoryTransactionSheetKind,
@@ -60,23 +71,41 @@ struct CashflowCategoryGridLayout {
     static func cardMetrics(showsBudgetDetails: Bool) -> CardMetrics {
         if showsBudgetDetails {
             return CardMetrics(
+                topRowMinHeight: unifiedTopRowMinHeight,
                 contentSpacing: 6,
                 titleMinHeight: 26,
-                cardMinHeight: 124,
+                cardMinHeight: unifiedCardMinHeight,
                 verticalPadding: 9,
                 amountTopPadding: 0,
-                usesFlexibleSpacer: true
+                usesFlexibleSpacer: true,
+                footerMinHeight: unifiedFooterMinHeight
             )
         }
 
         return CardMetrics(
+            topRowMinHeight: unifiedTopRowMinHeight,
             contentSpacing: 5,
             titleMinHeight: 24,
-            cardMinHeight: 98,
+            cardMinHeight: unifiedCardMinHeight,
             verticalPadding: 8,
-            amountTopPadding: 2,
-            usesFlexibleSpacer: false
+            amountTopPadding: 8,
+            usesFlexibleSpacer: true,
+            footerMinHeight: unifiedFooterMinHeight
         )
+    }
+
+    /// Для расходов не засоряем сетку пинами: unpinned скрыты, pinned получают компактный badge.
+    /// Доходы оставляем с явной кнопкой, потому что там плотность ниже и affordance помогает быстрее.
+    static func pinAffordanceStyle(
+        for kind: CashflowCategoryTransactionSheetKind,
+        isPinned: Bool
+    ) -> PinAffordanceStyle {
+        switch kind {
+        case .expense:
+            return isPinned ? .compactBadge : .hidden
+        case .income:
+            return .regularButton
+        }
     }
 }
 
@@ -677,6 +706,20 @@ private struct CashflowCategoryTransactionSheet: View {
             showsBudgetDetails: cardHasBudgetDetails
         )
         let isPinned = viewModel.isCategoryPinned(rawValue: option.rawValue, kind: kind.categoryKind)
+        let pinAffordanceStyle = CashflowCategoryGridLayout.pinAffordanceStyle(
+            for: kind,
+            isPinned: isPinned
+        )
+        let trailingInset: CGFloat = {
+            switch pinAffordanceStyle {
+            case .compactBadge:
+                return 18
+            case .regularButton:
+                return 28
+            case .hidden:
+                return 0
+            }
+        }()
 
         return ZStack(alignment: .topTrailing) {
             Button {
@@ -703,9 +746,10 @@ private struct CashflowCategoryTransactionSheet: View {
                                     Capsule(style: .continuous)
                                         .fill(budgetStatusColor(summary.status).opacity(0.14))
                                 )
-                                .padding(.trailing, isPinned ? 28 : 0)
+                                .padding(.trailing, trailingInset)
                         }
                     }
+                    .frame(maxWidth: .infinity, minHeight: metrics.topRowMinHeight, alignment: .topLeading)
 
                     Text(option.displayName)
                         .font(.system(size: 12, weight: .semibold))
@@ -719,44 +763,41 @@ private struct CashflowCategoryTransactionSheet: View {
                     }
 
                     Text(formattedCategoryTotal(for: option))
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(summary == nil ? AppColors.textSecondary : AppColors.textPrimary.opacity(0.95))
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle((summary == nil ? AppColors.textSecondary : AppColors.textPrimary).opacity(0.98))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                         .padding(.top, metrics.amountTopPadding)
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
-                    if let summary {
-                        VStack(alignment: .leading, spacing: metrics.contentSpacing) {
-                            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                                Text(formattedAmount(summary.spent))
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundStyle(budgetStatusColor(summary.status))
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.72)
-                                Text("/")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(Color.white.opacity(0.42))
-                                Text(formattedAmount(summary.limit))
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundStyle(Color.white.opacity(0.68))
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.72)
-                                Spacer(minLength: 0)
-                            }
-
-                            GeometryReader { proxy in
-                                let progress = min(max(summary.progress, 0), 1)
-                                ZStack(alignment: .leading) {
-                                    Capsule(style: .continuous)
-                                        .fill(Color.white.opacity(0.08))
-                                    Capsule(style: .continuous)
-                                        .fill(budgetStatusColor(summary.status))
-                                        .frame(width: max(8, proxy.size.width * progress))
+                    Group {
+                        if let summary {
+                            VStack(alignment: .leading, spacing: metrics.contentSpacing) {
+                                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                    Text("Лимит \(formattedAmount(summary.limit))")
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundStyle(Color.white.opacity(0.66))
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.72)
                                 }
+
+                                GeometryReader { proxy in
+                                    let progress = min(max(summary.progress, 0), 1)
+                                    ZStack(alignment: .leading) {
+                                        Capsule(style: .continuous)
+                                            .fill(Color.white.opacity(0.08))
+                                        Capsule(style: .continuous)
+                                            .fill(budgetStatusColor(summary.status))
+                                            .frame(width: max(8, proxy.size.width * progress))
+                                    }
+                                }
+                                .frame(height: 5)
                             }
-                            .frame(height: 5)
+                        } else {
+                            Color.clear
                         }
                     }
+                    .frame(maxWidth: .infinity, minHeight: metrics.footerMinHeight, alignment: .bottomLeading)
                 }
                 .frame(maxWidth: .infinity, minHeight: metrics.cardMinHeight, alignment: .topLeading)
                 .padding(.horizontal, 10)
@@ -772,25 +813,46 @@ private struct CashflowCategoryTransactionSheet: View {
             }
             .buttonStyle(.plain)
 
-            Button {
-                togglePinned(for: option)
-            } label: {
-                Image(systemName: isPinned ? "pin.fill" : "pin")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(isPinned ? Color.black : AppColors.textPrimary.opacity(0.82))
-                    .frame(width: 28, height: 28)
+            switch pinAffordanceStyle {
+            case .hidden:
+                EmptyView()
+            case .compactBadge:
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Color(hex: "FF6B6B"))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 5)
                     .background(
-                        Circle()
-                            .fill(isPinned ? Color(hex: "FF6B6B") : Color.white.opacity(0.08))
+                        Capsule(style: .continuous)
+                            .fill(Color.white.opacity(0.08))
                             .overlay(
-                                Circle()
-                                    .stroke(Color.white.opacity(isPinned ? 0.0 : 0.10), lineWidth: 1)
+                                Capsule(style: .continuous)
+                                    .stroke(Color.white.opacity(0.10), lineWidth: 1)
                             )
                     )
+                    .padding(8)
+                    .accessibilityLabel("Pinned category")
+            case .regularButton:
+                Button {
+                    togglePinned(for: option)
+                } label: {
+                    Image(systemName: isPinned ? "pin.fill" : "pin")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(isPinned ? Color.black : AppColors.textPrimary.opacity(0.82))
+                        .frame(width: 28, height: 28)
+                        .background(
+                            Circle()
+                                .fill(isPinned ? Color(hex: "FF6B6B") : Color.white.opacity(0.08))
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.white.opacity(isPinned ? 0.0 : 0.10), lineWidth: 1)
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+                .padding(8)
+                .accessibilityLabel(isPinned ? "Unpin category" : "Pin category")
             }
-            .buttonStyle(.plain)
-            .padding(8)
-            .accessibilityLabel(isPinned ? "Unpin category" : "Pin category")
         }
     }
 

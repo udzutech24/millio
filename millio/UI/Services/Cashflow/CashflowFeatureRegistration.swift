@@ -59,6 +59,12 @@ struct CashflowTransactionImporter: ModelImporter {
         let creditID = dict["creditID"] as? String
         let investmentID = dict["investmentID"] as? String
         let note = dict["note"] as? String
+        let assetQuantityBefore = dict["assetQuantityBefore"] as? Double
+        let assetQuantityAfter = dict["assetQuantityAfter"] as? Double
+        let assetUnitPriceBefore = dict["assetUnitPriceBefore"] as? Double
+        let assetUnitPriceAfter = dict["assetUnitPriceAfter"] as? Double
+        let assetAmountBefore = dict["assetAmountBefore"] as? Double
+        let assetAmountAfter = dict["assetAmountAfter"] as? Double
         let exchangeRate = dict["exchangeRate"] as? Double
         let exchangeRateDate = (dict["exchangeRateDate"] as? TimeInterval).map { Date(timeIntervalSince1970: $0) }
         let exchangeRateCurrency = dict["exchangeRateCurrency"] as? String
@@ -75,6 +81,7 @@ struct CashflowTransactionImporter: ModelImporter {
         }()
         let recurrenceSeriesID = dict["recurrenceSeriesID"] as? String
         let affectsCardBalance = dict["affectsCardBalance"] as? Bool ?? true
+        let hasAppliedBalanceEffect = dict["hasAppliedBalanceEffect"] as? Bool ?? false
         
         // Создаем новую транзакцию
         let transaction = CashflowTransaction(
@@ -99,7 +106,14 @@ struct CashflowTransactionImporter: ModelImporter {
         transaction.exchangeRate = exchangeRate
         transaction.exchangeRateDate = exchangeRateDate
         transaction.exchangeRateCurrency = exchangeRateCurrency
-        
+        transaction.assetQuantityBefore = assetQuantityBefore
+        transaction.assetQuantityAfter = assetQuantityAfter
+        transaction.assetUnitPriceBefore = assetUnitPriceBefore
+        transaction.assetUnitPriceAfter = assetUnitPriceAfter
+        transaction.assetAmountBefore = assetAmountBefore
+        transaction.assetAmountAfter = assetAmountAfter
+        transaction.hasAppliedBalanceEffect = hasAppliedBalanceEffect
+
         context.insert(transaction)
     }
 }

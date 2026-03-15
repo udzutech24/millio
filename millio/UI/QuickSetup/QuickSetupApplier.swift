@@ -9,7 +9,7 @@ struct QuickSetupApplier {
     func apply(_ selection: QuickSetupSelection) throws {
         applyLanguageAndCurrencies(selection)
         try applyExpenseCategories(selection.selectedExpenseCategoryIDs)
-        try applyProducts(selection.products)
+        try applyProducts(selection.products, groups: selection.groups)
         applyBackupPreference(selection.backupPreference)
 
         SettingsManager.shared.quickSetupExpenseCategoryIDs = selection.selectedExpenseCategoryIDs
@@ -101,13 +101,23 @@ struct QuickSetupApplier {
         try modelContext.save()
     }
 
-    private func applyProducts(_ products: [QuickSetupProductDraft]) throws {
+    private func applyProducts(_ products: [QuickSetupProductDraft], groups: [QuickSetupGroupDraft]) throws {
         guard !products.isEmpty else { return }
 
-        let group = try ensureUngroupedGroup()
+        let groupsByDraftID = try ensureQuickSetupGroups(groups)
+        var ungroupedGroup: FinanceGroup?
         var trackedTickerCount = try activeTrackedTickerCount()
 
         for draft in products {
+            let targetGroup: FinanceGroup
+            if let groupDraftID = draft.groupDraftID,
+               let group = groupsByDraftID[groupDraftID] {
+                targetGroup = group
+            } else {
+                let resolved = ungroupedGroup ?? FinanceSystemGroups.ensureUngroupedGroup(in: modelContext)
+                ungroupedGroup = resolved
+                targetGroup = resolved
+            }
             switch draft.type {
             case .card:
                 let card = Card(
@@ -122,7 +132,7 @@ struct QuickSetupApplier {
                 )
                 modelContext.insert(card)
                 let link = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
-                link.group = group
+                link.group = targetGroup
                 modelContext.insert(link)
 
             case .realEstate:
@@ -138,7 +148,7 @@ struct QuickSetupApplier {
                 )
                 modelContext.insert(investment)
                 let link = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
-                link.group = group
+                link.group = targetGroup
                 modelContext.insert(link)
 
             case .debt:
@@ -154,7 +164,7 @@ struct QuickSetupApplier {
                 )
                 modelContext.insert(investment)
                 let link = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
-                link.group = group
+                link.group = targetGroup
                 modelContext.insert(link)
 
             case .crypto:
@@ -177,7 +187,7 @@ struct QuickSetupApplier {
                 applyMarketSnapshot(draft.marketSnapshot, to: investment)
                 modelContext.insert(investment)
                 let link = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
-                link.group = group
+                link.group = targetGroup
                 modelContext.insert(link)
                 trackedTickerCount += 1
 
@@ -199,7 +209,7 @@ struct QuickSetupApplier {
                 )
                 modelContext.insert(credit)
                 let link = FinanceAccount(accountType: .credit, accountID: credit.creditUniqueID)
-                link.group = group
+                link.group = targetGroup
                 modelContext.insert(link)
 
             case .ticker:
@@ -222,7 +232,7 @@ struct QuickSetupApplier {
                 applyMarketSnapshot(draft.marketSnapshot, to: investment)
                 modelContext.insert(investment)
                 let link = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
-                link.group = group
+                link.group = targetGroup
                 modelContext.insert(link)
                 trackedTickerCount += 1
             }
@@ -248,25 +258,33 @@ struct QuickSetupApplier {
         }
     }
 
-    private func ensureUngroupedGroup() throws -> FinanceGroup {
-        let name = String(localized: "finances.group.ungrouped")
+    private func ensureQuickSetupGroups(_ drafts: [QuickSetupGroupDraft]) throws -> [UUID: FinanceGroup] {
         let descriptor = FetchDescriptor<FinanceGroup>()
-        let groups = try modelContext.fetch(descriptor)
+        var groups = try modelContext.fetch(descriptor)
+        var nextOrder = (groups.map(\.order).max() ?? -1) + 1
+        var result: [UUID: FinanceGroup] = [:]
 
-        if let existing = groups.first(where: { $0.name == name }) {
-            return existing
+        for draft in drafts {
+            let normalizedDraftName = normalizeGroupName(draft.name)
+            if let existing = groups.first(where: { normalizeGroupName($0.name) == normalizedDraftName }) {
+                result[draft.id] = existing
+                continue
+            }
+
+            let group = FinanceGroup(
+                name: draft.name,
+                colorHex: draft.colorHex,
+                order: nextOrder,
+                isFavorite: false,
+                priority: .normal
+            )
+            nextOrder += 1
+            modelContext.insert(group)
+            groups.append(group)
+            result[draft.id] = group
         }
 
-        let maxOrder = groups.map(\.order).max() ?? -1
-        let group = FinanceGroup(
-            name: name,
-            colorHex: "#3C4B5E",
-            order: maxOrder + 1,
-            isFavorite: false,
-            priority: .low
-        )
-        modelContext.insert(group)
-        return group
+        return result
     }
 
     private func activeTrackedTickerCount() throws -> Int {
@@ -308,6 +326,10 @@ struct QuickSetupApplier {
         investment.lastKnownPriceUpdatedAt = snapshot.priceUpdatedAt
         investment.marketProviderRaw = snapshot.providerRaw
         investment.recalculateAmountFromPosition()
+    }
+
+    private func normalizeGroupName(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 }
 

@@ -8,20 +8,20 @@ import Testing
 @testable import millio
 
 struct CashbackLocalizationTests {
-    @Test("Системные категории кешбэка резолвятся через ключи локализации")
+    @Test("Системные категории кешбэка резолвятся через локализованный каталог")
     func cashbackCategoriesAreLocalized() {
-        let checks: [(CashbackCategory, String)] = [
-            (.allPurchases, "cashback.category.all_purchases"),
-            (.gasStation, "cashback.category.gas_station"),
-            (.supermarket, "cashback.category.supermarket"),
-            (.restaurant, "cashback.category.restaurant"),
-            (.other, "cashback.category.other")
+        let checks: [CashbackCategory] = [
+            .allPurchases,
+            .gasStation,
+            .supermarket,
+            .restaurant,
+            .other
         ]
 
-        for (category, key) in checks {
+        for category in checks {
             let localized = category.displayName
-            #expect(localized == NSLocalizedString(key, comment: ""))
-            #expect(localized != key)
+            let expected = CashbackCategoryCatalog.metadata(for: category).localizedDisplayName()
+            #expect(localized == expected)
             #expect(!localized.isEmpty)
         }
     }
@@ -35,7 +35,8 @@ struct CashbackLocalizationTests {
         ]
 
         for (error, key) in checks {
-            #expect(error.errorDescription == NSLocalizedString(key, comment: ""))
+            let expected = String(localized: String.LocalizationValue(key))
+            #expect(error.errorDescription == expected)
             #expect(error.errorDescription != key)
         }
     }

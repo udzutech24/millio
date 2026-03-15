@@ -10,7 +10,6 @@ enum FinanceGroupNameTemplate: String, CaseIterable, Identifiable {
     case debitCards
     case stocks
     case myRealEstate
-    case localCards
     case credits
     case deposits
     case foreignCards
@@ -25,8 +24,6 @@ enum FinanceGroupNameTemplate: String, CaseIterable, Identifiable {
             "finances.group_editor.name_template.stocks"
         case .myRealEstate:
             "finances.group_editor.name_template.my_real_estate"
-        case .localCards:
-            "finances.group_editor.name_template.local_cards"
         case .credits:
             "finances.group_editor.name_template.credits"
         case .deposits:
@@ -40,4 +37,3 @@ enum FinanceGroupNameTemplate: String, CaseIterable, Identifiable {
         FinancesL10n.tr(localizationKey)
     }
 }
-

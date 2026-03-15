@@ -269,8 +269,13 @@ struct AuthManagerTests {
         manager.markAppleSignInStarted()
         await manager.signIn(with: .failure(AuthServiceError.unconfigured))
 
-        #expect(toastCenter.message == "Apple sign-in service is temporarily unavailable. Try again later.")
-        #expect(manager.errorMessage == "Apple sign-in service is temporarily unavailable. Try again later.")
+        let expected = String(
+            localized: "auth.error.apple_service_unavailable",
+            defaultValue: "Apple sign-in service is temporarily unavailable. Try again later.",
+            comment: "Apple auth service unavailable toast"
+        )
+        #expect(toastCenter.message == expected)
+        #expect(manager.errorMessage == expected)
     }
 
     @Test("token persistence failure after 200 is not mapped as no internet")

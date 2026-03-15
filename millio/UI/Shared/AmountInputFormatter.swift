@@ -80,6 +80,10 @@ enum AmountInputFormatter {
     }
 
     static func plainString(from value: Double) -> String {
+        plainString(from: value, maxFractionDigits: 2)
+    }
+
+    static func plainString(from value: Double, maxFractionDigits: Int) -> String {
         if value == 0 { return "" }
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
@@ -87,7 +91,7 @@ enum AmountInputFormatter {
         formatter.decimalSeparator = "."
         formatter.usesGroupingSeparator = false
         formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 2
+        formatter.maximumFractionDigits = maxFractionDigits
         return formatter.string(from: NSNumber(value: value)) ?? ""
     }
 

@@ -118,6 +118,35 @@ struct FinanceDynamicsViewModelTests {
         return context
     }
 
+    @Test("Период 1 день маппится на один день")
+    func testDayPeriodMapsToSingleDay() {
+        #expect(DynamicsPeriod.day.rawValue == "1D")
+        #expect(DynamicsPeriod.day.days == 1)
+    }
+
+    @Test("Период 1 день строит диапазон в один день")
+    func testOneDayPeriodBuildsSingleDayRange() throws {
+        let modelContext = try createTestModelContext()
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+
+        dynamicsViewModel.handle(.setPeriod(.day))
+
+        let period = dynamicsViewModel.getPeriodDates()
+        let interval = period.end.timeIntervalSince(period.start)
+
+        #expect(interval >= 86_300)
+        #expect(interval <= 86_500)
+    }
+
     @Test("Ручная корректировка долга учитывается в динамике без транзакций")
     func testManualAdjustmentAffectsDynamicsWhenNoTransactions() async throws {
         let modelContext = try createTestModelContext()

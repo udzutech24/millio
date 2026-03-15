@@ -20,6 +20,7 @@ struct QuickSetupView: View {
     @State private var productQuantityDisplayText = ""
     @State private var productPurchasePriceDisplayText = ""
     @State private var productCurrentPriceDisplayText = ""
+    @State private var isGroupSetupCollapsed = false
 
     private let mode: QuickSetupFlowMode
     private let onCompleted: (() -> Void)?
@@ -184,6 +185,13 @@ struct QuickSetupView: View {
             if newStep == .summary {
                 triggerSummaryCelebration()
             }
+        }
+        .onChange(of: viewModel.selectedGroupDraftID) { oldValue, newValue in
+            guard viewModel.currentStep == .products, oldValue != newValue, newValue != nil else { return }
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+                isGroupSetupCollapsed = true
+            }
+            routeToProductCreation()
         }
         .onChange(of: productAmountDisplayText) { _, newValue in
             handleAmountDisplayChange(
@@ -449,6 +457,7 @@ struct QuickSetupView: View {
 
     private var productsStep: some View {
         stepSectionCard {
+            productGroupsSection
             productTypeIconSelector
 
             VStack(spacing: 8) {
@@ -491,6 +500,11 @@ struct QuickSetupView: View {
                                 Text(product.symbol ?? product.name)
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundStyle(AppColors.textPrimary)
+                                if let groupName = productGroupName(product) {
+                                    Text(groupName)
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundStyle(AppColors.quickSetupAccent)
+                                }
                                 Text(productSummaryText(product))
                                     .font(.system(size: 12, weight: .regular))
                                     .foregroundStyle(AppColors.textSecondary)
@@ -519,11 +533,196 @@ struct QuickSetupView: View {
                 }
             }
 
-            Text(quickSetupText(ru: "Можно добавить после запуска", en: "Can be added after launch"))
+            Text(quickSetupText(ru: "Можно добавить после запуска, но стартовая структура уже будет чистой", en: "You can add more after launch, but the initial structure will already stay clean"))
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(AppColors.textSecondary.opacity(0.9))
         }
         .animation(.spring(response: 0.32, dampingFraction: 0.84), value: viewModel.productTypeForCreation)
+    }
+
+    private var productGroupsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if isGroupSetupCollapsed, !viewModel.groups.isEmpty {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(quickSetupText(ru: "Группы готовы", en: "Groups are ready"))
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                        Text(collapsedGroupsSummaryText)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(AppColors.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer()
+
+                    Button(quickSetupText(ru: "Изменить", en: "Edit")) {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+                            isGroupSetupCollapsed = false
+                        }
+                        fireSelectionHaptic()
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppColors.quickSetupAccent)
+                    .buttonStyle(.plain)
+                }
+                .padding(14)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(.white.opacity(0.04))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(.white.opacity(0.08), lineWidth: 1)
+                        )
+                )
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(quickSetupText(ru: "Сначала группы", en: "Groups first"))
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                    Text(
+                        quickSetupText(
+                            ru: "Так счета сразу попадают в правильные блоки, а итоги и динамика не превращаются в свалку.",
+                            en: "This keeps accounts in the right buckets from day one so totals and trends do not turn into a mess."
+                        )
+                    )
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(AppColors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+
+                LazyVGrid(columns: productTypeGridColumns, spacing: 8) {
+                    ForEach(QuickSetupGroupPreset.all) { preset in
+                        let isSelected = viewModel.groups.contains { $0.template == preset.template }
+                        Button {
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+                                viewModel.addGroupPreset(preset)
+                            }
+                            fireSelectionHaptic()
+                        } label: {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Image(systemName: preset.icon)
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .symbolRenderingMode(.hierarchical)
+                                    .foregroundStyle(isSelected ? AppColors.textPrimary : AppColors.textSecondary)
+                                    .frame(width: 28, height: 28)
+                                    .background(
+                                        Circle()
+                                            .fill(.white.opacity(0.06))
+                                    )
+                                Text(preset.title(for: quickSetupLocale))
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(AppColors.textPrimary)
+                                    .lineLimit(2)
+                                    .minimumScaleFactor(0.82)
+                                Text(
+                                    quickSetupText(
+                                        ru: "Готовая группа",
+                                        en: "Ready group"
+                                    )
+                                )
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(AppColors.textSecondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.82)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 80, alignment: .leading)
+                            .padding(10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(.white.opacity(0.04))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                            .stroke(isSelected ? AppColors.quickSetupAccent.opacity(0.9) : .white.opacity(0.08), lineWidth: isSelected ? 0.9 : 1)
+                                    )
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                if !viewModel.groups.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(quickSetupText(ru: "Куда сейчас пойдет новый продукт", en: "Where the next product will go"))
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AppColors.textSecondary)
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                Button {
+                                    withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+                                        viewModel.selectGroupDraft(id: nil)
+                                    }
+                                    fireSelectionHaptic()
+                                } label: {
+                                    groupDraftChip(
+                                        title: quickSetupText(ru: "Без группы", en: "Ungrouped"),
+                                        icon: "tray.fill",
+                                        isSelected: viewModel.selectedGroupDraftID == nil
+                                    )
+                                }
+                                .buttonStyle(.plain)
+
+                                ForEach(viewModel.groups) { group in
+                                    HStack(spacing: 6) {
+                                        Button {
+                                            withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+                                                viewModel.selectGroupDraft(id: group.id)
+                                            }
+                                            fireSelectionHaptic()
+                                        } label: {
+                                            groupDraftChip(
+                                                title: group.name,
+                                                icon: group.icon,
+                                                isSelected: viewModel.selectedGroupDraftID == group.id
+                                            )
+                                        }
+                                        .buttonStyle(.plain)
+
+                                        Button {
+                                            withAnimation(.spring(response: 0.25, dampingFraction: 0.86)) {
+                                                viewModel.removeGroup(id: group.id)
+                                            }
+                                            fireWarningHaptic()
+                                        } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .font(.system(size: 15, weight: .semibold))
+                                                .foregroundStyle(AppColors.textSecondary)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if let selectedGroup = selectedGroupTitle {
+                        HStack(spacing: 8) {
+                            Image(systemName: "arrow.turn.down.right")
+                                .font(.system(size: 12, weight: .semibold))
+                            Text(
+                                quickSetupText(
+                                    ru: "Следующий продукт добавится в группу «\(selectedGroup)»",
+                                    en: "The next product will be added to \"\(selectedGroup)\""
+                                )
+                            )
+                            .font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundStyle(AppColors.quickSetupAccent)
+                        .padding(.top, 2)
+                    }
+                } else {
+                    Text(
+                        quickSetupText(
+                            ru: "Выбери готовую группу, чтобы не раскидывать счета вручную после запуска.",
+                            en: "Pick a ready-made group now so you do not have to reorganize accounts after launch."
+                        )
+                    )
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppColors.textSecondary)
+                }
+            }
+        }
     }
 
     private var productTypeIconSelector: some View {
@@ -642,6 +841,7 @@ struct QuickSetupView: View {
                     value: selection.favoriteCurrencyCodes.isEmpty ? quickSetupText(ru: "Не выбраны", en: "Not selected") : selection.favoriteCurrencyCodes.joined(separator: ", ")
                 )
                 summaryRow(title: quickSetupText(ru: "Категории расходов", en: "Expense categories"), value: "\(selection.selectedExpenseCategoryIDs.count)")
+                summaryRow(title: quickSetupText(ru: "Группы счетов", en: "Account groups"), value: "\(selection.groups.count)")
                 summaryRow(title: quickSetupText(ru: "Продукты", en: "Products"), value: "\(selection.products.count)")
             }
         }
@@ -768,8 +968,56 @@ struct QuickSetupView: View {
         return String(format: String(localized: "quick_setup.product_summary_format"), productTypeTitle, amountText)
     }
 
+    private func productGroupName(_ product: QuickSetupProductDraft) -> String? {
+        guard let groupDraftID = product.groupDraftID else { return nil }
+        return viewModel.groups.first(where: { $0.id == groupDraftID })?.name
+    }
+
     private var expenseCategoryPresets: [QuickSetupExpenseCategoryPreset] {
         QuickSetupExpenseCategoryPreset.all(for: viewModel.selectedLanguage.locale ?? Locale.current)
+    }
+
+    private var selectedGroupTitle: String? {
+        guard let selectedGroupDraftID = viewModel.selectedGroupDraftID else { return nil }
+        return viewModel.groups.first(where: { $0.id == selectedGroupDraftID })?.name
+    }
+
+    private var collapsedGroupsSummaryText: String {
+        let groupNames = viewModel.groups.map(\.name)
+        if groupNames.isEmpty {
+            return quickSetupText(ru: "Группы не выбраны", en: "No groups selected")
+        }
+
+        if groupNames.count <= 2 {
+            return groupNames.joined(separator: ", ")
+        }
+
+        let leading = groupNames.prefix(2).joined(separator: ", ")
+        return quickSetupText(
+            ru: "\(leading) и еще \(groupNames.count - 2)",
+            en: "\(leading) and \(groupNames.count - 2) more"
+        )
+    }
+
+    private func groupDraftChip(title: String, icon: String, isSelected: Bool) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .lineLimit(1)
+        }
+        .foregroundStyle(AppColors.textPrimary)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            Capsule(style: .continuous)
+                .fill(.white.opacity(0.04))
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(isSelected ? AppColors.quickSetupAccent.opacity(0.9) : .white.opacity(0.08), lineWidth: isSelected ? 0.9 : 1)
+                )
+        )
     }
 
     private func saveSelection() {
@@ -789,6 +1037,17 @@ struct QuickSetupView: View {
         } catch {
             fireWarningHaptic()
             errorMessage = error.localizedDescription
+        }
+    }
+
+    private func routeToProductCreation() {
+        DispatchQueue.main.async {
+            if viewModel.isMarketProductDraft {
+                showMarketSearchSheet = true
+            } else {
+                focusedField = .productName
+            }
+            fireSelectionHaptic()
         }
     }
 

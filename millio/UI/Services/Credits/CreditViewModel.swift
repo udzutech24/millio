@@ -484,6 +484,7 @@ final class CreditViewModel: ViewModelProtocol {
                     creditID: existing.creditUniqueID,
                     note: String(localized: "finances.transaction.note.credit_remaining_edit")
                 )
+                transaction.hasAppliedBalanceEffect = true
                 modelContext.insert(transaction)
             }
         } else {

@@ -46,18 +46,12 @@ enum CashflowSelectableAccountResolver {
     static func options(
         cards: [Card],
         investments: [Investment],
-        financeAccounts: [FinanceAccount],
+        linkedInvestmentIDs: Set<String>,
         transactionType: CashflowTransactionType,
         currency: String
     ) -> [CashflowSelectableAccount] {
         let normalizedCurrency = currency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        let linkedCardIDs = Set(financeAccounts.compactMap { account in
-            account.accountType == .card ? account.accountID : nil
-        })
-        let linkedInvestmentIDs = Set(financeAccounts.compactMap { account in
-            account.accountType == .investment ? account.accountID : nil
-        })
-        let restrictToFinances = !financeAccounts.isEmpty
+        let restrictInvestmentsToFinances = !linkedInvestmentIDs.isEmpty
 
         let cardOptions = cards.map {
             CashflowSelectableAccount(
@@ -68,10 +62,6 @@ enum CashflowSelectableAccountResolver {
                 prioritySortOrder: $0.priority.sortOrder,
                 updatedAt: $0.updatedAt
             )
-        }
-        .filter { option in
-            guard restrictToFinances, let cardID = option.cardID else { return true }
-            return linkedCardIDs.contains(cardID)
         }
 
         let investmentOptions = investments
@@ -87,7 +77,7 @@ enum CashflowSelectableAccountResolver {
                 )
             }
             .filter { option in
-                guard restrictToFinances, let investmentID = option.investmentID else { return true }
+                guard restrictInvestmentsToFinances, let investmentID = option.investmentID else { return true }
                 return linkedInvestmentIDs.contains(investmentID)
             }
 

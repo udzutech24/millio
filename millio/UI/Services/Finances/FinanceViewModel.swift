@@ -305,6 +305,9 @@ final class FinanceViewModel: ViewModelProtocol {
             
         case .loadAccounts:
             loadAccounts()
+            scheduleBackgroundTask { viewModel in
+                await viewModel.refreshGroupTotalsAndAmounts()
+            }
             
         case .addGroup:
             state.editingGroup = nil
@@ -591,8 +594,7 @@ final class FinanceViewModel: ViewModelProtocol {
     
     private func loadAccounts() {
         // Загружаем карты, кредиты и активы
-        let cardDescriptor = FetchDescriptor<Card>()
-        let allCards = (try? modelContext.fetch(cardDescriptor)) ?? []
+        let allCards = CardCatalog.fetchAll(in: modelContext)
         state.availableCards = allCards.filter { $0.archivedAt == nil }
         state.archivedCards = allCards.filter { $0.archivedAt != nil }
         
@@ -799,6 +801,7 @@ final class FinanceViewModel: ViewModelProtocol {
 
         var didMutate = false
         var removedCount = 0
+        var dedupedCount = 0
         var reassignedToUngroupedCount = 0
         var createdMissingInvestmentLinksCount = 0
 
@@ -814,7 +817,27 @@ final class FinanceViewModel: ViewModelProtocol {
             account.accountType == .investment ? account.accountID : nil
         })
 
+        let groupedAccounts = Dictionary(
+            grouping: accounts,
+            by: { "\($0.accountTypeRaw)|\($0.accountID)" }
+        )
+
+        for duplicates in groupedAccounts.values where duplicates.count > 1 {
+            let survivor = duplicates.max { lhs, rhs in
+                financeAccountDeduplicationRank(lhs) < financeAccountDeduplicationRank(rhs)
+            }
+
+            for duplicate in duplicates where duplicate.persistentModelID != survivor?.persistentModelID {
+                modelContext.delete(duplicate)
+                dedupedCount += 1
+                didMutate = true
+            }
+        }
+
         for account in accounts {
+            if account.modelContext == nil {
+                continue
+            }
             // `group == nil` — невалидное состояние. Нормализуем в системную "Без группы",
             // иначе счет будет теряться из основного списка (это проявляется на массовом импорте акций).
             if account.group == nil {
@@ -863,6 +886,9 @@ final class FinanceViewModel: ViewModelProtocol {
 
         do {
             try modelContext.save()
+            if dedupedCount > 0 {
+                AppLogger.log(.info, category: "Finance", "Removed \(dedupedCount) duplicate finance account links")
+            }
             if removedCount > 0 {
                 AppLogger.log(.info, category: "Finance", "Removed \(removedCount) invalid finance account links")
             }
@@ -876,6 +902,15 @@ final class FinanceViewModel: ViewModelProtocol {
         } catch {
             AppLogger.log(.error, category: "Finance", "Failed to cleanup finance accounts: \(error.localizedDescription)")
         }
+    }
+
+    private func financeAccountDeduplicationRank(_ account: FinanceAccount) -> (Int, Int, Date, Date) {
+        let isGrouped = account.group != nil ? 1 : 0
+        let isNonSystemGroup: Int = {
+            guard let group = account.group else { return 0 }
+            return group.name == ungroupedGroupName ? 0 : 1
+        }()
+        return (isNonSystemGroup, isGrouped, account.updatedAt, account.createdAt)
     }
     
     private func calculateTotalAmount() {
@@ -1028,17 +1063,8 @@ final class FinanceViewModel: ViewModelProtocol {
         switch account.accountType {
         case .card:
             if let card = cardByID[account.accountID] {
-                // Учитываем только если includeInTotal = true
-                guard card.includeInTotal else { return (0.0, card.currency) }
-                
-                // Для кредитных карт учитываем задолженность как отрицательное значение (вычитаем из общего счета)
-                if card.cardType == .credit, let limit = card.creditLimit {
-                    let debt = max(0, limit - card.balance)
-                    // Вычитаем задолженность из общего счета
-                    return (-debt, card.currency)
-                }
-                // Для дебетовых карт учитываем баланс как положительное значение
-                return (card.balance, card.currency)
+                let snapshot = CardSnapshotFactory.make(from: card)
+                return (snapshot.netWorthAmount, snapshot.currency)
             }
             
         case .credit:
@@ -1093,20 +1119,8 @@ final class FinanceViewModel: ViewModelProtocol {
         switch account.accountType {
         case .card:
             if let card = cardByID[account.accountID] {
-                // Для кредитных карт показываем задолженность (debt)
-                let amount: Double
-                let isCreditCardDebt: Bool
-                if card.cardType == .credit, let limit = card.creditLimit {
-                    // Для кредитных карт используем актуальный сохраненный баланс
-                    // Задолженность = лимит - баланс
-                    amount = max(0, limit - card.balance)
-                    isCreditCardDebt = true
-                } else {
-                    // Для дебетовых карт показываем баланс
-                    amount = card.balance
-                    isCreditCardDebt = false
-                }
-                return (card.name, amount, card.currency, card.cardType.icon, isCreditCardDebt)
+                let snapshot = CardSnapshotFactory.make(from: card)
+                return (snapshot.name, snapshot.availableAmount, snapshot.currency, snapshot.icon, false)
             }
             
         case .credit:
@@ -1129,9 +1143,8 @@ final class FinanceViewModel: ViewModelProtocol {
         switch account.accountType {
         case .card:
             guard let card = cardByID[account.accountID], card.includeInTotal else { return false }
-            guard card.cardType == .credit, let limit = card.creditLimit else { return false }
-            let debt = max(0, limit - card.balance)
-            return debt > 0.01
+            let snapshot = CardSnapshotFactory.make(from: card)
+            return snapshot.isCreditCard && snapshot.debtAmount > 0.01
         case .credit:
             guard let credit = creditByID[account.accountID] else { return false }
             guard credit.archivedAt == nil else { return false }
@@ -1232,15 +1245,24 @@ final class FinanceViewModel: ViewModelProtocol {
     /// Для кредитных карт возвращает остаток лимита, чтобы показывать под суммой долга.
     func getCreditCardLimitRemaining(account: FinanceAccount) -> (amount: Double, currency: String)? {
         guard account.accountType == .card,
-              let card = cardByID[account.accountID],
-              card.cardType == .credit,
-              let limit = card.creditLimit,
-              limit > 0 else {
+              let card = cardByID[account.accountID] else {
             return nil
         }
 
-        let remaining = max(0, min(limit, card.balance))
-        return (remaining, card.currency)
+        let snapshot = CardSnapshotFactory.make(from: card)
+        guard snapshot.isCreditCard else { return nil }
+        return (snapshot.availableAmount, snapshot.currency)
+    }
+
+    func getCreditCardDebt(account: FinanceAccount) -> (amount: Double, currency: String)? {
+        guard account.accountType == .card,
+              let card = cardByID[account.accountID] else {
+            return nil
+        }
+
+        let snapshot = CardSnapshotFactory.make(from: card)
+        guard snapshot.isCreditCard, snapshot.debtAmount > 0.01 else { return nil }
+        return (snapshot.debtAmount, snapshot.currency)
     }
 
     func getMarketInvestment(account: FinanceAccount) -> Investment? {
@@ -1379,6 +1401,7 @@ final class FinanceViewModel: ViewModelProtocol {
             investment.hasInitialAmount = true
         }
 
+        let snapshotBefore = marketAssetSnapshot(for: investment)
         let didApply: Bool
         switch side {
         case .buy:
@@ -1406,7 +1429,12 @@ final class FinanceViewModel: ViewModelProtocol {
                     investmentID: investment.investmentUniqueID,
                     note: note
                 )
+                transaction.applyAssetChangeSnapshot(
+                    before: snapshotBefore,
+                    after: marketAssetSnapshot(for: investment)
+                )
                 stampFrozenRate(on: transaction, targetCurrency: resolvedInvestmentCurrency(investment))
+                transaction.hasAppliedBalanceEffect = true
                 modelContext.insert(transaction)
                 didCreateTransaction = true
             }
@@ -1443,6 +1471,7 @@ final class FinanceViewModel: ViewModelProtocol {
             return
         }
 
+        let snapshotBefore = marketAssetSnapshot(for: investment)
         let oldAmount = investment.amount
         if !investment.hasInitialAmount {
             investment.initialAmount = investment.amount
@@ -1476,7 +1505,12 @@ final class FinanceViewModel: ViewModelProtocol {
                     investmentID: investment.investmentUniqueID,
                     note: String(localized: "finances.transaction.note.market_position_edit")
                 )
+                transaction.applyAssetChangeSnapshot(
+                    before: snapshotBefore,
+                    after: marketAssetSnapshot(for: investment)
+                )
                 stampFrozenRate(on: transaction, targetCurrency: resolvedInvestmentCurrency(investment))
+                transaction.hasAppliedBalanceEffect = true
                 modelContext.insert(transaction)
                 didCreateTransaction = true
             }
@@ -1504,6 +1538,28 @@ final class FinanceViewModel: ViewModelProtocol {
     func warmupRemoteDataForStartup() async {
         await refreshCurrencyQuotes(forceRefresh: false)
         await refreshStockPrices(forceRefresh: false)
+    }
+
+    private func marketAssetSnapshot(
+        for investment: Investment
+    ) -> CashflowAssetChangeSnapshot {
+        marketAssetSnapshot(
+            quantity: investment.marketQuantity,
+            unitPrice: investment.lastKnownUnitPrice,
+            totalAmount: investment.amount
+        )
+    }
+
+    private func marketAssetSnapshot(
+        quantity: Double?,
+        unitPrice: Double?,
+        totalAmount: Double
+    ) -> CashflowAssetChangeSnapshot {
+        CashflowAssetChangeSnapshot(
+            quantity: quantity,
+            unitPrice: unitPrice,
+            totalAmount: totalAmount
+        )
     }
 
     func refreshCurrencyQuotes() async {
@@ -1573,6 +1629,15 @@ final class FinanceViewModel: ViewModelProtocol {
                     refreshed = true
                     break
                 } catch {
+                    if shouldAbortQuoteAliasRefresh(after: error) {
+                        AppLogger.log(
+                            .warning,
+                            category: "Finance",
+                            "Aborting quote refresh aliases for \(stockDisplaySymbol(stock)): \(error.localizedDescription)"
+                        )
+                        break
+                    }
+
                     AppLogger.log(
                         .warning,
                         category: "Finance",
@@ -1603,6 +1668,21 @@ final class FinanceViewModel: ViewModelProtocol {
     }
 
     /// Backward-compatible alias. Prefer `refreshCurrencyQuotes()`.
+
+    private func shouldAbortQuoteAliasRefresh(after error: Error) -> Bool {
+        guard let marketError = error as? MarketAPIClientError else {
+            return false
+        }
+
+        switch marketError {
+        case .backend(let statusCode, let message):
+            return statusCode == 429 || message.localizedCaseInsensitiveContains("Too Many Requests")
+        case .transport(let message):
+            return message.localizedCaseInsensitiveContains("Too Many Requests")
+        default:
+            return false
+        }
+    }
     func refreshRates() async {
         await refreshCurrencyQuotes()
     }
@@ -2035,6 +2115,7 @@ final class FinanceViewModel: ViewModelProtocol {
                             note: transactionNote
                         )
                         stampFrozenRate(on: transaction, targetCurrency: card.currency)
+                        transaction.hasAppliedBalanceEffect = true
                         modelContext.insert(transaction)
                         didCreateTransaction = true
                     }
@@ -2049,6 +2130,7 @@ final class FinanceViewModel: ViewModelProtocol {
                     if let groupID = accountGroup?.groupUniqueID {
                         scheduleGroupTotalRefresh(for: groupID)
                     }
+                    publishAccountChangedEvent(for: .card)
                     if didCreateTransaction {
                         EventBus.shared.publish(FinanceEvent.transactionsUpdated)
                     }
@@ -2090,6 +2172,7 @@ final class FinanceViewModel: ViewModelProtocol {
                             note: String(localized: "finances.transaction.note.quick_remaining_debt_change")
                         )
                         stampFrozenRate(on: transaction, targetCurrency: credit.currency)
+                        transaction.hasAppliedBalanceEffect = true
                         modelContext.insert(transaction)
                         didCreateTransaction = true
                     }
@@ -2104,6 +2187,7 @@ final class FinanceViewModel: ViewModelProtocol {
                     if let groupID = accountGroup?.groupUniqueID {
                         scheduleGroupTotalRefresh(for: groupID)
                     }
+                    publishAccountChangedEvent(for: .credit)
                     if didCreateTransaction {
                         EventBus.shared.publish(FinanceEvent.transactionsUpdated)
                     }
@@ -2123,6 +2207,7 @@ final class FinanceViewModel: ViewModelProtocol {
 
                 if investment.isMarketPriced {
                     let previousQuantity = investment.marketQuantity ?? 0
+                    let oldUnitPrice = investment.lastKnownUnitPrice
                     investment.marketQuantity = newAmount
 
                     if let unitPrice = investment.lastKnownUnitPrice, unitPrice > 0 {
@@ -2146,7 +2231,16 @@ final class FinanceViewModel: ViewModelProtocol {
                                 investmentID: investment.investmentUniqueID,
                                 note: String(localized: "finances.transaction.note.manual_investment_quantity_change")
                             )
+                            transaction.applyAssetChangeSnapshot(
+                                before: marketAssetSnapshot(
+                                    quantity: previousQuantity,
+                                    unitPrice: oldUnitPrice,
+                                    totalAmount: oldAmount
+                                ),
+                                after: marketAssetSnapshot(for: investment)
+                            )
                             stampFrozenRate(on: transaction, targetCurrency: resolvedInvestmentCurrency(investment))
+                            transaction.hasAppliedBalanceEffect = true
                             modelContext.insert(transaction)
                             didCreateTransaction = true
                         }
@@ -2159,6 +2253,7 @@ final class FinanceViewModel: ViewModelProtocol {
                         if let groupID = accountGroup?.groupUniqueID {
                             scheduleGroupTotalRefresh(for: groupID)
                         }
+                        publishAccountChangedEvent(for: .investment)
                         if didCreateTransaction {
                             EventBus.shared.publish(FinanceEvent.transactionsUpdated)
                         }
@@ -2182,7 +2277,16 @@ final class FinanceViewModel: ViewModelProtocol {
                                 investmentID: investment.investmentUniqueID,
                                 note: String(localized: "finances.transaction.note.manual_investment_amount_change")
                             )
+                            transaction.applyAssetChangeSnapshot(
+                                before: marketAssetSnapshot(
+                                    quantity: investment.marketQuantity,
+                                    unitPrice: investment.lastKnownUnitPrice,
+                                    totalAmount: oldAmount
+                                ),
+                                after: marketAssetSnapshot(for: investment)
+                            )
                             stampFrozenRate(on: transaction, targetCurrency: resolvedInvestmentCurrency(investment))
+                            transaction.hasAppliedBalanceEffect = true
                             modelContext.insert(transaction)
                             didCreateTransaction = true
                         }
@@ -2197,6 +2301,7 @@ final class FinanceViewModel: ViewModelProtocol {
                         if let groupID = accountGroup?.groupUniqueID {
                             scheduleGroupTotalRefresh(for: groupID)
                         }
+                        publishAccountChangedEvent(for: .investment)
                         if didCreateTransaction {
                             EventBus.shared.publish(FinanceEvent.transactionsUpdated)
                         }
@@ -2245,6 +2350,7 @@ final class FinanceViewModel: ViewModelProtocol {
                     note: String(localized: "finances.transaction.note.quick_credit_card_fields_change")
                 )
                 stampFrozenRate(on: transaction, targetCurrency: card.currency)
+                transaction.hasAppliedBalanceEffect = true
                 modelContext.insert(transaction)
                 didCreateTransaction = true
             }
@@ -2257,11 +2363,23 @@ final class FinanceViewModel: ViewModelProtocol {
             if let groupID = accountGroup?.groupUniqueID {
                 scheduleGroupTotalRefresh(for: groupID)
             }
+            publishAccountChangedEvent(for: .card)
             if didCreateTransaction {
                 EventBus.shared.publish(FinanceEvent.transactionsUpdated)
             }
         } catch {
             AppLogger.log(.error, category: "Finance", "Failed to update credit card quick fields: \(error.localizedDescription)")
+        }
+    }
+
+    private func publishAccountChangedEvent(for accountType: FinanceAccountType) {
+        switch accountType {
+        case .card:
+            EventBus.shared.publish(FinanceEvent.cardsUpdated)
+        case .credit:
+            EventBus.shared.publish(FinanceEvent.creditsUpdated)
+        case .investment:
+            EventBus.shared.publish(FinanceEvent.investmentsUpdated)
         }
     }
 }

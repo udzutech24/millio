@@ -116,6 +116,7 @@ struct QuickSetupProductDraft: Identifiable, Hashable {
     let name: String
     let amount: Double
     let currencyCode: String
+    let groupDraftID: UUID?
     let marketSnapshot: QuickSetupProductMarketSnapshot?
     let visualIcon: String?
 
@@ -129,6 +130,7 @@ struct QuickSetupProductDraft: Identifiable, Hashable {
         name: String,
         amount: Double,
         currencyCode: String,
+        groupDraftID: UUID? = nil,
         marketSnapshot: QuickSetupProductMarketSnapshot? = nil,
         visualIcon: String? = nil
     ) {
@@ -137,9 +139,66 @@ struct QuickSetupProductDraft: Identifiable, Hashable {
         self.name = name
         self.amount = amount
         self.currencyCode = currencyCode
+        self.groupDraftID = groupDraftID
         self.marketSnapshot = marketSnapshot
         self.visualIcon = visualIcon
     }
+}
+
+struct QuickSetupGroupDraft: Identifiable, Hashable {
+    let id: UUID
+    let name: String
+    let colorHex: String
+    let icon: String
+    let template: FinanceGroupNameTemplate?
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        colorHex: String,
+        icon: String,
+        template: FinanceGroupNameTemplate? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.colorHex = colorHex
+        self.icon = icon
+        self.template = template
+    }
+}
+
+struct QuickSetupGroupPreset: Identifiable, Hashable {
+    let template: FinanceGroupNameTemplate
+    let colorHex: String
+    let icon: String
+
+    var id: String { template.rawValue }
+
+    var title: String {
+        title(for: Locale.current)
+    }
+
+    func title(for locale: Locale) -> String {
+        AppLocalization.string(template.localizationKey, locale: locale, fallback: template.title)
+    }
+
+    func draft(for locale: Locale) -> QuickSetupGroupDraft {
+        QuickSetupGroupDraft(
+            name: title(for: locale),
+            colorHex: colorHex,
+            icon: icon,
+            template: template
+        )
+    }
+
+    static let all: [QuickSetupGroupPreset] = [
+        QuickSetupGroupPreset(template: .debitCards, colorHex: "#1D4ED8", icon: "creditcard.fill"),
+        QuickSetupGroupPreset(template: .foreignCards, colorHex: "#7C3AED", icon: "globe.europe.africa.fill"),
+        QuickSetupGroupPreset(template: .credits, colorHex: "#B45309", icon: "doc.text.fill"),
+        QuickSetupGroupPreset(template: .stocks, colorHex: "#15803D", icon: "chart.line.uptrend.xyaxis"),
+        QuickSetupGroupPreset(template: .deposits, colorHex: "#0369A1", icon: "banknote.fill"),
+        QuickSetupGroupPreset(template: .myRealEstate, colorHex: "#BE123C", icon: "shippingbox.fill")
+    ]
 }
 
 struct QuickSetupSelection {
@@ -147,6 +206,7 @@ struct QuickSetupSelection {
     let primaryCurrencyCode: String
     let favoriteCurrencyCodes: [String]
     let selectedExpenseCategoryIDs: [String]
+    let groups: [QuickSetupGroupDraft]
     let products: [QuickSetupProductDraft]
     let backupPreference: QuickSetupBackupPreference
 }

@@ -25,47 +25,29 @@ final class CardManager {
     /// Получить все карты
     func getAllCards() -> [Card] {
         guard let modelContext = modelContext else { return [] }
-        
-        let descriptor = FetchDescriptor<Card>()
-        let cards = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.archivedAt == nil }
-
-        return sortCards(cards)
+        let cards = CardCatalog.fetchAll(in: modelContext)
+        return sortCards(cards.filter { $0.archivedAt == nil })
     }
     
     /// Получить избранные карты
     func getFavoriteCards() -> [Card] {
         guard let modelContext = modelContext else { return [] }
-        
-        let descriptor = FetchDescriptor<Card>(
-            predicate: #Predicate<Card> { $0.isFavorite == true }
-        )
-        let cards = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.archivedAt == nil }
-
-        return sortCards(cards)
+        let cards = CardCatalog.fetchAll(in: modelContext)
+        return sortCards(cards.filter { $0.archivedAt == nil && $0.isFavorite })
     }
     
     /// Получить карты по валюте
     func getCards(by currency: String) -> [Card] {
         guard let modelContext = modelContext else { return [] }
-        
-        let descriptor = FetchDescriptor<Card>(
-            predicate: #Predicate<Card> { $0.currency == currency }
-        )
-        let cards = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.archivedAt == nil }
-
-        return sortCards(cards)
+        let cards = CardCatalog.fetchAll(in: modelContext)
+        return sortCards(cards.filter { $0.archivedAt == nil && $0.currency == currency })
     }
     
     /// Получить карты по банку
     func getCards(by bank: Bank) -> [Card] {
         guard let modelContext = modelContext else { return [] }
-        
-        let descriptor = FetchDescriptor<Card>(
-            predicate: #Predicate<Card> { $0.bankRaw == bank.rawValue }
-        )
-        let cards = ((try? modelContext.fetch(descriptor)) ?? []).filter { $0.archivedAt == nil }
-
-        return sortCards(cards)
+        let cards = CardCatalog.fetchAll(in: modelContext)
+        return sortCards(cards.filter { $0.archivedAt == nil && $0.bankRaw == bank.rawValue })
     }
     
     /// Получить карту по ID
@@ -85,14 +67,6 @@ final class CardManager {
     }
 
     private func sortCards(_ cards: [Card]) -> [Card] {
-        cards.sorted { card1, card2 in
-            if card1.isFavorite != card2.isFavorite {
-                return card1.isFavorite
-            }
-            if card1.priority.sortOrder != card2.priority.sortOrder {
-                return card1.priority.sortOrder < card2.priority.sortOrder
-            }
-            return card1.updatedAt > card2.updatedAt
-        }
+        CardCatalog.sortForDisplay(cards)
     }
 }

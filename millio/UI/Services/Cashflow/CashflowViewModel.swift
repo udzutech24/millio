@@ -55,6 +55,11 @@ enum CashflowBalanceUpdateError: Error {
     case insufficientFundsToRevert(accountName: String, required: Double, available: Double, currency: String)
 }
 
+private enum CashflowAffectedAccountEvent: Hashable {
+    case cardsUpdated
+    case investmentsUpdated
+}
+
 extension CashflowBalanceUpdateError: LocalizedError {
     var errorDescription: String? {
         switch self {
@@ -107,8 +112,9 @@ struct CashflowState {
     /// Доступные счета из инвестиций для выбора в доходах.
     var availableInvestments: [Investment] = []
 
-    /// Связи счетов, реально добавленных в Финансы.
-    var availableFinanceAccounts: [FinanceAccount] = []
+    /// Cashflow фильтрует по связям Финансов только cash investments.
+    /// Карты идут напрямую из карточного каталога и не должны зависеть от FinanceAccount.
+    var linkedInvestmentIDs: Set<String> = []
 
     /// Пользовательские категории операций
     var customCategories: [CashflowCustomCategory] = []
@@ -232,6 +238,16 @@ struct CashflowChartPoint: Identifiable {
     let balance: Double
 }
 
+struct CashflowCardBalanceSnapshot: Equatable {
+    let currency: String
+    let availableAmount: Double
+    let debtAmount: Double?
+
+    var isCreditCard: Bool {
+        debtAmount != nil
+    }
+}
+
 // MARK: - Chart Period
 
 enum ChartPeriod: String, CaseIterable {
@@ -309,6 +325,7 @@ struct CashflowHistoryQuery {
     var searchText: String = ""
     var startDate: Date?
     var endDate: Date?
+    var cardID: String? = nil
 }
 
 // MARK: - Cashflow Actions
@@ -386,7 +403,7 @@ final class CashflowViewModel: ViewModelProtocol {
         resetToDefaultPeriodInternal(referenceDate: nowDate)
         loadCards()
         loadInvestments()
-        loadFinanceAccounts()
+        loadLinkedInvestments()
         loadTransactions()
         loadCustomCategories()
         loadSystemCategoryOverrides()
@@ -412,7 +429,7 @@ final class CashflowViewModel: ViewModelProtocol {
             // Обновляем список карт перед открытием редактора, чтобы видеть актуальные данные
             loadCards()
             loadInvestments()
-            loadFinanceAccounts()
+            loadLinkedInvestments()
             state.creatingTransactionType = type
             state.editingTransaction = nil
             state.showTransactionEditor = true
@@ -421,7 +438,7 @@ final class CashflowViewModel: ViewModelProtocol {
             // Обновляем список карт перед редактированием на случай изменений в финансах
             loadCards()
             loadInvestments()
-            loadFinanceAccounts()
+            loadLinkedInvestments()
             state.editingTransaction = transaction
             state.creatingTransactionType = nil
             state.showTransactionEditor = true
@@ -560,6 +577,23 @@ final class CashflowViewModel: ViewModelProtocol {
         updateChartData()
     }
 
+    /// Stable UI sync signature for Cashflow screens that depend on live card balances.
+    /// Includes fields that change account availability, picker eligibility, or visible balance copy.
+    static func cardSyncSignature(for cards: [Card]) -> [String] {
+        cards.map { card in
+            [
+                card.cardUniqueID,
+                card.currency,
+                card.cardTypeRaw,
+                String(card.balance),
+                String(card.creditLimit ?? 0),
+                String(card.isFavorite),
+                String(card.archivedAt?.timeIntervalSince1970 ?? 0),
+                String(card.updatedAt.timeIntervalSince1970)
+            ].joined(separator: "_")
+        }
+    }
+
     private func scheduleRecurringGeneration() {
         guard !isRecurringGenerationInProgress else { return }
         isRecurringGenerationInProgress = true
@@ -591,10 +625,8 @@ final class CashflowViewModel: ViewModelProtocol {
     }
     
     private func loadCards() {
-        let descriptor = FetchDescriptor<Card>()
-        let allCards = (try? modelContext.fetch(descriptor)) ?? []
-        state.allCards = allCards
-        state.availableCards = allCards.filter { $0.archivedAt == nil }
+        state.allCards = CardCatalog.fetchAll(in: modelContext)
+        state.availableCards = state.allCards.filter { $0.archivedAt == nil }
     }
 
     private func loadInvestments() {
@@ -689,10 +721,15 @@ final class CashflowViewModel: ViewModelProtocol {
         )
     }
 
-    private func loadFinanceAccounts() {
+    private func loadLinkedInvestments() {
         let descriptor = FetchDescriptor<FinanceAccount>()
         let allAccounts = (try? modelContext.fetch(descriptor)) ?? []
-        state.availableFinanceAccounts = allAccounts.filter { $0.group != nil }
+        state.linkedInvestmentIDs = Set(
+            allAccounts.compactMap { account in
+                guard account.group != nil, account.accountType == .investment else { return nil }
+                return account.accountID
+            }
+        )
     }
 
     private func loadCustomCategories() {
@@ -715,17 +752,16 @@ final class CashflowViewModel: ViewModelProtocol {
             switch event {
             case FinanceEvent.cardsUpdated:
                 self.loadCards()
-                self.loadFinanceAccounts()
             case FinanceEvent.investmentsUpdated:
                 self.loadInvestments()
-                self.loadFinanceAccounts()
+                self.loadLinkedInvestments()
             case FinanceEvent.transactionsUpdated:
                 self.loadTransactions()
             case BackupEvent.restoreCompleted:
                 self.loadTransactions()
                 self.loadCards()
                 self.loadInvestments()
-                self.loadFinanceAccounts()
+                self.loadLinkedInvestments()
                 self.loadCustomCategories()
                 self.loadSystemCategoryOverrides()
             default:
@@ -764,6 +800,11 @@ final class CashflowViewModel: ViewModelProtocol {
                 return false
             }
 
+            if let cardID = query.cardID,
+               !historyTransactionMatchesCardFilter(transaction, cardID: cardID) {
+                return false
+            }
+
             if let dateRange {
                 let transactionDate = Calendar.current.startOfDay(for: transaction.transactionDate)
                 guard transactionDate >= dateRange.start && transactionDate <= dateRange.end else {
@@ -779,6 +820,15 @@ final class CashflowViewModel: ViewModelProtocol {
                 query: normalizedQuery,
                 cardsByID: cardsByID
             )
+        }
+    }
+
+    private func historyTransactionMatchesCardFilter(_ transaction: CashflowTransaction, cardID: String) -> Bool {
+        switch transaction.transactionType {
+        case .income, .expense, .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
+            return transaction.cardID == cardID
+        case .transfer:
+            return transaction.cardID == cardID || transaction.toCardID == cardID
         }
     }
 
@@ -1270,6 +1320,7 @@ final class CashflowViewModel: ViewModelProtocol {
             transaction.importSourceRaw = CashflowBulkExpenseImportTransactionSource.monthlyCategoryRollup.rawValue
             transaction.importReferenceKey = referenceKey
             transaction.affectsCardBalance = request.shouldAffectCardBalance
+            transaction.hasAppliedBalanceEffect = request.shouldAffectCardBalance
             transaction.updatedAt = nowDate
 
             let exchangeInfo = await resolveExchangeInfo(for: transaction)
@@ -1714,6 +1765,73 @@ final class CashflowViewModel: ViewModelProtocol {
         return categoryOption(for: raw, kind: .expense).displayName
     }
 
+    func incomeCategoryIcon(for raw: String?) -> String {
+        guard let raw else { return IncomeCategory.other.icon }
+        return categoryOption(for: raw, kind: .income).icon
+    }
+
+    func expenseCategoryIcon(for raw: String?) -> String {
+        guard let raw else { return ExpenseCategory.other.icon }
+        return categoryOption(for: raw, kind: .expense).icon
+    }
+
+    func historySummary(
+        matching query: CashflowHistoryQuery,
+        mode: CashflowHistorySummaryMode
+    ) async -> CashflowHistorySummaryModel {
+        let targetType: CashflowTransactionType = mode == .expense ? .expense : .income
+        let transactions = historyTransactions(matching: query).filter { $0.transactionType == targetType }
+        let targetCurrency = state.displayCurrency
+
+        let previousWarning = state.currencyConversionWarning
+        let previousWarningDate = state.currencyConversionWarningDate
+        defer {
+            state.currencyConversionWarning = previousWarning
+            state.currencyConversionWarningDate = previousWarningDate
+        }
+
+        var totalsByRawValue: [String: Double] = [:]
+        for transaction in transactions {
+            let rawValue = mode == .expense
+                ? (transaction.expenseCategoryRaw ?? ExpenseCategory.other.rawValue)
+                : (transaction.incomeCategoryRaw ?? IncomeCategory.other.rawValue)
+            let converted = await convertAmountForTransaction(transaction, to: targetCurrency)
+            guard converted.isFinite else { continue }
+            totalsByRawValue[rawValue, default: 0] += converted
+        }
+
+        let entries = CashflowHistorySummaryBuilder.build(
+            totalsByRawValue: totalsByRawValue,
+            mode: mode,
+            resolver: { [weak self] rawValue in
+                guard let self else {
+                    return CashflowHistorySummaryResolvedCategory(rawValue: rawValue, title: rawValue, icon: "•")
+                }
+                switch mode {
+                case .expense:
+                    return CashflowHistorySummaryResolvedCategory(
+                        rawValue: rawValue,
+                        title: self.expenseCategoryDisplayName(for: rawValue),
+                        icon: self.expenseCategoryIcon(for: rawValue)
+                    )
+                case .income:
+                    return CashflowHistorySummaryResolvedCategory(
+                        rawValue: rawValue,
+                        title: self.incomeCategoryDisplayName(for: rawValue),
+                        icon: self.incomeCategoryIcon(for: rawValue)
+                    )
+                }
+            }
+        )
+
+        return CashflowHistorySummaryModel(
+            mode: mode,
+            totalAmount: entries.reduce(0) { $0 + $1.amount },
+            currencyCode: targetCurrency,
+            entries: entries
+        )
+    }
+
     @discardableResult
     func createCustomCategory(
         kind: CashflowCategoryKind,
@@ -1852,10 +1970,15 @@ final class CashflowViewModel: ViewModelProtocol {
 
     @discardableResult
     func deleteCustomCategory(rawValue: String, kind: CashflowCategoryKind) -> Bool {
-        guard let sourceID = Self.customCategoryID(from: rawValue),
-              let sourceCategory = state.customCategories.first(where: { $0.categoryID == sourceID && $0.kind == kind }) else {
+        guard let sourceID = Self.customCategoryID(from: rawValue) else {
             return false
         }
+
+        let descriptor = FetchDescriptor<CashflowCustomCategory>()
+        let sourceCategory = ((try? modelContext.fetch(descriptor)) ?? []).first {
+            $0.categoryID == sourceID && $0.kind == kind
+        }
+        guard let sourceCategory else { return false }
 
         let fallback = defaultCategoryOption(for: kind)
         let nowDate = Date()
@@ -2225,6 +2348,7 @@ final class CashflowViewModel: ViewModelProtocol {
             return
         }
         card.updatedAt = now()
+        transaction.hasAppliedBalanceEffect = true
     }
 
     private func shouldAffectCardBalance(_ transaction: CashflowTransaction?) -> Bool {
@@ -2232,10 +2356,8 @@ final class CashflowViewModel: ViewModelProtocol {
         switch transaction.transactionType {
         case .income, .expense:
             return transaction.affectsCardBalance
-        case .transfer, .balanceAdjustment, .cardBalanceAdjustment:
+        case .transfer, .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
             return true
-        case .creditDebtAdjustment:
-            return false
         }
     }
 
@@ -2270,10 +2392,8 @@ final class CashflowViewModel: ViewModelProtocol {
             } else {
                 appliedDelta = 0
             }
-        case .balanceAdjustment, .cardBalanceAdjustment:
+        case .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
             appliedDelta = transaction.cardID == cardID ? amountInCardCurrency : 0
-        case .creditDebtAdjustment:
-            appliedDelta = 0
         }
 
         switch direction {
@@ -2284,13 +2404,23 @@ final class CashflowViewModel: ViewModelProtocol {
         }
     }
 
+    func cardBalanceSnapshot(for cardID: String) -> CashflowCardBalanceSnapshot? {
+        guard let card = card(for: cardID) else { return nil }
+        let snapshot = CardSnapshotFactory.make(from: card)
+        return CashflowCardBalanceSnapshot(
+            currency: snapshot.currency,
+            availableAmount: snapshot.availableAmount,
+            debtAmount: snapshot.isCreditCard ? snapshot.debtAmount : nil
+        )
+    }
+
     private func card(for cardID: String) -> Card? {
-        if let cached = state.availableCards.first(where: { $0.cardUniqueID == cardID }) {
-            return cached
-        }
         let descriptor = FetchDescriptor<Card>()
-        let allCards = (try? modelContext.fetch(descriptor)) ?? []
-        return allCards.first(where: { $0.cardUniqueID == cardID })
+        let allCards = CardCatalog.deduped((try? modelContext.fetch(descriptor)) ?? [])
+        if let fetched = allCards.first(where: { $0.cardUniqueID == cardID }) {
+            return fetched
+        }
+        return CardCatalog.deduped(state.availableCards).first(where: { $0.cardUniqueID == cardID })
     }
 
     private func investment(for investmentID: String) -> Investment? {
@@ -2439,9 +2569,14 @@ final class CashflowViewModel: ViewModelProtocol {
 
     private func applyDuePlannedTransactionsIfNeeded() async -> Bool {
         let referenceNow = now()
-        guard let previousCheckpoint = defaults.object(forKey: dueAutoApplyCheckpointKey) as? Date else {
+        guard let storedCheckpoint = defaults.object(forKey: dueAutoApplyCheckpointKey) as? Date else {
             defaults.set(referenceNow, forKey: dueAutoApplyCheckpointKey)
             return false
+        }
+        let previousCheckpoint = min(storedCheckpoint, referenceNow)
+
+        if previousCheckpoint != storedCheckpoint {
+            defaults.set(previousCheckpoint, forKey: dueAutoApplyCheckpointKey)
         }
 
         let dueTransactions = state.transactions
@@ -2451,6 +2586,7 @@ final class CashflowViewModel: ViewModelProtocol {
                 }
                 guard transaction.recurrenceRule == .none else { return false }
                 guard transaction.affectsCardBalance else { return false }
+                guard !transaction.hasAppliedBalanceEffect else { return false }
                 return transaction.transactionDate > previousCheckpoint
                     && transaction.transactionDate <= referenceNow
             }
@@ -2464,6 +2600,7 @@ final class CashflowViewModel: ViewModelProtocol {
         for transaction in dueTransactions {
             do {
                 try await applyAccountBalanceEffect(for: transaction, direction: .apply)
+                transaction.hasAppliedBalanceEffect = true
                 transaction.updatedAt = referenceNow
             } catch {
                 AppLogger.log(
@@ -2604,7 +2741,7 @@ final class CashflowViewModel: ViewModelProtocol {
         on date: Date,
         replacing existingTransaction: CashflowTransaction? = nil
     ) async throws -> Bool {
-        guard let card = state.availableCards.first(where: { $0.cardUniqueID == fromCardID }) else {
+        guard let card = card(for: fromCardID) else {
             AppLogger.log(.warning, category: "Cashflow", "isAmountAvailable: card not found for fromCardID: \(fromCardID)")
             return false
         }
@@ -2742,9 +2879,11 @@ final class CashflowViewModel: ViewModelProtocol {
     }
     
     private func deleteTransactionAsync(_ transaction: CashflowTransaction, recalculate: Bool) async {
-        if recalculate {
+        let affectedEvents = recalculate ? affectedAccountEvents(for: transaction) : []
+        if recalculate, persistedBalanceEffectWasApplied(for: transaction) {
             do {
                 try await applyAccountBalanceEffect(for: transaction, direction: .revert)
+                transaction.hasAppliedBalanceEffect = false
             } catch {
                 AppLogger.log(.error, category: "Cashflow", "Failed to revert card balance on delete: \(error.localizedDescription)")
                 state.deleteBalanceUpdateErrorMessage = error.localizedDescription
@@ -2758,6 +2897,7 @@ final class CashflowViewModel: ViewModelProtocol {
         do {
             try modelContext.save()
             if recalculate {
+                publishAffectedAccountEvents(affectedEvents)
                 loadTransactions()
             }
         } catch {
@@ -2766,11 +2906,13 @@ final class CashflowViewModel: ViewModelProtocol {
     }
 
     private func deleteTransactionWithoutRecalculation(_ transaction: CashflowTransaction) {
+        let preservedBalances = preservedAccountBalances(for: transaction)
         modelContext.delete(transaction)
 
         do {
             try modelContext.save()
-            loadTransactions()
+            restorePreservedAccountBalancesIfNeeded(preservedBalances)
+            loadTransactionsSnapshot()
         } catch {
             AppLogger.log(.error, category: "Cashflow", "Failed to delete transaction without recalculation: \(error.localizedDescription)")
         }
@@ -2789,6 +2931,9 @@ final class CashflowViewModel: ViewModelProtocol {
         replacing explicitExistingTransaction: CashflowTransaction? = nil
     ) async -> Bool {
         let existingTransaction = explicitExistingTransaction ?? state.editingTransaction
+        let affectedEvents = affectedAccountEvents(for: transaction).union(
+            existingTransaction.map(affectedAccountEvents(for:)) ?? []
+        )
         let nowDate = now()
         ensureSystemCategoriesVisible(
             rawValues: [transaction.incomeCategoryRaw, transaction.expenseCategoryRaw].compactMap { $0 },
@@ -2810,11 +2955,15 @@ final class CashflowViewModel: ViewModelProtocol {
         
         if let existing = existingTransaction {
             do {
-                if shouldApplyCardBalanceImmediately(for: existing) {
+                if persistedBalanceEffectWasApplied(for: existing) {
                     try await applyAccountBalanceEffect(for: existing, direction: .revert)
+                    existing.hasAppliedBalanceEffect = false
                 }
                 if shouldApplyCardBalanceImmediately(for: transaction) {
                     try await applyAccountBalanceEffect(for: transaction, direction: .apply)
+                    existing.hasAppliedBalanceEffect = true
+                } else {
+                    existing.hasAppliedBalanceEffect = false
                 }
             } catch {
                 AppLogger.log(.error, category: "Cashflow", "Failed to update card balance effect: \(error.localizedDescription)")
@@ -2867,6 +3016,7 @@ final class CashflowViewModel: ViewModelProtocol {
             do {
                 if shouldApplyCardBalanceImmediately(for: newTransaction) {
                     try await applyAccountBalanceEffect(for: newTransaction, direction: .apply)
+                    newTransaction.hasAppliedBalanceEffect = true
                 }
             } catch {
                 AppLogger.log(.error, category: "Cashflow", "Failed to apply card balance effect: \(error.localizedDescription)")
@@ -2877,6 +3027,7 @@ final class CashflowViewModel: ViewModelProtocol {
         
         do {
             try modelContext.save()
+            publishAffectedAccountEvents(affectedEvents)
             loadTransactions()
             state.showTransactionEditor = false
             if explicitExistingTransaction == nil || state.editingTransaction?.persistentModelID == explicitExistingTransaction?.persistentModelID {
@@ -2889,6 +3040,112 @@ final class CashflowViewModel: ViewModelProtocol {
             return false
         }
     }
+
+    private func affectedAccountEvents(for transaction: CashflowTransaction) -> Set<CashflowAffectedAccountEvent> {
+        guard shouldApplyCardBalanceImmediately(for: transaction) else { return [] }
+
+        var events = Set<CashflowAffectedAccountEvent>()
+
+        if transaction.cardID != nil || transaction.toCardID != nil {
+            events.insert(.cardsUpdated)
+        }
+
+        if transaction.investmentID != nil {
+            events.insert(.investmentsUpdated)
+        }
+
+        return events
+    }
+
+    private func publishAffectedAccountEvents(_ events: Set<CashflowAffectedAccountEvent>) {
+        for event in events {
+            switch event {
+            case .cardsUpdated:
+                EventBus.shared.publish(FinanceEvent.cardsUpdated)
+            case .investmentsUpdated:
+                EventBus.shared.publish(FinanceEvent.investmentsUpdated)
+            }
+        }
+    }
+
+    private struct PreservedAccountBalances {
+        var cardBalances: [String: Double] = [:]
+        var investmentBalances: [String: Double] = [:]
+
+        var isEmpty: Bool {
+            cardBalances.isEmpty && investmentBalances.isEmpty
+        }
+    }
+
+    private func preservedAccountBalances(for transaction: CashflowTransaction) -> PreservedAccountBalances {
+        var snapshot = PreservedAccountBalances()
+
+        let impactedCardIDs = Set([transaction.cardID, transaction.toCardID].compactMap { $0 })
+        for cardID in impactedCardIDs {
+            if let card = card(for: cardID) {
+                snapshot.cardBalances[cardID] = card.balance
+            }
+        }
+
+        if let investmentID = transaction.investmentID,
+           let investment = investment(for: investmentID) {
+            snapshot.investmentBalances[investmentID] = investment.amount
+        }
+
+        return snapshot
+    }
+
+    private func restorePreservedAccountBalancesIfNeeded(_ snapshot: PreservedAccountBalances) {
+        guard !snapshot.isEmpty else { return }
+
+        var didRestore = false
+
+        for (cardID, balance) in snapshot.cardBalances {
+            guard let card = card(for: cardID) else { continue }
+            guard abs(card.balance - balance) > 0.0000001 else { continue }
+            card.balance = balance
+            card.updatedAt = now()
+            didRestore = true
+        }
+
+        for (investmentID, amount) in snapshot.investmentBalances {
+            guard let investment = investment(for: investmentID) else { continue }
+            guard abs(investment.amount - amount) > 0.0000001 else { continue }
+            investment.amount = amount
+            investment.updatedAt = now()
+            didRestore = true
+        }
+
+        guard didRestore else { return }
+
+        do {
+            try modelContext.save()
+            AppLogger.log(
+                .warning,
+                category: "Cashflow",
+                "Restored affected balances after delete without recalculation attempted to mutate them"
+            )
+        } catch {
+            AppLogger.log(
+                .error,
+                category: "Cashflow",
+                "Failed to restore preserved balances after delete without recalculation: \(error.localizedDescription)"
+            )
+        }
+    }
+
+    private func persistedBalanceEffectWasApplied(for transaction: CashflowTransaction) -> Bool {
+        if transaction.hasAppliedBalanceEffect {
+            return true
+        }
+
+        switch transaction.transactionType {
+        case .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
+            return true
+        case .income, .expense, .transfer:
+            return false
+        }
+    }
     
     private func migrateTransactions(
         fromRaw sourceRaw: String,
@@ -2896,7 +3153,8 @@ final class CashflowViewModel: ViewModelProtocol {
         kind: CashflowCategoryKind,
         nowDate: Date
     ) {
-        let linkedTransactions = state.transactions.filter {
+        let descriptor = FetchDescriptor<CashflowTransaction>()
+        let linkedTransactions = ((try? modelContext.fetch(descriptor)) ?? []).filter {
             switch kind {
             case .income: return $0.incomeCategoryRaw == sourceRaw
             case .expense: return $0.expenseCategoryRaw == sourceRaw

@@ -13,6 +13,8 @@ import UIKit
 struct SlideToConfirmControl: View {
     let title: String
     let subtitle: String
+    let loadingTitle: String
+    let loadingSubtitle: String
     let icon: String
     let gradientColors: [Color]
     let isEnabled: Bool
@@ -24,6 +26,28 @@ struct SlideToConfirmControl: View {
 
     private let knobSize: CGFloat = 56
     private let horizontalPadding: CGFloat = 8
+
+    init(
+        title: String,
+        subtitle: String,
+        loadingTitle: String = "Создаем резервную копию...",
+        loadingSubtitle: String? = nil,
+        icon: String,
+        gradientColors: [Color],
+        isEnabled: Bool,
+        isLoading: Bool,
+        action: @escaping () -> Void
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.loadingTitle = loadingTitle
+        self.loadingSubtitle = loadingSubtitle ?? subtitle
+        self.icon = icon
+        self.gradientColors = gradientColors
+        self.isEnabled = isEnabled
+        self.isLoading = isLoading
+        self.action = action
+    }
 
     var body: some View {
         GeometryReader { proxy in
@@ -45,10 +69,10 @@ struct SlideToConfirmControl: View {
                     )
 
                 VStack(alignment: .center, spacing: 3) {
-                    Text(isLoading ? "Создаем резервную копию..." : title)
+                    Text(isLoading ? loadingTitle : title)
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
-                    Text(subtitle)
+                    Text(isLoading ? loadingSubtitle : subtitle)
                         .font(.system(size: 11, weight: .regular))
                         .foregroundStyle(AppColors.textSecondary)
                 }
@@ -96,8 +120,9 @@ struct SlideToConfirmControl: View {
             }
         }
         .frame(height: 72)
-        .opacity(isEnabled ? 1 : 0.45)
+        .opacity(isEnabled || isLoading ? 1 : 0.45)
         .animation(.easeInOut(duration: 0.2), value: isEnabled)
+        .animation(.easeInOut(duration: 0.2), value: isLoading)
     }
 
     private func handleDragProgress(offset: CGFloat, maxOffset: CGFloat) {
@@ -121,15 +146,21 @@ struct SlideToConfirmControl: View {
 
     private func triggerProgressHaptic() {
         #if canImport(UIKit)
-        let generator = UIImpactFeedbackGenerator(style: .light)
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.prepare()
         generator.impactOccurred()
         #endif
     }
 
     private func triggerSuccessHaptic() {
         #if canImport(UIKit)
-        let generator = UINotificationFeedbackGenerator()
-        generator.notificationOccurred(.success)
+        let impactGenerator = UIImpactFeedbackGenerator(style: .heavy)
+        impactGenerator.prepare()
+        impactGenerator.impactOccurred(intensity: 1)
+
+        let notificationGenerator = UINotificationFeedbackGenerator()
+        notificationGenerator.prepare()
+        notificationGenerator.notificationOccurred(.success)
         #endif
     }
 }

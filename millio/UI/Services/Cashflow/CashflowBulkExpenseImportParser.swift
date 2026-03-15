@@ -203,7 +203,7 @@ struct CashflowBulkExpenseImportParser {
         let lowercasedAmount = amountLine.lowercased()
         if normalizedTitle.isEmpty { return true }
         if ignoredTitleKeywords.contains(where: normalizedTitle.contains) { return true }
-        if incomeOrTransferKeywords.contains(where: normalizedTitle.contains) { return true }
+        if incomeKeywords.contains(where: normalizedTitle.contains) { return true }
         if lowercasedAmount.contains("+") { return true }
         if normalizedTitle.allSatisfy({ $0.isNumber || $0 == " " || $0 == ":" || $0 == "." }) { return true }
         return false
@@ -215,7 +215,7 @@ struct CashflowBulkExpenseImportParser {
         if ignoredTitleKeywords.contains(where: normalized.contains) {
             return true
         }
-        if incomeOrTransferKeywords.contains(where: normalized.contains) && !normalized.contains("оплата") {
+        if incomeKeywords.contains(where: normalized.contains) && !normalized.contains("оплата") {
             return true
         }
         if normalized.range(of: #"^\d{1,2}[:.]\d{2}$"#, options: .regularExpression) != nil {
@@ -284,9 +284,7 @@ struct CashflowBulkExpenseImportParser {
         "yesterday"
     ]
 
-    private static let incomeOrTransferKeywords: [String] = [
-        "перевод",
-        "сбп",
+    private static let incomeKeywords: [String] = [
         "пополнение",
         "зачисление",
         "возврат",

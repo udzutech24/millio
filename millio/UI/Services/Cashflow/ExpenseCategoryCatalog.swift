@@ -22,6 +22,7 @@ enum ExpenseCategoryGroup: String, CaseIterable, Codable {
     case digital = "digital"
     case bills = "bills"
     case pets = "pets"
+    case transfers = "transfers"
     case other = "other"
 }
 
@@ -112,7 +113,7 @@ enum ExpenseCategoryCatalog {
             displayNameRU: "Покупки",
             displayNameEN: "Shopping",
             icon: "🛍️",
-            aliases: ["покупки", "shopping", "store", "mall", "retail"]
+            aliases: ["покупки", "shopping", "store", "mall", "retail", "техника", "electronics", "gadgets"]
         ),
         .init(
             category: .marketplaces,
@@ -224,7 +225,32 @@ enum ExpenseCategoryCatalog {
             displayNameRU: "Сервисы",
             displayNameEN: "Digital",
             icon: "🖥️",
-            aliases: ["цифровые сервисы", "digital services", "software", "apps", "saas", "app store"]
+            aliases: [
+                "цифровые сервисы",
+                "digital services",
+                "software",
+                "apps",
+                "saas",
+                "app store",
+                "компьютер",
+                "компьютеры",
+                "комп",
+                "компы",
+                "компьютерная техника",
+                "ноутбук",
+                "ноут",
+                "макбук",
+                "laptop",
+                "computer",
+                "computers",
+                "pc",
+                "desktop",
+                "macbook",
+                "tech",
+                "electronics",
+                "gadgets",
+                "электроника"
+            ]
         ),
         .init(
             category: .subscriptions,
@@ -241,6 +267,27 @@ enum ExpenseCategoryCatalog {
             displayNameEN: "Pet goods",
             icon: "🐾",
             aliases: ["питомцы", "зоомагазин", "pets", "pet store", "veterinary", "ветеринар"]
+        ),
+        .init(
+            category: .transfers,
+            group: .transfers,
+            displayNameRU: "Переводы",
+            displayNameEN: "Transfers",
+            icon: "⇄",
+            aliases: [
+                "перевод",
+                "переводы",
+                "перевод себе",
+                "сбп",
+                "sbp",
+                "p2p",
+                "card to card",
+                "между счетами",
+                "между счетов",
+                "перевод между счетами",
+                "transfer",
+                "transfers"
+            ]
         ),
         .init(
             category: .other,
@@ -292,12 +339,7 @@ enum ExpenseCategoryCatalog {
             return Array(defaultSuggestedIcons.prefix(8))
         }
 
-        let matchedMetadata = allMetadata.first { metadata in
-            let candidates = [metadata.displayNameRU, metadata.displayNameEN] + metadata.aliases
-            return candidates.map(normalizeSearchValue).contains { candidate in
-                candidate.contains(normalized) || normalized.contains(candidate)
-            }
-        }
+        let matchedMetadata = bestMatchingMetadata(for: normalized)
 
         let semanticIcons = matchedMetadata.map { semanticIconsByCategory[$0.category] ?? [] } ?? heuristicIcons(for: normalized)
         let icon = matchedMetadata?.icon
@@ -366,13 +408,24 @@ enum ExpenseCategoryCatalog {
         .education: ["📚", "🎓", "✏️"],
         .entertainment: ["🎮", "🎬", "🎟️"],
         .travel: ["✈️", "🏨", "🧳"],
-        .digitalServices: ["🖥️", "📲", "⌨️"],
+        .digitalServices: ["💻", "🖥️", "⌨️"],
         .subscriptions: ["🔁", "🎵", "📺"],
         .pets: ["🐾", "🐶", "🐱"],
         .other: ["🧩", "📌", "📦"]
     ]
 
     private static func heuristicIcons(for normalized: String) -> [String] {
+        if normalized.contains("комп") ||
+            normalized.contains("ноут") ||
+            normalized.contains("электрон") ||
+            normalized.contains("гаджет") ||
+            normalized.contains("computer") ||
+            normalized.contains("laptop") ||
+            normalized.contains("desktop") ||
+            normalized.contains("tech") ||
+            normalized.contains("pc") {
+            return ["💻", "🖥️", "⌨️"]
+        }
         if normalized.contains("спорт") || normalized.contains("sport") || normalized.contains("gym") {
             return ["🏋️", "⚽️", "🏃"]
         }
@@ -386,6 +439,54 @@ enum ExpenseCategoryCatalog {
             return ["🌸", "🎁", "💐"]
         }
         return []
+    }
+
+    private static func bestMatchingMetadata(for normalizedQuery: String) -> ExpenseCategoryMetadata? {
+        allMetadata
+            .compactMap { metadata -> (ExpenseCategoryMetadata, Int)? in
+                let candidates = [metadata.displayNameRU, metadata.displayNameEN] + metadata.aliases
+                let score = candidates
+                    .map(normalizeSearchValue)
+                    .map { matchScore(query: normalizedQuery, candidate: $0) }
+                    .max() ?? 0
+                return score > 0 ? (metadata, score) : nil
+            }
+            .max { lhs, rhs in
+                lhs.1 < rhs.1
+            }?
+            .0
+    }
+
+    private static func matchScore(query: String, candidate: String) -> Int {
+        guard !query.isEmpty, !candidate.isEmpty else { return 0 }
+        if query == candidate {
+            return 400
+        }
+        if candidate.hasPrefix(query) {
+            return 320
+        }
+        if query.hasPrefix(candidate) {
+            return 260
+        }
+
+        let candidateTokens = candidate.split(separator: " ").map(String.init)
+        let queryTokens = query.split(separator: " ").map(String.init)
+
+        if candidateTokens.contains(where: { $0.hasPrefix(query) }) {
+            return 280
+        }
+        if queryTokens.contains(where: { token in
+            candidateTokens.contains(where: { $0.hasPrefix(token) })
+        }) {
+            return 220
+        }
+        if candidate.contains(query) {
+            return 180
+        }
+        if query.contains(candidate) {
+            return 120
+        }
+        return 0
     }
 
     private static func normalizeSearchValue(_ value: String) -> String {

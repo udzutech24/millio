@@ -202,6 +202,7 @@ enum ExpenseCategory: String, Codable, CaseIterable {
     case digitalServices = "digital_services" // Цифровые сервисы
     case subscriptions = "subscriptions" // Подписки
     case pets = "pets"               // Животные
+    case transfers = "transfers"     // Переводы
     case other = "other"             // Другое
     
     var displayName: String {
@@ -218,6 +219,12 @@ enum ExpenseCategory: String, Codable, CaseIterable {
 enum CashflowCategoryKind: String, Codable, CaseIterable {
     case income = "income"
     case expense = "expense"
+}
+
+struct CashflowAssetChangeSnapshot {
+    let quantity: Double?
+    let unitPrice: Double?
+    let totalAmount: Double
 }
 
 @Model
@@ -552,6 +559,24 @@ final class CashflowTransaction: Persistable {
     /// Описание/комментарий
     var note: String?
 
+    /// Снимок количества актива до изменения.
+    var assetQuantityBefore: Double?
+
+    /// Снимок количества актива после изменения.
+    var assetQuantityAfter: Double?
+
+    /// Снимок цены одной единицы актива до изменения.
+    var assetUnitPriceBefore: Double?
+
+    /// Снимок цены одной единицы актива после изменения.
+    var assetUnitPriceAfter: Double?
+
+    /// Снимок полной стоимости актива до изменения.
+    var assetAmountBefore: Double?
+
+    /// Снимок полной стоимости актива после изменения.
+    var assetAmountAfter: Double?
+
     /// Источник пакетного импорта для идемпотентного обновления импортных наборов.
     var importSourceRaw: String?
 
@@ -569,6 +594,10 @@ final class CashflowTransaction: Persistable {
 
     /// Влияет ли операция на текущий остаток карты
     var affectsCardBalance: Bool = true
+
+    /// Был ли эффект операции уже применен к текущему балансу счета.
+    /// Нужен, чтобы не применять одну и ту же операцию повторно при reopen/auto-apply.
+    var hasAppliedBalanceEffect: Bool = false
     
     /// Дата создания записи
     var createdAt: Date = Date()
@@ -624,6 +653,15 @@ final class CashflowTransaction: Persistable {
         recurrenceRule != .none
         && (transactionType == .income || transactionType == .expense)
         && recurrenceSeriesID != nil
+    }
+
+    var hasAssetChangeSnapshot: Bool {
+        assetQuantityBefore != nil
+            || assetQuantityAfter != nil
+            || assetUnitPriceBefore != nil
+            || assetUnitPriceAfter != nil
+            || assetAmountBefore != nil
+            || assetAmountAfter != nil
     }
     
     init(
@@ -707,6 +745,24 @@ final class CashflowTransaction: Persistable {
         if let note = note {
             dict["note"] = note
         }
+        if let assetQuantityBefore = assetQuantityBefore {
+            dict["assetQuantityBefore"] = assetQuantityBefore
+        }
+        if let assetQuantityAfter = assetQuantityAfter {
+            dict["assetQuantityAfter"] = assetQuantityAfter
+        }
+        if let assetUnitPriceBefore = assetUnitPriceBefore {
+            dict["assetUnitPriceBefore"] = assetUnitPriceBefore
+        }
+        if let assetUnitPriceAfter = assetUnitPriceAfter {
+            dict["assetUnitPriceAfter"] = assetUnitPriceAfter
+        }
+        if let assetAmountBefore = assetAmountBefore {
+            dict["assetAmountBefore"] = assetAmountBefore
+        }
+        if let assetAmountAfter = assetAmountAfter {
+            dict["assetAmountAfter"] = assetAmountAfter
+        }
         if let importSourceRaw = importSourceRaw {
             dict["importSourceRaw"] = importSourceRaw
         }
@@ -734,6 +790,9 @@ final class CashflowTransaction: Persistable {
         if !affectsCardBalance {
             dict["affectsCardBalance"] = false
         }
+        if hasAppliedBalanceEffect {
+            dict["hasAppliedBalanceEffect"] = true
+        }
         
         return try JSONSerialization.data(withJSONObject: dict)
     }
@@ -746,5 +805,17 @@ final class CashflowTransaction: Persistable {
     
     static func canImport(from dict: [String: Any]) -> Bool {
         dict["type"] as? String == "CashflowTransaction"
+    }
+
+    func applyAssetChangeSnapshot(
+        before: CashflowAssetChangeSnapshot,
+        after: CashflowAssetChangeSnapshot
+    ) {
+        assetQuantityBefore = before.quantity
+        assetQuantityAfter = after.quantity
+        assetUnitPriceBefore = before.unitPrice
+        assetUnitPriceAfter = after.unitPrice
+        assetAmountBefore = before.totalAmount
+        assetAmountAfter = after.totalAmount
     }
 }

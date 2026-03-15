@@ -453,7 +453,7 @@ private struct FinanceAccountRow: View {
     }
 
     private var isDebtHighlighted: Bool {
-        accountType == .credit || isCreditCardDebt || viewModel.isAccountLiabilityForTotals(account: account)
+        accountType == .credit || isCreditCardDebt
     }
 
     @ViewBuilder
@@ -497,6 +497,13 @@ private struct FinanceAccountRow: View {
     }
 
     private var creditLimitSubtitle: String? {
+        if let debt = viewModel.getCreditCardDebt(account: account) {
+            let amountText = formatBalance(debt.amount, isHidden: viewModel.state.isAmountHidden)
+            let currencySymbol = MonetaCurrency(rawValue: debt.currency)?.symbol ?? debt.currency
+            let title = String(localized: "finances.add_account.card.total_debt")
+            return "\(title) \(amountText) \(currencySymbol)"
+        }
+
         guard let remaining = viewModel.getCreditCardLimitRemaining(account: account) else {
             return nil
         }

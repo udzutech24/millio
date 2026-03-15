@@ -208,28 +208,14 @@ final class CardViewModel: ViewModelProtocol {
     // MARK: - Private Methods
     
     private func loadCards() {
-        let descriptor = FetchDescriptor<Card>()
-        if let cards = try? modelContext.fetch(descriptor) {
-            let activeCards = cards.filter { $0.archivedAt == nil }
-            // Сортируем: сначала избранные, потом по приоритету, потом по дате обновления
-            state.cards = activeCards.sorted { card1, card2 in
-                // Сначала избранные
-                if card1.isFavorite != card2.isFavorite {
-                    return card1.isFavorite
-                }
-                // Затем по приоритету (высокий > обычный > низкий)
-                if card1.priority.sortOrder != card2.priority.sortOrder {
-                    return card1.priority.sortOrder < card2.priority.sortOrder
-                }
-                // Затем по дате обновления (новые выше)
-                return card1.updatedAt > card2.updatedAt
-            }
-            applyFilters()
-            calculateStats()
-            
-            // Обновляем CardManager
-            CardManager.shared.setup(modelContext: modelContext)
-        }
+        let cards = CardCatalog.fetchAll(in: modelContext)
+        let activeCards = cards.filter { $0.archivedAt == nil }
+        state.cards = CardCatalog.sortForDisplay(activeCards)
+        applyFilters()
+        calculateStats()
+
+        // Обновляем CardManager
+        CardManager.shared.setup(modelContext: modelContext)
     }
     
     private func applyFilters() {
@@ -376,6 +362,7 @@ final class CardViewModel: ViewModelProtocol {
                     cardID: existing.cardUniqueID,
                     note: transactionNote
                 )
+                transaction.hasAppliedBalanceEffect = true
                 modelContext.insert(transaction)
             }
         } else {

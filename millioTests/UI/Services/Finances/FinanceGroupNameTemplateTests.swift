@@ -8,9 +8,9 @@ import Foundation
 @testable import millio
 
 struct FinanceGroupNameTemplateTests {
-    @Test("Шаблоны названий групп: 7 вариантов, уникальные ключи и валидные локализации")
+    @Test("Шаблоны названий групп: 6 вариантов, уникальные ключи и валидные локализации")
     func groupNameTemplatesAreStableAndLocalized() {
-        #expect(FinanceGroupNameTemplate.allCases.count == 7)
+        #expect(FinanceGroupNameTemplate.allCases.count == 6)
 
         let keys = FinanceGroupNameTemplate.allCases.map(\.localizationKey)
         #expect(Set(keys).count == keys.count)

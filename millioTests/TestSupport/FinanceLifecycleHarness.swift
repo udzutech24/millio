@@ -1,0 +1,454 @@
+import Foundation
+import SwiftData
+import Testing
+@testable import millio
+
+actor FinanceLifecycleMarketDataClient: MarketDataClientProtocol {
+    func searchSymbols(query: String, outputSize: Int) async throws -> [TwelveDataSymbol] { [] }
+    func latestPrice(symbol: String, forceRefresh: Bool) async throws -> Double? { nil }
+}
+
+@MainActor
+final class FinanceLifecycleHarness {
+    static let schema = Schema([
+        Card.self,
+        Credit.self,
+        Investment.self,
+        AssetCatalogItem.self,
+        AssetProviderMapping.self,
+        FinanceGroup.self,
+        FinanceAccount.self,
+        CashflowTransaction.self,
+        CashflowCustomCategory.self,
+        CashflowSystemCategoryOverride.self,
+        HistoricalRate.self
+    ])
+
+    static var retainedContainers: [ModelContainer] = []
+
+    let modelContext: ModelContext
+    let financeViewModel: FinanceViewModel
+    let cashflowViewModel: CashflowViewModel
+    let cardViewModel: CardViewModel
+    let group: FinanceGroup
+    let now: Date
+
+    init(now: Date) throws {
+        self.now = now
+
+        let defaults = UserDefaults.standard
+        defaults.set("RUB", forKey: "primaryCurrencyCode")
+        defaults.set(false, forKey: "finance_savings_goal_enabled")
+        defaults.set(0, forKey: "finance_savings_goal_amount")
+        defaults.removeObject(forKey: "finance_savings_goal_currency")
+
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: Self.schema, configurations: [config])
+        Self.retainedContainers.append(container)
+
+        self.modelContext = container.mainContext
+        self.group = FinanceGroup(name: "Main", colorHex: "#FFFFFF", order: 0)
+        modelContext.insert(group)
+        try modelContext.save()
+
+        let marketDataClient = FinanceLifecycleMarketDataClient()
+        self.financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: nil,
+            marketDataClient: marketDataClient,
+            skipInitialLoad: false
+        )
+        self.cashflowViewModel = CashflowViewModel(modelContext: modelContext, now: { now })
+        self.cardViewModel = CardViewModel(modelContext: modelContext)
+
+        financeViewModel.handle(.loadGroups)
+        financeViewModel.handle(.loadAccounts)
+        cashflowViewModel.handle(.loadCards)
+        cashflowViewModel.handle(.loadTransactions)
+    }
+
+    @discardableResult
+    func createDebitCardOnly(
+        name: String = "Detached debit",
+        balance: Double,
+        currency: String = "RUB"
+    ) async throws -> Card {
+        let card = Card(
+            name: name,
+            cardNumber: "3333",
+            bank: .other,
+            cardType: .debit,
+            currency: currency,
+            balance: balance
+        )
+        cardViewModel.handle(.updateCard(card))
+
+        let created = try requireCard(named: name)
+        try await waitUntil {
+            self.financeViewModel.state.availableCards.contains(where: { $0.cardUniqueID == created.cardUniqueID })
+                && self.cashflowViewModel.state.availableCards.contains(where: { $0.cardUniqueID == created.cardUniqueID })
+        }
+
+        return created
+    }
+
+    @discardableResult
+    func createLinkedDebitCard(
+        name: String = "Main debit",
+        balance: Double,
+        currency: String = "RUB"
+    ) async throws -> Card {
+        let card = Card(
+            name: name,
+            cardNumber: "1111",
+            bank: .other,
+            cardType: .debit,
+            currency: currency,
+            balance: balance
+        )
+        cardViewModel.handle(.updateCard(card))
+
+        let created = try requireCard(named: name)
+        financeViewModel.handle(.addAccountToGroup(accountType: .card, accountID: created.cardUniqueID, group: group))
+
+        try await waitUntil {
+            self.financeAccount(for: created.cardUniqueID) != nil
+                && self.financeViewModel.state.availableCards.contains(where: { $0.cardUniqueID == created.cardUniqueID })
+                && self.cashflowViewModel.state.availableCards.contains(where: { $0.cardUniqueID == created.cardUniqueID })
+        }
+
+        return created
+    }
+
+    @discardableResult
+    func createLinkedCreditCard(
+        name: String = "Main credit",
+        balance: Double,
+        creditLimit: Double,
+        currency: String = "RUB"
+    ) async throws -> Card {
+        let card = Card(
+            name: name,
+            cardNumber: "2222",
+            bank: .other,
+            cardType: .credit,
+            currency: currency,
+            balance: balance,
+            creditLimit: creditLimit
+        )
+        cardViewModel.handle(.updateCard(card))
+
+        let created = try requireCard(named: name)
+        financeViewModel.handle(.addAccountToGroup(accountType: .card, accountID: created.cardUniqueID, group: group))
+
+        try await waitUntil {
+            self.financeAccount(for: created.cardUniqueID) != nil
+                && self.financeViewModel.state.availableCards.contains(where: { $0.cardUniqueID == created.cardUniqueID })
+                && self.cashflowViewModel.state.availableCards.contains(where: { $0.cardUniqueID == created.cardUniqueID })
+        }
+
+        return created
+    }
+
+    func quickEditCardBalance(cardID: String, to newAmount: Double) async throws {
+        let account = try requireFinanceAccount(for: cardID)
+        financeViewModel.handle(.updateAccountAmount(account, newAmount))
+        try await assertCardState(cardID: cardID, balance: newAmount)
+    }
+
+    func quickEditCreditCard(cardID: String, creditLimit: Double, debt: Double) async throws {
+        let account = try requireFinanceAccount(for: cardID)
+        financeViewModel.handle(.updateCreditCardQuickFields(account: account, creditLimit: creditLimit, debt: debt))
+        try await assertCardState(cardID: cardID, balance: max(0, creditLimit - debt))
+    }
+
+    @discardableResult
+    func persistExpense(cardID: String, amount: Double, affectsBalance: Bool = true) async throws -> CashflowTransaction {
+        let expense = CashflowTransaction(
+            transactionType: .expense,
+            amount: amount,
+            currency: "RUB",
+            transactionDate: now,
+            cardID: cardID,
+            expenseCategory: .groceries,
+            affectsCardBalance: affectsBalance
+        )
+        let didSave = await cashflowViewModel.persistTransaction(expense)
+        #expect(didSave)
+        try await waitUntil {
+            self.cashflowViewModel.state.transactions.contains {
+                $0.cardID == cardID
+                    && $0.transactionType == .expense
+                    && abs($0.amount - amount) < 0.01
+                    && $0.affectsCardBalance == affectsBalance
+            }
+        }
+        return try requireTransaction(type: .expense, cardID: cardID, amount: amount)
+    }
+
+    @discardableResult
+    func persistIncome(cardID: String, amount: Double, affectsBalance: Bool = true) async throws -> CashflowTransaction {
+        let income = CashflowTransaction(
+            transactionType: .income,
+            amount: amount,
+            currency: "RUB",
+            transactionDate: now,
+            cardID: cardID,
+            incomeCategory: .salary,
+            affectsCardBalance: affectsBalance
+        )
+        let didSave = await cashflowViewModel.persistTransaction(income)
+        #expect(didSave)
+        try await waitUntil {
+            self.cashflowViewModel.state.transactions.contains {
+                $0.cardID == cardID
+                    && $0.transactionType == .income
+                    && abs($0.amount - amount) < 0.01
+                    && $0.affectsCardBalance == affectsBalance
+            }
+        }
+        return try requireTransaction(type: .income, cardID: cardID, amount: amount)
+    }
+
+    @discardableResult
+    func persistTransfer(from sourceCardID: String, to destinationCardID: String, amount: Double) async throws -> CashflowTransaction {
+        let transfer = CashflowTransaction(
+            transactionType: .transfer,
+            amount: amount,
+            currency: "RUB",
+            transactionDate: now,
+            cardID: sourceCardID,
+            toCardID: destinationCardID,
+            expenseCategory: .transfers
+        )
+        let didSave = await cashflowViewModel.persistTransaction(transfer)
+        #expect(didSave)
+        try await waitUntil {
+            self.cashflowViewModel.state.transactions.contains {
+                $0.transactionType == .transfer
+                    && $0.cardID == sourceCardID
+                    && $0.toCardID == destinationCardID
+                    && abs($0.amount - amount) < 0.01
+            }
+        }
+        return try requireTransaction(
+            type: .transfer,
+            cardID: sourceCardID,
+            toCardID: destinationCardID,
+            amount: amount
+        )
+    }
+
+    @discardableResult
+    func replaceTransaction(
+        _ existing: CashflowTransaction,
+        with updated: CashflowTransaction
+    ) async throws -> CashflowTransaction {
+        let didSave = await cashflowViewModel.persistTransaction(updated, replacing: existing)
+        #expect(didSave)
+        try await waitUntil {
+            self.cashflowViewModel.state.transactions.contains {
+                $0.persistentModelID == existing.persistentModelID
+                    && $0.transactionType == updated.transactionType
+                    && abs($0.amount - updated.amount) < 0.01
+                    && $0.cardID == updated.cardID
+                    && $0.toCardID == updated.toCardID
+                    && $0.affectsCardBalance == updated.affectsCardBalance
+            }
+        }
+
+        guard let saved = cashflowViewModel.state.transactions.first(where: {
+            $0.persistentModelID == existing.persistentModelID
+        }) else {
+            Issue.record("Expected updated transaction with id \(existing.persistentModelID)")
+            throw HarnessError.missingTransaction
+        }
+        return saved
+    }
+
+    func deleteTransaction(_ transaction: CashflowTransaction, recalculate: Bool) async throws {
+        cashflowViewModel.handle(.deleteTransaction(transaction, recalculate: recalculate))
+        try await waitUntil {
+            !self.cashflowViewModel.state.transactions.contains {
+                $0.persistentModelID == transaction.persistentModelID
+            }
+        }
+    }
+
+    func reloadAll() async throws {
+        financeViewModel.handle(.loadAccounts)
+        cashflowViewModel.handle(.loadCards)
+        cashflowViewModel.handle(.loadTransactions)
+        try await waitUntil { true }
+    }
+
+    func assertCardState(cardID: String, balance: Double) async throws {
+        try await waitUntil {
+            let financeBalance = self.financeViewModel.state.availableCards.first(where: { $0.cardUniqueID == cardID })?.balance
+            let cashflowBalance = self.cashflowViewModel.state.availableCards.first(where: { $0.cardUniqueID == cardID })?.balance
+            let modelBalance = self.cardFromStore(cardID: cardID)?.balance
+            let snapshotBalance = self.cashflowViewModel.cardBalanceSnapshot(for: cardID)?.availableAmount
+
+            return Self.approximatelyEqual(financeBalance, balance)
+                && Self.approximatelyEqual(cashflowBalance, balance)
+                && Self.approximatelyEqual(modelBalance, balance)
+                && Self.approximatelyEqual(snapshotBalance, balance)
+        }
+
+        #expect(Self.approximatelyEqual(cardFromStore(cardID: cardID)?.balance, balance))
+        #expect(Self.approximatelyEqual(financeViewModel.state.availableCards.first(where: { $0.cardUniqueID == cardID })?.balance, balance))
+        #expect(Self.approximatelyEqual(cashflowViewModel.state.availableCards.first(where: { $0.cardUniqueID == cardID })?.balance, balance))
+        #expect(Self.approximatelyEqual(cashflowViewModel.cardBalanceSnapshot(for: cardID)?.availableAmount, balance))
+    }
+
+    func assertFreshViewModels(
+        cardBalances: [String: Double],
+        transactionCount expectedTransactionCount: Int
+    ) async throws {
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: nil,
+            marketDataClient: FinanceLifecycleMarketDataClient(),
+            skipInitialLoad: false
+        )
+        let cashflowViewModel = CashflowViewModel(modelContext: modelContext, now: { self.now })
+
+        try await waitUntil {
+            cashflowViewModel.state.transactions.count == expectedTransactionCount
+                && cardBalances.allSatisfy { cardID, balance in
+                    Self.approximatelyEqual(
+                        financeViewModel.state.availableCards.first(where: { $0.cardUniqueID == cardID })?.balance,
+                        balance
+                    ) && Self.approximatelyEqual(
+                        cashflowViewModel.state.availableCards.first(where: { $0.cardUniqueID == cardID })?.balance,
+                        balance
+                    ) && Self.approximatelyEqual(
+                        cashflowViewModel.cardBalanceSnapshot(for: cardID)?.availableAmount,
+                        balance
+                    )
+                }
+        }
+
+        #expect(cashflowViewModel.state.transactions.count == expectedTransactionCount)
+        for (cardID, balance) in cardBalances {
+            #expect(
+                Self.approximatelyEqual(
+                    financeViewModel.state.availableCards.first(where: { $0.cardUniqueID == cardID })?.balance,
+                    balance
+                )
+            )
+            #expect(
+                Self.approximatelyEqual(
+                    cashflowViewModel.state.availableCards.first(where: { $0.cardUniqueID == cardID })?.balance,
+                    balance
+                )
+            )
+            #expect(
+                Self.approximatelyEqual(
+                    cashflowViewModel.cardBalanceSnapshot(for: cardID)?.availableAmount,
+                    balance
+                )
+            )
+        }
+    }
+
+    func assertCreditCardPresentation(
+        cardID: String,
+        availableAmount: Double,
+        debtAmount: Double
+    ) async throws {
+            let financeAccount = try requireFinanceAccount(for: cardID)
+
+        try await waitUntil {
+            let financeMainAmount = self.financeViewModel.getAccountInfo(account: financeAccount)?.amount
+            let financeRemaining = self.financeViewModel.getCreditCardLimitRemaining(account: financeAccount)?.amount
+            let financeDebt = self.financeViewModel.getCreditCardDebt(account: financeAccount)?.amount ?? 0
+            let cashflowAvailable = self.cashflowViewModel.cardBalanceSnapshot(for: cardID)?.availableAmount
+            let cashflowDebt = self.cashflowViewModel.cardBalanceSnapshot(for: cardID)?.debtAmount ?? 0
+
+            return Self.approximatelyEqual(financeMainAmount, availableAmount)
+                && Self.approximatelyEqual(financeRemaining, availableAmount)
+                && Self.approximatelyEqual(financeDebt, debtAmount)
+                && Self.approximatelyEqual(cashflowAvailable, availableAmount)
+                && Self.approximatelyEqual(cashflowDebt, debtAmount)
+        }
+    }
+
+    func assertTransactionCount(_ expected: Int) {
+        #expect(cashflowViewModel.state.transactions.count == expected)
+    }
+
+    func requireFinanceAccount(for cardID: String) throws -> FinanceAccount {
+        guard let account = financeAccount(for: cardID) else {
+            Issue.record("Expected finance account for card \(cardID)")
+            throw HarnessError.missingAccount
+        }
+        return account
+    }
+
+    func requireTransaction(
+        type: CashflowTransactionType,
+        cardID: String,
+        toCardID: String? = nil,
+        amount: Double
+    ) throws -> CashflowTransaction {
+        guard let transaction = cashflowViewModel.state.transactions.first(where: {
+            $0.transactionType == type
+                && $0.cardID == cardID
+                && $0.toCardID == toCardID
+                && abs($0.amount - amount) < 0.01
+        }) else {
+            Issue.record("Expected \(type.rawValue) transaction for card \(cardID)")
+            throw HarnessError.missingTransaction
+        }
+        return transaction
+    }
+
+    func requireCard(named name: String) throws -> Card {
+        let descriptor = FetchDescriptor<Card>()
+        let cards = (try? modelContext.fetch(descriptor)) ?? []
+        guard let card = cards.first(where: { $0.name == name }) else {
+            Issue.record("Expected card named \(name)")
+            throw HarnessError.missingCard
+        }
+        return card
+    }
+
+    private func financeAccount(for cardID: String) -> FinanceAccount? {
+        financeViewModel.state.groups
+            .flatMap { $0.accounts ?? [] }
+            .first { $0.accountType == .card && $0.accountID == cardID }
+    }
+
+    private func cardFromStore(cardID: String) -> Card? {
+        let descriptor = FetchDescriptor<Card>()
+        let cards = (try? modelContext.fetch(descriptor)) ?? []
+        return cards.first(where: { $0.cardUniqueID == cardID })
+    }
+
+    private func waitUntil(
+        timeoutNanoseconds: UInt64 = 2_000_000_000,
+        intervalNanoseconds: UInt64 = 50_000_000,
+        condition: @escaping @MainActor () -> Bool
+    ) async throws {
+        let start = DispatchTime.now().uptimeNanoseconds
+        while DispatchTime.now().uptimeNanoseconds - start < timeoutNanoseconds {
+            if condition() {
+                return
+            }
+            try await Task.sleep(nanoseconds: intervalNanoseconds)
+        }
+        #expect(Bool(false), "Condition was not met before timeout")
+    }
+
+    private static func approximatelyEqual(_ lhs: Double?, _ rhs: Double, epsilon: Double = 0.01) -> Bool {
+        guard let lhs else { return false }
+        return abs(lhs - rhs) < epsilon
+    }
+
+    enum HarnessError: Error {
+        case missingCard
+        case missingAccount
+        case missingTransaction
+    }
+}

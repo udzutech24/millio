@@ -83,6 +83,7 @@ final class QuickSetupViewModelTests: XCTestCase {
         let appState = AppState()
         let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)
 
+        viewModel.addGroupPreset(.all[0])
         viewModel.productTypeForCreation = .ticker
         viewModel.productSymbolInput = "AAPL"
         viewModel.productQuantityInput = "2"
@@ -92,9 +93,47 @@ final class QuickSetupViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.products.count, 1)
         XCTAssertEqual(viewModel.products.first?.symbol, "AAPL")
         XCTAssertEqual(viewModel.products.first?.name, "AAPL")
+        XCTAssertEqual(viewModel.products.first?.groupDraftID, viewModel.selectedGroupDraftID)
         XCTAssertEqual(viewModel.productSymbolInput, "")
         XCTAssertEqual(viewModel.productQuantityInput, "")
         XCTAssertEqual(viewModel.productPurchasePriceInput, "")
+    }
+
+    func testAddGroupPresetCreatesAndSelectsGroupWithoutDuplicates() {
+        let appState = AppState()
+        let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)
+        let preset = QuickSetupGroupPreset.all[0]
+        let expectedTitle = preset.title(for: viewModel.selectedLanguage.locale ?? Locale.current)
+
+        viewModel.addGroupPreset(preset)
+        let firstID = try! XCTUnwrap(viewModel.selectedGroupDraftID)
+        XCTAssertEqual(viewModel.groups.count, 1)
+        XCTAssertEqual(viewModel.groups.first?.name, expectedTitle)
+
+        viewModel.addGroupPreset(preset)
+
+        XCTAssertEqual(viewModel.groups.count, 1)
+        XCTAssertEqual(viewModel.selectedGroupDraftID, firstID)
+    }
+
+    func testRemovingGroupUngroupsAssignedProducts() {
+        let appState = AppState()
+        let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)
+        let preset = QuickSetupGroupPreset.all[0]
+
+        viewModel.addGroupPreset(preset)
+        let groupID = try! XCTUnwrap(viewModel.selectedGroupDraftID)
+        viewModel.productNameInput = "Основная карта"
+        viewModel.productAmountInput = "500"
+
+        XCTAssertTrue(viewModel.addDraftProduct())
+        XCTAssertEqual(viewModel.products.first?.groupDraftID, groupID)
+
+        viewModel.removeGroup(id: groupID)
+
+        XCTAssertNil(viewModel.products.first?.groupDraftID)
+        XCTAssertTrue(viewModel.groups.isEmpty)
+        XCTAssertNil(viewModel.selectedGroupDraftID)
     }
 
     func testMakeSelectionNormalizesFavoriteCurrencies() {
@@ -115,6 +154,7 @@ final class QuickSetupViewModelTests: XCTestCase {
 
         XCTAssertEqual(selection.primaryCurrencyCode, "RUB")
         XCTAssertEqual(selection.favoriteCurrencyCodes, ["USD", "EUR"])
+        XCTAssertTrue(selection.groups.isEmpty)
         XCTAssertEqual(selection.backupPreference, .localOnly)
     }
 
@@ -142,6 +182,15 @@ final class QuickSetupViewModelTests: XCTestCase {
         viewModel.backupPreference = .localOnly
         let selection = viewModel.makeSelection()
         XCTAssertEqual(selection.backupPreference, .localOnly)
+    }
+
+    func testBackupPreferenceDefaultsToCloudBackupForSuggestion() {
+        let appState = AppState()
+        appState.isBackupEnabled = false
+
+        let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)
+
+        XCTAssertEqual(viewModel.backupPreference, .cloudBackup)
     }
 
     func testExpenseCategoryQuickActions() {

@@ -29,7 +29,7 @@ struct CashflowBulkExpenseImportTests {
         return container.mainContext
     }
 
-    @Test("Парсер расходов понимает inline и split форматы и игнорирует переводы")
+    @Test("Парсер расходов понимает inline и split форматы и оставляет переводы для отдельной категории")
     func parserSupportsExpenseLayouts() {
         let rows = CashflowBulkExpenseImportParser.parseRecognizedLines([
             "Пятерочка 1 240 ₽",
@@ -40,9 +40,10 @@ struct CashflowBulkExpenseImportTests {
             "Coffee Point 340"
         ])
 
-        #expect(rows.count == 3)
+        #expect(rows.count == 4)
         #expect(rows.contains { $0.title == "Пятерочка" && abs($0.amount - 1240) < 0.001 })
         #expect(rows.contains { $0.title == "Яндекс Такси" && abs($0.amount - 870) < 0.001 })
+        #expect(rows.contains { $0.title == "Перевод себе" && abs($0.amount - 5000) < 0.001 })
         #expect(rows.contains { $0.title == "Coffee Point" && abs($0.amount - 340) < 0.001 })
     }
 
@@ -62,6 +63,7 @@ struct CashflowBulkExpenseImportTests {
         let transport = resolver.resolve(title: "Yandex Go taxi", availableOptions: options)
         let fuel = resolver.resolve(title: "Газпромнефть АЗС", availableOptions: options)
         let marketplace = resolver.resolve(title: "Ozon order", availableOptions: options)
+        let transfer = resolver.resolve(title: "Перевод себе по СБП", availableOptions: options)
         let unknown = resolver.resolve(title: "Strange merchant xyz", availableOptions: options)
 
         #expect(groceries.option.rawValue == ExpenseCategory.groceries.rawValue)
@@ -72,6 +74,8 @@ struct CashflowBulkExpenseImportTests {
         #expect(fuel.confidence >= .medium)
         #expect(marketplace.option.rawValue == ExpenseCategory.marketplaces.rawValue)
         #expect(marketplace.confidence >= .medium)
+        #expect(transfer.option.rawValue == ExpenseCategory.transfers.rawValue)
+        #expect(transfer.confidence >= .medium)
         #expect(unknown.option.rawValue == ExpenseCategory.other.rawValue)
         #expect(unknown.confidence == .low)
     }
@@ -84,10 +88,77 @@ struct CashflowBulkExpenseImportTests {
         let byAlias = viewModel.categoryOptions(for: .expense, matching: "заправки")
         let byShortName = viewModel.categoryOptions(for: .expense, matching: "азс")
         let byMerchant = viewModel.categoryOptions(for: .expense, matching: "wildberries")
+        let byTransfer = viewModel.categoryOptions(for: .expense, matching: "сбп")
 
         #expect(byAlias.contains { $0.rawValue == ExpenseCategory.fuel.rawValue })
         #expect(byShortName.contains { $0.rawValue == ExpenseCategory.fuel.rawValue })
         #expect(byMerchant.contains { $0.rawValue == ExpenseCategory.marketplaces.rawValue })
+        #expect(byTransfer.contains { $0.rawValue == ExpenseCategory.transfers.rawValue })
+    }
+
+    @Test("После OCR новые категории всплывают наверх по убыванию суммы")
+    func importedCategoriesMoveToTopByAmount() {
+        let drafts = [
+            CashflowBulkExpenseCategoryDraft(
+                category: CashflowCategoryOption(
+                    rawValue: ExpenseCategory.groceries.rawValue,
+                    displayName: ExpenseCategory.groceries.displayName,
+                    icon: ExpenseCategory.groceries.icon,
+                    isCustom: false
+                ),
+                amountText: "",
+                sourceOrderIndex: 0
+            ),
+            CashflowBulkExpenseCategoryDraft(
+                category: CashflowCategoryOption(
+                    rawValue: ExpenseCategory.transfers.rawValue,
+                    displayName: ExpenseCategory.transfers.displayName,
+                    icon: ExpenseCategory.transfers.icon,
+                    isCustom: false
+                ),
+                amountText: "4 000",
+                sourceOrderIndex: 1
+            ),
+            CashflowBulkExpenseCategoryDraft(
+                category: CashflowCategoryOption(
+                    rawValue: ExpenseCategory.fuel.rawValue,
+                    displayName: ExpenseCategory.fuel.displayName,
+                    icon: ExpenseCategory.fuel.icon,
+                    isCustom: false
+                ),
+                amountText: "1 500",
+                sourceOrderIndex: 2
+            ),
+            CashflowBulkExpenseCategoryDraft(
+                category: CashflowCategoryOption(
+                    rawValue: ExpenseCategory.other.rawValue,
+                    displayName: ExpenseCategory.other.displayName,
+                    icon: ExpenseCategory.other.icon,
+                    isCustom: false
+                ),
+                amountText: "300",
+                sourceOrderIndex: 3
+            )
+        ]
+
+        let orderedIndices = CashflowBulkExpenseCategorySortPolicy.orderedDraftIndices(
+            drafts: drafts,
+            searchText: "",
+            importedCategoryRaws: [ExpenseCategory.fuel.rawValue, ExpenseCategory.transfers.rawValue]
+        )
+
+        #expect(orderedIndices.map { drafts[$0].category.rawValue } == [
+            ExpenseCategory.transfers.rawValue,
+            ExpenseCategory.fuel.rawValue,
+            ExpenseCategory.other.rawValue,
+            ExpenseCategory.groceries.rawValue
+        ])
+    }
+
+    @Test("Категория переводов помечается как подозрительная для bulk import")
+    func transferCategoryIsFlagged() {
+        #expect(CashflowBulkExpenseCategorySortPolicy.isTransferCategory(ExpenseCategory.transfers.rawValue))
+        #expect(!CashflowBulkExpenseCategorySortPolicy.isTransferCategory(ExpenseCategory.groceries.rawValue))
     }
 
     @Test("Скрытая системная категория возвращается в каталог после массового импорта")

@@ -62,14 +62,49 @@ struct CashflowCategoryGridLayoutTests {
         #expect(count == CashflowCategoryGridLayout.compactColumns)
     }
 
-    @Test("Карточки без лимитов компактнее карточек с лимитами")
-    func cardsWithoutBudgetAreShorter() {
+    @Test("Карточки категорий сохраняют одинаковую высоту с лимитом и без")
+    func cardsKeepSameHeightWithAndWithoutBudget() {
         let compact = CashflowCategoryGridLayout.cardMetrics(showsBudgetDetails: false)
         let budget = CashflowCategoryGridLayout.cardMetrics(showsBudgetDetails: true)
 
-        #expect(compact.cardMinHeight < budget.cardMinHeight)
-        #expect(compact.cardMinHeight <= 100)
-        #expect(compact.usesFlexibleSpacer == false)
-        #expect(compact.titleMinHeight < budget.titleMinHeight)
+        #expect(compact.cardMinHeight == budget.cardMinHeight)
+        #expect(compact.cardMinHeight == CashflowCategoryGridLayout.unifiedCardMinHeight)
+        #expect(compact.topRowMinHeight == budget.topRowMinHeight)
+        #expect(compact.topRowMinHeight == CashflowCategoryGridLayout.unifiedTopRowMinHeight)
+        #expect(compact.amountTopPadding > budget.amountTopPadding)
+        #expect(compact.usesFlexibleSpacer == true)
+        #expect(budget.usesFlexibleSpacer == true)
+        #expect(compact.footerMinHeight == budget.footerMinHeight)
+        #expect(compact.footerMinHeight == CashflowCategoryGridLayout.unifiedFooterMinHeight)
+    }
+
+    @Test("У расхода unpinned-пин скрыт по умолчанию")
+    func expenseUnpinnedPinIsHidden() {
+        let style = CashflowCategoryGridLayout.pinAffordanceStyle(
+            for: .expense,
+            isPinned: false
+        )
+
+        #expect(style == .hidden)
+    }
+
+    @Test("У расхода pinned-пин показывается компактным badge")
+    func expensePinnedPinUsesCompactBadge() {
+        let style = CashflowCategoryGridLayout.pinAffordanceStyle(
+            for: .expense,
+            isPinned: true
+        )
+
+        #expect(style == .compactBadge)
+    }
+
+    @Test("У дохода остается обычная кнопка пина")
+    func incomeKeepsRegularPinButton() {
+        let style = CashflowCategoryGridLayout.pinAffordanceStyle(
+            for: .income,
+            isPinned: false
+        )
+
+        #expect(style == .regularButton)
     }
 }

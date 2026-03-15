@@ -100,6 +100,7 @@ struct FinanceDynamicsState {
 // MARK: - Dynamics Period
 
 enum DynamicsPeriod: String, CaseIterable {
+    case day = "1D"
     case week = "1W"
     case month = "1M"
     case year = "1Y"
@@ -108,6 +109,7 @@ enum DynamicsPeriod: String, CaseIterable {
     
     var days: Int? {
         switch self {
+        case .day: return 1
         case .week: return 7
         case .month: return 30
         case .year: return 365
@@ -606,7 +608,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
         
         switch state.period {
-        case .week, .month, .year:
+        case .day, .week, .month, .year:
             if let days = state.period.days {
                 startDate = calendar.date(byAdding: .day, value: -days, to: endDate) ?? endDate
             } else {

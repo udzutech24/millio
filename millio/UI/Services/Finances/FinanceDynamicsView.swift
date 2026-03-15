@@ -945,14 +945,10 @@ private struct FinanceDynamicsContentView: View {
     }
 
     private func rawNumberString(_ value: Double, maxFractionDigits: Int) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.decimalSeparator = "."
-        formatter.usesGroupingSeparator = false
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = maxFractionDigits
-        return formatter.string(from: NSNumber(value: value)) ?? "0"
+        AmountInputFormatter.display(
+            AmountInputFormatter.plainString(from: value, maxFractionDigits: maxFractionDigits),
+            maxFractionDigits: maxFractionDigits
+        )
     }
 
     private var overviewReloadToken: String {
@@ -1445,8 +1441,8 @@ private struct FinanceDynamicsContentView: View {
                        let account = initialAccount,
                        inlineCreditCard(for: account) == nil {
                         let editText = Binding(
-                            get: { AmountInputFormatter.display(inlineAmountText) },
-                            set: { inlineAmountText = AmountInputFormatter.sanitize($0) }
+                            get: { inlineAmountText },
+                            set: { inlineAmountText = AmountInputFormatter.display($0) }
                         )
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
                             TextField("0", text: editText)
@@ -1828,8 +1824,8 @@ private struct FinanceDynamicsContentView: View {
                     currency: info.currency,
                     isEditing: isInlineAccountEdit,
                     text: Binding(
-                        get: { AmountInputFormatter.display(inlineCreditLimitText) },
-                        set: { inlineCreditLimitText = AmountInputFormatter.sanitize($0) }
+                        get: { inlineCreditLimitText },
+                        set: { inlineCreditLimitText = AmountInputFormatter.display($0) }
                     )
                 )
                 creditFieldRow(
@@ -1838,8 +1834,8 @@ private struct FinanceDynamicsContentView: View {
                     currency: info.currency,
                     isEditing: isInlineAccountEdit,
                     text: Binding(
-                        get: { AmountInputFormatter.display(inlineCreditDebtText) },
-                        set: { inlineCreditDebtText = AmountInputFormatter.sanitize($0) }
+                        get: { inlineCreditDebtText },
+                        set: { inlineCreditDebtText = AmountInputFormatter.display($0) }
                     )
                 )
                 creditFieldRow(
@@ -2090,9 +2086,9 @@ private struct FinanceDynamicsContentView: View {
     private var periodSelector: some View {
         let periodBg = Color(.sRGB, red: 217.0 / 255.0, green: 217.0 / 255.0, blue: 217.0 / 255.0, opacity: 0.2)
         let calendarBg = Color(.sRGB, red: 217.0 / 255.0, green: 217.0 / 255.0, blue: 217.0 / 255.0, opacity: 0.4)
-        return HStack(spacing: 8) {
+        return HStack(spacing: 6) {
             // Кнопки периодов
-            ForEach([DynamicsPeriod.all, .week, .month, .year], id: \.self) { period in
+            ForEach([DynamicsPeriod.all, .day, .week, .month, .year], id: \.self) { period in
                 Button {
                     withAnimation(.easeInOut(duration: 0.25)) {
                         viewModel.handle(.setPeriod(period))
@@ -2126,10 +2122,10 @@ private struct FinanceDynamicsContentView: View {
                         )
                 }
                 .buttonStyle(.plain)
-                .frame(width: 60, height: 32)
+                .frame(width: 48, height: 32)
             }
 
-            Spacer(minLength: 8)
+            Spacer(minLength: 4)
 
             // Кнопка календаря
             Button {
@@ -2620,6 +2616,7 @@ private struct FinanceDynamicsContentView: View {
 
     private var xAxisStride: Calendar.Component {
         switch viewModel.state.period {
+        case .day: return .hour
         case .week: return .day
         case .month: return .day
         case .year: return .month
@@ -2629,6 +2626,7 @@ private struct FinanceDynamicsContentView: View {
 
     private var xAxisCount: Int {
         switch viewModel.state.period {
+        case .day: return 6
         case .week: return 1
         case .month: return 7
         case .year: return 2

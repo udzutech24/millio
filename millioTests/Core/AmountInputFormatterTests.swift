@@ -8,6 +8,12 @@ struct AmountInputFormatterTests {
         #expect(sanitized == "11111.23")
     }
 
+    @Test("sanitize removes a leading zero during integer typing")
+    func sanitizeRemovesLeadingZeroForIntegerTyping() {
+        let sanitized = AmountInputFormatter.sanitize("01")
+        #expect(sanitized == "1")
+    }
+
     @Test("display formats with space grouping and dot decimal separator")
     func displayFormatsGrouping() {
         let displayed = AmountInputFormatter.display("11111.2")
@@ -74,5 +80,17 @@ struct AmountInputFormatterTests {
         #expect(parsedDot != nil)
         #expect(abs((parsedComma ?? 0) - 11111.25) < 0.000_001)
         #expect(abs((parsedDot ?? 0) - 11111.25) < 0.000_001)
+    }
+
+    @Test("plainString returns empty for zero amount")
+    func plainStringHidesZeroValue() {
+        let plain = AmountInputFormatter.plainString(from: 0)
+        #expect(plain.isEmpty)
+    }
+
+    @Test("plainString preserves custom precision for non-zero amount")
+    func plainStringSupportsCustomPrecision() {
+        let plain = AmountInputFormatter.plainString(from: 1234.56789123, maxFractionDigits: 8)
+        #expect(plain == "1234.56789123")
     }
 }

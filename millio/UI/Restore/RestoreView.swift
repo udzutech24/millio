@@ -228,14 +228,18 @@ struct RestoreView: View {
                     .padding(.vertical, 12)
             }
 
-            ActionButton(
+            SlideToConfirmControl(
                 title: "Восстановить из копии",
-                icon: .system("arrow.down.circle.fill"),
-                gradientColors: AppColors.financesGradient
+                subtitle: "Сдвиньте, чтобы заменить локальные данные",
+                loadingTitle: "Восстанавливаем данные...",
+                loadingSubtitle: "Не закрывайте приложение, пока идет замена",
+                icon: "arrow.right",
+                gradientColors: AppColors.financesGradient,
+                isEnabled: !isRestoring,
+                isLoading: isRestoring
             ) {
                 restore()
             }
-            .disabled(isRestoring)
 
             Button {
                 showSkipConfirmation = true

@@ -8,6 +8,7 @@ final class QuickSetupExpenseCategoryPresetTests: XCTestCase {
 
         XCTAssertEqual(namesByID[ExpenseCategory.groceries.rawValue], "Продукты")
         XCTAssertEqual(namesByID[ExpenseCategory.fuel.rawValue], "АЗС")
+        XCTAssertEqual(namesByID[ExpenseCategory.transfers.rawValue], "Переводы")
         XCTAssertEqual(namesByID[ExpenseCategory.other.rawValue], "Разное")
     }
 
@@ -17,5 +18,6 @@ final class QuickSetupExpenseCategoryPresetTests: XCTestCase {
 
         XCTAssertEqual(namesByID[ExpenseCategory.travel.rawValue], "Travel")
         XCTAssertEqual(namesByID[ExpenseCategory.marketplaces.rawValue], "Marketplaces")
+        XCTAssertEqual(namesByID[ExpenseCategory.transfers.rawValue], "Transfers")
     }
 }

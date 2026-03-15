@@ -195,14 +195,24 @@ final class QuickSetupViewModel: ObservableObject {
     @Published private(set) var productLastPriceUpdatedAt: Date?
     @Published private(set) var isRefreshingProductQuote = false
     @Published private(set) var productMarketError: String?
+    @Published var groups: [QuickSetupGroupDraft] = []
+    @Published var selectedGroupDraftID: UUID?
     @Published var products: [QuickSetupProductDraft] = []
-    @Published var backupPreference: QuickSetupBackupPreference
+    @Published var backupPreference: QuickSetupBackupPreference {
+        didSet {
+            if backupPreference != initialBackupPreference {
+                hasCustomizedBackupPreference = true
+            }
+        }
+    }
     @Published private(set) var lastAddDraftError: String?
 
     private let isProUser: Bool
     private let systemContext: QuickSetupSystemContext
     private let marketDataClient: MarketDataClientProtocol
     private let defaults: UserDefaults
+    private let initialBackupPreference: QuickSetupBackupPreference
+    private var hasCustomizedBackupPreference = false
 
     static let maxFavoriteCurrencies = 4
 
@@ -238,7 +248,8 @@ final class QuickSetupViewModel: ObservableObject {
             primaryCode: initialPrimaryCurrency,
             maxCount: Self.maxFavoriteCurrencies
         )
-        backupPreference = appState.isBackupEnabled ? .cloudBackup : .localOnly
+        initialBackupPreference = appState.isBackupEnabled ? .cloudBackup : .localOnly
+        backupPreference = .cloudBackup
 
         let storedCategories = SettingsManager.shared.quickSetupExpenseCategoryIDs
         if storedCategories.isEmpty {
@@ -361,8 +372,9 @@ final class QuickSetupViewModel: ObservableObject {
             primaryCurrencyCode: normalizedPrimary,
             favoriteCurrencyCodes: Array(normalizedFavorites.prefix(Self.maxFavoriteCurrencies)),
             selectedExpenseCategoryIDs: Array(selectedExpenseCategoryIDs),
+            groups: groups,
             products: products,
-            backupPreference: backupPreference
+            backupPreference: hasCustomizedBackupPreference ? backupPreference : initialBackupPreference
         )
     }
 
@@ -419,6 +431,44 @@ final class QuickSetupViewModel: ObservableObject {
     func selectProductType(_ type: QuickSetupProductType) {
         productTypeForCreation = type
         resetDraftInputs(keepingTypeSpecificData: false)
+    }
+
+    func addGroupPreset(_ preset: QuickSetupGroupPreset) {
+        let locale = selectedLanguage.locale ?? Locale.current
+        let targetName = normalizeGroupName(preset.title(for: locale))
+        if let existing = groups.first(where: { normalizeGroupName($0.name) == targetName }) {
+            selectedGroupDraftID = existing.id
+            return
+        }
+
+        let draft = preset.draft(for: locale)
+        groups.append(draft)
+        selectedGroupDraftID = draft.id
+    }
+
+    func selectGroupDraft(id: UUID?) {
+        selectedGroupDraftID = id
+    }
+
+    func removeGroup(id: UUID) {
+        groups.removeAll { $0.id == id }
+        products = products.map { product in
+            guard product.groupDraftID == id else { return product }
+            return QuickSetupProductDraft(
+                id: product.id,
+                type: product.type,
+                name: product.name,
+                amount: product.amount,
+                currencyCode: product.currencyCode,
+                groupDraftID: nil,
+                marketSnapshot: product.marketSnapshot,
+                visualIcon: product.visualIcon
+            )
+        }
+
+        if selectedGroupDraftID == id {
+            selectedGroupDraftID = groups.first?.id
+        }
     }
 
     func applySelectedMarketSymbol(_ symbol: TwelveDataSymbol) {
@@ -527,6 +577,7 @@ final class QuickSetupViewModel: ObservableObject {
                 name: resolvedName,
                 amount: amount,
                 currencyCode: normalizedCurrency.isEmpty ? SettingsManager.defaultPrimaryCurrencyCode : normalizedCurrency,
+                groupDraftID: selectedGroupDraftID,
                 marketSnapshot: marketSnapshot,
                 visualIcon: productTypeForCreation.icon
             )
@@ -569,5 +620,9 @@ final class QuickSetupViewModel: ObservableObject {
             return manual
         }
         return nil
+    }
+
+    private func normalizeGroupName(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 }

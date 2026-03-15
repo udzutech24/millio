@@ -104,9 +104,13 @@ struct CreditEditorView: View {
             .onAppear {
                 if let editing = viewModel.state.editingCredit {
                     name = editing.name
-                    amountText = AmountInputFormatter.plainString(from: editing.amount)
-                    remainingAmountText = AmountInputFormatter.plainString(from: editing.remainingAmount)
-                    monthlyPaymentText = AmountInputFormatter.plainString(from: editing.monthlyPayment)
+                    amountText = AmountInputFormatter.display(AmountInputFormatter.plainString(from: editing.amount))
+                    remainingAmountText = AmountInputFormatter.display(
+                        AmountInputFormatter.plainString(from: editing.remainingAmount)
+                    )
+                    monthlyPaymentText = AmountInputFormatter.display(
+                        AmountInputFormatter.plainString(from: editing.monthlyPayment)
+                    )
                     selectedCurrency = editing.currency
                     selectedCreditType = editing.creditType
                     isFavorite = editing.isFavorite
@@ -192,10 +196,9 @@ struct CreditEditorView: View {
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         TextField("0", text: Binding(
-                            get: { formatNumberForDisplay(amountText) },
+                            get: { amountText },
                             set: { newValue in
-                                let sanitized = AmountInputFormatter.sanitize(newValue)
-                                amountText = sanitized
+                                amountText = AmountInputFormatter.display(newValue)
                             }
                         ))
                         .keyboardType(.decimalPad)
@@ -213,10 +216,9 @@ struct CreditEditorView: View {
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         TextField("0", text: Binding(
-                            get: { formatNumberForDisplay(remainingAmountText) },
+                            get: { remainingAmountText },
                             set: { newValue in
-                                let sanitized = AmountInputFormatter.sanitize(newValue)
-                                remainingAmountText = sanitized
+                                remainingAmountText = AmountInputFormatter.display(newValue)
                             }
                         ))
                         .keyboardType(.decimalPad)
@@ -234,10 +236,9 @@ struct CreditEditorView: View {
                             .foregroundStyle(AppColors.textPrimary)
                         Spacer()
                         TextField("0", text: Binding(
-                            get: { formatNumberForDisplay(monthlyPaymentText) },
+                            get: { monthlyPaymentText },
                             set: { newValue in
-                                let sanitized = AmountInputFormatter.sanitize(newValue)
-                                monthlyPaymentText = sanitized
+                                monthlyPaymentText = AmountInputFormatter.display(newValue)
                             }
                         ))
                         .keyboardType(.decimalPad)

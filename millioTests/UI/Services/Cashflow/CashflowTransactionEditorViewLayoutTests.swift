@@ -10,17 +10,15 @@ import Testing
 @testable import millio
 
 struct CashflowTransactionEditorViewLayoutTests {
-    @Test("Для дохода показываются только карты из финансов в выбранной валюте")
-    func incomeShowsOnlyFinanceCardsInSelectedCurrency() {
+    @Test("Для дохода показываются все карты в выбранной валюте, даже без привязки к финансам")
+    func incomeShowsAllCardsInSelectedCurrency() {
         let rubCard = Card(name: "RUB", cardNumber: "1111", bank: .sberbank, cardType: .debit, priority: .normal, currency: "RUB")
         let usdCard = Card(name: "USD", cardNumber: "2222", bank: .tinkoff, cardType: .debit, priority: .normal, currency: "USD")
-        let rubLink = FinanceAccount(accountType: .card, accountID: rubCard.cardUniqueID)
-        let usdLink = FinanceAccount(accountType: .card, accountID: usdCard.cardUniqueID)
 
         let accounts = CashflowTransactionEditorView.selectableAccounts(
             cards: [rubCard, usdCard],
             investments: [],
-            financeAccounts: [rubLink, usdLink],
+            linkedInvestmentIDs: [],
             transactionType: .income,
             currency: "usd"
         )
@@ -30,18 +28,16 @@ struct CashflowTransactionEditorViewLayoutTests {
         #expect(accounts.first?.cardID == usdCard.cardUniqueID)
     }
 
-    @Test("Для расхода показываются только карты из финансов и сортировка идет по приоритету продукта")
-    func expenseUsesFinanceCardsAndProductPriority() {
+    @Test("Для расхода показываются все карты и сортировка идет по приоритету продукта")
+    func expenseUsesAllCardsAndProductPriority() {
         let lowFavorite = Card(name: "Low Favorite", cardNumber: "1111", bank: .sberbank, cardType: .debit, priority: .low, currency: "EUR", isFavorite: true)
         let highRegular = Card(name: "High Regular", cardNumber: "2222", bank: .tinkoff, cardType: .debit, priority: .high, currency: "EUR")
         let usdCard = Card(name: "USD", cardNumber: "3333", bank: .tinkoff, cardType: .debit, priority: .high, currency: "USD", isFavorite: true)
-        let lowLink = FinanceAccount(accountType: .card, accountID: lowFavorite.cardUniqueID)
-        let highLink = FinanceAccount(accountType: .card, accountID: highRegular.cardUniqueID)
 
         let accounts = CashflowTransactionEditorView.selectableAccounts(
             cards: [lowFavorite, highRegular, usdCard],
             investments: [],
-            financeAccounts: [lowLink, highLink],
+            linkedInvestmentIDs: [],
             transactionType: .expense,
             currency: "eur"
         )
@@ -74,14 +70,11 @@ struct CashflowTransactionEditorViewLayoutTests {
             priority: .high,
             isFavorite: true
         )
-        let cardLink = FinanceAccount(accountType: .card, accountID: debitCard.cardUniqueID)
-        let accountLink = FinanceAccount(accountType: .investment, accountID: account.investmentUniqueID)
-        let assetLink = FinanceAccount(accountType: .investment, accountID: asset.investmentUniqueID)
 
         let accounts = CashflowTransactionEditorView.selectableAccounts(
             cards: [debitCard],
             investments: [account, asset],
-            financeAccounts: [cardLink, accountLink, assetLink],
+            linkedInvestmentIDs: Set([account.investmentUniqueID, asset.investmentUniqueID]),
             transactionType: .income,
             currency: "RUB"
         )
@@ -120,7 +113,7 @@ struct CashflowTransactionEditorViewLayoutTests {
         let accounts = CashflowTransactionEditorView.selectableAccounts(
             cards: [],
             investments: [rubAccount, usdAccount],
-            financeAccounts: links,
+            linkedInvestmentIDs: Set(links.map(\.accountID)),
             transactionType: .income,
             currency: "USD"
         )
@@ -150,15 +143,10 @@ struct CashflowTransactionEditorViewLayoutTests {
             currency: "RUB",
             isFavorite: false
         )
-        let links = [
-            FinanceAccount(accountType: .card, accountID: favoriteCard.cardUniqueID),
-            FinanceAccount(accountType: .card, accountID: regularCard.cardUniqueID)
-        ]
-
         let accounts = CashflowTransactionEditorView.selectableAccounts(
             cards: [favoriteCard, regularCard],
             investments: [],
-            financeAccounts: links,
+            linkedInvestmentIDs: [],
             transactionType: .expense,
             currency: "RUB"
         )
@@ -171,13 +159,11 @@ struct CashflowTransactionEditorViewLayoutTests {
     func transferDoesNotFilterCardsByCurrency() {
         let rubCard = Card(name: "RUB", cardNumber: "1111", bank: .sberbank, cardType: .debit, priority: .normal, currency: "RUB")
         let usdCard = Card(name: "USD", cardNumber: "2222", bank: .tinkoff, cardType: .debit, priority: .normal, currency: "USD")
-        let rubLink = FinanceAccount(accountType: .card, accountID: rubCard.cardUniqueID)
-        let usdLink = FinanceAccount(accountType: .card, accountID: usdCard.cardUniqueID)
 
         let accounts = CashflowTransactionEditorView.selectableAccounts(
             cards: [rubCard, usdCard],
             investments: [],
-            financeAccounts: [rubLink, usdLink],
+            linkedInvestmentIDs: [],
             transactionType: .transfer,
             currency: "RUB"
         )

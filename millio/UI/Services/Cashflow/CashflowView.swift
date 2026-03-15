@@ -722,7 +722,10 @@ private struct CashflowContentView: View {
         ToolbarItem(placement: .topBarTrailing) {
             Button {
                 selectedTopAction = .history
-                openHistory(filter: .all)
+                openHistory(
+                    filter: .all,
+                    dateRange: currentCalendarMonthHistoryRange
+                )
             } label: {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.system(size: 18, weight: .regular))
@@ -786,6 +789,11 @@ private struct CashflowContentView: View {
         historyInitialEndDate = calendar.startOfDay(for: range.upperBound)
         viewModel.handle(.showTransactionsHistory)
         fireLightImpact()
+    }
+
+    private var currentCalendarMonthHistoryRange: ClosedRange<Date> {
+        let range = CashflowViewModel.defaultPeriodRange(referenceDate: Date(), calendar: .current)
+        return range.start...range.end
     }
 
     private func financeCardBackground(cornerRadius: CGFloat) -> some View {

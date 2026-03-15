@@ -38,4 +38,11 @@ struct CashflowFormattingTests {
         #expect(cashflowHistoryAmountText(1232.32) == "1 232,32")
     }
 
+    @Test("Summary суммы в истории округляются до целых")
+    func historyWholeAmountDropsFraction() {
+        #expect(cashflowHistoryWholeAmountText(1232) == "1 232")
+        #expect(cashflowHistoryWholeAmountText(1232.32) == "1 232")
+        #expect(cashflowHistoryWholeAmountText(1232.82) == "1 233")
+    }
+
 }

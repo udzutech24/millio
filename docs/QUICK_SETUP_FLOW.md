@@ -30,18 +30,26 @@
 - Category names in quick setup are localized based on the currently selected app language.
 
 3. `products`
-- Add one or many products in a row:
+- Build finance groups first, then add one or many products in a row:
+  - one-tap group presets are based on the same finance group templates as the main finance editor;
+  - the selected group becomes the target for the next product draft;
+  - if no group is selected, the product falls back to the system `Ungrouped` group.
+- Why this exists:
+  - totals and dynamics are clearer from day one;
+  - user does not need to re-sort accounts right after onboarding;
+  - quick setup stays fast because groups can be picked from ready-made presets.
+- Supported product types:
   - account (`Card`)
   - asset (`Investment.other`)
   - stock (`Investment.stocks`)
   - crypto (`Investment.crypto`)
-- Every added product is attached to the ungrouped finance group.
 
 4. `summary` (security slide)
 - Explain data safety and storage model before completing setup.
 - User selects backup preference:
   - `localOnly`: data stays local in SwiftData, backup remains disabled.
   - `cloudBackup`: snapshots are uploaded to user's Private CloudKit database.
+- Default quick setup suggestion is `cloudBackup` (`Local + iCloud`) so backup is opt-out rather than easy to miss.
 - Security note on this slide clarifies backup encryption options:
   - AES-GCM with device key (Keychain-backed key).
   - AES-GCM with passphrase (portable mode, configured in Profile -> Backup).

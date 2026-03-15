@@ -13,6 +13,7 @@ struct ProfileView: View {
     @Bindable var router: AppRouter
     @Environment(AppState.self) private var appState
     @Environment(AuthManager.self) private var authManager
+    @Environment(\.appRefreshCoordinator) private var appRefreshCoordinator
     @Environment(\.requestReview) private var requestReview
     @Environment(\.openURL) private var openURL
     @State private var selectedPhotoItem: PhotosPickerItem?
@@ -135,12 +136,15 @@ struct ProfileView: View {
             }
         }
         .task {
-            // Обновляем статус подписки при открытии профиля
-            await SubscriptionManager.shared.checkSubscriptionStatus()
-            appState.applySubscriptionSnapshot(SubscriptionManager.shared.snapshot)
-            if authManager.isAuthenticated {
-                await authManager.reloadCurrentUser()
-            }
+            guard let appRefreshCoordinator else { return }
+            await appRefreshCoordinator.refreshSubscriptionIfNeeded(
+                reason: .profileAppeared,
+                appState: appState
+            )
+            await appRefreshCoordinator.refreshAuthenticatedUserIfNeeded(
+                reason: .profileAppeared,
+                authManager: authManager
+            )
         }
     }
     

@@ -22,11 +22,111 @@ func cashflowHistoryAmountText(_ amount: Double) -> String {
     return formatter.string(from: NSNumber(value: amount)) ?? "0"
 }
 
+func cashflowHistoryWholeAmountText(_ amount: Double) -> String {
+    cashflowHistoryFormattedNumberText(amount, maxFractionDigits: 0)
+}
+
+func cashflowHistoryFormattedNumberText(
+    _ amount: Double,
+    maxFractionDigits: Int
+) -> String {
+    let formatter = NumberFormatter()
+    formatter.numberStyle = .decimal
+    formatter.locale = Locale(identifier: "ru_RU")
+    formatter.decimalSeparator = ","
+    formatter.groupingSeparator = " "
+    formatter.usesGroupingSeparator = true
+    formatter.groupingSize = 3
+    formatter.secondaryGroupingSize = 3
+    formatter.minimumFractionDigits = 0
+    formatter.maximumFractionDigits = max(0, maxFractionDigits)
+    return formatter.string(from: NSNumber(value: amount)) ?? "0"
+}
+
+func cashflowHistoryAssetChangeLines(
+    for transaction: CashflowTransaction,
+    currencyCode: String,
+    locale: Locale = .autoupdatingCurrent
+) -> [String] {
+    guard transaction.hasAssetChangeSnapshot else { return [] }
+
+    let isRussian = locale.identifier.lowercased().hasPrefix("ru")
+    let quantityTitle = isRussian ? "Кол-во" : "Qty"
+    let priceTitle = isRussian ? "Цена" : "Price"
+    let amountTitle = isRussian ? "Стоимость" : "Value"
+    let epsilon = 0.0000001
+
+    func appendLine(
+        _ lines: inout [String],
+        title: String,
+        before: Double?,
+        after: Double?,
+        maxFractionDigits: Int,
+        suffix: String = ""
+    ) {
+        guard let before, let after, abs(before - after) > epsilon else { return }
+        let beforeText = cashflowHistoryFormattedNumberText(before, maxFractionDigits: maxFractionDigits)
+        let afterText = cashflowHistoryFormattedNumberText(after, maxFractionDigits: maxFractionDigits)
+        lines.append("\(title): \(beforeText)\(suffix) -> \(afterText)\(suffix)")
+    }
+
+    let normalizedCurrency = currencyCode
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .uppercased()
+    let currencySuffix = normalizedCurrency.isEmpty ? "" : " \(normalizedCurrency)"
+
+    var lines: [String] = []
+    appendLine(
+        &lines,
+        title: quantityTitle,
+        before: transaction.assetQuantityBefore,
+        after: transaction.assetQuantityAfter,
+        maxFractionDigits: 8
+    )
+    appendLine(
+        &lines,
+        title: priceTitle,
+        before: transaction.assetUnitPriceBefore,
+        after: transaction.assetUnitPriceAfter,
+        maxFractionDigits: 4,
+        suffix: currencySuffix
+    )
+    appendLine(
+        &lines,
+        title: amountTitle,
+        before: transaction.assetAmountBefore,
+        after: transaction.assetAmountAfter,
+        maxFractionDigits: 2,
+        suffix: currencySuffix
+    )
+    return lines
+}
+
+func cashflowHistoryAssetChangeSummary(
+    for transaction: CashflowTransaction,
+    currencyCode: String,
+    locale: Locale = .autoupdatingCurrent
+) -> String? {
+    let lines = cashflowHistoryAssetChangeLines(
+        for: transaction,
+        currencyCode: currencyCode,
+        locale: locale
+    )
+    return lines.isEmpty ? nil : lines.joined(separator: ". ")
+}
+
 func cashflowHistoryResolvedTransaction(
     for transaction: CashflowTransaction,
     in transactions: [CashflowTransaction]
 ) -> CashflowTransaction {
     transactions.first(where: { $0.persistentModelID == transaction.persistentModelID }) ?? transaction
+}
+
+func cashflowHistoryTimeToken(for date: Date?) -> String {
+    guard let date else { return "0" }
+    let timestamp = date.timeIntervalSince1970
+    guard timestamp.isFinite, !timestamp.isNaN else { return "0" }
+    return String(Int(timestamp.rounded(.towardZero)))
 }
 
 // MARK: - History View
@@ -36,11 +136,15 @@ struct CashflowTransactionsHistoryView: View {
     @Environment(\.dismiss) private var dismiss
     private let showsDismissButton: Bool
     @State private var selectedFilter: CashflowHistoryTypeFilter
+    @State private var selectedSummaryCategoryRawValue: String?
+    @State private var summaryModel: CashflowHistorySummaryModel
+    @State private var selectedCardID: String?
     @State private var isSearchActive = false
     @State private var searchText = ""
     @State private var selectedStartDate: Date?
     @State private var selectedEndDate: Date?
     @State private var isDateFilterSheetPresented = false
+    @State private var isCardFilterSheetPresented = false
     @State private var displayedTransactionsLimit = Self.pageSize
     @State private var selectedTransaction: CashflowTransaction?
     @FocusState private var isSearchFocused: Bool
@@ -55,9 +159,16 @@ struct CashflowTransactionsHistoryView: View {
     ) {
         self.viewModel = viewModel
         self.showsDismissButton = showsDismissButton
+        let defaultRange = CashflowViewModel.defaultPeriodRange(referenceDate: Date(), calendar: .current)
         _selectedFilter = State(initialValue: initialFilter)
-        _selectedStartDate = State(initialValue: initialStartDate)
-        _selectedEndDate = State(initialValue: initialEndDate)
+        _selectedStartDate = State(initialValue: initialStartDate ?? defaultRange.start)
+        _selectedEndDate = State(initialValue: initialEndDate ?? defaultRange.end)
+        _summaryModel = State(
+            initialValue: CashflowHistorySummaryModel.empty(
+                mode: .expense,
+                currencyCode: viewModel.state.displayCurrency
+            )
+        )
     }
 
     /// Транзакции с учетом типа, даты и поиска.
@@ -66,9 +177,10 @@ struct CashflowTransactionsHistoryView: View {
             typeFilter: selectedFilter,
             searchText: isSearchActive ? searchText : "",
             startDate: selectedStartDate,
-            endDate: selectedEndDate
+            endDate: selectedEndDate,
+            cardID: selectedCardID
         )
-        return viewModel.historyTransactions(matching: query)
+        return viewModel.historyTransactions(matching: query).filter(matchesSelectedSummaryCategory)
     }
 
     private var visibleTransactions: [CashflowTransaction] {
@@ -79,11 +191,32 @@ struct CashflowTransactionsHistoryView: View {
         filteredTransactions.count > visibleTransactions.count
     }
 
-    private var activeFilterItems: [CashflowHistoryActiveFilterItem] {
-        CashflowHistoryFilterPresentation.activeItems(
+    private var summaryMode: CashflowHistorySummaryMode {
+        switch selectedFilter {
+        case .income:
+            return .income
+        case .expense, .all, .transfer, .assetBalanceChange, .accountBalanceCorrection:
+            return .expense
+        }
+    }
+
+    private var summaryQuery: CashflowHistoryQuery {
+        CashflowHistoryQuery(
+            typeFilter: .all,
+            searchText: "",
+            startDate: selectedStartDate,
+            endDate: selectedEndDate,
+            cardID: selectedCardID
+        )
+    }
+
+    private var shouldShowSummary: Bool {
+        CashflowHistorySummaryPresentation.shouldShow(
             selectedFilter: selectedFilter,
-            dateFilterTitle: dateFilterTitle,
-            isDateFilterActive: isDateFilterActive
+            isSearchActive: isSearchActive,
+            searchText: searchText,
+            entryCount: summaryModel.entries.count,
+            totalAmount: summaryModel.totalAmount
         )
     }
 
@@ -103,7 +236,6 @@ struct CashflowTransactionsHistoryView: View {
                 GradientBackground()
 
                 VStack(spacing: 0) {
-                    // Поиск или фильтр
                     if isSearchActive {
                         searchBar
                     } else {
@@ -113,7 +245,7 @@ struct CashflowTransactionsHistoryView: View {
                     if filteredTransactions.isEmpty {
                         emptyState
                     } else {
-                        transactionsList
+                        transactionsListWithSummary
                     }
                 }
             }
@@ -152,7 +284,14 @@ struct CashflowTransactionsHistoryView: View {
             .sheet(isPresented: $isDateFilterSheetPresented) {
                 HistoryDateRangeSheet(
                     startDate: $selectedStartDate,
-                    endDate: $selectedEndDate
+                    endDate: $selectedEndDate,
+                    resetToDefaultRange: resetDateFilterToDefault
+                )
+            }
+            .sheet(isPresented: $isCardFilterSheetPresented) {
+                HistoryCardFilterSheet(
+                    cards: viewModel.state.allCards,
+                    selectedCardID: $selectedCardID
                 )
             }
             .navigationDestination(item: $selectedTransaction) { transaction in
@@ -161,6 +300,9 @@ struct CashflowTransactionsHistoryView: View {
                     viewModel: viewModel
                 )
             }
+            .task(id: summaryReloadKey) {
+                await reloadSummary()
+            }
         }
     }
 
@@ -168,48 +310,40 @@ struct CashflowTransactionsHistoryView: View {
 
     private var filterChips: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if !activeFilterItems.isEmpty {
-                ActiveHistoryFiltersGroup(
-                    items: activeFilterItems,
-                    onClearTypeFilter: {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            selectedFilter = .all
-                            resetPagination()
-                        }
-                    },
-                    onEditDateFilter: {
-                        isDateFilterSheetPresented = true
-                    },
-                    onClearDateFilter: {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            selectedStartDate = nil
-                            selectedEndDate = nil
-                            resetPagination()
-                        }
-                    }
-                )
-                .padding(.horizontal, 24)
-            }
-
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
-                    ForEach(CashflowHistoryTypeFilter.allCases, id: \.self) { filter in
-                        HistoryFilterChip(
-                            title: filter.title,
-                            isSelected: selectedFilter == filter
-                        ) {
+                    HistoryDateFilterChip(
+                        title: dateFilterTitle,
+                        isSelected: true
+                    ) {
+                        isDateFilterSheetPresented = true
+                    }
+
+                    HistoryTypeFilterChip(
+                        selectedFilter: selectedFilter,
+                        onSelect: { filter in
                             withAnimation(.easeInOut(duration: 0.2)) {
                                 selectedFilter = filter
                                 resetPagination()
                             }
+                        },
+                        onReset: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                selectedFilter = .all
+                                resetPagination()
+                            }
                         }
-                    }
+                    )
 
-                    HistoryDateFilterChip(
-                        title: dateFilterTitle,
-                        isSelected: isDateFilterActive
+                    HistoryCardFilterChip(
+                        title: selectedCardTitle ?? String(
+                            localized: "cashflow.history.cards",
+                            defaultValue: "Счета и карты",
+                            comment: "History card filter title"
+                        ),
+                        isSelected: selectedCardID != nil
                     ) {
-                        isDateFilterSheetPresented = true
+                        isCardFilterSheetPresented = true
                     }
                 }
                 .padding(.horizontal, 24)
@@ -245,7 +379,7 @@ struct CashflowTransactionsHistoryView: View {
             } label: {
                 Image(systemName: "calendar")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(isDateFilterActive ? Color(hex: "47D7FF") : AppColors.textSecondary)
+                    .foregroundStyle(isDateFilterCustomized ? Color(hex: "47D7FF") : AppColors.textSecondary)
                     .frame(width: 42, height: 42)
                     .background(
                         Circle()
@@ -293,9 +427,21 @@ struct CashflowTransactionsHistoryView: View {
 
     // MARK: - Transactions List
 
+    private var transactionsListWithSummary: some View {
+        transactionsList
+    }
+
     private var transactionsList: some View {
         ScrollView {
             LazyVStack(spacing: 12) {
+                if shouldShowSummary {
+                    CashflowHistorySummaryContainer(
+                        summary: summaryModel,
+                        selectedCategoryRawValue: $selectedSummaryCategoryRawValue
+                    )
+                    .padding(.bottom, 8)
+                }
+
                 ForEach(Array(groupedTransactions.enumerated()), id: \.element.date) { index, group in
                     // Разделитель с датой (не для первой группы)
                     if index > 0 {
@@ -323,7 +469,7 @@ struct CashflowTransactionsHistoryView: View {
                 }
             }
             .padding(.horizontal, 24)
-            .padding(.top, 4)
+            .padding(.top, 8)
             .padding(.bottom, 24)
         }
         .safeAreaInset(edge: .bottom) {
@@ -345,6 +491,11 @@ struct CashflowTransactionsHistoryView: View {
         }
         .onChange(of: selectedEndDate) { _, _ in
             resetPagination()
+        }
+        .onChange(of: shouldShowSummary) { _, newValue in
+            if !newValue {
+                selectedSummaryCategoryRawValue = nil
+            }
         }
     }
 
@@ -371,36 +522,99 @@ struct CashflowTransactionsHistoryView: View {
         .buttonStyle(.plain)
     }
 
-    private var isDateFilterActive: Bool {
-        selectedStartDate != nil || selectedEndDate != nil
+    private var defaultDateRange: (start: Date, end: Date) {
+        CashflowViewModel.defaultPeriodRange(referenceDate: Date(), calendar: .current)
+    }
+
+    private var isDateFilterCustomized: Bool {
+        guard let selectedStartDate, let selectedEndDate else { return false }
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: min(selectedStartDate, selectedEndDate))
+        let end = calendar.startOfDay(for: max(selectedStartDate, selectedEndDate))
+        return !calendar.isDate(start, inSameDayAs: defaultDateRange.start)
+            || !calendar.isDate(end, inSameDayAs: defaultDateRange.end)
     }
 
     private var dateFilterTitle: String {
-        guard isDateFilterActive else {
-            return String(localized: "cashflow.history.period")
-        }
         let formatter = DateFormatter()
         formatter.locale = .autoupdatingCurrent
-        formatter.setLocalizedDateFormatFromTemplate("dMMM")
+        formatter.setLocalizedDateFormatFromTemplate("LLLL")
         switch (selectedStartDate, selectedEndDate) {
         case let (start?, end?):
             let normalizedStart = min(start, end)
             let normalizedEnd = max(start, end)
-            if Calendar.current.isDate(normalizedStart, inSameDayAs: normalizedEnd) {
-                return formatter.string(from: normalizedStart)
+            if Calendar.current.isDate(
+                normalizedStart,
+                equalTo: normalizedEnd,
+                toGranularity: .month
+            ) {
+                return formatter.string(from: normalizedStart).capitalized
             }
+            formatter.setLocalizedDateFormatFromTemplate("dMMM")
             return "\(formatter.string(from: normalizedStart)) - \(formatter.string(from: normalizedEnd))"
         case let (start?, nil):
-            return formatter.string(from: start)
+            return formatter.string(from: start).capitalized
         case let (nil, end?):
-            return formatter.string(from: end)
+            return formatter.string(from: end).capitalized
         case (nil, nil):
             return String(localized: "cashflow.history.period")
         }
     }
 
+    private var selectedCardTitle: String? {
+        guard let selectedCardID else { return nil }
+        return viewModel.state.allCards.first(where: { $0.cardUniqueID == selectedCardID })?.name
+    }
+
+    private var summaryReloadKey: String {
+        return [
+            summaryMode.rawValue,
+            selectedCardID ?? "all",
+            "\(selectedFilterIndex)",
+            isSearchActive ? searchText : "",
+            cashflowHistoryTimeToken(for: selectedStartDate),
+            cashflowHistoryTimeToken(for: selectedEndDate),
+            "\(viewModel.state.transactions.count)",
+            viewModel.state.displayCurrency
+        ].joined(separator: "|")
+    }
+
     private func resetPagination() {
         displayedTransactionsLimit = Self.pageSize
+    }
+
+    private func resetDateFilterToDefault() {
+        let range = defaultDateRange
+        selectedStartDate = range.start
+        selectedEndDate = range.end
+    }
+
+    private func reloadSummary() async {
+        let model = await viewModel.historySummary(
+            matching: summaryQuery,
+            mode: summaryMode
+        )
+        summaryModel = model
+        if let selectedSummaryCategoryRawValue,
+           !model.entries.contains(where: { $0.rawValue == selectedSummaryCategoryRawValue }) {
+            self.selectedSummaryCategoryRawValue = nil
+        }
+    }
+
+    private func matchesSelectedSummaryCategory(_ transaction: CashflowTransaction) -> Bool {
+        guard let selectedSummaryCategoryRawValue else { return true }
+        switch summaryMode {
+        case .expense:
+            return transaction.transactionType == .expense
+                && (transaction.expenseCategoryRaw ?? ExpenseCategory.other.rawValue) == selectedSummaryCategoryRawValue
+        case .income:
+            return transaction.transactionType == .income
+                && (transaction.incomeCategoryRaw ?? IncomeCategory.other.rawValue) == selectedSummaryCategoryRawValue
+        }
+    }
+
+    private var selectedFilterIndex: Int {
+        CashflowHistoryTypeFilter.allCases.firstIndex(of: selectedFilter) ?? 0
     }
 
     private func formatSectionDate(_ date: Date) -> String {
@@ -413,139 +627,25 @@ struct CashflowTransactionsHistoryView: View {
 
 // MARK: - History Filter Chip
 
-enum CashflowHistoryFilterPresentation {
-    static func activeItems(
+enum CashflowHistorySummaryPresentation {
+    static func shouldShow(
         selectedFilter: CashflowHistoryTypeFilter,
-        dateFilterTitle: String,
-        isDateFilterActive: Bool
-    ) -> [CashflowHistoryActiveFilterItem] {
-        var items: [CashflowHistoryActiveFilterItem] = []
-        if selectedFilter != .all {
-            items.append(.type(selectedFilter))
+        isSearchActive: Bool,
+        searchText: String,
+        entryCount: Int,
+        totalAmount: Double
+    ) -> Bool {
+        guard totalAmount > 0, entryCount > 1 else { return false }
+        guard !isSearchActive || searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return false
         }
-        if isDateFilterActive {
-            items.append(.date(dateFilterTitle))
+
+        switch selectedFilter {
+        case .income, .expense:
+            return true
+        case .all, .transfer, .assetBalanceChange, .accountBalanceCorrection:
+            return false
         }
-        return items
-    }
-}
-
-enum CashflowHistoryActiveFilterItem: Equatable {
-    case type(CashflowHistoryTypeFilter)
-    case date(String)
-}
-
-private struct ActiveHistoryFiltersGroup: View {
-    let items: [CashflowHistoryActiveFilterItem]
-    let onClearTypeFilter: () -> Void
-    let onEditDateFilter: () -> Void
-    let onClearDateFilter: () -> Void
-
-    var body: some View {
-        HStack(spacing: 8) {
-            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                switch item {
-                case let .type(filter):
-                    HistoryActiveFilterChip(
-                        title: filter.title,
-                        systemImage: "line.3.horizontal.decrease.circle.fill",
-                        action: onClearTypeFilter
-                    )
-                case let .date(title):
-                    HistoryActiveFilterChip(
-                        title: title,
-                        systemImage: "calendar",
-                        action: onEditDateFilter,
-                        secondaryAction: onClearDateFilter
-                    )
-                }
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.white.opacity(0.06))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.white.opacity(0.08), lineWidth: 0.75)
-        )
-    }
-}
-
-private struct HistoryActiveFilterChip: View {
-    let title: String
-    let systemImage: String
-    let action: () -> Void
-    var secondaryAction: (() -> Void)? = nil
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Button(action: action) {
-                HStack(spacing: 6) {
-                    Image(systemName: systemImage)
-                        .font(.system(size: 11, weight: .semibold))
-                    Text(title)
-                        .font(.system(size: 13, weight: .semibold))
-                        .lineLimit(1)
-                }
-                .foregroundStyle(AppColors.textPrimary)
-                .padding(.leading, 10)
-                .padding(.trailing, secondaryAction == nil ? 10 : 4)
-                .padding(.vertical, 8)
-                .background(
-                    Capsule()
-                        .fill(Color.white.opacity(0.08))
-                )
-            }
-            .buttonStyle(.plain)
-
-            if let secondaryAction {
-                Button(action: secondaryAction) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(AppColors.textSecondary)
-                        .frame(width: 24, height: 24)
-                        .background(
-                            Circle()
-                                .fill(Color.white.opacity(0.08))
-                        )
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-}
-
-private struct HistoryFilterChip: View {
-    let title: String
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(isSelected ? Color(hex: "1A2233") : Color.white)
-                .padding(.horizontal, 18)
-                .padding(.vertical, 10)
-                .background {
-                    Capsule()
-                        .fill(
-                            isSelected
-                            ? AnyShapeStyle(Color(hex: "A0A0A0"))
-                            : AnyShapeStyle(
-                                LinearGradient(
-                                    colors: [Color(hex: "303238"), Color(hex: "24262B")],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                        )
-                }
-        }
-        .buttonStyle(.plain)
     }
 }
 
@@ -559,31 +659,128 @@ private struct HistoryDateFilterChip: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
-                Image(systemName: "calendar")
-                    .font(.system(size: 12, weight: .semibold))
                 Text(title)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 15, weight: .semibold))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 12, weight: .bold))
             }
-            .foregroundStyle(isSelected ? Color(hex: "1A2233") : Color.white)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background {
-                Capsule()
-                    .fill(
-                        isSelected
-                        ? AnyShapeStyle(Color(hex: "A0A0A0"))
-                        : AnyShapeStyle(
-                            LinearGradient(
-                                colors: [Color(hex: "303238"), Color(hex: "24262B")],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                    )
-            }
+            .foregroundStyle(isSelected ? .white : AppColors.textPrimary)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .background(chipBackground(isSelected: isSelected))
         }
         .buttonStyle(.plain)
     }
+}
+
+private struct HistoryTypeFilterChip: View {
+    let selectedFilter: CashflowHistoryTypeFilter
+    let onSelect: (CashflowHistoryTypeFilter) -> Void
+    let onReset: () -> Void
+
+    private var isActive: Bool {
+        selectedFilter != .all
+    }
+
+    var body: some View {
+        if isActive {
+            HStack(spacing: 8) {
+                Menu {
+                    ForEach(CashflowHistoryTypeFilter.allCases, id: \.self) { filter in
+                        Button(filter.title) {
+                            onSelect(filter)
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Text(selectedFilter.title)
+                            .font(.system(size: 15, weight: .semibold))
+                            .lineLimit(1)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 11, weight: .bold))
+                    }
+                    .foregroundStyle(Color.white)
+                    .padding(.leading, 18)
+                    .padding(.trailing, 8)
+                    .padding(.vertical, 12)
+                    .background(chipBackground(isSelected: true))
+                }
+
+                Button(action: onReset) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Color.white)
+                        .frame(width: 20, height: 20)
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 16)
+            }
+            .background(chipBackground(isSelected: true))
+        } else {
+            Menu {
+                ForEach(CashflowHistoryTypeFilter.allCases, id: \.self) { filter in
+                    Button(filter.title) {
+                        onSelect(filter)
+                    }
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Text(selectedFilter.title)
+                        .font(.system(size: 15, weight: .semibold))
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 12, weight: .bold))
+                }
+                .foregroundStyle(AppColors.textPrimary)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
+                .background(chipBackground(isSelected: false))
+            }
+        }
+    }
+}
+
+private struct HistoryCardFilterChip: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 12, weight: .bold))
+            }
+            .foregroundStyle(isSelected ? .white : AppColors.textPrimary)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .background(chipBackground(isSelected: isSelected))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private func chipBackground(isSelected: Bool) -> some View {
+    Capsule()
+        .fill(
+            isSelected
+            ? AnyShapeStyle(
+                LinearGradient(
+                    colors: [Color(hex: "5B9DFF"), Color(hex: "3C7FF0")],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            : AnyShapeStyle(
+                LinearGradient(
+                    colors: [Color(hex: "3A3A3F"), Color(hex: "2B2B30")],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+        )
 }
 
 // MARK: - History Date Range Sheet
@@ -591,6 +788,7 @@ private struct HistoryDateFilterChip: View {
 private struct HistoryDateRangeSheet: View {
     @Binding var startDate: Date?
     @Binding var endDate: Date?
+    let resetToDefaultRange: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var draftStartDate: Date = Calendar.current.startOfDay(for: Date())
     @State private var draftEndDate: Date = Calendar.current.startOfDay(for: Date())
@@ -614,8 +812,7 @@ private struct HistoryDateRangeSheet: View {
 
                 HStack(spacing: 12) {
                     Button(String(localized: "cashflow.common.reset")) {
-                        startDate = nil
-                        endDate = nil
+                        resetToDefaultRange()
                         dismiss()
                     }
                     .font(.system(size: 16, weight: .semibold))
@@ -675,6 +872,97 @@ private struct HistoryDateRangeSheet: View {
     }
 }
 
+private struct HistoryCardFilterSheet: View {
+    let cards: [Card]
+    @Binding var selectedCardID: String?
+    @Environment(\.dismiss) private var dismiss
+
+    private var sortedCards: [Card] {
+        cards.sorted { lhs, rhs in
+            if lhs.archivedAt == nil && rhs.archivedAt != nil { return true }
+            if lhs.archivedAt != nil && rhs.archivedAt == nil { return false }
+            if lhs.isFavorite != rhs.isFavorite { return lhs.isFavorite && !rhs.isFavorite }
+            return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Button {
+                    selectedCardID = nil
+                    dismiss()
+                } label: {
+                    HStack {
+                        Text(String(
+                            localized: "cashflow.history.cards.all",
+                            defaultValue: "Все счета и карты",
+                            comment: "All cards option in history filter"
+                        ))
+                        Spacer()
+                        if selectedCardID == nil {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(.blue)
+                        }
+                    }
+                }
+                .foregroundStyle(AppColors.textPrimary)
+
+                ForEach(sortedCards, id: \.cardUniqueID) { card in
+                    Button {
+                        selectedCardID = card.cardUniqueID
+                        dismiss()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: card.cardType.icon)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(Color(hex: card.cardColor ?? "47D7FF"))
+                                .frame(width: 32, height: 32)
+                                .background(
+                                    Circle()
+                                        .fill(Color.white.opacity(0.08))
+                                )
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(card.name)
+                                    .foregroundStyle(AppColors.textPrimary)
+                                Text(card.bank.displayName)
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(AppColors.textSecondary)
+                            }
+
+                            Spacer()
+
+                            if selectedCardID == card.cardUniqueID {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(.blue)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .listRowBackground(Color.clear)
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(Color.black.ignoresSafeArea())
+            .navigationTitle(String(
+                localized: "cashflow.history.cards",
+                defaultValue: "Счета и карты",
+                comment: "History card filter title"
+            ))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(String(localized: "cashflow.common.dismiss")) {
+                        dismiss()
+                    }
+                    .foregroundStyle(AppColors.textPrimary)
+                }
+            }
+        }
+    }
+}
+
 // MARK: - History Transaction Card
 
 private struct HistoryTransactionDetailView: View {
@@ -687,6 +975,10 @@ private struct HistoryTransactionDetailView: View {
 
     private var cardNameByID: [String: String] {
         Dictionary(uniqueKeysWithValues: viewModel.state.allCards.map { ($0.cardUniqueID, $0.name) })
+    }
+
+    private var investmentNameByID: [String: String] {
+        Dictionary(uniqueKeysWithValues: viewModel.state.availableInvestments.map { ($0.investmentUniqueID, $0.name) })
     }
 
     private var currentTransaction: CashflowTransaction {
@@ -785,6 +1077,20 @@ private struct HistoryTransactionDetailView: View {
                 detailRow(
                     title: String(localized: "cashflow.history.detail.to_account"),
                     value: toCard
+                )
+            }
+
+            if let investmentName = investmentName(for: currentTransaction.investmentID) {
+                detailRow(
+                    title: historyInvestmentTitle,
+                    value: investmentName
+                )
+            }
+
+            if let assetChangeDetails, !assetChangeDetails.isEmpty {
+                detailRow(
+                    title: historyChangesTitle,
+                    value: assetChangeDetails
                 )
             }
 
@@ -900,6 +1206,28 @@ private struct HistoryTransactionDetailView: View {
         return name
     }
 
+    private func investmentName(for investmentID: String?) -> String? {
+        guard let investmentID,
+              let name = investmentNameByID[investmentID],
+              !name.isEmpty else { return nil }
+        return name
+    }
+
+    private var assetChangeDetails: String? {
+        cashflowHistoryAssetChangeSummary(
+            for: currentTransaction,
+            currencyCode: resolvedCurrencyCode
+        )
+    }
+
+    private var historyInvestmentTitle: String {
+        Locale.autoupdatingCurrent.identifier.lowercased().hasPrefix("ru") ? "Актив" : "Asset"
+    }
+
+    private var historyChangesTitle: String {
+        Locale.autoupdatingCurrent.identifier.lowercased().hasPrefix("ru") ? "Что изменилось" : "What changed"
+    }
+
     private func deleteTransaction(recalculate: Bool) {
         viewModel.handle(.deleteTransaction(currentTransaction, recalculate: recalculate))
         dismiss()
@@ -1009,6 +1337,9 @@ private struct HistoryTransactionCard: View {
             }
 
         default:
+            if let investmentName = investmentName(for: transaction.investmentID) {
+                parts.append(investmentName)
+            }
             if let cardName = cardName(for: transaction.cardID) {
                 parts.append(cardName)
             }
@@ -1018,11 +1349,27 @@ private struct HistoryTransactionCard: View {
             parts.append(note)
         }
 
+        if let assetChangeSummary, !assetChangeSummary.isEmpty {
+            parts.append(assetChangeSummary)
+        }
+
         return parts.isEmpty ? nil : parts.joined(separator: ". ")
     }
 
     private func cardName(for cardID: String?) -> String? {
         guard let cardID else { return nil }
         return viewModel.state.allCards.first(where: { $0.cardUniqueID == cardID })?.name
+    }
+
+    private func investmentName(for investmentID: String?) -> String? {
+        guard let investmentID else { return nil }
+        return viewModel.state.availableInvestments.first(where: { $0.investmentUniqueID == investmentID })?.name
+    }
+
+    private var assetChangeSummary: String? {
+        cashflowHistoryAssetChangeSummary(
+            for: transaction,
+            currencyCode: resolvedCurrencyCode
+        )
     }
 }

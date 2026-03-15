@@ -241,6 +241,56 @@ struct CashflowBulkExpenseCategoryDraft: Identifiable, Equatable {
     }
 }
 
+struct CashflowBulkExpenseCategorySortPolicy {
+    static func orderedDraftIndices(
+        drafts: [CashflowBulkExpenseCategoryDraft],
+        searchText: String,
+        importedCategoryRaws: Set<String>
+    ) -> [Int] {
+        let trimmedQuery = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return drafts.indices
+            .filter { index in
+                guard !trimmedQuery.isEmpty else { return true }
+                return drafts[index].category.displayName.localizedCaseInsensitiveContains(trimmedQuery)
+            }
+            .sorted { lhs, rhs in
+                let left = drafts[lhs]
+                let right = drafts[rhs]
+                let leftImported = importedCategoryRaws.contains(left.category.rawValue) && left.hasValue
+                let rightImported = importedCategoryRaws.contains(right.category.rawValue) && right.hasValue
+
+                if leftImported != rightImported {
+                    return leftImported && !rightImported
+                }
+
+                if leftImported && rightImported {
+                    let leftAmount = left.amount ?? 0
+                    let rightAmount = right.amount ?? 0
+                    if abs(leftAmount - rightAmount) > 0.0000001 {
+                        return leftAmount > rightAmount
+                    }
+                }
+
+                let leftHasValue = left.hasValue
+                let rightHasValue = right.hasValue
+                if leftHasValue != rightHasValue {
+                    return leftHasValue && !rightHasValue
+                }
+
+                if left.sourceOrderIndex != right.sourceOrderIndex {
+                    return left.sourceOrderIndex < right.sourceOrderIndex
+                }
+
+                return left.category.rawValue < right.category.rawValue
+            }
+    }
+
+    static func isTransferCategory(_ rawValue: String) -> Bool {
+        rawValue == ExpenseCategory.transfers.rawValue
+    }
+}
+
 struct CashflowBulkExpenseStoredCategoryEntry: Equatable {
     let categoryRaw: String
     let amount: Double

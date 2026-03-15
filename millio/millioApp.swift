@@ -10,7 +10,19 @@ import SwiftData
 import UIKit
 import FirebaseCore
 import OSLog
-import CryptoKit
+
+private enum EarlyFirebaseBootstrap {
+    private static var didConfigure = false
+
+    static func ensureConfigured() {
+        guard !didConfigure else { return }
+        didConfigure = true
+
+        if FirebaseApp.app() == nil {
+            FirebaseApp.configure()
+        }
+    }
+}
 
 @MainActor
 enum AppWidgetDeepLinkHandler {
@@ -28,42 +40,13 @@ enum AppWidgetDeepLinkHandler {
     }
 }
 
-private enum DataScope: Equatable {
-    case guest
-    case user(id: String)
-
-    var storeConfigurationName: String {
-        switch self {
-        case .guest:
-            return "millio_guest"
-        case .user(let id):
-            return "millio_user_\(Self.hash(id))"
-        }
-    }
-
-    var storeFileName: String {
-        "\(storeConfigurationName).store"
-    }
-
-    static func current(isAuthenticated: Bool, user: AuthUser?) -> DataScope {
-        guard
-            isAuthenticated,
-            let rawUserID = user?.id.trimmingCharacters(in: .whitespacesAndNewlines),
-            !rawUserID.isEmpty
-        else {
-            return .guest
-        }
-        return .user(id: rawUserID)
-    }
-
-    private static func hash(_ value: String) -> String {
-        let digest = SHA256.hash(data: Data(value.utf8))
-        return digest.map { String(format: "%02x", $0) }.joined()
-    }
-}
-
 @main
 struct millioApp: App {
+    private struct AppDependencyBinding {
+        let container: DIContainer
+        let financeWarmupUseCase: FinanceStartupWarmupUseCase
+    }
+
     @UIApplicationDelegateAdaptor(FirebaseAppDelegate.self) private var firebaseDelegate
     @State private var appState = AppState()
     @State private var diContainer: DIContainer?
@@ -74,12 +57,14 @@ struct millioApp: App {
     @State private var isBiometricUnlockInProgress = false
     @State private var activeDataScope: DataScope = .guest
     @State private var activeModelContainer: ModelContainer?
-    @State private var didRestoreAuthSession = false
     @State private var backendRuntime: BackendSessionRuntime?
+    @State private var startupCoordinator = StartupCoordinator(initialScope: .guest)
+    @State private var appRefreshCoordinator = AppRefreshCoordinator()
     private let appLockCoordinator = AppLockLifecycleCoordinator()
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "App")
 
     init() {
+        EarlyFirebaseBootstrap.ensureConfigured()
         Self.registerFeatures()
         let initialScope = DataScope.guest
         _activeDataScope = State(initialValue: initialScope)
@@ -112,20 +97,11 @@ struct millioApp: App {
                 .environment(toastCenter)
                 .modelContainer(container)
                 .environment(\.diContainer, diContainer)
+                .environment(\.appRefreshCoordinator, appRefreshCoordinator)
                 .environment(\.locale, appState.selectedLanguage.locale ?? Locale.current)
-                .task(id: activeDataScope) {
-                    await initializeApp(
-                        container: container,
-                        restoreSession: !didRestoreAuthSession
-                    )
-
-                    if !didRestoreAuthSession {
-                        didRestoreAuthSession = true
-                    }
-
-                    // Восстанавливаем расписание уведомлений, если они включены
-                    if appState.isDailyReminderEnabled {
-                        await NotificationManager.shared.scheduleDailyReminder(using: SettingsManager.shared.dailyReminderSettings)
+                .task {
+                    await startupCoordinator.runColdStartIfNeeded {
+                        await initializeColdStart(using: container)
                     }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
@@ -134,9 +110,10 @@ struct millioApp: App {
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                     Task { @MainActor in
-                        // Обновляем статус подписки при возврате из фона
-                        await SubscriptionManager.shared.checkSubscriptionStatus()
-                        appState.applySubscriptionSnapshot(SubscriptionManager.shared.snapshot)
+                        await appRefreshCoordinator.refreshSubscriptionIfNeeded(
+                            reason: .appDidBecomeActive,
+                            appState: appState
+                        )
                         CurrencyWidgetSyncService.bootstrapFromStandardDefaults()
                         await appLockCoordinator.handleDidBecomeActive(
                             appState: appState,
@@ -144,19 +121,6 @@ struct millioApp: App {
                         )
 
                         await financeStartupWarmupUseCase?.warmupIfNeeded()
-                    }
-                }
-                .onChange(of: authManager.isAuthenticated) { _, isAuthenticated in
-                    if isAuthenticated && appState.isGuestModeEnabled {
-                        appState.isGuestModeEnabled = false
-                    }
-                    Task { @MainActor in
-                        await switchToDataScopeIfNeeded(for: authManager.currentUser)
-                    }
-                }
-                .onChange(of: authManager.currentUser?.id) { _, _ in
-                    Task { @MainActor in
-                        await switchToDataScopeIfNeeded(for: authManager.currentUser)
                     }
                 }
                 .onOpenURL { url in
@@ -179,72 +143,77 @@ struct millioApp: App {
     }
     
     @MainActor
-    private func initializeApp(container: ModelContainer, restoreSession: Bool) async {
+    private func initializeColdStart(using container: ModelContainer) async {
         let start = DispatchTime.now()
         let backendRuntime = await resolveBackendRuntimeIfNeeded()
 
         appLockCoordinator.enforceLockStateOnLaunch(appState: appState, hasPin: AppLockPinStore.shared.hasPin())
 
-        // Фичи уже зарегистрированы при создании ModelContainer
-        
-        // Используем DIContainer для создания зависимостей
-        let diStart = DispatchTime.now()
-        let container = DIContainer.create(
-            appState: appState,
-            modelContainer: container,
+        let binding = await prepareDependencyBinding(
+            for: container,
             backendRuntime: backendRuntime
         )
-        self.diContainer = container
-        authManager.configure(service: container.authService)
-        authManager.configure(toastCenter: toastCenter)
-        authManager.configure(authConfiguration: backendRuntime.authConfiguration)
-        authManager.configure(onSessionChanged: { user in
-            if user == nil {
-                await switchToDataScopeIfNeeded(for: nil)
-            }
-        })
-        authManager.configure(onPostLoginBootstrap: { user in
-            await switchToDataScopeIfNeeded(for: user)
-        })
-        let apiClientFactory = APIClientFactory(runtime: backendRuntime)
-        await MarketAPIClient.shared.configure(
-            authService: container.authService,
-            configurationProvider: apiClientFactory.authConfigurationProvider()
-        )
-        self.financeStartupWarmupUseCase = FinanceStartupWarmupUseCase(
-            modelContext: container.modelContainer.mainContext
-        )
-        logger.info("DIContainer.create finished in \(Double(DispatchTime.now().uptimeNanoseconds - diStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
-        
-        // Создаем UseCase через DI Container
+        applyDependencyBinding(binding, backendRuntime: backendRuntime)
+
         let useCase = AppLifecycleUseCase(
             appState: appState,
-            backupManager: container.backupManager
+            backupManager: binding.container.backupManager
         )
         
         self.lifecycleUseCase = useCase
         let initStart = DispatchTime.now()
         await useCase.initialize()
-        if restoreSession {
-            await authManager.restoreSession()
-            await switchToDataScopeIfNeeded(for: authManager.currentUser)
-        }
+        await authManager.restoreSession()
+        await synchronizeDataScope(with: authManager.currentUser)
         await presentRestoreFlowIfNeeded()
         logger.info("AppLifecycleUseCase.initialize finished in \(Double(DispatchTime.now().uptimeNanoseconds - initStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
-        logger.info("initializeApp finished in \(Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
+        logger.info("initializeColdStart finished in \(Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
         
-        Task { @MainActor in
-            await SubscriptionManager.shared.checkSubscriptionStatus()
-            appState.applySubscriptionSnapshot(SubscriptionManager.shared.snapshot)
-            CurrencyWidgetSyncService.bootstrapFromStandardDefaults()
+        await runPostStartupRefreshes()
+        await scheduleDailyReminderIfNeeded()
+    }
 
-            await appLockCoordinator.handleDidBecomeActive(
-                appState: appState,
-                unlockWithBiometrics: unlockWithBiometricsIfEnabled
-            )
+    @MainActor
+    private func prepareDependencyBinding(
+        for modelContainer: ModelContainer,
+        backendRuntime: BackendSessionRuntime
+    ) async -> AppDependencyBinding {
+        let diStart = DispatchTime.now()
+        let container = DIContainer.create(
+            appState: appState,
+            modelContainer: modelContainer,
+            backendRuntime: backendRuntime
+        )
+        let apiClientFactory = APIClientFactory(runtime: backendRuntime)
+        await MarketAPIClient.shared.configure(
+            authService: container.authService,
+            configurationProvider: apiClientFactory.authConfigurationProvider()
+        )
+        let financeWarmupUseCase = FinanceStartupWarmupUseCase(
+            modelContext: modelContainer.mainContext
+        )
 
-            await financeStartupWarmupUseCase?.warmupIfNeeded()
-        }
+        logger.info("DIContainer.create finished in \(Double(DispatchTime.now().uptimeNanoseconds - diStart.uptimeNanoseconds) / 1_000_000, privacy: .public) ms")
+        return AppDependencyBinding(
+            container: container,
+            financeWarmupUseCase: financeWarmupUseCase
+        )
+    }
+
+    @MainActor
+    private func applyDependencyBinding(
+        _ binding: AppDependencyBinding,
+        backendRuntime: BackendSessionRuntime
+    ) {
+        diContainer = binding.container
+        financeStartupWarmupUseCase = binding.financeWarmupUseCase
+        authManager.configure(service: binding.container.authService)
+        authManager.configure(toastCenter: toastCenter)
+        authManager.configure(authConfiguration: backendRuntime.authConfiguration)
+        authManager.configure(onSessionChanged: { user in
+            await synchronizeDataScope(with: user)
+        })
+        authManager.configure(onPostLoginBootstrap: { _ in })
     }
 
     @MainActor
@@ -282,12 +251,24 @@ struct millioApp: App {
     }
 
     @MainActor
-    private func switchToDataScopeIfNeeded(for user: AuthUser?) async {
+    private func synchronizeDataScope(with user: AuthUser?) async {
+        if authManager.isAuthenticated && appState.isGuestModeEnabled {
+            appState.isGuestModeEnabled = false
+        }
+
         let targetScope = DataScope.current(
             isAuthenticated: authManager.isAuthenticated,
             user: user
         )
-        guard targetScope != activeDataScope else { return }
+
+        await startupCoordinator.switchScopeIfNeeded(to: targetScope) { targetScope in
+            await rebindDataScope(to: targetScope)
+        }
+    }
+
+    @MainActor
+    private func rebindDataScope(to targetScope: DataScope) async -> Bool {
+        guard targetScope != activeDataScope else { return false }
 
         let targetContainer = Self.makeModelContainer(for: targetScope)
         if let targetContainer {
@@ -298,8 +279,49 @@ struct millioApp: App {
             )
         }
 
+        guard !Task.isCancelled else { return false }
+
+        let binding: AppDependencyBinding?
+        if let backendRuntime, let targetContainer {
+            let preparedBinding = await prepareDependencyBinding(
+                for: targetContainer,
+                backendRuntime: backendRuntime
+            )
+            guard !Task.isCancelled else { return false }
+            binding = preparedBinding
+        } else {
+            binding = nil
+        }
+
         activeDataScope = targetScope
         activeModelContainer = targetContainer
+
+        if let backendRuntime, let binding {
+            applyDependencyBinding(binding, backendRuntime: backendRuntime)
+        }
+        return true
+    }
+
+    @MainActor
+    private func runPostStartupRefreshes() async {
+        await appRefreshCoordinator.refreshSubscriptionIfNeeded(
+            reason: .coldStart,
+            appState: appState
+        )
+        CurrencyWidgetSyncService.bootstrapFromStandardDefaults()
+
+        await appLockCoordinator.handleDidBecomeActive(
+            appState: appState,
+            unlockWithBiometrics: unlockWithBiometricsIfEnabled
+        )
+
+        await financeStartupWarmupUseCase?.warmupIfNeeded()
+    }
+
+    @MainActor
+    private func scheduleDailyReminderIfNeeded() async {
+        guard appState.isDailyReminderEnabled else { return }
+        await NotificationManager.shared.scheduleDailyReminder(using: SettingsManager.shared.dailyReminderSettings)
     }
 
     private static func registerFeatures() {

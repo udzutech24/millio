@@ -247,6 +247,7 @@ struct CashflowTransactionEditorView: View {
             Text(autoApplyToggleHelpMessage)
         }
         .onAppear {
+            refreshSelectableAccounts()
             loadAvailableCurrencies()
             synchronizeSelectedCards()
             if editingTransaction == nil,
@@ -305,7 +306,7 @@ struct CashflowTransactionEditorView: View {
             synchronizeSelectedCards()
             validateAvailableBalance()
         }
-        .onChange(of: viewModel.state.availableCards.map(\.cardUniqueID)) { _, _ in
+        .onChange(of: CashflowViewModel.cardSyncSignature(for: viewModel.state.availableCards)) { _, _ in
             synchronizeSelectedCards()
             validateAvailableBalance()
         }
@@ -665,8 +666,8 @@ struct CashflowTransactionEditorView: View {
                 }
             }
 
-            if shouldValidateBalance, let availableText = availableBalanceText {
-                Text(availableText)
+            if let accountBalanceText = selectedAccountBalanceText {
+                Text(accountBalanceText)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(AppColors.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -829,7 +830,7 @@ struct CashflowTransactionEditorView: View {
             .padding(.vertical, 8)
             .padding(.horizontal, 16)
 
-            if shouldValidateBalance, let availableText = availableBalanceText {
+            if shouldValidateBalance, let availableText = selectedAccountBalanceText {
                 FinancesRowDivider()
                 Text(availableText)
                     .font(.caption)
@@ -972,7 +973,7 @@ struct CashflowTransactionEditorView: View {
         Self.selectableAccounts(
             cards: viewModel.state.availableCards,
             investments: viewModel.state.availableInvestments,
-            financeAccounts: viewModel.state.availableFinanceAccounts,
+            linkedInvestmentIDs: viewModel.state.linkedInvestmentIDs,
             transactionType: selectedTransactionType,
             currency: selectedCurrency
         )
@@ -992,7 +993,7 @@ struct CashflowTransactionEditorView: View {
         Self.selectableAccounts(
             cards: viewModel.state.availableCards,
             investments: [],
-            financeAccounts: viewModel.state.availableFinanceAccounts,
+            linkedInvestmentIDs: [],
             transactionType: .transfer,
             currency: selectedCurrency
         )
@@ -1057,6 +1058,10 @@ struct CashflowTransactionEditorView: View {
     private func fireLightImpact() {
         let generator = UIImpactFeedbackGenerator(style: .light)
         generator.impactOccurred(intensity: 0.9)
+    }
+
+    private func refreshSelectableAccounts() {
+        viewModel.handle(.loadCards)
     }
 
     private func openFinancesAddCard() {
@@ -1211,19 +1216,37 @@ struct CashflowTransactionEditorView: View {
         selectedTransactionType == .transfer || (selectedTransactionType == .expense && shouldAffectCardBalance)
     }
 
-    private var availableBalanceText: String? {
-        guard shouldValidateBalance,
-              let cardID = selectedCardID,
-              let card = viewModel.state.availableCards.first(where: { $0.cardUniqueID == cardID }) else {
-            return nil
+    private var selectedAccountBalanceText: String? {
+        if let cardID = selectedCardID,
+           let snapshot = viewModel.cardBalanceSnapshot(for: cardID) {
+            let availableText = String(
+                format: String(localized: "cashflow.editor.available_format"),
+                formatNumberForDisplay(snapshot.availableAmount),
+                snapshot.currency
+            )
+
+            guard let debtAmount = snapshot.debtAmount else {
+                return availableText
+            }
+
+            let debtLabel = String(localized: "finances.add_account.card.total_debt")
+            let availableLabel = String(localized: "finances.add_account.card.remaining_limit")
+            let debtText = formatNumberForDisplay(debtAmount)
+            let remainingLimitText = formatNumberForDisplay(snapshot.availableAmount)
+
+            return "\(debtLabel): \(debtText) \(snapshot.currency)\n\(availableLabel): \(remainingLimitText) \(snapshot.currency)"
         }
 
-        let formatted = formatNumberForDisplay(card.balance)
-        return String(
-            format: String(localized: "cashflow.editor.available_format"),
-            formatted,
-            card.currency
-        )
+        if let investmentID = selectedInvestmentID,
+           let investment = viewModel.state.availableInvestments.first(where: { $0.investmentUniqueID == investmentID }) {
+            return String(
+                format: String(localized: "cashflow.editor.available_format"),
+                formatNumberForDisplay(investment.amount),
+                investment.currency
+            )
+        }
+
+        return nil
     }
 
     private func parseAmount() -> Double? {
@@ -1365,14 +1388,14 @@ extension CashflowTransactionEditorView {
     static func selectableAccounts(
         cards: [Card],
         investments: [Investment],
-        financeAccounts: [FinanceAccount] = [],
+        linkedInvestmentIDs: Set<String> = [],
         transactionType: CashflowTransactionType,
         currency: String
     ) -> [CashflowSelectableAccount] {
         CashflowSelectableAccountResolver.options(
             cards: cards,
             investments: investments,
-            financeAccounts: financeAccounts,
+            linkedInvestmentIDs: linkedInvestmentIDs,
             transactionType: transactionType,
             currency: currency
         )

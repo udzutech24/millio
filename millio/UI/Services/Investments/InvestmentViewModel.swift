@@ -310,6 +310,7 @@ final class InvestmentViewModel: ViewModelProtocol {
         var newAmountForTransaction: Double?
         var quantityWasChanged: Bool = false
         var didCreateTransaction: Bool = false
+        var assetChangeSnapshotBefore: CashflowAssetChangeSnapshot?
         
         if let existing = state.editingInvestment {
             if existing.uniqueID.isEmpty {
@@ -321,7 +322,13 @@ final class InvestmentViewModel: ViewModelProtocol {
             }
             oldAmount = existing.amount
             let previousQuantity = existing.marketQuantity
+            let previousUnitPrice = existing.lastKnownUnitPrice
             editedInvestment = existing
+            assetChangeSnapshotBefore = CashflowAssetChangeSnapshot(
+                quantity: previousQuantity,
+                unitPrice: previousUnitPrice,
+                totalAmount: oldAmount
+            )
             // Обновляем существующую инвестицию
             existing.name = name
             existing.investmentType = investmentType
@@ -380,7 +387,18 @@ final class InvestmentViewModel: ViewModelProtocol {
                     investmentID: existing.investmentUniqueID,
                     note: quantityWasChanged ? "Ручное изменение количества актива" : "Ручное изменение стоимости актива"
                 )
+                if let assetChangeSnapshotBefore {
+                    transaction.applyAssetChangeSnapshot(
+                        before: assetChangeSnapshotBefore,
+                        after: CashflowAssetChangeSnapshot(
+                            quantity: existing.marketQuantity,
+                            unitPrice: existing.lastKnownUnitPrice,
+                            totalAmount: existing.amount
+                        )
+                    )
+                }
                 stampFrozenRate(on: transaction, targetCurrency: existing.currency)
+                transaction.hasAppliedBalanceEffect = true
                 modelContext.insert(transaction)
                 didCreateTransaction = true
             }

@@ -20,6 +20,7 @@ struct CashflowBulkExpenseImportSheet: View {
     @State private var selectedMonth: Date
     @State private var categoryDrafts: [CashflowBulkExpenseCategoryDraft] = []
     @State private var categorySearchText: String = ""
+    @State private var importedCategoryRaws: Set<String> = []
     @State private var shouldAffectCardBalance: Bool = true
     @State private var loadedAffectingTotal: Double = 0
     @State private var screenshotItems: [PhotosPickerItem] = []
@@ -159,7 +160,7 @@ struct CashflowBulkExpenseImportSheet: View {
                     await reloadDrafts()
                 }
             }
-            .onChange(of: viewModel.state.availableCards.map { "\($0.cardUniqueID)_\($0.currency)_\($0.isFavorite)" }) { _, _ in
+            .onChange(of: CashflowViewModel.cardSyncSignature(for: viewModel.state.availableCards)) { _, _ in
                 syncSelectionWithCurrency()
             }
             .onDisappear {
@@ -317,14 +318,8 @@ struct CashflowBulkExpenseImportSheet: View {
                 .opacity(cardsInSelectedCurrency.isEmpty ? 0.55 : 1)
             }
 
-            if let selectedCard {
-                Text(
-                    String(
-                        format: String(localized: "cashflow.editor.available_format"),
-                        CashflowBulkExpenseRowDraft.formatAmount(selectedCard.balance),
-                        selectedCard.currency
-                    )
-                )
+            if let balanceText = selectedCardBalanceText {
+                Text(balanceText)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Color.white.opacity(0.68))
             } else if cardsInSelectedCurrency.isEmpty {
@@ -624,7 +619,7 @@ struct CashflowBulkExpenseImportSheet: View {
             }
 
             if let selectedCard, shouldAffectCardBalance {
-                let availableBalance = selectedCard.balance + loadedAffectingTotal
+                let availableBalance = (selectedCardBalanceSnapshot?.availableAmount ?? selectedCard.balance) + loadedAffectingTotal
                 let overflow = totalAmount - availableBalance
                 if overflow > 0.009 {
                     noticeCard(
@@ -668,12 +663,11 @@ struct CashflowBulkExpenseImportSheet: View {
             .background(innerBackground)
 
             LazyVGrid(columns: categoryGridColumns, spacing: 8) {
-                ForEach($categoryDrafts) { $draft in
-                    if filteredCategoryDrafts.contains(where: { $0.id == draft.id }) {
-                        categoryTile($draft)
-                    }
+                ForEach(orderedDraftIndices, id: \.self) { index in
+                    categoryTile($categoryDrafts[index])
                 }
             }
+            .animation(.spring(response: 0.26, dampingFraction: 0.88), value: orderedDraftIndices)
             .padding(.bottom, 76)
 
             if let errorMessage, !isErrorDismissed {
@@ -704,7 +698,24 @@ struct CashflowBulkExpenseImportSheet: View {
             },
             set: { newValue in
                 draft.wrappedValue.amountText = formatTileAmountInput(newValue)
+                if !draft.wrappedValue.hasValue {
+                    importedCategoryRaws.remove(draft.wrappedValue.category.rawValue)
+                }
             }
+        )
+        let isTransferCategory = CashflowBulkExpenseCategorySortPolicy.isTransferCategory(
+            draft.wrappedValue.category.rawValue
+        )
+        let tileFill = isTransferCategory ? danger.opacity(0.08) : Color.black.opacity(0.88)
+        let borderGradient = LinearGradient(
+            colors: isTransferCategory
+                ? [danger.opacity(0.98), Color(hex: "FF8A5B").opacity(0.92)]
+                : [
+                    accent.opacity(draft.wrappedValue.hasValue ? 0.9 : 0.5),
+                    Color(hex: "C428C8").opacity(draft.wrappedValue.hasValue ? 0.85 : 0.5)
+                ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
         )
 
         return VStack(spacing: 6) {
@@ -757,20 +768,10 @@ struct CashflowBulkExpenseImportSheet: View {
         .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color.black.opacity(0.88))
+                .fill(tileFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .stroke(
-                            LinearGradient(
-                                colors: [
-                                    accent.opacity(draft.wrappedValue.hasValue ? 0.9 : 0.5),
-                                    Color(hex: "C428C8").opacity(draft.wrappedValue.hasValue ? 0.85 : 0.5)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: draft.wrappedValue.hasValue ? 1.4 : 1
-                        )
+                        .stroke(borderGradient, lineWidth: isTransferCategory ? 1.5 : (draft.wrappedValue.hasValue ? 1.4 : 1))
                 )
         )
         .onTapGesture {
@@ -780,6 +781,7 @@ struct CashflowBulkExpenseImportSheet: View {
             Button(role: .destructive) {
                 draft.wrappedValue.amountText = ""
                 draft.wrappedValue.noteText = ""
+                importedCategoryRaws.remove(draft.wrappedValue.category.rawValue)
             } label: {
                 Label(
                     String(
@@ -912,6 +914,7 @@ struct CashflowBulkExpenseImportSheet: View {
                                 comment: "Bulk expense import help step body"
                             )
                         )
+                        screenshotCroppingGuideCard
                         helpStepCard(
                             number: "4",
                             title: String(
@@ -985,6 +988,85 @@ struct CashflowBulkExpenseImportSheet: View {
         .background(cardBackground)
     }
 
+    private var screenshotCroppingGuideCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: "crop")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(warning)
+                    .frame(width: 30, height: 30)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(warning.opacity(0.12))
+                    )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(
+                        String(
+                            localized: "cashflow.bulk_expense.help.crop.title",
+                            defaultValue: "How to crop a bank screenshot",
+                            comment: "Title for screenshot cropping guide in bulk expense import help"
+                        )
+                    )
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.94))
+
+                    Text(
+                        String(
+                            localized: "cashflow.bulk_expense.help.crop.subtitle",
+                            defaultValue: "The parser works best when the frame contains only merchant names and amounts.",
+                            comment: "Subtitle for screenshot cropping guide in bulk expense import help"
+                        )
+                    )
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.62))
+                }
+            }
+
+            screenshotCropExample
+
+            helpHintRow(
+                systemImage: "checkmark.circle.fill",
+                tint: positive,
+                text: String(
+                    localized: "cashflow.bulk_expense.help.crop.do",
+                    defaultValue: "Leave 5-12 expense rows with merchant names and amounts in one column.",
+                    comment: "Positive screenshot cropping tip for bulk expense import help"
+                )
+            )
+            helpHintRow(
+                systemImage: "checkmark.circle.fill",
+                tint: positive,
+                text: String(
+                    localized: "cashflow.bulk_expense.help.crop.do_second",
+                    defaultValue: "Keep the amount fully visible: `Пятерочка 1 240 ₽`, `Яндекс Такси 870 ₽`.",
+                    comment: "Second positive screenshot cropping tip for bulk expense import help"
+                )
+            )
+            helpHintRow(
+                systemImage: "xmark.circle.fill",
+                tint: danger,
+                text: String(
+                    localized: "cashflow.bulk_expense.help.crop.dont",
+                    defaultValue: "Cut off balance, cards carousel, charts, cashback banners, and bottom navigation.",
+                    comment: "Negative screenshot cropping tip for bulk expense import help"
+                )
+            )
+            helpHintRow(
+                systemImage: "exclamationmark.triangle.fill",
+                tint: warning,
+                text: String(
+                    localized: "cashflow.bulk_expense.help.crop.warning",
+                    defaultValue: "Transfers and top-ups can be recognized too. They will go to `Transfers` and are highlighted in red for cleanup.",
+                    comment: "Warning screenshot cropping tip for bulk expense import help"
+                )
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(cardBackground)
+    }
+
     private func helpStepCard(number: String, title: String, body: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Text(number)
@@ -1010,6 +1092,121 @@ struct CashflowBulkExpenseImportSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
         .background(cardBackground)
+    }
+
+    private var screenshotCropExample: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(
+                String(
+                    localized: "cashflow.bulk_expense.help.crop.example_title",
+                    defaultValue: "Example frame",
+                    comment: "Title for screenshot crop example in bulk expense import help"
+                )
+            )
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(Color.white.opacity(0.72))
+
+            ZStack {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(Color(red: 0.06, green: 0.07, blue: 0.09))
+
+                VStack(spacing: 10) {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.white.opacity(0.07))
+                        .frame(height: 28)
+                        .overlay(alignment: .leading) {
+                            Text("История операций")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(Color.white.opacity(0.55))
+                                .padding(.leading, 12)
+                        }
+
+                    VStack(spacing: 8) {
+                        screenshotExampleRow(title: "Пятерочка", amount: "1 240 ₽")
+                        screenshotExampleRow(title: "Яндекс Такси", amount: "870 ₽")
+                        screenshotExampleRow(title: "Coffee Point", amount: "340 ₽")
+                        screenshotExampleRow(title: "Перевод себе", amount: "5 000 ₽", tint: danger.opacity(0.9))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Color.white.opacity(0.04))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(warning.opacity(0.92), style: StrokeStyle(lineWidth: 2, dash: [7, 5]))
+                            .padding(-6)
+                    )
+
+                    HStack(spacing: 8) {
+                        cropBadZone(label: "Баланс")
+                        cropBadZone(label: "Карусель карт")
+                        cropBadZone(label: "Нижнее меню")
+                    }
+                }
+                .padding(12)
+            }
+            .frame(height: 260)
+        }
+    }
+
+    private func screenshotExampleRow(title: String, amount: String, tint: Color = Color.white.opacity(0.92)) -> some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(Color.white.opacity(0.10))
+                .frame(width: 18, height: 18)
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.82))
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Text(amount)
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundStyle(tint)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 34)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.black.opacity(0.26))
+        )
+    }
+
+    private func cropBadZone(label: String) -> some View {
+        Text(label)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(Color.white.opacity(0.58))
+            .lineLimit(1)
+            .padding(.horizontal, 10)
+            .frame(height: 28)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.white.opacity(0.05))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(danger.opacity(0.65), lineWidth: 1)
+                    )
+            )
+    }
+
+    private func helpHintRow(systemImage: String, tint: Color, text: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: systemImage)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(tint)
+                .frame(width: 18, height: 18)
+
+            Text(text)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.72))
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     private func summaryMetric(title: String, value: String) -> some View {
@@ -1147,6 +1344,29 @@ struct CashflowBulkExpenseImportSheet: View {
         return cardsInSelectedCurrency.first(where: { $0.cardUniqueID == selectedCardID })
     }
 
+    private var selectedCardBalanceSnapshot: CashflowCardBalanceSnapshot? {
+        guard let selectedCardID else { return nil }
+        return viewModel.cardBalanceSnapshot(for: selectedCardID)
+    }
+
+    private var selectedCardBalanceText: String? {
+        guard let selectedCard else { return nil }
+
+        if let snapshot = selectedCardBalanceSnapshot {
+            return String(
+                format: String(localized: "cashflow.editor.available_format"),
+                CashflowBulkExpenseRowDraft.formatAmount(snapshot.availableAmount),
+                snapshot.currency
+            )
+        }
+
+        return String(
+            format: String(localized: "cashflow.editor.available_format"),
+            CashflowBulkExpenseRowDraft.formatAmount(selectedCard.balance),
+            selectedCard.currency
+        )
+    }
+
     private var availableCurrencies: [String] {
         CashflowBulkExpenseImportSelectionPolicy.availableCurrencies(
             cards: viewModel.state.availableCards,
@@ -1165,12 +1385,12 @@ struct CashflowBulkExpenseImportSheet: View {
             .sorted { $0.sourceOrderIndex < $1.sourceOrderIndex }
     }
 
-    private var filteredCategoryDrafts: [CashflowBulkExpenseCategoryDraft] {
-        let trimmed = categorySearchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return categoryDrafts }
-        return categoryDrafts.filter { draft in
-            draft.category.displayName.localizedCaseInsensitiveContains(trimmed)
-        }
+    private var orderedDraftIndices: [Int] {
+        CashflowBulkExpenseCategorySortPolicy.orderedDraftIndices(
+            drafts: categoryDrafts,
+            searchText: categorySearchText,
+            importedCategoryRaws: importedCategoryRaws
+        )
     }
 
     private var canSave: Bool {
@@ -1222,6 +1442,7 @@ struct CashflowBulkExpenseImportSheet: View {
         if categoryDrafts.isEmpty {
             categoryDrafts = makeEmptyCategoryDrafts()
         }
+        importedCategoryRaws = []
         Task {
             await reloadDrafts()
         }
@@ -1255,6 +1476,7 @@ struct CashflowBulkExpenseImportSheet: View {
     private func reloadDrafts() async {
         let emptyDrafts = makeEmptyCategoryDrafts()
         categoryDrafts = emptyDrafts
+        importedCategoryRaws = []
         loadedAffectingTotal = 0
         errorMessage = nil
         saveMessage = nil
@@ -1318,6 +1540,7 @@ struct CashflowBulkExpenseImportSheet: View {
 
         let availableOptions = viewModel.categoryOptions(for: .expense, includeHiddenSystem: true)
         var mergedCount = 0
+        var changedCategories: Set<String> = []
 
         for row in parsedRows {
             let resolution = categoryResolver.resolve(title: row.title, availableOptions: availableOptions)
@@ -1327,8 +1550,11 @@ struct CashflowBulkExpenseImportSheet: View {
             let existingAmount = categoryDrafts[index].amount ?? 0
             let newAmount = existingAmount + row.amount
             categoryDrafts[index].amountText = CashflowBulkExpenseRowDraft.formatAmount(newAmount)
+            changedCategories.insert(resolution.option.rawValue)
             mergedCount += 1
         }
+
+        importedCategoryRaws = changedCategories
 
         saveMessage = String(
             localized: "cashflow.bulk_expense.screenshot.merged",
