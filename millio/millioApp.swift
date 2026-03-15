@@ -57,6 +57,7 @@ struct millioApp: App {
     @State private var isBiometricUnlockInProgress = false
     @State private var activeDataScope: DataScope = .guest
     @State private var activeModelContainer: ModelContainer?
+    @State private var activeScopeStoreExistedBeforeBinding = false
     @State private var backendRuntime: BackendSessionRuntime?
     @State private var startupCoordinator = StartupCoordinator(initialScope: .guest)
     @State private var appRefreshCoordinator = AppRefreshCoordinator()
@@ -67,6 +68,7 @@ struct millioApp: App {
         EarlyFirebaseBootstrap.ensureConfigured()
         Self.registerFeatures()
         let initialScope = DataScope.guest
+        _activeScopeStoreExistedBeforeBinding = State(initialValue: Self.storeExists(for: initialScope))
         _activeDataScope = State(initialValue: initialScope)
         _activeModelContainer = State(initialValue: Self.makeModelContainer(for: initialScope))
     }
@@ -270,6 +272,7 @@ struct millioApp: App {
     private func rebindDataScope(to targetScope: DataScope) async -> Bool {
         guard targetScope != activeDataScope else { return false }
 
+        let didTargetStoreExistBeforeBinding = Self.storeExists(for: targetScope)
         let targetContainer = Self.makeModelContainer(for: targetScope)
         if let targetContainer {
             migrateExistingStoresIfNeeded(
@@ -295,6 +298,7 @@ struct millioApp: App {
 
         activeDataScope = targetScope
         activeModelContainer = targetContainer
+        activeScopeStoreExistedBeforeBinding = didTargetStoreExistBeforeBinding
 
         if let backendRuntime, let binding {
             applyDependencyBinding(binding, backendRuntime: backendRuntime)
@@ -397,6 +401,11 @@ struct millioApp: App {
             return nil
         }
         return storageDirectoryURL.appendingPathComponent(scope.storeFileName, isDirectory: false)
+    }
+
+    private static func storeExists(for scope: DataScope) -> Bool {
+        guard let storeURL = storeURL(for: scope) else { return false }
+        return FileManager.default.fileExists(atPath: storeURL.path)
     }
 
     private static func makeLegacyDefaultModelContainer() -> ModelContainer? {
@@ -513,6 +522,7 @@ struct millioApp: App {
         let shouldPresentRestore = LaunchRecoveryPolicy.shouldPresentRestore(
             lifecycle: appState.lifecycle,
             hasCompletedOnboarding: lifecycleUseCase?.checkOnboardingStatus() ?? false,
+            didLocalStoreExistBeforeLaunch: activeScopeStoreExistedBeforeBinding,
             localDataCount: localDataCount,
             latestBackupInfo: latestBackupInfo
         )

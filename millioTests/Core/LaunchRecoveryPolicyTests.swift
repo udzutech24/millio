@@ -11,6 +11,7 @@ struct LaunchRecoveryPolicyTests {
             LaunchRecoveryPolicy.shouldPresentRestore(
                 lifecycle: .ready,
                 hasCompletedOnboarding: true,
+                didLocalStoreExistBeforeLaunch: false,
                 localDataCount: 0,
                 latestBackupInfo: backupInfo
             )
@@ -20,6 +21,7 @@ struct LaunchRecoveryPolicyTests {
             !LaunchRecoveryPolicy.shouldPresentRestore(
                 lifecycle: .launching,
                 hasCompletedOnboarding: true,
+                didLocalStoreExistBeforeLaunch: false,
                 localDataCount: 0,
                 latestBackupInfo: backupInfo
             )
@@ -29,6 +31,7 @@ struct LaunchRecoveryPolicyTests {
             !LaunchRecoveryPolicy.shouldPresentRestore(
                 lifecycle: .ready,
                 hasCompletedOnboarding: false,
+                didLocalStoreExistBeforeLaunch: false,
                 localDataCount: 0,
                 latestBackupInfo: backupInfo
             )
@@ -38,6 +41,7 @@ struct LaunchRecoveryPolicyTests {
             !LaunchRecoveryPolicy.shouldPresentRestore(
                 lifecycle: .ready,
                 hasCompletedOnboarding: true,
+                didLocalStoreExistBeforeLaunch: false,
                 localDataCount: 3,
                 latestBackupInfo: backupInfo
             )
@@ -47,8 +51,19 @@ struct LaunchRecoveryPolicyTests {
             !LaunchRecoveryPolicy.shouldPresentRestore(
                 lifecycle: .ready,
                 hasCompletedOnboarding: true,
+                didLocalStoreExistBeforeLaunch: false,
                 localDataCount: 0,
                 latestBackupInfo: nil
+            )
+        )
+
+        #expect(
+            !LaunchRecoveryPolicy.shouldPresentRestore(
+                lifecycle: .ready,
+                hasCompletedOnboarding: true,
+                didLocalStoreExistBeforeLaunch: true,
+                localDataCount: 0,
+                latestBackupInfo: backupInfo
             )
         )
     }
