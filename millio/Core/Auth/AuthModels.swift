@@ -36,12 +36,15 @@ struct RefreshTokenRequest: Encodable, Sendable {
 enum AuthSessionSource: String, Equatable, Sendable {
     case appleSignIn = "apple_sign_in"
     case refresh
+    case cachedSnapshot = "cached_snapshot"
 
     var operation: AuthRequestOperation {
         switch self {
         case .appleSignIn:
             return .appleSignIn
         case .refresh:
+            return .refresh
+        case .cachedSnapshot:
             return .refresh
         }
     }

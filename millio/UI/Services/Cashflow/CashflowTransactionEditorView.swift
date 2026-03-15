@@ -1412,7 +1412,7 @@ private struct CashflowCategorySelectionSheet: View {
     }
 
     private var options: [CashflowCategoryOption] {
-        viewModel.categoryOptions(for: kind, matching: searchText)
+        viewModel.categoryOptions(for: kind, matching: searchText, includeHiddenSystem: true)
     }
 
     private var fallbackRaw: String {
@@ -1592,7 +1592,7 @@ private struct CashflowCategorySelectionSheet: View {
                 newIcon: icon
             ) else { return }
 
-            if let resolved = viewModel.categoryOptions(for: kind).first(where: {
+            if let resolved = viewModel.categoryOptions(for: kind, includeHiddenSystem: true).first(where: {
                 $0.displayName.caseInsensitiveCompare(trimmed) == .orderedSame
             }) {
                 selectedRaw = resolved.rawValue

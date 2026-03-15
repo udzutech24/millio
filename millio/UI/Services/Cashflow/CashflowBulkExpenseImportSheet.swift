@@ -1247,7 +1247,7 @@ struct CashflowBulkExpenseImportSheet: View {
     }
 
     private func makeEmptyCategoryDrafts() -> [CashflowBulkExpenseCategoryDraft] {
-        viewModel.categoryOptions(for: .expense).enumerated().map { index, option in
+        viewModel.categoryOptions(for: .expense, includeHiddenSystem: true).enumerated().map { index, option in
             CashflowBulkExpenseCategoryDraft(category: option, sourceOrderIndex: index)
         }
     }
@@ -1316,7 +1316,7 @@ struct CashflowBulkExpenseImportSheet: View {
             return
         }
 
-        let availableOptions = viewModel.categoryOptions(for: .expense)
+        let availableOptions = viewModel.categoryOptions(for: .expense, includeHiddenSystem: true)
         var mergedCount = 0
 
         for row in parsedRows {

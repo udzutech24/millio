@@ -9,6 +9,9 @@ struct APIClientFactory {
             tokenStore: AuthTokenStore(
                 refreshTokenStore: KeychainRefreshTokenStore(account: runtime.refreshTokenAccountKey)
             ),
+            sessionSnapshotStore: UserDefaultsAuthSessionSnapshotStore(
+                key: runtime.sessionSnapshotStorageKey
+            ),
             diagnosticsContext: AuthDiagnosticsContext(configuration: runtime.authConfiguration)
         )
     }

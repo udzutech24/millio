@@ -117,7 +117,7 @@ private struct CashflowCategoryTransactionSheet: View {
     @State private var showRecurringManagement: Bool = false
     @State private var showPlannedManagement: Bool = false
     @State private var showTransactionsHistory: Bool = false
-    @State private var showHelpSheet: Bool = false
+    @State private var showSettingsSheet: Bool = false
     @State private var showBulkExpenseImportSheet: Bool = false
     @State private var showBudgetSetupSheet: Bool = false
 
@@ -131,7 +131,6 @@ private struct CashflowCategoryTransactionSheet: View {
     @State private var categoryEditorIcon: String = CashflowCustomCategory.defaultIcon
     @State private var pendingDeleteCategoryRaw: String?
     @State private var categoryGridWidth: CGFloat = UIScreen.main.bounds.width
-
     private let outerCornerRadius: CGFloat = 22
     private let innerCornerRadius: CGFloat = 16
 
@@ -163,7 +162,11 @@ private struct CashflowCategoryTransactionSheet: View {
     }
 
     private var categories: [CashflowCategoryOption] {
-        viewModel.categoryOptions(for: kind.categoryKind, matching: searchText)
+        viewModel.orderedCategoryOptions(
+            for: kind.categoryKind,
+            matching: searchText,
+            totalsByCategory: categoryTotals
+        )
     }
 
     var body: some View {
@@ -228,8 +231,8 @@ private struct CashflowCategoryTransactionSheet: View {
                     onSave: handleCreateCategory
                 )
             }
-            .sheet(isPresented: $showHelpSheet) {
-                CashflowCategoryHelpSheet(kind: kind)
+            .sheet(isPresented: $showSettingsSheet) {
+                CashflowCategorySettingsSheet(viewModel: viewModel, kind: kind)
             }
             .sheet(isPresented: $showBulkExpenseImportSheet) {
                 CashflowBulkExpenseImportSheet(
@@ -348,9 +351,9 @@ private struct CashflowCategoryTransactionSheet: View {
             .accessibilityLabel(String(localized: "cashflow.operation.history_accessibility"))
 
             Button {
-                showHelpSheet = true
+                showSettingsSheet = true
             } label: {
-                Image(systemName: "questionmark.circle")
+                Image(systemName: "gearshape")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary.opacity(0.92))
                     .frame(width: 44, height: 44)
@@ -365,10 +368,7 @@ private struct CashflowCategoryTransactionSheet: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(
-                String(
-                    format: String(localized: "cashflow.category.hint_accessibility_format"),
-                    kind.navigationTitle.lowercased()
-                )
+                String(localized: "Settings")
             )
         }
         .padding(.top, 6)
@@ -640,103 +640,11 @@ private struct CashflowCategoryTransactionSheet: View {
     private var categoriesSection: some View {
         LazyVGrid(columns: categoryColumns, spacing: 10) {
             ForEach(categories) { option in
-                Button {
-                    selectedCategory = option
-                } label: {
-                    let summary = categoryBudgetSummary(for: option)
-                    let cardHasBudgetDetails = summary != nil
-                    let metrics = CashflowCategoryGridLayout.cardMetrics(
-                        showsBudgetDetails: cardHasBudgetDetails
-                    )
-                    VStack(alignment: .leading, spacing: metrics.contentSpacing) {
-                        HStack(alignment: .top) {
-                            CashflowCategoryIconView(
-                                icon: option.icon,
-                                fontSize: 18,
-                                fontWeight: .semibold,
-                                tint: AnyShapeStyle(AppColors.textPrimary)
-                            )
-                            Spacer(minLength: 6)
-                            if let summary, let badge = categoryBudgetBadgeText(summary.status) {
-                                Text(badge)
-                                    .font(.system(size: 9, weight: .bold))
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.75)
-                                    .foregroundStyle(budgetStatusColor(summary.status))
-                                    .padding(.horizontal, 7)
-                                    .padding(.vertical, 4)
-                                    .background(
-                                        Capsule(style: .continuous)
-                                            .fill(budgetStatusColor(summary.status).opacity(0.14))
-                                    )
-                            }
-                        }
-
-                        Text(option.displayName)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary)
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.72)
-                            .frame(maxWidth: .infinity, minHeight: metrics.titleMinHeight, alignment: .topLeading)
-
-                        if metrics.usesFlexibleSpacer {
-                            Spacer(minLength: 0)
-                        }
-
-                        Text(formattedCategoryTotal(for: option))
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(summary == nil ? AppColors.textSecondary : AppColors.textPrimary.opacity(0.95))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                            .padding(.top, metrics.amountTopPadding)
-
-                        if let summary {
-                            VStack(alignment: .leading, spacing: metrics.contentSpacing) {
-                                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                                    Text(formattedAmount(summary.spent))
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundStyle(budgetStatusColor(summary.status))
-                                        .lineLimit(1)
-                                        .minimumScaleFactor(0.72)
-                                    Text("/")
-                                        .font(.system(size: 10, weight: .semibold))
-                                        .foregroundStyle(Color.white.opacity(0.42))
-                                    Text(formattedAmount(summary.limit))
-                                        .font(.system(size: 10, weight: .medium))
-                                        .foregroundStyle(Color.white.opacity(0.68))
-                                        .lineLimit(1)
-                                        .minimumScaleFactor(0.72)
-                                    Spacer(minLength: 0)
-                                }
-
-                                GeometryReader { proxy in
-                                    let progress = min(max(summary.progress, 0), 1)
-                                    ZStack(alignment: .leading) {
-                                        Capsule(style: .continuous)
-                                            .fill(Color.white.opacity(0.08))
-                                        Capsule(style: .continuous)
-                                            .fill(budgetStatusColor(summary.status))
-                                            .frame(width: max(8, proxy.size.width * progress))
-                                    }
-                                }
-                                .frame(height: 5)
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity, minHeight: metrics.cardMinHeight, alignment: .topLeading)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, metrics.verticalPadding)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color.black.opacity(0.28))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(categoryStrokeStyle(for: option), lineWidth: 1.1)
-                            )
-                    )
-                }
-                .buttonStyle(.plain)
+                categoryCard(for: option)
                 .contextMenu {
+                    Button(viewModel.isCategoryPinned(rawValue: option.rawValue, kind: kind.categoryKind) ? "Unpin" : "Pin") {
+                        togglePinned(for: option)
+                    }
                     Button("Edit") {
                         openCategoryEditor(for: option)
                     }
@@ -759,6 +667,130 @@ private struct CashflowCategoryTransactionSheet: View {
                         updateCategoryGridWidth(newWidth)
                     }
             }
+        }
+    }
+
+    private func categoryCard(for option: CashflowCategoryOption) -> some View {
+        let summary = categoryBudgetSummary(for: option)
+        let cardHasBudgetDetails = summary != nil
+        let metrics = CashflowCategoryGridLayout.cardMetrics(
+            showsBudgetDetails: cardHasBudgetDetails
+        )
+        let isPinned = viewModel.isCategoryPinned(rawValue: option.rawValue, kind: kind.categoryKind)
+
+        return ZStack(alignment: .topTrailing) {
+            Button {
+                selectedCategory = option
+            } label: {
+                VStack(alignment: .leading, spacing: metrics.contentSpacing) {
+                    HStack(alignment: .top) {
+                        CashflowCategoryIconView(
+                            icon: option.icon,
+                            fontSize: 18,
+                            fontWeight: .semibold,
+                            tint: AnyShapeStyle(AppColors.textPrimary)
+                        )
+                        Spacer(minLength: 6)
+                        if let summary, let badge = categoryBudgetBadgeText(summary.status) {
+                            Text(badge)
+                                .font(.system(size: 9, weight: .bold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
+                                .foregroundStyle(budgetStatusColor(summary.status))
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule(style: .continuous)
+                                        .fill(budgetStatusColor(summary.status).opacity(0.14))
+                                )
+                                .padding(.trailing, isPinned ? 28 : 0)
+                        }
+                    }
+
+                    Text(option.displayName)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.72)
+                        .frame(maxWidth: .infinity, minHeight: metrics.titleMinHeight, alignment: .topLeading)
+
+                    if metrics.usesFlexibleSpacer {
+                        Spacer(minLength: 0)
+                    }
+
+                    Text(formattedCategoryTotal(for: option))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(summary == nil ? AppColors.textSecondary : AppColors.textPrimary.opacity(0.95))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .padding(.top, metrics.amountTopPadding)
+
+                    if let summary {
+                        VStack(alignment: .leading, spacing: metrics.contentSpacing) {
+                            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                Text(formattedAmount(summary.spent))
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(budgetStatusColor(summary.status))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.72)
+                                Text("/")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(Color.white.opacity(0.42))
+                                Text(formattedAmount(summary.limit))
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(Color.white.opacity(0.68))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.72)
+                                Spacer(minLength: 0)
+                            }
+
+                            GeometryReader { proxy in
+                                let progress = min(max(summary.progress, 0), 1)
+                                ZStack(alignment: .leading) {
+                                    Capsule(style: .continuous)
+                                        .fill(Color.white.opacity(0.08))
+                                    Capsule(style: .continuous)
+                                        .fill(budgetStatusColor(summary.status))
+                                        .frame(width: max(8, proxy.size.width * progress))
+                                }
+                            }
+                            .frame(height: 5)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: metrics.cardMinHeight, alignment: .topLeading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, metrics.verticalPadding)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color.black.opacity(0.28))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(categoryStrokeStyle(for: option), lineWidth: 1.1)
+                        )
+                )
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                togglePinned(for: option)
+            } label: {
+                Image(systemName: isPinned ? "pin.fill" : "pin")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(isPinned ? Color.black : AppColors.textPrimary.opacity(0.82))
+                    .frame(width: 28, height: 28)
+                    .background(
+                        Circle()
+                            .fill(isPinned ? Color(hex: "FF6B6B") : Color.white.opacity(0.08))
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.white.opacity(isPinned ? 0.0 : 0.10), lineWidth: 1)
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+            .padding(8)
+            .accessibilityLabel(isPinned ? "Unpin category" : "Pin category")
         }
     }
 
@@ -907,6 +939,11 @@ private struct CashflowCategoryTransactionSheet: View {
         showCreateCategorySheet = false
     }
 
+    private func togglePinned(for option: CashflowCategoryOption) {
+        let nextValue = !viewModel.isCategoryPinned(rawValue: option.rawValue, kind: kind.categoryKind)
+        viewModel.setCategoryPinned(rawValue: option.rawValue, kind: kind.categoryKind, isPinned: nextValue)
+    }
+
     private func openCategoryEditor(for option: CashflowCategoryOption) {
         categoryEditorMode = .edit(rawValue: option.rawValue)
         categoryEditorName = option.displayName
@@ -932,7 +969,7 @@ private struct CashflowCategoryTransactionSheet: View {
             ) else { return }
 
             if selectedCategory?.rawValue == rawValue {
-                if let resolved = viewModel.categoryOptions(for: kind.categoryKind).first(where: {
+                if let resolved = viewModel.categoryOptions(for: kind.categoryKind, includeHiddenSystem: true).first(where: {
                     $0.displayName.caseInsensitiveCompare(trimmedName) == .orderedSame
                 }) {
                     selectedCategory = resolved
@@ -1222,6 +1259,157 @@ private struct CashflowCategoryHelpSheet: View {
     }
 }
 
+private struct CashflowCategorySettingsSheet: View {
+    @ObservedObject var viewModel: CashflowViewModel
+    let kind: CashflowCategoryTransactionSheetKind
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var searchText: String = ""
+
+    private var systemOptions: [CashflowCategoryOption] {
+        viewModel.categoryOptions(
+            for: kind.categoryKind,
+            matching: searchText,
+            includeHiddenSystem: true
+        ).filter { !$0.isCustom }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(
+                                String(
+                                    localized: "cashflow.category.settings.title",
+                                    defaultValue: "Category settings",
+                                    comment: "Category settings section title"
+                                )
+                            )
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(AppColors.textPrimary)
+
+                            HStack(spacing: 10) {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(AppColors.textSecondary)
+                                TextField(
+                                    String(
+                                        localized: "cashflow.operation.search_category",
+                                        defaultValue: "Search category",
+                                        comment: "Category settings search placeholder"
+                                    ),
+                                    text: $searchText
+                                )
+                                .textInputAutocapitalization(.words)
+                                .foregroundStyle(AppColors.textPrimary)
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(Color.white.opacity(0.06))
+                            )
+
+                            VStack(spacing: 10) {
+                                ForEach(systemOptions) { option in
+                                    categoryVisibilityRow(for: option)
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 14)
+                    .padding(.bottom, 28)
+                }
+            }
+            .navigationTitle(
+                String(
+                    localized: "Settings",
+                    defaultValue: "Settings",
+                    comment: "Settings sheet title"
+                )
+            )
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary.opacity(0.92))
+                    }
+                    .accessibilityLabel(String(localized: "cashflow.common.close"))
+                }
+            }
+        }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func categoryVisibilityRow(for option: CashflowCategoryOption) -> some View {
+        let isVisible = viewModel.categoryOptions(for: kind.categoryKind).contains { $0.rawValue == option.rawValue }
+        let canHide = option.rawValue != ExpenseCategory.other.rawValue
+
+        return HStack(spacing: 12) {
+            CashflowCategoryIconView(
+                icon: option.icon,
+                fontSize: 18,
+                fontWeight: .semibold,
+                tint: AnyShapeStyle(AppColors.textPrimary)
+            )
+            .frame(width: 28, height: 28)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(option.displayName)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                Text(
+                    canHide
+                    ? (isVisible ? "Visible in list" : "Hidden from list")
+                    : "Always visible"
+                )
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppColors.textSecondary)
+            }
+
+            Spacer()
+
+            Toggle(
+                "",
+                isOn: Binding(
+                    get: { isVisible },
+                    set: { newValue in
+                        _ = viewModel.setSystemCategoryHidden(
+                            kind: kind.categoryKind,
+                            categoryRaw: option.rawValue,
+                            isHidden: !newValue
+                        )
+                    }
+                )
+            )
+            .labelsHidden()
+            .tint(AppColors.brandPrimary)
+            .disabled(!canHide)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white.opacity(0.05))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                )
+        )
+    }
+}
+
 enum CashflowCategoryTransactionSheetKind {
     case income
     case expense
@@ -1339,6 +1527,10 @@ private struct CashflowCategoryQuickCreateSheet: View {
         }
     }
 
+    private var suggestedIcons: [String] {
+        ExpenseCategoryCatalog.suggestedIcons(for: name)
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -1359,6 +1551,48 @@ private struct CashflowCategoryQuickCreateSheet: View {
                         FinancesSectionHeader(title: String(localized: "cashflow.editor.category_icon"))
                         FinancesGlassCard {
                             VStack(spacing: 12) {
+                                if !suggestedIcons.isEmpty {
+                                    VStack(alignment: .leading, spacing: 10) {
+                                        Text(
+                                            String(
+                                                localized: "cashflow.editor.icon_suggestions",
+                                                defaultValue: "Suggested icons",
+                                                comment: "Suggested icons title for category creation"
+                                            )
+                                        )
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(AppColors.textSecondary)
+
+                                        ScrollView(.horizontal, showsIndicators: false) {
+                                            HStack(spacing: 10) {
+                                                ForEach(suggestedIcons, id: \.self) { suggested in
+                                                    Button {
+                                                        icon = suggested
+                                                    } label: {
+                                                        CashflowCategoryIconView(
+                                                            icon: suggested,
+                                                            fontSize: 22,
+                                                            fontWeight: .semibold,
+                                                            tint: AnyShapeStyle(icon == suggested ? AppColors.textPrimary : AppColors.textSecondary)
+                                                        )
+                                                        .frame(width: 52, height: 52)
+                                                        .background(
+                                                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                                                .fill(icon == suggested ? Color.white.opacity(0.14) : Color.white.opacity(0.06))
+                                                                .overlay(
+                                                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                                                        .stroke(Color.white.opacity(icon == suggested ? 0.24 : 0.10), lineWidth: 1)
+                                                                )
+                                                        )
+                                                    }
+                                                    .buttonStyle(.plain)
+                                                }
+                                            }
+                                            .padding(.horizontal, 2)
+                                        }
+                                    }
+                                }
+
                                 Picker(String(localized: "cashflow.editor.icon_type"), selection: $selectedTab) {
                                     ForEach(IconPickerTab.allCases) { tab in
                                         Text(tab.rawValue).tag(tab)

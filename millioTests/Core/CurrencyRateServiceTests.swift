@@ -234,4 +234,38 @@ struct CurrencyRateServiceTests {
         #expect(r2 == 90.0)
         #expect(loader.requestedURLs == [url1, url2])
     }
+
+    @Test("Frankfurter HTTP 404 для той же даты и пары не должен повторно ходить в сеть")
+    func testHistorical404IsNegativeCachedPerDateAndPair() async {
+        final class MockHistoricalLoader: HTTPDataLoading {
+            private(set) var requestedURLs: [URL] = []
+
+            func data(from url: URL) async throws -> (Data, URLResponse) {
+                requestedURLs.append(url)
+                let data = Data(#"{"message":"not found"}"#.utf8)
+                let http = HTTPURLResponse(
+                    url: url,
+                    statusCode: 404,
+                    httpVersion: "HTTP/1.1",
+                    headerFields: ["Content-Type": "application/json"]
+                )!
+                return (data, http)
+            }
+        }
+
+        let loader = MockHistoricalLoader()
+        let service = CurrencyRateService(
+            rateSource: .erapi,
+            rateRepository: MockRateRepository(),
+            historicalLoader: loader
+        )
+        let date = Date(timeIntervalSince1970: 1_704_067_200)
+
+        let first = await service.getHistoricalRate(on: date, from: "CNY", to: "RUB")
+        let second = await service.getHistoricalRate(on: date, from: "CNY", to: "RUB")
+
+        #expect(first == nil)
+        #expect(second == nil)
+        #expect(loader.requestedURLs.count == 1)
+    }
 }

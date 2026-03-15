@@ -79,8 +79,13 @@ final class CrashlyticsBootstrap {
         started = true
         
         firebase.configureIfNeeded()
-        
-        crashReporting.setReporter(reporterFactory())
+
+        if environment.isCrashlyticsEnabled {
+            crashReporting.setReporter(reporterFactory())
+        } else {
+            crashReporting.setReporter(NoopCrashReporter())
+        }
+
         crashReporting.setEnabled(environment.isCrashlyticsEnabled)
         crashReporting.setCustomValue(environment.isDebug, forKey: "is_debug")
         crashReporting.setCustomValue(environment.isUnitTesting, forKey: "is_unit_testing")

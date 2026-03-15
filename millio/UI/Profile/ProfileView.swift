@@ -559,7 +559,7 @@ struct ProfileView: View {
                             SubscriptionManager.shared.grantDebugPremium()
                         } else {
                             SubscriptionManager.shared.revokeDebugPremium()
-                            await SubscriptionManager.shared.checkSubscriptionStatus()
+                            await SubscriptionManager.shared.checkSubscriptionStatus(force: true)
                         }
 
                         appState.applySubscriptionSnapshot(SubscriptionManager.shared.snapshot)
@@ -577,7 +577,7 @@ struct ProfileView: View {
                 set: { newValue in
                     Task { @MainActor in
                         SubscriptionManager.shared.setTrialDisabledOverride(newValue)
-                        await SubscriptionManager.shared.checkSubscriptionStatus()
+                        await SubscriptionManager.shared.checkSubscriptionStatus(force: true)
                         appState.applySubscriptionSnapshot(SubscriptionManager.shared.snapshot)
                     }
                 }

@@ -745,7 +745,6 @@ struct SubscriptionView: View {
                 )
             )
 
-            await SubscriptionManager.shared.checkSubscriptionStatus()
             appState.applySubscriptionSnapshot(SubscriptionManager.shared.snapshot)
 
         } catch {

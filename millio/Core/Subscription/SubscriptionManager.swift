@@ -70,7 +70,7 @@ protocol SubscriptionManagerProtocol {
     var expirationDate: Date? { get }
     var isTrialActive: Bool { get }
     
-    func checkSubscriptionStatus() async
+    func checkSubscriptionStatus(force: Bool) async
     func purchaseSubscription(productId: String) async throws
     func restorePurchases() async throws
     func startTrial() async throws
@@ -93,6 +93,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
     private let debugSubscriptionExpirationKey = "debug_subscription_expiration"
     private let trialDisabledOverrideKey = "debug_trial_disabled_override"
     private let trialDurationDays = 7
+    private let statusRefreshCooldown: TimeInterval
     
     // Product IDs (нужно будет настроить в App Store Connect)
     private let monthlyProductId = "com.millio.pro.monthly"
@@ -103,14 +104,18 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
     @Published private(set) var isTrialActive: Bool = false
     
     private var updateListenerTask: Task<Void, Never>?
+    private var statusRefreshTask: Task<Void, Never>?
+    private var lastStatusRefreshAt: Date?
     
     init(
         defaults: UserDefaults = .standard,
         startTransactionListener: Bool = true,
-        now: @escaping () -> Date = Date.init
+        now: @escaping () -> Date = Date.init,
+        statusRefreshCooldown: TimeInterval = 2
     ) {
         self.defaults = defaults
         self.now = now
+        self.statusRefreshCooldown = max(0, statusRefreshCooldown)
         
         // Загружаем локально сохраненный статус (offline-first)
         loadLocalStatus()
@@ -129,7 +134,32 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
     
     // MARK: - Public Methods
     
-    func checkSubscriptionStatus() async {
+    func checkSubscriptionStatus(force: Bool = false) async {
+        if !force {
+            if let statusRefreshTask {
+                await statusRefreshTask.value
+                return
+            }
+
+            if let lastStatusRefreshAt,
+               now().timeIntervalSince(lastStatusRefreshAt) < statusRefreshCooldown {
+                return
+            }
+        }
+
+        let task = Task { @MainActor in
+            await refreshSubscriptionStatus()
+        }
+        statusRefreshTask = task
+        await task.value
+    }
+
+    private func refreshSubscriptionStatus() async {
+        defer {
+            lastStatusRefreshAt = now()
+            statusRefreshTask = nil
+        }
+
         logger.info("Checking subscription status...")
         
         // Если включен дебаг-премиум, не проверяем StoreKit
@@ -201,7 +231,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
             await transaction.finish()
             
             // Обновляем статус после успешной покупки
-            await checkSubscriptionStatus()
+            await checkSubscriptionStatus(force: true)
             
             logger.info("Subscription purchased successfully")
             
@@ -220,7 +250,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
         logger.info("Restoring purchases...")
         
         try await AppStore.sync()
-        await checkSubscriptionStatus()
+        await checkSubscriptionStatus(force: true)
         
         logger.info("Purchases restored")
     }
@@ -393,7 +423,7 @@ final class SubscriptionManager: SubscriptionManagerProtocol {
                 switch result {
                 case .verified(let transaction):
                     await transaction.finish()
-                    await self?.checkSubscriptionStatus()
+                    await self?.checkSubscriptionStatus(force: true)
                 case .unverified:
                     // Пропускаем непроверенные транзакции
                     continue

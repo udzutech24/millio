@@ -355,7 +355,8 @@ final class CashflowViewModel: ViewModelProtocol {
     private let notificationManager: NotificationManagerProtocol
     private let now: () -> Date
     private let assetsSnapshotProvider: ((Date, Date, String) async -> (start: Double, end: Double)?)?
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
+    private let categoryPinPrefs: CashflowCategoryPinPrefs
     private let budgetAutoRepeatPrefs = BudgetAutoRepeatPrefs()
     
     private var eventSubscriptionID: UUID?
@@ -367,13 +368,16 @@ final class CashflowViewModel: ViewModelProtocol {
         modelContext: ModelContext,
         notificationManager: NotificationManagerProtocol? = nil,
         now: @escaping () -> Date = Date.init,
-        assetsSnapshotProvider: ((Date, Date, String) async -> (start: Double, end: Double)?)? = nil
+        assetsSnapshotProvider: ((Date, Date, String) async -> (start: Double, end: Double)?)? = nil,
+        defaults: UserDefaults = .standard
     ) {
         self.modelContext = modelContext
         self.historicalRateStore = HistoricalRateStore(modelContext: modelContext)
         self.notificationManager = notificationManager ?? NotificationManager.shared
         self.now = now
         self.assetsSnapshotProvider = assetsSnapshotProvider
+        self.defaults = defaults
+        self.categoryPinPrefs = CashflowCategoryPinPrefs(defaults: defaults)
         state.displayCurrency = SettingsManager.shared.primaryCurrencyCode
         let nowDate = now()
         state.selectedMonth = nowDate
@@ -1199,10 +1203,11 @@ final class CashflowViewModel: ViewModelProtocol {
             cardID: request.cardID,
             month: request.month
         )
+        let nowDate = now()
         let transactionDates = Self.bulkExpenseTransactionDates(
             for: request.month,
             count: sortedEntries.count,
-            referenceDate: now(),
+            referenceDate: nowDate,
             calendar: Calendar.current
         )
 
@@ -1230,6 +1235,12 @@ final class CashflowViewModel: ViewModelProtocol {
         }
 
         var seenReferenceKeys = Set<String>()
+        ensureSystemCategoriesVisible(
+            rawValues: sortedEntries.map(\.expenseCategoryRaw),
+            kind: .expense,
+            nowDate: nowDate
+        )
+
         for (index, entry) in sortedEntries.enumerated() {
             let referenceKey = Self.bulkExpenseImportReferenceKey(
                 cardID: request.cardID,
@@ -1259,7 +1270,7 @@ final class CashflowViewModel: ViewModelProtocol {
             transaction.importSourceRaw = CashflowBulkExpenseImportTransactionSource.monthlyCategoryRollup.rawValue
             transaction.importReferenceKey = referenceKey
             transaction.affectsCardBalance = request.shouldAffectCardBalance
-            transaction.updatedAt = Date()
+            transaction.updatedAt = nowDate
 
             let exchangeInfo = await resolveExchangeInfo(for: transaction)
             transaction.exchangeRate = exchangeInfo.rate
@@ -1590,16 +1601,87 @@ final class CashflowViewModel: ViewModelProtocol {
 
     // MARK: - Categories
 
-    func categoryOptions(for kind: CashflowCategoryKind, matching query: String = "") -> [CashflowCategoryOption] {
+    func categoryOptions(
+        for kind: CashflowCategoryKind,
+        matching query: String = "",
+        includeHiddenSystem: Bool = false
+    ) -> [CashflowCategoryOption] {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let options = systemCategoryOptions(for: kind) + customCategoryOptions(for: kind)
+        let options = systemCategoryOptions(for: kind, includeHidden: includeHiddenSystem) + customCategoryOptions(for: kind)
 
         guard !trimmedQuery.isEmpty else { return options }
-        return options.filter { $0.displayName.localizedCaseInsensitiveContains(trimmedQuery) }
+        return options.filter { option in
+            if option.isCustom {
+                return option.displayName.localizedCaseInsensitiveContains(trimmedQuery)
+            }
+            return ExpenseCategoryCatalog.matchesSearch(rawValue: option.rawValue, query: trimmedQuery)
+        }
+    }
+
+    func orderedCategoryOptions(
+        for kind: CashflowCategoryKind,
+        matching query: String = "",
+        includeHiddenSystem: Bool = false,
+        totalsByCategory: [String: Double] = [:]
+    ) -> [CashflowCategoryOption] {
+        let options = categoryOptions(
+            for: kind,
+            matching: query,
+            includeHiddenSystem: includeHiddenSystem
+        )
+
+        return Self.sortCategoryOptions(
+            options,
+            totalsByCategory: totalsByCategory,
+            pinnedRawValues: categoryPinPrefs.pinnedRawValues(for: kind)
+        )
+    }
+
+    func isCategoryPinned(rawValue: String, kind: CashflowCategoryKind) -> Bool {
+        categoryPinPrefs.isPinned(categoryRaw: rawValue, kind: kind)
+    }
+
+    func setCategoryPinned(rawValue: String, kind: CashflowCategoryKind, isPinned: Bool) {
+        categoryPinPrefs.setPinned(isPinned, categoryRaw: rawValue, kind: kind)
+        objectWillChange.send()
+    }
+
+    static func sortCategoryOptions(
+        _ options: [CashflowCategoryOption],
+        totalsByCategory: [String: Double],
+        pinnedRawValues: Set<String>
+    ) -> [CashflowCategoryOption] {
+        options.sorted { lhs, rhs in
+            let lhsPinned = pinnedRawValues.contains(lhs.rawValue)
+            let rhsPinned = pinnedRawValues.contains(rhs.rawValue)
+            if lhsPinned != rhsPinned {
+                return lhsPinned && !rhsPinned
+            }
+
+            let lhsTotal = totalsByCategory[lhs.rawValue] ?? 0
+            let rhsTotal = totalsByCategory[rhs.rawValue] ?? 0
+            let lhsHasActivity = lhsTotal > 0.0000001
+            let rhsHasActivity = rhsTotal > 0.0000001
+
+            if lhsHasActivity != rhsHasActivity {
+                return lhsHasActivity && !rhsHasActivity
+            }
+
+            if abs(lhsTotal - rhsTotal) > 0.0000001 {
+                return lhsTotal > rhsTotal
+            }
+
+            let nameOrder = lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName)
+            if nameOrder != .orderedSame {
+                return nameOrder == .orderedAscending
+            }
+
+            return lhs.rawValue < rhs.rawValue
+        }
     }
 
     func categoryOption(for raw: String, kind: CashflowCategoryKind, fallbackName: String = "") -> CashflowCategoryOption {
-        if let system = systemCategoryOption(for: raw, kind: kind) {
+        if let system = systemCategoryOption(for: raw, kind: kind, includeHidden: true) {
             return system
         }
         if let customID = Self.customCategoryID(from: raw),
@@ -1641,7 +1723,7 @@ final class CashflowViewModel: ViewModelProtocol {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
-        if let system = systemCategoryOptions(for: kind).first(where: {
+        if let system = systemCategoryOptions(for: kind, includeHidden: true).first(where: {
             $0.displayName.caseInsensitiveCompare(trimmed) == .orderedSame
         }) {
             return system
@@ -1799,7 +1881,7 @@ final class CashflowViewModel: ViewModelProtocol {
         let normalizedIcon = CashflowCustomCategory.normalizeIcon(newIcon ?? base.icon)
         let nowDate = Date()
 
-        if let duplicateSystem = systemCategoryOptions(for: kind).first(where: {
+        if let duplicateSystem = systemCategoryOptions(for: kind, includeHidden: true).first(where: {
             $0.rawValue != rawValue && $0.displayName.caseInsensitiveCompare(trimmed) == .orderedSame
         }) {
             migrateTransactions(
@@ -2707,6 +2789,12 @@ final class CashflowViewModel: ViewModelProtocol {
         replacing explicitExistingTransaction: CashflowTransaction? = nil
     ) async -> Bool {
         let existingTransaction = explicitExistingTransaction ?? state.editingTransaction
+        let nowDate = now()
+        ensureSystemCategoriesVisible(
+            rawValues: [transaction.incomeCategoryRaw, transaction.expenseCategoryRaw].compactMap { $0 },
+            kind: transaction.transactionType == .income ? .income : .expense,
+            nowDate: nowDate
+        )
         let exchangeInfo = await resolveExchangeInfo(for: transaction)
 
         do {
@@ -2752,7 +2840,7 @@ final class CashflowViewModel: ViewModelProtocol {
             existing.exchangeRate = exchangeInfo.rate
             existing.exchangeRateDate = exchangeInfo.rateDate
             existing.exchangeRateCurrency = exchangeInfo.rateCurrency
-            existing.updatedAt = Date()
+            existing.updatedAt = nowDate
         } else {
             // Создаем новую транзакцию
             let newTransaction = CashflowTransaction(
@@ -2851,7 +2939,7 @@ final class CashflowViewModel: ViewModelProtocol {
 
     private func defaultCategoryOption(for kind: CashflowCategoryKind) -> CashflowCategoryOption {
         let fallbackRaw = fallbackCategoryRaw(for: kind)
-        return systemCategoryOption(for: fallbackRaw, kind: kind) ?? CashflowCategoryOption(
+        return systemCategoryOption(for: fallbackRaw, kind: kind, includeHidden: true) ?? CashflowCategoryOption(
             rawValue: fallbackRaw,
             displayName: "Other",
             icon: "ellipsis.circle.fill",
@@ -2859,12 +2947,16 @@ final class CashflowViewModel: ViewModelProtocol {
         )
     }
 
-    private func systemCategoryOption(for raw: String, kind: CashflowCategoryKind) -> CashflowCategoryOption? {
+    private func systemCategoryOption(
+        for raw: String,
+        kind: CashflowCategoryKind,
+        includeHidden: Bool = false
+    ) -> CashflowCategoryOption? {
         guard let base = baseSystemCategoryOption(for: raw, kind: kind) else {
             return nil
         }
         if let override = systemCategoryOverride(for: raw, kind: kind) {
-            if override.isHidden {
+            if override.isHidden && !includeHidden {
                 return nil
             }
             return CashflowCategoryOption(
@@ -2877,10 +2969,63 @@ final class CashflowViewModel: ViewModelProtocol {
         return base
     }
 
-    private func systemCategoryOptions(for kind: CashflowCategoryKind) -> [CashflowCategoryOption] {
+    private func systemCategoryOptions(
+        for kind: CashflowCategoryKind,
+        includeHidden: Bool = false
+    ) -> [CashflowCategoryOption] {
         systemCategoryRaws(for: kind).compactMap { raw in
-            systemCategoryOption(for: raw, kind: kind)
+            systemCategoryOption(for: raw, kind: kind, includeHidden: includeHidden)
         }
+    }
+
+    private func ensureSystemCategoriesVisible(rawValues: [String], kind: CashflowCategoryKind, nowDate: Date) {
+        let systemRaws = Set(systemCategoryRaws(for: kind))
+        let rawsToReveal = Set(rawValues).intersection(systemRaws)
+
+        guard !rawsToReveal.isEmpty else { return }
+
+        for raw in rawsToReveal {
+            guard let existing = systemCategoryOverride(for: raw, kind: kind), existing.isHidden else {
+                continue
+            }
+            existing.isHidden = false
+            existing.updatedAt = nowDate
+        }
+    }
+
+    @discardableResult
+    func setSystemCategoryHidden(
+        kind: CashflowCategoryKind,
+        categoryRaw: String,
+        isHidden: Bool
+    ) -> Bool {
+        guard let base = baseSystemCategoryOption(for: categoryRaw, kind: kind) else {
+            return false
+        }
+        guard !isProtectedFallbackCategory(rawValue: categoryRaw, kind: kind) || !isHidden else {
+            return false
+        }
+
+        let nowDate = now()
+        if isHidden {
+            setSystemCategoryOverride(
+                kind: kind,
+                categoryRaw: categoryRaw,
+                name: base.displayName,
+                icon: base.icon,
+                isHidden: true,
+                nowDate: nowDate
+            )
+        } else if let override = systemCategoryOverride(for: categoryRaw, kind: kind) {
+            if override.name == base.displayName && override.icon == base.icon {
+                removeSystemCategoryOverride(kind: kind, categoryRaw: categoryRaw)
+            } else {
+                override.isHidden = false
+                override.updatedAt = nowDate
+            }
+        }
+
+        return saveCategoriesAndTransactions()
     }
 
     private func customCategoryOptions(for kind: CashflowCategoryKind) -> [CashflowCategoryOption] {

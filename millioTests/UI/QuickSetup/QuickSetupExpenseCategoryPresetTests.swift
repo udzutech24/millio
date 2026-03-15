@@ -7,15 +7,15 @@ final class QuickSetupExpenseCategoryPresetTests: XCTestCase {
         let namesByID = Dictionary(uniqueKeysWithValues: presets.map { ($0.id, $0.displayName) })
 
         XCTAssertEqual(namesByID[ExpenseCategory.groceries.rawValue], "Продукты")
-        XCTAssertEqual(namesByID[ExpenseCategory.transport.rawValue], "Транспорт")
-        XCTAssertEqual(namesByID[ExpenseCategory.other.rawValue], "Другое")
+        XCTAssertEqual(namesByID[ExpenseCategory.fuel.rawValue], "АЗС")
+        XCTAssertEqual(namesByID[ExpenseCategory.other.rawValue], "Разное")
     }
 
-    func testCustomExpenseCategoriesAreLocalizedForEnglishLocale() {
+    func testExpandedSystemExpenseCategoriesAreLocalizedForEnglishLocale() {
         let presets = QuickSetupExpenseCategoryPreset.all(for: Locale(identifier: "en_US"))
         let namesByID = Dictionary(uniqueKeysWithValues: presets.map { ($0.id, $0.displayName) })
 
-        XCTAssertEqual(namesByID["custom:travel"], "Travel")
-        XCTAssertEqual(namesByID["custom:home"], "Home")
+        XCTAssertEqual(namesByID[ExpenseCategory.travel.rawValue], "Travel")
+        XCTAssertEqual(namesByID[ExpenseCategory.marketplaces.rawValue], "Marketplaces")
     }
 }

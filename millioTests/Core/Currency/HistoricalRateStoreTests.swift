@@ -215,4 +215,24 @@ struct HistoricalRateStoreTests {
         #expect(result.rate == 95.0)
         #expect(result.resolution == .exact)
     }
+
+    @Test("Store не повторяет historical lookup для того же miss")
+    func testStoreNegativeCachesUnavailableHistoricalRequests() async throws {
+        let context = try createTestModelContext()
+        let mockService = MockHistoricalRateService()
+        mockService.historicalRate = nil
+        mockService.currentRate = 92.0
+
+        let store = HistoricalRateStore(modelContext: context, currencyService: mockService)
+        let date = Calendar.current.startOfDay(for: Date().addingTimeInterval(-7 * 86400))
+
+        let first = await store.getRate(on: date, from: "CNY", to: "RUB")
+        let second = await store.getRate(on: date, from: "CNY", to: "RUB")
+
+        #expect(first.rate == 92.0)
+        #expect(first.resolution == .current)
+        #expect(second.rate == 92.0)
+        #expect(second.resolution == .current)
+        #expect(mockService.historicalCalls == 1)
+    }
 }

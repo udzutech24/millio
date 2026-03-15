@@ -87,9 +87,9 @@ final class AppLifecycleUseCase: AppLifecycleUseCaseProtocol {
         Task.detached {
             let iCloudStart = DispatchTime.now()
             let result = await withTimeout(seconds: 5, operation: {
-                async let available = backupManager.isAvailable()
-                async let info = backupManager.lastBackupInfo()
-                return await (available, info)
+                let available = await backupManager.isAvailable()
+                let info = available ? await backupManager.lastBackupInfo() : nil
+                return (available, info)
             })
 
             let available = result?.0 ?? false

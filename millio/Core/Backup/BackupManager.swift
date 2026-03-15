@@ -669,7 +669,7 @@ actor BackupManager: BackupManagerProtocol {
         do {
             return try await cloudStore.getLatestBackupInfo()
         } catch {
-            logger.error("Failed to get backup info: \(error.localizedDescription)")
+            logger.warning("Backup info lookup degraded: \(error.localizedDescription)")
             return nil
         }
     }

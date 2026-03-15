@@ -152,6 +152,36 @@ struct CashbackViewModelCustomCategoryTests {
         #expect(option.isCustom)
     }
 
+    @Test("Системные категории кешбэка ищутся по короткому имени и alias")
+    func testCategoryOptionsMatchShortNamesAndAliases() throws {
+        let context = try createModelContext()
+        let viewModel = CashbackViewModel(modelContext: context)
+
+        let byShortName = viewModel.categoryOptions(matching: "азс")
+        let byAlias = viewModel.categoryOptions(matching: "заправки")
+        let byMarketplace = viewModel.categoryOptions(matching: "wildberries")
+
+        #expect(byShortName.contains { $0.rawValue == CashbackCategory.gasStation.rawValue })
+        #expect(byAlias.contains { $0.rawValue == CashbackCategory.gasStation.rawValue })
+        #expect(byMarketplace.contains { $0.rawValue == CashbackCategory.marketplaces.rawValue })
+    }
+
+    @Test("Системную категорию кешбэка можно скрыть и вернуть обратно")
+    func testSetCategoryHiddenTogglesVisibility() throws {
+        let context = try createModelContext()
+        let defaults = makeDefaults()
+        let viewModel = CashbackViewModel(modelContext: context, defaults: defaults)
+
+        #expect(viewModel.categoryOptions().contains { $0.rawValue == CashbackCategory.gasStation.rawValue })
+
+        #expect(viewModel.setCategoryHidden(rawValue: CashbackCategory.gasStation.rawValue, isHidden: true))
+        #expect(!viewModel.categoryOptions().contains { $0.rawValue == CashbackCategory.gasStation.rawValue })
+        #expect(viewModel.categoryOptions(includeHidden: true).contains { $0.rawValue == CashbackCategory.gasStation.rawValue })
+
+        #expect(viewModel.setCategoryHidden(rawValue: CashbackCategory.gasStation.rawValue, isHidden: false))
+        #expect(viewModel.categoryOptions().contains { $0.rawValue == CashbackCategory.gasStation.rawValue })
+    }
+
     @Test("updateCashbacksForCard сохраняет кастомную категорию в кэшбэке")
     func testUpdateCashbacksForCardWithCustomCategory() throws {
         let context = try createModelContext()

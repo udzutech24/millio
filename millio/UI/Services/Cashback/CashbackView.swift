@@ -71,7 +71,7 @@ private struct CashbackContentViewInternal: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
     @Environment(AppRouter.self) private var router
-    @State private var showFavoriteCategoriesSheet: Bool = false
+    @State private var showCategorySettingsSheet: Bool = false
     @State private var isSearchExpanded: Bool = false
     @State private var searchText: String = ""
     @FocusState private var isSearchFieldFocused: Bool
@@ -93,6 +93,10 @@ private struct CashbackContentViewInternal: View {
             let cardNames = viewModel.getCardsForCashback(cashback).map(\.name)
 
             if categoryOption.displayName.localizedCaseInsensitiveContains(query) {
+                return true
+            }
+
+            if CashbackCategoryCatalog.matchesSearch(rawValue: cashback.categoryRaw, query: query) {
                 return true
             }
 
@@ -153,8 +157,8 @@ private struct CashbackContentViewInternal: View {
         )) {
             CashbackEditorView(viewModel: viewModel)
         }
-        .sheet(isPresented: $showFavoriteCategoriesSheet) {
-            CashbackFavoriteCategoriesSheet(viewModel: viewModel)
+        .sheet(isPresented: $showCategorySettingsSheet) {
+            CashbackCategorySettingsSheet(viewModel: viewModel)
         }
     }
 
@@ -429,15 +433,15 @@ private struct CashbackContentViewInternal: View {
                 .accessibilityLabel(Text(isSearchExpanded ? "Закрыть поиск" : "Поиск"))
 
                 Button {
-                    showFavoriteCategoriesSheet = true
+                    showCategorySettingsSheet = true
                 } label: {
-                    Image(systemName: "line.3.horizontal.decrease.circle")
+                    Image(systemName: "gearshape")
                         .font(.system(size: iconSize, weight: .semibold))
                         .foregroundStyle(Color.white.opacity(0.94))
                         .frame(width: itemSize, height: itemSize)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Text("Избранные категории"))
+                .accessibilityLabel(Text("Настройки категорий"))
             }
         }
     }
@@ -476,21 +480,17 @@ private struct CashbackContentViewInternal: View {
     }
 }
 
-private struct CashbackFavoriteCategoriesSheet: View {
+private struct CashbackCategorySettingsSheet: View {
     @ObservedObject var viewModel: CashbackViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var searchText: String = ""
-    @State private var showCategoryEditorSheet: Bool = false
-    @State private var showDeleteCategoryAlert: Bool = false
-    @State private var categoryEditorMode: CashbackCategoryEditorMode = .create
-    @State private var categoryEditorName: String = ""
-    @State private var categoryEditorIcon: String = CashbackCustomCategory.defaultIcon
-    @State private var pendingCategoryRawAction: String?
-    @State private var categoryEditorSourceRaw: String?
-
     private var categoryOptions: [CashbackCategoryOption] {
-        let options = viewModel.favoriteCategoryOptions(matching: searchText)
+        let options = viewModel.categoryOptions(matching: searchText, includeHidden: true)
+            .filter { !$0.isCustom }
         return options.sorted { lhs, rhs in
+            let lhsVisible = !viewModel.state.hiddenCategoryRaws.contains(lhs.rawValue)
+            let rhsVisible = !viewModel.state.hiddenCategoryRaws.contains(rhs.rawValue)
+            if lhsVisible != rhsVisible { return lhsVisible && !rhsVisible }
             let lhsFavorite = viewModel.isFavoriteCategory(rawValue: lhs.rawValue, fallbackName: lhs.displayName)
             let rhsFavorite = viewModel.isFavoriteCategory(rawValue: rhs.rawValue, fallbackName: rhs.displayName)
             if lhsFavorite != rhsFavorite { return lhsFavorite && !rhsFavorite }
@@ -524,27 +524,39 @@ private struct CashbackFavoriteCategoriesSheet: View {
                                     rawValue: category.rawValue,
                                     fallbackName: category.displayName
                                 )
+                                let isVisible = !viewModel.state.hiddenCategoryRaws.contains(category.rawValue)
+                                let canHide = category.rawValue != CashbackCategory.other.rawValue
                                 HStack(spacing: 12) {
-                                    Button {
-                                        openCategoryEditor(for: category)
-                                    } label: {
-                                        HStack(spacing: 12) {
-                                            CashbackCategoryIconView(
-                                                icon: category.icon,
-                                                fontSize: 17,
-                                                fontWeight: .semibold,
-                                                tint: AnyShapeStyle(AppColors.textPrimary)
-                                            )
-                                            .frame(width: 28, height: 28)
+                                    HStack(spacing: 12) {
+                                        CashbackCategoryIconView(
+                                            icon: category.icon,
+                                            fontSize: 17,
+                                            fontWeight: .semibold,
+                                            tint: AnyShapeStyle(AppColors.textPrimary)
+                                        )
+                                        .frame(width: 28, height: 28)
 
-                                            Text(category.displayName)
-                                                .font(.system(size: 16, weight: .medium))
-                                                .foregroundStyle(AppColors.textPrimary)
-                                                .frame(maxWidth: .infinity, alignment: .leading)
-                                        }
-                                        .contentShape(Rectangle())
+                                        Text(category.displayName)
+                                            .font(.system(size: 16, weight: .medium))
+                                            .foregroundStyle(AppColors.textPrimary)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
                                     }
-                                    .buttonStyle(.plain)
+
+                                    Toggle(
+                                        "",
+                                        isOn: Binding(
+                                            get: { isVisible },
+                                            set: { newValue in
+                                                _ = viewModel.setCategoryHidden(
+                                                    rawValue: category.rawValue,
+                                                    isHidden: !newValue
+                                                )
+                                            }
+                                        )
+                                    )
+                                    .labelsHidden()
+                                    .tint(CashbackScreenStyle.accent)
+                                    .disabled(!canHide)
 
                                     Button {
                                         viewModel.handle(.toggleFavoriteCategory(rawValue: category.rawValue))
@@ -568,18 +580,6 @@ private struct CashbackFavoriteCategoriesSheet: View {
                                 }
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 14)
-                                .contextMenu {
-                                    if category.isCustom {
-                                        Button("Редактировать") {
-                                            openCategoryEditor(for: category)
-                                        }
-
-                                        Button("Удалить", role: .destructive) {
-                                            pendingCategoryRawAction = category.rawValue
-                                            showDeleteCategoryAlert = true
-                                        }
-                                    }
-                                }
 
                                 if index < categoryOptions.count - 1 {
                                     Rectangle()
@@ -603,103 +603,28 @@ private struct CashbackFavoriteCategoriesSheet: View {
                 }
                 .padding(.top, 12)
             }
-            .navigationTitle("Избранные категории")
+            .navigationTitle("Настройки категорий")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Готово") {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button {
                         dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 18, weight: .semibold))
                     }
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: AppColors.cashbackGradient,
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .foregroundStyle(AppColors.textPrimary)
+                    .accessibilityLabel(Text("Закрыть"))
                 }
-            }
-            .sheet(isPresented: $showCategoryEditorSheet) {
-                CashbackCategoryEditorSheet(
-                    mode: categoryEditorMode,
-                    name: categoryEditorName,
-                    selectedIcon: categoryEditorIcon
-                ) { name, icon in
-                    handleCategoryEditorSave(name: name, icon: icon)
-                } onDelete: {
-                    handleCategoryEditorDelete()
-                }
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-            }
-            .alert("Удалить категорию?", isPresented: $showDeleteCategoryAlert) {
-                Button("Отмена", role: .cancel) {
-                    pendingCategoryRawAction = nil
-                }
-                Button("Удалить", role: .destructive) {
-                    guard let raw = pendingCategoryRawAction else { return }
-                    _ = viewModel.deleteCategory(rawValue: raw)
-                    pendingCategoryRawAction = nil
-                }
-            } message: {
-                Text("Все связанные кешбэки этой категории будут безопасно перенесены в категорию \"Другое\".")
-            }
-        }
-    }
-
-    private func openEditCategorySheet(for category: CashbackCategoryOption) {
-        categoryEditorMode = .edit(rawValue: category.rawValue)
-        categoryEditorName = category.displayName
-        categoryEditorIcon = category.icon
-        categoryEditorSourceRaw = category.rawValue
-        showCategoryEditorSheet = true
-    }
-
-    private func openCategoryEditor(for category: CashbackCategoryOption) {
-        openEditCategorySheet(for: category)
-    }
-
-    private func handleCategoryEditorSave(name: String, icon: String) {
-        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedName.isEmpty else { return }
-
-        switch categoryEditorMode {
-        case .create:
-            if let option = viewModel.createCustomCategory(trimmedName, icon: icon) {
-                if let sourceRaw = categoryEditorSourceRaw,
-                   sourceRaw != option.rawValue,
-                   viewModel.isFavoriteCategory(rawValue: sourceRaw) {
-                    viewModel.handle(.toggleFavoriteCategory(rawValue: sourceRaw))
-                    if !viewModel.isFavoriteCategory(rawValue: option.rawValue) {
-                        viewModel.handle(.toggleFavoriteCategory(rawValue: option.rawValue))
-                    }
-                }
-            }
-        case .edit(let oldRaw):
-            if !viewModel.renameCustomCategory(rawValue: oldRaw, newName: trimmedName, newIcon: icon) {
-                if let option = viewModel.createCustomCategory(trimmedName, icon: icon),
-                   oldRaw != option.rawValue,
-                   viewModel.isFavoriteCategory(rawValue: oldRaw) {
-                    viewModel.handle(.toggleFavoriteCategory(rawValue: oldRaw))
-                    if !viewModel.isFavoriteCategory(rawValue: option.rawValue) {
-                        viewModel.handle(.toggleFavoriteCategory(rawValue: option.rawValue))
+                ToolbarItem(placement: .principal) {
+                    Text("Настройки категорий")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
                     }
                 }
             }
         }
-
-        categoryEditorSourceRaw = nil
-        showCategoryEditorSheet = false
     }
-
-    private func handleCategoryEditorDelete() {
-        guard case .edit(let raw) = categoryEditorMode else { return }
-        _ = viewModel.deleteCategory(rawValue: raw)
-        categoryEditorSourceRaw = nil
-        showCategoryEditorSheet = false
-    }
-}
-
 // MARK: - Cashback Row View
 
 private struct CashbackRowView: View {

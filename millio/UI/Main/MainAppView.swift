@@ -165,12 +165,6 @@ struct MainAppView: View {
                     showExpenseSheet: &showExpenseSheet,
                     showIncomeSheet: &showIncomeSheet
                 )
-                
-                // Обновляем статус подписки при открытии главного экрана
-                Task {
-                    await SubscriptionManager.shared.checkSubscriptionStatus()
-                    appState.applySubscriptionSnapshot(SubscriptionManager.shared.snapshot)
-                }
             }
             .onChange(of: appState.pendingOpenConverterService) { _, _ in
                 MainWidgetDeepLinkHandler.consumePendingActions(

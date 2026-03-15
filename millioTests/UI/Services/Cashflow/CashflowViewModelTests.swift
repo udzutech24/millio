@@ -54,6 +54,45 @@ private final class CashflowTestNotificationManager: NotificationManagerProtocol
 }
 
 extension CashflowViewModelTests {
+    @Test("Сортировка категорий ставит pinned сверху, затем активные по убыванию суммы, затем пустые")
+    func sortCategoryOptionsPrioritizesPinnedAndActivity() {
+        let options = [
+            CashflowCategoryOption(rawValue: "salary", displayName: "Salary", icon: "💼", isCustom: false),
+            CashflowCategoryOption(rawValue: "gift", displayName: "Gift", icon: "🎁", isCustom: false),
+            CashflowCategoryOption(rawValue: "bonus", displayName: "Bonus", icon: "✨", isCustom: false),
+            CashflowCategoryOption(rawValue: "other", displayName: "Other", icon: "🧩", isCustom: true)
+        ]
+
+        let sorted = CashflowViewModel.sortCategoryOptions(
+            options,
+            totalsByCategory: [
+                "salary": 120_000,
+                "gift": 15_000,
+                "bonus": 0,
+                "other": 0
+            ],
+            pinnedRawValues: ["bonus"]
+        )
+
+        #expect(sorted.map(\.rawValue) == ["bonus", "salary", "gift", "other"])
+    }
+
+    @Test("Пины категорий сохраняются отдельно для доходов и расходов")
+    func categoryPinsPersistPerKind() {
+        let suite = "CashflowCategoryPinPrefsTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let prefs = CashflowCategoryPinPrefs(defaults: defaults)
+        prefs.setPinned(true, categoryRaw: "salary", kind: .income)
+        prefs.setPinned(true, categoryRaw: "groceries", kind: .expense)
+        prefs.setPinned(false, categoryRaw: "salary", kind: .expense)
+
+        #expect(prefs.isPinned(categoryRaw: "salary", kind: .income))
+        #expect(!prefs.isPinned(categoryRaw: "salary", kind: .expense))
+        #expect(prefs.isPinned(categoryRaw: "groceries", kind: .expense))
+    }
+
     @Test("Текст предупреждения об оценочном курсе содержит дату для ru_RU")
     func estimatedRateWarningTextIncludesDateForRussianLocale() {
         let calendar = Calendar(identifier: .gregorian)

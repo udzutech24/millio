@@ -179,40 +179,37 @@ enum IncomeCategory: String, Codable, CaseIterable {
 enum ExpenseCategory: String, Codable, CaseIterable {
     case groceries = "groceries"     // Продукты
     case cafe = "cafe"               // Кафе
+    case fastFood = "fast_food"      // Фастфуд
+    case coffeeShops = "coffee_shops" // Кофейни
     case transport = "transport"     // Транспорт
+    case taxi = "taxi"               // Такси
+    case fuel = "fuel"               // Топливо и АЗС
+    case carService = "car_service"  // Автосервис
     case shopping = "shopping"       // Покупки
+    case marketplaces = "marketplaces" // Маркетплейсы
+    case clothing = "clothing"       // Одежда и обувь
+    case homeGoods = "home_goods"    // Товары для дома
     case entertainment = "entertainment" // Развлечения
     case bills = "bills"             // Счета
-    case health = "health"            // Здоровье
+    case telecom = "telecom"         // Связь и интернет
+    case utilities = "utilities"     // Коммунальные
+    case health = "health"           // Здоровье
+    case pharmacies = "pharmacies"   // Аптеки
+    case medicalServices = "medical_services" // Медицинские услуги
+    case beauty = "beauty"           // Красота и уход
     case education = "education"     // Образование
+    case travel = "travel"           // Путешествия
+    case digitalServices = "digital_services" // Цифровые сервисы
+    case subscriptions = "subscriptions" // Подписки
+    case pets = "pets"               // Животные
     case other = "other"             // Другое
     
     var displayName: String {
-        switch self {
-        case .groceries: return String(localized: "Groceries")
-        case .cafe: return String(localized: "Cafe")
-        case .transport: return String(localized: "Transport")
-        case .shopping: return String(localized: "Shopping")
-        case .entertainment: return String(localized: "Entertainment")
-        case .bills: return String(localized: "Bills")
-        case .health: return String(localized: "Health")
-        case .education: return String(localized: "Education")
-        case .other: return String(localized: "Other")
-        }
+        ExpenseCategoryCatalog.metadata(for: self).localizedDisplayName()
     }
     
     var icon: String {
-        switch self {
-        case .groceries: return "🛒"
-        case .cafe: return "☕️"
-        case .transport: return "🚕"
-        case .shopping: return "🛍️"
-        case .entertainment: return "🎮"
-        case .bills: return "🧾"
-        case .health: return "💊"
-        case .education: return "📚"
-        case .other: return "🧩"
-        }
+        ExpenseCategoryCatalog.metadata(for: self).icon
     }
 }
 

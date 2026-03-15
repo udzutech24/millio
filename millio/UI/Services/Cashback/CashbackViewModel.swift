@@ -204,22 +204,25 @@ final class CashbackViewModel: ViewModelProtocol {
 
     // MARK: - Categories
 
-    func categoryOptions(matching query: String = "") -> [CashbackCategoryOption] {
+    func categoryOptions(matching query: String = "", includeHidden: Bool = false) -> [CashbackCategoryOption] {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let allOptions = (systemCategoryOptions + customCategoryOptions)
-            .filter { !state.hiddenCategoryRaws.contains($0.rawValue) }
+            .filter { includeHidden || !state.hiddenCategoryRaws.contains($0.rawValue) }
 
         guard !trimmedQuery.isEmpty else { return allOptions }
 
         return allOptions.filter { option in
-            option.displayName.localizedCaseInsensitiveContains(trimmedQuery)
+            if option.isCustom {
+                return option.displayName.localizedCaseInsensitiveContains(trimmedQuery)
+            }
+            return CashbackCategoryCatalog.matchesSearch(rawValue: option.rawValue, query: trimmedQuery)
         }
     }
 
     /// Категории для экрана избранного без дублей по смыслу.
     /// Импортные кастомные ярлыки схлопываются в системную категорию, если резолвер знает эквивалент.
     func favoriteCategoryOptions(matching query: String = "") -> [CashbackCategoryOption] {
-        let options = categoryOptions(matching: query)
+        let options = categoryOptions(matching: query, includeHidden: true)
         var uniqueByCanonicalRaw: [String: CashbackCategoryOption] = [:]
 
         for option in options {
@@ -829,6 +832,27 @@ final class CashbackViewModel: ViewModelProtocol {
             return normalizedStoredIcon
         }
         return resolvedSystem.icon
+    }
+
+    @discardableResult
+    func setCategoryHidden(rawValue: String, isHidden: Bool) -> Bool {
+        guard CashbackCategory(rawValue: rawValue) != nil else { return false }
+        guard rawValue != CashbackCategory.other.rawValue || !isHidden else { return false }
+
+        if isHidden {
+            state.hiddenCategoryRaws.insert(rawValue)
+            let canonicalRaw = canonicalFavoriteRaw(for: rawValue)
+            if state.favoriteCategoryRaws.contains(canonicalRaw) {
+                state.favoriteCategoryRaws.remove(canonicalRaw)
+                saveFavoriteCategoryRaws()
+            }
+        } else {
+            state.hiddenCategoryRaws.remove(rawValue)
+        }
+
+        saveHiddenCategoryRaws()
+        applyFilters()
+        return true
     }
 
     private func canonicalFavoriteRaw(for rawValue: String, fallbackName: String = "") -> String {

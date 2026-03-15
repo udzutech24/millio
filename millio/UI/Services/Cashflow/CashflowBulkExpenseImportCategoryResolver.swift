@@ -95,37 +95,25 @@ struct CashflowBulkExpenseImportCategoryResolver {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static let keywordsByCategory: [String: [String]] = [
-        ExpenseCategory.groceries.rawValue: [
-            "супермаркет", "продукт", "магазин", "перекресток", "перекресток", "пятерочка",
-            "пятерочка", "магнит", "лента", "вкусвилл", "ашан", "metro", "supermarket", "grocery"
-        ],
-        ExpenseCategory.cafe.rawValue: [
-            "кафе", "ресторан", "кофе", "кофейня", "бар", "бургер", "pizza", "food", "lunch",
-            "dinner", "coffee", "restaurant", "cafe", "fastfood", "fast food"
-        ],
-        ExpenseCategory.transport.rawValue: [
-            "такси", "метро", "автобус", "бензин", "азс", "заправ", "каршеринг", "парков",
-            "uber", "yandex go", "transport", "fuel", "gas", "taxi"
-        ],
-        ExpenseCategory.shopping.rawValue: [
-            "одежд", "обув", "маркетплейс", "ozon", "wb", "wildberries", "lamoda", "shopping",
-            "marketplace", "store", "mall", "amazon"
-        ],
-        ExpenseCategory.entertainment.rawValue: [
-            "кино", "игр", "игра", "подписк", "netflix", "spotify", "театр", "concert",
-            "movie", "steam", "playstation", "entertainment"
-        ],
-        ExpenseCategory.bills.rawValue: [
-            "жкх", "коммун", "интернет", "связь", "mobile", "wifi", "rent", "аренда", "счет",
-            "счёт", "utility", "utilities", "bill", "electricity"
-        ],
-        ExpenseCategory.health.rawValue: [
-            "аптек", "врач", "клиник", "мед", "лекар", "здоров", "pharmacy", "health", "doctor"
-        ],
-        ExpenseCategory.education.rawValue: [
-            "курс", "учеб", "school", "школ", "универс", "образован", "book", "книга", "lesson",
-            "education"
-        ]
-    ]
+    private static let keywordsByCategory: [String: [String]] = Dictionary(
+        uniqueKeysWithValues: ExpenseCategory.allCases.map { category in
+            let metadata = ExpenseCategoryCatalog.metadata(for: category)
+            let normalizedKeywords = Set(
+                ([metadata.displayNameRU, metadata.displayNameEN] + metadata.aliases)
+                    .map(Self.normalizeKeyword)
+                    .filter { !$0.isEmpty }
+            )
+            return (category.rawValue, Array(normalizedKeywords))
+        }
+    )
+
+    private static func normalizeKeyword(_ value: String) -> String {
+        value
+            .lowercased()
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .replacingOccurrences(of: "ё", with: "е")
+            .replacingOccurrences(of: #"[^\p{L}\p{N}\s]"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 }

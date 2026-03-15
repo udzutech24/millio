@@ -70,7 +70,7 @@ struct FinancesView: View {
         .navigationBarBackButtonHidden(true)
         .interactiveBackSwipe()
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
+            ToolbarItemGroup(placement: .topBarLeading) {
                 Button {
                     dismiss()
                 } label: {
@@ -78,9 +78,7 @@ struct FinancesView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "finances.common.back"))
-            }
-
-            ToolbarItem(placement: .topBarLeading) {
+                
                 Menu {
                     ForEach(MiniAppNavigation.destinations(excluding: currentRoute)) { destination in
                         Button {

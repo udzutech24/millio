@@ -31,6 +31,9 @@
 - `MarketAPIClient` reuses the exact same runtime-selected backend base URL and gets Bearer tokens from `AuthService`.
 - `refreshToken` is stored in Keychain only, namespaced by backend base URL/region.
 - `accessToken` is kept in memory and renewed through `/auth/refresh`.
+- `lastKnownSession` stores only non-secret UI metadata (`AuthUser` + expiry) in `UserDefaults`, also namespaced by backend base URL/region.
+- On transient restore failures (`offline`, generic transport, TLS, `429`, `5xx`, temporary service unavailable), the app keeps the last known signed-in UI state instead of forcing logout.
+- On hard invalidation (`401`, missing refresh token, explicit logout), both tokens and `lastKnownSession` snapshot are cleared.
 - SwiftData is isolated by session scope:
   - guest mode uses `millio_guest` persistent store
   - authenticated mode uses `millio_user_<sha256(userId)>` persistent store

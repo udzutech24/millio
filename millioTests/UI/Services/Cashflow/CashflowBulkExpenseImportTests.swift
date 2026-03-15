@@ -60,11 +60,74 @@ struct CashflowBulkExpenseImportTests {
 
         let groceries = resolver.resolve(title: "ВкусВилл у дома", availableOptions: options)
         let transport = resolver.resolve(title: "Yandex Go taxi", availableOptions: options)
+        let fuel = resolver.resolve(title: "Газпромнефть АЗС", availableOptions: options)
+        let marketplace = resolver.resolve(title: "Ozon order", availableOptions: options)
+        let unknown = resolver.resolve(title: "Strange merchant xyz", availableOptions: options)
 
         #expect(groceries.option.rawValue == ExpenseCategory.groceries.rawValue)
         #expect(groceries.confidence >= .medium)
-        #expect(transport.option.rawValue == ExpenseCategory.transport.rawValue)
+        #expect(transport.option.rawValue == ExpenseCategory.taxi.rawValue)
         #expect(transport.confidence >= .medium)
+        #expect(fuel.option.rawValue == ExpenseCategory.fuel.rawValue)
+        #expect(fuel.confidence >= .medium)
+        #expect(marketplace.option.rawValue == ExpenseCategory.marketplaces.rawValue)
+        #expect(marketplace.confidence >= .medium)
+        #expect(unknown.option.rawValue == ExpenseCategory.other.rawValue)
+        #expect(unknown.confidence == .low)
+    }
+
+    @Test("Поиск категорий учитывает короткое имя и синонимы каталога")
+    func categoryOptionsMatchAliases() throws {
+        let context = try makeContext()
+        let viewModel = CashflowViewModel(modelContext: context)
+
+        let byAlias = viewModel.categoryOptions(for: .expense, matching: "заправки")
+        let byShortName = viewModel.categoryOptions(for: .expense, matching: "азс")
+        let byMerchant = viewModel.categoryOptions(for: .expense, matching: "wildberries")
+
+        #expect(byAlias.contains { $0.rawValue == ExpenseCategory.fuel.rawValue })
+        #expect(byShortName.contains { $0.rawValue == ExpenseCategory.fuel.rawValue })
+        #expect(byMerchant.contains { $0.rawValue == ExpenseCategory.marketplaces.rawValue })
+    }
+
+    @Test("Скрытая системная категория возвращается в каталог после массового импорта")
+    func bulkPersistRevealsHiddenSystemCategory() async throws {
+        let context = try makeContext()
+        let card = Card(name: "Main", cardNumber: "1234", bank: .tinkoff, currency: "RUB", balance: 10_000)
+        let hiddenFuel = CashflowSystemCategoryOverride(
+            kind: .expense,
+            categoryRaw: ExpenseCategory.fuel.rawValue,
+            name: ExpenseCategory.fuel.displayName,
+            icon: ExpenseCategory.fuel.icon,
+            isHidden: true
+        )
+        context.insert(card)
+        context.insert(hiddenFuel)
+        try context.save()
+
+        let viewModel = CashflowViewModel(modelContext: context)
+
+        _ = try await viewModel.persistBulkExpenseImport(
+            CashflowBulkExpensePersistRequest(
+                cardID: card.cardUniqueID,
+                month: Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 1)) ?? Date(),
+                shouldAffectCardBalance: false,
+                entries: [
+                    CashflowBulkExpensePersistEntry(
+                        amount: 1_500,
+                        expenseCategoryRaw: ExpenseCategory.fuel.rawValue,
+                        note: "АЗС",
+                        sourceOrderIndex: 0
+                    )
+                ]
+            )
+        )
+
+        let visibleOptions = viewModel.categoryOptions(for: .expense)
+
+        #expect(hiddenFuel.isHidden == false)
+        #expect(visibleOptions.contains { $0.rawValue == ExpenseCategory.fuel.rawValue })
+        #expect(viewModel.expenseCategoryDisplayName(for: ExpenseCategory.fuel.rawValue) == ExpenseCategory.fuel.displayName)
     }
 
     @Test("Сумма в массовом импорте понимает группировку и форматируется с разделителями")

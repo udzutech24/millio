@@ -483,6 +483,37 @@ struct AppLifecycleUseCaseTests {
         #expect(didUpdate == true)
     }
 
+    @Test("initialize не запрашивает backup info если iCloud недоступен")
+    func testInitializeSkipsBackupInfoLookupWhenICloudUnavailable() async throws {
+        let defaults = UserDefaults.standard
+        let key = "hasCompletedOnboarding"
+        let previous = defaults.object(forKey: key)
+        defer {
+            if let previous { defaults.set(previous, forKey: key) } else { defaults.removeObject(forKey: key) }
+        }
+        defaults.set(true, forKey: key)
+
+        let backupManager = FakeBackupManager(
+            isAvailableResult: false,
+            lastBackupInfoResult: BackupInfo(date: Date(timeIntervalSince1970: 789), size: 1, version: "2.0.0")
+        )
+
+        let appState = AppState()
+        appState.isBackupEnabled = true
+
+        let useCase = AppLifecycleUseCase(appState: appState, backupManager: backupManager)
+        await useCase.initialize()
+
+        for _ in 0..<20 where backupManager.isAvailableCalls == 0 {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        #expect(backupManager.isAvailableCalls > 0)
+        #expect(backupManager.lastBackupInfoCalls == 0)
+        #expect(appState.isICloudAvailable == false)
+        #expect(appState.lastBackupDate == nil)
+    }
+
     @Test("initialize удерживает launching минимум указанное время")
     func testInitializeRespectsMinimumLaunchDuration() async throws {
         let defaults = UserDefaults.standard
@@ -608,13 +639,18 @@ struct AppLifecycleUseCaseTests {
 final class FakeBackupManager: BackupManagerProtocol {
     private let isAvailableResult: Bool
     private let lastBackupInfoResult: BackupInfo?
+    private(set) var isAvailableCalls: Int = 0
+    private(set) var lastBackupInfoCalls: Int = 0
     
     init(isAvailableResult: Bool = false, lastBackupInfoResult: BackupInfo? = nil) {
         self.isAvailableResult = isAvailableResult
         self.lastBackupInfoResult = lastBackupInfoResult
     }
     
-    func isAvailable() async -> Bool { isAvailableResult }
+    func isAvailable() async -> Bool {
+        isAvailableCalls += 1
+        return isAvailableResult
+    }
     func backupNow() async throws {}
     func backupNow(passphrase: String?) async throws {}
     func saveVersionNow(passphrase: String?) async throws {}
@@ -645,7 +681,10 @@ final class FakeBackupManager: BackupManagerProtocol {
     func restoreVersion(recordName: String, passphrase: String?) async throws {}
     func listBackupVersions() async -> [BackupVersionInfo] { [] }
     func deleteBackupVersion(recordName: String) async throws {}
-    func lastBackupInfo() async -> BackupInfo? { lastBackupInfoResult }
+    func lastBackupInfo() async -> BackupInfo? {
+        lastBackupInfoCalls += 1
+        return lastBackupInfoResult
+    }
 }
 
 final class FakeLaunchSplashPreferences: LaunchSplashPreferences {

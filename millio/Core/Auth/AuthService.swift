@@ -143,6 +143,77 @@ protocol RefreshTokenStoreProtocol: Sendable {
     func clearRefreshToken() throws
 }
 
+protocol AuthSessionSnapshotStoreProtocol: Sendable {
+    func session() throws -> AuthSession?
+    func setSession(_ session: AuthSession) throws
+    func clearSession() throws
+}
+
+// Stores only non-secret session metadata so the UI can survive transient restore failures.
+private struct PersistedAuthSessionSnapshot: Codable, Sendable {
+    let user: AuthUser
+    let accessTokenExpiresAt: Date
+    let savedAt: Date
+
+    init(session: AuthSession, savedAt: Date = Date()) {
+        self.user = session.user
+        self.accessTokenExpiresAt = session.accessTokenExpiresAt
+        self.savedAt = savedAt
+    }
+
+    func makeSession() -> AuthSession {
+        AuthSession(
+            user: user,
+            accessTokenExpiresAt: accessTokenExpiresAt,
+            metadata: AuthResponseMetadata(
+                statusCode: 200,
+                requestId: "local-session-snapshot",
+                clientRequestId: "local-session-snapshot",
+                durationMilliseconds: 0
+            ),
+            source: .cachedSnapshot
+        )
+    }
+}
+
+final class UserDefaultsAuthSessionSnapshotStore: AuthSessionSnapshotStoreProtocol, @unchecked Sendable {
+    private let defaults: UserDefaults
+    private let key: String
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+
+    init(
+        defaults: UserDefaults = .standard,
+        key: String = "auth.sessionSnapshot"
+    ) {
+        self.defaults = defaults
+        self.key = key
+    }
+
+    func session() throws -> AuthSession? {
+        guard let data = defaults.data(forKey: key) else {
+            return nil
+        }
+
+        do {
+            let snapshot = try decoder.decode(PersistedAuthSessionSnapshot.self, from: data)
+            return snapshot.makeSession()
+        } catch {
+            defaults.removeObject(forKey: key)
+            throw AuthServiceError.tokenPersistenceFailed("Stored auth session snapshot is corrupted.")
+        }
+    }
+
+    func setSession(_ session: AuthSession) throws {
+        let data = try encoder.encode(PersistedAuthSessionSnapshot(session: session))
+        defaults.set(data, forKey: key)
+    }
+
+    func clearSession() throws {
+        defaults.removeObject(forKey: key)
+    }
+}
+
 struct KeychainRefreshTokenStore: RefreshTokenStoreProtocol {
     private let service: String
     private let account: String
@@ -776,6 +847,7 @@ struct AuthAPIClient: AuthAPIClientProtocol {
 protocol AuthServiceProtocol: Sendable {
     func signInWithApple(identityToken: String, email: String?, firstName: String?, lastName: String?) async throws -> AuthSession
     func restoreSession() async throws -> AuthSession?
+    func lastKnownSession() async -> AuthSession?
     func currentUser() async throws -> AuthUser
     func logout() async
     func accessTokenExpiryDate() async -> Date?
@@ -785,6 +857,7 @@ protocol AuthServiceProtocol: Sendable {
 actor AuthService: AuthServiceProtocol {
     private let apiClient: any AuthAPIClientProtocol
     private let tokenStore: AuthTokenStore
+    private let sessionSnapshotStore: any AuthSessionSnapshotStoreProtocol
     private let diagnostics: any AuthDiagnosticsLogging
     private let diagnosticsContext: AuthDiagnosticsContext
     private var signInBackoffState = AuthRateLimitBackoffState()
@@ -793,11 +866,13 @@ actor AuthService: AuthServiceProtocol {
     init(
         apiClient: any AuthAPIClientProtocol,
         tokenStore: AuthTokenStore = AuthTokenStore(),
+        sessionSnapshotStore: any AuthSessionSnapshotStoreProtocol = UserDefaultsAuthSessionSnapshotStore(),
         diagnostics: any AuthDiagnosticsLogging = AuthDiagnosticsLogger(),
         diagnosticsContext: AuthDiagnosticsContext = .empty
     ) {
         self.apiClient = apiClient
         self.tokenStore = tokenStore
+        self.sessionSnapshotStore = sessionSnapshotStore
         self.diagnostics = diagnostics
         self.diagnosticsContext = diagnosticsContext
     }
@@ -834,6 +909,7 @@ actor AuthService: AuthServiceProtocol {
 
     func restoreSession() async throws -> AuthSession? {
         guard let refreshToken = try await tokenStore.refreshToken() else {
+            try? sessionSnapshotStore.clearSession()
             diagnostics.log(.info, phase: "auth.session.restore.skipped", operation: .refresh, requestId: nil, backendRequestId: nil, details: ["reason": "noRefreshToken"])
             return nil
         }
@@ -845,6 +921,7 @@ actor AuthService: AuthServiceProtocol {
         } catch AuthServiceError.unauthorized {
             diagnostics.log(.warning, phase: "auth.session.restore.cleared", operation: .refresh, requestId: nil, backendRequestId: nil, details: ["reason": "unauthorized"])
             try await tokenStore.clear()
+            try? sessionSnapshotStore.clearSession()
             return nil
         } catch let AuthServiceError.rateLimited(requestId, message, retryAfter) {
             throw registerRateLimit(
@@ -854,6 +931,22 @@ actor AuthService: AuthServiceProtocol {
                 retryAfter: retryAfter,
                 operation: .refresh
             )
+        }
+    }
+
+    func lastKnownSession() async -> AuthSession? {
+        do {
+            return try sessionSnapshotStore.session()
+        } catch {
+            diagnostics.log(
+                .warning,
+                phase: "auth.session.snapshot.load_failed",
+                operation: .refresh,
+                requestId: nil,
+                backendRequestId: nil,
+                details: ["errorType": AuthErrorMapper.category(for: error).rawValue]
+            )
+            return nil
         }
     }
 
@@ -876,10 +969,12 @@ actor AuthService: AuthServiceProtocol {
                 _ = try? await apiClient.logout(refreshToken: refreshToken)
             }
             try await tokenStore.clear()
+            try? sessionSnapshotStore.clearSession()
             diagnostics.log(.info, phase: "auth.logout.local_state_cleared", operation: .logout, requestId: nil, backendRequestId: nil, details: [:])
         } catch {
             diagnostics.log(.warning, phase: "auth.logout.cleanup_failed", operation: .logout, requestId: nil, backendRequestId: nil, details: ["errorType": AuthErrorMapper.category(for: error).rawValue])
             try? await tokenStore.clear()
+            try? sessionSnapshotStore.clearSession()
         }
     }
 
@@ -918,6 +1013,7 @@ actor AuthService: AuthServiceProtocol {
             return token
         } catch AuthServiceError.unauthorized {
             try await tokenStore.clear()
+            try? sessionSnapshotStore.clearSession()
             throw AuthServiceError.unauthorized()
         } catch let AuthServiceError.rateLimited(requestId, message, retryAfter) {
             throw registerRateLimit(
@@ -954,6 +1050,18 @@ actor AuthService: AuthServiceProtocol {
                 metadata: result.metadata,
                 source: source
             )
+            do {
+                try sessionSnapshotStore.setSession(session)
+            } catch {
+                diagnostics.log(
+                    .warning,
+                    phase: "auth.session.snapshot.persist_failed",
+                    operation: source.operation,
+                    requestId: result.metadata.clientRequestId,
+                    backendRequestId: result.metadata.requestId,
+                    details: ["errorType": AuthErrorMapper.category(for: error).rawValue]
+                )
+            }
             diagnostics.log(
                 .info,
                 phase: "tokens_persist_succeeded",
@@ -1040,6 +1148,10 @@ struct UnconfiguredAuthService: AuthServiceProtocol {
 
     func restoreSession() async throws -> AuthSession? {
         throw AuthServiceError.unconfigured
+    }
+
+    func lastKnownSession() async -> AuthSession? {
+        nil
     }
 
     func currentUser() async throws -> AuthUser {
@@ -1168,6 +1280,21 @@ final class AuthManager {
             }
             apply(session)
         } catch {
+            // Keep the last known signed-in UI state for transient backend/network failures.
+            if shouldKeepSessionOnRestoreFailure(error),
+               let cachedSession = await service.lastKnownSession() {
+                apply(cachedSession)
+                present(error, operation: .refresh)
+                diagnostics.log(
+                    .warning,
+                    phase: "auth.session.restore.fallback_snapshot",
+                    operation: .refresh,
+                    requestId: cachedSession.metadata.clientRequestId,
+                    backendRequestId: cachedSession.metadata.requestId,
+                    details: ["source": cachedSession.source.rawValue]
+                )
+                return
+            }
             clearState()
             present(error, operation: .refresh)
         }
@@ -1407,6 +1534,15 @@ final class AuthManager {
                 "toast": presentation.shouldPresentToast ? "true" : "false"
             ]
         )
+    }
+
+    private func shouldKeepSessionOnRestoreFailure(_ error: Error) -> Bool {
+        switch AuthErrorMapper.category(for: error) {
+        case .noInternet, .timeout, .tls, .transport, .rateLimited, .serverUnavailable, .serviceUnavailable:
+            return true
+        case .requestCancelled, .unauthorized, .forbidden, .invalidResponse, .tokenPersistence, .appleCredentials, .business, .postLoginBootstrap, .wrongSessionNamespace, .unknown:
+            return false
+        }
     }
 
     // Post-login work is allowed to fail without tearing down a valid session.

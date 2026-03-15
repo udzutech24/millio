@@ -42,6 +42,7 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
     private var lastUpdateTS: Double = 0
     private let cacheTimeout: TimeInterval = 12 * 3600 // 12 часов
     private var knownHistoricalUnsupportedPairs: Set<String> = []
+    private var knownHistoricalUnavailableRequests: Set<String> = []
     private var historicalFailureLogDedup: Set<String> = []
     
     init(
@@ -141,9 +142,15 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
     private func fetchFrankfurterRate(on date: Date, from: String, to: String) async -> Double? {
         let dateString = formatDateForFrankfurter(date)
         let pairKey = "\(from)->\(to)"
+        let requestKey = "\(dateString)|\(pairKey)"
 
         // Для явно неподдерживаемых пар не делаем повторные сетевые запросы.
         if knownHistoricalUnsupportedPairs.contains(pairKey) {
+            return nil
+        }
+
+        // Для уже известных miss по точной дате и паре повторно в сеть не ходим.
+        if knownHistoricalUnavailableRequests.contains(requestKey) {
             return nil
         }
 
@@ -162,7 +169,7 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
                 let body = String(data: data, encoding: .utf8)?
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 let bodySnippet = body?.prefix(180) ?? ""
-                let logKey = "\(pairKey)|\(statusCode)"
+                let logKey = "\(requestKey)|\(statusCode)"
 
                 if historicalFailureLogDedup.insert(logKey).inserted {
                     AppLogger.log(
@@ -179,9 +186,15 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
                 // неподдерживается. Поэтому 404 не должен банить пару навсегда.
                 if statusCode == 400 {
                     knownHistoricalUnsupportedPairs.insert(pairKey)
+                    knownHistoricalUnavailableRequests.insert(requestKey)
+                    return nil
+                }
+                if statusCode == 404 {
+                    knownHistoricalUnavailableRequests.insert(requestKey)
                     return nil
                 }
                 if statusCode == 429 {
+                    knownHistoricalUnavailableRequests.insert(requestKey)
                     return nil
                 }
 
@@ -192,9 +205,21 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
                 let rates: [String: Double]
             }
             let decoded = try JSONDecoder().decode(FrankfurterResponse.self, from: data)
-            return decoded.rates[to]
+            guard let rate = decoded.rates[to] else {
+                knownHistoricalUnavailableRequests.insert(requestKey)
+                return nil
+            }
+            return rate
         } catch {
-            AppLogger.log(.error, category: "CurrencyRateService", "Failed to fetch historical rate: \(error.localizedDescription)")
+            let nsError = error as NSError
+            let logKey = "\(requestKey)|\(nsError.domain)|\(nsError.code)"
+            if historicalFailureLogDedup.insert(logKey).inserted {
+                AppLogger.log(
+                    .error,
+                    category: "CurrencyRateService",
+                    "Failed to fetch historical rate for \(pairKey) on \(dateString): \(error.localizedDescription)"
+                )
+            }
             return nil
         }
     }

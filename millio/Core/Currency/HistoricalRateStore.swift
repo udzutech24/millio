@@ -26,6 +26,7 @@ struct HistoricalRateResult {
 final class HistoricalRateStore {
     private let modelContext: ModelContext
     private let currencyService: CurrencyRateServiceProtocol
+    private var knownUnavailableRequests: Set<String> = []
     
     init(
         modelContext: ModelContext,
@@ -48,6 +49,7 @@ final class HistoricalRateStore {
         }
         
         let targetDate = normalizedDate(date)
+        let requestKey = unavailableRequestKey(base: base, quote: quote, date: targetDate)
         
         if let cached = fetchExactRate(base: base, quote: quote, date: targetDate) {
             return HistoricalRateResult(rate: cached.rate, resolution: .exact, rateDate: cached.rateDate)
@@ -55,10 +57,13 @@ final class HistoricalRateStore {
         if let cachedInverse = fetchExactRate(base: quote, quote: base, date: targetDate) {
             return HistoricalRateResult(rate: 1.0 / cachedInverse.rate, resolution: .exact, rateDate: cachedInverse.rateDate)
         }
-        
-        if let fetched = await currencyService.getHistoricalRate(on: targetDate, from: base, to: quote) {
-            upsertRate(base: base, quote: quote, rate: fetched, date: targetDate, source: "historical")
-            return HistoricalRateResult(rate: fetched, resolution: .exact, rateDate: targetDate)
+
+        if !knownUnavailableRequests.contains(requestKey) {
+            if let fetched = await currencyService.getHistoricalRate(on: targetDate, from: base, to: quote) {
+                upsertRate(base: base, quote: quote, rate: fetched, date: targetDate, source: "historical")
+                return HistoricalRateResult(rate: fetched, resolution: .exact, rateDate: targetDate)
+            }
+            knownUnavailableRequests.insert(requestKey)
         }
         
         if let previous = fetchLatestBefore(base: base, quote: quote, date: targetDate) {
@@ -87,12 +92,16 @@ final class HistoricalRateStore {
                 let base = pair.from.uppercased()
                 let quote = pair.to.uppercased()
                 if base == quote { continue }
+                let requestKey = unavailableRequestKey(base: base, quote: quote, date: targetDate)
 
                 if fetchExactRate(base: base, quote: quote, date: targetDate) != nil { continue }
                 if fetchExactRate(base: quote, quote: base, date: targetDate) != nil { continue }
+                if knownUnavailableRequests.contains(requestKey) { continue }
 
                 if let fetched = await currencyService.getHistoricalRate(on: targetDate, from: base, to: quote) {
                     upsertRate(base: base, quote: quote, rate: fetched, date: targetDate, source: "historical_prefetch")
+                } else {
+                    knownUnavailableRequests.insert(requestKey)
                 }
             }
         }
@@ -100,6 +109,11 @@ final class HistoricalRateStore {
     
     private func normalizedDate(_ date: Date) -> Date {
         Calendar.current.startOfDay(for: date)
+    }
+
+    private func unavailableRequestKey(base: String, quote: String, date: Date) -> String {
+        let ts = Int(date.timeIntervalSince1970)
+        return "\(ts)|\(base)->\(quote)"
     }
     
     private func fetchExactRate(base: String, quote: String, date: Date) -> HistoricalRate? {

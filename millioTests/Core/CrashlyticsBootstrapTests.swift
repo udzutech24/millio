@@ -106,6 +106,31 @@ struct CrashlyticsBootstrapTests {
         #expect(sink.enabled == false)
         #expect((sink.customValues["is_unit_testing"] as? Bool) == true)
     }
+
+    @Test("CrashlyticsBootstrap does not build Firebase reporter when disabled")
+    func testBootstrapSkipsFirebaseReporterFactoryWhenDisabled() {
+        let env = CrashlyticsBootstrapEnvironment(isDebug: true, isUnitTesting: false, overrideEnabled: nil)
+        let firebase = MockFirebaseConfigurator()
+        let sink = MockCrashReportingSink()
+        var reporterFactoryCalls = 0
+
+        let bootstrap = CrashlyticsBootstrap(
+            environment: env,
+            firebase: firebase,
+            crashReporting: sink,
+            reporterFactory: {
+                reporterFactoryCalls += 1
+                return MockCrashReporter()
+            }
+        )
+
+        bootstrap.start()
+
+        #expect(firebase.configureCalls == 1)
+        #expect(reporterFactoryCalls == 0)
+        #expect(sink.reporter is NoopCrashReporter)
+        #expect(sink.enabled == false)
+    }
     
     @Test("CrashReporting forwards logs/keys/errors to reporter")
     func testCrashReportingForwarding() {

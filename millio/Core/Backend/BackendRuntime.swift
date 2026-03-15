@@ -183,6 +183,14 @@ struct BackendSessionRuntime: Equatable, Sendable {
         return "refreshToken.\(selectedEndpoint.region.analyticsValue).\(hash)"
     }
 
+    var sessionSnapshotStorageKey: String {
+        let hash = SHA256
+            .hash(data: Data(selectedEndpoint.baseURL.absoluteString.lowercased().utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return "auth.sessionSnapshot.\(selectedEndpoint.region.analyticsValue).\(hash)"
+    }
+
     var selectionSummaryLine: String {
         switch selectionSource {
         case .debugOverride:

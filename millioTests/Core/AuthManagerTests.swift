@@ -35,6 +35,78 @@ struct AuthManagerTests {
         #expect(toastCenter.message == "No internet connection. Check your network and try again.")
     }
 
+    @Test("restore session keeps cached session on offline error")
+    func testRestoreSessionKeepsCachedSessionOnOfflineError() async {
+        let toastCenter = ToastCenter()
+        let manager = AuthManager(
+            service: FailingAuthService(
+                restoreError: AuthServiceError.transport(.noInternet),
+                cachedSession: .fixtureSession
+            ),
+            toastCenter: toastCenter
+        )
+
+        await manager.restoreSession()
+
+        #expect(manager.isAuthenticated)
+        #expect(manager.currentUser == .fixture)
+        #expect(toastCenter.message == "No internet connection. Check your network and try again.")
+    }
+
+    @Test("restore session keeps cached session on backend 500")
+    func testRestoreSessionKeepsCachedSessionOnServerError() async {
+        let toastCenter = ToastCenter()
+        let manager = AuthManager(
+            service: FailingAuthService(
+                restoreError: AuthServiceError.server(statusCode: 500, message: "Internal server error"),
+                cachedSession: .fixtureSession
+            ),
+            toastCenter: toastCenter
+        )
+
+        await manager.restoreSession()
+
+        #expect(manager.isAuthenticated)
+        #expect(manager.currentUser == .fixture)
+        #expect(toastCenter.message == "Server error. Try again later.")
+    }
+
+    @Test("restore session keeps cached session on rate limit")
+    func testRestoreSessionKeepsCachedSessionOnRateLimit() async {
+        let toastCenter = ToastCenter()
+        let manager = AuthManager(
+            service: FailingAuthService(
+                restoreError: AuthServiceError.rateLimited(requestId: "backend-429", message: "Too many attempts", retryAfter: 5),
+                cachedSession: .fixtureSession
+            ),
+            toastCenter: toastCenter
+        )
+
+        await manager.restoreSession()
+
+        #expect(manager.isAuthenticated)
+        #expect(manager.currentUser == .fixture)
+        #expect(toastCenter.message == "Too many attempts. Please wait a bit and try again.")
+    }
+
+    @Test("restore session does not keep cached session on unauthorized")
+    func testRestoreSessionUnauthorizedDoesNotKeepCachedSession() async {
+        let toastCenter = ToastCenter()
+        let manager = AuthManager(
+            service: FailingAuthService(
+                restoreError: AuthServiceError.unauthorized(requestId: "backend-401"),
+                cachedSession: .fixtureSession
+            ),
+            toastCenter: toastCenter
+        )
+
+        await manager.restoreSession()
+
+        #expect(manager.isAuthenticated == false)
+        #expect(manager.currentUser == nil)
+        #expect(toastCenter.message == "Your session expired. Sign in again.")
+    }
+
     @Test("request cancelled error does not show toast")
     func testRestoreSessionCancelledRequestSuppressesToast() async {
         let toastCenter = ToastCenter()
@@ -285,9 +357,11 @@ struct AuthManagerTests {
 
 private struct FailingAuthService: AuthServiceProtocol {
     let restoreError: Error?
+    let cachedSession: AuthSession?
 
-    init(restoreError: Error? = nil) {
+    init(restoreError: Error? = nil, cachedSession: AuthSession? = nil) {
         self.restoreError = restoreError
+        self.cachedSession = cachedSession
     }
 
     func signInWithApple(identityToken: String, email: String?, firstName: String?, lastName: String?) async throws -> AuthSession {
@@ -299,6 +373,10 @@ private struct FailingAuthService: AuthServiceProtocol {
             throw restoreError
         }
         return nil
+    }
+
+    func lastKnownSession() async -> AuthSession? {
+        cachedSession
     }
 
     func currentUser() async throws -> AuthUser {
@@ -335,6 +413,7 @@ private actor SignInAuthService: AuthServiceProtocol {
     }
 
     func restoreSession() async throws -> AuthSession? { nil }
+    func lastKnownSession() async -> AuthSession? { nil }
     func currentUser() async throws -> AuthUser { throw AuthServiceError.unconfigured }
     func logout() async {}
     func accessTokenExpiryDate() async -> Date? { .now.addingTimeInterval(600) }
@@ -355,6 +434,7 @@ private actor DelayedSignInAuthService: AuthServiceProtocol {
     }
 
     func restoreSession() async throws -> AuthSession? { nil }
+    func lastKnownSession() async -> AuthSession? { nil }
     func currentUser() async throws -> AuthUser { throw AuthServiceError.unconfigured }
     func logout() async {}
     func accessTokenExpiryDate() async -> Date? { .now.addingTimeInterval(600) }
@@ -408,6 +488,10 @@ private actor SuspendedRestoreAuthService: AuthServiceProtocol {
         throw AuthServiceError.unconfigured
     }
 
+    func lastKnownSession() async -> AuthSession? {
+        nil
+    }
+
     func logout() async {}
 
     func accessTokenExpiryDate() async -> Date? {
@@ -445,6 +529,10 @@ private actor LogoutTrackingAuthService: AuthServiceProtocol {
         nil
     }
 
+    func lastKnownSession() async -> AuthSession? {
+        nil
+    }
+
     func currentUser() async throws -> AuthUser {
         throw AuthServiceError.unconfigured
     }
@@ -473,6 +561,10 @@ private actor SuspendedCurrentUserAuthService: AuthServiceProtocol {
     }
 
     func restoreSession() async throws -> AuthSession? {
+        nil
+    }
+
+    func lastKnownSession() async -> AuthSession? {
         nil
     }
 

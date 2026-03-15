@@ -25,6 +25,8 @@
 2. `expenseCategories`
 - Choose expense categories to keep visible in Cashflow.
 - Non-selected system categories are hidden via `CashflowSystemCategoryOverride`.
+- The picker is backed by the shared `ExpenseCategoryCatalog` with canonical system categories and alias coverage for import.
+- If a hidden system category is later used in manual entry or bulk screenshot import, it is automatically shown again instead of being downgraded to `Other`.
 - Category names in quick setup are localized based on the currently selected app language.
 
 3. `products`

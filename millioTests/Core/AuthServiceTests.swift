@@ -6,13 +6,16 @@ import Testing
 struct AuthServiceTests {
     @Test("restoreSession returns nil when refresh token is missing")
     func testRestoreSessionWithoutRefreshToken() async throws {
+        let snapshotStore = InMemoryAuthSessionSnapshotStore(session: .fixtureSession)
         let service = AuthService(
             apiClient: FakeAuthAPIClient(),
-            tokenStore: AuthTokenStore(refreshTokenStore: InMemoryRefreshTokenStore())
+            tokenStore: AuthTokenStore(refreshTokenStore: InMemoryRefreshTokenStore()),
+            sessionSnapshotStore: snapshotStore
         )
 
         let restored = try await service.restoreSession()
         #expect(restored == nil)
+        #expect(await service.lastKnownSession() == nil)
     }
 
     @Test("currentUser refreshes tokens when access token is missing")
@@ -34,16 +37,19 @@ struct AuthServiceTests {
     @Test("restoreSession clears refresh token after 401 on refresh")
     func testRestoreSessionClearsTokenOnUnauthorizedRefresh() async throws {
         let refreshStore = InMemoryRefreshTokenStore(refreshToken: "refresh-1")
+        let snapshotStore = InMemoryAuthSessionSnapshotStore(session: .fixtureSession)
         let apiClient = FakeAuthAPIClient(refreshError: AuthServiceError.unauthorized())
         let service = AuthService(
             apiClient: apiClient,
-            tokenStore: AuthTokenStore(refreshTokenStore: refreshStore)
+            tokenStore: AuthTokenStore(refreshTokenStore: refreshStore),
+            sessionSnapshotStore: snapshotStore
         )
 
         let restored = try await service.restoreSession()
 
         #expect(restored == nil)
         #expect(try refreshStore.refreshToken() == nil)
+        #expect(await service.lastKnownSession() == nil)
         let refreshCalls = await apiClient.refreshCallCount
         #expect(refreshCalls == 1)
     }
@@ -195,9 +201,11 @@ struct AuthServiceTests {
 
     @Test("access token expiry uses backend ttl")
     func testAccessTokenExpiryUsesBackendTTL() async throws {
+        let snapshotStore = InMemoryAuthSessionSnapshotStore()
         let service = AuthService(
             apiClient: FakeAuthAPIClient(),
-            tokenStore: AuthTokenStore(refreshTokenStore: InMemoryRefreshTokenStore())
+            tokenStore: AuthTokenStore(refreshTokenStore: InMemoryRefreshTokenStore()),
+            sessionSnapshotStore: snapshotStore
         )
 
         let session = try await service.signInWithApple(
@@ -213,6 +221,7 @@ struct AuthServiceTests {
         #expect(abs((storedExpiry ?? .distantPast).timeIntervalSince(session.accessTokenExpiresAt)) < 1)
         #expect(session.accessTokenExpiresAt.timeIntervalSinceNow > 850)
         #expect(session.accessTokenExpiresAt.timeIntervalSinceNow < 950)
+        #expect(await service.lastKnownSession()?.user == .fixture)
     }
 }
 
@@ -361,6 +370,33 @@ private final class InMemoryRefreshTokenStore: RefreshTokenStoreProtocol, @unche
     }
 }
 
+private final class InMemoryAuthSessionSnapshotStore: AuthSessionSnapshotStoreProtocol, @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedSession: AuthSession?
+
+    init(session: AuthSession? = nil) {
+        self.storedSession = session
+    }
+
+    func session() throws -> AuthSession? {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedSession
+    }
+
+    func setSession(_ session: AuthSession) throws {
+        lock.lock()
+        storedSession = session
+        lock.unlock()
+    }
+
+    func clearSession() throws {
+        lock.lock()
+        storedSession = nil
+        lock.unlock()
+    }
+}
+
 private extension AuthUser {
     static let fixture = AuthUser(
         id: "user-1",
@@ -371,5 +407,19 @@ private extension AuthUser {
         fullName: "Sid Orkin",
         avatarUrl: nil,
         lastLoginAt: nil
+    )
+}
+
+private extension AuthSession {
+    static let fixtureSession = AuthSession(
+        user: .fixture,
+        accessTokenExpiresAt: Date().addingTimeInterval(900),
+        metadata: AuthResponseMetadata(
+            statusCode: 200,
+            requestId: "backend-auth-1",
+            clientRequestId: "client-auth-1",
+            durationMilliseconds: 42
+        ),
+        source: .appleSignIn
     )
 }
