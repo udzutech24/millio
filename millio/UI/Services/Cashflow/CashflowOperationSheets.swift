@@ -8,6 +8,14 @@
 import SwiftUI
 import UIKit
 
+enum CashflowCategorySheetBootstrap {
+    @MainActor
+    static func prepare(viewModel: CashflowViewModel) {
+        viewModel.handle(.loadCards)
+        viewModel.handle(.loadTransactions)
+    }
+}
+
 /// Единая политика сетки категорий для экранов создания дохода/расхода.
 /// На узких экранах обе сетки переключаются на 3 колонки, чтобы размещение
 /// категорий в доходах и расходах оставалось консистентным. Для расходов с
@@ -160,6 +168,10 @@ private struct CashflowCategoryTransactionSheet: View {
     @State private var categoryEditorIcon: String = CashflowCustomCategory.defaultIcon
     @State private var pendingDeleteCategoryRaw: String?
     @State private var categoryGridWidth: CGFloat = UIScreen.main.bounds.width
+    @State private var highlightedCategoryRaw: String?
+    @State private var categoryUpdateFeedbackPlan: CashflowCategoryUpdateFeedbackPlan?
+    @State private var categoryFeedbackSequence: Int = 0
+    @State private var hasCompletedInitialLoad: Bool = false
     private let outerCornerRadius: CGFloat = 22
     private let innerCornerRadius: CGFloat = 16
 
@@ -200,27 +212,32 @@ private struct CashflowCategoryTransactionSheet: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.black
-                    .ignoresSafeArea()
+            ScrollViewReader { scrollProxy in
+                ZStack {
+                    Color.black
+                        .ignoresSafeArea()
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        headerSection
-                        monthSelectorSection
-                        monthlyTotalSection
-                        managementSection
-                        searchSection
-                        categoriesSection
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 12) {
+                            headerSection
+                            monthSelectorSection
+                            monthlyTotalSection
+                            managementSection
+                            searchSection
+                            categoriesSection
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 10)
+                        .padding(.bottom, 112)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 10)
-                    .padding(.bottom, 112)
-                }
-                .scrollDismissesKeyboard(.immediately)
-                .dismissKeyboardOnTap()
+                    .scrollDismissesKeyboard(.immediately)
+                    .dismissKeyboardOnTap()
+                    .onChange(of: categoryFeedbackSequence) { _, _ in
+                        presentCategoryUpdateFeedback(using: scrollProxy)
+                    }
 
-                floatingAddCategoryButton
+                    floatingAddCategoryButton
+                }
             }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(item: $selectedCategory) { option in
@@ -236,7 +253,7 @@ private struct CashflowCategoryTransactionSheet: View {
                     preselectedExpenseCategoryRaw: kind.categoryKind == .expense ? option.rawValue : nil,
                     onSave: {
                         selectedCategory = nil
-                        reloadMonthlyTotal()
+                        reloadMonthlyTotal(focusingOn: option.rawValue)
                     }
                 )
             }
@@ -267,7 +284,9 @@ private struct CashflowCategoryTransactionSheet: View {
                 CashflowBulkExpenseImportSheet(
                     viewModel: viewModel,
                     month: selectedMonth,
-                    onComplete: reloadMonthlyTotal
+                    onComplete: {
+                        reloadMonthlyTotal()
+                    }
                 )
             }
             .sheet(isPresented: $showBudgetSetupSheet) {
@@ -324,6 +343,7 @@ private struct CashflowCategoryTransactionSheet: View {
                 Text("cashflow.operation.delete_category.message")
             }
             .onAppear {
+                CashflowCategorySheetBootstrap.prepare(viewModel: viewModel)
                 reloadMonthlyTotal()
             }
             .onChange(of: selectedMonth) { _, _ in
@@ -490,6 +510,7 @@ private struct CashflowCategoryTransactionSheet: View {
                         .foregroundStyle(kind.amountColor(for: monthlyTotal))
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
+                        .contentTransition(.numericText())
                 }
             }
             .padding(.horizontal, 16)
@@ -670,6 +691,7 @@ private struct CashflowCategoryTransactionSheet: View {
         LazyVGrid(columns: categoryColumns, spacing: 10) {
             ForEach(categories) { option in
                 categoryCard(for: option)
+                .id(option.rawValue)
                 .contextMenu {
                     Button(viewModel.isCategoryPinned(rawValue: option.rawValue, kind: kind.categoryKind) ? "Unpin" : "Pin") {
                         togglePinned(for: option)
@@ -705,6 +727,9 @@ private struct CashflowCategoryTransactionSheet: View {
         let metrics = CashflowCategoryGridLayout.cardMetrics(
             showsBudgetDetails: cardHasBudgetDetails
         )
+        let isHighlighted = highlightedCategoryRaw == option.rawValue
+        let feedbackPlan = categoryUpdateFeedbackPlan?.categoryRawValue == option.rawValue ? categoryUpdateFeedbackPlan : nil
+        let feedbackColor = kind.amountColor(for: feedbackPlan?.delta ?? 0)
         let isPinned = viewModel.isCategoryPinned(rawValue: option.rawValue, kind: kind.categoryKind)
         let pinAffordanceStyle = CashflowCategoryGridLayout.pinAffordanceStyle(
             for: kind,
@@ -769,6 +794,31 @@ private struct CashflowCategoryTransactionSheet: View {
                         .minimumScaleFactor(0.8)
                         .padding(.top, metrics.amountTopPadding)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentTransition(.numericText())
+                        .scaleEffect(isHighlighted ? 1.07 : 1)
+                        .animation(.spring(response: 0.32, dampingFraction: 0.68), value: isHighlighted)
+
+                    if let feedbackPlan, isHighlighted {
+                        Text(cashflowSignedAmountText(feedbackPlan.delta))
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(feedbackColor)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(
+                                Capsule(style: .continuous)
+                                    .fill(Color.white.opacity(0.08))
+                                    .overlay(
+                                        Capsule(style: .continuous)
+                                            .stroke(feedbackColor.opacity(0.55), lineWidth: 1)
+                                    )
+                            )
+                            .transition(
+                                .asymmetric(
+                                    insertion: .move(edge: .top).combined(with: .opacity),
+                                    removal: .opacity
+                                )
+                            )
+                    }
 
                     Group {
                         if let summary {
@@ -809,7 +859,14 @@ private struct CashflowCategoryTransactionSheet: View {
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
                                 .stroke(categoryStrokeStyle(for: option), lineWidth: 1.1)
                         )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(feedbackColor.opacity(isHighlighted ? 0.95 : 0), lineWidth: 1.4)
+                        )
+                        .shadow(color: feedbackColor.opacity(isHighlighted ? 0.28 : 0), radius: isHighlighted ? 16 : 0)
                 )
+                .scaleEffect(isHighlighted ? 1.015 : 1)
+                .animation(.spring(response: 0.34, dampingFraction: 0.8), value: isHighlighted)
             }
             .buttonStyle(.plain)
 
@@ -925,7 +982,7 @@ private struct CashflowCategoryTransactionSheet: View {
         }
     }
 
-    private func reloadMonthlyTotal() {
+    private func reloadMonthlyTotal(focusingOn categoryRawValue: String? = nil) {
         monthTotalTask?.cancel()
         monthTotalTask = Task {
             await MainActor.run {
@@ -951,19 +1008,67 @@ private struct CashflowCategoryTransactionSheet: View {
 
             guard !Task.isCancelled else { return }
             await MainActor.run {
+                let previousCategoryTotals = categoryTotals
                 let previousBudgetSnapshot = budgetSnapshot
                 let previousCategorySteps = lastCategoryBudgetSteps
-                monthlyTotal = total
-                categoryTotals = totalsByCategory
-                budgetSnapshot = budgetSummary.snapshot
-                categoryBudgetLimits = budgetSummary.categoryLimits
-                budgetTotalLimit = budgetSummary.plan?.totalLimitAmount
-                isLoadingMonthlyTotal = false
+                let shouldAnimateValueUpdate = hasCompletedInitialLoad || categoryRawValue != nil
+                let feedbackPlan = CashflowCategoryUpdateFeedbackPlan.make(
+                    for: categoryRawValue,
+                    previousTotals: previousCategoryTotals,
+                    updatedTotals: totalsByCategory
+                )
+
+                let applyStateUpdate = {
+                    monthlyTotal = total
+                    categoryTotals = totalsByCategory
+                    budgetSnapshot = budgetSummary.snapshot
+                    categoryBudgetLimits = budgetSummary.categoryLimits
+                    budgetTotalLimit = budgetSummary.plan?.totalLimitAmount
+                    isLoadingMonthlyTotal = false
+                    categoryUpdateFeedbackPlan = feedbackPlan
+                }
+
+                if shouldAnimateValueUpdate {
+                    withAnimation(.easeInOut(duration: 0.24)) {
+                        applyStateUpdate()
+                    }
+                } else {
+                    applyStateUpdate()
+                }
+
+                if feedbackPlan != nil {
+                    categoryFeedbackSequence += 1
+                } else {
+                    highlightedCategoryRaw = nil
+                    categoryUpdateFeedbackPlan = nil
+                }
+
+                hasCompletedInitialLoad = true
+
                 handleBudgetThresholdHaptics(
                     previousSnapshot: previousBudgetSnapshot,
                     newSnapshot: budgetSummary.snapshot,
                     previousCategorySteps: previousCategorySteps
                 )
+            }
+        }
+    }
+
+    private func presentCategoryUpdateFeedback(using scrollProxy: ScrollViewProxy) {
+        guard let feedbackPlan = categoryUpdateFeedbackPlan else { return }
+
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.84)) {
+            scrollProxy.scrollTo(feedbackPlan.categoryRawValue, anchor: .center)
+            highlightedCategoryRaw = feedbackPlan.categoryRawValue
+        }
+
+        Task {
+            try? await Task.sleep(nanoseconds: 1_600_000_000)
+            await MainActor.run {
+                guard highlightedCategoryRaw == feedbackPlan.categoryRawValue else { return }
+                withAnimation(.easeOut(duration: 0.28)) {
+                    highlightedCategoryRaw = nil
+                }
             }
         }
     }

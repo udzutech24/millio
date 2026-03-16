@@ -4,11 +4,13 @@ import FirebaseCore
 struct CrashlyticsBootstrapEnvironment: Equatable {
     let isDebug: Bool
     let isUnitTesting: Bool
+    let isUITesting: Bool
     let overrideEnabled: Bool?
     
     static func current() -> CrashlyticsBootstrapEnvironment {
         let env = ProcessInfo.processInfo.environment
         let isUnitTesting = env["XCTestConfigurationFilePath"] != nil
+        let isUITesting = env["MILLIO_UI_TEST_MODE"] == "1"
         let overrideEnabled: Bool?
         if let raw = env["MILLIO_CRASHLYTICS_ENABLED"]?.lowercased() {
             if ["1", "true", "yes", "y"].contains(raw) {
@@ -31,6 +33,7 @@ struct CrashlyticsBootstrapEnvironment: Equatable {
         return CrashlyticsBootstrapEnvironment(
             isDebug: isDebug,
             isUnitTesting: isUnitTesting,
+            isUITesting: isUITesting,
             overrideEnabled: overrideEnabled
         )
     }
@@ -38,6 +41,7 @@ struct CrashlyticsBootstrapEnvironment: Equatable {
     var isCrashlyticsEnabled: Bool {
         if let overrideEnabled { return overrideEnabled }
         if isUnitTesting { return false }
+        if isUITesting { return false }
         if isDebug { return false }
         return true
     }
@@ -77,10 +81,9 @@ final class CrashlyticsBootstrap {
     func start() {
         guard !started else { return }
         started = true
-        
-        firebase.configureIfNeeded()
 
         if environment.isCrashlyticsEnabled {
+            firebase.configureIfNeeded()
             crashReporting.setReporter(reporterFactory())
         } else {
             crashReporting.setReporter(NoopCrashReporter())
@@ -89,5 +92,6 @@ final class CrashlyticsBootstrap {
         crashReporting.setEnabled(environment.isCrashlyticsEnabled)
         crashReporting.setCustomValue(environment.isDebug, forKey: "is_debug")
         crashReporting.setCustomValue(environment.isUnitTesting, forKey: "is_unit_testing")
+        crashReporting.setCustomValue(environment.isUITesting, forKey: "is_ui_testing")
     }
 }

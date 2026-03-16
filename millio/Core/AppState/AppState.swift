@@ -107,6 +107,12 @@ final class AppState {
     var pendingOpenMainExpenseSheet: Bool = false
     /// One-shot deep-link trigger from widget to quick income sheet on Home.
     var pendingOpenMainIncomeSheet: Bool = false
+    /// One-shot trigger to open expense flow inside the actual Cashflow service.
+    var pendingOpenCashflowExpense: Bool = false
+    /// One-shot trigger to open income flow inside the actual Cashflow service.
+    var pendingOpenCashflowIncome: Bool = false
+    /// One-shot trigger to open history inside the actual Cashflow service.
+    var pendingOpenCashflowHistory: Bool = false
     /// One-shot deep-link trigger from widget to open converter service.
     var pendingOpenConverterService: Bool = false
     var backendRegionCode: String = ""

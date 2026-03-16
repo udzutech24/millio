@@ -118,12 +118,44 @@ struct CashflowView: View {
             // Перезагружаем данные при каждом появлении экрана
             viewModel?.handle(.loadCards)
             viewModel?.handle(.loadTransactions)
+            consumePendingQuickActions()
         }
         .onChange(of: appState.primaryCurrencyCode) { oldValue, newValue in
             viewModel?.handle(.syncPrimaryCurrencyChange(old: oldValue, new: newValue))
         }
+        .onChange(of: appState.pendingOpenCashflowExpense) { _, newValue in
+            guard newValue else { return }
+            consumePendingQuickActions()
+        }
+        .onChange(of: appState.pendingOpenCashflowIncome) { _, newValue in
+            guard newValue else { return }
+            consumePendingQuickActions()
+        }
+        .onChange(of: appState.pendingOpenCashflowHistory) { _, newValue in
+            guard newValue else { return }
+            consumePendingQuickActions()
+        }
         .onDisappear {
             viewModel?.handle(.syncDisplayCurrencyWithPrimary(appState.primaryCurrencyCode))
+        }
+    }
+
+    private func consumePendingQuickActions() {
+        guard let viewModel else { return }
+
+        if appState.pendingOpenCashflowExpense {
+            appState.pendingOpenCashflowExpense = false
+            viewModel.handle(.addTransaction(.expense))
+        }
+
+        if appState.pendingOpenCashflowIncome {
+            appState.pendingOpenCashflowIncome = false
+            viewModel.handle(.addTransaction(.income))
+        }
+
+        if appState.pendingOpenCashflowHistory {
+            appState.pendingOpenCashflowHistory = false
+            viewModel.handle(.showTransactionsHistory)
         }
     }
 }

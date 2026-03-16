@@ -93,6 +93,54 @@ func cashflowHistoryPercentText(share: Double) -> String {
     return "\(Int(percent))%"
 }
 
+enum CashflowHistorySummaryLayout {
+    static let collapseDistance: CGFloat = 180
+    static let collapsedHeight: CGFloat = 120
+    static let narrowExpandedHeaderHeight: CGFloat = 208
+    static let wideExpandedHeaderHeight: CGFloat = 192
+    static let outerPadding: CGFloat = 16
+    static let sectionSpacing: CGFloat = 14
+    static let chipSpacing: CGFloat = 10
+    static let chipHeight: CGFloat = 72
+
+    static func collapseProgress(minY: CGFloat) -> CGFloat {
+        let progress = -minY / collapseDistance
+        return min(max(progress, 0), 1)
+    }
+
+    static func columnCount(containerWidth: CGFloat) -> Int {
+        switch containerWidth {
+        case ..<360:
+            return 2
+        case ..<560:
+            return 3
+        default:
+            return 4
+        }
+    }
+
+    static func expandedHeight(containerWidth: CGFloat, entryCount: Int) -> CGFloat {
+        let headerHeight = containerWidth < 380 ? narrowExpandedHeaderHeight : wideExpandedHeaderHeight
+        guard entryCount > 0 else {
+            return max(collapsedHeight, headerHeight + (outerPadding * 2))
+        }
+
+        let columns = max(columnCount(containerWidth: containerWidth), 1)
+        let rowCount = CGFloat((entryCount + columns - 1) / columns)
+        let chipsHeight = (rowCount * chipHeight) + (max(rowCount - 1, 0) * chipSpacing)
+        return headerHeight + chipsHeight + sectionSpacing + (outerPadding * 2)
+    }
+
+    static func containerHeight(
+        containerWidth: CGFloat,
+        entryCount: Int,
+        collapseProgress: CGFloat
+    ) -> CGFloat {
+        let expanded = expandedHeight(containerWidth: containerWidth, entryCount: entryCount)
+        return expanded - ((expanded - collapsedHeight) * min(max(collapseProgress, 0), 1))
+    }
+}
+
 enum CashflowHistorySummaryBuilder {
     private static let expensePalette = [
         "47D7FF",
@@ -204,6 +252,14 @@ private struct CashflowHistoryRingChart: View {
 
 }
 
+struct CashflowHistorySummaryMinYPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 struct CashflowHistorySummaryCard: View {
     let summary: CashflowHistorySummaryModel
     @Binding var selectedCategoryRawValue: String?
@@ -228,20 +284,58 @@ struct CashflowHistorySummaryCard: View {
         min(max(collapseProgress, 0), 1)
     }
 
+    private var primaryTextOpacity: CGFloat {
+        1 - (compactProgress * 0.22)
+    }
+
+    private var secondaryTextOpacity: CGFloat {
+        1 - (compactProgress * 0.36)
+    }
+
+    private var accentTextOpacity: CGFloat {
+        1 - (compactProgress * 0.48)
+    }
+
+    private var headerOffset: CGFloat {
+        -compactProgress * 10
+    }
+
+    private var chipsOffset: CGFloat {
+        -compactProgress * 28
+    }
+
+    private func chipAmountText(_ amount: Double) -> String {
+        cashflowHistoryWholeAmountText(amount)
+    }
+
     var body: some View {
         GeometryReader { proxy in
             let isNarrow = proxy.size.width < 380
-            let expandedMinHeight: CGFloat = isNarrow ? 392 : 372
-            let collapsedMinHeight: CGFloat = 126
-            let headerHeight = expandedMinHeight - ((expandedMinHeight - collapsedMinHeight) * compactProgress)
-            let chartSize: CGFloat = compactProgress > 0.75 ? 110 : (isNarrow ? 176 : 204)
-            let textWidth = max(138, proxy.size.width - chartSize - (isNarrow ? 22 : 30))
-            let chipsColumns = isNarrow ? [GridItem(.flexible(), spacing: 12)] : [
-                GridItem(.flexible(), spacing: 12),
-                GridItem(.flexible(), spacing: 12)
-            ]
+            let totalHeight = CashflowHistorySummaryLayout.containerHeight(
+                containerWidth: proxy.size.width,
+                entryCount: summary.entries.count,
+                collapseProgress: compactProgress
+            )
+            let chartExpandedSize: CGFloat = isNarrow ? 172 : 196
+            let chartCollapsedSize: CGFloat = 88
+            let chartSize = chartExpandedSize - ((chartExpandedSize - chartCollapsedSize) * compactProgress)
+            let textWidth = max(134, proxy.size.width - chartSize - (isNarrow ? 18 : 28))
+            let chipColumns = Array(
+                repeating: GridItem(.flexible(), spacing: CashflowHistorySummaryLayout.chipSpacing),
+                count: CashflowHistorySummaryLayout.columnCount(containerWidth: proxy.size.width)
+            )
+            let chipsVisibility = max(0, 1 - (compactProgress * 1.35))
+            let chipsExpandedHeight = max(
+                totalHeight
+                - (isNarrow
+                   ? CashflowHistorySummaryLayout.narrowExpandedHeaderHeight
+                   : CashflowHistorySummaryLayout.wideExpandedHeaderHeight)
+                - (CashflowHistorySummaryLayout.outerPadding * 2)
+                - CashflowHistorySummaryLayout.sectionSpacing,
+                0
+            )
 
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: CashflowHistorySummaryLayout.sectionSpacing) {
                 HStack(alignment: .top, spacing: isNarrow ? 10 : 16) {
                     summaryTextBlock
                         .frame(width: textWidth, alignment: .leading)
@@ -250,32 +344,44 @@ struct CashflowHistorySummaryCard: View {
                     summaryChart(size: chartSize)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
+                .offset(y: headerOffset)
 
-                if compactProgress < 0.9 {
-                    LazyVGrid(columns: chipsColumns, spacing: 12) {
-                        ForEach(summary.entries.prefix(6)) { entry in
+                if chipsVisibility > 0.01 {
+                    LazyVGrid(columns: chipColumns, spacing: CashflowHistorySummaryLayout.chipSpacing) {
+                        ForEach(summary.entries) { entry in
                             summaryChip(entry)
                         }
                     }
-                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                    .frame(maxHeight: chipsExpandedHeight * chipsVisibility, alignment: .top)
+                    .opacity(chipsVisibility)
+                    .scaleEffect(0.96 + (chipsVisibility * 0.04), anchor: .top)
+                    .offset(y: chipsOffset)
+                    .clipped()
                 }
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 18)
-            .frame(maxWidth: .infinity, minHeight: headerHeight, alignment: .topLeading)
+            .padding(.horizontal, CashflowHistorySummaryLayout.outerPadding)
+            .padding(.vertical, CashflowHistorySummaryLayout.outerPadding)
+            .frame(maxWidth: .infinity, minHeight: totalHeight, maxHeight: totalHeight, alignment: .topLeading)
             .background(cardBackground)
+            .overlay(collapseShadowOverlay, alignment: .bottom)
             .overlay(cardBorder)
             .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .shadow(
+                color: Color.black.opacity(0.18 + (compactProgress * 0.12)),
+                radius: 20,
+                x: 0,
+                y: 12
+            )
         }
-        .frame(height: compactProgress < 0.72 ? 392 : 126)
+        .frame(maxWidth: .infinity)
     }
 
     private var summaryTextBlock: some View {
         VStack(alignment: .leading, spacing: 8) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(amountLabel)
-                    .font(.system(size: compactProgress > 0.7 ? 24 : 30, weight: .bold, design: .rounded))
-                    .foregroundStyle(AppColors.textPrimary)
+                    .font(.system(size: compactProgress > 0.7 ? 23 : 30, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppColors.textPrimary.opacity(primaryTextOpacity))
                     .contentTransition(.numericText())
                     .lineLimit(2)
                     .minimumScaleFactor(0.82)
@@ -283,15 +389,15 @@ struct CashflowHistorySummaryCard: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 Text(subtitleLabel)
-                    .font(.system(size: compactProgress > 0.7 ? 18 : 20, weight: .medium))
-                    .foregroundStyle(AppColors.textSecondary)
+                    .font(.system(size: compactProgress > 0.7 ? 16 : 20, weight: .medium))
+                    .foregroundStyle(AppColors.textSecondary.opacity(secondaryTextOpacity))
                     .lineLimit(2)
             }
 
             if let selectedEntry, compactProgress < 0.75 {
                 Text(cashflowHistoryPercentText(share: selectedEntry.share))
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color(hex: selectedEntry.tintHex))
+                    .foregroundStyle(Color(hex: selectedEntry.tintHex).opacity(accentTextOpacity))
             }
         }
     }
@@ -329,6 +435,22 @@ struct CashflowHistorySummaryCard: View {
             .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
     }
 
+    private var collapseShadowOverlay: some View {
+        let overlayOpacity = min(max((compactProgress - 0.28) / 0.72, 0), 1)
+
+        return LinearGradient(
+            colors: [
+                Color.clear,
+                Color.black.opacity(0.04 * overlayOpacity),
+                Color.black.opacity(0.14 * overlayOpacity)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .frame(height: 92)
+        .allowsHitTesting(false)
+    }
+
     private func summaryChip(_ entry: CashflowHistorySummaryEntry) -> some View {
         let isSelected = selectedCategoryRawValue == entry.rawValue
         let tint = Color(hex: entry.tintHex)
@@ -340,8 +462,8 @@ struct CashflowHistorySummaryCard: View {
         } label: {
             HStack(spacing: 10) {
                 Text(entry.icon)
-                    .font(.system(size: 17))
-                    .frame(width: 34, height: 34)
+                    .font(.system(size: 16))
+                    .frame(width: 30, height: 30)
                     .background(
                         Circle()
                             .fill(tint.opacity(isSelected ? 0.95 : 0.78))
@@ -349,20 +471,24 @@ struct CashflowHistorySummaryCard: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(entry.title)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                        .allowsTightening(true)
 
-                    Text("\(cashflowHistoryWholeAmountText(entry.amount)) \(MonetaCurrency(rawValue: summary.currencyCode)?.symbol ?? summary.currencyCode)")
-                        .font(.system(size: 13, weight: .medium))
+                    Text(chipAmountText(entry.amount))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(AppColors.textSecondary)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.55)
+                        .allowsTightening(true)
                 }
 
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 9)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(tint.opacity(isSelected ? 0.22 : 0.12))
@@ -379,18 +505,52 @@ struct CashflowHistorySummaryCard: View {
 struct CashflowHistorySummaryContainer: View {
     let summary: CashflowHistorySummaryModel
     @Binding var selectedCategoryRawValue: String?
+    let collapseProgress: CGFloat
+    let containerWidth: CGFloat
 
     var body: some View {
-        GeometryReader { proxy in
-            let minY = proxy.frame(in: .global).minY
-            let collapseProgress = min(max(-minY / 220, 0), 1)
+        let resolvedWidth = max(containerWidth, 0)
+        let height = CashflowHistorySummaryLayout.containerHeight(
+            containerWidth: resolvedWidth,
+            entryCount: summary.entries.count,
+            collapseProgress: collapseProgress
+        )
 
-            CashflowHistorySummaryCard(
-                summary: summary,
-                selectedCategoryRawValue: $selectedCategoryRawValue,
-                collapseProgress: collapseProgress
-            )
+        CashflowHistorySummaryCard(
+            summary: summary,
+            selectedCategoryRawValue: $selectedCategoryRawValue,
+            collapseProgress: collapseProgress
+        )
+        .frame(width: resolvedWidth, height: height, alignment: .top)
+        .frame(maxWidth: .infinity, alignment: .top)
+        .frame(height: height)
+    }
+}
+
+struct CashflowHistorySummaryResponsiveContainer: View {
+    let summary: CashflowHistorySummaryModel
+    @Binding var selectedCategoryRawValue: String?
+    let collapseProgress: CGFloat
+
+    @State private var measuredWidth: CGFloat = max(UIScreen.main.bounds.width - 48, 0)
+
+    var body: some View {
+        CashflowHistorySummaryContainer(
+            summary: summary,
+            selectedCategoryRawValue: $selectedCategoryRawValue,
+            collapseProgress: collapseProgress,
+            containerWidth: measuredWidth
+        )
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear {
+                        measuredWidth = proxy.size.width
+                    }
+                    .onChange(of: proxy.size.width) { _, newValue in
+                        measuredWidth = newValue
+                    }
+            }
         }
-        .frame(height: 392)
     }
 }

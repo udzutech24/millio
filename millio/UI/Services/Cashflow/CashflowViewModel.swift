@@ -2921,14 +2921,20 @@ final class CashflowViewModel: ViewModelProtocol {
     @discardableResult
     func persistTransaction(
         _ transaction: CashflowTransaction,
-        replacing existingTransaction: CashflowTransaction? = nil
+        replacing existingTransaction: CashflowTransaction? = nil,
+        dismissEditorOnSuccess: Bool = true
     ) async -> Bool {
-        await updateTransactionAsync(transaction, replacing: existingTransaction)
+        await updateTransactionAsync(
+            transaction,
+            replacing: existingTransaction,
+            dismissEditorOnSuccess: dismissEditorOnSuccess
+        )
     }
     
     private func updateTransactionAsync(
         _ transaction: CashflowTransaction,
-        replacing explicitExistingTransaction: CashflowTransaction? = nil
+        replacing explicitExistingTransaction: CashflowTransaction? = nil,
+        dismissEditorOnSuccess: Bool = true
     ) async -> Bool {
         let existingTransaction = explicitExistingTransaction ?? state.editingTransaction
         let affectedEvents = affectedAccountEvents(for: transaction).union(
@@ -3029,11 +3035,13 @@ final class CashflowViewModel: ViewModelProtocol {
             try modelContext.save()
             publishAffectedAccountEvents(affectedEvents)
             loadTransactions()
-            state.showTransactionEditor = false
-            if explicitExistingTransaction == nil || state.editingTransaction?.persistentModelID == explicitExistingTransaction?.persistentModelID {
-                state.editingTransaction = nil
+            if dismissEditorOnSuccess {
+                state.showTransactionEditor = false
+                if explicitExistingTransaction == nil || state.editingTransaction?.persistentModelID == explicitExistingTransaction?.persistentModelID {
+                    state.editingTransaction = nil
+                }
+                state.creatingTransactionType = nil
             }
-            state.creatingTransactionType = nil
             return true
         } catch {
             AppLogger.log(.error, category: "Cashflow", "Failed to save transaction: \(error.localizedDescription)")
@@ -3143,7 +3151,11 @@ final class CashflowViewModel: ViewModelProtocol {
         case .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
             return true
         case .income, .expense, .transfer:
-            return false
+            // Legacy records and externally inserted test fixtures may predate
+            // `hasAppliedBalanceEffect`. For immediate cashflow operations we
+            // treat `affectsCardBalance == true` as the source of truth so
+            // delete-with-recalculation restores balances consistently.
+            return shouldApplyCardBalanceImmediately(for: transaction)
         }
     }
     

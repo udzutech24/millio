@@ -47,6 +47,16 @@ struct CashflowTransactionEditorViewLayoutTests {
         #expect(!accounts.contains { $0.cardID == usdCard.cardUniqueID })
     }
 
+    @Test("Новый редактор операции берет валюту из текущего Cashflow, чтобы не терять карты")
+    func editorDefaultsToCashflowDisplayCurrency() {
+        let currency = CashflowTransactionEditorView.defaultEditorCurrency(
+            displayCurrency: " usd ",
+            primaryCurrencyCode: "RUB"
+        )
+
+        #expect(currency == "USD")
+    }
+
     @Test("Для дохода показываются счета из финансов вместе с картами")
     func incomeIncludesCashAccountsFromInvestments() {
         let debitCard = Card(name: "Debit", cardNumber: "1111", bank: .sberbank, cardType: .debit, priority: .normal, currency: "RUB")

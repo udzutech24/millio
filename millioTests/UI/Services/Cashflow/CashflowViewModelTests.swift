@@ -2297,6 +2297,46 @@ extension CashflowViewModelTests {
         #expect(viewModel.state.transactions.first?.affectsCardBalance == false)
     }
 
+    @Test("Сохранение из вложенного экрана категории не закрывает sheet расходов/доходов")
+    func testPersistTransactionCanKeepCategorySheetOpen() async throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 16, hour: 14)) ?? Date()
+
+        let card = Card(
+            name: "Nested",
+            cardNumber: "7788",
+            bank: .tinkoff,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 5_000
+        )
+        modelContext.insert(card)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        viewModel.handle(.addTransaction(.expense))
+
+        let expense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 300,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: card.cardUniqueID,
+            expenseCategoryRaw: ExpenseCategory.cafe.rawValue,
+            affectsCardBalance: true
+        )
+
+        let didSave = await viewModel.persistTransaction(
+            expense,
+            dismissEditorOnSuccess: false
+        )
+
+        #expect(didSave)
+        #expect(viewModel.state.showTransactionEditor)
+        #expect(viewModel.state.creatingTransactionType == .expense)
+        #expect(viewModel.state.transactions.contains { abs($0.amount - 300) < 0.01 })
+    }
+
     @Test("Редактирование расхода корректно пересчитывает баланс карты")
     func testEditingExpenseReplacesOldBalanceEffect() async throws {
         let modelContext = try createTestModelContext()

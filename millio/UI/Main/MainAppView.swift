@@ -8,14 +8,13 @@
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
+import SwiftData
 
 @MainActor
 enum MainWidgetDeepLinkHandler {
     static func consumePendingActions(
         appState: AppState,
-        router: AppRouter,
-        showExpenseSheet: inout Bool,
-        showIncomeSheet: inout Bool
+        router: AppRouter
     ) {
         if appState.pendingOpenConverterService {
             appState.pendingOpenConverterService = false
@@ -25,12 +24,16 @@ enum MainWidgetDeepLinkHandler {
 
         if appState.pendingOpenMainExpenseSheet {
             appState.pendingOpenMainExpenseSheet = false
-            showExpenseSheet = true
+            appState.pendingOpenCashflowExpense = true
+            router.navigationPath = NavigationPath()
+            router.push(.cashflow)
         }
 
         if appState.pendingOpenMainIncomeSheet {
             appState.pendingOpenMainIncomeSheet = false
-            showIncomeSheet = true
+            appState.pendingOpenCashflowIncome = true
+            router.navigationPath = NavigationPath()
+            router.push(.cashflow)
         }
     }
 }
@@ -74,9 +77,10 @@ struct MainAppView: View {
                         
                         // История операций справа
                         Button {
+                            prepareCashflowQuickAccess()
                             showCashflowHistory = true
                         } label: {
-                            Image(systemName: "clock.arrow.circlepath")
+                        Image(systemName: "clock.arrow.circlepath")
                                 .font(.system(size: 20, weight: .regular))
                                 .foregroundStyle(Color.white.opacity(0.95))
                                 .frame(width: 40, height: 40)
@@ -99,7 +103,7 @@ struct MainAppView: View {
 
                     servicesGrid
                         .padding(.horizontal, 24)
-                        .padding(.top, showQuickSetupBanner ? 20 : 34)
+                        .padding(.top, showQuickSetupBanner ? 20 : 28)
                     
                     Spacer()
                     
@@ -110,6 +114,7 @@ struct MainAppView: View {
                             icon: .system(QuickActionIcons.expense),
                             gradientColors: AppColors.expenseGradient
                         ) {
+                            prepareCashflowQuickAccess()
                             showExpenseSheet = true
                         }
                         
@@ -118,6 +123,7 @@ struct MainAppView: View {
                             icon: .system(QuickActionIcons.income),
                             gradientColors: AppColors.incomeGradient
                         ) {
+                            prepareCashflowQuickAccess()
                             showIncomeSheet = true
                         }
                     }
@@ -156,38 +162,52 @@ struct MainAppView: View {
                 loadServices()
                 showQuickSetupBanner = !SettingsManager.shared.isQuickSetupCompleted
                     && !SettingsManager.shared.isQuickSetupBannerHidden
-                if cashflowViewModel == nil {
-                    cashflowViewModel = CashflowViewModel(modelContext: modelContext)
-                }
+                prepareCashflowQuickAccess()
                 MainWidgetDeepLinkHandler.consumePendingActions(
                     appState: appState,
-                    router: router,
-                    showExpenseSheet: &showExpenseSheet,
-                    showIncomeSheet: &showIncomeSheet
+                    router: router
                 )
+            }
+            .onChange(of: appState.primaryCurrencyCode) { _, _ in
+                prepareCashflowQuickAccess()
+            }
+            .onChange(of: showExpenseSheet) { _, isPresented in
+                if isPresented {
+                    prepareCashflowQuickAccess()
+                } else {
+                    cashflowViewModel = nil
+                }
+            }
+            .onChange(of: showIncomeSheet) { _, isPresented in
+                if isPresented {
+                    prepareCashflowQuickAccess()
+                } else {
+                    cashflowViewModel = nil
+                }
+            }
+            .onChange(of: showCashflowHistory) { _, isPresented in
+                if isPresented {
+                    prepareCashflowQuickAccess()
+                } else {
+                    cashflowViewModel = nil
+                }
             }
             .onChange(of: appState.pendingOpenConverterService) { _, _ in
                 MainWidgetDeepLinkHandler.consumePendingActions(
                     appState: appState,
-                    router: router,
-                    showExpenseSheet: &showExpenseSheet,
-                    showIncomeSheet: &showIncomeSheet
+                    router: router
                 )
             }
             .onChange(of: appState.pendingOpenMainExpenseSheet) { _, _ in
                 MainWidgetDeepLinkHandler.consumePendingActions(
                     appState: appState,
-                    router: router,
-                    showExpenseSheet: &showExpenseSheet,
-                    showIncomeSheet: &showIncomeSheet
+                    router: router
                 )
             }
             .onChange(of: appState.pendingOpenMainIncomeSheet) { _, _ in
                 MainWidgetDeepLinkHandler.consumePendingActions(
                     appState: appState,
-                    router: router,
-                    showExpenseSheet: &showExpenseSheet,
-                    showIncomeSheet: &showIncomeSheet
+                    router: router
                 )
             }
         }
@@ -261,7 +281,7 @@ struct MainAppView: View {
     // MARK: - Services Grid
     
     private var servicesGrid: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 12) {
             ForEach(services) { service in
                 ServiceButton(
                     title: MainLocalization.text(service.titleKey),
@@ -297,6 +317,14 @@ struct MainAppView: View {
 
     private func persistServiceOrder() {
         serviceOrderManager.saveOrder(services.map(\.id))
+    }
+
+    private func prepareCashflowQuickAccess() {
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+        viewModel.handle(.syncDisplayCurrencyWithPrimary(appState.primaryCurrencyCode))
+        viewModel.handle(.loadCards)
+        viewModel.handle(.loadTransactions)
+        cashflowViewModel = viewModel
     }
     
     @ViewBuilder

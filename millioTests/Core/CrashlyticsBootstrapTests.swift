@@ -86,7 +86,7 @@ private final class MockCrashReportingSink: CrashReportingSink {
 struct CrashlyticsBootstrapTests {
     @Test("CrashlyticsBootstrap is idempotent and configures once")
     func testBootstrapIdempotent() {
-        let env = CrashlyticsBootstrapEnvironment(isDebug: false, isUnitTesting: true, overrideEnabled: nil)
+        let env = CrashlyticsBootstrapEnvironment(isDebug: false, isUnitTesting: true, isUITesting: false, overrideEnabled: nil)
         let firebase = MockFirebaseConfigurator()
         let sink = MockCrashReportingSink()
         let reporter = MockCrashReporter()
@@ -101,7 +101,7 @@ struct CrashlyticsBootstrapTests {
         bootstrap.start()
         bootstrap.start()
         
-        #expect(firebase.configureCalls == 1)
+        #expect(firebase.configureCalls == 0)
         #expect(sink.reporter != nil)
         #expect(sink.enabled == false)
         #expect((sink.customValues["is_unit_testing"] as? Bool) == true)
@@ -109,7 +109,7 @@ struct CrashlyticsBootstrapTests {
 
     @Test("CrashlyticsBootstrap does not build Firebase reporter when disabled")
     func testBootstrapSkipsFirebaseReporterFactoryWhenDisabled() {
-        let env = CrashlyticsBootstrapEnvironment(isDebug: true, isUnitTesting: false, overrideEnabled: nil)
+        let env = CrashlyticsBootstrapEnvironment(isDebug: true, isUnitTesting: false, isUITesting: false, overrideEnabled: nil)
         let firebase = MockFirebaseConfigurator()
         let sink = MockCrashReportingSink()
         var reporterFactoryCalls = 0
@@ -126,10 +126,30 @@ struct CrashlyticsBootstrapTests {
 
         bootstrap.start()
 
-        #expect(firebase.configureCalls == 1)
+        #expect(firebase.configureCalls == 0)
         #expect(reporterFactoryCalls == 0)
         #expect(sink.reporter is NoopCrashReporter)
         #expect(sink.enabled == false)
+    }
+
+    @Test("CrashlyticsBootstrap skips Firebase configure in UI test mode")
+    func testBootstrapSkipsFirebaseConfigureDuringUITests() {
+        let env = CrashlyticsBootstrapEnvironment(isDebug: false, isUnitTesting: false, isUITesting: true, overrideEnabled: nil)
+        let firebase = MockFirebaseConfigurator()
+        let sink = MockCrashReportingSink()
+
+        let bootstrap = CrashlyticsBootstrap(
+            environment: env,
+            firebase: firebase,
+            crashReporting: sink,
+            reporterFactory: { MockCrashReporter() }
+        )
+
+        bootstrap.start()
+
+        #expect(firebase.configureCalls == 0)
+        #expect(sink.reporter is NoopCrashReporter)
+        #expect((sink.customValues["is_ui_testing"] as? Bool) == true)
     }
     
     @Test("CrashReporting forwards logs/keys/errors to reporter")

@@ -37,39 +37,32 @@ struct WidgetDeepLinkHandlerTests {
     func mainDeepLinkConsumerOpensSheetsAndClearsPendingFlags() {
         let appState = AppState()
         let router = AppRouter()
-        var showExpenseSheet = false
-        var showIncomeSheet = false
 
         appState.pendingOpenMainExpenseSheet = true
         appState.pendingOpenMainIncomeSheet = true
 
         MainWidgetDeepLinkHandler.consumePendingActions(
             appState: appState,
-            router: router,
-            showExpenseSheet: &showExpenseSheet,
-            showIncomeSheet: &showIncomeSheet
+            router: router
         )
 
-        #expect(showExpenseSheet)
-        #expect(showIncomeSheet)
+        #expect(appState.pendingOpenCashflowExpense)
+        #expect(appState.pendingOpenCashflowIncome)
         #expect(appState.pendingOpenMainExpenseSheet == false)
         #expect(appState.pendingOpenMainIncomeSheet == false)
+        #expect(router.navigationPath.isEmpty == false)
     }
 
     @Test("MainWidgetDeepLinkHandler открывает конвертер и очищает pending-флаг")
     func mainDeepLinkConsumerNavigatesToConverter() {
         let appState = AppState()
         let router = AppRouter()
-        var showExpenseSheet = false
-        var showIncomeSheet = false
 
         appState.pendingOpenConverterService = true
 
         MainWidgetDeepLinkHandler.consumePendingActions(
             appState: appState,
-            router: router,
-            showExpenseSheet: &showExpenseSheet,
-            showIncomeSheet: &showIncomeSheet
+            router: router
         )
 
         #expect(appState.pendingOpenConverterService == false)

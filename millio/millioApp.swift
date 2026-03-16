@@ -16,6 +16,10 @@ private enum EarlyFirebaseBootstrap {
 
     static func ensureConfigured() {
         guard !didConfigure else { return }
+        let environment = ProcessInfo.processInfo.environment
+        let isTestLaunch = environment["XCTestConfigurationFilePath"] != nil
+            || environment["MILLIO_UI_TEST_MODE"] == "1"
+        guard !isTestLaunch else { return }
         didConfigure = true
 
         if FirebaseApp.app() == nil {

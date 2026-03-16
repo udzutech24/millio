@@ -147,6 +147,7 @@ struct CashflowTransactionsHistoryView: View {
     @State private var isCardFilterSheetPresented = false
     @State private var displayedTransactionsLimit = Self.pageSize
     @State private var selectedTransaction: CashflowTransaction?
+    @State private var summaryCollapseProgress: CGFloat = 0
     @FocusState private var isSearchFocused: Bool
     private static let pageSize = 20
 
@@ -435,9 +436,18 @@ struct CashflowTransactionsHistoryView: View {
         ScrollView {
             LazyVStack(spacing: 12) {
                 if shouldShowSummary {
-                    CashflowHistorySummaryContainer(
+                    GeometryReader { proxy in
+                        Color.clear.preference(
+                            key: CashflowHistorySummaryMinYPreferenceKey.self,
+                            value: proxy.frame(in: .named("cashflowHistoryScroll")).minY
+                        )
+                    }
+                    .frame(height: 0)
+
+                    CashflowHistorySummaryResponsiveContainer(
                         summary: summaryModel,
-                        selectedCategoryRawValue: $selectedSummaryCategoryRawValue
+                        selectedCategoryRawValue: $selectedSummaryCategoryRawValue,
+                        collapseProgress: summaryCollapseProgress
                     )
                     .padding(.bottom, 8)
                 }
@@ -472,6 +482,7 @@ struct CashflowTransactionsHistoryView: View {
             .padding(.top, 8)
             .padding(.bottom, 24)
         }
+        .coordinateSpace(name: "cashflowHistoryScroll")
         .safeAreaInset(edge: .bottom) {
             if canLoadMore {
                 loadMoreButton
@@ -485,17 +496,24 @@ struct CashflowTransactionsHistoryView: View {
         }
         .onChange(of: selectedFilter) { _, _ in
             resetPagination()
+            resetSummarySelectionAndPlaceholder()
         }
         .onChange(of: selectedStartDate) { _, _ in
             resetPagination()
+            resetSummarySelectionAndPlaceholder()
         }
         .onChange(of: selectedEndDate) { _, _ in
             resetPagination()
+            resetSummarySelectionAndPlaceholder()
         }
         .onChange(of: shouldShowSummary) { _, newValue in
             if !newValue {
                 selectedSummaryCategoryRawValue = nil
+                summaryCollapseProgress = 0
             }
+        }
+        .onPreferenceChange(CashflowHistorySummaryMinYPreferenceKey.self) { minY in
+            summaryCollapseProgress = CashflowHistorySummaryLayout.collapseProgress(minY: minY)
         }
     }
 
@@ -583,6 +601,15 @@ struct CashflowTransactionsHistoryView: View {
         displayedTransactionsLimit = Self.pageSize
     }
 
+    private func resetSummarySelectionAndPlaceholder() {
+        selectedSummaryCategoryRawValue = nil
+        summaryCollapseProgress = 0
+        summaryModel = .empty(
+            mode: summaryMode,
+            currencyCode: viewModel.state.displayCurrency
+        )
+    }
+
     private func resetDateFilterToDefault() {
         let range = defaultDateRange
         selectedStartDate = range.start
@@ -590,10 +617,12 @@ struct CashflowTransactionsHistoryView: View {
     }
 
     private func reloadSummary() async {
+        let currentMode = summaryMode
         let model = await viewModel.historySummary(
             matching: summaryQuery,
-            mode: summaryMode
+            mode: currentMode
         )
+        guard currentMode == summaryMode else { return }
         summaryModel = model
         if let selectedSummaryCategoryRawValue,
            !model.entries.contains(where: { $0.rawValue == selectedSummaryCategoryRawValue }) {
@@ -664,10 +693,11 @@ private struct HistoryDateFilterChip: View {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 12, weight: .bold))
             }
-            .foregroundStyle(isSelected ? .white : AppColors.textPrimary)
+            .foregroundStyle(chipForeground(isSelected: isSelected))
             .padding(.horizontal, 18)
             .padding(.vertical, 12)
             .background(chipBackground(isSelected: isSelected))
+            .overlay(chipBorder(isSelected: isSelected))
         }
         .buttonStyle(.plain)
     }
@@ -699,23 +729,23 @@ private struct HistoryTypeFilterChip: View {
                         Image(systemName: "chevron.down")
                             .font(.system(size: 11, weight: .bold))
                     }
-                    .foregroundStyle(Color.white)
+                    .foregroundStyle(chipForeground(isSelected: true))
                     .padding(.leading, 18)
                     .padding(.trailing, 8)
                     .padding(.vertical, 12)
-                    .background(chipBackground(isSelected: true))
                 }
 
                 Button(action: onReset) {
                     Image(systemName: "xmark")
                         .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(Color.white)
+                        .foregroundStyle(chipForeground(isSelected: true))
                         .frame(width: 20, height: 20)
                 }
                 .buttonStyle(.plain)
                 .padding(.trailing, 16)
             }
             .background(chipBackground(isSelected: true))
+            .overlay(chipBorder(isSelected: true))
         } else {
             Menu {
                 ForEach(CashflowHistoryTypeFilter.allCases, id: \.self) { filter in
@@ -730,10 +760,11 @@ private struct HistoryTypeFilterChip: View {
                     Image(systemName: "chevron.down")
                         .font(.system(size: 12, weight: .bold))
                 }
-                .foregroundStyle(AppColors.textPrimary)
+                .foregroundStyle(chipForeground(isSelected: false))
                 .padding(.horizontal, 18)
                 .padding(.vertical, 12)
                 .background(chipBackground(isSelected: false))
+                .overlay(chipBorder(isSelected: false))
             }
         }
     }
@@ -753,10 +784,11 @@ private struct HistoryCardFilterChip: View {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 12, weight: .bold))
             }
-            .foregroundStyle(isSelected ? .white : AppColors.textPrimary)
+            .foregroundStyle(chipForeground(isSelected: isSelected))
             .padding(.horizontal, 18)
             .padding(.vertical, 12)
             .background(chipBackground(isSelected: isSelected))
+            .overlay(chipBorder(isSelected: isSelected))
         }
         .buttonStyle(.plain)
     }
@@ -768,19 +800,51 @@ private func chipBackground(isSelected: Bool) -> some View {
             isSelected
             ? AnyShapeStyle(
                 LinearGradient(
-                    colors: [Color(hex: "5B9DFF"), Color(hex: "3C7FF0")],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            : AnyShapeStyle(
-                LinearGradient(
-                    colors: [Color(hex: "3A3A3F"), Color(hex: "2B2B30")],
+                    colors: [
+                        Color(red: 0.02, green: 0.10, blue: 0.17).opacity(0.92),
+                        Color.black.opacity(0.88)
+                    ],
                     startPoint: .leading,
                     endPoint: .trailing
                 )
             )
+            : AnyShapeStyle(Color.white.opacity(0.015))
         )
+        .overlay {
+            if isSelected {
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                (AppColors.cashflowGradient.first ?? .blue).opacity(0.12),
+                                Color.clear
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+            }
+        }
+}
+
+private func chipBorder(isSelected: Bool) -> some View {
+    Capsule()
+        .stroke(
+            isSelected
+            ? AnyShapeStyle(
+                LinearGradient(
+                    colors: AppColors.cashflowGradient.map { $0.opacity(0.95) },
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            : AnyShapeStyle(Color.white.opacity(0.14)),
+            lineWidth: 1
+        )
+}
+
+private func chipForeground(isSelected: Bool) -> Color {
+    AppColors.textPrimary
 }
 
 // MARK: - History Date Range Sheet

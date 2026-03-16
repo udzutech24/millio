@@ -26,6 +26,7 @@ final class millioUITests: XCTestCase {
     func testExample() throws {
         // UI tests must launch the application that they test.
         let app = XCUIApplication()
+        app.launchEnvironment["MILLIO_UI_TEST_MODE"] = "1"
         app.launch()
 
         // Use XCTAssert and related functions to verify your tests produce the correct results.
@@ -38,6 +39,7 @@ final class millioUITests: XCTestCase {
             // `XCTApplicationLaunchMetric` expects a cold launch each iteration.
             // If the app remains running between iterations, XCTest may record 0 metrics and fail the test.
             let app = XCUIApplication()
+            app.launchEnvironment["MILLIO_UI_TEST_MODE"] = "1"
             app.terminate()
             app.launch()
             app.terminate()

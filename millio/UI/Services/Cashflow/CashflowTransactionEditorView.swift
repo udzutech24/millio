@@ -110,7 +110,12 @@ struct CashflowTransactionEditorView: View {
             _recurrenceWeekdays = State(initialValue: transaction.recurrenceWeekdays)
             _shouldAffectCardBalance = State(initialValue: transaction.affectsCardBalance)
         } else if let type = transactionType {
+            let initialCurrency = Self.defaultEditorCurrency(
+                displayCurrency: viewModel.state.displayCurrency,
+                primaryCurrencyCode: SettingsManager.shared.primaryCurrencyCode
+            )
             _selectedTransactionType = State(initialValue: type)
+            _selectedCurrency = State(initialValue: initialCurrency)
             _transactionDate = State(initialValue: initialTransactionDate ?? Date())
             if type == .income {
                 _selectedIncomeCategoryRaw = State(initialValue: preselectedIncomeCategoryRaw ?? IncomeCategory.salary.rawValue)
@@ -121,7 +126,12 @@ struct CashflowTransactionEditorView: View {
             _recurrenceWeekdays = State(initialValue: [])
             _shouldAffectCardBalance = State(initialValue: true)
         } else {
+            let initialCurrency = Self.defaultEditorCurrency(
+                displayCurrency: viewModel.state.displayCurrency,
+                primaryCurrencyCode: SettingsManager.shared.primaryCurrencyCode
+            )
             _selectedTransactionType = State(initialValue: .expense)
+            _selectedCurrency = State(initialValue: initialCurrency)
             _transactionDate = State(initialValue: initialTransactionDate ?? Date())
             _recurrenceRule = State(initialValue: initialRecurrenceRule ?? .none)
             _recurrenceWeekdays = State(initialValue: [])
@@ -1072,9 +1082,18 @@ struct CashflowTransactionEditorView: View {
         }
     }
 
-    private func fireSuccessHaptic() {
-        let generator = UINotificationFeedbackGenerator()
-        generator.notificationOccurred(.success)
+    private func fireTransactionSavedHaptic(for transactionType: CashflowTransactionType) {
+        switch transactionType {
+        case .expense:
+            let generator = UIImpactFeedbackGenerator(style: .rigid)
+            generator.impactOccurred(intensity: 1.0)
+        case .income:
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.success)
+        case .transfer, .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
+            let generator = UIImpactFeedbackGenerator(style: .medium)
+            generator.impactOccurred(intensity: 0.9)
+        }
     }
 
     private func editorCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
@@ -1170,7 +1189,8 @@ struct CashflowTransactionEditorView: View {
         Task {
             let didSave = await viewModel.persistTransaction(
                 transaction,
-                replacing: editingTransaction
+                replacing: editingTransaction,
+                dismissEditorOnSuccess: onSave == nil
             )
             await MainActor.run {
                 isSavingTransaction = false
@@ -1179,7 +1199,7 @@ struct CashflowTransactionEditorView: View {
                     return
                 }
 
-                fireSuccessHaptic()
+                fireTransactionSavedHaptic(for: selectedTransactionType)
                 if let onSave {
                     onSave()
                 } else {
@@ -1372,6 +1392,20 @@ extension CashflowTransactionEditorView {
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .uppercased()
         return normalized.isEmpty ? nil : normalized
+    }
+
+    static func defaultEditorCurrency(
+        displayCurrency: String,
+        primaryCurrencyCode: String?
+    ) -> String {
+        let normalizedDisplayCurrency = displayCurrency
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+        if !normalizedDisplayCurrency.isEmpty {
+            return normalizedDisplayCurrency
+        }
+
+        return operationCurrencyPrimaryPinnedCode(from: primaryCurrencyCode) ?? "RUB"
     }
 
     static func mainInfoRows(for transactionType: CashflowTransactionType) -> [CashflowEditorMainInfoRow] {
