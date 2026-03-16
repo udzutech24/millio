@@ -37,6 +37,14 @@ struct CashflowViewModelTests {
         try context.save()
         return context
     }
+
+    private func makeIsolatedDefaults() -> (suiteName: String, defaults: UserDefaults) {
+        let suiteName = "CashflowViewModelTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        defaults.set("RUB", forKey: "primaryCurrencyCode")
+        return (suiteName, defaults)
+    }
 }
 
 @MainActor
@@ -887,23 +895,18 @@ extension CashflowViewModelTests {
     func testDeleteCustomExpenseCategoryMigratesTransactions() async throws {
         let modelContext = try createTestModelContext()
         let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 2, day: 13)) ?? Date()
-        let defaults = UserDefaults.standard
-        let previousDisplayCurrency = defaults.string(forKey: "cashflow_display_currency")
+        let defaultsBox = makeIsolatedDefaults()
+        let defaults = defaultsBox.defaults
         defaults.set("RUB", forKey: "cashflow_display_currency")
-        defer {
-            if let previousDisplayCurrency {
-                defaults.set(previousDisplayCurrency, forKey: "cashflow_display_currency")
-            } else {
-                defaults.removeObject(forKey: "cashflow_display_currency")
-            }
-        }
+        defer { defaults.removePersistentDomain(forName: defaultsBox.suiteName) }
 
         let viewModel = CashflowViewModel(
             modelContext: modelContext,
             now: { fixedNow },
             assetsSnapshotProvider: { _, _, _ in
                 (start: 0, end: 0)
-            }
+            },
+            defaults: defaults
         )
 
         guard let custom = viewModel.createCustomCategory(kind: .expense, name: "Такси", icon: "car.fill") else {
@@ -1891,6 +1894,10 @@ extension CashflowViewModelTests {
     func testDeleteTransactionWithRecalculationPublishesCardsUpdated() async throws {
         let modelContext = try createTestModelContext()
         let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 15, hour: 9)) ?? Date()
+        let defaultsBox = makeIsolatedDefaults()
+        let defaults = defaultsBox.defaults
+        defer { defaults.removePersistentDomain(forName: defaultsBox.suiteName) }
+        defaults.set(fixedNow, forKey: "cashflow_due_auto_apply_checkpoint_v1")
 
         let card = Card(
             name: "T-Bank",
@@ -1915,7 +1922,11 @@ extension CashflowViewModelTests {
         modelContext.insert(existing)
         try modelContext.save()
 
-        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        let viewModel = CashflowViewModel(
+            modelContext: modelContext,
+            now: { fixedNow },
+            defaults: defaults
+        )
 
         var didPublishCardsUpdated = false
         let subscriptionID = EventBus.shared.subscribe { event in
