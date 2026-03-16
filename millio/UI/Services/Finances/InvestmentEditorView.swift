@@ -684,12 +684,31 @@ struct InvestmentEditorView: View {
                 )
 
                 await MainActor.run {
-                    lastKnownUnitPrice = latestQuote?.price
-                    lastKnownPriceUpdatedAt = latestQuote?.updatedAtDate ?? (latestQuote == nil ? nil : Date())
-                    marketQuoteLookupKey = latestQuote?.canonicalQuoteLookupKey ?? lookupKey
-                    marketMICCode = latestQuote?.micCode ?? marketMICCode
-                    marketProviderRaw = latestQuote == nil ? nil : "market-backend"
-                    if let latestPrice = latestQuote?.price, purchaseUnitPriceText.isEmpty {
+                    guard let latestQuote else {
+                        marketErrorMessage = nil
+                        return
+                    }
+
+                    switch latestQuote.resolutionStatus {
+                    case .fresh, .stale:
+                        lastKnownUnitPrice = latestQuote.price
+                        lastKnownPriceUpdatedAt = latestQuote.updatedAtDate ?? Date()
+                        marketQuoteLookupKey = latestQuote.canonicalQuoteLookupKey
+                        marketMICCode = latestQuote.micCode ?? marketMICCode
+                        marketProviderRaw = latestQuote.providerSymbol == nil ? marketProviderRaw : "market-backend"
+                    case .notFound:
+                        marketErrorMessage = FinancesL10n.text(
+                            locale: .current,
+                            ru: "Тикер не найден",
+                            en: "Stock symbol not found"
+                        )
+                        return
+                    case .providerError:
+                        marketErrorMessage = String(localized: "finances.market.error_generic")
+                        return
+                    }
+
+                    if let latestPrice = latestQuote.price, purchaseUnitPriceText.isEmpty {
                         purchaseUnitPriceText = String(latestPrice)
                     }
                     if let positionTotal {

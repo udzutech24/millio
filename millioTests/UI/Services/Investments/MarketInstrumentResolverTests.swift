@@ -13,7 +13,7 @@ private actor MarketInstrumentResolverClientMock: MarketDataClientProtocol {
         symbols
     }
 
-    func latestPrice(symbol: String, forceRefresh: Bool) async throws -> Double? {
+    func latestQuote(symbol: String, forceRefresh: Bool) async throws -> AssetSummary? {
         nil
     }
 }

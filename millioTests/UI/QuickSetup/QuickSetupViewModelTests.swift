@@ -8,8 +8,28 @@ private struct QuickSetupMarketDataClientMock: MarketDataClientProtocol {
         []
     }
 
-    func latestPrice(symbol: String, forceRefresh: Bool) async throws -> Double? {
-        latestPriceValue
+    func latestQuote(symbol: String, forceRefresh: Bool) async throws -> AssetSummary? {
+        guard let latestPriceValue else {
+            return nil
+        }
+
+        return AssetSummary(
+            symbol: symbol,
+            canonicalSymbol: symbol,
+            providerSymbol: symbol,
+            name: nil,
+            exchange: nil,
+            micCode: nil,
+            currency: "USD",
+            price: latestPriceValue,
+            previousClose: nil,
+            change: nil,
+            percentChange: nil,
+            isMarketOpen: nil,
+            resolutionStatus: .fresh,
+            updatedAt: "2026-03-16T00:00:00.000Z",
+            isStale: false
+        )
     }
 }
 

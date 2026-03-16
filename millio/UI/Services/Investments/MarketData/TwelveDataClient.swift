@@ -96,7 +96,7 @@ enum MarketInstrumentIdentity {
 
 protocol MarketDataClientProtocol: Sendable {
     func searchSymbols(query: String, outputSize: Int) async throws -> [TwelveDataSymbol]
-    func latestPrice(symbol: String, forceRefresh: Bool) async throws -> Double?
+    func latestQuote(symbol: String, forceRefresh: Bool) async throws -> AssetSummary?
 }
 
 extension MarketDataClientProtocol {
@@ -104,25 +104,8 @@ extension MarketDataClientProtocol {
         try await searchSymbols(query: query, outputSize: 20)
     }
 
-    func latestQuote(symbol: String, forceRefresh: Bool) async throws -> AssetSummary? {
-        guard let price = try await latestPrice(symbol: symbol, forceRefresh: forceRefresh) else {
-            return nil
-        }
-
-        return AssetSummary(
-            symbol: symbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased(),
-            name: nil,
-            exchange: nil,
-            micCode: nil,
-            currency: nil,
-            price: price,
-            previousClose: nil,
-            change: nil,
-            percentChange: nil,
-            isMarketOpen: nil,
-            updatedAt: MarketAPIClient.iso8601Formatter.string(from: Date()),
-            isStale: false
-        )
+    func latestPrice(symbol: String, forceRefresh: Bool) async throws -> Double? {
+        try await latestQuote(symbol: symbol, forceRefresh: forceRefresh)?.price
     }
 }
 
@@ -215,8 +198,17 @@ struct MarketSearchResult: Codable, Equatable, Sendable {
     }
 }
 
+enum MarketQuoteResolutionStatus: String, Codable, Equatable, Sendable {
+    case fresh
+    case stale
+    case notFound = "not_found"
+    case providerError = "provider_error"
+}
+
 struct AssetSummary: Codable, Equatable, Sendable {
     let symbol: String
+    let canonicalSymbol: String?
+    let providerSymbol: String?
     let name: String?
     let exchange: String?
     let micCode: String?
@@ -226,6 +218,7 @@ struct AssetSummary: Codable, Equatable, Sendable {
     let change: Double?
     let percentChange: Double?
     let isMarketOpen: Bool?
+    let resolutionStatus: MarketQuoteResolutionStatus
     let updatedAt: String
     let isStale: Bool
 
@@ -234,7 +227,14 @@ struct AssetSummary: Codable, Equatable, Sendable {
     }
 
     var canonicalQuoteLookupKey: String {
-        MarketInstrumentIdentity.canonicalQuoteLookupKey(symbol: symbol, exchange: exchange)
+        if let canonicalSymbol = canonicalSymbol?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased(),
+           !canonicalSymbol.isEmpty {
+            return canonicalSymbol
+        }
+
+        return MarketInstrumentIdentity.canonicalQuoteLookupKey(symbol: symbol, exchange: exchange)
     }
 }
 
@@ -512,10 +512,6 @@ final class MarketAPIClient: MarketDataClientProtocol, @unchecked Sendable {
         let mapped = results.map(\.asSymbol)
         await cacheStore.setSearch(mapped, for: normalizedQuery)
         return Array(mapped.prefix(max(1, outputSize)))
-    }
-
-    func latestPrice(symbol: String, forceRefresh: Bool = false) async throws -> Double? {
-        try await latestQuote(symbol: symbol, forceRefresh: forceRefresh)?.price
     }
 
     func latestQuote(symbol: String, forceRefresh: Bool = false) async throws -> AssetSummary? {

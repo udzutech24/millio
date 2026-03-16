@@ -152,6 +152,15 @@ struct FinanceState {
     var showRefreshIssue: Bool = false
 }
 
+private struct StockRefreshIssues {
+    var notFoundSymbols: Set<String> = []
+    var providerErrorSymbols: Set<String> = []
+
+    var hasIssues: Bool {
+        !notFoundSymbols.isEmpty || !providerErrorSymbols.isEmpty
+    }
+}
+
 enum InvestmentOrderSide: Hashable {
     case buy
     case sell
@@ -1583,12 +1592,12 @@ final class FinanceViewModel: ViewModelProtocol {
     func refreshStockPrices() async {
         state.isLoadingRates = true
         defer { state.isLoadingRates = false }
-        let failedSymbols = await refreshStockPrices(forceRefresh: true)
-        presentRefreshIssueIfNeeded(message: stockRefreshIssueMessage(for: failedSymbols))
+        let issues = await refreshStockPrices(forceRefresh: true)
+        presentRefreshIssueIfNeeded(message: stockRefreshIssueMessage(for: issues))
     }
 
     @discardableResult
-    private func refreshStockPrices(forceRefresh: Bool) async -> [String] {
+    private func refreshStockPrices(forceRefresh: Bool) async -> StockRefreshIssues {
         let descriptor = FetchDescriptor<Investment>()
         let activeStocks = ((try? modelContext.fetch(descriptor)) ?? []).filter {
             $0.archivedAt == nil && $0.category == .stocks && $0.isMarketPriced
@@ -1596,40 +1605,67 @@ final class FinanceViewModel: ViewModelProtocol {
 
         guard !activeStocks.isEmpty else {
             await refreshGroupTotalsAndAmounts()
-            return []
+            return StockRefreshIssues()
         }
 
         var didUpdateAnyPrice = false
-        var failedSymbols = Set<String>()
+        var issues = StockRefreshIssues()
 
         for stock in activeStocks {
             let lookupSymbols = stockQuoteLookupSymbols(for: stock)
             guard !lookupSymbols.isEmpty else {
-                failedSymbols.insert(stock.name.trimmingCharacters(in: .whitespacesAndNewlines))
+                issues.notFoundSymbols.insert(stock.name.trimmingCharacters(in: .whitespacesAndNewlines))
                 continue
             }
 
             var refreshed = false
+            var lastResolutionStatus: MarketQuoteResolutionStatus?
 
             for symbol in lookupSymbols {
                 do {
-                    guard let latestPrice = try await marketDataClient.latestPrice(
+                    guard let latestQuote = try await marketDataClient.latestQuote(
                         symbol: symbol,
                         forceRefresh: forceRefresh
-                    ), latestPrice > 0 else {
+                    ) else {
                         continue
                     }
 
-                    stock.lastKnownUnitPrice = latestPrice
-                    stock.lastKnownPriceUpdatedAt = Date()
-                    stock.marketQuoteLookupKey = symbol
-                    stock.recalculateAmountFromPosition()
-                    stock.updatedAt = Date()
-                    didUpdateAnyPrice = true
-                    refreshed = true
-                    break
+                    lastResolutionStatus = latestQuote.resolutionStatus
+
+                    switch latestQuote.resolutionStatus {
+                    case .fresh, .stale:
+                        guard let latestPrice = latestQuote.price, latestPrice > 0 else {
+                            continue
+                        }
+
+                        stock.lastKnownUnitPrice = latestPrice
+                        stock.lastKnownPriceUpdatedAt = latestQuote.updatedAtDate ?? Date()
+                        stock.marketQuoteLookupKey = latestQuote.canonicalQuoteLookupKey
+                        stock.marketExchange = latestQuote.exchange ?? stock.marketExchange
+                        stock.marketMICCode = latestQuote.micCode ?? stock.marketMICCode
+                        stock.marketCurrency = latestQuote.currency ?? stock.marketCurrency
+                        stock.marketProviderRaw = latestQuote.providerSymbol == nil ? stock.marketProviderRaw : "market-backend"
+                        stock.recalculateAmountFromPosition()
+                        stock.updatedAt = Date()
+                        didUpdateAnyPrice = true
+                        refreshed = true
+                    case .notFound:
+                        continue
+                    case .providerError:
+                        AppLogger.log(
+                            .warning,
+                            category: "Finance",
+                            "Provider error while refreshing stock quote for \(symbol)"
+                        )
+                        continue
+                    }
+
+                    if refreshed {
+                        break
+                    }
                 } catch {
                     if shouldAbortQuoteAliasRefresh(after: error) {
+                        lastResolutionStatus = .providerError
                         AppLogger.log(
                             .warning,
                             category: "Finance",
@@ -1643,11 +1679,18 @@ final class FinanceViewModel: ViewModelProtocol {
                         category: "Finance",
                         "Failed to refresh stock quote for \(symbol): \(error.localizedDescription)"
                     )
+                    lastResolutionStatus = .providerError
                 }
             }
 
             if !refreshed {
-                failedSymbols.insert(stockDisplaySymbol(stock))
+                let displaySymbol = stockDisplaySymbol(stock)
+                switch lastResolutionStatus {
+                case .providerError:
+                    issues.providerErrorSymbols.insert(displaySymbol)
+                case .fresh, .stale, .notFound, .none:
+                    issues.notFoundSymbols.insert(displaySymbol)
+                }
             }
         }
 
@@ -1661,10 +1704,7 @@ final class FinanceViewModel: ViewModelProtocol {
 
         loadAccounts()
         await refreshGroupTotalsAndAmounts()
-        return failedSymbols
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .sorted()
+        return normalizedStockRefreshIssues(issues)
     }
 
     /// Backward-compatible alias. Prefer `refreshCurrencyQuotes()`.
@@ -1707,14 +1747,47 @@ final class FinanceViewModel: ViewModelProtocol {
         return normalized.isEmpty ? nil : normalized
     }
 
-    private func stockRefreshIssueMessage(for failedSymbols: [String]) -> String? {
-        guard !failedSymbols.isEmpty else { return nil }
-        let label = FinancesL10n.text(
-            locale: .current,
-            ru: "Не обновились акции",
-            en: "Failed to refresh stocks"
+    private func normalizedStockRefreshIssues(_ issues: StockRefreshIssues) -> StockRefreshIssues {
+        StockRefreshIssues(
+            notFoundSymbols: normalizedStockRefreshSymbols(issues.notFoundSymbols),
+            providerErrorSymbols: normalizedStockRefreshSymbols(issues.providerErrorSymbols)
         )
-        return "\(label): \(failedSymbols.joined(separator: ", "))"
+    }
+
+    private func normalizedStockRefreshSymbols(_ values: Set<String>) -> Set<String> {
+        Set(
+            values
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        )
+    }
+
+    private func stockRefreshIssueMessage(for issues: StockRefreshIssues) -> String? {
+        guard issues.hasIssues else { return nil }
+
+        let notFoundSymbols = issues.notFoundSymbols.sorted()
+        let providerErrorSymbols = issues.providerErrorSymbols.sorted()
+        var parts: [String] = []
+
+        if !notFoundSymbols.isEmpty {
+            let label = FinancesL10n.text(
+                locale: .current,
+                ru: "Не найдены тикеры",
+                en: "Missing stock symbols"
+            )
+            parts.append("\(label): \(notFoundSymbols.joined(separator: ", "))")
+        }
+
+        if !providerErrorSymbols.isEmpty {
+            let label = FinancesL10n.text(
+                locale: .current,
+                ru: "Ошибка провайдера котировок",
+                en: "Quote provider error"
+            )
+            parts.append("\(label): \(providerErrorSymbols.joined(separator: ", "))")
+        }
+
+        return parts.joined(separator: ". ")
     }
 
     private func stockQuoteLookupSymbols(for investment: Investment) -> [String] {

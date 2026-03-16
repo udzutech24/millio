@@ -35,7 +35,9 @@ struct TwelveDataClientTests {
     func testAssetSummaryDecoding() throws {
         let json = """
         {
-          "symbol": "AAPL",
+          "symbol": "AAPL.US",
+          "canonicalSymbol": "AAPL",
+          "providerSymbol": "AAPL",
           "name": "Apple Inc.",
           "exchange": "NASDAQ",
           "micCode": "XNAS",
@@ -45,6 +47,7 @@ struct TwelveDataClientTests {
           "change": 3.43,
           "percentChange": 1.63,
           "isMarketOpen": true,
+          "resolutionStatus": "fresh",
           "updatedAt": "2026-03-08T12:00:00.000Z",
           "isStale": false
         }
@@ -52,10 +55,14 @@ struct TwelveDataClientTests {
 
         let decoded = try JSONDecoder().decode(AssetSummary.self, from: Data(json.utf8))
 
-        #expect(decoded.symbol == "AAPL")
+        #expect(decoded.symbol == "AAPL.US")
+        #expect(decoded.canonicalSymbol == "AAPL")
+        #expect(decoded.providerSymbol == "AAPL")
         #expect(decoded.price == 213.55)
+        #expect(decoded.resolutionStatus == .fresh)
         #expect(decoded.updatedAt == "2026-03-08T12:00:00.000Z")
         #expect(decoded.isStale == false)
+        #expect(decoded.canonicalQuoteLookupKey == "AAPL")
     }
 
     @Test("MarketAPIClient требует configured auth service")

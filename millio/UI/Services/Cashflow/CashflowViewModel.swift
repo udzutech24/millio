@@ -1974,14 +1974,15 @@ final class CashflowViewModel: ViewModelProtocol {
             return false
         }
 
-        let descriptor = FetchDescriptor<CashflowCustomCategory>()
-        let sourceCategory = ((try? modelContext.fetch(descriptor)) ?? []).first {
+        let sourceCategory = state.customCategories.first {
+            $0.categoryID == sourceID && $0.kind == kind
+        } ?? ((try? modelContext.fetch(FetchDescriptor<CashflowCustomCategory>())) ?? []).first {
             $0.categoryID == sourceID && $0.kind == kind
         }
         guard let sourceCategory else { return false }
 
         let fallback = defaultCategoryOption(for: kind)
-        let nowDate = Date()
+        let nowDate = now()
         migrateTransactions(fromRaw: rawValue, toRaw: fallback.rawValue, kind: kind, nowDate: nowDate)
         modelContext.delete(sourceCategory)
 

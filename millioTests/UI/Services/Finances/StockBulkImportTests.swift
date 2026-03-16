@@ -32,12 +32,32 @@ actor StockBulkImportMockMarketDataClient: MarketDataClientProtocol {
         searchResults[query.uppercased()] ?? []
     }
 
-    func latestPrice(symbol: String, forceRefresh: Bool) async throws -> Double? {
+    func latestQuote(symbol: String, forceRefresh: Bool) async throws -> AssetSummary? {
         latestPriceRequests.append((symbol.uppercased(), forceRefresh))
         if let error = latestPriceErrors[symbol.uppercased()] {
             throw error
         }
-        return latestPrices[symbol.uppercased()] ?? nil
+        guard let price = latestPrices[symbol.uppercased()] ?? nil else {
+            return nil
+        }
+
+        return AssetSummary(
+            symbol: symbol.uppercased(),
+            canonicalSymbol: symbol.uppercased(),
+            providerSymbol: symbol.uppercased(),
+            name: nil,
+            exchange: nil,
+            micCode: nil,
+            currency: "USD",
+            price: price,
+            previousClose: nil,
+            change: nil,
+            percentChange: nil,
+            isMarketOpen: nil,
+            resolutionStatus: .fresh,
+            updatedAt: "2026-03-16T00:00:00.000Z",
+            isStale: false
+        )
     }
 
     func lastLatestPriceRequest() -> (symbol: String, forceRefresh: Bool)? {

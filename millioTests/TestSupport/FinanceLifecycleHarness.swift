@@ -5,7 +5,7 @@ import Testing
 
 actor FinanceLifecycleMarketDataClient: MarketDataClientProtocol {
     func searchSymbols(query: String, outputSize: Int) async throws -> [TwelveDataSymbol] { [] }
-    func latestPrice(symbol: String, forceRefresh: Bool) async throws -> Double? { nil }
+    func latestQuote(symbol: String, forceRefresh: Bool) async throws -> AssetSummary? { nil }
 }
 
 @MainActor

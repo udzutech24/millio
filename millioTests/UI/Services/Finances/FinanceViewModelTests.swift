@@ -46,11 +46,17 @@ final class MockCurrencyRateService: CurrencyRateServiceProtocol {
 
 actor MockMarketDataClient: MarketDataClientProtocol {
     var pricesBySymbol: [String: Double?]
+    var quotesBySymbol: [String: AssetSummary?]
     var errorsBySymbol: [String: Error]
     var latestPriceRequests: [String]
 
-    init(pricesBySymbol: [String: Double?] = [:], errorsBySymbol: [String: Error] = [:]) {
+    init(
+        pricesBySymbol: [String: Double?] = [:],
+        quotesBySymbol: [String: AssetSummary?] = [:],
+        errorsBySymbol: [String: Error] = [:]
+    ) {
         self.pricesBySymbol = pricesBySymbol
+        self.quotesBySymbol = quotesBySymbol
         self.errorsBySymbol = errorsBySymbol
         self.latestPriceRequests = []
     }
@@ -59,18 +65,71 @@ actor MockMarketDataClient: MarketDataClientProtocol {
         []
     }
 
-    func latestPrice(symbol: String, forceRefresh: Bool) async throws -> Double? {
+    func latestQuote(symbol: String, forceRefresh: Bool) async throws -> AssetSummary? {
         let key = symbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         latestPriceRequests.append(key)
         if let error = errorsBySymbol[key] {
             throw error
         }
-        return pricesBySymbol[key] ?? nil
+        if let quote = quotesBySymbol[key] {
+            return quote
+        }
+        guard let price = pricesBySymbol[key] ?? nil else {
+            return nil
+        }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return AssetSummary(
+            symbol: key,
+            canonicalSymbol: key,
+            providerSymbol: key,
+            name: nil,
+            exchange: nil,
+            micCode: nil,
+            currency: "USD",
+            price: price,
+            previousClose: nil,
+            change: nil,
+            percentChange: nil,
+            isMarketOpen: nil,
+            resolutionStatus: .fresh,
+            updatedAt: formatter.string(from: Date()),
+            isStale: false
+        )
     }
 
     func allLatestPriceRequests() -> [String] {
         latestPriceRequests
     }
+}
+
+private func makeMarketQuote(
+    symbol: String,
+    canonicalSymbol: String? = nil,
+    providerSymbol: String? = nil,
+    exchange: String? = nil,
+    currency: String? = "USD",
+    price: Double?,
+    resolutionStatus: MarketQuoteResolutionStatus,
+    isStale: Bool = false
+) -> AssetSummary {
+    AssetSummary(
+        symbol: symbol,
+        canonicalSymbol: canonicalSymbol,
+        providerSymbol: providerSymbol,
+        name: nil,
+        exchange: exchange,
+        micCode: nil,
+        currency: currency,
+        price: price,
+        previousClose: nil,
+        change: nil,
+        percentChange: nil,
+        isMarketOpen: nil,
+        resolutionStatus: resolutionStatus,
+        updatedAt: "2026-03-16T00:00:00.000Z",
+        isStale: isStale
+    )
 }
 
 // MARK: - Тесты
@@ -1181,7 +1240,16 @@ struct FinanceViewModelTests {
         try modelContext.save()
 
         let marketClient = MockMarketDataClient(
-            pricesBySymbol: ["SPY.US": 677.03]
+            quotesBySymbol: [
+                "SPY.US": makeMarketQuote(
+                    symbol: "SPY.US",
+                    canonicalSymbol: "SPY",
+                    providerSymbol: "SPY",
+                    exchange: "NYSE",
+                    price: 677.03,
+                    resolutionStatus: .fresh
+                )
+            ]
         )
         let viewModel = FinanceViewModel(
             modelContext: modelContext,
@@ -1196,7 +1264,102 @@ struct FinanceViewModelTests {
         let requests = await marketClient.latestPriceRequests
         #expect(requests == ["NYSE:SPY", "SPY", "SPY.US"])
         #expect(abs((spy.lastKnownUnitPrice ?? 0) - 677.03) < 0.0001)
+        #expect(spy.marketQuoteLookupKey == "SPY")
         #expect(viewModel.state.showRefreshIssue == false)
+    }
+
+    @Test("Stale котировка обновляет цену без refresh ошибки")
+    func testRefreshStockPricesTreatsStaleQuoteAsDegradedSuccess() async throws {
+        let modelContext = try createTestModelContext()
+
+        let gld = Investment(
+            name: "Gold",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 100,
+            currency: "USD"
+        )
+        gld.marketSymbol = "GLD.US"
+        gld.marketQuantity = 1
+        gld.lastKnownUnitPrice = 100
+        modelContext.insert(gld)
+        try modelContext.save()
+
+        let marketClient = MockMarketDataClient(
+            quotesBySymbol: [
+                "GLD.US": makeMarketQuote(
+                    symbol: "GLD.US",
+                    canonicalSymbol: "GLD",
+                    providerSymbol: "GLD",
+                    exchange: "NYSE",
+                    price: 301.5,
+                    resolutionStatus: .stale,
+                    isStale: true
+                )
+            ]
+        )
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            marketDataClient: marketClient,
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadAccounts)
+
+        await viewModel.refreshStockPrices()
+
+        #expect(abs((gld.lastKnownUnitPrice ?? 0) - 301.5) < 0.0001)
+        #expect(gld.marketQuoteLookupKey == "GLD")
+        #expect(viewModel.state.showRefreshIssue == false)
+    }
+
+    @Test("Provider error показывает отдельную refresh ошибку")
+    func testRefreshStockPricesSeparatesProviderErrors() async throws {
+        let modelContext = try createTestModelContext()
+
+        let pall = Investment(
+            name: "PALL",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 100,
+            currency: "USD"
+        )
+        pall.marketSymbol = "PALL.US"
+        pall.marketQuantity = 1
+        pall.lastKnownUnitPrice = 100
+        modelContext.insert(pall)
+        try modelContext.save()
+
+        let marketClient = MockMarketDataClient(
+            quotesBySymbol: [
+                "PALL.US": makeMarketQuote(
+                    symbol: "PALL.US",
+                    canonicalSymbol: "PALL",
+                    providerSymbol: "PALL",
+                    exchange: "NYSE",
+                    price: nil,
+                    resolutionStatus: .providerError
+                )
+            ]
+        )
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            marketDataClient: marketClient,
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadAccounts)
+
+        await viewModel.refreshStockPrices()
+
+        let message = viewModel.state.refreshIssueMessage ?? ""
+
+        #expect(viewModel.state.showRefreshIssue)
+        #expect(message.contains("PALL.US"))
+        #expect(
+            message.localizedLowercase.contains("провайдера")
+                || message.localizedLowercase.contains("provider")
+        )
     }
 
     @Test("Обновление акций предпочитает provider mapping для assetID-first инструмента")
@@ -1231,7 +1394,16 @@ struct FinanceViewModelTests {
         try modelContext.save()
 
         let marketClient = MockMarketDataClient(
-            pricesBySymbol: ["AAPL.US": 215.0]
+            quotesBySymbol: [
+                "AAPL.US": makeMarketQuote(
+                    symbol: "AAPL.US",
+                    canonicalSymbol: "AAPL",
+                    providerSymbol: "AAPL",
+                    exchange: "NASDAQ",
+                    price: 215.0,
+                    resolutionStatus: .fresh
+                )
+            ]
         )
         let viewModel = FinanceViewModel(
             modelContext: modelContext,
@@ -1246,6 +1418,7 @@ struct FinanceViewModelTests {
         let requests = await marketClient.allLatestPriceRequests()
         #expect(requests.first == "AAPL.US")
         #expect(abs((apple.lastKnownUnitPrice ?? 0) - 215.0) < 0.0001)
+        #expect(apple.marketQuoteLookupKey == "AAPL")
     }
 
     @Test("Загрузка финансов нормализует канонический ключ котировки для старых акций")

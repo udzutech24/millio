@@ -909,7 +909,7 @@ extension CashflowViewModelTests {
             defaults: defaults
         )
 
-        guard let custom = viewModel.createCustomCategory(kind: .expense, name: "Такси", icon: "car.fill") else {
+        guard let custom = viewModel.createCustomCategory(kind: .expense, name: "Рабочие поездки", icon: "car.fill") else {
             #expect(Bool(false), "Custom category was not created")
             return
         }
@@ -926,7 +926,8 @@ extension CashflowViewModelTests {
         try modelContext.save()
 
         viewModel.handle(.loadTransactions)
-        #expect(viewModel.expenseCategoryDisplayName(for: custom.rawValue) == "Такси")
+        #expect(custom.isCustom)
+        #expect(viewModel.expenseCategoryDisplayName(for: custom.rawValue) == "Рабочие поездки")
 
         let deleted = viewModel.deleteCustomCategory(rawValue: custom.rawValue, kind: .expense)
         #expect(deleted)
