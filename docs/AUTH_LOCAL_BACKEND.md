@@ -3,9 +3,9 @@
 ## Configuration
 
 - Backend endpoints are defined in one place:
-  - `RU_API_BASE_URL = https://api.udzutech.com/api/v1`
-  - `DE_API_BASE_URL = https://api.udzutech.com/api/v1`
-- The client now has a single production safety default URL. If `Info.plist`/xcconfig values are missing or unresolved (for example literal `$(RU_API_BASE_URL)`), runtime falls back to `https://api.udzutech.com/api/v1` and reports `Selection: Config fallback (...)` in the auth banner.
+  - `RU_API_BASE_URL = https://api.iqdrop.ru/api/v1`
+  - `DE_API_BASE_URL = https://api.iqdrop.ru/api/v1`
+- The client now has a single production safety default URL. If `Info.plist`/xcconfig values are missing or unresolved (for example literal `$(RU_API_BASE_URL)`), runtime falls back to `https://api.iqdrop.ru/api/v1` and reports `Selection: Config fallback (...)` in the auth banner.
 - Startup resolver rule:
   - debug override has top priority: `BACKEND_FORCE_REGION` / `BACKEND_FORCE_BASE_URL`
   - otherwise the app resolves the best-effort device country code from locale plus preferred language fallbacks

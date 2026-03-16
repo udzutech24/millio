@@ -4,18 +4,18 @@ import Testing
 
 @Suite(.serialized)
 struct BackendStartupResolverTests {
-    private let deURL = URL(string: "https://api.udzutech.com/api/v1")!
+    private let deURL = URL(string: "https://api.iqdrop.ru/api/v1")!
     private let altURL = URL(string: "https://alt.example.com/api/v1")!
 
     @Test("RU country now resolves to the single DE backend")
     func testRUCountrySelectsSingleBackend() async {
         URLProtocolBackendStub.setHandler { request in
             let url = try #require(request.url)
-            #expect(url.absoluteString == "https://api.udzutech.com/api/v1/runtime/server-info")
+            #expect(url.absoluteString == "https://api.iqdrop.ru/api/v1/runtime/server-info")
             return Self.successResponse(
                 url: url,
                 region: "DE",
-                publicApiBaseURL: "https://api.udzutech.com/api/v1"
+                publicApiBaseURL: "https://api.iqdrop.ru/api/v1"
             )
         }
         defer { URLProtocolBackendStub.reset() }
@@ -36,11 +36,11 @@ struct BackendStartupResolverTests {
     func testNonRUCountrySelectsDEBackend(countryCode: String?) async {
         URLProtocolBackendStub.setHandler { request in
             let url = try #require(request.url)
-            #expect(url.absoluteString == "https://api.udzutech.com/api/v1/runtime/server-info")
+            #expect(url.absoluteString == "https://api.iqdrop.ru/api/v1/runtime/server-info")
             return Self.successResponse(
                 url: url,
                 region: "DE",
-                publicApiBaseURL: "https://api.udzutech.com/api/v1"
+                publicApiBaseURL: "https://api.iqdrop.ru/api/v1"
             )
         }
         defer { URLProtocolBackendStub.reset() }
@@ -88,8 +88,8 @@ struct BackendStartupResolverTests {
             infoDictionary: [:]
         )
 
-        #expect(endpoints.ru.baseURL.absoluteString == "https://api.udzutech.com/api/v1")
-        #expect(endpoints.de.baseURL.absoluteString == "https://api.udzutech.com/api/v1")
+        #expect(endpoints.ru.baseURL.absoluteString == "https://api.iqdrop.ru/api/v1")
+        #expect(endpoints.de.baseURL.absoluteString == "https://api.iqdrop.ru/api/v1")
     }
 
     @Test("Unresolved plist placeholders fall back to production defaults")
@@ -102,8 +102,8 @@ struct BackendStartupResolverTests {
             ]
         )
 
-        #expect(endpoints.ru.baseURL.absoluteString == "https://api.udzutech.com/api/v1")
-        #expect(endpoints.de.baseURL.absoluteString == "https://api.udzutech.com/api/v1")
+        #expect(endpoints.ru.baseURL.absoluteString == "https://api.iqdrop.ru/api/v1")
+        #expect(endpoints.de.baseURL.absoluteString == "https://api.iqdrop.ru/api/v1")
     }
 
     @Test("Auth tokens are isolated between different backend namespaces")

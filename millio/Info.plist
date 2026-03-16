@@ -5,7 +5,7 @@
 	<key>AUTH_BASE_URL</key>
 	<string>$(AUTH_BASE_URL)</string>
 	<key>RU_API_BASE_URL</key>
-	<string>https://api.udzutech.com/api/v1</string>
+	<string>https://api.iqdrop.ru/api/v1</string>
 	<key>DE_API_BASE_URL</key>
 	<string>$(DE_API_BASE_URL)</string>
 	<key>AUTH_BASE_SCHEME</key>

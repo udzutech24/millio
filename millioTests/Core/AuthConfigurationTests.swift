@@ -7,12 +7,12 @@ struct AuthConfigurationTests {
     func testLivePrefersDEAPIBaseURL() throws {
         let configuration = try AuthConfiguration.live(
             environment: [
-            "DE_API_BASE_URL": "https://api.udzutech.com/api/v1/"
+            "DE_API_BASE_URL": "https://api.iqdrop.ru/api/v1/"
             ].compactMapValues { $0 },
             infoDictionary: [:]
         )
 
-        #expect(configuration.baseURL.absoluteString == "https://api.udzutech.com/api/v1")
+        #expect(configuration.baseURL.absoluteString == "https://api.iqdrop.ru/api/v1")
         #expect(configuration.region == .de)
     }
 
@@ -37,7 +37,7 @@ struct AuthConfigurationTests {
             ]
         )
 
-        #expect(configuration.baseURL.absoluteString == "https://api.udzutech.com/api/v1")
+        #expect(configuration.baseURL.absoluteString == "https://api.iqdrop.ru/api/v1")
         #expect(configuration.region == .de)
     }
 }

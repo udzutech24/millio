@@ -3,7 +3,7 @@ import Foundation
 struct AuthConfiguration: Sendable {
     let baseURL: URL
     let region: BackendRegion
-    private static let productionDEBaseURL = URL(string: "https://api.udzutech.com/api/v1")!
+    private static let productionDEBaseURL = URL(string: "https://api.iqdrop.ru/api/v1")!
 
     init(baseURL: URL, region: BackendRegion = .de) {
         self.baseURL = Self.normalize(baseURL)

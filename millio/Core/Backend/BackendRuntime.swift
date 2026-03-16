@@ -91,8 +91,8 @@ struct BackendEndpoints: Equatable, Sendable {
     let de: BackendEndpoint
 
     private static let productionDefaults: [String: URL] = [
-        "RU_API_BASE_URL": URL(string: "https://api.udzutech.com/api/v1")!,
-        "DE_API_BASE_URL": URL(string: "https://api.udzutech.com/api/v1")!
+        "RU_API_BASE_URL": URL(string: "https://api.iqdrop.ru/api/v1")!,
+        "DE_API_BASE_URL": URL(string: "https://api.iqdrop.ru/api/v1")!
     ]
 
     func endpoint(for countryCode: String?) -> BackendEndpoint {

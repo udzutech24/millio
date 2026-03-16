@@ -238,8 +238,8 @@ struct millioApp: App {
         } catch {
             AppLogger.log(.error, category: "Backend", "Failed to resolve backend endpoints: \(error.localizedDescription)")
             let fallbackRuntime = BackendSessionRuntime(
-                selectedEndpoint: BackendEndpoint(region: .de, baseURL: URL(string: "https://api.udzutech.com/api/v1")!),
-                preferredEndpoint: BackendEndpoint(region: .de, baseURL: URL(string: "https://api.udzutech.com/api/v1")!),
+                selectedEndpoint: BackendEndpoint(region: .de, baseURL: URL(string: "https://api.iqdrop.ru/api/v1")!),
+                preferredEndpoint: BackendEndpoint(region: .de, baseURL: URL(string: "https://api.iqdrop.ru/api/v1")!),
                 fallbackActivated: false,
                 forcedOverride: false,
                 selectionSource: .configurationFallback,
