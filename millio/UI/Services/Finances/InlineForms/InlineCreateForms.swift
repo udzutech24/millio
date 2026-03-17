@@ -1737,25 +1737,26 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
 
                     switch latestQuote.resolutionStatus {
                     case .fresh, .stale:
-                        lastKnownUnitPrice = latestQuote.price
+                        guard let latestPrice = latestQuote.price, latestPrice > 0 else {
+                            marketErrorMessage = MarketDataErrorPresentation.message(for: .priceUnavailable)
+                            return
+                        }
+
+                        lastKnownUnitPrice = latestPrice
                         lastKnownPriceUpdatedAt = latestQuote.updatedAtDate ?? Date()
                         marketQuoteLookupKey = latestQuote.canonicalQuoteLookupKey
                         marketMICCode = latestQuote.micCode ?? marketMICCode
                         marketProviderRaw = latestQuote.providerSymbol == nil ? marketProviderRaw : "market-backend"
                     case .notFound:
-                        marketErrorMessage = FinancesL10n.text(
-                            locale: .current,
-                            ru: "Тикер не найден",
-                            en: "Stock symbol not found"
-                        )
+                        marketErrorMessage = MarketDataErrorPresentation.message(for: .notFound)
                         return
                     case .providerError:
-                        marketErrorMessage = String(localized: "finances.market.error_generic")
+                        marketErrorMessage = MarketDataErrorPresentation.message(for: .providerError)
                         return
                     }
 
-                    if let latestPrice = latestQuote.price, purchaseUnitPriceText.isEmpty {
-                        purchaseUnitPriceText = String(latestPrice)
+                    if purchaseUnitPriceText.isEmpty {
+                        purchaseUnitPriceText = String(lastKnownUnitPrice ?? 0)
                     }
                     if let positionTotal {
                         amountText = String(positionTotal)
@@ -1764,7 +1765,9 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                 }
             } catch {
                 await MainActor.run {
-                    marketErrorMessage = error.localizedDescription
+                    marketErrorMessage = MarketDataErrorPresentation.message(
+                        for: MarketDataErrorPresentation.category(for: error)
+                    )
                 }
             }
         }

@@ -268,7 +268,7 @@ final class MarketSymbolSearchViewModel: ObservableObject {
     }
 
     private func isRateLimitError(_ error: Error) -> Bool {
-        if case let MarketAPIClientError.backend(statusCode, message) = error {
+        if case let MarketAPIClientError.backend(statusCode, message, _) = error {
             if statusCode == 429 {
                 return true
             }

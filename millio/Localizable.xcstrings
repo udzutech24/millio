@@ -14380,7 +14380,7 @@
     },
     "finances.mass_import.market_warning" : {
       "comment" : "Warning shown when mass import cannot fetch current market prices for specific tickers",
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {

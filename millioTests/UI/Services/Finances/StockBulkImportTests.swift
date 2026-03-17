@@ -5,12 +5,8 @@ import UIKit
 @testable import millio
 
 actor StockBulkImportMockMarketDataClient: MarketDataClientProtocol {
-    enum MockError: Error {
-        case latestPriceUnavailable
-    }
-
     var searchResults: [String: [TwelveDataSymbol]] = [:]
-    var latestPrices: [String: Double?] = [:]
+    var latestQuotes: [String: AssetSummary?] = [:]
     var latestPriceErrors: [String: Error] = [:]
     var latestPriceRequests: [(symbol: String, forceRefresh: Bool)] = []
 
@@ -19,29 +15,7 @@ actor StockBulkImportMockMarketDataClient: MarketDataClientProtocol {
     }
 
     func setLatestPrice(_ price: Double?, for symbol: String) {
-        latestPrices[symbol.uppercased()] = price
-        latestPriceErrors.removeValue(forKey: symbol.uppercased())
-    }
-
-    func setLatestPriceError(_ error: Error, for symbol: String) {
-        latestPriceErrors[symbol.uppercased()] = error
-        latestPrices.removeValue(forKey: symbol.uppercased())
-    }
-
-    func searchSymbols(query: String, outputSize: Int) async throws -> [TwelveDataSymbol] {
-        searchResults[query.uppercased()] ?? []
-    }
-
-    func latestQuote(symbol: String, forceRefresh: Bool) async throws -> AssetSummary? {
-        latestPriceRequests.append((symbol.uppercased(), forceRefresh))
-        if let error = latestPriceErrors[symbol.uppercased()] {
-            throw error
-        }
-        guard let price = latestPrices[symbol.uppercased()] ?? nil else {
-            return nil
-        }
-
-        return AssetSummary(
+        latestQuotes[symbol.uppercased()] = AssetSummary(
             symbol: symbol.uppercased(),
             canonicalSymbol: symbol.uppercased(),
             providerSymbol: symbol.uppercased(),
@@ -58,6 +32,29 @@ actor StockBulkImportMockMarketDataClient: MarketDataClientProtocol {
             updatedAt: "2026-03-16T00:00:00.000Z",
             isStale: false
         )
+        latestPriceErrors.removeValue(forKey: symbol.uppercased())
+    }
+
+    func setLatestQuote(_ quote: AssetSummary?, for symbol: String) {
+        latestQuotes[symbol.uppercased()] = quote
+        latestPriceErrors.removeValue(forKey: symbol.uppercased())
+    }
+
+    func setLatestPriceError(_ error: Error, for symbol: String) {
+        latestPriceErrors[symbol.uppercased()] = error
+        latestQuotes.removeValue(forKey: symbol.uppercased())
+    }
+
+    func searchSymbols(query: String, outputSize: Int) async throws -> [TwelveDataSymbol] {
+        searchResults[query.uppercased()] ?? []
+    }
+
+    func latestQuote(symbol: String, forceRefresh: Bool) async throws -> AssetSummary? {
+        latestPriceRequests.append((symbol.uppercased(), forceRefresh))
+        if let error = latestPriceErrors[symbol.uppercased()] {
+            throw error
+        }
+        return latestQuotes[symbol.uppercased()] ?? nil
     }
 
     func lastLatestPriceRequest() -> (symbol: String, forceRefresh: Bool)? {
@@ -517,7 +514,7 @@ struct StockBulkImportTests {
         let context = try makeContext()
         let client = StockBulkImportMockMarketDataClient()
         await client.setLatestPrice(677.03, for: "SPY.US")
-        await client.setLatestPriceError(StockBulkImportMockMarketDataClient.MockError.latestPriceUnavailable, for: "SIVR.US")
+        await client.setLatestPriceError(MarketAPIClientError.transport("offline"), for: "SIVR.US")
 
         let viewModel = StockBulkImportViewModel(
             modelContext: context,
@@ -575,6 +572,122 @@ struct StockBulkImportTests {
         #expect(viewModel.rows[1].currentPriceText.isEmpty)
         #expect(viewModel.marketDataWarning?.contains("SIVR") == true)
         #expect(viewModel.marketDataWarning?.contains("SPY") == false)
+        #expect(
+            viewModel.marketDataWarning?.contains(
+                MarketDataErrorPresentation.listLabel(for: .networkError, locale: .current)
+            ) == true
+        )
+    }
+
+    @Test("Mass import различает provider error и отсутствие текущей цены")
+    func marketWarningSeparatesProviderAndPriceUnavailable() async throws {
+        let context = try makeContext()
+        let client = StockBulkImportMockMarketDataClient()
+        await client.setLatestQuote(
+            AssetSummary(
+                symbol: "NASDAQ:QQQ",
+                canonicalSymbol: "QQQ",
+                providerSymbol: "QQQ",
+                name: nil,
+                exchange: "NASDAQ",
+                micCode: nil,
+                currency: "USD",
+                price: nil,
+                previousClose: nil,
+                change: nil,
+                percentChange: nil,
+                isMarketOpen: nil,
+                resolutionStatus: .providerError,
+                updatedAt: "2026-03-16T00:00:00.000Z",
+                isStale: false
+            ),
+            for: "NASDAQ:QQQ"
+        )
+        await client.setLatestQuote(
+            AssetSummary(
+                symbol: "NYSE:SIVR",
+                canonicalSymbol: "SIVR",
+                providerSymbol: "SIVR",
+                name: nil,
+                exchange: "NYSE",
+                micCode: nil,
+                currency: "USD",
+                price: nil,
+                previousClose: nil,
+                change: nil,
+                percentChange: nil,
+                isMarketOpen: nil,
+                resolutionStatus: .fresh,
+                updatedAt: "2026-03-16T00:00:00.000Z",
+                isStale: false
+            ),
+            for: "NYSE:SIVR"
+        )
+
+        let viewModel = StockBulkImportViewModel(
+            modelContext: context,
+            marketDataClient: client,
+            parser: StockBulkImportParser(textRecognizer: StubTextRecognizer())
+        )
+
+        let qqq = StockBulkImportCandidate(
+            symbol: "QQQ",
+            market: "NASDAQ",
+            displayName: "Invesco QQQ Trust",
+            currency: "USD",
+            providerRaw: "market-backend"
+        )
+        let sivr = StockBulkImportCandidate(
+            symbol: "SIVR",
+            market: "NYSE",
+            displayName: "abrdn Physical Silver Shares ETF",
+            currency: "USD",
+            providerRaw: "market-backend"
+        )
+        let qqqRowID = UUID()
+        let sivrRowID = UUID()
+        viewModel.rows = [
+            StockBulkImportRowDraft(
+                id: qqqRowID,
+                rawLine: "NASDAQ:QQQ",
+                tickerText: "QQQ",
+                marketText: "NASDAQ",
+                quantityText: "3",
+                buyPriceText: "400",
+                currentPriceText: "",
+                sourceOrderIndex: 0,
+                candidates: [qqq],
+                selectedCandidate: qqq
+            ),
+            StockBulkImportRowDraft(
+                id: sivrRowID,
+                rawLine: "NYSE:SIVR",
+                tickerText: "SIVR",
+                marketText: "NYSE",
+                quantityText: "5",
+                buyPriceText: "24",
+                currentPriceText: "",
+                sourceOrderIndex: 1,
+                candidates: [sivr],
+                selectedCandidate: sivr
+            )
+        ]
+
+        await viewModel.refreshCurrentPrice(for: qqqRowID)
+        await viewModel.refreshCurrentPrice(for: sivrRowID)
+
+        #expect(viewModel.marketDataWarning?.contains("QQQ") == true)
+        #expect(viewModel.marketDataWarning?.contains("SIVR") == true)
+        #expect(
+            viewModel.marketDataWarning?.contains(
+                MarketDataErrorPresentation.listLabel(for: .providerError, locale: .current)
+            ) == true
+        )
+        #expect(
+            viewModel.marketDataWarning?.contains(
+                MarketDataErrorPresentation.listLabel(for: .priceUnavailable, locale: .current)
+            ) == true
+        )
     }
 
     @Test("Сохранение акций фиксирует USD и корректный баланс")

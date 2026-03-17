@@ -1220,6 +1220,14 @@ struct FinanceViewModelTests {
         #expect(viewModel.state.showRefreshIssue)
         #expect(viewModel.state.refreshIssueMessage?.contains("TSLA") == true)
         #expect(viewModel.state.refreshIssueMessage?.contains("AAPL") == false)
+        #expect(
+            viewModel.state.refreshIssueMessage?.localizedLowercase.contains("сет") == true
+                || viewModel.state.refreshIssueMessage?.localizedLowercase.contains("network") == true
+        )
+        #expect(
+            viewModel.state.refreshIssueMessage?.localizedLowercase.contains("провайдера") == false
+                && viewModel.state.refreshIssueMessage?.localizedLowercase.contains("provider") == false
+        )
     }
 
     @Test("Обновление акций пробует fallback форматы для market symbol")
@@ -1359,6 +1367,100 @@ struct FinanceViewModelTests {
         #expect(
             message.localizedLowercase.contains("провайдера")
                 || message.localizedLowercase.contains("provider")
+        )
+    }
+
+    @Test("Ошибки авторизации обновления акций показываются отдельно от provider error")
+    func testRefreshStockPricesSeparatesAuthErrors() async throws {
+        let modelContext = try createTestModelContext()
+
+        let qqq = Investment(
+            name: "QQQ",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 100,
+            currency: "USD"
+        )
+        qqq.marketSymbol = "NASDAQ:QQQ"
+        qqq.marketQuantity = 1
+        qqq.lastKnownUnitPrice = 100
+        modelContext.insert(qqq)
+        try modelContext.save()
+
+        let marketClient = MockMarketDataClient(
+            errorsBySymbol: [
+                "NASDAQ:QQQ": MarketAPIClientError.unauthorized(requestId: "req-auth-1")
+            ]
+        )
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            marketDataClient: marketClient,
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadAccounts)
+
+        await viewModel.refreshStockPrices()
+
+        let message = viewModel.state.refreshIssueMessage ?? ""
+
+        #expect(viewModel.state.showRefreshIssue)
+        #expect(message.contains("NASDAQ:QQQ"))
+        #expect(
+            message.localizedLowercase.contains("автор") || message.localizedLowercase.contains("auth")
+        )
+        #expect(
+            message.localizedLowercase.contains("провайдера") == false
+                && message.localizedLowercase.contains("provider") == false
+        )
+    }
+
+    @Test("Котировка без цены показывает отдельную refresh ошибку")
+    func testRefreshStockPricesSeparatesPriceUnavailable() async throws {
+        let modelContext = try createTestModelContext()
+
+        let sivr = Investment(
+            name: "SIVR",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 100,
+            currency: "USD"
+        )
+        sivr.marketSymbol = "NYSE:SIVR"
+        sivr.marketQuantity = 1
+        sivr.lastKnownUnitPrice = 100
+        modelContext.insert(sivr)
+        try modelContext.save()
+
+        let marketClient = MockMarketDataClient(
+            quotesBySymbol: [
+                "NYSE:SIVR": makeMarketQuote(
+                    symbol: "NYSE:SIVR",
+                    canonicalSymbol: "SIVR",
+                    providerSymbol: "SIVR",
+                    exchange: "NYSE",
+                    price: nil,
+                    resolutionStatus: .fresh
+                )
+            ]
+        )
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            marketDataClient: marketClient,
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadAccounts)
+
+        await viewModel.refreshStockPrices()
+
+        let message = viewModel.state.refreshIssueMessage ?? ""
+
+        #expect(viewModel.state.showRefreshIssue)
+        #expect(message.contains("NYSE:SIVR"))
+        #expect(
+            message.localizedLowercase.contains("нет текущей цены")
+                || message.localizedLowercase.contains("current price unavailable")
         )
     }
 

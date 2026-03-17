@@ -304,10 +304,10 @@ struct AddToWatchlistRequest: Encodable, Sendable {
 enum MarketAPIClientError: LocalizedError, Equatable, Sendable {
     case invalidConfiguration
     case unconfigured
-    case unauthorized
-    case backend(statusCode: Int, message: String)
+    case unauthorized(requestId: String? = nil)
+    case backend(statusCode: Int, message: String, requestId: String? = nil)
     case transport(String)
-    case decodingFailed
+    case decodingFailed(requestId: String? = nil)
 
     var errorDescription: String? {
         switch self {
@@ -317,12 +317,25 @@ enum MarketAPIClientError: LocalizedError, Equatable, Sendable {
             return "Market API client is not configured yet."
         case .unauthorized:
             return "Session expired. Please sign in again."
-        case .backend(_, let message):
+        case .backend(_, let message, _):
             return message
         case .transport(let message):
             return message
         case .decodingFailed:
             return String(localized: "finances.market.error_generic")
+        }
+    }
+
+    var requestId: String? {
+        switch self {
+        case .unauthorized(let requestId),
+             .backend(_, _, let requestId),
+             .decodingFailed(let requestId):
+            return requestId
+        case .invalidConfiguration,
+             .unconfigured,
+             .transport:
+            return nil
         }
     }
 }
@@ -690,27 +703,31 @@ final class MarketAPIClient: MarketDataClientProtocol, @unchecked Sendable {
                 throw MarketAPIClientError.transport("Invalid market response.")
             }
 
+            let requestId = httpResponse.value(forHTTPHeaderField: "x-request-id")
+
             if httpResponse.statusCode == 401 {
-                throw MarketAPIClientError.unauthorized
+                throw MarketAPIClientError.unauthorized(requestId: requestId)
             }
 
             guard (200..<300).contains(httpResponse.statusCode) else {
                 if let envelope = try? decoder.decode(ErrorEnvelope.self, from: data) {
                     throw MarketAPIClientError.backend(
                         statusCode: httpResponse.statusCode,
-                        message: envelope.resolvedMessage
+                        message: envelope.resolvedMessage,
+                        requestId: requestId
                     )
                 }
                 throw MarketAPIClientError.backend(
                     statusCode: httpResponse.statusCode,
-                    message: HTTPURLResponse.localizedString(forStatusCode: httpResponse.statusCode)
+                    message: HTTPURLResponse.localizedString(forStatusCode: httpResponse.statusCode),
+                    requestId: requestId
                 )
             }
 
             do {
                 return try decoder.decode(Response.self, from: data)
             } catch {
-                throw MarketAPIClientError.decodingFailed
+                throw MarketAPIClientError.decodingFailed(requestId: requestId)
             }
         } catch let error as MarketAPIClientError {
             throw error

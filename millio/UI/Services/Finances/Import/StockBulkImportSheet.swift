@@ -21,7 +21,12 @@ final class StockBulkImportViewModel: ObservableObject {
     @Published var marketDataWarning: String?
     @Published private(set) var refreshingRowIDs: Set<UUID> = []
 
-    private var failedQuoteSymbolsByRowID: [UUID: String] = [:]
+    private struct QuoteIssue: Sendable {
+        let symbol: String
+        let category: MarketDataIssueCategory
+    }
+
+    private var quoteIssuesByRowID: [UUID: QuoteIssue] = [:]
     private let parser: StockBulkImportParser
     private let matcher: StockBulkImportMatcher
     private let persistenceService: StockBulkImportPersistenceService
@@ -153,7 +158,7 @@ final class StockBulkImportViewModel: ObservableObject {
 
     func removeRow(_ rowID: UUID) {
         rows.removeAll { $0.id == rowID }
-        failedQuoteSymbolsByRowID.removeValue(forKey: rowID)
+        quoteIssuesByRowID.removeValue(forKey: rowID)
         syncMarketDataWarning()
     }
 
@@ -182,7 +187,7 @@ final class StockBulkImportViewModel: ObservableObject {
 
         rows.removeAll { matchingIDs.contains($0.id) }
         for rowID in matchingIDs {
-            failedQuoteSymbolsByRowID.removeValue(forKey: rowID)
+            quoteIssuesByRowID.removeValue(forKey: rowID)
         }
         syncMarketDataWarning()
     }
@@ -262,7 +267,7 @@ final class StockBulkImportViewModel: ObservableObject {
     private func applyCandidateSelection(_ candidate: StockBulkImportCandidate, at index: Int) {
         // Важно: после выбора инструмента синхронизируем input-поля (тикер/рынок),
         // иначе пользователю кажется, что тикер "нашёлся, но не вставился".
-        failedQuoteSymbolsByRowID.removeValue(forKey: rows[index].id)
+        quoteIssuesByRowID.removeValue(forKey: rows[index].id)
         syncMarketDataWarning()
         rows[index].tickerText = candidate.normalizedSymbol
         rows[index].marketText = candidate.normalizedMarket ?? ""
@@ -282,22 +287,45 @@ final class StockBulkImportViewModel: ObservableObject {
     }
 
     private func fetchLatestPrice(for candidate: StockBulkImportCandidate, rowID: UUID, forceRefresh: Bool) async -> Double? {
+        var lastIssueCategory: MarketDataIssueCategory?
+
         for symbol in candidate.quoteLookupSymbols {
             do {
-                if let latestPrice = try await persistenceService.marketDataClient.latestPrice(
+                guard let latestQuote = try await persistenceService.marketDataClient.latestQuote(
                     symbol: symbol,
                     forceRefresh: forceRefresh
-                ) {
-                    failedQuoteSymbolsByRowID.removeValue(forKey: rowID)
-                    syncMarketDataWarning()
-                    return latestPrice
+                ) else {
+                    continue
                 }
+
+                if let issueCategory = MarketDataErrorPresentation.category(for: latestQuote) {
+                    lastIssueCategory = issueCategory
+                    quoteIssuesByRowID[rowID] = QuoteIssue(
+                        symbol: candidate.normalizedSymbol,
+                        category: issueCategory
+                    )
+                    syncMarketDataWarning()
+                    continue
+                }
+
+                quoteIssuesByRowID.removeValue(forKey: rowID)
+                syncMarketDataWarning()
+                return latestQuote.price
             } catch {
+                lastIssueCategory = MarketDataErrorPresentation.category(for: error)
+                quoteIssuesByRowID[rowID] = QuoteIssue(
+                    symbol: candidate.normalizedSymbol,
+                    category: lastIssueCategory ?? .clientError
+                )
+                syncMarketDataWarning()
                 continue
             }
         }
 
-        failedQuoteSymbolsByRowID[rowID] = candidate.normalizedSymbol
+        quoteIssuesByRowID[rowID] = QuoteIssue(
+            symbol: candidate.normalizedSymbol,
+            category: lastIssueCategory ?? .notFound
+        )
         syncMarketDataWarning()
         return nil
     }
@@ -313,30 +341,43 @@ final class StockBulkImportViewModel: ObservableObject {
         )
         let matched = await matcher.buildDraftRows(from: [parsed])
         guard let matchedRow = matched.first else { return }
-        failedQuoteSymbolsByRowID.removeValue(forKey: rows[index].id)
+        quoteIssuesByRowID.removeValue(forKey: rows[index].id)
         syncMarketDataWarning()
         rows[index].candidates = matchedRow.candidates
         rows[index].selectedCandidate = matchedRow.selectedCandidate
     }
 
     private func clearQuoteWarnings() {
-        failedQuoteSymbolsByRowID = [:]
+        quoteIssuesByRowID = [:]
         marketDataWarning = nil
     }
 
     private func syncMarketDataWarning() {
-        let failedSymbols = Array(Set(failedQuoteSymbolsByRowID.values)).sorted()
-        guard !failedSymbols.isEmpty else {
+        guard !quoteIssuesByRowID.isEmpty else {
             marketDataWarning = nil
             return
         }
 
-        let template = String(
-            localized: "finances.mass_import.market_warning",
-            defaultValue: "Не удалось загрузить котировки: %@. Проверь вход в аккаунт и настройки backend.",
-            comment: "Warning shown when mass import cannot fetch current market prices for specific tickers"
-        )
-        marketDataWarning = String.localizedStringWithFormat(template, failedSymbols.joined(separator: ", "))
+        let grouped = Dictionary(grouping: quoteIssuesByRowID.values, by: \.category)
+        let orderedCategories: [MarketDataIssueCategory] = [
+            .notFound,
+            .priceUnavailable,
+            .providerError,
+            .authError,
+            .networkError,
+            .httpError,
+            .decodeError,
+            .clientError
+        ]
+
+        let parts = orderedCategories.compactMap { category -> String? in
+            guard let issues = grouped[category], !issues.isEmpty else { return nil }
+            let symbols = Array(Set(issues.map(\.symbol))).sorted()
+            let label = MarketDataErrorPresentation.listLabel(for: category, locale: .current)
+            return "\(label): \(symbols.joined(separator: ", "))"
+        }
+
+        marketDataWarning = parts.joined(separator: ". ")
     }
 
     private func sanitizeTicker(_ value: String) -> String {
