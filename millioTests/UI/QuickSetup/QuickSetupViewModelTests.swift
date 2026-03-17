@@ -31,6 +31,15 @@ private struct QuickSetupMarketDataClientMock: MarketDataClientProtocol {
             isStale: false
         )
     }
+
+    func fetchQuotes(symbols: [String]) async throws -> [AssetSummary] {
+        guard let latestPriceValue else {
+            return symbols.map { s in AssetSummary(symbol: s, canonicalSymbol: s, providerSymbol: s, name: nil, exchange: nil, micCode: nil, currency: nil, price: nil, previousClose: nil, change: nil, percentChange: nil, isMarketOpen: nil, resolutionStatus: .notFound, updatedAt: "", isStale: false) }
+        }
+        return symbols.map { s in
+            AssetSummary(symbol: s, canonicalSymbol: s, providerSymbol: s, name: nil, exchange: nil, micCode: nil, currency: "USD", price: latestPriceValue, previousClose: nil, change: nil, percentChange: nil, isMarketOpen: nil, resolutionStatus: .fresh, updatedAt: "2026-03-16T00:00:00.000Z", isStale: false)
+        }
+    }
 }
 
 @MainActor

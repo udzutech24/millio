@@ -172,6 +172,17 @@ private struct StockRefreshIssues {
         !decodingErrorSymbols.isEmpty ||
         !clientErrorSymbols.isEmpty
     }
+
+    mutating func remove(symbol: String) {
+        notFoundSymbols.remove(symbol)
+        priceUnavailableSymbols.remove(symbol)
+        providerErrorSymbols.remove(symbol)
+        authErrorSymbols.remove(symbol)
+        networkErrorSymbols.remove(symbol)
+        httpErrorSymbols.remove(symbol)
+        decodingErrorSymbols.remove(symbol)
+        clientErrorSymbols.remove(symbol)
+    }
 }
 
 enum InvestmentOrderSide: Hashable {
@@ -1609,6 +1620,9 @@ final class FinanceViewModel: ViewModelProtocol {
         presentRefreshIssueIfNeeded(message: stockRefreshIssueMessage(for: issues))
     }
 
+    /// Лимит символов в одном запросе к backend (market/quotes).
+    private static let quoteBatchSize = 8
+
     @discardableResult
     private func refreshStockPrices(forceRefresh: Bool) async -> StockRefreshIssues {
         let descriptor = FetchDescriptor<Investment>()
@@ -1624,83 +1638,104 @@ final class FinanceViewModel: ViewModelProtocol {
         var didUpdateAnyPrice = false
         var issues = StockRefreshIssues()
 
+        // Собираем уникальные символы и отображение символ -> бумаги (для ошибок по батчу)
+        var stockToLookupSymbols: [(stock: Investment, symbols: [String])] = []
+        var symbolToStocks: [String: [Investment]] = [:]
+        var allSymbolsOrdered: [String] = []
+        var seenSymbols: Set<String> = []
+
         for stock in activeStocks {
             let lookupSymbols = stockQuoteLookupSymbols(for: stock)
             guard !lookupSymbols.isEmpty else {
                 issues.notFoundSymbols.insert(stock.name.trimmingCharacters(in: .whitespacesAndNewlines))
                 continue
             }
+            stockToLookupSymbols.append((stock, lookupSymbols))
+            for s in lookupSymbols {
+                let key = s.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+                if !seenSymbols.contains(key) {
+                    seenSymbols.insert(key)
+                    allSymbolsOrdered.append(key)
+                }
+                symbolToStocks[key, default: []].append(stock)
+            }
+        }
 
-            var refreshed = false
-            var lastIssueCategory: MarketDataIssueCategory?
+        var quotesBySymbol: [String: AssetSummary] = [:]
+        var aborted = false
+        var stocksAssignedIssueInCatch = Set<ObjectIdentifier>()
 
-            for symbol in lookupSymbols {
-                do {
-                    guard let latestQuote = try await marketDataClient.latestQuote(
-                        symbol: symbol,
-                        forceRefresh: forceRefresh
-                    ) else {
-                        continue
-                    }
-
-                    lastIssueCategory = MarketDataErrorPresentation.category(for: latestQuote)
-
-                    switch latestQuote.resolutionStatus {
-                    case .fresh, .stale:
-                        guard let latestPrice = latestQuote.price, latestPrice > 0 else {
-                            continue
+        for chunkStart in stride(from: 0, to: allSymbolsOrdered.count, by: Self.quoteBatchSize) {
+            guard !aborted else { break }
+            let chunk = Array(allSymbolsOrdered[chunkStart ..< min(chunkStart + Self.quoteBatchSize, allSymbolsOrdered.count)])
+            do {
+                let quotes = try await marketDataClient.fetchQuotes(symbols: chunk)
+                for (symbol, quote) in zip(chunk, quotes) {
+                    quotesBySymbol[symbol] = quote
+                }
+            } catch {
+                let issueCategory = stockRefreshIssueCategory(for: error)
+                let requestID = MarketDataErrorPresentation.requestID(for: error) ?? "none"
+                AppLogger.log(
+                    .warning,
+                    category: "Finance",
+                    "Batch quote failed: category=\(issueCategory.rawValue) requestId=\(requestID) error=\(error.localizedDescription)"
+                )
+                if shouldAbortQuoteAliasRefresh(after: error) {
+                    aborted = true
+                }
+                for symbol in chunk {
+                    for stock in symbolToStocks[symbol] ?? [] {
+                        if stocksAssignedIssueInCatch.insert(ObjectIdentifier(stock)).inserted {
+                            assignStockRefreshIssue(issueCategory, symbol: stockDisplaySymbol(stock), to: &issues)
                         }
-
-                        stock.lastKnownUnitPrice = latestPrice
-                        stock.lastKnownPriceUpdatedAt = latestQuote.updatedAtDate ?? Date()
-                        stock.marketQuoteLookupKey = latestQuote.canonicalQuoteLookupKey
-                        stock.marketExchange = latestQuote.exchange ?? stock.marketExchange
-                        stock.marketMICCode = latestQuote.micCode ?? stock.marketMICCode
-                        stock.marketCurrency = latestQuote.currency ?? stock.marketCurrency
-                        stock.marketProviderRaw = latestQuote.providerSymbol == nil ? stock.marketProviderRaw : "market-backend"
-                        stock.recalculateAmountFromPosition()
-                        stock.updatedAt = Date()
-                        didUpdateAnyPrice = true
-                        refreshed = true
-                    case .notFound:
-                        continue
-                    case .providerError:
-                        AppLogger.log(
-                            .warning,
-                            category: "Finance",
-                            "Provider error while refreshing stock quote for \(symbol)"
-                        )
-                        continue
                     }
-
-                    if refreshed {
-                        break
-                    }
-                } catch {
-                    let issueCategory = stockRefreshIssueCategory(for: error)
-                    lastIssueCategory = issueCategory
-                    let requestID = MarketDataErrorPresentation.requestID(for: error) ?? "none"
-
-                    if shouldAbortQuoteAliasRefresh(after: error) {
-                        AppLogger.log(
-                            .warning,
-                            category: "Finance",
-                            "Aborting quote refresh aliases for \(stockDisplaySymbol(stock)): category=\(issueCategory.rawValue) requestId=\(requestID) error=\(error.localizedDescription)"
-                        )
-                        break
-                    }
-
-                    AppLogger.log(
-                        .warning,
-                        category: "Finance",
-                        "Failed to refresh stock quote for \(symbol): category=\(issueCategory.rawValue) requestId=\(requestID) error=\(error.localizedDescription)"
-                    )
                 }
             }
+        }
 
-            if !refreshed {
-                let displaySymbol = stockDisplaySymbol(stock)
-                assignStockRefreshIssue(lastIssueCategory, symbol: displaySymbol, to: &issues)
+        for (stock, lookupSymbols) in stockToLookupSymbols {
+            var refreshed = false
+            var lastIssueCategory: MarketDataIssueCategory?
+            for symbol in lookupSymbols {
+                let key = symbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+                guard let quote = quotesBySymbol[key] else { continue }
+                switch quote.resolutionStatus {
+                case .fresh, .stale:
+                    guard let price = quote.price, price > 0 else {
+                        if lastIssueCategory == nil {
+                            lastIssueCategory = MarketDataErrorPresentation.category(for: quote) ?? .priceUnavailable
+                        }
+                        continue
+                    }
+                    stock.lastKnownUnitPrice = price
+                    stock.lastKnownPriceUpdatedAt = quote.updatedAtDate ?? Date()
+                    stock.marketQuoteLookupKey = quote.canonicalQuoteLookupKey
+                    stock.marketExchange = quote.exchange ?? stock.marketExchange
+                    stock.marketMICCode = quote.micCode ?? stock.marketMICCode
+                    stock.marketCurrency = quote.currency ?? stock.marketCurrency
+                    stock.marketProviderRaw = quote.providerSymbol == nil ? stock.marketProviderRaw : "market-backend"
+                    stock.recalculateAmountFromPosition()
+                    stock.updatedAt = Date()
+                    didUpdateAnyPrice = true
+                    refreshed = true
+                    issues.remove(symbol: stockDisplaySymbol(stock))
+                    break
+                case .notFound:
+                    if lastIssueCategory == nil {
+                        lastIssueCategory = .notFound
+                    }
+                    continue
+                case .providerError:
+                    if lastIssueCategory == nil {
+                        lastIssueCategory = .providerError
+                    }
+                    AppLogger.log(.warning, category: "Finance", "Provider error while refreshing stock quote for \(symbol)")
+                    continue
+                }
+            }
+            if !refreshed, !stocksAssignedIssueInCatch.contains(ObjectIdentifier(stock)) {
+                assignStockRefreshIssue(lastIssueCategory, symbol: stockDisplaySymbol(stock), to: &issues)
             }
         }
 

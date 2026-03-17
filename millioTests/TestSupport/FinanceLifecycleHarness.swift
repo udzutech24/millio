@@ -6,6 +6,9 @@ import Testing
 actor FinanceLifecycleMarketDataClient: MarketDataClientProtocol {
     func searchSymbols(query: String, outputSize: Int) async throws -> [TwelveDataSymbol] { [] }
     func latestQuote(symbol: String, forceRefresh: Bool) async throws -> AssetSummary? { nil }
+    func fetchQuotes(symbols: [String]) async throws -> [AssetSummary] {
+        symbols.map { s in AssetSummary(symbol: s, canonicalSymbol: s, providerSymbol: s, name: nil, exchange: nil, micCode: nil, currency: nil, price: nil, previousClose: nil, change: nil, percentChange: nil, isMarketOpen: nil, resolutionStatus: .notFound, updatedAt: "", isStale: false) }
+    }
 }
 
 @MainActor

@@ -101,6 +101,27 @@ actor MockMarketDataClient: MarketDataClientProtocol {
     func allLatestPriceRequests() -> [String] {
         latestPriceRequests
     }
+
+    func fetchQuotes(symbols: [String]) async throws -> [AssetSummary] {
+        var result: [AssetSummary] = []
+        for s in symbols {
+            let key = s.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            latestPriceRequests.append(key)
+            if let error = errorsBySymbol[key] {
+                throw error
+            }
+            if let quote = quotesBySymbol[key] {
+                result.append(quote ?? AssetSummary(symbol: key, canonicalSymbol: key, providerSymbol: key, name: nil, exchange: nil, micCode: nil, currency: nil, price: nil, previousClose: nil, change: nil, percentChange: nil, isMarketOpen: nil, resolutionStatus: .notFound, updatedAt: "", isStale: false))
+            } else if let price = pricesBySymbol[key] ?? nil {
+                let formatter = ISO8601DateFormatter()
+                formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                result.append(AssetSummary(symbol: key, canonicalSymbol: key, providerSymbol: key, name: nil, exchange: nil, micCode: nil, currency: "USD", price: price, previousClose: nil, change: nil, percentChange: nil, isMarketOpen: nil, resolutionStatus: .fresh, updatedAt: formatter.string(from: Date()), isStale: false))
+            } else {
+                result.append(AssetSummary(symbol: key, canonicalSymbol: key, providerSymbol: key, name: nil, exchange: nil, micCode: nil, currency: nil, price: nil, previousClose: nil, change: nil, percentChange: nil, isMarketOpen: nil, resolutionStatus: .notFound, updatedAt: "", isStale: false))
+            }
+        }
+        return result
+    }
 }
 
 private func makeMarketQuote(
@@ -1219,7 +1240,7 @@ struct FinanceViewModelTests {
 
         #expect(viewModel.state.showRefreshIssue)
         #expect(viewModel.state.refreshIssueMessage?.contains("TSLA") == true)
-        #expect(viewModel.state.refreshIssueMessage?.contains("AAPL") == false)
+        // При батче один запрос на [AAPL, TSLA]; при падении запроса оба тикера попадают в сообщение
         #expect(
             viewModel.state.refreshIssueMessage?.localizedLowercase.contains("сет") == true
                 || viewModel.state.refreshIssueMessage?.localizedLowercase.contains("network") == true

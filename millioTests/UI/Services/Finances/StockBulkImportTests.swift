@@ -57,6 +57,20 @@ actor StockBulkImportMockMarketDataClient: MarketDataClientProtocol {
         return latestQuotes[symbol.uppercased()] ?? nil
     }
 
+    func fetchQuotes(symbols: [String]) async throws -> [AssetSummary] {
+        var result: [AssetSummary] = []
+        for symbol in symbols {
+            let q = try await latestQuote(symbol: symbol, forceRefresh: true)
+            if let q {
+                result.append(q)
+            } else {
+                let key = symbol.uppercased()
+                result.append(AssetSummary(symbol: key, canonicalSymbol: key, providerSymbol: key, name: nil, exchange: nil, micCode: nil, currency: nil, price: nil, previousClose: nil, change: nil, percentChange: nil, isMarketOpen: nil, resolutionStatus: .notFound, updatedAt: "", isStale: false))
+            }
+        }
+        return result
+    }
+
     func lastLatestPriceRequest() -> (symbol: String, forceRefresh: Bool)? {
         latestPriceRequests.last
     }

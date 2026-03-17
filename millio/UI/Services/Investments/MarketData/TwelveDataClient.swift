@@ -97,6 +97,8 @@ enum MarketInstrumentIdentity {
 protocol MarketDataClientProtocol: Sendable {
     func searchSymbols(query: String, outputSize: Int) async throws -> [TwelveDataSymbol]
     func latestQuote(symbol: String, forceRefresh: Bool) async throws -> AssetSummary?
+    /// Пакетная загрузка котировок (до 8 символов за запрос). Результаты кэшируются.
+    func fetchQuotes(symbols: [String]) async throws -> [AssetSummary]
 }
 
 extension MarketDataClientProtocol {
@@ -554,11 +556,16 @@ final class MarketAPIClient: MarketDataClientProtocol, @unchecked Sendable {
             return []
         }
 
-        return try await authorizedRequest(
+        let quotes: [AssetSummary] = try await authorizedRequest(
             path: "market/quotes",
             method: "GET",
             queryItems: [URLQueryItem(name: "symbols", value: normalizedSymbols.joined(separator: ","))]
         )
+        // Кэшируем по запрошенному символу (порядок ответа бэкенда совпадает с порядком запроса)
+        for (symbol, quote) in zip(normalizedSymbols, quotes) {
+            await cacheStore.setQuote(quote, for: symbol)
+        }
+        return quotes
     }
 
     func assetSummary(symbol: String) async throws -> AssetSummary {

@@ -16,6 +16,10 @@ private actor MarketInstrumentResolverClientMock: MarketDataClientProtocol {
     func latestQuote(symbol: String, forceRefresh: Bool) async throws -> AssetSummary? {
         nil
     }
+
+    func fetchQuotes(symbols: [String]) async throws -> [AssetSummary] {
+        symbols.map { s in AssetSummary(symbol: s, canonicalSymbol: s, providerSymbol: s, name: nil, exchange: nil, micCode: nil, currency: nil, price: nil, previousClose: nil, change: nil, percentChange: nil, isMarketOpen: nil, resolutionStatus: .notFound, updatedAt: "", isStale: false) }
+    }
 }
 
 @Suite(.serialized)
