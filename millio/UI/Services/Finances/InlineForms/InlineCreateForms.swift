@@ -1138,7 +1138,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     }
     
     private var positionTotal: Double? {
-        guard let quantity = parseNumber(marketQuantityText),
+        guard let quantity = parseMarketQuantity(marketQuantityText),
               let unitPrice = lastKnownUnitPrice else {
             return nil
         }
@@ -1149,18 +1149,18 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
         if isMarketCategory {
             guard !name.isEmpty,
                   !marketSymbol.isEmpty,
-                  let quantity = parseNumber(marketQuantityText) else {
+                  let quantity = parseMarketQuantity(marketQuantityText) else {
                 return false
             }
-            return quantity > 0
+            return quantity >= 0
         }
         return !name.isEmpty
     }
     
     func getInvestmentData() -> (name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)? {
         if isMarketCategory {
-            guard let quantity = parseNumber(marketQuantityText),
-                  quantity > 0 else {
+            guard let quantity = parseMarketQuantity(marketQuantityText),
+                  quantity >= 0 else {
                 return nil
             }
             
@@ -1231,7 +1231,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
                 amountDisplayText = formatNumberForDisplay(amountText)
             }
             if marketQuantityDisplayText.isEmpty {
-                marketQuantityDisplayText = formatNumberForDisplay(marketQuantityText)
+                marketQuantityDisplayText = formatMarketQuantityForDisplay(marketQuantityText)
             }
         }
         .onChange(of: name) { _, _ in onInvestmentDataChanged(getInvestmentData()) }
@@ -1278,8 +1278,11 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
             onInvestmentDataChanged(getInvestmentData())
         }
         .onChange(of: marketQuantityDisplayText) { _, newValue in
-            let sanitized = AmountInputFormatter.sanitize(newValue)
-            let formatted = formatNumberForDisplay(sanitized)
+            let sanitized = AmountInputFormatter.sanitize(
+                newValue,
+                maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
+            )
+            let formatted = formatMarketQuantityForDisplay(sanitized)
             if newValue != formatted {
                 marketQuantityDisplayText = formatted
             }
@@ -1688,8 +1691,13 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
         marketQuoteLookupKey = editing.marketQuoteLookupKey
         marketMICCode = editing.marketMICCode
         marketCurrency = editing.marketCurrency
-        marketQuantityText = editing.marketQuantity.map { "\($0)" } ?? ""
-        marketQuantityDisplayText = formatNumberForDisplay(marketQuantityText)
+        marketQuantityText = editing.marketQuantity.map {
+            AmountInputFormatter.plainString(
+                from: $0,
+                maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
+            )
+        } ?? ""
+        marketQuantityDisplayText = formatMarketQuantityForDisplay(marketQuantityText)
         purchaseUnitPriceText = editing.averagePurchaseUnitPrice.map { "\($0)" } ?? ""
         lastKnownUnitPrice = editing.lastKnownUnitPrice
         lastKnownPriceUpdatedAt = editing.lastKnownPriceUpdatedAt
@@ -1700,6 +1708,10 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     
     private func parseNumber(_ text: String) -> Double? {
         AmountInputFormatter.parse(text)
+    }
+
+    private func parseMarketQuantity(_ text: String) -> Double? {
+        AmountInputFormatter.parse(text, maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits)
     }
     
     private func refreshLatestPrice(forceRefresh: Bool) {
@@ -1819,5 +1831,9 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     
     private func formatNumberForDisplay(_ text: String) -> String {
         AmountInputFormatter.display(text)
+    }
+
+    private func formatMarketQuantityForDisplay(_ text: String) -> String {
+        AmountInputFormatter.display(text, maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits)
     }
 }

@@ -221,17 +221,17 @@ struct CurrencyRateServiceTests {
         let d1 = Date(timeIntervalSince1970: 1_704_067_200) // 2024-01-01 00:00:00 UTC
         let d2 = Date(timeIntervalSince1970: 1_704_153_600) // 2024-01-02 00:00:00 UTC
 
-        let url1 = URL(string: "https://api.frankfurter.app/2024-01-01?from=USD&to=RUB")!
-        let url2 = URL(string: "https://api.frankfurter.app/2024-01-02?from=USD&to=RUB")!
+        let url1 = URL(string: "https://api.frankfurter.app/2024-01-01?from=USD&to=CNY")!
+        let url2 = URL(string: "https://api.frankfurter.app/2024-01-02?from=USD&to=CNY")!
 
         loader.responses[url1.absoluteString] = .init(statusCode: 404, body: #"{"message":"not found"}"#)
-        loader.responses[url2.absoluteString] = .init(statusCode: 200, body: #"{"rates":{"RUB":90.0}}"#)
+        loader.responses[url2.absoluteString] = .init(statusCode: 200, body: #"{"rates":{"CNY":7.2}}"#)
 
-        let r1 = await service.getHistoricalRate(on: d1, from: "USD", to: "RUB")
+        let r1 = await service.getHistoricalRate(on: d1, from: "USD", to: "CNY")
         #expect(r1 == nil)
 
-        let r2 = await service.getHistoricalRate(on: d2, from: "USD", to: "RUB")
-        #expect(r2 == 90.0)
+        let r2 = await service.getHistoricalRate(on: d2, from: "USD", to: "CNY")
+        #expect(r2 == 7.2)
         #expect(loader.requestedURLs == [url1, url2])
     }
 
@@ -261,11 +261,45 @@ struct CurrencyRateServiceTests {
         )
         let date = Date(timeIntervalSince1970: 1_704_067_200)
 
-        let first = await service.getHistoricalRate(on: date, from: "CNY", to: "RUB")
-        let second = await service.getHistoricalRate(on: date, from: "CNY", to: "RUB")
+        let first = await service.getHistoricalRate(on: date, from: "USD", to: "CNY")
+        let second = await service.getHistoricalRate(on: date, from: "USD", to: "CNY")
 
         #expect(first == nil)
         #expect(second == nil)
         #expect(loader.requestedURLs.count == 1)
+    }
+
+    @Test("Frankfurter не должен ходить в сеть для неподдерживаемой исторической валюты")
+    func testHistoricalRequestSkipsUnsupportedCurrencyWithoutNetworkCall() async {
+        final class MockHistoricalLoader: HTTPDataLoading {
+            private(set) var requestedURLs: [URL] = []
+
+            func data(from url: URL) async throws -> (Data, URLResponse) {
+                requestedURLs.append(url)
+                let data = Data(#"{"message":"unexpected network call"}"#.utf8)
+                let http = HTTPURLResponse(
+                    url: url,
+                    statusCode: 500,
+                    httpVersion: "HTTP/1.1",
+                    headerFields: ["Content-Type": "application/json"]
+                )!
+                return (data, http)
+            }
+        }
+
+        let loader = MockHistoricalLoader()
+        let service = CurrencyRateService(
+            rateSource: .erapi,
+            rateRepository: MockRateRepository(),
+            historicalLoader: loader
+        )
+        let date = Date(timeIntervalSince1970: 1_704_067_200)
+
+        let rubRate = await service.getHistoricalRate(on: date, from: "USD", to: "RUB")
+        let kztRate = await service.getHistoricalRate(on: date, from: "KZT", to: "USD")
+
+        #expect(rubRate == nil)
+        #expect(kztRate == nil)
+        #expect(loader.requestedURLs.isEmpty)
     }
 }

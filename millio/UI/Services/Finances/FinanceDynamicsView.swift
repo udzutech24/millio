@@ -589,9 +589,12 @@ private struct FinanceDynamicsContentView: View {
 
                     if isEditable, isEditing, let editText {
                         TextField("0", text: Binding(
-                            get: { AmountInputFormatter.display(editText.wrappedValue, maxFractionDigits: 8) },
+                            get: { AmountInputFormatter.display(editText.wrappedValue, maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits) },
                             set: { newValue in
-                                editText.wrappedValue = AmountInputFormatter.sanitize(newValue, maxFractionDigits: 8)
+                                editText.wrappedValue = AmountInputFormatter.sanitize(
+                                    newValue,
+                                    maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
+                                )
                             }
                         ))
                         .font(.system(size: compactLayout ? 15 : 16, weight: .semibold))
@@ -716,13 +719,21 @@ private struct FinanceDynamicsContentView: View {
                                 tradeRow(
                                     title: marketQuantityTitle(for: investment),
                                     valueText: Binding(
-                                        get: { AmountInputFormatter.display(tradeQuantityText, maxFractionDigits: 8) },
-                                        set: { newValue in tradeQuantityText = AmountInputFormatter.sanitize(newValue, maxFractionDigits: 8) }
+                                        get: { AmountInputFormatter.display(tradeQuantityText, maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits) },
+                                        set: { newValue in
+                                            tradeQuantityText = AmountInputFormatter.sanitize(
+                                                newValue,
+                                                maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
+                                            )
+                                        }
                                     ),
                                     editable: true
                                 )
 
-                                let qty = AmountInputFormatter.parse(tradeQuantityText) ?? 0
+                                let qty = AmountInputFormatter.parse(
+                                    tradeQuantityText,
+                                    maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
+                                ) ?? 0
                                 let price = currentTradeUnitPrice(for: investment)
                                 tradeRow(
                                     title: FinancesL10n.format(
@@ -820,7 +831,10 @@ private struct FinanceDynamicsContentView: View {
     }
 
     private func canSubmitTrade(for investment: Investment) -> Bool {
-        let quantity = AmountInputFormatter.parse(tradeQuantityText) ?? 0
+        let quantity = AmountInputFormatter.parse(
+            tradeQuantityText,
+            maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
+        ) ?? 0
         let unitPrice = currentTradeUnitPrice(for: investment)
         guard quantity > 0, unitPrice > 0 else {
             return false
@@ -833,7 +847,10 @@ private struct FinanceDynamicsContentView: View {
     }
 
     private func submitTrade(for investment: Investment) {
-        let quantity = AmountInputFormatter.parse(tradeQuantityText) ?? 0
+        let quantity = AmountInputFormatter.parse(
+            tradeQuantityText,
+            maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
+        ) ?? 0
         let unitPrice = currentTradeUnitPrice(for: investment)
         guard quantity > 0, unitPrice > 0 else {
             tradeErrorText = String(localized: "finances.dynamics.trade.error.invalid_inputs")
@@ -901,7 +918,10 @@ private struct FinanceDynamicsContentView: View {
     }
 
     private func syncMarketDraft(from investment: Investment) {
-        editQuantityText = rawNumberString(investment.marketQuantity ?? 0, maxFractionDigits: 8)
+        editQuantityText = rawNumberString(
+            investment.marketQuantity ?? 0,
+            maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
+        )
         editUnitPriceText = rawNumberString(investment.lastKnownUnitPrice ?? 0, maxFractionDigits: 8)
         editPurchasePriceText = rawNumberString(investment.averagePurchaseUnitPrice ?? 0, maxFractionDigits: 8)
     }
@@ -910,7 +930,10 @@ private struct FinanceDynamicsContentView: View {
         guard isInlineMarketEdit else {
             return true
         }
-        guard let quantity = AmountInputFormatter.parse(editQuantityText),
+        guard let quantity = AmountInputFormatter.parse(
+                editQuantityText,
+                maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
+              ),
               let unitPrice = AmountInputFormatter.parse(editUnitPriceText),
               quantity > 0, unitPrice > 0 else {
             return false
@@ -925,7 +948,10 @@ private struct FinanceDynamicsContentView: View {
 
     private func finishInlineMarketEdit(for investment: Investment) {
         guard canFinishInlineMarketEdit(for: investment),
-              let quantity = AmountInputFormatter.parse(editQuantityText),
+              let quantity = AmountInputFormatter.parse(
+                editQuantityText,
+                maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
+              ),
               let unitPrice = AmountInputFormatter.parse(editUnitPriceText) else {
             return
         }

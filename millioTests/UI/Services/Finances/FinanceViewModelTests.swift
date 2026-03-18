@@ -280,6 +280,45 @@ struct FinanceViewModelTests {
         #expect(accounts[0].group?.name == String(localized: "finances.group.ungrouped"))
     }
 
+    @Test("Кредиты без FinanceAccount привязываются к \"Без группы\" и уменьшают Итого")
+    func testMissingCreditLinksAreRecoveredIntoUngroupedGroup() async throws {
+        let modelContext = try createTestModelContext()
+        let currencyService = MockCurrencyRateService()
+
+        let credit = Credit(
+            name: "Test Loan",
+            amount: 10_000,
+            interestRate: 0,
+            monthlyPayment: 500,
+            startDate: Date(),
+            termMonths: 24,
+            currency: "RUB"
+        )
+        credit.remainingAmount = 2_500
+        credit.includeInTotal = true
+        modelContext.insert(credit)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: currencyService,
+            marketDataClient: MockMarketDataClient(),
+            skipInitialLoad: false
+        )
+
+        let accounts = try modelContext.fetch(FetchDescriptor<FinanceAccount>())
+        let groups = try modelContext.fetch(FetchDescriptor<FinanceGroup>())
+
+        #expect(accounts.count == 1)
+        #expect(groups.count == 1)
+        #expect(accounts[0].accountType == .credit)
+        #expect(accounts[0].accountID == credit.creditUniqueID)
+        #expect(accounts[0].group?.name == String(localized: "finances.group.ungrouped"))
+
+        let total = await viewModel.calculateGroupTotal(group: groups[0], in: "RUB")
+        #expect(abs(total + 2_500) < 0.01)
+    }
+
     @Test("Негативные инвестиции подсвечиваются как обязательства")
     func testNegativeInvestmentsAreDetectedAsLiabilities() async throws {
         let modelContext = try createTestModelContext()
@@ -1731,8 +1770,8 @@ struct FinanceViewModelTests {
         #expect(limitInfo?.currency == "RUB")
     }
 
-    @Test("Для кредитной карты в списке показывается остаток лимита, а долг доступен отдельно")
-    func testCreditCardAccountInfoUsesRemainingLimitForPrimaryAmount() throws {
+    @Test("Для кредитной карты в списке показывается задолженность, а остаток лимита доступен отдельно")
+    func testCreditCardAccountInfoUsesDebtForPrimaryAmount() throws {
         let modelContext = try createTestModelContext()
 
         let group = FinanceGroup(name: "Карты", colorHex: "#22AAFF")
@@ -1765,8 +1804,8 @@ struct FinanceViewModelTests {
         let debtInfo = viewModel.getCreditCardDebt(account: account)
 
         #expect(info != nil)
-        #expect(abs((info?.amount ?? 0) - 213_641) < 0.01)
-        #expect(info?.isCreditCardDebt == false)
+        #expect(abs((info?.amount ?? 0) - 346_359) < 0.01)
+        #expect(info?.isCreditCardDebt == true)
         #expect(abs((debtInfo?.amount ?? 0) - 346_359) < 0.01)
         #expect(debtInfo?.currency == "RUB")
     }
@@ -1823,7 +1862,7 @@ struct FinanceViewModelTests {
         let limitInfo = viewModel.getCreditCardLimitRemaining(account: account)
         let debtInfo = viewModel.getCreditCardDebt(account: account)
 
-        #expect(abs((info?.amount ?? 0) - 213_641) < 0.01)
+        #expect(abs((info?.amount ?? 0) - 346_359) < 0.01)
         #expect(abs((limitInfo?.amount ?? 0) - 213_641) < 0.01)
         #expect(abs((debtInfo?.amount ?? 0) - 346_359) < 0.01)
     }

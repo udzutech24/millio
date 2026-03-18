@@ -6,6 +6,8 @@
 import Foundation
 
 enum AmountInputFormatter {
+    static let marketQuantityFractionDigits = 12
+
     /// Formats integer-only monetary input on each keystroke.
     /// Useful for live-edit fields that must show grouping separators immediately.
     static func integerInput(_ text: String) -> String {
@@ -47,8 +49,8 @@ enum AmountInputFormatter {
         return trimLeadingZeros(result)
     }
 
-    static func parse(_ text: String) -> Double? {
-        let normalized = sanitize(text, maxFractionDigits: 8)
+    static func parse(_ text: String, maxFractionDigits: Int = marketQuantityFractionDigits) -> Double? {
+        let normalized = sanitize(text, maxFractionDigits: maxFractionDigits)
         return Double(normalized)
     }
 
@@ -56,27 +58,15 @@ enum AmountInputFormatter {
         let sanitized = sanitize(text, maxFractionDigits: maxFractionDigits)
         guard !sanitized.isEmpty else { return "" }
 
-        let hasDecimalSeparator = sanitized.contains(".")
-        let trailingSeparator = sanitized.last == "."
-        let number = Double(sanitized) ?? 0
+        let parts = sanitized.split(separator: ".", omittingEmptySubsequences: false)
+        let integerPart = formatGroupedIntegerPart(String(parts[0]))
 
-        let formatter = NumberFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.numberStyle = .decimal
-        formatter.decimalSeparator = "."
-        formatter.groupingSeparator = " "
-        formatter.usesGroupingSeparator = true
-        formatter.groupingSize = 3
-        formatter.secondaryGroupingSize = 3
-        formatter.minimumGroupingDigits = 1
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = hasDecimalSeparator ? maxFractionDigits : 0
-
-        var formatted = formatter.string(from: NSNumber(value: number)) ?? sanitized
-        if trailingSeparator, !formatted.contains(".") {
-            formatted.append(".")
+        guard parts.count > 1 else {
+            return integerPart
         }
-        return formatted
+
+        let fractionPart = String(parts[1])
+        return "\(integerPart).\(fractionPart)"
     }
 
     static func plainString(from value: Double) -> String {
@@ -114,5 +104,20 @@ enum AmountInputFormatter {
             return "\(integerPart).\(fractionPart)"
         }
         return integerPart
+    }
+
+    private static func formatGroupedIntegerPart(_ integerPart: String) -> String {
+        guard integerPart.count > 3 else { return integerPart }
+
+        var groupedChunks: [String] = []
+        var endIndex = integerPart.endIndex
+
+        while endIndex > integerPart.startIndex {
+            let startIndex = integerPart.index(endIndex, offsetBy: -3, limitedBy: integerPart.startIndex) ?? integerPart.startIndex
+            groupedChunks.append(String(integerPart[startIndex..<endIndex]))
+            endIndex = startIndex
+        }
+
+        return groupedChunks.reversed().joined(separator: " ")
     }
 }

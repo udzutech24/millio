@@ -6,6 +6,89 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+private struct OverflowFadeWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private struct AvailableFadeWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private struct OverflowFadeText: View {
+    let text: String
+    let font: Font
+    let color: Color
+    let fadeStart: CGFloat
+    let fadeEnd: CGFloat
+
+    @State private var intrinsicWidth: CGFloat = 0
+    @State private var availableWidth: CGFloat = 0
+
+    private var shouldFade: Bool {
+        intrinsicWidth > availableWidth + 1
+    }
+
+    var body: some View {
+        displayedText
+            .mask(
+                Group {
+                    if shouldFade {
+                        LinearGradient(
+                            stops: [
+                                .init(color: .white, location: 0),
+                                .init(color: .white, location: fadeStart),
+                                .init(color: .clear, location: fadeEnd)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    } else {
+                        Color.white
+                    }
+                }
+            )
+            .background(
+                GeometryReader { proxy in
+                    Color.clear
+                        .preference(key: AvailableFadeWidthKey.self, value: proxy.size.width)
+                }
+            )
+            .background(intrinsicWidthProbe)
+            .onPreferenceChange(AvailableFadeWidthKey.self) { availableWidth = $0 }
+            .onPreferenceChange(OverflowFadeWidthKey.self) { intrinsicWidth = $0 }
+    }
+
+    private var displayedText: some View {
+        Text(text)
+            .font(font)
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .clipped()
+    }
+
+    private var intrinsicWidthProbe: some View {
+        Text(text)
+            .font(font)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .hidden()
+            .background(
+                GeometryReader { proxy in
+                    Color.clear
+                        .preference(key: OverflowFadeWidthKey.self, value: proxy.size.width)
+                }
+            )
+    }
+}
+
 private func financeAmountLabel(
     amountText: String,
     currencySymbol: String,
@@ -15,10 +98,10 @@ private func financeAmountLabel(
 ) -> some View {
     HStack(alignment: .firstTextBaseline, spacing: 3) {
         Text(amountText)
-            .font(.system(size: amountFontSize, weight: .semibold))
+            .font(.system(size: amountFontSize, weight: .semibold).monospacedDigit())
             .foregroundStyle(amountColor)
             .lineLimit(1)
-            .minimumScaleFactor(0.78)
+            .minimumScaleFactor(0.72)
 
         Text(currencySymbol)
             .font(.system(size: max(11, amountFontSize * 0.82), weight: .medium))
@@ -53,7 +136,7 @@ struct FinanceGroupRow: View {
     var body: some View {
         groupContent
             .background(groupBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: FinanceScreenChrome.groupRowCornerRadius, style: .continuous))
             .contextMenu {
                 contextMenuContent
             }
@@ -84,32 +167,33 @@ struct FinanceGroupRow: View {
     }
     
     private var groupHeader: some View {
-        HStack(spacing: 12) {
-            Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    viewModel.handle(.toggleGroupExpanded(groupID))
+        GeometryReader { proxy in
+            HStack(spacing: 12) {
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        viewModel.handle(.toggleGroupExpanded(groupID))
+                    }
+                } label: {
+                    headerContent(containerWidth: proxy.size.width)
                 }
-            } label: {
-                headerContent
-            }
-            .buttonStyle(.plain)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
 
-            dragChevron
+                dragChevron
+            }
+            .padding(.vertical, 16)
+            .padding(.leading, contentLeadingInset)
+            .padding(.trailing, contentTrailingInset)
         }
-        .padding(.vertical, 16)
-        .padding(.leading, contentLeadingInset)
-        .padding(.trailing, contentTrailingInset)
+        .frame(height: 56)
     }
     
-    private var headerContent: some View {
+    private func headerContent(containerWidth: CGFloat) -> some View {
         HStack(spacing: 12) {
-            // Название группы
             groupNameSection
-            
-            // Сумма группы
-            groupAmountSection
+
+            groupAmountSection(containerWidth: containerWidth)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
@@ -117,25 +201,33 @@ struct FinanceGroupRow: View {
     
     private var groupNameSection: some View {
         HStack(spacing: 6) {
-            Text(group.name)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(AppColors.textPrimary)
-                .lineLimit(1)
-                .truncationMode(.tail)
+            OverflowFadeText(
+                text: group.name,
+                font: .system(size: 16, weight: .semibold),
+                color: AppColors.textPrimary,
+                fadeStart: FinancesMainLayoutPolicy.groupRowNameFadeStart,
+                fadeEnd: FinancesMainLayoutPolicy.groupRowNameFadeEnd
+            )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .layoutPriority(1)
     }
     
-    private var groupAmountSection: some View {
-        financeAmountLabel(
+    private func groupAmountSection(containerWidth: CGFloat) -> some View {
+        let amountColor = groupTotal < 0 ? AppColors.error : AppColors.textPrimary
+        return financeAmountLabel(
             amountText: formatBalance(groupTotal, isHidden: viewModel.state.isAmountHidden),
             currencySymbol: MonetaCurrency(rawValue: groupDisplayCurrency)?.symbol ?? groupDisplayCurrency,
-            amountFontSize: 14,
-            amountColor: AppColors.textPrimary.opacity(0.92),
-            currencyColor: AppColors.textSecondary.opacity(0.70)
+            amountFontSize: 15,
+            amountColor: amountColor.opacity(0.92),
+            currencyColor: amountColor.opacity(0.66)
         )
-        .frame(maxWidth: .infinity, alignment: .trailing)
-        .padding(.leading, 20)
+        .frame(
+            width: FinancesMainLayoutPolicy.groupRowAmountWidth(containerWidth: containerWidth),
+            alignment: .trailing
+        )
+        .padding(.leading, 12)
+        .fixedSize(horizontal: false, vertical: true)
     }
     
     private var accountsAccordion: some View {
@@ -201,7 +293,18 @@ struct FinanceGroupRow: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(AppColors.textTertiary.opacity(0.9))
                 .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                .frame(width: 24, height: 24)
+                .frame(
+                    width: FinancesMainLayoutPolicy.groupRowChevronSize,
+                    height: FinancesMainLayoutPolicy.groupRowChevronSize
+                )
+                .background(
+                    Circle()
+                        .fill(Color.white.opacity(0.05))
+                        .overlay(
+                            Circle()
+                                .stroke(Color.white.opacity(0.10), lineWidth: 0.8)
+                        )
+                )
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -213,12 +316,10 @@ struct FinanceGroupRow: View {
     
     private var groupBackground: some View {
         let accentColor = group.color
-        return RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .fill(Color.white.opacity(0.035))
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
-            )
+        return FinanceChromeCardBackground(
+            cornerRadius: FinanceScreenChrome.groupRowCornerRadius,
+            accentColor: accentColor
+        )
             .overlay(alignment: .leading) {
                 Capsule(style: .continuous)
                     .fill(accentColor.opacity(0.85))
@@ -370,18 +471,22 @@ private struct FinanceAccountRow: View {
             )
             
             VStack(alignment: .leading, spacing: 3) {
-                Text(name)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                OverflowFadeText(
+                    text: name,
+                    font: .system(size: 15, weight: .semibold),
+                    color: AppColors.textPrimary,
+                    fadeStart: FinancesMainLayoutPolicy.groupRowNameFadeStart,
+                    fadeEnd: FinancesMainLayoutPolicy.groupRowNameFadeEnd
+                )
 
                 if let subtitle = viewModel.getInvestmentPositionSubtitle(account: account) {
-                    Text(subtitle)
-                        .font(.system(size: 11, weight: .regular))
-                        .foregroundStyle(AppColors.textSecondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                    OverflowFadeText(
+                        text: subtitle,
+                        font: .system(size: 11, weight: .regular),
+                        color: AppColors.textSecondary,
+                        fadeStart: FinancesMainLayoutPolicy.groupRowNameFadeStart,
+                        fadeEnd: FinancesMainLayoutPolicy.groupRowNameFadeEnd
+                    )
                 }
 
                 if let limitSubtitle = creditLimitSubtitle {
@@ -414,26 +519,32 @@ private struct FinanceAccountRow: View {
             )
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(name)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                OverflowFadeText(
+                    text: name,
+                    font: .system(size: 15, weight: .semibold),
+                    color: AppColors.textPrimary,
+                    fadeStart: FinancesMainLayoutPolicy.groupRowNameFadeStart,
+                    fadeEnd: FinancesMainLayoutPolicy.groupRowNameFadeEnd
+                )
 
                 if let subtitle = viewModel.getInvestmentPositionSubtitle(account: account) {
-                    Text(subtitle)
-                        .font(.system(size: 11, weight: .regular))
-                        .foregroundStyle(AppColors.textSecondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                    OverflowFadeText(
+                        text: subtitle,
+                        font: .system(size: 11, weight: .regular),
+                        color: AppColors.textSecondary,
+                        fadeStart: FinancesMainLayoutPolicy.groupRowNameFadeStart,
+                        fadeEnd: FinancesMainLayoutPolicy.groupRowNameFadeEnd
+                    )
                 }
 
                 if let performance = viewModel.getInvestmentPurchaseGrowthSubtitle(account: account) {
-                    Text(performance.text)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(performance.isPositive ? Color.green : AppColors.error)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                    OverflowFadeText(
+                        text: performance.text,
+                        font: .system(size: 11, weight: .medium),
+                        color: performance.isPositive ? Color.green : AppColors.error,
+                        fadeStart: FinancesMainLayoutPolicy.groupRowNameFadeStart,
+                        fadeEnd: FinancesMainLayoutPolicy.groupRowNameFadeEnd
+                    )
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -453,7 +564,7 @@ private struct FinanceAccountRow: View {
     }
 
     private var isDebtHighlighted: Bool {
-        accountType == .credit || isCreditCardDebt
+        viewModel.isAccountLiabilityForTotals(account: account) || isCreditCardDebt
     }
 
     @ViewBuilder
@@ -497,13 +608,6 @@ private struct FinanceAccountRow: View {
     }
 
     private var creditLimitSubtitle: String? {
-        if let debt = viewModel.getCreditCardDebt(account: account) {
-            let amountText = formatBalance(debt.amount, isHidden: viewModel.state.isAmountHidden)
-            let currencySymbol = MonetaCurrency(rawValue: debt.currency)?.symbol ?? debt.currency
-            let title = String(localized: "finances.add_account.card.total_debt")
-            return "\(title) \(amountText) \(currencySymbol)"
-        }
-
         guard let remaining = viewModel.getCreditCardLimitRemaining(account: account) else {
             return nil
         }

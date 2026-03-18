@@ -99,7 +99,7 @@ struct InvestmentEditorView: View {
     }
 
     private var positionTotal: Double? {
-        guard let quantity = parseNumber(marketQuantityText),
+        guard let quantity = parseMarketQuantity(marketQuantityText),
               let unitPrice = lastKnownUnitPrice else {
             return nil
         }
@@ -180,7 +180,12 @@ struct InvestmentEditorView: View {
                     marketQuoteLookupKey = editing.marketQuoteLookupKey
                     marketMICCode = editing.marketMICCode
                     marketCurrency = editing.marketCurrency
-                    marketQuantityText = editing.marketQuantity.map { String($0) } ?? ""
+                    marketQuantityText = editing.marketQuantity.map {
+                        AmountInputFormatter.plainString(
+                            from: $0,
+                            maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
+                        )
+                    } ?? ""
                     purchaseUnitPriceText = editing.averagePurchaseUnitPrice.map { String($0) } ?? ""
                     lastKnownUnitPrice = editing.lastKnownUnitPrice
                     lastKnownPriceUpdatedAt = editing.lastKnownPriceUpdatedAt
@@ -434,9 +439,12 @@ struct InvestmentEditorView: View {
                     .foregroundStyle(AppColors.textPrimary)
                 Spacer()
                 TextField("0", text: Binding(
-                    get: { formatNumberForDisplay(marketQuantityText) },
+                    get: { formatMarketQuantityForDisplay(marketQuantityText) },
                     set: { newValue in
-                        let sanitized = AmountInputFormatter.sanitize(newValue)
+                        let sanitized = AmountInputFormatter.sanitize(
+                            newValue,
+                            maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
+                        )
                         marketQuantityText = sanitized
                     }
                 ))
@@ -629,10 +637,10 @@ struct InvestmentEditorView: View {
         if isMarketCategory {
             guard !name.isEmpty,
                   !marketSymbol.isEmpty,
-                  let quantity = parseNumber(marketQuantityText) else {
+                  let quantity = parseMarketQuantity(marketQuantityText) else {
                 return false
             }
-            return quantity > 0
+            return quantity >= 0
         }
 
         guard !name.isEmpty,
@@ -764,6 +772,10 @@ struct InvestmentEditorView: View {
         AmountInputFormatter.parse(text)
     }
 
+    private func parseMarketQuantity(_ text: String) -> Double? {
+        AmountInputFormatter.parse(text, maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits)
+    }
+
     private func formatOptionalPrice(_ value: Double?) -> String {
         guard let value else {
             return "—"
@@ -785,6 +797,10 @@ struct InvestmentEditorView: View {
         AmountInputFormatter.display(text)
     }
 
+    private func formatMarketQuantityForDisplay(_ text: String) -> String {
+        AmountInputFormatter.display(text, maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits)
+    }
+
     private func saveInvestment() {
         guard validateEntitlementsForSave() else { return }
 
@@ -794,7 +810,7 @@ struct InvestmentEditorView: View {
         let effectiveCategory: InvestmentCategory
 
         if isMarketCategory {
-            guard let quantity = parseNumber(marketQuantityText), quantity > 0 else {
+            guard let quantity = parseMarketQuantity(marketQuantityText), quantity >= 0 else {
                 return
             }
 

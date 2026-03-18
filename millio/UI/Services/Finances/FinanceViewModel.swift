@@ -836,6 +836,8 @@ final class FinanceViewModel: ViewModelProtocol {
         var removedCount = 0
         var dedupedCount = 0
         var reassignedToUngroupedCount = 0
+        var createdMissingCardLinksCount = 0
+        var createdMissingCreditLinksCount = 0
         var createdMissingInvestmentLinksCount = 0
 
         var ungroupedGroup: FinanceGroup?
@@ -846,6 +848,12 @@ final class FinanceViewModel: ViewModelProtocol {
             return group
         }
 
+        var linkedCardIDs = Set(accounts.compactMap { account in
+            account.accountType == .card ? account.accountID : nil
+        })
+        var linkedCreditIDs = Set(accounts.compactMap { account in
+            account.accountType == .credit ? account.accountID : nil
+        })
         var linkedInvestmentIDs = Set(accounts.compactMap { account in
             account.accountType == .investment ? account.accountID : nil
         })
@@ -903,8 +911,29 @@ final class FinanceViewModel: ViewModelProtocol {
             }
         }
 
-        // Восстанавливаем отсутствующие связи для инвестиций:
-        // раньше они могли "пропасть" из групп из-за очистки nil-group связей.
+        // Восстанавливаем отсутствующие связи для продуктов:
+        // раньше они могли "пропасть" из групп из-за cleanup/dangling links, после чего
+        // счет исчезал с главного экрана и переставал влиять на Итого.
+        for card in allCardByID.values where card.archivedAt == nil {
+            guard !linkedCardIDs.contains(card.cardUniqueID) else { continue }
+            let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+            account.group = resolveUngroupedGroup()
+            modelContext.insert(account)
+            linkedCardIDs.insert(card.cardUniqueID)
+            createdMissingCardLinksCount += 1
+            didMutate = true
+        }
+
+        for credit in allCreditByID.values where credit.archivedAt == nil {
+            guard !linkedCreditIDs.contains(credit.creditUniqueID) else { continue }
+            let account = FinanceAccount(accountType: .credit, accountID: credit.creditUniqueID)
+            account.group = resolveUngroupedGroup()
+            modelContext.insert(account)
+            linkedCreditIDs.insert(credit.creditUniqueID)
+            createdMissingCreditLinksCount += 1
+            didMutate = true
+        }
+
         for investment in allInvestmentByID.values where investment.archivedAt == nil {
             guard !linkedInvestmentIDs.contains(investment.investmentUniqueID) else { continue }
             let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
@@ -927,6 +956,12 @@ final class FinanceViewModel: ViewModelProtocol {
             }
             if reassignedToUngroupedCount > 0 {
                 AppLogger.log(.info, category: "Finance", "Reassigned \(reassignedToUngroupedCount) finance account links to ungrouped group")
+            }
+            if createdMissingCardLinksCount > 0 {
+                AppLogger.log(.info, category: "Finance", "Created \(createdMissingCardLinksCount) missing card finance account links")
+            }
+            if createdMissingCreditLinksCount > 0 {
+                AppLogger.log(.info, category: "Finance", "Created \(createdMissingCreditLinksCount) missing credit finance account links")
             }
             if createdMissingInvestmentLinksCount > 0 {
                 AppLogger.log(.info, category: "Finance", "Created \(createdMissingInvestmentLinksCount) missing investment finance account links")
@@ -1153,6 +1188,9 @@ final class FinanceViewModel: ViewModelProtocol {
         case .card:
             if let card = cardByID[account.accountID] {
                 let snapshot = CardSnapshotFactory.make(from: card)
+                if snapshot.isCreditCard {
+                    return (snapshot.name, snapshot.debtAmount, snapshot.currency, snapshot.icon, true)
+                }
                 return (snapshot.name, snapshot.availableAmount, snapshot.currency, snapshot.icon, false)
             }
             

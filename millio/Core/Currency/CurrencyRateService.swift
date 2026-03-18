@@ -31,6 +31,11 @@ protocol CurrencyRateServiceProtocol {
 @MainActor
 final class CurrencyRateService: CurrencyRateServiceProtocol {
     static let shared = CurrencyRateService(rateSource: .erapi, rateRepository: RateRepository.shared)
+    private static let frankfurterHistoricalSupportedCurrencies: Set<String> = [
+        "AUD", "BRL", "CAD", "CHF", "CNY", "CZK", "DKK", "EUR", "GBP", "HKD",
+        "HUF", "IDR", "ILS", "INR", "ISK", "JPY", "KRW", "MXN", "MYR", "NOK",
+        "NZD", "PHP", "PLN", "RON", "SEK", "SGD", "THB", "TRY", "USD", "ZAR"
+    ]
     
     /// Источник курсов для данного экземпляра сервиса.
     /// Глобально для приложения используется `.erapi`.
@@ -143,6 +148,15 @@ final class CurrencyRateService: CurrencyRateServiceProtocol {
         let dateString = formatDateForFrankfurter(date)
         let pairKey = "\(from)->\(to)"
         let requestKey = "\(dateString)|\(pairKey)"
+
+        // Frankfurter не публикует все валюты. Например, RUB отсутствует в справочнике
+        // доступных symbols, поэтому такие запросы гарантированно не дадут exact-курс.
+        guard Self.frankfurterHistoricalSupportedCurrencies.contains(from),
+              Self.frankfurterHistoricalSupportedCurrencies.contains(to) else {
+            knownHistoricalUnsupportedPairs.insert(pairKey)
+            knownHistoricalUnavailableRequests.insert(requestKey)
+            return nil
+        }
 
         // Для явно неподдерживаемых пар не делаем повторные сетевые запросы.
         if knownHistoricalUnsupportedPairs.contains(pairKey) {

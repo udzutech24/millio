@@ -7,6 +7,12 @@
 
 import SwiftUI
 
+enum FinanceQuickEditLayoutPolicy {
+    static func showsDeleteButton(for accountType: FinanceAccountType) -> Bool {
+        accountType == .card || accountType == .investment
+    }
+}
+
 struct FinanceQuickEditAccountView: View {
     let account: FinanceAccount
     @ObservedObject var viewModel: FinanceViewModel
@@ -16,6 +22,7 @@ struct FinanceQuickEditAccountView: View {
     @State private var creditLimitText: String = ""
     @State private var creditDebtText: String = ""
     @State private var isLoading = false
+    @State private var showDeleteConfirmation = false
     @FocusState private var isAmountFieldFocused: Bool
     
     var accountInfo: (name: String, amount: Double, currency: String, icon: String, isCreditCardDebt: Bool)? {
@@ -143,9 +150,14 @@ struct FinanceQuickEditAccountView: View {
                         .disabled(isLoading || !isValidInput)
                         .opacity(isLoading || !isValidInput ? 0.6 : 1.0)
                         .padding(.horizontal, 24)
-                        .padding(.bottom, 40)
+
+                        if FinanceQuickEditLayoutPolicy.showsDeleteButton(for: account.accountType) {
+                            deleteAccountButton
+                                .padding(.horizontal, 24)
+                        }
                     }
                 }
+                .padding(.bottom, 40)
             }
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
@@ -157,10 +169,43 @@ struct FinanceQuickEditAccountView: View {
                     .foregroundStyle(AppColors.textPrimary)
                 }
             }
+            .alert(
+                deleteConfirmationTitle,
+                isPresented: $showDeleteConfirmation
+            ) {
+                Button(String(localized: "finances.common.cancel"), role: .cancel) {}
+                Button(String(localized: "finances.common.delete"), role: .destructive) {
+                    deleteAccount()
+                }
+            } message: {
+                Text(String(localized: "finances.dynamics.delete_account.confirm.message"))
+            }
         }
         .onAppear {
             setupInitialValues()
         }
+    }
+
+    private var deleteAccountButton: some View {
+        Button(role: .destructive) {
+            showDeleteConfirmation = true
+        } label: {
+            Text(String(localized: "finances.dynamics.delete_account"))
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AppColors.error.opacity(0.92))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color.white.opacity(0.035))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(AppColors.error.opacity(0.22), lineWidth: 0.9)
+                        )
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("finances.quick_edit.delete_account.button")
     }
 
     @ViewBuilder
@@ -265,7 +310,7 @@ struct FinanceQuickEditAccountView: View {
     }
 
     private var maxFractionDigitsForInput: Int {
-        isMarketInvestment ? 8 : 2
+        isMarketInvestment ? AmountInputFormatter.marketQuantityFractionDigits : 2
     }
 
     private func plainAmountForInput(_ amount: Double) -> String {
@@ -273,7 +318,10 @@ struct FinanceQuickEditAccountView: View {
     }
 
     private func parseAmount(_ text: String) -> Double? {
-        AmountInputFormatter.parse(text)
+        AmountInputFormatter.parse(
+            text,
+            maxFractionDigits: isMarketInvestment ? AmountInputFormatter.marketQuantityFractionDigits : 2
+        )
     }
 
     private func syncFormattedText(_ newValue: String, text: Binding<String>, maxFractionDigits: Int = 2) {
@@ -304,6 +352,11 @@ struct FinanceQuickEditAccountView: View {
         isLoading = true
         viewModel.handle(.updateAccountAmount(account, amount))
         isLoading = false
+        dismiss()
+    }
+
+    private func deleteAccount() {
+        viewModel.handle(.deleteAccountPermanently(account))
         dismiss()
     }
 
@@ -364,5 +417,10 @@ struct FinanceQuickEditAccountView: View {
             return investment.marketQuantity ?? 0
         }
         return fallbackAmount
+    }
+
+    private var deleteConfirmationTitle: String {
+        let name = accountInfo?.name ?? String(localized: "finances.dynamics.chart.account_fallback")
+        return FinancesL10n.format("finances.dynamics.delete_account.confirm.title", name)
     }
 }

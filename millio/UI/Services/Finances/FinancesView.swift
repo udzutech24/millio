@@ -163,19 +163,34 @@ private struct FinancesContentViewInternal: View {
                 viewModel: viewModel
             )
                 .tabItem {
-                    Label("finances.main.title", systemImage: "creditcard")
+                    financesTabItemLabel(
+                        titleKey: "finances.main.title",
+                        imageName: "credit-card"
+                    )
                 }
                 .tag(FinancesTab.main)
             
             // Вкладка 2: Динамика
             FinanceDynamicsTabView(financeViewModel: viewModel)
                 .tabItem {
-                    Label("finances.dynamics.title", systemImage: "chart.line.uptrend.xyaxis")
+                    financesTabItemLabel(
+                        titleKey: "finances.dynamics.title",
+                        imageName: "trending-up"
+                    )
                 }
                 .tag(FinancesTab.dynamics)
         }
         .toolbarBackground(.visible, for: .tabBar)
         .toolbarBackground(Color.black.opacity(0.52), for: .tabBar)
+    }
+
+    private func financesTabItemLabel(titleKey: LocalizedStringKey, imageName: String) -> some View {
+        Label {
+            Text(titleKey)
+        } icon: {
+            Image(imageName)
+                .renderingMode(.template)
+        }
     }
 }
 
@@ -359,10 +374,6 @@ private struct FinancesMainTabView: View {
         }
         .padding(22)
         .background(heroModuleBackground)
-        .overlay(
-            RoundedRectangle(cornerRadius: FinancesMainLayoutPolicy.heroCornerRadius, style: .continuous)
-                .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
-        )
         .clipShape(RoundedRectangle(cornerRadius: FinancesMainLayoutPolicy.heroCornerRadius, style: .continuous))
     }
 
@@ -373,14 +384,7 @@ private struct FinancesMainTabView: View {
                 chrome: .embedded
             )
             .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: FinancesMainLayoutPolicy.sectionCardCornerRadius, style: .continuous)
-                    .fill(Color.white.opacity(0.035))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: FinancesMainLayoutPolicy.sectionCardCornerRadius, style: .continuous)
-                            .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
-                    )
-            )
+            .background(sectionModuleBackground)
         }
     }
     
@@ -389,7 +393,7 @@ private struct FinancesMainTabView: View {
     private var totalAmountSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 16) {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 10) {
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text(formatBalance(viewModel.state.totalAmount, isHidden: viewModel.state.isAmountHidden))
                             .font(.system(size: 36, weight: .bold))
@@ -426,6 +430,7 @@ private struct FinancesMainTabView: View {
                             }
                             .buttonStyle(.plain)
                         }
+                        .offset(y: -2)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -453,12 +458,14 @@ private struct FinancesMainTabView: View {
                 .padding(.vertical, 8)
                 .padding(.horizontal, 12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppColors.warning.opacity(0.10))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(AppColors.warning.opacity(0.32), lineWidth: 1)
-                }
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.white.opacity(0.05))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(AppColors.warning.opacity(0.32), lineWidth: 1)
+                        )
+                )
                 .accessibilityLabel(Text(warning))
             }
             
@@ -522,12 +529,17 @@ private struct FinancesMainTabView: View {
         } label: {
             ZStack {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.white.opacity(0.055))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                    .fill(Color.clear)
+                    .background(
+                        FinanceChromeCardBackground(
+                            cornerRadius: FinanceScreenChrome.controlCornerRadius,
+                            isElevated: false
+                        )
                     )
-                    .frame(width: 32, height: 32)
+                    .frame(
+                        width: FinanceScreenChrome.headerControlSide,
+                        height: FinanceScreenChrome.headerControlSide
+                    )
 
                 if viewModel.state.isLoadingRates {
                     ProgressView()
@@ -550,38 +562,31 @@ private struct FinancesMainTabView: View {
             Image(systemName: systemName)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(AppColors.textSecondary)
-                .frame(width: 32, height: 32)
+                .frame(
+                    width: FinanceScreenChrome.headerControlSide,
+                    height: FinanceScreenChrome.headerControlSide
+                )
                 .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color.white.opacity(0.055))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(Color.white.opacity(0.10), lineWidth: 1)
-                        )
+                    FinanceChromeCardBackground(
+                        cornerRadius: FinanceScreenChrome.controlCornerRadius,
+                        isElevated: false
+                    )
                 )
         }
         .buttonStyle(.plain)
     }
 
     private var heroModuleBackground: some View {
-        RoundedRectangle(cornerRadius: FinancesMainLayoutPolicy.heroCornerRadius, style: .continuous)
-            .fill(
-                LinearGradient(
-                    colors: [
-                        Color.white.opacity(0.07),
-                        Color.white.opacity(0.035),
-                        Color.white.opacity(0.018)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
+        FinanceChromeCardBackground(
+            cornerRadius: FinancesMainLayoutPolicy.heroCornerRadius,
+            isElevated: true
+        )
             .overlay(alignment: .topLeading) {
                 Circle()
-                    .fill((AppColors.financesGradient.first ?? .cyan).opacity(0.08))
-                    .blur(radius: 42)
-                    .frame(width: 170, height: 170)
-                    .offset(x: -48, y: -56)
+                    .fill((AppColors.financesGradient.first ?? .cyan).opacity(0.12))
+                    .blur(radius: 46)
+                    .frame(width: 180, height: 180)
+                    .offset(x: -44, y: -52)
             }
             .overlay(alignment: .bottomTrailing) {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
@@ -589,7 +594,7 @@ private struct FinancesMainTabView: View {
                         LinearGradient(
                             colors: [
                                 Color.clear,
-                                AppColors.brandPrimary.opacity(0.06)
+                                AppColors.brandPrimary.opacity(0.08)
                             ],
                             startPoint: .leading,
                             endPoint: .trailing
@@ -599,6 +604,12 @@ private struct FinancesMainTabView: View {
                     .blur(radius: 18)
                     .offset(x: 30, y: 22)
             }
+    }
+
+    private var sectionModuleBackground: some View {
+        FinanceChromeCardBackground(
+            cornerRadius: FinancesMainLayoutPolicy.sectionCardCornerRadius
+        )
     }
     
     // MARK: - Groups List Section
@@ -727,21 +738,11 @@ private struct FinancesMainTabView: View {
                             height: FinancesMainLayoutPolicy.fabDiameter
                         )
                         .background(
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            Color(red: 0.04, green: 0.08, blue: 0.12),
-                                            Color(red: 0.02, green: 0.04, blue: 0.06)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .overlay(
-                                    Circle()
-                                        .stroke(AppColors.brandPrimary.opacity(0.34), lineWidth: 1)
-                                )
+                            FinanceChromeCardBackground(
+                                cornerRadius: FinancesMainLayoutPolicy.fabDiameter / 2,
+                                accentColor: AppColors.brandPrimary,
+                                isElevated: true
+                            )
                         )
                         .shadow(color: AppColors.brandPrimary.opacity(0.14), radius: 16, y: 8)
                 }

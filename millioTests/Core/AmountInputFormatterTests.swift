@@ -26,6 +26,21 @@ struct AmountInputFormatterTests {
         #expect(displayed == "1 234.")
     }
 
+    @Test("display preserves trailing fractional zeros while typing")
+    func displayPreservesTrailingFractionalZeros() {
+        let displayed = AmountInputFormatter.display(
+            "0.000",
+            maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
+        )
+        #expect(displayed == "0.000")
+    }
+
+    @Test("display preserves grouped integer part with trailing fractional zeros")
+    func displayPreservesGroupedIntegerPartAndFractionalZeros() {
+        let displayed = AmountInputFormatter.display("1234.00")
+        #expect(displayed == "1 234.00")
+    }
+
     @Test("display groups long integer input immediately")
     func displayGroupsLongIntegerInput() {
         let displayed = AmountInputFormatter.display("2222222")
@@ -92,5 +107,24 @@ struct AmountInputFormatterTests {
     func plainStringSupportsCustomPrecision() {
         let plain = AmountInputFormatter.plainString(from: 1234.56789123, maxFractionDigits: 8)
         #expect(plain == "1234.56789123")
+    }
+
+    @Test("sanitize preserves extended market quantity precision")
+    func sanitizeSupportsExtendedMarketQuantityPrecision() {
+        let sanitized = AmountInputFormatter.sanitize(
+            "0,0000002214567",
+            maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
+        )
+        #expect(sanitized == "0.000000221456")
+    }
+
+    @Test("parse preserves extended market quantity precision")
+    func parseSupportsExtendedMarketQuantityPrecision() {
+        let parsed = AmountInputFormatter.parse(
+            "0,000000221456",
+            maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
+        )
+        #expect(parsed != nil)
+        #expect(abs((parsed ?? 0) - 0.000000221456) < 0.0000000000001)
     }
 }

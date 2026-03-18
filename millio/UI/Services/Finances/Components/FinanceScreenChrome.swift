@@ -1,0 +1,110 @@
+//
+//  FinanceScreenChrome.swift
+//  millio
+//
+//  Общий visual chrome для финансовых экранов.
+//  Держим базовые метрики и цвета централизованно, чтобы главный экран и динамика
+//  не расходились по стилю.
+//
+
+import SwiftUI
+
+enum FinanceScreenChrome {
+    static let heroCornerRadius: CGFloat = 24
+    static let sectionCornerRadius: CGFloat = 20
+    static let groupRowCornerRadius: CGFloat = 20
+    static let controlCornerRadius: CGFloat = 12
+    static let headerControlSide: CGFloat = 36
+    static let fabDiameter: CGFloat = 56
+    static let fabIconSize: CGFloat = 20
+
+    static let surfaceStrokeColor = Color.white.opacity(0.18)
+    static let elevatedSurfaceStrokeColor = Color.white.opacity(0.22)
+
+    static var accentColor: Color {
+        AppColors.financesGradient.first ?? .cyan
+    }
+
+    static var surfaceFillGradient: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color(red: 0.04, green: 0.06, blue: 0.10),
+                Color(red: 0.02, green: 0.03, blue: 0.06),
+                Color.black
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    static var elevatedSurfaceFillGradient: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color(red: 0.05, green: 0.08, blue: 0.12),
+                Color(red: 0.03, green: 0.05, blue: 0.08),
+                Color.black
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+}
+
+struct FinanceChromeCardBackground: View {
+    let cornerRadius: CGFloat
+    let accentColor: Color
+    let isElevated: Bool
+
+    init(
+        cornerRadius: CGFloat = FinanceScreenChrome.sectionCornerRadius,
+        accentColor: Color = FinanceScreenChrome.accentColor,
+        isElevated: Bool = false
+    ) {
+        self.cornerRadius = cornerRadius
+        self.accentColor = accentColor
+        self.isElevated = isElevated
+    }
+
+    var body: some View {
+        let fillGradient = isElevated
+            ? FinanceScreenChrome.elevatedSurfaceFillGradient
+            : FinanceScreenChrome.surfaceFillGradient
+        let strokeColor = isElevated
+            ? FinanceScreenChrome.elevatedSurfaceStrokeColor
+            : FinanceScreenChrome.surfaceStrokeColor
+
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(fillGradient)
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [accentColor.opacity(isElevated ? 0.10 : 0.06), Color.clear],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .opacity(isElevated ? 0.7 : 0.45)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(strokeColor, lineWidth: 0.9)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.18),
+                                Color.white.opacity(0.05),
+                                Color.clear
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.6
+                    )
+            )
+    }
+}
+
