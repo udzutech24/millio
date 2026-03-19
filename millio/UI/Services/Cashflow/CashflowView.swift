@@ -1452,12 +1452,7 @@ private struct CashflowContentView: View {
                 .padding(.top, 16)
                 .padding(.bottom, 8)
 
-                Text(
-                    CashflowInsightsChartStyle.barLabel(
-                        for: bar.periodStart,
-                        granularity: granularity
-                    )
-                )
+                Text(bar.label)
                     .font(.system(size: labelFontSize, weight: .medium))
                     .foregroundStyle(AppColors.textPrimary.opacity(bar.isPlaceholder ? 0.78 : 0.94))
                     .lineLimit(1)
