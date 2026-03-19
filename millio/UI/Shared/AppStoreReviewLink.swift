@@ -10,11 +10,24 @@ enum AppStoreReviewLink {
         return makeReviewURL(appStoreID: appStoreID)
     }
 
+    static var appURL: URL? {
+        let configuredID = Bundle.main.object(forInfoDictionaryKey: "AppStoreID") as? String
+        let appStoreID = normalizedAppStoreID(from: configuredID) ?? fallbackAppStoreID
+        return makeAppURL(appStoreID: appStoreID)
+    }
+
     static func makeReviewURL(appStoreID: String) -> URL? {
         guard let normalizedID = normalizedAppStoreID(from: appStoreID) else {
             return nil
         }
         return URL(string: "itms-apps://apps.apple.com/app/id\(normalizedID)?action=write-review")
+    }
+
+    static func makeAppURL(appStoreID: String) -> URL? {
+        guard let normalizedID = normalizedAppStoreID(from: appStoreID) else {
+            return nil
+        }
+        return URL(string: "https://apps.apple.com/app/id\(normalizedID)")
     }
 
     private static func normalizedAppStoreID(from rawValue: String?) -> String? {

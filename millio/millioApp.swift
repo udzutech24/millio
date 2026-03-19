@@ -523,15 +523,17 @@ struct millioApp: App {
 
         let localDataCount = Self.exportedModelCount(in: activeModelContainer)
         let latestBackupInfo = await diContainer.backupManager.lastBackupInfo()
-        let shouldPresentRestore = LaunchRecoveryPolicy.shouldPresentRestore(
-            lifecycle: appState.lifecycle,
-            hasCompletedOnboarding: lifecycleUseCase?.checkOnboardingStatus() ?? false,
-            didLocalStoreExistBeforeLaunch: activeScopeStoreExistedBeforeBinding,
-            localDataCount: localDataCount,
-            latestBackupInfo: latestBackupInfo
+        let recoveryDecision = LaunchRecoveryPolicy.evaluate(
+            .init(
+                lifecycle: appState.lifecycle,
+                hasCompletedOnboarding: lifecycleUseCase?.checkOnboardingStatus() ?? false,
+                didLocalStoreExistBeforeLaunch: activeScopeStoreExistedBeforeBinding,
+                localDataCount: localDataCount,
+                latestBackupInfo: latestBackupInfo
+            )
         )
 
-        guard shouldPresentRestore else { return }
+        guard recoveryDecision.shouldPresentRestore else { return }
         appState.isICloudAvailable = await diContainer.backupManager.isAvailable()
         appState.lastBackupDate = latestBackupInfo?.date
         appState.lifecycle = .restoring

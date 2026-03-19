@@ -65,7 +65,27 @@ enum ExpenseCategoryCatalog {
             displayNameRU: "Фастфуд",
             displayNameEN: "Fast food",
             icon: "🍔",
-            aliases: ["фастфуд", "fast food", "burger", "pizza", "kfc", "mcdonald", "burger king"]
+            aliases: [
+                "фастфуд",
+                "быстрая еда",
+                "fast food",
+                "burger",
+                "pizza",
+                "пицца",
+                "пиццерия",
+                "роллы",
+                "суши",
+                "бургер",
+                "шаверма",
+                "шаурма",
+                "доставка еды",
+                "еда навынос",
+                "kfc",
+                "mcdonald",
+                "burger king",
+                "dodo",
+                "додо"
+            ]
         ),
         .init(
             category: .coffeeShops,
@@ -339,15 +359,17 @@ enum ExpenseCategoryCatalog {
             return Array(defaultSuggestedIcons.prefix(8))
         }
 
-        let matchedMetadata = bestMatchingMetadata(for: normalized)
-
-        let semanticIcons = matchedMetadata.map { semanticIconsByCategory[$0.category] ?? [] } ?? heuristicIcons(for: normalized)
-        let icon = matchedMetadata?.icon
+        let matchedMetadata = rankedMetadata(for: normalized)
+        let semanticIcons = matchedMetadata
+            .prefix(3)
+            .flatMap { semanticIconsByCategory[$0.category] ?? [] }
+        let icon = matchedMetadata.first?.icon
         var combined: [String] = []
         if let icon {
             combined.append(icon)
         }
         combined.append(contentsOf: semanticIcons)
+        combined.append(contentsOf: heuristicIcons(for: normalized))
         combined.append(contentsOf: defaultSuggestedIcons)
 
         var unique: [String] = []
@@ -388,7 +410,7 @@ enum ExpenseCategoryCatalog {
     private static let semanticIconsByCategory: [ExpenseCategory: [String]] = [
         .groceries: ["🛒", "🥑", "🥖"],
         .cafe: ["☕️", "🍽️", "🥗"],
-        .fastFood: ["🍔", "🍟", "🌮"],
+        .fastFood: ["🍕", "🍣", "🍔", "🍟", "🌮"],
         .coffeeShops: ["☕️", "🥐", "🍰"],
         .transport: ["🚇", "🚌", "🚉"],
         .taxi: ["🚕", "🚖", "🚘"],
@@ -415,6 +437,17 @@ enum ExpenseCategoryCatalog {
     ]
 
     private static func heuristicIcons(for normalized: String) -> [String] {
+        let tokens = tokenize(normalized)
+
+        if tokens.contains(where: { matchesToken($0, candidates: ["пицц", "pizza", "пиццер"]) }) {
+            return ["🍕", "🍔", "🍟"]
+        }
+        if tokens.contains(where: { matchesToken($0, candidates: ["суш", "ролл", "roll", "sushi"]) }) {
+            return ["🍣", "🥢", "🍱"]
+        }
+        if tokens.contains(where: { matchesToken($0, candidates: ["коф", "coffee", "cafe", "latte", "капуч"]) }) {
+            return ["☕️", "🥐", "🍰"]
+        }
         if normalized.contains("комп") ||
             normalized.contains("ноут") ||
             normalized.contains("электрон") ||
@@ -442,6 +475,10 @@ enum ExpenseCategoryCatalog {
     }
 
     private static func bestMatchingMetadata(for normalizedQuery: String) -> ExpenseCategoryMetadata? {
+        rankedMetadata(for: normalizedQuery).first
+    }
+
+    private static func rankedMetadata(for normalizedQuery: String) -> [ExpenseCategoryMetadata] {
         allMetadata
             .compactMap { metadata -> (ExpenseCategoryMetadata, Int)? in
                 let candidates = [metadata.displayNameRU, metadata.displayNameEN] + metadata.aliases
@@ -451,10 +488,13 @@ enum ExpenseCategoryCatalog {
                     .max() ?? 0
                 return score > 0 ? (metadata, score) : nil
             }
-            .max { lhs, rhs in
-                lhs.1 < rhs.1
-            }?
-            .0
+            .sorted { lhs, rhs in
+                if lhs.1 == rhs.1 {
+                    return lhs.0.displayNameRU < rhs.0.displayNameRU
+                }
+                return lhs.1 > rhs.1
+            }
+            .map(\.0)
     }
 
     private static func matchScore(query: String, candidate: String) -> Int {
@@ -469,14 +509,14 @@ enum ExpenseCategoryCatalog {
             return 260
         }
 
-        let candidateTokens = candidate.split(separator: " ").map(String.init)
-        let queryTokens = query.split(separator: " ").map(String.init)
+        let candidateWords = tokenize(candidate)
+        let queryWords = tokenize(query)
 
-        if candidateTokens.contains(where: { $0.hasPrefix(query) }) {
+        if candidateWords.contains(where: { $0.hasPrefix(query) }) {
             return 280
         }
-        if queryTokens.contains(where: { token in
-            candidateTokens.contains(where: { $0.hasPrefix(token) })
+        if queryWords.contains(where: { token in
+            candidateWords.contains(where: { $0.hasPrefix(token) })
         }) {
             return 220
         }
@@ -486,7 +526,66 @@ enum ExpenseCategoryCatalog {
         if query.contains(candidate) {
             return 120
         }
+
+        guard !candidateWords.isEmpty, !queryWords.isEmpty else { return 0 }
+
+        var score = 0
+        var matchedQueryTokens = 0
+        var matchedCandidateTokens = Set<String>()
+
+        for queryToken in queryWords {
+            let bestTokenMatch = candidateWords
+                .map { candidateToken in
+                    (candidateToken, tokenMatchScore(queryToken: queryToken, candidateToken: candidateToken))
+                }
+                .max { lhs, rhs in lhs.1 < rhs.1 } ?? ("", 0)
+
+            guard bestTokenMatch.1 > 0 else { continue }
+            score += bestTokenMatch.1
+            matchedQueryTokens += 1
+            matchedCandidateTokens.insert(bestTokenMatch.0)
+        }
+
+        guard score > 0 else { return 0 }
+
+        if matchedQueryTokens == queryWords.count {
+            score += 90
+        } else {
+            score += matchedQueryTokens * 20
+        }
+        score += matchedCandidateTokens.count * 10
+
+        return score
+    }
+
+    private static func tokenMatchScore(queryToken: String, candidateToken: String) -> Int {
+        guard !queryToken.isEmpty, !candidateToken.isEmpty else { return 0 }
+        if queryToken == candidateToken {
+            return 160
+        }
+        if candidateToken.hasPrefix(queryToken) {
+            return queryToken.count >= 3 ? 140 : 90
+        }
+        if queryToken.hasPrefix(candidateToken) {
+            return candidateToken.count >= 3 ? 110 : 70
+        }
+        if candidateToken.contains(queryToken) || queryToken.contains(candidateToken) {
+            return 60
+        }
         return 0
+    }
+
+    private static func tokenize(_ value: String) -> [String] {
+        value
+            .split(separator: " ")
+            .map(String.init)
+            .filter { !$0.isEmpty }
+    }
+
+    private static func matchesToken(_ token: String, candidates: [String]) -> Bool {
+        candidates.contains { candidate in
+            token.hasPrefix(candidate) || candidate.hasPrefix(token)
+        }
     }
 
     private static func normalizeSearchValue(_ value: String) -> String {

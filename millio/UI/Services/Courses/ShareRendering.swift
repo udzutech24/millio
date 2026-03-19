@@ -7,6 +7,7 @@ import Foundation
 #if os(iOS)
 import UIKit
 import LinkPresentation
+import CoreImage.CIFilterBuiltins
 
 final class ImageItem: NSObject, UIActivityItemSource {
     private let image: UIImage
@@ -38,6 +39,30 @@ final class ImageItem: NSObject, UIActivityItemSource {
         meta.iconProvider = NSItemProvider(object: image)
         return meta
     }
+}
+
+enum ShareQRCodeGenerator {
+    #if os(iOS)
+    private static let context = CIContext()
+    private static let filter = CIFilter.qrCodeGenerator()
+
+    static func image(for string: String, size: CGFloat) -> UIImage? {
+        guard let data = string.data(using: .utf8) else { return nil }
+        filter.setValue(data, forKey: "inputMessage")
+        filter.correctionLevel = "M"
+
+        guard let outputImage = filter.outputImage else { return nil }
+        let scaleX = max(1, size / outputImage.extent.width)
+        let scaleY = max(1, size / outputImage.extent.height)
+        let transformed = outputImage.transformed(by: CGAffineTransform(scaleX: scaleX, y: scaleY))
+
+        guard let cgImage = context.createCGImage(transformed, from: transformed.extent) else {
+            return nil
+        }
+
+        return UIImage(cgImage: cgImage)
+    }
+    #endif
 }
 #endif
 
@@ -170,6 +195,7 @@ struct ShareRow: View {
 
 // MARK: - ShareCardView
 struct ShareCardView: View {
+    let locale: Locale
     let dateString: String
     let rows: [ShareRowModel]
     let highlightedCode: String
@@ -203,56 +229,76 @@ struct ShareCardView: View {
 
     private var footerBranding: some View {
         HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(ConverterL10n.sharePromoTitle)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.96))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                Text(ConverterL10n.sharePromoSubtitle)
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(Color.white.opacity(0.7))
+            VStack(alignment: .leading, spacing: 6) {
+                Text(ConverterL10n.sharePromoBrand)
+                    .font(.system(size: 20, weight: .black, design: .rounded))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [Color(hex: "47D7FF"), Color(hex: "8A6BFF")],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+
+                Text(ConverterL10n.sharePromoSubtitle(locale: locale))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.72))
+                    .lineLimit(2)
+
+                Text(ConverterL10n.shareMetaLine(dateString: dateString, baseSummary: baseSummary, locale: locale))
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.56))
                     .lineLimit(2)
             }
 
             Spacer(minLength: 8)
 
-            Text(ConverterL10n.sharePromoBrand)
-                .font(.system(size: 20, weight: .black, design: .rounded))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [Color(hex: "47D7FF"), Color(hex: "8A6BFF")],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(Color.white.opacity(0.08))
-                )
-                .overlay(
-                    Capsule(style: .continuous)
-                        .stroke(Color.white.opacity(0.14), lineWidth: 1)
-                )
+            shareQRCode
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: [Color(hex: "141A25").opacity(0.98), Color(hex: "11161F").opacity(0.98)],
+                        colors: [Color(hex: "141A25").opacity(0.95), Color(hex: "11161F").opacity(0.94)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
         )
+    }
+
+    @ViewBuilder
+    private var shareQRCode: some View {
+        #if os(iOS)
+        if let image = ShareQRCodeGenerator.image(for: appStoreURLText, size: 72) {
+            Image(uiImage: image)
+                .interpolation(.none)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 72, height: 72)
+                .padding(6)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color.white)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                )
+        } else {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white.opacity(0.08))
+                .frame(width: 84, height: 84)
+        }
+        #else
+        EmptyView()
+        #endif
     }
 }
 
@@ -342,11 +388,12 @@ struct ActivityView: UIViewControllerRepresentable {
     formatter.timeStyle = .short
 
     let card = ShareCardView(
+        locale: Locale(identifier: "ru_RU"),
         dateString: formatter.string(from: date),
         rows: rows,
         highlightedCode: "USD",
         baseSummary: ConverterL10n.baseSummary(input: "1", code: "USD"),
-        appStoreURLText: "https://apps.apple.com"
+        appStoreURLText: AppStoreReviewLink.appURL?.absoluteString ?? "https://apps.apple.com/app/id\(AppStoreReviewLink.fallbackAppStoreID)"
     )
 
     // Use a typical iPhone screen size in points for preview.

@@ -39,4 +39,20 @@ struct ExpenseCategoryCatalogTests {
         #expect(suggestions.contains("🖥️"))
         #expect(suggestions.prefix(3).contains("💻") || suggestions.prefix(3).contains("🖥️"))
     }
+
+    @Test("Неполное слово пиццы даёт релевантную рекомендацию")
+    func suggestedIconsPreferPizzaForPartialPizzaQuery() {
+        let suggestions = ExpenseCategoryCatalog.suggestedIcons(for: "Пицц")
+
+        #expect(!suggestions.isEmpty)
+        #expect(suggestions.prefix(3).contains("🍕"))
+    }
+
+    @Test("Рекомендации учитывают все слова в названии категории")
+    func suggestedIconsUseAllWordsInQuery() {
+        let suggestions = ExpenseCategoryCatalog.suggestedIcons(for: "доставка роллов домой")
+
+        #expect(!suggestions.isEmpty)
+        #expect(suggestions.prefix(3).contains("🍣"))
+    }
 }

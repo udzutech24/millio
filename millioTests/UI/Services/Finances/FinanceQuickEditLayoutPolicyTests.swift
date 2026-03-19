@@ -14,4 +14,9 @@ struct FinanceQuickEditLayoutPolicyTests {
         #expect(FinanceQuickEditLayoutPolicy.showsDeleteButton(for: .investment) == true)
         #expect(FinanceQuickEditLayoutPolicy.showsDeleteButton(for: .credit) == false)
     }
+
+    @Test("Название продукта для удаления очищается от хвостовых пробелов")
+    func deleteProductNameIsTrimmedBeforeFormatting() {
+        #expect(FinanceDeleteProductCopy.normalizedProductName(" Тест Карта  ") == "Тест Карта")
+    }
 }

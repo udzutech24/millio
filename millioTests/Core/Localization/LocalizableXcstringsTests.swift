@@ -101,6 +101,99 @@ final class LocalizableXcstringsTests: XCTestCase {
         }
     }
 
+    func testCashflowBulkExpenseScreenshotStringsAreTranslatedAndWithoutTrailingPeriods() throws {
+        let xcstringsURL = try Self.localizableXcstringsURL()
+        let data = try Data(contentsOf: xcstringsURL)
+
+        let jsonObject = try JSONSerialization.jsonObject(with: data)
+        guard
+            let root = jsonObject as? [String: Any],
+            let strings = root["strings"] as? [String: Any]
+        else {
+            return XCTFail("Invalid `millio/Localizable.xcstrings` JSON structure.")
+        }
+
+        let keys = [
+            "cashflow.bulk_expense.mode.manual",
+            "cashflow.bulk_expense.mode.screenshot",
+            "cashflow.bulk_expense.save",
+            "cashflow.bulk_expense.screenshot.hint",
+            "cashflow.bulk_expense.screenshot.pick",
+            "cashflow.bulk_expense.screenshot.processing",
+            "cashflow.bulk_expense.help.crop.title",
+            "cashflow.bulk_expense.help.crop.subtitle",
+            "cashflow.bulk_expense.help.crop.do",
+            "cashflow.bulk_expense.help.crop.do_second",
+            "cashflow.bulk_expense.help.crop.dont",
+            "cashflow.bulk_expense.help.crop.warning",
+            "cashflow.bulk_expense.help.step.balance.body",
+            "cashflow.bulk_expense.help.step.save.body"
+        ]
+
+        for key in keys {
+            guard
+                let entry = strings[key] as? [String: Any],
+                let localizations = entry["localizations"] as? [String: Any]
+            else {
+                XCTFail("Missing `\(key)` in `millio/Localizable.xcstrings`.")
+                continue
+            }
+
+            let values = try localizedStringValues(for: localizations, key: key)
+            let ruValue = values["ru", default: ""]
+
+            XCTAssertFalse(values["en", default: ""].hasSuffix("."), "English `\(key)` should not end with a period.")
+            XCTAssertFalse(ruValue.hasSuffix("."), "Russian `\(key)` should not end with a period.")
+            XCTAssertNotEqual(ruValue, values["en", default: ""], "Russian `\(key)` should not fall back to English.")
+        }
+    }
+
+    func testCashflowAssetChangeCopyIsLocalizedAndWithoutTrailingPeriods() throws {
+        let xcstringsURL = try Self.localizableXcstringsURL()
+        let data = try Data(contentsOf: xcstringsURL)
+
+        let jsonObject = try JSONSerialization.jsonObject(with: data)
+        guard
+            let root = jsonObject as? [String: Any],
+            let strings = root["strings"] as? [String: Any]
+        else {
+            return XCTFail("Invalid `millio/Localizable.xcstrings` JSON structure.")
+        }
+
+        let keys = [
+            "cashflow.asset_change.balance_check",
+            "cashflow.asset_change.explanation",
+            "cashflow.asset_change.formula",
+            "cashflow.asset_change.formula_title",
+            "cashflow.asset_change.matches",
+            "cashflow.asset_change.matches_detail",
+            "cashflow.asset_change.mismatch",
+            "cashflow.asset_change.mismatch_detail",
+            "cashflow.asset_change.subtitle",
+            "cashflow.asset_change.substitution",
+            "cashflow.chart.title",
+            "cashflow.stats.income"
+        ]
+
+        for key in keys {
+            guard
+                let entry = strings[key] as? [String: Any],
+                let localizations = entry["localizations"] as? [String: Any]
+            else {
+                XCTFail("Missing `\(key)` in `millio/Localizable.xcstrings`.")
+                continue
+            }
+
+            let values = try localizedStringValues(for: localizations, key: key)
+            let english = values["en", default: ""]
+            let russian = values["ru", default: ""]
+
+            XCTAssertFalse(english.hasSuffix("."), "English `\(key)` should not end with a period.")
+            XCTAssertFalse(russian.hasSuffix("."), "Russian `\(key)` should not end with a period.")
+            XCTAssertNotEqual(russian, english, "Russian `\(key)` should not fall back to English.")
+        }
+    }
+
     func testProfileAuthStringsAreLocalizedInENAndRU() throws {
         let xcstringsURL = try Self.localizableXcstringsURL()
         let data = try Data(contentsOf: xcstringsURL)
@@ -133,6 +226,24 @@ final class LocalizableXcstringsTests: XCTestCase {
         for key in keys {
             try assertLocalized(strings: strings, key: key)
         }
+    }
+
+    func testBackupRestoreConfirmationStringsAreLocalizedInENAndRU() throws {
+        let xcstringsURL = try Self.localizableXcstringsURL()
+        let data = try Data(contentsOf: xcstringsURL)
+
+        let jsonObject = try JSONSerialization.jsonObject(with: data)
+        guard
+            let root = jsonObject as? [String: Any],
+            let strings = root["strings"] as? [String: Any]
+        else {
+            return XCTFail("Invalid `millio/Localizable.xcstrings` JSON structure.")
+        }
+
+        try assertLocalized(strings: strings, key: "backup.restore.confirm.title")
+        try assertLocalized(strings: strings, key: "backup.restore.confirm.message")
+        try assertLocalized(strings: strings, key: "backup.restore.confirm.action")
+        try assertLocalized(strings: strings, key: "common.cancel")
     }
 
     private static func localizableXcstringsURL() throws -> URL {

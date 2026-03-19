@@ -262,10 +262,9 @@ struct BackupManagementView: View {
                 }
             }
         }
-        .confirmationDialog(
+        .alert(
             BackupL10n.tr("backup.restore.confirm.title", fallback: "Restore this version?"),
-            isPresented: $showRestoreConfirmation,
-            titleVisibility: .visible
+            isPresented: $showRestoreConfirmation
         ) {
             Button(BackupL10n.tr("backup.restore.confirm.action", fallback: "Yes, restore"), role: .destructive) {
                 Task { await restoreSelectedVersion() }

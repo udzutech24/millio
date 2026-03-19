@@ -20,4 +20,10 @@ struct AppStoreReviewLinkTests {
         let url = AppStoreReviewLink.makeReviewURL(appStoreID: "   ")
         #expect(url == nil)
     }
+
+    @Test("App Store app URL uses provided app id")
+    func makeAppURLUsesProvidedID() {
+        let url = AppStoreReviewLink.makeAppURL(appStoreID: "6757660504")
+        #expect(url?.absoluteString == "https://apps.apple.com/app/id6757660504")
+    }
 }

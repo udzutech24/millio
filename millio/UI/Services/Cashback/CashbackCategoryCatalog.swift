@@ -29,7 +29,7 @@ enum CashbackCategoryCatalog {
         .init(category: .gasStation, displayNameRU: "АЗС", displayNameEN: "Gas stations", icon: "⛽️", aliases: ["топливо", "азс", "заправки", "fuel", "gas station", "gas stations", "petrol"]),
         .init(category: .supermarket, displayNameRU: "Продукты", displayNameEN: "Supermarkets", icon: "🛒", aliases: ["продукты", "супермаркеты", "groceries", "grocery", "supermarket", "supermarkets", "вкусвилл", "пятерочка"]),
         .init(category: .restaurant, displayNameRU: "Кафе", displayNameEN: "Restaurants", icon: "🍽️", aliases: ["кафе", "рестораны", "restaurants", "restaurant", "dining"]),
-        .init(category: .fastFood, displayNameRU: "Фастфуд", displayNameEN: "Fast food", icon: "🍔", aliases: ["фастфуд", "fast food", "burger", "pizza"]),
+        .init(category: .fastFood, displayNameRU: "Фастфуд", displayNameEN: "Fast food", icon: "🍔", aliases: ["фастфуд", "быстрая еда", "fast food", "burger", "pizza", "пицца", "пиццерия", "роллы", "суши", "бургер", "шаверма", "шаурма", "доставка еды"]),
         .init(category: .coffeeShop, displayNameRU: "Кофейни", displayNameEN: "Coffee shops", icon: "☕️", aliases: ["кофейня", "кофе", "coffee", "coffee shop"]),
         .init(category: .pharmacy, displayNameRU: "Аптеки", displayNameEN: "Pharmacies", icon: "💊", aliases: ["аптека", "аптеки", "pharmacy", "drugstore"]),
         .init(category: .healthcare, displayNameRU: "Медицина", displayNameEN: "Medical", icon: "🩺", aliases: ["медицина", "клиника", "врач", "medical", "healthcare", "dental"]),
@@ -90,6 +90,32 @@ enum CashbackCategoryCatalog {
         }
     }
 
+    static func suggestedIcons(for name: String) -> [String] {
+        let normalized = normalize(name)
+        guard !normalized.isEmpty else {
+            return Array(defaultSuggestedIcons.prefix(8))
+        }
+
+        let matchedMetadata = rankedMetadata(for: normalized)
+        let semanticIcons = matchedMetadata
+            .prefix(3)
+            .flatMap { semanticIconsByCategory[$0.category] ?? [] }
+        let icon = matchedMetadata.first?.icon
+        var combined: [String] = []
+        if let icon {
+            combined.append(icon)
+        }
+        combined.append(contentsOf: semanticIcons)
+        combined.append(contentsOf: heuristicIcons(for: normalized))
+        combined.append(contentsOf: defaultSuggestedIcons)
+
+        var unique: [String] = []
+        for item in combined where !unique.contains(item) {
+            unique.append(item)
+        }
+        return Array(unique.prefix(10))
+    }
+
     private static let fallbackMetadata = CashbackCategoryMetadata(
         category: .other,
         displayNameRU: "Разное",
@@ -97,6 +123,200 @@ enum CashbackCategoryCatalog {
         icon: "🧩",
         aliases: ["разное", "прочее", "other"]
     )
+
+    private static let defaultSuggestedIcons = ["🧩", "🛒", "☕️", "🚕", "✈️", "🏠", "📱", "🎮", "💄", "🐾"]
+
+    private static let semanticIconsByCategory: [CashbackCategory: [String]] = [
+        .allPurchases: ["🛒", "💳", "✨"],
+        .gasStation: ["⛽️", "🚗", "🛣️"],
+        .supermarket: ["🛒", "🥑", "🥖"],
+        .restaurant: ["🍽️", "🥗", "🍷"],
+        .fastFood: ["🍕", "🍣", "🍔", "🍟", "🌮"],
+        .coffeeShop: ["☕️", "🥐", "🍰"],
+        .pharmacy: ["💊", "🩹", "🧴"],
+        .healthcare: ["🩺", "🏥", "🦷"],
+        .transport: ["🚇", "🚌", "🚉"],
+        .taxi: ["🚖", "🚕", "🚘"],
+        .carSharing: ["🚗", "🅿️", "🛣️"],
+        .autoServices: ["🛠️", "🔧", "🚗"],
+        .entertainment: ["🎮", "🎬", "🎟️"],
+        .cinema: ["🎬", "🍿", "🎟️"],
+        .travel: ["🧳", "✈️", "🏨"],
+        .hotels: ["🏨", "🛏️", "🧳"],
+        .airlines: ["✈️", "🧳", "🌍"],
+        .railway: ["🚆", "🎫", "🧳"],
+        .online: ["🌐", "💳", "📦"],
+        .marketplaces: ["📦", "🛍️", "🚚"],
+        .electronics: ["💻", "🖥️", "⌨️"],
+        .homeGoods: ["🏠", "🪑", "🛋️"],
+        .furniture: ["🛋️", "🪑", "🏠"],
+        .clothing: ["👕", "👟", "🧥"],
+        .shoes: ["👟", "🥿", "👞"],
+        .beauty: ["💄", "💅", "🧴"],
+        .sport: ["🏋️", "⚽️", "🏃"],
+        .books: ["📚", "📖", "✏️"],
+        .education: ["🎓", "📚", "✏️"],
+        .kids: ["🧸", "🍼", "🎒"],
+        .pets: ["🐾", "🐶", "🐱"],
+        .telecom: ["📱", "☎️", "📶"],
+        .internet: ["📶", "🌐", "🛜"],
+        .utilities: ["💡", "🚿", "🔥"],
+        .digitalServices: ["🖥️", "💻", "⌨️"],
+        .subscriptions: ["🔁", "🎵", "📺"],
+        .insurance: ["🛡️", "📄", "🚑"],
+        .homeRepair: ["🔧", "🪛", "🏠"],
+        .flowersGifts: ["🎁", "🌸", "💐"],
+        .alcohol: ["🍷", "🍺", "🥂"],
+        .other: ["🧩", "📌", "📦"]
+    ]
+
+    private static func heuristicIcons(for normalized: String) -> [String] {
+        let tokens = tokenize(normalized)
+
+        if tokens.contains(where: { matchesToken($0, candidates: ["пицц", "pizza", "пиццер"]) }) {
+            return ["🍕", "🍔", "🍟"]
+        }
+        if tokens.contains(where: { matchesToken($0, candidates: ["суш", "ролл", "roll", "sushi"]) }) {
+            return ["🍣", "🥢", "🍱"]
+        }
+        if tokens.contains(where: { matchesToken($0, candidates: ["коф", "coffee", "cafe", "latte", "капуч"]) }) {
+            return ["☕️", "🥐", "🍰"]
+        }
+        if normalized.contains("комп") ||
+            normalized.contains("ноут") ||
+            normalized.contains("электрон") ||
+            normalized.contains("гаджет") ||
+            normalized.contains("computer") ||
+            normalized.contains("laptop") ||
+            normalized.contains("desktop") ||
+            normalized.contains("tech") ||
+            normalized.contains("pc") {
+            return ["💻", "🖥️", "⌨️"]
+        }
+        if normalized.contains("спорт") || normalized.contains("sport") || normalized.contains("gym") {
+            return ["🏋️", "⚽️", "🏃"]
+        }
+        if normalized.contains("дет") || normalized.contains("kids") || normalized.contains("baby") {
+            return ["🧸", "🍼", "🎒"]
+        }
+        if normalized.contains("книг") || normalized.contains("book") {
+            return ["📚", "📖", "✏️"]
+        }
+        if normalized.contains("цвет") || normalized.contains("flower") || normalized.contains("gift") {
+            return ["🌸", "🎁", "💐"]
+        }
+        return []
+    }
+
+    private static func rankedMetadata(for normalizedQuery: String) -> [CashbackCategoryMetadata] {
+        allMetadata
+            .compactMap { metadata -> (CashbackCategoryMetadata, Int)? in
+                let candidates = [metadata.displayNameRU, metadata.displayNameEN] + metadata.aliases
+                let score = candidates
+                    .map(normalize)
+                    .map { matchScore(query: normalizedQuery, candidate: $0) }
+                    .max() ?? 0
+                return score > 0 ? (metadata, score) : nil
+            }
+            .sorted { lhs, rhs in
+                if lhs.1 == rhs.1 {
+                    return lhs.0.displayNameRU < rhs.0.displayNameRU
+                }
+                return lhs.1 > rhs.1
+            }
+            .map(\.0)
+    }
+
+    private static func matchScore(query: String, candidate: String) -> Int {
+        guard !query.isEmpty, !candidate.isEmpty else { return 0 }
+        if query == candidate {
+            return 400
+        }
+        if candidate.hasPrefix(query) {
+            return 320
+        }
+        if query.hasPrefix(candidate) {
+            return 260
+        }
+
+        let candidateWords = tokenize(candidate)
+        let queryWords = tokenize(query)
+
+        if candidateWords.contains(where: { $0.hasPrefix(query) }) {
+            return 280
+        }
+        if queryWords.contains(where: { token in
+            candidateWords.contains(where: { $0.hasPrefix(token) })
+        }) {
+            return 220
+        }
+        if candidate.contains(query) {
+            return 180
+        }
+        if query.contains(candidate) {
+            return 120
+        }
+
+        guard !candidateWords.isEmpty, !queryWords.isEmpty else { return 0 }
+
+        var score = 0
+        var matchedQueryTokens = 0
+        var matchedCandidateTokens = Set<String>()
+
+        for queryToken in queryWords {
+            let bestTokenMatch = candidateWords
+                .map { candidateToken in
+                    (candidateToken, tokenMatchScore(queryToken: queryToken, candidateToken: candidateToken))
+                }
+                .max { lhs, rhs in lhs.1 < rhs.1 } ?? ("", 0)
+
+            guard bestTokenMatch.1 > 0 else { continue }
+            score += bestTokenMatch.1
+            matchedQueryTokens += 1
+            matchedCandidateTokens.insert(bestTokenMatch.0)
+        }
+
+        guard score > 0 else { return 0 }
+
+        if matchedQueryTokens == queryWords.count {
+            score += 90
+        } else {
+            score += matchedQueryTokens * 20
+        }
+        score += matchedCandidateTokens.count * 10
+
+        return score
+    }
+
+    private static func tokenMatchScore(queryToken: String, candidateToken: String) -> Int {
+        guard !queryToken.isEmpty, !candidateToken.isEmpty else { return 0 }
+        if queryToken == candidateToken {
+            return 160
+        }
+        if candidateToken.hasPrefix(queryToken) {
+            return queryToken.count >= 3 ? 140 : 90
+        }
+        if queryToken.hasPrefix(candidateToken) {
+            return candidateToken.count >= 3 ? 110 : 70
+        }
+        if candidateToken.contains(queryToken) || queryToken.contains(candidateToken) {
+            return 60
+        }
+        return 0
+    }
+
+    private static func tokenize(_ value: String) -> [String] {
+        value
+            .split(separator: " ")
+            .map(String.init)
+            .filter { !$0.isEmpty }
+    }
+
+    private static func matchesToken(_ token: String, candidates: [String]) -> Bool {
+        candidates.contains { candidate in
+            token.hasPrefix(candidate) || candidate.hasPrefix(token)
+        }
+    }
 
     private static func normalize(_ value: String) -> String {
         value

@@ -158,6 +158,16 @@ struct FinanceQuickEditAccountView: View {
                     }
                 }
                 .padding(.bottom, 40)
+
+                FinancesDestructiveConfirmationOverlay(
+                    isPresented: showDeleteConfirmation,
+                    title: deleteConfirmationTitle,
+                    message: String(localized: deleteConfirmationMessageKey),
+                    confirmTitle: String(localized: "finances.common.delete"),
+                    cancelTitle: String(localized: "finances.common.cancel"),
+                    onConfirm: deleteAccount,
+                    onCancel: { showDeleteConfirmation = false }
+                )
             }
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
@@ -169,17 +179,6 @@ struct FinanceQuickEditAccountView: View {
                     .foregroundStyle(AppColors.textPrimary)
                 }
             }
-            .alert(
-                deleteConfirmationTitle,
-                isPresented: $showDeleteConfirmation
-            ) {
-                Button(String(localized: "finances.common.cancel"), role: .cancel) {}
-                Button(String(localized: "finances.common.delete"), role: .destructive) {
-                    deleteAccount()
-                }
-            } message: {
-                Text(String(localized: "finances.dynamics.delete_account.confirm.message"))
-            }
         }
         .onAppear {
             setupInitialValues()
@@ -190,7 +189,7 @@ struct FinanceQuickEditAccountView: View {
         Button(role: .destructive) {
             showDeleteConfirmation = true
         } label: {
-            Text(String(localized: "finances.dynamics.delete_account"))
+            Text(String(localized: deleteActionTitle))
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(AppColors.error.opacity(0.92))
                 .frame(maxWidth: .infinity)
@@ -356,6 +355,7 @@ struct FinanceQuickEditAccountView: View {
     }
 
     private func deleteAccount() {
+        showDeleteConfirmation = false
         viewModel.handle(.deleteAccountPermanently(account))
         dismiss()
     }
@@ -421,6 +421,14 @@ struct FinanceQuickEditAccountView: View {
 
     private var deleteConfirmationTitle: String {
         let name = accountInfo?.name ?? String(localized: "finances.dynamics.chart.account_fallback")
-        return FinancesL10n.format("finances.dynamics.delete_account.confirm.title", name)
+        return FinanceDeleteProductCopy.confirmationTitle(for: account.accountType, name: name)
+    }
+
+    private var deleteActionTitle: LocalizedStringResource {
+        FinanceDeleteProductCopy.actionTitle(for: account.accountType)
+    }
+
+    private var deleteConfirmationMessageKey: LocalizedStringResource {
+        FinanceDeleteProductCopy.confirmationMessage(for: account.accountType)
     }
 }

@@ -1847,6 +1847,15 @@ struct CashflowCategoryEditorSheet: View {
         case symbols = "Icons"
 
         var id: String { rawValue }
+
+        var localizedTitle: String {
+            switch self {
+            case .emoji:
+                return String(localized: "Эмодзи")
+            case .symbols:
+                return String(localized: "Иконки")
+            }
+        }
     }
 
     let mode: CashflowCategoryEditorMode
@@ -1907,7 +1916,7 @@ struct CashflowCategoryEditorSheet: View {
                             VStack(spacing: 12) {
                                 Picker(String(localized: "cashflow.editor.icon_type"), selection: $selectedTab) {
                                     ForEach(IconPickerTab.allCases) { tab in
-                                        Text(tab.rawValue).tag(tab)
+                                        Text(tab.localizedTitle).tag(tab)
                                     }
                                 }
                                 .pickerStyle(.segmented)

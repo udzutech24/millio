@@ -41,4 +41,21 @@ struct ConverterLocalizationTests {
             #expect(!value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
     }
+
+    @Test("Share promo brand stays millio in Russian locale")
+    func sharePromoBrandDoesNotLocalizeAppName() {
+        #expect(ConverterL10n.sharePromoBrand == "millio")
+        #expect(ConverterL10n.sharePromoSubtitle(locale: Locale(identifier: "ru_RU")).contains("Миллио") == false)
+        #expect(ConverterL10n.sharePromoSubtitle(locale: Locale(identifier: "ru_RU")) == "Управляйте всеми финансами в одном месте")
+    }
+
+    @Test("Share promo English copy stays minimal and clean")
+    func sharePromoEnglishCopyIsMinimal() {
+        #expect(ConverterL10n.sharePromoSubtitle(locale: Locale(identifier: "en_US")) == "Manage all your finances in one place")
+        #expect(ConverterL10n.shareMetaLine(
+            dateString: "Mar 19 • 07:28",
+            baseSummary: "Base: 1 BTC",
+            locale: Locale(identifier: "en_US")
+        ).contains("Updated"))
+    }
 }

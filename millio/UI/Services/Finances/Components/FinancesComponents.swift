@@ -196,3 +196,93 @@ struct FinancesRadioOption: View {
         .buttonStyle(.plain)
     }
 }
+
+struct FinancesDestructiveConfirmationOverlay: View {
+    let isPresented: Bool
+    let title: String
+    let message: String
+    let confirmTitle: String
+    let cancelTitle: String
+    let onConfirm: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            if isPresented {
+                Color.black.opacity(0.58)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: onCancel)
+                    .transition(.opacity)
+
+                FinancesGlassCard(
+                    accentColor: AppColors.error,
+                    cornerRadius: 24,
+                    contentPadding: EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20)
+                ) {
+                    VStack(spacing: 18) {
+                        Capsule()
+                            .fill(Color.white.opacity(0.16))
+                            .frame(width: 42, height: 5)
+
+                        VStack(spacing: 10) {
+                            Text(title)
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundStyle(AppColors.textPrimary)
+                                .multilineTextAlignment(.center)
+
+                            Text(message)
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(AppColors.textSecondary)
+                                .multilineTextAlignment(.center)
+                        }
+
+                        VStack(spacing: 10) {
+                            Button(action: onConfirm) {
+                                Text(confirmTitle)
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .foregroundStyle(AppColors.error.opacity(0.98))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                            .fill(Color.white.opacity(0.08))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                                    .stroke(AppColors.error.opacity(0.28), lineWidth: 1)
+                                            )
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("finances.delete_confirmation.confirm")
+
+                            Button(action: onCancel) {
+                                Text(cancelTitle)
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .foregroundStyle(AppColors.textPrimary.opacity(0.92))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                            .fill(Color.white.opacity(0.05))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                                            )
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("finances.delete_confirmation.cancel")
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.28, dampingFraction: 0.92), value: isPresented)
+        .allowsHitTesting(isPresented)
+        .accessibilityIdentifier("finances.delete_confirmation.overlay")
+    }
+}

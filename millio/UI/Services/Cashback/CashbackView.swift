@@ -1693,6 +1693,15 @@ private struct CashbackCategoryEditorSheet: View {
         case symbols
 
         var id: Self { self }
+
+        var localizedTitle: String {
+            switch self {
+            case .emoji:
+                return String(localized: "Эмодзи")
+            case .symbols:
+                return String(localized: "Иконки")
+            }
+        }
     }
 
     let mode: CashbackCategoryEditorMode
@@ -1753,6 +1762,10 @@ private struct CashbackCategoryEditorSheet: View {
         }
     }
 
+    private var suggestedIcons: [String] {
+        CashbackCategoryCatalog.suggestedIcons(for: name)
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -1772,10 +1785,53 @@ private struct CashbackCategoryEditorSheet: View {
                         FinancesSectionHeader(title: String(localized: "Иконка"))
                         FinancesGlassCard(accentColor: CashbackScreenStyle.accent) {
                             VStack(spacing: 12) {
+                                if !suggestedIcons.isEmpty {
+                                    VStack(alignment: .leading, spacing: 10) {
+                                        Text(
+                                            String(
+                                                localized: "cashflow.editor.icon_suggestions",
+                                                defaultValue: "Suggested icons",
+                                                comment: "Suggested icons title for category creation"
+                                            )
+                                        )
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(AppColors.textSecondary)
+
+                                        ScrollView(.horizontal, showsIndicators: false) {
+                                            HStack(spacing: 10) {
+                                                ForEach(suggestedIcons, id: \.self) { icon in
+                                                    let isSelected = selectedIcon == icon
+                                                    Button {
+                                                        selectedIcon = icon
+                                                    } label: {
+                                                        CashbackCategoryIconView(
+                                                            icon: icon,
+                                                            fontSize: 22,
+                                                            fontWeight: .semibold,
+                                                            tint: AnyShapeStyle(AppColors.textPrimary)
+                                                        )
+                                                        .frame(width: 52, height: 52)
+                                                        .background {
+                                                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                                                .fill(isSelected ? Color.white.opacity(0.22) : CashbackScreenStyle.subduedCircleFill)
+                                                                .overlay(
+                                                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                                                        .stroke(CashbackScreenStyle.accent.opacity(isSelected ? 0.75 : 0.15), lineWidth: 1)
+                                                                )
+                                                        }
+                                                    }
+                                                    .buttonStyle(.plain)
+                                                }
+                                            }
+                                            .padding(.horizontal, 2)
+                                        }
+                                    }
+                                }
+
                                 Picker("Тип иконки", selection: $selectedTab) {
-                                    Text("Эмодзи")
+                                    Text(IconPickerTab.emoji.localizedTitle)
                                         .tag(IconPickerTab.emoji)
-                                    Text("Иконки")
+                                    Text(IconPickerTab.symbols.localizedTitle)
                                         .tag(IconPickerTab.symbols)
                                 }
                                 .pickerStyle(.segmented)
@@ -1785,7 +1841,7 @@ private struct CashbackCategoryEditorSheet: View {
                                         Image(systemName: "magnifyingglass")
                                             .font(.system(size: 14, weight: .medium))
                                             .foregroundStyle(AppColors.textTertiary)
-                                        TextField("Поиск иконки (например: car, cart, heart)", text: $iconSearchText)
+                                        TextField("Поиск иконки (например, машина, корзина, сердце)", text: $iconSearchText)
                                             .font(.system(size: 14, weight: .regular))
                                             .foregroundStyle(AppColors.textPrimary)
                                     }

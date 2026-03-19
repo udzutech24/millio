@@ -117,6 +117,34 @@ struct CashflowInsightsChartModelsTests {
         #expect(presentation.selectedPeriodStart == Self.date(2026, 3, 1))
     }
 
+    @Test("Режим 12 месяцев может показывать месяцы цифрами")
+    func fullScreenPresentationUsesNumericMonthLabelsWhenRequested() {
+        let calendar = Calendar(identifier: .gregorian)
+        let locale = Locale(identifier: "ru_RU")
+        let referenceDate = Self.date(2026, 12, 15)
+
+        let entries: [CashflowConvertedTransaction] = [
+            .init(id: "jan", date: Self.date(2026, 1, 10), income: 100, expense: 0),
+            .init(id: "jun", date: Self.date(2026, 6, 10), income: 100, expense: 0),
+            .init(id: "dec", date: Self.date(2026, 12, 10), income: 100, expense: 0)
+        ]
+
+        let presentation = CashflowInsightsChartBuilder.makeFullScreenPresentation(
+            entries: entries,
+            granularity: .month,
+            selectedPeriodStart: nil,
+            referenceDate: referenceDate,
+            maxVisiblePeriods: 12,
+            monthLabelStyle: .monthNumber,
+            calendar: calendar,
+            locale: locale
+        )
+
+        #expect(presentation.bars.count == 12)
+        #expect(presentation.bars.map(\.label) == ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"])
+        #expect(presentation.selectedPeriodStart == Self.date(2026, 12, 1))
+    }
+
     private static func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
         Calendar(identifier: .gregorian).date(from: DateComponents(year: year, month: month, day: day)) ?? Date()
     }

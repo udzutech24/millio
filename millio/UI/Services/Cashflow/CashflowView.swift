@@ -392,7 +392,11 @@ private struct CashflowContentView: View {
             rowDivider
 
             expandableStatRow(
-                title: String(localized: "main.quick_action.income"),
+                title: String(
+                    localized: "cashflow.stats.income",
+                    defaultValue: "Доходы",
+                    comment: "Cashflow stats income row title"
+                ),
                 value: formatSignedMoney(viewModel.state.totalIncome),
                 valueColor: positiveColor(for: viewModel.state.totalIncome),
                 isExpanded: $showIncomeBreakdown
@@ -1150,6 +1154,7 @@ private struct CashflowContentView: View {
             selectedPeriodStart: selectedChartPeriodStart,
             referenceDate: compactChartReferenceDate,
             maxVisiblePeriods: compactChartMaxPeriods,
+            monthLabelStyle: .abbreviatedWithYear,
             calendar: .current,
             locale: .autoupdatingCurrent
         )
@@ -1162,6 +1167,7 @@ private struct CashflowContentView: View {
             selectedPeriodStart: selectedChartPeriodStart,
             referenceDate: fullScreenChartReferenceDate,
             maxVisiblePeriods: fullScreenChartVisiblePeriods,
+            monthLabelStyle: fullScreenChartVisiblePeriods >= 12 ? .monthNumber : .abbreviatedWithYear,
             calendar: .current,
             locale: .autoupdatingCurrent
         )
@@ -1825,49 +1831,128 @@ private struct CashflowContentView: View {
     }
 
     private var assetChangeInfoSheet: some View {
-        NavigationStack {
+        let isBalanced = assetChangeBalanceDelta < 0.01
+
+        return NavigationStack {
             ZStack {
                 GradientBackground()
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 22) {
                         Text("cashflow.asset_change.info_title")
                             .font(.system(size: 34, weight: .bold))
                             .foregroundStyle(AppColors.textPrimary)
 
-                        Text(String(localized: "cashflow.asset_change.formula"))
+                        Text(
+                            String(
+                                localized: "cashflow.asset_change.subtitle",
+                                defaultValue: "Это разница между началом и концом периода после учёта всех зафиксированных доходов и расходов",
+                                comment: "Cashflow asset change info subtitle"
+                            )
+                        )
                             .font(.system(size: 18, weight: .regular))
                             .foregroundStyle(AppColors.textSecondary)
 
-                        Text("cashflow.asset_change.substitution")
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundStyle(AppColors.textPrimary)
-
-                        Group {
-                            Text(String(format: String(localized: "cashflow.asset_change.start_total_format"), formatMoney(viewModel.state.assetsAtPeriodStart)))
-                            Text(String(format: String(localized: "cashflow.asset_change.end_total_format"), formatMoney(viewModel.state.assetsAtPeriodEnd)))
-                            Text(String(format: String(localized: "cashflow.asset_change.income_format"), formatSignedMoney(viewModel.state.totalIncome)))
-                            Text(String(format: String(localized: "cashflow.asset_change.expenses_format"), formatSignedMoney(-viewModel.state.contributedExpense)))
-                            Text(String(format: String(localized: "cashflow.asset_change.change_format"), formatSignedMoney(viewModel.state.assetValueChange)))
+                        assetChangeInfoCard(
+                            title: String(
+                                localized: "cashflow.asset_change.formula_title",
+                                defaultValue: "Формула",
+                                comment: "Cashflow asset change formula section title"
+                            )
+                        ) {
+                            Text(String(localized: "cashflow.asset_change.formula"))
+                                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                                .foregroundStyle(AppColors.textPrimary)
+                                .multilineTextAlignment(.leading)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                        .fill(Color.white.opacity(0.04))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                                        )
+                                )
                         }
-                        .font(.system(size: 18, weight: .regular))
-                        .foregroundStyle(AppColors.textPrimary)
 
-                        Text("cashflow.asset_change.balance_check")
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundStyle(AppColors.textPrimary)
+                        assetChangeInfoCard(title: String(localized: "cashflow.asset_change.substitution")) {
+                            VStack(spacing: 14) {
+                                assetChangeValueRow(
+                                    title: assetChangeLabel("cashflow.asset_change.start_total_format"),
+                                    value: formatMoney(viewModel.state.assetsAtPeriodStart),
+                                    valueColor: AppColors.textPrimary
+                                )
+                                assetChangeValueRow(
+                                    title: assetChangeLabel("cashflow.asset_change.end_total_format"),
+                                    value: formatMoney(viewModel.state.assetsAtPeriodEnd),
+                                    valueColor: AppColors.textPrimary
+                                )
+                                assetChangeValueRow(
+                                    title: assetChangeLabel("cashflow.asset_change.income_format"),
+                                    value: formatSignedMoney(viewModel.state.totalIncome),
+                                    valueColor: positiveColor(for: viewModel.state.totalIncome)
+                                )
+                                assetChangeValueRow(
+                                    title: assetChangeLabel("cashflow.asset_change.expenses_format"),
+                                    value: formatSignedMoney(-viewModel.state.contributedExpense),
+                                    valueColor: negativeColor(for: -viewModel.state.contributedExpense)
+                                )
+                                assetChangeValueRow(
+                                    title: assetChangeLabel("cashflow.asset_change.change_format"),
+                                    value: formatSignedMoney(viewModel.state.assetValueChange),
+                                    valueColor: positiveColor(for: viewModel.state.assetValueChange),
+                                    emphasizesValue: true
+                                )
+                            }
+                        }
 
-                        let checkValue = abs(
-                            (viewModel.state.assetsAtPeriodEnd - viewModel.state.assetsAtPeriodStart) -
-                            (viewModel.state.totalIncome + viewModel.state.assetValueChange - viewModel.state.contributedExpense)
-                        )
-                        Text(checkValue < 0.01 ? "cashflow.asset_change.matches" : "cashflow.asset_change.mismatch")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundStyle(checkValue < 0.01 ? Color.green : Color.red)
+                        assetChangeInfoCard(title: String(localized: "cashflow.asset_change.balance_check")) {
+                            HStack(alignment: .top, spacing: 12) {
+                                Image(systemName: isBalanced ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
+                                    .font(.system(size: 22, weight: .semibold))
+                                    .foregroundStyle(isBalanced ? Color.green : AppColors.warning)
+                                    .frame(width: 28)
+
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(
+                                        isBalanced
+                                        ? String(localized: "cashflow.asset_change.matches")
+                                        : String(localized: "cashflow.asset_change.mismatch")
+                                    )
+                                        .font(.system(size: 19, weight: .semibold))
+                                        .foregroundStyle(AppColors.textPrimary)
+
+                                    Text(
+                                        isBalanced
+                                        ? String(
+                                            localized: "cashflow.asset_change.matches_detail",
+                                            defaultValue: "Итог периода сходится с движением активов",
+                                            comment: "Cashflow asset change balanced detail"
+                                        )
+                                        : String(
+                                            localized: "cashflow.asset_change.mismatch_detail",
+                                            defaultValue: "Есть расхождение между итогом периода и движением активов",
+                                            comment: "Cashflow asset change mismatch detail"
+                                        )
+                                    )
+                                    .font(.system(size: 15, weight: .regular))
+                                    .foregroundStyle(AppColors.textSecondary)
+                                }
+
+                                Spacer()
+
+                                Text(formatMoney(assetChangeBalanceDelta))
+                                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(isBalanced ? AppColors.textSecondary : AppColors.warning)
+                                    .monospacedDigit()
+                            }
+                        }
 
                         Text("cashflow.asset_change.explanation")
-                            .font(.system(size: 18, weight: .regular))
+                            .font(.system(size: 16, weight: .regular))
                             .foregroundStyle(AppColors.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(24)
                 }
@@ -1886,6 +1971,64 @@ private struct CashflowContentView: View {
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+    }
+
+    private var assetChangeBalanceDelta: Double {
+        abs(
+            (viewModel.state.assetsAtPeriodEnd - viewModel.state.assetsAtPeriodStart) -
+            (viewModel.state.totalIncome + viewModel.state.assetValueChange - viewModel.state.contributedExpense)
+        )
+    }
+
+    private func assetChangeInfoCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(title)
+                .font(.system(size: 21, weight: .semibold))
+                .foregroundStyle(AppColors.textPrimary)
+
+            content()
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .fill(Color.white.opacity(0.035))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 26, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        )
+    }
+
+    private func assetChangeValueRow(
+        title: String,
+        value: String,
+        valueColor: Color,
+        emphasizesValue: Bool = false
+    ) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 16) {
+            Text(title)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(AppColors.textSecondary)
+
+            Spacer()
+
+            Text(value)
+                .font(.system(size: emphasizesValue ? 18 : 17, weight: emphasizesValue ? .bold : .semibold, design: .rounded))
+                .foregroundStyle(valueColor)
+                .monospacedDigit()
+                .lineLimit(1)
+        }
+    }
+
+    private func assetChangeLabel(_ key: String) -> String {
+        let format = AppLocalization.string(key, locale: .autoupdatingCurrent)
+        if let separatorIndex = format.firstIndex(of: ":") {
+            return String(format[..<separatorIndex]).trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+        }
+        return format
+            .replacingOccurrences(of: "%@", with: "")
+            .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
     }
     
     private var customPeriodSheet: some View {

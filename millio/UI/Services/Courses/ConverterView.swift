@@ -12,6 +12,7 @@ struct ConverterView: View {
     @State private var historyPreviewImage: UIImage? = nil
     @State private var showHistoryPreview: Bool = false
     @State private var sharePreviewKeyboardHeight: CGFloat = 0
+    @FocusState private var isShareDraftMessageFocused: Bool
     
     private var decSep: String { Locale.current.decimalSeparator ?? "," }
     
@@ -27,6 +28,7 @@ struct ConverterView: View {
     private let neonCyan = Color(hex: "47D7FF")
     private let neonViolet = Color(hex: "8A6BFF")
     private let currentRoute: AppRoute = .courses
+    private let shareDraftMessageFieldID = "shareDraftMessageField"
     
     
     // MARK: - Sounds
@@ -696,58 +698,78 @@ struct ConverterView: View {
             GeometryReader { geometry in
                 let keyboardOverlap = max(0, sharePreviewKeyboardHeight - geometry.safeAreaInsets.bottom)
                 let cardScale = SharePreviewLayout.cardScale(
-                    containerHeight: geometry.size.height,
+                    containerSize: geometry.size,
                     keyboardHeight: keyboardOverlap
                 )
-                let compactInput = cardScale < 0.95
+                let compactInput = cardScale < 0.8
+                let inputSpacing: CGFloat = compactInput ? 8 : 10
 
-                ZStack {
-                    Color.black.ignoresSafeArea()
-                    VStack(alignment: .leading, spacing: compactInput ? 8 : 10) {
-                        shareCardPreview(scale: cardScale, containerHeight: geometry.size.height, keyboardHeight: keyboardOverlap)
-                        VStack(alignment: .leading, spacing: compactInput ? 8 : 10) {
-                            Text(viewModel.state.shareDraftTitle)
-                                .font(.system(size: compactInput ? 14 : 15, weight: .semibold))
-                                .foregroundStyle(Color.white.opacity(0.94))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.72)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(Color.white.opacity(0.08))
-                                )
-                            TextField(
-                                ConverterL10n.shareMessagePlaceholder,
-                                text: Binding(
-                                    get: { viewModel.state.shareDraftMessage },
-                                    set: { viewModel.handle(.updateShareDraftMessage($0)) }
-                                ),
-                                axis: .vertical
-                            )
-                            .lineLimit(compactInput ? 1...3 : 2...5)
-                            .textInputAutocapitalization(.sentences)
-                            .autocorrectionDisabled(false)
-                            .font(.system(size: compactInput ? 14 : 15, weight: .regular))
-                            .foregroundStyle(Color.white.opacity(0.92))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, compactInput ? 8 : 10)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(.ultraThinMaterial)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(Color.white.opacity(0.14), lineWidth: 1)
-                            )
+                ScrollViewReader { proxy in
+                    ZStack {
+                        Color.black.ignoresSafeArea()
+                        ScrollView(.vertical, showsIndicators: false) {
+                            VStack(alignment: .leading, spacing: inputSpacing) {
+                                shareCardPreview(scale: cardScale)
+                                    .frame(maxWidth: .infinity, alignment: .center)
+
+                                VStack(alignment: .leading, spacing: inputSpacing) {
+                                    Text(viewModel.state.shareDraftTitle)
+                                        .font(.system(size: compactInput ? 14 : 15, weight: .semibold))
+                                        .foregroundStyle(Color.white.opacity(0.94))
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.72)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                .fill(Color.white.opacity(0.08))
+                                        )
+                                    TextField(
+                                        ConverterL10n.shareMessagePlaceholder,
+                                        text: Binding(
+                                            get: { viewModel.state.shareDraftMessage },
+                                            set: { viewModel.handle(.updateShareDraftMessage($0)) }
+                                        ),
+                                        axis: .vertical
+                                    )
+                                    .id(shareDraftMessageFieldID)
+                                    .focused($isShareDraftMessageFocused)
+                                    .lineLimit(compactInput ? 2...4 : 2...5)
+                                    .textInputAutocapitalization(.sentences)
+                                    .autocorrectionDisabled(false)
+                                    .font(.system(size: compactInput ? 14 : 15, weight: .regular))
+                                    .foregroundStyle(Color.white.opacity(0.92))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, compactInput ? 8 : 10)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                            .fill(.ultraThinMaterial)
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                            .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                                    )
+                                }
+                            }
+                            .padding(14)
+                            .padding(.bottom, keyboardOverlap > 0 ? keyboardOverlap + 20 : 20)
+                            .frame(maxWidth: .infinity, alignment: .top)
                         }
+                        .scrollDismissesKeyboard(.interactively)
                     }
-                    .padding(14)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .onChange(of: isShareDraftMessageFocused) { _, isFocused in
+                        guard isFocused else { return }
+                        scrollShareDraftMessageIntoView(with: proxy)
+                    }
+                    .onChange(of: keyboardOverlap) { _, overlap in
+                        guard overlap > 0, isShareDraftMessageFocused else { return }
+                        scrollShareDraftMessageIntoView(with: proxy)
+                    }
                 }
             }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
+            .ignoresSafeArea(.keyboard, edges: .bottom)
 #if os(iOS)
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -762,6 +784,7 @@ struct ConverterView: View {
 #endif
             .onDisappear {
                 sharePreviewKeyboardHeight = 0
+                isShareDraftMessageFocused = false
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -1237,23 +1260,29 @@ struct ConverterView: View {
         return "\(trimmedTitle)\n\(trimmedMessage)"
     }
 
-    private func shareCardPreview(scale: CGFloat, containerHeight: CGFloat, keyboardHeight: CGFloat) -> some View {
+    private func shareCardPreview(scale: CGFloat) -> some View {
         let shareData = viewModel.getShareData()
-        let cardHeight = SharePreviewLayout.cardFrameHeight(
-            containerHeight: containerHeight,
-            keyboardHeight: keyboardHeight
+        let cardSize = CGSize(
+            width: SharePreviewLayout.baseCardWidth,
+            height: SharePreviewLayout.baseCardHeight
         )
+        let appStoreURLText = AppStoreReviewLink.appURL?.absoluteString ?? "https://apps.apple.com/app/id\(AppStoreReviewLink.fallbackAppStoreID)"
         return ShareCardView(
+            locale: appState.selectedLanguage.locale ?? Locale.current,
             dateString: shareData.dateString,
             rows: shareData.rows,
             highlightedCode: shareData.highlightedCode,
             baseSummary: ConverterL10n.baseSummary(input: viewModel.state.inputText, code: viewModel.state.activeCode),
-            appStoreURLText: "https://apps.apple.com"
+            appStoreURLText: appStoreURLText
         )
+        .frame(width: cardSize.width, height: cardSize.height)
         .scaleEffect(scale, anchor: .top)
-        .frame(maxWidth: .infinity)
-        .frame(height: cardHeight, alignment: .top)
-        .clipped()
+        .frame(
+            width: cardSize.width * scale,
+            height: cardSize.height * scale,
+            alignment: .top
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 24 * scale, style: .continuous))
     }
 
 #if os(iOS)
@@ -1279,17 +1308,25 @@ struct ConverterView: View {
         } else {
             size = screenBounds.size
         }
+        let appStoreURLText = AppStoreReviewLink.appURL?.absoluteString ?? "https://apps.apple.com/app/id\(AppStoreReviewLink.fallbackAppStoreID)"
 
         let card = ShareCardView(
+            locale: appState.selectedLanguage.locale ?? Locale.current,
             dateString: shareData.dateString,
             rows: shareData.rows,
             highlightedCode: shareData.highlightedCode,
             baseSummary: ConverterL10n.baseSummary(input: viewModel.state.inputText, code: viewModel.state.activeCode),
-            appStoreURLText: "https://apps.apple.com"
+            appStoreURLText: appStoreURLText
         )
         .frame(width: size.width, height: size.height)
 
         return ShareRenderer.render(card: card, size: size, scale: UIScreen.main.scale)
+    }
+
+    private func scrollShareDraftMessageIntoView(with proxy: ScrollViewProxy) {
+        withAnimation(.easeInOut(duration: 0.22)) {
+            proxy.scrollTo(shareDraftMessageFieldID, anchor: .center)
+        }
     }
 #endif
     

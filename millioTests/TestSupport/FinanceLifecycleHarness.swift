@@ -282,7 +282,17 @@ final class FinanceLifecycleHarness {
         financeViewModel.handle(.loadAccounts)
         cashflowViewModel.handle(.loadCards)
         cashflowViewModel.handle(.loadTransactions)
-        try await waitUntil { true }
+        try await waitUntil {
+            let cardDescriptor = FetchDescriptor<Card>()
+            let transactionDescriptor = FetchDescriptor<CashflowTransaction>()
+
+            let storedCards = ((try? self.modelContext.fetch(cardDescriptor)) ?? []).filter { $0.archivedAt == nil }
+            let storedTransactions = (try? self.modelContext.fetch(transactionDescriptor)) ?? []
+
+            return self.financeViewModel.state.availableCards.count == storedCards.count
+                && self.cashflowViewModel.state.availableCards.count == storedCards.count
+                && self.cashflowViewModel.state.transactions.count == storedTransactions.count
+        }
     }
 
     func assertCardState(cardID: String, balance: Double) async throws {
@@ -360,21 +370,29 @@ final class FinanceLifecycleHarness {
         availableAmount: Double,
         debtAmount: Double
     ) async throws {
-            let financeAccount = try requireFinanceAccount(for: cardID)
-
         try await waitUntil {
+            guard let financeAccount = self.financeAccount(for: cardID) else {
+                return false
+            }
             let financeMainAmount = self.financeViewModel.getAccountInfo(account: financeAccount)?.amount
             let financeRemaining = self.financeViewModel.getCreditCardLimitRemaining(account: financeAccount)?.amount
             let financeDebt = self.financeViewModel.getCreditCardDebt(account: financeAccount)?.amount ?? 0
             let cashflowAvailable = self.cashflowViewModel.cardBalanceSnapshot(for: cardID)?.availableAmount
             let cashflowDebt = self.cashflowViewModel.cardBalanceSnapshot(for: cardID)?.debtAmount ?? 0
 
-            return Self.approximatelyEqual(financeMainAmount, availableAmount)
+            return Self.approximatelyEqual(financeMainAmount, debtAmount)
                 && Self.approximatelyEqual(financeRemaining, availableAmount)
                 && Self.approximatelyEqual(financeDebt, debtAmount)
                 && Self.approximatelyEqual(cashflowAvailable, availableAmount)
                 && Self.approximatelyEqual(cashflowDebt, debtAmount)
         }
+
+        let financeAccount = try requireFinanceAccount(for: cardID)
+        #expect(Self.approximatelyEqual(financeViewModel.getAccountInfo(account: financeAccount)?.amount, debtAmount))
+        #expect(Self.approximatelyEqual(financeViewModel.getCreditCardLimitRemaining(account: financeAccount)?.amount, availableAmount))
+        #expect(Self.approximatelyEqual(financeViewModel.getCreditCardDebt(account: financeAccount)?.amount ?? 0, debtAmount))
+        #expect(Self.approximatelyEqual(cashflowViewModel.cardBalanceSnapshot(for: cardID)?.availableAmount, availableAmount))
+        #expect(Self.approximatelyEqual(cashflowViewModel.cardBalanceSnapshot(for: cardID)?.debtAmount ?? 0, debtAmount))
     }
 
     func assertTransactionCount(_ expected: Int) {

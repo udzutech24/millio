@@ -73,7 +73,7 @@ enum EntitlementDiagnostics {
             ),
             EntitlementDiagnosticItem(
                 id: "cashflow.chart",
-                title: isRussian ? "График расходов и доходов" : "Income & expenses chart",
+                title: isRussian ? "Доходы и расходы" : "Income and expenses",
                 location: isRussian ? "Cashflow -> динамика за период" : "Cashflow -> period chart",
                 freeBehavior: isRussian ? "График скрыт." : "Chart is locked.",
                 premiumBehavior: isRussian ? "График доступен." : "Chart is available.",

@@ -4,28 +4,47 @@ import Testing
 
 struct SharePreviewLayoutTests {
 
-    @Test("Без клавиатуры карточка не сжимается")
-    func cardScaleWithoutKeyboardIsFull() {
-        let scale = SharePreviewLayout.cardScale(containerHeight: 844, keyboardHeight: 0)
+    @Test("При полном доступном размере карточка не сжимается")
+    func cardScaleWithoutConstraintsIsFull() {
+        let scale = SharePreviewLayout.cardScale(
+            availableWidth: SharePreviewLayout.baseCardWidth,
+            availableHeight: SharePreviewLayout.baseCardHeight
+        )
         #expect(scale == 1.0)
     }
 
-    @Test("При появлении клавиатуры карточка уменьшается")
-    func cardScaleShrinksWithKeyboard() {
-        let scale = SharePreviewLayout.cardScale(containerHeight: 844, keyboardHeight: 320)
+    @Test("Высота предпросмотра уменьшается на высоту клавиатуры и контролов")
+    func availableCardHeightShrinksWithKeyboard() {
+        let availableHeight = SharePreviewLayout.availableCardHeight(containerHeight: 844, keyboardHeight: 320)
+        #expect(availableHeight == 334)
+    }
+
+    @Test("Когда доступное место меньше исходного экрана карточка уменьшается")
+    func cardScaleShrinksWithLimitedSpace() {
+        let scale = SharePreviewLayout.cardScale(
+            availableWidth: 240,
+            availableHeight: 520
+        )
         #expect(scale < 1.0)
     }
 
     @Test("Карточка не сжимается ниже минимального порога")
     func cardScaleRespectsLowerBound() {
-        let scale = SharePreviewLayout.cardScale(containerHeight: 500, keyboardHeight: 420)
-        #expect(scale == 0.62)
+        let scale = SharePreviewLayout.cardScale(
+            availableWidth: 40,
+            availableHeight: 80
+        )
+        #expect(scale == 0.32)
     }
 
-    @Test("Высота карточки следует вычисленному масштабу")
-    func cardFrameHeightUsesScale() {
-        let height = SharePreviewLayout.cardFrameHeight(containerHeight: 844, keyboardHeight: 320)
-        #expect(height < SharePreviewLayout.baseCardHeight)
-        #expect(height > 0)
+    @Test("Размер превью следует вычисленному масштабу")
+    func cardFrameSizeUsesScale() {
+        let size = SharePreviewLayout.cardFrameSize(
+            containerSize: CGSize(width: 390, height: 844),
+            keyboardHeight: 320
+        )
+        #expect(size.height < SharePreviewLayout.baseCardHeight)
+        #expect(size.width < SharePreviewLayout.baseCardWidth)
+        #expect(size.height > 0)
     }
 }

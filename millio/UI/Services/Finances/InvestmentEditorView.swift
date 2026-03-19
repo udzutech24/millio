@@ -9,6 +9,12 @@ import SwiftUI
 
 // MARK: - Investment Editor View
 
+enum InvestmentEditorLayoutPolicy {
+    static func showsDeleteButton(for editingInvestment: Investment?) -> Bool {
+        editingInvestment != nil
+    }
+}
+
 struct InvestmentEditorView: View {
     @ObservedObject var viewModel: InvestmentViewModel
     let onClose: (() -> Void)?
@@ -46,6 +52,7 @@ struct InvestmentEditorView: View {
     @State private var showPaywallAlert = false
     @State private var paywallMessage = ""
     @State private var showCryptoProAlert = false
+    @State private var showDeleteConfirmation = false
 
     private let marketDataClient: MarketDataClientProtocol
 
@@ -106,6 +113,10 @@ struct InvestmentEditorView: View {
         return quantity * unitPrice
     }
 
+    private var canDeleteInvestment: Bool {
+        InvestmentEditorLayoutPolicy.showsDeleteButton(for: viewModel.state.editingInvestment)
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -116,6 +127,10 @@ struct InvestmentEditorView: View {
                         mainInfoSection
                         investmentParamsSection
                         additionalSection
+
+                        if canDeleteInvestment {
+                            deleteInvestmentButton
+                        }
                     }
                     .padding(.top, 20)
                     .padding(.bottom, 40)
@@ -123,6 +138,16 @@ struct InvestmentEditorView: View {
                 }
                 .scrollDismissesKeyboard(.immediately)
                 .dismissKeyboardOnTap()
+
+                FinancesDestructiveConfirmationOverlay(
+                    isPresented: showDeleteConfirmation,
+                    title: deleteConfirmationTitle,
+                    message: String(localized: deleteConfirmationMessageKey),
+                    confirmTitle: String(localized: "finances.common.delete"),
+                    cancelTitle: String(localized: "finances.common.cancel"),
+                    onConfirm: confirmDeleteInvestment,
+                    onCancel: { showDeleteConfirmation = false }
+                )
             }
             .navigationTitle(
                 viewModel.state.editingInvestment == nil
@@ -154,14 +179,6 @@ struct InvestmentEditorView: View {
                         )
                     )
                     .disabled(!isValid)
-                }
-
-                if onDelete != nil, viewModel.state.editingInvestment != nil {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button(String(localized: "finances.common.delete"), role: .destructive) {
-                            onDelete?()
-                        }
-                    }
                 }
             }
             .onAppear {
@@ -281,6 +298,28 @@ struct InvestmentEditorView: View {
                 onSubscribe: { router.push(.subscription) }
             )
         }
+    }
+
+    private var deleteInvestmentButton: some View {
+        Button(role: .destructive) {
+            showDeleteConfirmation = true
+        } label: {
+            Text(String(localized: deleteActionTitle))
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AppColors.error.opacity(0.92))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color.white.opacity(0.035))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(AppColors.error.opacity(0.22), lineWidth: 0.9)
+                        )
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("finances.investment_editor.delete_account.button")
     }
     
     private var mainInfoSection: some View {
@@ -871,6 +910,25 @@ struct InvestmentEditorView: View {
         }
     }
 
+    private func confirmDeleteInvestment() {
+        guard let editingInvestment = viewModel.state.editingInvestment else { return }
+
+        showDeleteConfirmation = false
+
+        if let onDelete {
+            onDelete()
+            return
+        }
+
+        viewModel.handle(.deleteInvestment(editingInvestment))
+
+        if let onClose {
+            onClose()
+        } else {
+            dismiss()
+        }
+    }
+
     private var currentTrackedTickerCount: Int {
         viewModel.state.investments.reduce(into: 0) { partialResult, investment in
             if investment.category == .stocks || investment.category == .crypto {
@@ -932,5 +990,19 @@ struct InvestmentEditorView: View {
         default:
             return String(localized: "monetization.finance.market_assets.pro_only")
         }
+    }
+
+    private var deleteConfirmationTitle: String {
+        let name = viewModel.state.editingInvestment?.name
+            ?? String(localized: "finances.dynamics.chart.account_fallback")
+        return FinanceDeleteProductCopy.confirmationTitle(for: .investment, name: name)
+    }
+
+    private var deleteActionTitle: LocalizedStringResource {
+        FinanceDeleteProductCopy.actionTitle(for: .investment)
+    }
+
+    private var deleteConfirmationMessageKey: LocalizedStringResource {
+        FinanceDeleteProductCopy.confirmationMessage(for: .investment)
     }
 }

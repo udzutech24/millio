@@ -66,6 +66,24 @@ enum FinanceDynamicsHeaderStyle {
     static let summaryAmountFontSize: CGFloat = 24
 }
 
+enum FinanceDynamicsDeleteLayoutPolicy {
+    static func showsDeleteFooter(
+        isSingleAccountMode: Bool,
+        hasInitialAccount: Bool,
+        hasMarketInvestment: Bool
+    ) -> Bool {
+        isSingleAccountMode && hasInitialAccount && !hasMarketInvestment
+    }
+
+    static func showsMarketDeleteFooter(
+        isSingleAccountMode: Bool,
+        hasInitialAccount: Bool,
+        hasMarketInvestment: Bool
+    ) -> Bool {
+        isSingleAccountMode && hasInitialAccount && hasMarketInvestment
+    }
+}
+
 // MARK: - Finance Dynamics View
 
 struct FinanceDynamicsView: View {
@@ -273,19 +291,16 @@ private struct FinanceDynamicsContentView: View {
                 }
             }
         }
-        .confirmationDialog(
-            deleteAccountConfirmationTitle,
-            isPresented: $showDeleteAccountConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(String(localized: "finances.common.delete"), role: .destructive) {
-                guard let account = initialAccount else { return }
-                financeViewModel.handle(.removeAccountFromGroup(account))
-                dismiss()
-            }
-            Button(String(localized: "finances.common.cancel"), role: .cancel) {}
-        } message: {
-            Text(String(localized: "finances.dynamics.delete_account.confirm.message"))
+        .overlay {
+            FinancesDestructiveConfirmationOverlay(
+                isPresented: showDeleteAccountConfirmation,
+                title: deleteAccountConfirmationTitle,
+                message: String(localized: deleteAccountConfirmationMessageKey),
+                confirmTitle: String(localized: "finances.common.delete"),
+                cancelTitle: String(localized: "finances.common.cancel"),
+                onConfirm: confirmDeleteAccount,
+                onCancel: { showDeleteAccountConfirmation = false }
+            )
         }
         .navigationTitle(viewModel.state.isSingleAccountMode ? "" : String(localized: "finances.dynamics.title"))
         .navigationBarTitleDisplayMode(.inline)
@@ -455,10 +470,14 @@ private struct FinanceDynamicsContentView: View {
                             }
                         }
                     }
+
+                    if shouldShowDeleteMarketInvestmentFooter, let account = initialAccount {
+                        deleteAccountFooterButton(account: account)
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, FinanceDynamicsTopBarStyle.baseScrollContentTopPadding)
-                .padding(.bottom, 32)
+                .padding(.bottom, shouldShowDeleteMarketInvestmentFooter ? 44 : 32)
             }
         }
     }
@@ -1682,7 +1701,19 @@ private struct FinanceDynamicsContentView: View {
     }
 
     private var shouldShowDeleteAccountFooter: Bool {
-        viewModel.state.isSingleAccountMode && initialAccount != nil && marketInvestment == nil
+        FinanceDynamicsDeleteLayoutPolicy.showsDeleteFooter(
+            isSingleAccountMode: viewModel.state.isSingleAccountMode,
+            hasInitialAccount: initialAccount != nil,
+            hasMarketInvestment: marketInvestment != nil
+        )
+    }
+
+    private var shouldShowDeleteMarketInvestmentFooter: Bool {
+        FinanceDynamicsDeleteLayoutPolicy.showsMarketDeleteFooter(
+            isSingleAccountMode: viewModel.state.isSingleAccountMode,
+            hasInitialAccount: initialAccount != nil,
+            hasMarketInvestment: marketInvestment != nil
+        )
     }
 
     private var deleteAccountConfirmationTitle: String {
@@ -1691,14 +1722,28 @@ private struct FinanceDynamicsContentView: View {
         }
         let name = financeViewModel.getAccountInfo(account: account)?.name
             ?? String(localized: "finances.dynamics.chart.account_fallback")
-        return FinancesL10n.format("finances.dynamics.delete_account.confirm.title", name)
+        return FinanceDeleteProductCopy.confirmationTitle(for: account.accountType, name: name)
+    }
+
+    private var deleteAccountActionTitle: LocalizedStringResource {
+        guard let account = initialAccount else {
+            return "finances.dynamics.delete_account"
+        }
+        return FinanceDeleteProductCopy.actionTitle(for: account.accountType)
+    }
+
+    private var deleteAccountConfirmationMessageKey: LocalizedStringResource {
+        guard let account = initialAccount else {
+            return "finances.dynamics.delete_account.confirm.message"
+        }
+        return FinanceDeleteProductCopy.confirmationMessage(for: account.accountType)
     }
 
     private func deleteAccountFooterButton(account: FinanceAccount) -> some View {
         Button(role: .destructive) {
             showDeleteAccountConfirmation = true
         } label: {
-            Text(String(localized: "finances.dynamics.delete_account"))
+            Text(String(localized: deleteAccountActionTitle))
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(AppColors.error.opacity(0.9))
                 .frame(maxWidth: .infinity)
@@ -1714,6 +1759,13 @@ private struct FinanceDynamicsContentView: View {
                 )
         }
         .accessibilityIdentifier("finances.delete_account.button")
+    }
+
+    private func confirmDeleteAccount() {
+        guard let account = initialAccount else { return }
+        showDeleteAccountConfirmation = false
+        financeViewModel.handle(.removeAccountFromGroup(account))
+        dismiss()
     }
 
     private func singleAccountActionBar(account: FinanceAccount) -> some View {

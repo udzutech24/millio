@@ -58,6 +58,11 @@ struct CashflowInsightsPresentation: Equatable {
     let incomeCard: CashflowInsightsCardModel
 }
 
+enum CashflowInsightsMonthLabelStyle {
+    case abbreviatedWithYear
+    case monthNumber
+}
+
 enum CashflowInsightsChartBuilder {
     private static let epsilon = 0.0000001
     private static let visiblePeriodCount = 4
@@ -178,6 +183,7 @@ enum CashflowInsightsChartBuilder {
         selectedPeriodStart: Date?,
         referenceDate: Date,
         maxVisiblePeriods: Int? = nil,
+        monthLabelStyle: CashflowInsightsMonthLabelStyle = .abbreviatedWithYear,
         calendar: Calendar = .current,
         locale: Locale = .autoupdatingCurrent
     ) -> CashflowInsightsPresentation {
@@ -209,7 +215,14 @@ enum CashflowInsightsChartBuilder {
                 offsetPeriod(windowStart, by: index, granularity: granularity, calendar: calendar)
             }
             bars = starts.map {
-                makeBar(for: $0, grouped: grouped, granularity: granularity, calendar: calendar, locale: locale)
+                makeBar(
+                    for: $0,
+                    grouped: grouped,
+                    granularity: granularity,
+                    monthLabelStyle: monthLabelStyle,
+                    calendar: calendar,
+                    locale: locale
+                )
             }
         } else {
             normalizedSelection = rawSelection
@@ -222,7 +235,14 @@ enum CashflowInsightsChartBuilder {
                 calendar: calendar
             )
             bars = starts.map {
-                makeBar(for: $0, grouped: grouped, granularity: granularity, calendar: calendar, locale: locale)
+                makeBar(
+                    for: $0,
+                    grouped: grouped,
+                    granularity: granularity,
+                    monthLabelStyle: monthLabelStyle,
+                    calendar: calendar,
+                    locale: locale
+                )
             }
         }
 
@@ -390,6 +410,7 @@ enum CashflowInsightsChartBuilder {
         for start: Date,
         grouped: [Date: [CashflowConvertedTransaction]],
         granularity: CashflowInsightsGranularity,
+        monthLabelStyle: CashflowInsightsMonthLabelStyle = .abbreviatedWithYear,
         calendar: Calendar,
         locale: Locale
     ) -> CashflowInsightsBar {
@@ -400,7 +421,13 @@ enum CashflowInsightsChartBuilder {
         return CashflowInsightsBar(
             id: start,
             periodStart: start,
-            label: label(for: start, granularity: granularity, calendar: calendar, locale: locale),
+            label: label(
+                for: start,
+                granularity: granularity,
+                monthLabelStyle: monthLabelStyle,
+                calendar: calendar,
+                locale: locale
+            ),
             income: income,
             expense: expense,
             isPlaceholder: bucket.isEmpty
@@ -487,6 +514,7 @@ enum CashflowInsightsChartBuilder {
     private static func label(
         for date: Date,
         granularity: CashflowInsightsGranularity,
+        monthLabelStyle: CashflowInsightsMonthLabelStyle = .abbreviatedWithYear,
         calendar: Calendar,
         locale: Locale
     ) -> String {
@@ -494,6 +522,9 @@ enum CashflowInsightsChartBuilder {
         case .year:
             return String(calendar.component(.year, from: date))
         case .month:
+            if monthLabelStyle == .monthNumber {
+                return String(calendar.component(.month, from: date))
+            }
             let monthFormatter = DateFormatter()
             monthFormatter.locale = locale
             monthFormatter.setLocalizedDateFormatFromTemplate("LLL")

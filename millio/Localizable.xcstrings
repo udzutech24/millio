@@ -99,16 +99,6 @@
     "0" : {
 
     },
-    "1 %@ = rate in %@" : {
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "1 %1$@ = rate in %2$@"
-          }
-        }
-      }
-    },
     "Account balance adjustment" : {
       "localizations" : {
         "en" : {
@@ -1074,6 +1064,57 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Кодовая фраза сохранена и готова к восстановлению"
+          }
+        }
+      }
+    },
+    "backup.restore.confirm.action" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yes, restore"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Да, восстановить"
+          }
+        }
+      }
+    },
+    "backup.restore.confirm.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current local data will be fully replaced by the selected backup"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Текущие локальные данные будут полностью заменены выбранной копией"
+          }
+        }
+      }
+    },
+    "backup.restore.confirm.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore this version?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Восстановить эту версию?"
           }
         }
       }
@@ -2441,18 +2482,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Balance check:"
+            "value" : "Balance check"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Проверка баланса:"
+            "value" : "Сверка баланса"
           }
         }
       }
     },
     "cashflow.asset_change.change_format" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2469,6 +2511,7 @@
       }
     },
     "cashflow.asset_change.end_total_format" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2485,6 +2528,7 @@
       }
     },
     "cashflow.asset_change.expenses_format" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2505,13 +2549,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Explanation: this is asset revaluation/movement for the period after explicit inflows (income) and recorded expenses are accounted for."
+            "value" : "Usually this includes revaluation, market price movement, or asset activity that was not recorded as income or expense"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Пояснение: это переоценка или движение активов за период после учета явных поступлений и зафиксированных расходов."
+            "value" : "Обычно сюда попадает переоценка, изменение рыночной цены или движение активов, которое не было записано как доход или расход"
           }
         }
       }
@@ -2521,18 +2565,36 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Formula:\nChange = (End total - Start total) - Income + Expenses."
+            "value" : "Change = (Assets at end - Assets at start) - Income + Expenses"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Формула:\nИзменение = (Итог на конец - Стартовый итог) - Доходы + Расходы."
+            "value" : "Изменение = (Активы на конец - Активы на начало) - Доходы + Расходы"
+          }
+        }
+      }
+    },
+    "cashflow.asset_change.formula_title" : {
+      "comment" : "Cashflow asset change formula section title",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Formula"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Формула"
           }
         }
       }
     },
     "cashflow.asset_change.income_format" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2569,13 +2631,30 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Matches"
+            "value" : "Balance aligns"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Совпадает"
+            "value" : "Баланс сходится"
+          }
+        }
+      }
+    },
+    "cashflow.asset_change.matches_detail" : {
+      "comment" : "Cashflow asset change balanced detail",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The period result is consistent with the recorded asset movement"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Итог периода согласуется с зафиксированным движением активов"
           }
         }
       }
@@ -2585,18 +2664,36 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mismatch"
+            "value" : "Balance needs attention"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Не совпадает"
+            "value" : "Есть расхождение"
+          }
+        }
+      }
+    },
+    "cashflow.asset_change.mismatch_detail" : {
+      "comment" : "Cashflow asset change mismatch detail",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The period result does not fully match the recorded asset movement"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Итог периода не полностью совпадает с зафиксированным движением активов"
           }
         }
       }
     },
     "cashflow.asset_change.start_total_format" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2617,13 +2714,30 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Substitution:"
+            "value" : "Calculation"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Подстановка:"
+            "value" : "Расчёт"
+          }
+        }
+      }
+    },
+    "cashflow.asset_change.subtitle" : {
+      "comment" : "Cashflow asset change info subtitle",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is the difference left between the start and end of the period after all recorded income and expenses are accounted for"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Это разница между началом и концом периода после учёта всех зафиксированных доходов и расходов"
           }
         }
       }
@@ -2966,61 +3080,57 @@
     },
     "cashflow.bulk_expense.help.crop.do" : {
       "comment" : "Positive screenshot cropping tip for bulk expense import help",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Leave 5-12 expense rows with merchant names and amounts in one column."
+            "value" : "Leave 5-12 expense rows with merchant names and amounts in one column"
           }
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Leave 5-12 expense rows with merchant names and amounts in one column."
+            "state" : "translated",
+            "value" : "Оставляй 5-12 строк расходов с названиями магазинов и суммами в одной колонке"
           }
         }
       }
     },
     "cashflow.bulk_expense.help.crop.do_second" : {
       "comment" : "Second positive screenshot cropping tip for bulk expense import help",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keep the amount fully visible: `Пятерочка 1 240 ₽`, `Яндекс Такси 870 ₽`."
+            "value" : "Keep the amount fully visible: `Пятерочка 1 240 ₽`, `Яндекс Такси 870 ₽`"
           }
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Keep the amount fully visible: `Пятерочка 1 240 ₽`, `Яндекс Такси 870 ₽`."
+            "state" : "translated",
+            "value" : "Следи, чтобы сумма была видна целиком: `Пятерочка 1 240 ₽`, `Яндекс Такси 870 ₽`"
           }
         }
       }
     },
     "cashflow.bulk_expense.help.crop.dont" : {
       "comment" : "Negative screenshot cropping tip for bulk expense import help",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cut off balance, cards carousel, charts, cashback banners, and bottom navigation."
+            "value" : "Cut off balance, cards carousel, charts, cashback banners, and bottom navigation"
           }
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Cut off balance, cards carousel, charts, cashback banners, and bottom navigation."
+            "state" : "translated",
+            "value" : "Обрезай баланс, карусель карт, графики, баннеры кешбэка и нижнюю навигацию"
           }
         }
       }
     },
     "cashflow.bulk_expense.help.crop.example_title" : {
       "comment" : "Title for screenshot crop example in bulk expense import help",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3030,33 +3140,31 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Example frame"
+            "state" : "translated",
+            "value" : "Пример кадра"
           }
         }
       }
     },
     "cashflow.bulk_expense.help.crop.subtitle" : {
       "comment" : "Subtitle for screenshot cropping guide in bulk expense import help",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The parser works best when the frame contains only merchant names and amounts."
+            "value" : "The parser works best when the frame contains only merchant names and amounts"
           }
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "The parser works best when the frame contains only merchant names and amounts."
+            "state" : "translated",
+            "value" : "Парсер лучше всего работает, когда в кадре только названия магазинов и суммы"
           }
         }
       }
     },
     "cashflow.bulk_expense.help.crop.title" : {
       "comment" : "Title for screenshot cropping guide in bulk expense import help",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3066,26 +3174,25 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "How to crop a bank screenshot"
+            "state" : "translated",
+            "value" : "Как обрезать банковский скриншот"
           }
         }
       }
     },
     "cashflow.bulk_expense.help.crop.warning" : {
       "comment" : "Warning screenshot cropping tip for bulk expense import help",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Transfers and top-ups can be recognized too. They will go to `Transfers` and are highlighted in red for cleanup."
+            "value" : "Transfers and top-ups can be recognized too. They will go to `Transfers` and are highlighted in red for cleanup"
           }
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Transfers and top-ups can be recognized too. They will go to `Transfers` and are highlighted in red for cleanup."
+            "state" : "translated",
+            "value" : "Переводы и пополнения тоже могут распознаться, они попадут в `Переводы` и будут подсвечены красным для проверки"
           }
         }
       }
@@ -3097,13 +3204,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This screen is designed for quickly recording monthly expenses by category without creating each transaction manually."
+            "value" : "This screen is designed for quickly recording monthly expenses by category without creating each transaction manually"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Этот экран нужен для быстрого занесения месячных расходов по категориям без ручного создания каждой отдельной операции."
+            "value" : "Этот экран нужен для быстрого занесения месячных расходов по категориям без ручного создания каждой отдельной операции"
           }
         }
       }
@@ -3133,13 +3240,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "If the toggle is on, saving also adjusts the current card balance. If you only need categorized history, turn it off."
+            "value" : "If the toggle is on, saving also adjusts the current card balance. If you only need categorized history, turn it off"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Если переключатель включен, сохранение скорректирует текущий баланс карты. Если нужен только архив истории по категориям, выключай его."
+            "value" : "Если переключатель включен, сохранение скорректирует текущий баланс карты. Если нужен только архив истории по категориям, выключай его"
           }
         }
       }
@@ -3169,13 +3276,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "In manual mode, enter the total amount into the needed category. The field formats numbers immediately, and larger values shrink to stay readable."
+            "value" : "In manual mode, enter the total amount into the needed category. The field formats numbers immediately, and larger values shrink to stay readable"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "В ручном режиме просто вбивай итоговую сумму в нужную категорию. Поле сразу форматирует число, а большие суммы ужимаются, чтобы все оставалось читаемым."
+            "value" : "В ручном режиме просто вбивай итоговую сумму в нужную категорию. Поле сразу форматирует число, а большие суммы ужимаются, чтобы все оставалось читаемым"
           }
         }
       }
@@ -3205,13 +3312,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "First choose a month and card. The import is tied to that exact pair, so reopening the screen shows the saved totals for the same month."
+            "value" : "First choose a month and card. The import is tied to that exact pair, so reopening the screen shows the saved totals for the same month"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Сначала выбери месяц и карту. Импорт привязывается именно к этой паре, поэтому при повторном открытии ты увидишь сохраненные суммы за тот же месяц."
+            "value" : "Сначала выбери месяц и карту. Импорт привязывается именно к этой паре, поэтому при повторном открытии ты увидишь сохраненные суммы за тот же месяц"
           }
         }
       }
@@ -3241,13 +3348,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "One card and one month keep a single category set. Saving again updates the current set instead of creating duplicate noise."
+            "value" : "One card and one month keep a single category set. Saving again updates the current set instead of creating duplicate noise"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Для одного месяца и одной карты сохраняется один набор категорий. Повторное сохранение обновляет текущий набор, а не плодит мусор."
+            "value" : "Для одного месяца и одной карты сохраняется один набор категорий. Повторное сохранение обновляет текущий набор, а не плодит мусор"
           }
         }
       }
@@ -3277,13 +3384,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Screenshot mode tries to recognize bank expenses and merge them into monthly categories automatically. It is a speed-up, not magic, so the result should still be checked."
+            "value" : "Screenshot mode tries to recognize bank expenses and merge them into monthly categories automatically. It is a speed-up, not magic, so the result should still be checked"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Режим Screenshot пробует распознать расходы из банка и автоматически сложить их в месячные категории. Это ускорение, а не магия, поэтому результат лучше быстро проверить."
+            "value" : "Режим скриншотов пробует распознать расходы из банка и автоматически сложить их в месячные категории. Это ускорение, а не магия, поэтому результат лучше быстро проверить"
           }
         }
       }
@@ -3416,7 +3523,6 @@
     },
     "cashflow.bulk_expense.mode.manual" : {
       "comment" : "Mode title for manual bulk expense import",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3426,15 +3532,14 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Manual"
+            "state" : "translated",
+            "value" : "Вручную"
           }
         }
       }
     },
     "cashflow.bulk_expense.mode.screenshot" : {
       "comment" : "Mode title for screenshot bulk expense import",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3444,8 +3549,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Screenshot"
+            "state" : "translated",
+            "value" : "Скриншот"
           }
         }
       }
@@ -3498,8 +3603,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "No card"
+            "state" : "translated",
+            "value" : "Нет карты"
           }
         }
       }
@@ -3524,7 +3629,6 @@
     },
     "cashflow.bulk_expense.pick_card" : {
       "comment" : "Placeholder text for picking a card",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3534,8 +3638,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Choose card"
+            "state" : "translated",
+            "value" : "Выбери карту"
           }
         }
       }
@@ -3704,7 +3808,6 @@
     },
     "cashflow.bulk_expense.save" : {
       "comment" : "Bulk expense import save button",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3714,44 +3817,42 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Save"
+            "state" : "translated",
+            "value" : "Сохранить"
           }
         }
       }
     },
     "cashflow.bulk_expense.saved" : {
       "comment" : "Success message after saving bulk expense import",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Saved %lld expenses."
+            "value" : "Saved %lld expenses"
           }
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Saved %lld category totals."
+            "state" : "translated",
+            "value" : "Сохранено %lld итогов по категориям"
           }
         }
       }
     },
     "cashflow.bulk_expense.screenshot.hint" : {
       "comment" : "Screenshot import hint",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Load one or several screenshots from your bank. The parser will extract merchant lines and amounts."
+            "value" : "Load one or several screenshots from your bank. The parser will extract merchant lines and amounts"
           }
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Load one or several screenshots from your bank. Recognized expenses will be merged into the monthly category totals below."
+            "state" : "translated",
+            "value" : "Загрузи один или несколько скриншотов из банка, а распознанные расходы объединятся в месячные суммы по категориям ниже"
           }
         }
       }
@@ -3775,7 +3876,6 @@
     },
     "cashflow.bulk_expense.screenshot.pick" : {
       "comment" : "Choose screenshot button label",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3785,15 +3885,14 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Choose screenshots"
+            "state" : "translated",
+            "value" : "Выбрать скриншоты"
           }
         }
       }
     },
     "cashflow.bulk_expense.screenshot.processing" : {
       "comment" : "Processing screenshots button label",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3803,8 +3902,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Analyzing screenshots…"
+            "state" : "translated",
+            "value" : "Анализирую скриншоты…"
           }
         }
       }
@@ -4108,13 +4207,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Income vs Expenses"
+            "value" : "Income and Expenses"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "График расходов и доходов"
+            "value" : "Доходы и расходы"
           }
         }
       }
@@ -4679,14 +4778,13 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Поиск иконки (например, car, cart, heart)"
+            "value" : "Поиск иконки (например, машина, корзина, сердце)"
           }
         }
       }
     },
     "cashflow.editor.icon_suggestions" : {
       "comment" : "Suggested icons title for category creation",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4696,8 +4794,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Suggested icons"
+            "state" : "translated",
+            "value" : "Рекомендуемые иконки"
           }
         }
       }
@@ -5022,42 +5120,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Тип операции"
-          }
-        }
-      }
-    },
-    "cashflow.editor.transfer.exchange_rate" : {
-      "comment" : "Transfer exchange rate field title",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Exchange rate"
-          }
-        }
-      }
-    },
-    "cashflow.editor.transfer.from_currency" : {
-      "comment" : "Transfer source currency label",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "From currency"
-          }
-        }
-      }
-    },
-    "cashflow.editor.transfer.to_currency" : {
-      "comment" : "Transfer destination currency label",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "To currency"
           }
         }
       }
@@ -7527,6 +7589,23 @@
         }
       }
     },
+    "cashflow.stats.income" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Income"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доходы"
+          }
+        }
+      }
+    },
     "cashflow.stats.result" : {
       "localizations" : {
         "en" : {
@@ -7608,6 +7687,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Комментарий"
+          }
+        }
+      }
+    },
+    "common.cancel" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отмена"
           }
         }
       }
@@ -11607,18 +11703,69 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This action can’t be undone."
+            "value" : "This action can’t be undone"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Это действие нельзя отменить."
+            "value" : "Это действие нельзя отменить"
           }
         }
       }
     },
     "finances.dynamics.delete_account.confirm.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete “%@”?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить «%@»?"
+          }
+        }
+      }
+    },
+    "finances.dynamics.delete_investment" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete asset"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить актив"
+          }
+        }
+      }
+    },
+    "finances.dynamics.delete_investment.confirm.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This action can’t be undone"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Это действие нельзя отменить"
+          }
+        }
+      }
+    },
+    "finances.dynamics.delete_investment.confirm.title" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -13449,7 +13596,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Обновить рыночные котировки"
+            "value" : "Обновить курсы валют"
           }
         }
       }
@@ -21500,9 +21647,6 @@
         }
       }
     },
-    "Will receive: %@" : {
-
-    },
     "Year" : {
       "localizations" : {
         "en" : {
@@ -22674,7 +22818,11 @@
     "Поиск" : {
 
     },
+    "Поиск иконки (например, машина, корзина, сердце)" : {
+
+    },
     "Поиск иконки (например: car, cart, heart)" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {

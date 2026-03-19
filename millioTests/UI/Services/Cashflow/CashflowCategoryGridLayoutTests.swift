@@ -117,4 +117,18 @@ struct CashflowCategoryGridLayoutTests {
 
         #expect(style == .compactBadge)
     }
+
+    @Test("Компактный pinned badge рендерится inline в верхнем ряду карточки")
+    func compactPinnedBadgeUsesInlinePlacement() {
+        let placement = CashflowCategoryGridLayout.pinPlacement(for: .compactBadge)
+
+        #expect(placement == .inlineBadge)
+    }
+
+    @Test("Обычная pin-кнопка остаётся overlay-элементом")
+    func regularPinButtonUsesOverlayPlacement() {
+        let placement = CashflowCategoryGridLayout.pinPlacement(for: .regularButton)
+
+        #expect(placement == .overlayButton)
+    }
 }

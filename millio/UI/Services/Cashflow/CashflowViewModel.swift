@@ -2959,6 +2959,10 @@ final class CashflowViewModel: ViewModelProtocol {
         do {
             try modelContext.save()
             if recalculate {
+                // Keep the current cashflow view model in sync immediately after
+                // balance-reverting deletes instead of relying solely on EventBus.
+                loadCards()
+                loadInvestments()
                 publishAffectedAccountEvents(affectedEvents)
                 loadTransactions()
             }

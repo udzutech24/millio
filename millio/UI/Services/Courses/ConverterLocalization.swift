@@ -1,6 +1,8 @@
 import Foundation
 
 enum ConverterL10n {
+    static var sharePromoBrand: String { "millio" }
+
     static var shareSheetDefaultSubject: String { String(localized: "converter.share.default_subject") }
     static var sharePreviewTitle: String { String(localized: "converter.share.preview_title") }
     static var shareMessagePlaceholder: String { String(localized: "converter.share.message_placeholder") }
@@ -41,10 +43,6 @@ enum ConverterL10n {
     static var cancel: String { String(localized: "converter.common.cancel") }
     static var close: String { String(localized: "converter.common.close") }
 
-    static var sharePromoTitle: String { String(localized: "converter.share.promo_title") }
-    static var sharePromoSubtitle: String { String(localized: "converter.share.promo_subtitle") }
-    static var sharePromoBrand: String { String(localized: "converter.share.promo_brand") }
-
     static var noInternetError: String { String(localized: "converter.error.no_internet") }
     static var timeoutError: String { String(localized: "converter.error.timeout") }
     static var genericUpdateError: String { String(localized: "converter.error.update_failed") }
@@ -75,5 +73,26 @@ enum ConverterL10n {
 
     static func baseSummary(input: String, code: String) -> String {
         String(format: String(localized: "converter.share.base_summary_format"), input, code)
+    }
+
+    static func sharePromoSubtitle(locale: Locale) -> String {
+        text(
+            locale: locale,
+            ru: "Управляйте всеми финансами в одном месте",
+            en: "Manage all your finances in one place"
+        )
+    }
+
+    static func shareMetaLine(dateString: String, baseSummary: String, locale: Locale) -> String {
+        let separator = text(locale: locale, ru: "Обновлено", en: "Updated")
+        return "\(separator) \(dateString)  •  \(baseSummary)"
+    }
+
+    static func text(locale: Locale, ru: String, en: String) -> String {
+        let languageCode = locale.identifier
+            .split(whereSeparator: { $0 == "-" || $0 == "_" })
+            .first?
+            .lowercased() ?? ""
+        return languageCode == "ru" ? ru : en
     }
 }

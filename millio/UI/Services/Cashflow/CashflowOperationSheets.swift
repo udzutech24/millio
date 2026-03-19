@@ -38,6 +38,12 @@ struct CashflowCategoryGridLayout {
         case regularButton
     }
 
+    enum PinPlacement {
+        case hidden
+        case inlineBadge
+        case overlayButton
+    }
+
     static let compactColumns = 3
     static let regularColumns = 4
     static let compactWidthThreshold: CGFloat = 330
@@ -113,6 +119,17 @@ struct CashflowCategoryGridLayout {
             return isPinned ? .compactBadge : .hidden
         case .income:
             return isPinned ? .compactBadge : .hidden
+        }
+    }
+
+    static func pinPlacement(for style: PinAffordanceStyle) -> PinPlacement {
+        switch style {
+        case .hidden:
+            return .hidden
+        case .compactBadge:
+            return .inlineBadge
+        case .regularButton:
+            return .overlayButton
         }
     }
 }
@@ -735,16 +752,7 @@ private struct CashflowCategoryTransactionSheet: View {
             for: kind,
             isPinned: isPinned
         )
-        let trailingInset: CGFloat = {
-            switch pinAffordanceStyle {
-            case .compactBadge:
-                return 18
-            case .regularButton:
-                return 28
-            case .hidden:
-                return 0
-            }
-        }()
+        let pinPlacement = CashflowCategoryGridLayout.pinPlacement(for: pinAffordanceStyle)
 
         return ZStack(alignment: .topTrailing) {
             Button {
@@ -759,19 +767,25 @@ private struct CashflowCategoryTransactionSheet: View {
                             tint: AnyShapeStyle(AppColors.textPrimary)
                         )
                         Spacer(minLength: 6)
-                        if let summary, let badge = categoryBudgetBadgeText(summary.status) {
-                            Text(badge)
-                                .font(.system(size: 9, weight: .bold))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.75)
-                                .foregroundStyle(budgetStatusColor(summary.status))
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 4)
-                                .background(
-                                    Capsule(style: .continuous)
-                                        .fill(budgetStatusColor(summary.status).opacity(0.14))
-                                )
-                                .padding(.trailing, trailingInset)
+
+                        HStack(spacing: 6) {
+                            if let summary, let badge = categoryBudgetBadgeText(summary.status) {
+                                Text(badge)
+                                    .font(.system(size: 9, weight: .bold))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
+                                    .foregroundStyle(budgetStatusColor(summary.status))
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 4)
+                                    .background(
+                                        Capsule(style: .continuous)
+                                            .fill(budgetStatusColor(summary.status).opacity(0.14))
+                                    )
+                            }
+
+                            if pinPlacement == .inlineBadge {
+                                pinnedBadge
+                            }
                         }
                     }
                     .frame(maxWidth: .infinity, minHeight: metrics.topRowMinHeight, alignment: .topLeading)
@@ -874,21 +888,7 @@ private struct CashflowCategoryTransactionSheet: View {
             case .hidden:
                 EmptyView()
             case .compactBadge:
-                Image(systemName: "pin.fill")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(Color(hex: "FF6B6B"))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 5)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(Color.white.opacity(0.08))
-                            .overlay(
-                                Capsule(style: .continuous)
-                                    .stroke(Color.white.opacity(0.10), lineWidth: 1)
-                            )
-                    )
-                    .padding(8)
-                    .accessibilityLabel("Pinned category")
+                EmptyView()
             case .regularButton:
                 Button {
                     togglePinned(for: option)
@@ -911,6 +911,23 @@ private struct CashflowCategoryTransactionSheet: View {
                 .accessibilityLabel(isPinned ? "Unpin category" : "Pin category")
             }
         }
+    }
+
+    private var pinnedBadge: some View {
+        Image(systemName: "pin.fill")
+            .font(.system(size: 9, weight: .bold))
+            .foregroundStyle(Color(hex: "FF6B6B"))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 5)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.white.opacity(0.08))
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                    )
+            )
+            .accessibilityLabel("Pinned category")
     }
 
     private var floatingAddCategoryButton: some View {
@@ -1664,6 +1681,15 @@ private struct CashflowCategoryQuickCreateSheet: View {
         case symbols = "Icons"
 
         var id: String { rawValue }
+
+        var localizedTitle: String {
+            switch self {
+            case .emoji:
+                return String(localized: "Эмодзи")
+            case .symbols:
+                return String(localized: "Иконки")
+            }
+        }
     }
 
     @Binding var name: String
@@ -1762,7 +1788,7 @@ private struct CashflowCategoryQuickCreateSheet: View {
 
                                 Picker(String(localized: "cashflow.editor.icon_type"), selection: $selectedTab) {
                                     ForEach(IconPickerTab.allCases) { tab in
-                                        Text(tab.rawValue).tag(tab)
+                                        Text(tab.localizedTitle).tag(tab)
                                     }
                                 }
                                 .pickerStyle(.segmented)
