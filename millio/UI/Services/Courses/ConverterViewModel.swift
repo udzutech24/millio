@@ -881,7 +881,10 @@ final class ConverterViewModel: ViewModelProtocol {
 
             _ = await refreshCryptoRates(requiredCodes: requiredCrypto)
             storedCachedRates = state.allRates
-            storedLastRatesTS = snapshot.updatedAt
+            // Для UI и виджета важнее момент фактической загрузки на устройстве,
+            // чем дата/время публикации у провайдера. Иначе часть источников
+            // показывает "синтетическое" или неочевидное для пользователя время.
+            storedLastRatesTS = snapshot.fetchedAt
             state.isOffline = false
             
             // Фильтруем выбранные валюты, оставляя только те, что есть в новом источнике
@@ -1037,6 +1040,7 @@ final class ConverterViewModel: ViewModelProtocol {
         guard storedLastRatesTS > 0 else { return "—" }
         let df = DateFormatter()
         df.locale = Locale(identifier: Locale.current.identifier)
+        df.timeZone = .current
         df.dateFormat = "dd MMM • HH:mm"
         return df.string(from: Date(timeIntervalSince1970: storedLastRatesTS))
     }

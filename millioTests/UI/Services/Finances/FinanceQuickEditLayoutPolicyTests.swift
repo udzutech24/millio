@@ -8,13 +8,6 @@ import Testing
 
 @Suite
 struct FinanceQuickEditLayoutPolicyTests {
-    @Test("Кнопка удаления в быстром редактировании доступна для карты и инвестиций")
-    func deleteButtonVisibilityMatchesSupportedAccountTypes() {
-        #expect(FinanceQuickEditLayoutPolicy.showsDeleteButton(for: .card) == true)
-        #expect(FinanceQuickEditLayoutPolicy.showsDeleteButton(for: .investment) == true)
-        #expect(FinanceQuickEditLayoutPolicy.showsDeleteButton(for: .credit) == false)
-    }
-
     @Test("Название продукта для удаления очищается от хвостовых пробелов")
     func deleteProductNameIsTrimmedBeforeFormatting() {
         #expect(FinanceDeleteProductCopy.normalizedProductName(" Тест Карта  ") == "Тест Карта")

@@ -7,6 +7,95 @@ private struct StockBulkImportSearchRequest: Identifiable {
     let id: UUID
 }
 
+struct StockBulkImportModePresentation: Equatable {
+    let icon: String
+    let title: String
+    let subtitle: String
+}
+
+enum StockBulkImportLayoutPolicy {
+    static func presentation(for mode: StockBulkImportMode) -> StockBulkImportModePresentation {
+        switch mode {
+        case .screenshot:
+            return StockBulkImportModePresentation(
+                icon: "photo.stack",
+                title: String(localized: "finances.mass_import.pick_screenshots"),
+                subtitle: localized(
+                    ru: "Загрузите до 8 кадров, а мы соберем черновик позиций и отметим спорные строки.",
+                    en: "Upload up to 8 screenshots and we will build draft positions and flag ambiguous rows."
+                )
+            )
+        case .manual:
+            return StockBulkImportModePresentation(
+                icon: "square.and.pencil",
+                title: String(localized: "finances.mass_import.add_row"),
+                subtitle: String(localized: "finances.mass_import.add_row_hint")
+            )
+        }
+    }
+
+    static func bottomActionTitle(addableCount: Int) -> String {
+        addableCount > 0
+            ? localized(
+                ru: "Импортировать \(addableCount) \(addableCount == 1 ? "позицию" : addableCount < 5 ? "позиции" : "позиций")",
+                en: "Import \(addableCount) position\(addableCount == 1 ? "" : "s")"
+            )
+            : localized(
+                ru: "Нечего импортировать",
+                en: "Nothing to import"
+            )
+    }
+
+    static func bottomActionSubtitle(totalRows: Int) -> String {
+        totalRows > 0
+            ? localized(
+                ru: "Подготовлено строк: \(totalRows)",
+                en: "Prepared rows: \(totalRows)"
+            )
+            : FinancesL10n.tr("finances.mass_import.preview_empty")
+    }
+
+    static func localized(ru: String, en: String, locale: Locale = .current) -> String {
+        let languageCode = locale.language.languageCode?.identifier ?? locale.identifier
+        return languageCode.hasPrefix("ru") ? ru : en
+    }
+
+    static var screenshotInstructionsTitle: String {
+        localized(
+            ru: "Как подготовить скриншоты",
+            en: "How to prepare screenshots"
+        )
+    }
+
+    static var screenshotInstructionsMessage: String {
+        localized(
+            ru: "Откройте экран брокера или портфеля, где видны тикер, рынок, количество и цена покупки\nДелайте четкие скриншоты без сильного блюра, бликов и перекрытий\nЛучше использовать светлый фон и полный список позиций, а не обрезанные карточки\nМожно добавить до 8 скриншотов подряд, после чего проверьте найденные строки перед импортом",
+            en: "Open your broker or portfolio screen where ticker, market, quantity, and buy price are visible\nCapture clear screenshots without heavy blur, glare, or overlays\nA light background and full position list work better than cropped cards\nYou can add up to 8 screenshots, then review the detected rows before import"
+        )
+    }
+
+    static var screenshotExampleTitle: String {
+        localized(
+            ru: "Пример удачного скриншота",
+            en: "Good screenshot example"
+        )
+    }
+
+    static var screenshotExampleHint: String {
+        localized(
+            ru: "Тикер, рынок, количество и цена покупки читаются сразу",
+            en: "Ticker, market, quantity, and buy price are readable at a glance"
+        )
+    }
+
+    static var screenshotInstructionsButtonTitle: String {
+        localized(
+            ru: "Понятно",
+            en: "Got it"
+        )
+    }
+}
+
 @MainActor
 final class StockBulkImportViewModel: ObservableObject {
     @Published var mode: StockBulkImportMode = .screenshot
@@ -408,6 +497,7 @@ struct StockBulkImportSheet: View {
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var searchRequest: StockBulkImportSearchRequest?
     @State private var showGroupCreator: Bool = false
+    @State private var showScreenshotInstructions: Bool = false
     @State private var previousGroupIDs: Set<String> = []
     @FocusState private var focusedField: FocusField?
 
@@ -442,9 +532,15 @@ struct StockBulkImportSheet: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 18)
                 }
+
+                screenshotInstructionsOverlay
             }
             .navigationTitle(String(localized: "finances.mass_import.title"))
             .navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .bottom) {
+                bottomActionBar
+            }
+            .animation(.spring(response: 0.3, dampingFraction: 0.88), value: showScreenshotInstructions)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
@@ -456,6 +552,18 @@ struct StockBulkImportSheet: View {
                     }
                     .foregroundStyle(AppColors.textPrimary)
                     .accessibilityLabel(Text(String(localized: "finances.common.cancel")))
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showScreenshotInstructions = true
+                    } label: {
+                        Image(systemName: "questionmark.circle")
+                            .font(.system(size: 18, weight: .semibold))
+                            .frame(width: 30, height: 30)
+                    }
+                    .foregroundStyle(AppColors.textSecondary)
+                    .accessibilityLabel(Text(StockBulkImportLayoutPolicy.screenshotInstructionsTitle))
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -499,6 +607,170 @@ struct StockBulkImportSheet: View {
         }
     }
 
+    @ViewBuilder
+    private var screenshotInstructionsOverlay: some View {
+        if showScreenshotInstructions {
+            ZStack {
+                Color.black.opacity(0.62)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        showScreenshotInstructions = false
+                    }
+
+                VStack(spacing: 18) {
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(StockBulkImportLayoutPolicy.screenshotInstructionsTitle)
+                                .font(.system(size: 24, weight: .bold))
+                                .foregroundStyle(AppColors.textPrimary)
+
+                            Text(
+                                StockBulkImportLayoutPolicy.localized(
+                                    ru: "Чтобы импорт точнее распознал позиции",
+                                    en: "To help the import recognize positions more accurately"
+                                )
+                            )
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(AppColors.textSecondary)
+                        }
+
+                        Spacer()
+
+                        Button {
+                            showScreenshotInstructions = false
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(AppColors.textSecondary)
+                                .frame(width: 28, height: 28)
+                                .background(Color.white.opacity(0.08))
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    screenshotExampleCard
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(screenshotInstructionLines.indices, id: \.self) { index in
+                            HStack(alignment: .top, spacing: 10) {
+                                Text("\(index + 1)")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundStyle(AppColors.brandPrimary)
+                                    .frame(width: 18, alignment: .leading)
+
+                                Text(screenshotInstructionLines[index])
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundStyle(AppColors.textPrimary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+
+                    Button {
+                        showScreenshotInstructions = false
+                    } label: {
+                        Text(StockBulkImportLayoutPolicy.screenshotInstructionsButtonTitle)
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(AppColors.textPrimary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color.white.opacity(0.06))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .stroke(AppColors.brandPrimary.opacity(0.5), lineWidth: 1)
+                            }
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(18)
+                .background {
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.08, green: 0.08, blue: 0.1),
+                                    Color.black
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                                .stroke(AppColors.brandPrimary.opacity(0.38), lineWidth: 1)
+                        }
+                }
+                .padding(.horizontal, 22)
+                .shadow(color: Color.black.opacity(0.32), radius: 26, y: 16)
+                .transition(
+                    .asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 0.96)),
+                        removal: .opacity.combined(with: .scale(scale: 0.98))
+                    )
+                )
+            }
+            .zIndex(5)
+        }
+    }
+
+    private var screenshotExampleCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(StockBulkImportLayoutPolicy.screenshotExampleTitle)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                    Text(StockBulkImportLayoutPolicy.screenshotExampleHint)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(AppColors.textSecondary)
+                }
+                Spacer()
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(AppColors.brandPrimary)
+            }
+
+            VStack(spacing: 8) {
+                screenshotExampleRow(symbol: "AAPL", market: "NASDAQ", quantity: "12", price: "$188")
+                screenshotExampleRow(symbol: "GLD", market: "NYSEARCA", quantity: "4", price: "$344")
+                screenshotExampleRow(symbol: "ORCL", market: "NYSE", quantity: "7", price: "$151")
+            }
+        }
+        .padding(12)
+        .background(Color.white.opacity(0.04))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private func screenshotExampleRow(symbol: String, market: String, quantity: String, price: String) -> some View {
+        HStack(spacing: 8) {
+            exampleCell(symbol, width: 68, alignment: .leading)
+            exampleCell(market, width: 90, alignment: .leading)
+            exampleCell(quantity, width: 48, alignment: .center)
+            exampleCell(price, width: 58, alignment: .trailing)
+        }
+    }
+
+    private func exampleCell(_ title: String, width: CGFloat, alignment: Alignment) -> some View {
+        Text(title)
+            .font(.system(size: 10, weight: .semibold, design: .rounded))
+            .foregroundStyle(AppColors.textPrimary)
+            .frame(width: width, alignment: alignment)
+            .padding(.vertical, 7)
+            .padding(.horizontal, 7)
+            .background(Color.white.opacity(0.06))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private var screenshotInstructionLines: [String] {
+        StockBulkImportLayoutPolicy.screenshotInstructionsMessage.components(separatedBy: "\n")
+    }
+
     private func tickerTextBinding(for rowID: UUID) -> Binding<String> {
         Binding(
             get: { viewModel.rows.first(where: { $0.id == rowID })?.tickerText ?? "" },
@@ -508,26 +780,117 @@ struct StockBulkImportSheet: View {
         )
     }
 
+    private var modePresentation: StockBulkImportModePresentation {
+        StockBulkImportLayoutPolicy.presentation(for: viewModel.mode)
+    }
+
     private var modePicker: some View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: FinancesL10n.tr("finances.mass_import.mode.title"))
-            Picker("", selection: $viewModel.mode) {
-                ForEach(StockBulkImportMode.allCases) { mode in
-                    Text(FinancesL10n.tr(mode.titleKey)).tag(mode)
+            FinancesGlassCard(accentColor: AppColors.brandPrimary.opacity(0.9), cornerRadius: 20) {
+                HStack(spacing: 8) {
+                    ForEach(StockBulkImportMode.allCases) { mode in
+                        let isSelected = viewModel.mode == mode
+                        Button {
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                                viewModel.mode = mode
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: StockBulkImportLayoutPolicy.presentation(for: mode).icon)
+                                    .font(.system(size: 13, weight: .semibold))
+                                Text(FinancesL10n.tr(mode.titleKey))
+                                    .font(.system(size: 15, weight: .semibold))
+                            }
+                            .foregroundStyle(isSelected ? Color.white : AppColors.textSecondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background {
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(Color.white.opacity(isSelected ? 0.16 : 0.001))
+                                    .overlay {
+                                        if isSelected {
+                                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                                        }
+                                    }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
-            .pickerStyle(.segmented)
         }
+    }
+
+    private var modeHeroCard: some View {
+        Button {
+            if viewModel.mode == .manual {
+                viewModel.addManualRow()
+            }
+        } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(Color.white.opacity(0.16))
+                        .frame(width: 52, height: 52)
+                    Image(systemName: viewModel.mode == .manual ? "plus" : modePresentation.icon)
+                        .font(.system(size: viewModel.mode == .manual ? 22 : 20, weight: .bold))
+                        .foregroundStyle(Color.white)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(modePresentation.title)
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(Color.white)
+                        .multilineTextAlignment(.leading)
+                    Text(modePresentation.subtitle)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.76))
+                        .multilineTextAlignment(.leading)
+                }
+
+                Spacer(minLength: 8)
+
+                Image(systemName: viewModel.mode == .manual ? "arrow.right" : "sparkles")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.92))
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .buttonStyle(.plain)
+        .background {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.white.opacity(0.02))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(AppColors.brandPrimary.opacity(0.55), lineWidth: 1)
+                }
+        }
+        .disabled(viewModel.mode != .manual)
     }
 
     private var paramsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: FinancesL10n.tr("finances.mass_import.params"))
-            FinancesGlassCard {
+            FinancesGlassCard(accentColor: AppColors.brandPrimary.opacity(0.9), cornerRadius: 20) {
                 VStack(spacing: 0) {
                     HStack {
-                        Text(String(localized: "finances.mass_import.group"))
-                            .foregroundStyle(AppColors.textPrimary)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(String(localized: "finances.mass_import.group"))
+                                .font(.system(size: 17, weight: .medium))
+                                .foregroundStyle(AppColors.textPrimary)
+                            Text(
+                                StockBulkImportLayoutPolicy.localized(
+                                    ru: "Выберите группу, куда сохранить импортированные позиции.",
+                                    en: "Choose the group where imported positions will be saved."
+                                )
+                            )
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(AppColors.textSecondary)
+                        }
                         Spacer()
                         HStack(spacing: 10) {
                             Menu {
@@ -544,6 +907,7 @@ struct StockBulkImportSheet: View {
                                     Text(viewModel.selectedGroup?.name ?? String(localized: "finances.mass_import.group_none"))
                                     Image(systemName: "chevron.up.chevron.down")
                                 }
+                                .font(.system(size: 17, weight: .semibold))
                                 .foregroundStyle(AppColors.brandPrimary)
                             }
 
@@ -572,11 +936,22 @@ struct StockBulkImportSheet: View {
     private var quickSettingsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: FinancesL10n.tr("finances.mass_import.quick_settings"))
-            FinancesGlassCard {
+            FinancesGlassCard(accentColor: AppColors.brandPrimary.opacity(0.9), cornerRadius: 20) {
                 VStack(spacing: 0) {
                     Toggle(isOn: $viewModel.includeInTotal) {
-                        Text(String(localized: "finances.mass_import.include_in_total"))
-                            .foregroundStyle(AppColors.textPrimary)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(String(localized: "finances.mass_import.include_in_total"))
+                                .font(.system(size: 17, weight: .medium))
+                                .foregroundStyle(AppColors.textPrimary)
+                            Text(
+                                StockBulkImportLayoutPolicy.localized(
+                                    ru: "Новые активы сразу попадут в общий баланс финансов.",
+                                    en: "New assets will be included in the total balance right away."
+                                )
+                            )
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(AppColors.textSecondary)
+                        }
                     }
                     .tint(AppColors.brandPrimary)
                     .padding(.horizontal, 16)
@@ -594,58 +969,14 @@ struct StockBulkImportSheet: View {
             switch viewModel.mode {
             case .manual:
                 VStack(spacing: 10) {
-                    Button {
-                        viewModel.addManualRow()
-                    } label: {
-                        HStack(spacing: 14) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.white.opacity(0.18))
-                                    .frame(width: 36, height: 36)
-                                Image(systemName: "plus")
-                                    .font(.system(size: 18, weight: .bold))
-                            }
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(String(localized: "finances.mass_import.add_row"))
-                                    .font(.system(size: 17, weight: .semibold))
-                                Text(String(localized: "finances.mass_import.add_row_hint"))
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundStyle(Color.white.opacity(0.72))
-                            }
-                            Spacer()
-                            Image(systemName: "arrow.right")
-                                .font(.system(size: 14, weight: .semibold))
-                        }
-                        .foregroundStyle(Color.white)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 16)
-                    }
-                    .buttonStyle(.plain)
-                    .background(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        AppColors.brandPrimary.opacity(0.95),
-                                        (AppColors.financesGradient.last ?? AppColors.brandPrimary).opacity(0.88)
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .stroke(Color.white.opacity(0.16), lineWidth: 1)
-                            )
-                    )
-                    .shadow(color: AppColors.brandPrimary.opacity(0.28), radius: 18, y: 8)
+                    modeHeroCard
 
                     ForEach(viewModel.rows.sorted(by: { $0.sourceOrderIndex < $1.sourceOrderIndex })) { row in
                         manualRowEditor(row)
                     }
                 }
             case .screenshot:
-                FinancesGlassCard {
+                FinancesGlassCard(accentColor: AppColors.brandPrimary.opacity(0.9), cornerRadius: 24) {
                     VStack(alignment: .leading, spacing: 12) {
                         PhotosPicker(
                             selection: $selectedPhotoItems,
@@ -658,8 +989,15 @@ struct StockBulkImportSheet: View {
                             )
                             .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(.borderedProminent)
-                        .tint(AppColors.brandPrimary)
+                        .buttonStyle(.plain)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 18)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .stroke(AppColors.brandPrimary.opacity(0.55), lineWidth: 1)
+                        }
 
                         Text(
                             FinancesL10n.format(
@@ -669,6 +1007,15 @@ struct StockBulkImportSheet: View {
                         )
                         .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(AppColors.textSecondary)
+
+                        Text(
+                            StockBulkImportLayoutPolicy.localized(
+                                ru: "Лучше всего работают четкие таблицы и портфельные списки на светлом фоне.",
+                                en: "Sharp tables and portfolio lists on a light background work best."
+                            )
+                        )
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(AppColors.textTertiary)
                     }
                     .padding(16)
                 }
@@ -679,11 +1026,16 @@ struct StockBulkImportSheet: View {
     private var managementCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: FinancesL10n.tr("finances.mass_import.management"))
-            FinancesGlassCard {
+            FinancesGlassCard(accentColor: AppColors.brandPrimary.opacity(0.9), cornerRadius: 20) {
                 VStack(spacing: 0) {
                     Toggle(isOn: $viewModel.mergeDuplicates) {
-                        Text(String(localized: "finances.mass_import.merge_duplicates"))
-                            .foregroundStyle(AppColors.textPrimary)
+                        settingsToggleContent(
+                            title: String(localized: "finances.mass_import.merge_duplicates"),
+                            subtitle: StockBulkImportLayoutPolicy.localized(
+                                ru: "Склеивать одинаковые тикеры в одну итоговую позицию.",
+                                en: "Merge duplicate tickers into one final position."
+                            )
+                        )
                     }
                     .tint(AppColors.brandPrimary)
                     .padding(.horizontal, 16)
@@ -692,8 +1044,13 @@ struct StockBulkImportSheet: View {
                     FinancesRowDivider()
 
                     Toggle(isOn: $viewModel.showProblemsOnly) {
-                        Text(String(localized: "finances.mass_import.show_problems"))
-                            .foregroundStyle(AppColors.textPrimary)
+                        settingsToggleContent(
+                            title: String(localized: "finances.mass_import.show_problems"),
+                            subtitle: StockBulkImportLayoutPolicy.localized(
+                                ru: "Оставить на экране только строки, которые требуют проверки.",
+                                en: "Show only the rows that still require review."
+                            )
+                        )
                     }
                     .tint(AppColors.brandPrimary)
                     .padding(.horizontal, 16)
@@ -719,6 +1076,8 @@ struct StockBulkImportSheet: View {
                 title: FinancesL10n.format("finances.mass_import.preview_title", viewModel.addableCount, viewModel.rows.count)
             )
 
+            previewSummaryStrip
+
             if viewModel.isProcessing {
                 ProgressView()
                     .tint(AppColors.textPrimary)
@@ -741,8 +1100,32 @@ struct StockBulkImportSheet: View {
         }
     }
 
+    private var previewSummaryStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                previewChip(
+                    title: StockBulkImportLayoutPolicy.localized(ru: "Готово", en: "Ready"),
+                    value: "\(viewModel.addableCount)",
+                    accent: AppColors.brandPrimary
+                )
+                previewChip(
+                    title: StockBulkImportLayoutPolicy.localized(ru: "Всего", en: "Total"),
+                    value: "\(viewModel.rows.count)",
+                    accent: Color.white.opacity(0.9)
+                )
+                if viewModel.showProblemsOnly {
+                    previewChip(
+                        title: StockBulkImportLayoutPolicy.localized(ru: "Фильтр", en: "Filter"),
+                        value: StockBulkImportLayoutPolicy.localized(ru: "Только важное", en: "Problems only"),
+                        accent: AppColors.warning
+                    )
+                }
+            }
+        }
+    }
+
     private func placeholderCard(text: String) -> some View {
-        FinancesGlassCard {
+        FinancesGlassCard(accentColor: AppColors.brandPrimary.opacity(0.7), cornerRadius: 20) {
             Text(text)
                 .font(.system(size: 14, weight: .regular))
                 .foregroundStyle(AppColors.textSecondary)
@@ -752,7 +1135,7 @@ struct StockBulkImportSheet: View {
     }
 
     private func editableImportedRow(_ row: StockBulkImportRowDraft) -> some View {
-        FinancesGlassCard {
+        FinancesGlassCard(accentColor: statusColor(row.status), cornerRadius: 20) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top, spacing: 10) {
                     VStack(alignment: .leading, spacing: 4) {
@@ -786,7 +1169,7 @@ struct StockBulkImportSheet: View {
     }
 
     private func manualRowEditor(_ row: StockBulkImportRowDraft) -> some View {
-        FinancesGlassCard {
+        FinancesGlassCard(accentColor: AppColors.brandPrimary.opacity(0.9), cornerRadius: 20) {
             inlineEditorGrid(for: row, showsDelete: true)
             .padding(16)
         }
@@ -897,25 +1280,62 @@ struct StockBulkImportSheet: View {
             }
 
             if !row.candidates.isEmpty && row.selectedCandidate == nil {
-                Menu {
-                    ForEach(row.candidates) { candidate in
-                        Button(candidate.normalizedSymbol) {
-                            focusedField = nil
-                            viewModel.selectCandidate(candidate, for: row.id)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(
+                        StockBulkImportLayoutPolicy.localized(
+                            ru: "Выберите точный инструмент из найденных совпадений",
+                            en: "Choose the exact instrument from the matches below"
+                        )
+                    )
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppColors.textSecondary)
+
+                    Menu {
+                        ForEach(row.candidates) { candidate in
+                            Button {
+                                focusedField = nil
+                                viewModel.selectCandidate(candidate, for: row.id)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(candidateChoiceTitle(candidate))
+                                    if let subtitle = candidateChoiceSubtitle(candidate) {
+                                        Text(subtitle)
+                                    }
+                                }
+                            }
                         }
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(
+                                    StockBulkImportLayoutPolicy.localized(
+                                        ru: "Найдено \(row.candidates.count) вариантов",
+                                        en: "Found \(row.candidates.count) matches"
+                                    )
+                                )
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(AppColors.textSecondary)
+
+                                Text(
+                                    StockBulkImportLayoutPolicy.localized(
+                                        ru: "Нажмите, чтобы выбрать инструмент",
+                                        en: "Tap to choose instrument"
+                                    )
+                                )
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(AppColors.textPrimary)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.up.chevron.down")
+                                .foregroundStyle(AppColors.textSecondary)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 12)
+                        .background(Color.white.opacity(0.06))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
-                } label: {
-                    HStack {
-                        Text(String(localized: "finances.mass_import.choose_instrument"))
-                        Spacer()
-                        Image(systemName: "chevron.up.chevron.down")
-                    }
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(AppColors.textPrimary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(Color.white.opacity(0.06))
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
             }
         }
@@ -937,6 +1357,112 @@ struct StockBulkImportSheet: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func settingsToggleContent(title: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(AppColors.textPrimary)
+            Text(subtitle)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(AppColors.textSecondary)
+        }
+    }
+
+    private func previewChip(title: String, value: String, accent: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(AppColors.textSecondary)
+            Text(value)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(AppColors.textPrimary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.white.opacity(0.05))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(accent.opacity(0.5), lineWidth: 1)
+                }
+        }
+    }
+
+    private func candidateChoiceTitle(_ candidate: StockBulkImportCandidate) -> String {
+        if let market = candidate.normalizedMarket, !market.isEmpty {
+            return "\(candidate.normalizedSymbol) - \(market)"
+        }
+        return candidate.normalizedSymbol
+    }
+
+    private func candidateChoiceSubtitle(_ candidate: StockBulkImportCandidate) -> String? {
+        let displayName = candidate.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let currency = candidate.currency.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if !displayName.isEmpty, !currency.isEmpty {
+            return "\(displayName) • \(currency)"
+        }
+        if !displayName.isEmpty {
+            return displayName
+        }
+        if !currency.isEmpty {
+            return currency
+        }
+        return nil
+    }
+
+    private var bottomActionBar: some View {
+        VStack(spacing: 12) {
+            Button {
+                Task {
+                    let imported = await viewModel.persistRows()
+                    guard imported > 0 else { return }
+                    financeViewModel.handle(.loadAccounts)
+                    financeViewModel.handle(.loadGroups)
+                    dismiss()
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(StockBulkImportLayoutPolicy.bottomActionTitle(addableCount: viewModel.addableCount))
+                            .font(.system(size: 17, weight: .bold))
+                        Text(StockBulkImportLayoutPolicy.bottomActionSubtitle(totalRows: viewModel.rows.count))
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Color.white.opacity(0.78))
+                    }
+
+                    Spacer()
+
+                    Image(systemName: viewModel.isProcessing ? "hourglass" : "arrow.up.circle.fill")
+                        .font(.system(size: 22, weight: .semibold))
+                }
+                .foregroundStyle(Color.white)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 16)
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.plain)
+            .background {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(Color.white.opacity(0.02))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .stroke(
+                                (viewModel.addableCount > 0 ? AppColors.brandPrimary : AppColors.textSecondary)
+                                    .opacity(0.45),
+                                lineWidth: 1
+                            )
+                    }
+            }
+            .disabled(viewModel.addableCount == 0 || viewModel.isProcessing)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 12)
+        .background(.ultraThinMaterial)
     }
 
     private func valueColumn(title: String, value: String) -> some View {

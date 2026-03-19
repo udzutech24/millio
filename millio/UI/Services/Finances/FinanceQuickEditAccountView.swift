@@ -7,12 +7,6 @@
 
 import SwiftUI
 
-enum FinanceQuickEditLayoutPolicy {
-    static func showsDeleteButton(for accountType: FinanceAccountType) -> Bool {
-        accountType == .card || accountType == .investment
-    }
-}
-
 struct FinanceQuickEditAccountView: View {
     let account: FinanceAccount
     @ObservedObject var viewModel: FinanceViewModel
@@ -22,7 +16,6 @@ struct FinanceQuickEditAccountView: View {
     @State private var creditLimitText: String = ""
     @State private var creditDebtText: String = ""
     @State private var isLoading = false
-    @State private var showDeleteConfirmation = false
     @FocusState private var isAmountFieldFocused: Bool
     
     var accountInfo: (name: String, amount: Double, currency: String, icon: String, isCreditCardDebt: Bool)? {
@@ -150,24 +143,9 @@ struct FinanceQuickEditAccountView: View {
                         .disabled(isLoading || !isValidInput)
                         .opacity(isLoading || !isValidInput ? 0.6 : 1.0)
                         .padding(.horizontal, 24)
-
-                        if FinanceQuickEditLayoutPolicy.showsDeleteButton(for: account.accountType) {
-                            deleteAccountButton
-                                .padding(.horizontal, 24)
-                        }
                     }
                 }
                 .padding(.bottom, 40)
-
-                FinancesDestructiveConfirmationOverlay(
-                    isPresented: showDeleteConfirmation,
-                    title: deleteConfirmationTitle,
-                    message: String(localized: deleteConfirmationMessageKey),
-                    confirmTitle: String(localized: "finances.common.delete"),
-                    cancelTitle: String(localized: "finances.common.cancel"),
-                    onConfirm: deleteAccount,
-                    onCancel: { showDeleteConfirmation = false }
-                )
             }
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
@@ -183,28 +161,6 @@ struct FinanceQuickEditAccountView: View {
         .onAppear {
             setupInitialValues()
         }
-    }
-
-    private var deleteAccountButton: some View {
-        Button(role: .destructive) {
-            showDeleteConfirmation = true
-        } label: {
-            Text(String(localized: deleteActionTitle))
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(AppColors.error.opacity(0.92))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color.white.opacity(0.035))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .stroke(AppColors.error.opacity(0.22), lineWidth: 0.9)
-                        )
-                )
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("finances.quick_edit.delete_account.button")
     }
 
     @ViewBuilder
@@ -354,12 +310,6 @@ struct FinanceQuickEditAccountView: View {
         dismiss()
     }
 
-    private func deleteAccount() {
-        showDeleteConfirmation = false
-        viewModel.handle(.deleteAccountPermanently(account))
-        dismiss()
-    }
-
     private func setupInitialValues() {
         guard let info = accountInfo else { return }
         if isCreditCard, let card = currentCreditCard {
@@ -417,18 +367,5 @@ struct FinanceQuickEditAccountView: View {
             return investment.marketQuantity ?? 0
         }
         return fallbackAmount
-    }
-
-    private var deleteConfirmationTitle: String {
-        let name = accountInfo?.name ?? String(localized: "finances.dynamics.chart.account_fallback")
-        return FinanceDeleteProductCopy.confirmationTitle(for: account.accountType, name: name)
-    }
-
-    private var deleteActionTitle: LocalizedStringResource {
-        FinanceDeleteProductCopy.actionTitle(for: account.accountType)
-    }
-
-    private var deleteConfirmationMessageKey: LocalizedStringResource {
-        FinanceDeleteProductCopy.confirmationMessage(for: account.accountType)
     }
 }

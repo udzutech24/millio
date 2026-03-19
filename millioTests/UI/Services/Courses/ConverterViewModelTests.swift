@@ -15,6 +15,8 @@ import Testing
 final class MockConverterRateRepository: RateRepositoryProtocol, @unchecked Sendable {
     var mockRates: [String: Double] = ["USD": 1.0, "EUR": 0.92, "RUB": 90.0, "TRY": 30.0, "GBP": 0.79]
     var shouldFail: Bool = false
+    var mockUpdatedAt: TimeInterval = Date().timeIntervalSince1970
+    var mockFetchedAt: TimeInterval = Date().timeIntervalSince1970
 
     nonisolated func getLatestRates(source: RateSource, forceRefresh: Bool, allowStaleOnError: Bool) async throws -> RateSnapshot {
         let shouldFailValue = await MainActor.run { shouldFail }
@@ -22,12 +24,14 @@ final class MockConverterRateRepository: RateRepositoryProtocol, @unchecked Send
             throw URLError(.notConnectedToInternet)
         }
 
-        let ratesValue = await MainActor.run { mockRates }
+        let payload = await MainActor.run {
+            (rates: mockRates, updatedAt: mockUpdatedAt, fetchedAt: mockFetchedAt)
+        }
         return RateSnapshot(
             source: source,
-            rates: ratesValue,
-            updatedAt: Date().timeIntervalSince1970,
-            fetchedAt: Date().timeIntervalSince1970
+            rates: payload.rates,
+            updatedAt: payload.updatedAt,
+            fetchedAt: payload.fetchedAt
         )
     }
 }
@@ -399,5 +403,32 @@ struct ConverterViewModelTests {
         #expect(viewModel.state.showToast)
         #expect(viewModel.state.toastMessage?.contains("EUR") == true)
         #expect(viewModel.state.toastMessage?.contains("RUB") == true)
+    }
+
+    @Test("Последнее обновление сохраняет время фактической загрузки, а не время провайдера")
+    func testFetchRatesStoresFetchedAtForLastUpdated() async {
+        let defaults = UserDefaults.standard
+        let key = CurrencyWidgetShared.Keys.lastRatesTimestamp(for: RateSource.erapi.rawValue)
+        let hadValue = defaults.object(forKey: key) != nil
+        let previousValue = defaults.double(forKey: key)
+        defer {
+            if hadValue {
+                defaults.set(previousValue, forKey: key)
+            } else {
+                defaults.removeObject(forKey: key)
+            }
+        }
+
+        let mockRepo = MockConverterRateRepository()
+        mockRepo.mockUpdatedAt = 1_710_000_000
+        mockRepo.mockFetchedAt = 1_710_003_600
+
+        let viewModel = ConverterViewModel(rateRepository: mockRepo)
+        viewModel.state.rateSource = .erapi
+
+        await viewModel.fetchRates(force: true)
+
+        #expect(defaults.double(forKey: key) == mockRepo.mockFetchedAt)
+        #expect(defaults.double(forKey: key) != mockRepo.mockUpdatedAt)
     }
 }
