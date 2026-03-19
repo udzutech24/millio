@@ -706,7 +706,9 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             date: startDate,
             accountCardIDs: Set(accounts.compactMap { $0.accountType == .card ? $0.accountID : nil }),
             debtAsNegative: useNetTotals,
-            includeInitialBeforeCreation: true
+            // Старт периода должен отражать фактическое состояние на эту дату.
+            // Счет, созданный позже, не должен "задним числом" попадать в стартовый баланс.
+            includeInitialBeforeCreation: false
         )
         if Task.isCancelled { return }
         if selectedDate != state.selectedDate { return }
@@ -848,7 +850,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                             date: startDate,
                             accountCardIDs: accountCardIDs,
                             debtAsNegative: true,
-                            includeInitialBeforeCreation: true
+                            includeInitialBeforeCreation: false
                         )
                         async let endBalanceTask = self.calculateBalanceAtDate(
                             accounts: filteredAccounts,
@@ -921,7 +923,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                             date: startDate,
                             accountCardIDs: accountCardIDs,
                             debtAsNegative: false,
-                            includeInitialBeforeCreation: true
+                            includeInitialBeforeCreation: false
                         )
                         async let endBalanceTask = self.calculateBalanceAtDate(
                             accounts: [account],
@@ -1069,7 +1071,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             date: startDate,
             accountCardIDs: accountCardIDs,
             debtAsNegative: debtAsNegative,
-            includeInitialBeforeCreation: true
+            includeInitialBeforeCreation: false
         )
         let endBalance = await calculateBalanceAtDate(
             accounts: accounts,
@@ -1628,8 +1630,9 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                 accountCurrency = resolvedInvestmentCurrency(investment)
                 shouldInclude = true
                 
-                // Активы = оценочная стоимость + история изменений
-                var baseAmount = investment.hasInitialAmount ? investment.initialAmount : investment.amount
+                // Для рыночных активов baseline должен опираться на cost basis, если legacy initialAmount
+                // оказался записан как 0. Иначе динамика начинает путь с нуля и рисует ложный +inf.
+                var baseAmount = baselineAmountForInvestment(investment)
                 let investmentTransactions = transactionsByInvestmentCache[investment.investmentUniqueID] ?? []
                 if !investment.hasInitialAmount {
                     var totalDelta: Double = 0.0
@@ -1778,6 +1781,50 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             totalAdjustments += converted
         }
         return card.balance - totalAdjustments
+    }
+
+    private func baselineAmountForInvestment(_ investment: Investment) -> Double {
+        let calendar = Calendar.current
+        let endOfCreationDay = calendar.date(
+            bySettingHour: 23,
+            minute: 59,
+            second: 59,
+            of: investment.createdAt
+        ) ?? investment.createdAt
+
+        if investment.hasInitialAmount {
+            if abs(investment.initialAmount) >= 0.01 {
+                return investment.initialAmount
+            }
+
+            if investment.isMarketPriced,
+               investment.updatedAt <= endOfCreationDay,
+               abs(investment.amount) >= 0.01 {
+                return investment.amount
+            }
+
+            if investment.isMarketPriced,
+               let purchaseCost = investment.totalPurchaseCost,
+               purchaseCost > 0 {
+                return purchaseCost
+            }
+
+            return investment.initialAmount
+        }
+
+        if investment.isMarketPriced,
+           investment.updatedAt <= endOfCreationDay,
+           abs(investment.amount) >= 0.01 {
+            return investment.amount
+        }
+
+        if investment.isMarketPriced,
+           let purchaseCost = investment.totalPurchaseCost,
+           purchaseCost > 0 {
+            return purchaseCost
+        }
+
+        return investment.amount
     }
     
     /// Рассчитать остаток долга по кредиту на конкретную дату с учетом транзакций корректировки

@@ -2389,7 +2389,10 @@ final class CashflowViewModel: ViewModelProtocol {
             if transaction.cardID == cardID {
                 appliedDelta = -amountInCardCurrency
             } else if transaction.toCardID == cardID {
-                appliedDelta = amountInCardCurrency
+                appliedDelta = try await transferReceivedAmount(
+                    for: transaction,
+                    in: cardCurrency
+                )
             } else {
                 appliedDelta = 0
             }
@@ -2730,6 +2733,14 @@ final class CashflowViewModel: ViewModelProtocol {
         let rateCurrency: String?
     }
 
+    private func normalizedCurrencyCode(_ currency: String?) -> String? {
+        guard let currency else { return nil }
+        let normalized = currency
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+        return normalized.isEmpty ? nil : normalized
+    }
+
     private enum CardBalanceEffectDirection {
         case apply
         case revert
@@ -2787,6 +2798,38 @@ final class CashflowViewModel: ViewModelProtocol {
     }
     
     private func resolveExchangeInfo(for transaction: CashflowTransaction) async -> ExchangeInfo {
+        if transaction.transactionType == .transfer,
+           let targetCurrency = normalizedCurrencyCode(card(for: transaction.toCardID ?? "")?.currency) {
+            let sourceCurrency = normalizedCurrencyCode(transaction.currency) ?? targetCurrency
+            let rateDate = Calendar.current.startOfDay(for: transaction.transactionDate)
+
+            if sourceCurrency == targetCurrency {
+                return ExchangeInfo(rate: 1.0, rateDate: rateDate, rateCurrency: targetCurrency)
+            }
+
+            if let explicitRate = transaction.exchangeRate,
+               explicitRate > 0,
+               normalizedCurrencyCode(transaction.exchangeRateCurrency) == targetCurrency {
+                return ExchangeInfo(
+                    rate: explicitRate,
+                    rateDate: transaction.exchangeRateDate ?? rateDate,
+                    rateCurrency: targetCurrency
+                )
+            }
+
+            let result = await historicalRateStore.getRate(
+                on: transaction.transactionDate,
+                from: sourceCurrency,
+                to: targetCurrency
+            )
+
+            return ExchangeInfo(
+                rate: result.rate,
+                rateDate: result.rateDate ?? rateDate,
+                rateCurrency: result.rate != nil ? targetCurrency : nil
+            )
+        }
+
         let targetCurrency = state.displayCurrency
         
         guard transaction.currency != targetCurrency else {
@@ -2841,6 +2884,24 @@ final class CashflowViewModel: ViewModelProtocol {
         }
 
         return transaction.amount
+    }
+
+    private func transferReceivedAmount(
+        for transaction: CashflowTransaction,
+        in cardCurrency: String
+    ) async throws -> Double {
+        if let rate = transaction.exchangeRate,
+           rate > 0,
+           normalizedCurrencyCode(transaction.exchangeRateCurrency) == normalizedCurrencyCode(cardCurrency) {
+            return transaction.amount * rate
+        }
+
+        return try await convertAmountForValidation(
+            amount: transaction.amount,
+            from: transaction.currency,
+            to: cardCurrency,
+            on: transaction.transactionDate
+        )
     }
 
     private func markEstimatedRateWarning(on date: Date) {
@@ -2948,6 +3009,18 @@ final class CashflowViewModel: ViewModelProtocol {
             nowDate: nowDate
         )
         let exchangeInfo = await resolveExchangeInfo(for: transaction)
+
+        if transaction.transactionType == .transfer,
+           let targetCurrency = normalizedCurrencyCode(card(for: transaction.toCardID ?? "")?.currency),
+           normalizedCurrencyCode(transaction.currency) != targetCurrency,
+           (exchangeInfo.rate ?? 0) <= 0 {
+            AppLogger.log(
+                .warning,
+                category: "Cashflow",
+                "Transfer exchange rate is missing for \(transaction.currency) -> \(targetCurrency)"
+            )
+            return false
+        }
 
         do {
             let isAvailable = try await canPersistTransaction(transaction, replacing: existingTransaction)

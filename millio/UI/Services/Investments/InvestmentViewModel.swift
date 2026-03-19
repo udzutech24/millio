@@ -372,6 +372,8 @@ final class InvestmentViewModel: ViewModelProtocol {
                 category: category
             )
             newInvestment.recalculateAmountFromPosition()
+            newInvestment.initialAmount = newInvestment.amount
+            newInvestment.hasInitialAmount = true
             modelContext.insert(newInvestment)
         }
         

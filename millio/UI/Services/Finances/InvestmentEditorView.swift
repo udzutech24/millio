@@ -637,7 +637,7 @@ struct InvestmentEditorView: View {
         if isMarketCategory {
             guard !name.isEmpty,
                   !marketSymbol.isEmpty,
-                  let quantity = parseMarketQuantity(marketQuantityText) else {
+                  let quantity = InvestmentMarketInputParser.quantity(from: marketQuantityText) else {
                 return false
             }
             return quantity >= 0
@@ -810,7 +810,7 @@ struct InvestmentEditorView: View {
         let effectiveCategory: InvestmentCategory
 
         if isMarketCategory {
-            guard let quantity = parseMarketQuantity(marketQuantityText), quantity >= 0 else {
+            guard let quantity = InvestmentMarketInputParser.quantity(from: marketQuantityText), quantity >= 0 else {
                 return
             }
 

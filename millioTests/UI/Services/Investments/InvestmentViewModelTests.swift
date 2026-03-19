@@ -288,6 +288,41 @@ struct InvestmentViewModelTests {
         #expect(viewModel.state.investments.first?.investmentType == .positive)
     }
 
+    @Test("Создание market-инвестиции фиксирует initialAmount после пересчета позиции")
+    func testCreateMarketInvestmentStoresInitialAmountFromPositionTotal() async throws {
+        let context = try createTestModelContext()
+
+        let viewModel = InvestmentViewModel(modelContext: context)
+
+        viewModel.handle(.updateInvestment(
+            name: "BTCUSD",
+            investmentType: .positive,
+            category: .crypto,
+            amount: 0,
+            currency: "USD",
+            includeInTotal: true,
+            priority: .normal,
+            isFavorite: false,
+            marketData: InvestmentMarketData(
+                symbol: "BTCUSD",
+                exchange: "CRYPTO",
+                currency: "USD",
+                quantity: 0.25,
+                unitPrice: 50_000,
+                purchaseUnitPrice: 48_000,
+                priceUpdatedAt: Date(),
+                providerRaw: "market-backend"
+            ),
+            createCashflowTransaction: false,
+            uniqueID: nil
+        ))
+
+        let investment = try #require(viewModel.state.investments.first)
+        #expect(abs(investment.amount - 12_500) < 0.01)
+        #expect(abs(investment.initialAmount - 12_500) < 0.01)
+        #expect(investment.hasInitialAmount)
+    }
+
     @Test("Обновление инвестиции создаёт CashflowTransaction")
     func testUpdateInvestmentCreatesTransaction() async throws {
         let context = try createTestModelContext()

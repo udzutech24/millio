@@ -20,6 +20,7 @@ struct CashflowLocalizationRegressionTests {
         #expect(AppLocalization.string("cashflow.stats.asset_value_change", locale: locale) == "Изменение стоимости активов")
         #expect(AppLocalization.string("cashflow.stats.result", locale: locale) == "Результат")
         #expect(AppLocalization.string("cashflow.quick_action.transfer", locale: locale) == "Перевод")
+        #expect(AppLocalization.string("cashflow.operation.new_transfer", locale: locale) == "Новый перевод")
         #expect(AppLocalization.string("cashflow.chart.expand", locale: locale) == "Развернуть график")
         #expect(AppLocalization.string("cashflow.chart.visible_range", locale: locale) == "Диапазон")
         #expect(AppLocalization.string("cashflow.chart.hint_format", locale: locale).contains("Диапазон"))
@@ -75,6 +76,7 @@ struct CashflowLocalizationRegressionTests {
         let locale = Locale(identifier: "en_US")
 
         #expect(AppLocalization.string("cashflow.editor.account", locale: locale) == "Account")
+        #expect(AppLocalization.string("cashflow.operation.new_transfer", locale: locale) == "New transfer")
         #expect(AppLocalization.string("cashflow.editor.affect_balance.subtitle.expense", locale: locale) == "Turn off if the current balance is already correct and you only need to backfill expense history for the selected period")
         #expect(AppLocalization.string("cashflow.recurrence.quarterly", locale: locale) == "Every 3 months")
         #expect(AppLocalization.string("cashflow.recurrence.semiannual", locale: locale) == "Every 6 months")

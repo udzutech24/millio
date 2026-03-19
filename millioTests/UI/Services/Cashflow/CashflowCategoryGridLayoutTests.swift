@@ -98,13 +98,23 @@ struct CashflowCategoryGridLayoutTests {
         #expect(style == .compactBadge)
     }
 
-    @Test("У дохода остается обычная кнопка пина")
-    func incomeKeepsRegularPinButton() {
+    @Test("У дохода unpinned-пин скрыт по умолчанию")
+    func incomeUnpinnedPinIsHidden() {
         let style = CashflowCategoryGridLayout.pinAffordanceStyle(
             for: .income,
             isPinned: false
         )
 
-        #expect(style == .regularButton)
+        #expect(style == .hidden)
+    }
+
+    @Test("У дохода pinned-пин показывается компактным badge")
+    func incomePinnedPinUsesCompactBadge() {
+        let style = CashflowCategoryGridLayout.pinAffordanceStyle(
+            for: .income,
+            isPinned: true
+        )
+
+        #expect(style == .compactBadge)
     }
 }

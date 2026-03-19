@@ -196,7 +196,7 @@ struct CashflowTransactionEditorViewLayoutTests {
     @Test("Основная информация для перевода: валюта выбирается раньше карт")
     func transferMainInfoRows() {
         let rows = CashflowTransactionEditorView.mainInfoRows(for: .transfer)
-        #expect(rows == [.amount, .currency, .fromCard, .toCard, .date])
+        #expect(rows == [.amount, .fromCard, .toCard, .date])
     }
 
     @Test("Конфигурация cashflow-листа для дохода")

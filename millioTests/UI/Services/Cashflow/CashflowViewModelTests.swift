@@ -313,6 +313,57 @@ extension CashflowViewModelTests {
         #expect(available)
     }
 
+    @Test("Межвалютный перевод списывает и зачисляет суммы по сохраненному курсу")
+    func testTransferAppliesFrozenRateToDestinationCard() async throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 19, hour: 5)) ?? Date()
+
+        let usdCard = Card(
+            name: "USD",
+            cardNumber: "1000",
+            bank: .other,
+            cardType: .debit,
+            currency: "USD",
+            balance: 100
+        )
+        let rubCard = Card(
+            name: "RUB",
+            cardNumber: "2000",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 1_000
+        )
+        modelContext.insert(usdCard)
+        modelContext.insert(rubCard)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        let transfer = CashflowTransaction(
+            transactionType: .transfer,
+            amount: 10,
+            currency: "USD",
+            transactionDate: fixedNow,
+            cardID: usdCard.cardUniqueID,
+            toCardID: rubCard.cardUniqueID,
+            expenseCategory: .transfers
+        )
+        transfer.exchangeRate = 90
+        transfer.exchangeRateCurrency = "RUB"
+        transfer.exchangeRateDate = Calendar.current.startOfDay(for: fixedNow)
+
+        let didSave = await viewModel.persistTransaction(transfer)
+
+        #expect(didSave)
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            abs(usdCard.balance - 90) < 0.01
+                && abs(rubCard.balance - 1_900) < 0.01
+                && viewModel.state.transactions.count == 1
+        }
+        #expect(abs(usdCard.balance - 90) < 0.01)
+        #expect(abs(rubCard.balance - 1_900) < 0.01)
+    }
+
     @Test("Для кредитной карты snapshot возвращает долг и остаток лимита")
     func testCreditCardBalanceSnapshotReturnsDebtAndRemainingLimit() throws {
         let modelContext = try createTestModelContext()

@@ -99,6 +99,16 @@
     "0" : {
 
     },
+    "1 %@ = rate in %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "1 %1$@ = rate in %2$@"
+          }
+        }
+      }
+    },
     "Account balance adjustment" : {
       "localizations" : {
         "en" : {
@@ -5016,6 +5026,42 @@
         }
       }
     },
+    "cashflow.editor.transfer.exchange_rate" : {
+      "comment" : "Transfer exchange rate field title",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Exchange rate"
+          }
+        }
+      }
+    },
+    "cashflow.editor.transfer.from_currency" : {
+      "comment" : "Transfer source currency label",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "From currency"
+          }
+        }
+      }
+    },
+    "cashflow.editor.transfer.to_currency" : {
+      "comment" : "Transfer destination currency label",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "To currency"
+          }
+        }
+      }
+    },
     "cashflow.history.cards" : {
       "comment" : "History card filter title",
       "extractionState" : "extracted_with_value",
@@ -6163,6 +6209,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Добавить доход"
+          }
+        }
+      }
+    },
+    "cashflow.operation.new_transfer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New transfer"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Новый перевод"
           }
         }
       }
@@ -21437,6 +21499,9 @@
           }
         }
       }
+    },
+    "Will receive: %@" : {
+
     },
     "Year" : {
       "localizations" : {

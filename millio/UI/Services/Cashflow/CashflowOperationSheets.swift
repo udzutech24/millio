@@ -102,8 +102,8 @@ struct CashflowCategoryGridLayout {
         )
     }
 
-    /// Для расходов не засоряем сетку пинами: unpinned скрыты, pinned получают компактный badge.
-    /// Доходы оставляем с явной кнопкой, потому что там плотность ниже и affordance помогает быстрее.
+    /// Для обеих сеток не засоряем карточки пустыми пинами:
+    /// unpinned скрыты, pinned получают компактный badge.
     static func pinAffordanceStyle(
         for kind: CashflowCategoryTransactionSheetKind,
         isPinned: Bool
@@ -112,7 +112,7 @@ struct CashflowCategoryGridLayout {
         case .expense:
             return isPinned ? .compactBadge : .hidden
         case .income:
-            return .regularButton
+            return isPinned ? .compactBadge : .hidden
         }
     }
 }
@@ -1653,7 +1653,7 @@ struct CashflowTransferTransactionSheet: View {
             viewModel: viewModel,
             transactionType: .transfer,
             showsTransactionTypeSection: false,
-            customNavigationTitle: "New transfer"
+            customNavigationTitle: String(localized: "cashflow.operation.new_transfer")
         )
     }
 }

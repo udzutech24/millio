@@ -1149,7 +1149,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
         if isMarketCategory {
             guard !name.isEmpty,
                   !marketSymbol.isEmpty,
-                  let quantity = parseMarketQuantity(marketQuantityText) else {
+                  let quantity = InvestmentMarketInputParser.quantity(from: marketQuantityText) else {
                 return false
             }
             return quantity >= 0
@@ -1159,7 +1159,7 @@ struct InlineInvestmentCreateForm<GroupSection: View>: View {
     
     func getInvestmentData() -> (name: String, investmentType: InvestmentType, category: InvestmentCategory, amount: Double, currency: String, includeInTotal: Bool, priority: InvestmentPriority, isFavorite: Bool, marketData: InvestmentMarketData?, createCashflowTransaction: Bool)? {
         if isMarketCategory {
-            guard let quantity = parseMarketQuantity(marketQuantityText),
+            guard let quantity = InvestmentMarketInputParser.quantity(from: marketQuantityText),
                   quantity >= 0 else {
                 return nil
             }

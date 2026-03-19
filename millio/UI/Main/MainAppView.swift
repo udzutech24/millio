@@ -109,22 +109,27 @@ struct MainAppView: View {
                     
                     // Bottom action buttons
                     HStack(spacing: 16) {
-                        ActionButton(
-                            title: MainLocalization.text(MainLocalization.quickActionExpense),
-                            icon: .system(QuickActionIcons.expense),
-                            gradientColors: AppColors.expenseGradient
-                        ) {
-                            prepareCashflowQuickAccess()
-                            showExpenseSheet = true
-                        }
-                        
-                        ActionButton(
-                            title: MainLocalization.text(MainLocalization.quickActionIncome),
-                            icon: .system(QuickActionIcons.income),
-                            gradientColors: AppColors.incomeGradient
-                        ) {
-                            prepareCashflowQuickAccess()
-                            showIncomeSheet = true
+                        ForEach(MainQuickActionsLayout.buttonOrder, id: \.self) { action in
+                            switch action {
+                            case .expense:
+                                ActionButton(
+                                    title: MainLocalization.text(MainLocalization.quickActionExpense),
+                                    icon: .system(QuickActionIcons.expense),
+                                    gradientColors: AppColors.expenseGradient
+                                ) {
+                                    prepareCashflowQuickAccess()
+                                    showExpenseSheet = true
+                                }
+                            case .income:
+                                ActionButton(
+                                    title: MainLocalization.text(MainLocalization.quickActionIncome),
+                                    icon: .system(QuickActionIcons.income),
+                                    gradientColors: AppColors.incomeGradient
+                                ) {
+                                    prepareCashflowQuickAccess()
+                                    showIncomeSheet = true
+                                }
+                            }
                         }
                     }
                     .padding(.horizontal, 24)

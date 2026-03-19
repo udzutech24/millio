@@ -931,6 +931,66 @@ struct FinanceDynamicsViewModelTests {
         #expect(abs(balanceWithFlag - 5000) < 0.01)
     }
 
+    @Test("Старт графика не включает счет до его создания")
+    func testTimeSeriesStartDoesNotBackfillBalanceBeforeAccountCreation() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let now = Date()
+        let startOfToday = calendar.startOfDay(for: now)
+        let startOfYesterday = calendar.date(byAdding: .day, value: -1, to: startOfToday) ?? now
+        let createdAt = calendar.date(byAdding: .hour, value: 10, to: startOfToday) ?? now
+
+        let card = Card(name: "Сегодняшний счет", cardNumber: "4444", bank: .other, cardType: .debit, currency: "RUB")
+        card.createdAt = createdAt
+        card.updatedAt = calendar.date(byAdding: .hour, value: 14, to: startOfToday) ?? now
+        card.initialBalance = 1_500
+        card.hasInitialBalance = true
+        card.balance = 1_100
+        modelContext.insert(card)
+
+        modelContext.insert(
+            CashflowTransaction(
+                transactionType: .balanceAdjustment,
+                amount: -400,
+                currency: "RUB",
+                transactionDate: card.updatedAt,
+                cardID: card.cardUniqueID,
+                note: "Исправление суммы"
+            )
+        )
+
+        let group = FinanceGroup(name: "Тест", colorHex: "#FFFFFF")
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+
+        let points = await dynamicsViewModel.buildTimeSeriesData(
+            accounts: [account],
+            startDate: startOfYesterday,
+            endDate: now,
+            label: "Total",
+            debtAsNegative: false
+        )
+
+        #expect(points.first?.date == startOfYesterday)
+        #expect(abs((points.first?.value ?? -1) - 0) < 0.01)
+    }
+
     @Test("History-only доходы и расходы не искажают исторический баланс карты")
     func testHistoryOnlyCashflowTransactionsDoNotAffectDynamicsBalance() async throws {
         let modelContext = try createTestModelContext()
@@ -1189,6 +1249,123 @@ struct FinanceDynamicsViewModelTests {
             accountCardIDs: []
         )
         #expect(abs(afterUpdate - 4_672) < 0.01)
+    }
+
+    @Test("Акции: если initialAmount сломан и равен нулю, baseline берем из cost basis")
+    func testStocksBaselineFallsBackToTotalPurchaseCostWhenInitialAmountIsZero() async throws {
+        let modelContext = try createTestModelContext()
+
+        let createdAt = Date().addingTimeInterval(-10 * 86400)
+        let updatedAt = Date().addingTimeInterval(-2 * 3600)
+
+        let investment = Investment(
+            name: "SPY",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 12_500,
+            currency: "USD"
+        )
+        investment.createdAt = createdAt
+        investment.updatedAt = updatedAt
+        investment.initialAmount = 0
+        investment.hasInitialAmount = true
+        investment.marketQuantity = 100
+        investment.averagePurchaseUnitPrice = 100
+        investment.totalPurchaseCost = 10_000
+        investment.lastKnownUnitPrice = 125
+        modelContext.insert(investment)
+
+        let group = FinanceGroup(name: "Акции", colorHex: "#00CC66")
+        let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+        account.group = group
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+
+        let beforeUpdate = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: updatedAt.addingTimeInterval(-60),
+            accountCardIDs: []
+        )
+        #expect(abs(beforeUpdate - 10_000) < 0.01)
+
+        let afterUpdate = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: updatedAt.addingTimeInterval(60),
+            accountCardIDs: []
+        )
+        #expect(abs(afterUpdate - 12_500) < 0.01)
+    }
+
+    @Test("Акции: в конце дня создания legacy baseline берется из стоимости дня, а не из нуля")
+    func testStocksCreationDayEndUsesCreationDayAmountWhenInitialAmountIsZero() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let createdAt = calendar.date(from: DateComponents(year: 2026, month: 3, day: 1, hour: 10, minute: 0)) ?? Date()
+        let updatedAt = calendar.date(from: DateComponents(year: 2026, month: 3, day: 1, hour: 18, minute: 0)) ?? Date()
+        let endOfCreationDay = calendar.date(
+            bySettingHour: 23,
+            minute: 59,
+            second: 59,
+            of: createdAt
+        ) ?? createdAt
+
+        let investment = Investment(
+            name: "QQQ",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 12_500,
+            currency: "USD"
+        )
+        investment.createdAt = createdAt
+        investment.updatedAt = updatedAt
+        investment.initialAmount = 0
+        investment.hasInitialAmount = true
+        investment.marketQuantity = 100
+        investment.averagePurchaseUnitPrice = 100
+        investment.totalPurchaseCost = 10_000
+        investment.lastKnownUnitPrice = 125
+        modelContext.insert(investment)
+
+        let group = FinanceGroup(name: "Акции", colorHex: "#00CC66")
+        let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+        account.group = group
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+
+        let creationDayBalance = await dynamicsViewModel.calculateBalanceAtDate(
+            accounts: [account],
+            date: endOfCreationDay,
+            accountCardIDs: []
+        )
+        #expect(abs(creationDayBalance - 12_500) < 0.01)
     }
 
     @Test("Агрегат: вчера и сегодня совпадают, если не было транзакций изменений")

@@ -260,6 +260,7 @@ struct CashflowTransactionEditorView: View {
             refreshSelectableAccounts()
             loadAvailableCurrencies()
             synchronizeSelectedCards()
+            synchronizeTransferCurrencies()
             if editingTransaction == nil,
                selectedTransactionType == .income,
                selectedIncomeCategoryRaw == nil {
@@ -282,15 +283,18 @@ struct CashflowTransactionEditorView: View {
             if selectedCardID == selectedToCardID {
                 selectedToCardID = nil
             }
+            synchronizeTransferCurrencies()
             validateAvailableBalance()
         }
         .onChange(of: selectedToCardID) { _, _ in
             if selectedToCardID == selectedCardID {
                 selectedToCardID = nil
             }
+            synchronizeTransferCurrencies()
         }
         .onChange(of: selectedCurrency) { _, _ in
             synchronizeSelectedCards()
+            synchronizeTransferCurrencies()
             validateAvailableBalance()
         }
         .onChange(of: amountText) { _, _ in
@@ -314,6 +318,7 @@ struct CashflowTransactionEditorView: View {
                 shouldAffectCardBalance = true
             }
             synchronizeSelectedCards()
+            synchronizeTransferCurrencies()
             validateAvailableBalance()
         }
         .onChange(of: CashflowViewModel.cardSyncSignature(for: viewModel.state.availableCards)) { _, _ in
@@ -387,7 +392,9 @@ struct CashflowTransactionEditorView: View {
         if let customNavigationTitle {
             return customNavigationTitle
         }
-        return editingTransaction == nil ? "New transaction" : "Edit"
+        return editingTransaction == nil
+            ? "New transaction"
+            : String(localized: "cashflow.history.detail.edit")
     }
 
     // MARK: - Тип операции
@@ -800,6 +807,11 @@ struct CashflowTransactionEditorView: View {
             : String(localized: "cashflow.editor.card")
     }
 
+    private var selectedTransferSourceCard: Card? {
+        guard let selectedCardID else { return nil }
+        return viewModel.state.availableCards.first(where: { $0.cardUniqueID == selectedCardID })
+    }
+
     private var selectedAccountTitle: String {
         if let selected = selectableAccountsForCurrentSelection.first(where: { $0.id == selectedAccountPickerID }) {
             return selected.pickerTitle
@@ -819,69 +831,63 @@ struct CashflowTransactionEditorView: View {
                 .padding(.vertical, 14)
                 .padding(.horizontal, 16)
         } else {
-            HStack {
-                Text("cashflow.editor.from_card")
-                    .foregroundStyle(AppColors.textPrimary)
-                    .layoutPriority(1)
-                Spacer()
-                Picker(String(localized: "cashflow.editor.from_card"), selection: Binding(
-                    get: { selectedCardID ?? "" },
-                    set: { selectedCardID = $0.isEmpty ? nil : $0 }
-                )) {
-                    Text("cashflow.editor.select_card").tag("")
-                    ForEach(transferCardOptions.filter { $0.cardID != selectedToCardID }) { account in
-                        Text(account.pickerTitle).tag(account.cardID ?? "")
-                    }
+            VStack(spacing: 12) {
+                transferCardPickerRow(
+                    title: String(localized: "cashflow.editor.from_card"),
+                    selection: Binding(
+                        get: { selectedCardID ?? "" },
+                        set: { selectedCardID = $0.isEmpty ? nil : $0 }
+                    ),
+                    excludingCardID: selectedToCardID
+                )
+
+                if shouldValidateBalance, let availableText = selectedAccountBalanceText {
+                    Text(availableText)
+                        .font(.caption)
+                        .foregroundStyle(AppColors.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .tint(AppColors.textTertiary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-            }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 16)
 
-            if shouldValidateBalance, let availableText = selectedAccountBalanceText {
-                FinancesRowDivider()
-                Text(availableText)
-                    .font(.caption)
-                    .foregroundStyle(AppColors.textSecondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 16)
-            }
-
-            if isAmountOverBalance {
-                FinancesRowDivider()
-                Text("cashflow.editor.insufficient_funds")
-                    .font(.caption)
-                    .foregroundStyle(AppColors.error)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 16)
-            }
-
-            FinancesRowDivider()
-
-            HStack {
-                Text("cashflow.editor.to_card")
-                    .foregroundStyle(AppColors.textPrimary)
-                    .layoutPriority(1)
-                Spacer()
-                Picker(String(localized: "cashflow.editor.to_card"), selection: Binding(
-                    get: { selectedToCardID ?? "" },
-                    set: { selectedToCardID = $0.isEmpty ? nil : $0 }
-                )) {
-                    Text("cashflow.editor.select_card").tag("")
-                    ForEach(transferCardOptions.filter { $0.cardID != selectedCardID }) { account in
-                        Text(account.pickerTitle).tag(account.cardID ?? "")
-                    }
+                if isAmountOverBalance {
+                    Text("cashflow.editor.insufficient_funds")
+                        .font(.caption)
+                        .foregroundStyle(AppColors.error)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .tint(AppColors.textTertiary)
-                .lineLimit(1)
-                .truncationMode(.tail)
+
+                transferCardPickerRow(
+                    title: String(localized: "cashflow.editor.to_card"),
+                    selection: Binding(
+                        get: { selectedToCardID ?? "" },
+                        set: { selectedToCardID = $0.isEmpty ? nil : $0 }
+                    ),
+                    excludingCardID: selectedCardID
+                )
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, 12)
             .padding(.horizontal, 16)
+        }
+    }
+
+    private func transferCardPickerRow(
+        title: String,
+        selection: Binding<String>,
+        excludingCardID: String?
+    ) -> some View {
+        HStack {
+            Text(title)
+                .foregroundStyle(AppColors.textPrimary)
+                .layoutPriority(1)
+            Spacer()
+            Picker(title, selection: selection) {
+                Text("cashflow.editor.select_card").tag("")
+                ForEach(transferCardOptions.filter { $0.cardID != excludingCardID }) { account in
+                    Text(account.pickerTitle).tag(account.cardID ?? "")
+                }
+            }
+            .tint(AppColors.textTertiary)
+            .lineLimit(1)
+            .truncationMode(.tail)
         }
     }
 
@@ -1032,7 +1038,10 @@ struct CashflowTransactionEditorView: View {
         case .income, .expense:
             return (selectedCardID != nil || selectedInvestmentID != nil) && !isAmountOverBalance
         case .transfer:
-            return selectedCardID != nil && selectedToCardID != nil && selectedCardID != selectedToCardID && !isAmountOverBalance
+            return selectedCardID != nil
+                && selectedToCardID != nil
+                && selectedCardID != selectedToCardID
+                && !isAmountOverBalance
         case .balanceAdjustment, .cardBalanceAdjustment:
             return selectedCardID != nil || editingTransaction?.creditID != nil || editingTransaction?.investmentID != nil
         case .creditDebtAdjustment:
@@ -1358,6 +1367,15 @@ struct CashflowTransactionEditorView: View {
         selectedToCardID = nil
     }
 
+    private func synchronizeTransferCurrencies() {
+        guard selectedTransactionType == .transfer else { return }
+
+        if let sourceCurrency = Self.normalizedCurrencyCode(selectedTransferSourceCard?.currency),
+           selectedCurrency != sourceCurrency {
+            selectedCurrency = sourceCurrency
+        }
+    }
+
     private var defaultWeeklyRecurrenceWeekday: CashflowRecurrenceWeekday {
         let weekday = Calendar.current.component(.weekday, from: transactionDate)
         return CashflowRecurrenceWeekday(rawValue: weekday) ?? .monday
@@ -1394,6 +1412,14 @@ extension CashflowTransactionEditorView {
         return normalized.isEmpty ? nil : normalized
     }
 
+    static func normalizedCurrencyCode(_ currencyCode: String?) -> String? {
+        guard let currencyCode else { return nil }
+        let normalized = currencyCode
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+        return normalized.isEmpty ? nil : normalized
+    }
+
     static func defaultEditorCurrency(
         displayCurrency: String,
         primaryCurrencyCode: String?
@@ -1413,7 +1439,7 @@ extension CashflowTransactionEditorView {
         case .income, .expense:
             return [.amount, .currency, .fromCard, .date]
         case .transfer:
-            return [.amount, .currency, .fromCard, .toCard, .date]
+            return [.amount, .fromCard, .toCard, .date]
         case .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
             return [.amount, .currency, .date]
         }
