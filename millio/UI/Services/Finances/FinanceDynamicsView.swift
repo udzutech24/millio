@@ -201,6 +201,8 @@ private struct FinanceDynamicsContentView: View {
     @State private var tradePriceMode: TradePriceMode = .market
     @State private var tradeQuantityText: String = "1"
     @State private var tradePriceText: String = ""
+    @State private var tradeSettlementSelectionID: String? = nil
+    @State private var tradeShouldAffectCardBalance: Bool = true
     @State private var tradeErrorText: String?
     @State private var isInlineMarketEdit: Bool = false
     @State private var editQuantityText: String = ""
@@ -704,7 +706,16 @@ private struct FinanceDynamicsContentView: View {
     }
 
     private func tradeSheet(for investment: Investment) -> some View {
-        NavigationStack {
+        let investmentCurrency = resolvedInvestmentCurrency(investment)
+        let settlementAccounts = tradeSettlementAccounts(for: investment)
+        let selectedSettlementAccount = settlementAccounts.first(where: { $0.id == tradeSettlementSelectionID })
+        let quantity = AmountInputFormatter.parse(
+            tradeQuantityText,
+            maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
+        ) ?? 0
+        let unitPrice = currentTradeUnitPrice(for: investment)
+
+        return NavigationStack {
             ZStack {
                 GradientBackground()
 
@@ -749,19 +760,82 @@ private struct FinanceDynamicsContentView: View {
                                     editable: true
                                 )
 
-                                let qty = AmountInputFormatter.parse(
-                                    tradeQuantityText,
-                                    maxFractionDigits: AmountInputFormatter.marketQuantityFractionDigits
-                                ) ?? 0
-                                let price = currentTradeUnitPrice(for: investment)
                                 tradeRow(
                                     title: FinancesL10n.format(
                                         "finances.dynamics.trade.total_with_currency",
-                                        resolvedInvestmentCurrency(investment)
+                                        investmentCurrency
                                     ),
-                                    valueText: .constant(money(qty * price, currency: resolvedInvestmentCurrency(investment))),
+                                    valueText: .constant(money(quantity * unitPrice, currency: resolvedInvestmentCurrency(investment))),
                                     editable: false
                                 )
+                            }
+                        }
+
+                        FinancesGlassCard(contentPadding: EdgeInsets(top: 14, leading: 14, bottom: 14, trailing: 14)) {
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack(spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(String(localized: "finances.dynamics.trade.funding.title"))
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundStyle(AppColors.textPrimary)
+                                        Text(
+                                            tradeMode == .buy
+                                                ? String(localized: "finances.dynamics.trade.funding.buy_subtitle")
+                                                : String(localized: "finances.dynamics.trade.funding.sell_subtitle")
+                                        )
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundStyle(AppColors.textSecondary)
+                                    }
+                                    Spacer()
+                                    Toggle("", isOn: $tradeShouldAffectCardBalance)
+                                        .labelsHidden()
+                                }
+
+                                if tradeShouldAffectCardBalance {
+                                    if settlementAccounts.isEmpty {
+                                        Text(
+                                            FinancesL10n.format(
+                                                "finances.dynamics.trade.funding.empty",
+                                                investmentCurrency
+                                            )
+                                        )
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundStyle(AppColors.textSecondary)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                    } else {
+                                        tradeSettlementAccountMenu(
+                                            accounts: settlementAccounts,
+                                            selectedAccount: selectedSettlementAccount
+                                        )
+                                    }
+                                } else {
+                                    Text(String(localized: "finances.dynamics.trade.funding.ignored_hint"))
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundStyle(AppColors.textSecondary)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+
+                                if let selectedSettlementAccount, tradeShouldAffectCardBalance {
+                                    let total = quantity * unitPrice
+                                    let currentBalance = tradeSettlementAccountBalance(for: selectedSettlementAccount)
+                                    let projectedBalance = tradeMode == .buy
+                                        ? max(0, currentBalance - total)
+                                        : currentBalance + total
+                                    Text(
+                                        tradeMode == .buy
+                                            ? FinancesL10n.format(
+                                                "finances.dynamics.trade.funding.buy_balance_hint",
+                                                money(projectedBalance, currency: selectedSettlementAccount.currency)
+                                            )
+                                            : FinancesL10n.format(
+                                                "finances.dynamics.trade.funding.sell_balance_hint",
+                                                money(projectedBalance, currency: selectedSettlementAccount.currency)
+                                            )
+                                    )
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(AppColors.textSecondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
                             }
                         }
 
@@ -806,6 +880,57 @@ private struct FinanceDynamicsContentView: View {
         .presentationDragIndicator(.visible)
     }
 
+    private func tradeSettlementAccountMenu(
+        accounts: [CashflowSelectableAccount],
+        selectedAccount: CashflowSelectableAccount?
+    ) -> some View {
+        Menu {
+            ForEach(accounts) { account in
+                Button(account.pickerTitle) {
+                    tradeSettlementSelectionID = account.id
+                }
+            }
+        } label: {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(String(localized: "finances.dynamics.trade.funding.title"))
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(AppColors.textTertiary)
+                        .textCase(.uppercase)
+                    Text(selectedAccount?.pickerTitle ?? String(localized: "finances.dynamics.trade.error.account_required"))
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(selectedAccount == nil ? AppColors.textSecondary : AppColors.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+
+                Spacer(minLength: 6)
+
+                if let selectedAccount {
+                    Text(money(tradeSettlementAccountBalance(for: selectedAccount), currency: selectedAccount.currency))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .lineLimit(1)
+                }
+
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppColors.textTertiary.opacity(0.9))
+            }
+            .padding(.vertical, 12)
+            .padding(.horizontal, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.white.opacity(0.05))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            )
+        }
+        .disabled(accounts.isEmpty)
+    }
+
     private func tradeRow(title: String, valueText: Binding<String>, editable: Bool) -> some View {
         HStack(spacing: 10) {
             Text(title)
@@ -838,6 +963,8 @@ private struct FinanceDynamicsContentView: View {
             tradePriceText = ""
         }
         tradePriceMode = .market
+        tradeShouldAffectCardBalance = true
+        tradeSettlementSelectionID = preferredTradeSettlementAccount(for: investment)?.id
     }
 
     private func currentTradeUnitPrice(for investment: Investment) -> Double {
@@ -858,6 +985,14 @@ private struct FinanceDynamicsContentView: View {
         guard quantity > 0, unitPrice > 0 else {
             return false
         }
+        if tradeShouldAffectCardBalance {
+            guard let settlementAccount = resolvedTradeSettlementAccount(for: investment) else {
+                return false
+            }
+            if tradeMode == .buy {
+                return quantity * unitPrice <= tradeSettlementAccountBalance(for: settlementAccount) + 0.0000001
+            }
+        }
         if tradeMode == .sell {
             let available = investment.marketQuantity ?? 0
             return quantity <= available
@@ -876,6 +1011,25 @@ private struct FinanceDynamicsContentView: View {
             return
         }
 
+        let funding = currentTradeFunding(for: investment)
+        if tradeShouldAffectCardBalance {
+            guard funding.settlementAccountKind != nil else {
+                tradeErrorText = String(localized: "finances.dynamics.trade.error.account_required")
+                return
+            }
+            guard let settlementAccount = resolvedTradeSettlementAccount(for: investment) else {
+                tradeErrorText = FinancesL10n.format(
+                    "finances.dynamics.trade.error.no_accounts",
+                    resolvedInvestmentCurrency(investment)
+                )
+                return
+            }
+            if tradeMode == .buy, quantity * unitPrice > tradeSettlementAccountBalance(for: settlementAccount) + 0.0000001 {
+                tradeErrorText = String(localized: "finances.dynamics.trade.error.insufficient_account_balance")
+                return
+            }
+        }
+
         if tradeMode == .sell, quantity > (investment.marketQuantity ?? 0) {
             tradeErrorText = String(localized: "finances.dynamics.trade.error.insufficient_quantity")
             return
@@ -888,11 +1042,61 @@ private struct FinanceDynamicsContentView: View {
                     account: account,
                     side: tradeMode,
                     quantity: quantity,
-                    unitPrice: unitPrice
+                    unitPrice: unitPrice,
+                    funding: funding
                 )
             )
         }
         showTradeSheet = false
+    }
+
+    private func tradeSettlementAccounts(for investment: Investment) -> [CashflowSelectableAccount] {
+        FinanceViewModel.eligibleSettlementAccounts(
+            cards: financeViewModel.state.availableCards,
+            investments: financeViewModel.state.availableInvestments,
+            investmentCurrency: resolvedInvestmentCurrency(investment),
+            excludingInvestmentID: investment.investmentUniqueID
+        )
+    }
+
+    private func preferredTradeSettlementAccount(for investment: Investment) -> CashflowSelectableAccount? {
+        let accounts = tradeSettlementAccounts(for: investment)
+        return accounts.first(where: \.isFavorite) ?? accounts.first
+    }
+
+    private func currentTradeFunding(for investment: Investment) -> InvestmentOrderFunding {
+        guard tradeShouldAffectCardBalance else {
+            return .ignored
+        }
+
+        let settlementAccounts = tradeSettlementAccounts(for: investment)
+        let resolvedKind: CashflowSelectableAccount.Kind?
+        if let selected = settlementAccounts.first(where: { $0.id == tradeSettlementSelectionID }) {
+            resolvedKind = selected.kind
+        } else {
+            resolvedKind = preferredTradeSettlementAccount(for: investment)?.kind
+        }
+
+        return InvestmentOrderFunding(
+            settlementAccountKind: resolvedKind,
+            shouldAffectCardBalance: true
+        )
+    }
+
+    private func resolvedTradeSettlementAccount(for investment: Investment) -> CashflowSelectableAccount? {
+        let accounts = tradeSettlementAccounts(for: investment)
+        let funding = currentTradeFunding(for: investment)
+        guard let kind = funding.settlementAccountKind else { return nil }
+        return accounts.first(where: { $0.kind == kind })
+    }
+
+    private func tradeSettlementAccountBalance(for account: CashflowSelectableAccount) -> Double {
+        switch account.kind {
+        case .card(let cardID):
+            return financeViewModel.state.availableCards.first(where: { $0.cardUniqueID == cardID })?.balance ?? 0
+        case .investment(let investmentID):
+            return financeViewModel.state.availableInvestments.first(where: { $0.investmentUniqueID == investmentID })?.amount ?? 0
+        }
     }
 
     private func resolvedInvestmentCurrency(_ investment: Investment) -> String {

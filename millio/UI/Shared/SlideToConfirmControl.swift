@@ -130,8 +130,9 @@ struct SlideToConfirmControl: View {
         let progress = offset / maxOffset
         let currentStep = SlideToConfirmHapticsPlan.progressStep(for: Double(progress))
 
-        if currentStep > lastHapticStep {
-            triggerProgressHaptic()
+        if currentStep > lastHapticStep,
+           let feedback = SlideToConfirmHapticsPlan.feedback(for: currentStep) {
+            triggerProgressHaptic(feedback)
         }
 
         lastHapticStep = currentStep
@@ -144,23 +145,47 @@ struct SlideToConfirmControl: View {
         }
     }
 
-    private func triggerProgressHaptic() {
+    private func triggerProgressHaptic(_ feedback: SlideToConfirmHapticsPlan.ProgressFeedback) {
         #if canImport(UIKit)
-        let generator = UIImpactFeedbackGenerator(style: .medium)
+        let generator = UIImpactFeedbackGenerator(style: impactStyle(for: feedback.style))
         generator.prepare()
-        generator.impactOccurred()
+        generator.impactOccurred(intensity: feedback.intensity)
         #endif
     }
 
     private func triggerSuccessHaptic() {
         #if canImport(UIKit)
-        let impactGenerator = UIImpactFeedbackGenerator(style: .heavy)
+        let feedback = SlideToConfirmHapticsPlan.completionFeedback
+        let impactGenerator = UIImpactFeedbackGenerator(style: impactStyle(for: feedback.primaryStyle))
         impactGenerator.prepare()
-        impactGenerator.impactOccurred(intensity: 1)
+        impactGenerator.impactOccurred(intensity: feedback.primaryIntensity)
 
-        let notificationGenerator = UINotificationFeedbackGenerator()
-        notificationGenerator.prepare()
-        notificationGenerator.notificationOccurred(.success)
+        DispatchQueue.main.asyncAfter(deadline: .now() + feedback.settleDelay) {
+            let settleGenerator = UIImpactFeedbackGenerator(style: impactStyle(for: feedback.settleStyle))
+            settleGenerator.prepare()
+            settleGenerator.impactOccurred(intensity: feedback.settleIntensity)
+
+            let notificationGenerator = UINotificationFeedbackGenerator()
+            notificationGenerator.prepare()
+            notificationGenerator.notificationOccurred(.success)
+        }
         #endif
     }
+
+    #if canImport(UIKit)
+    private func impactStyle(for style: SlideToConfirmHapticsPlan.ImpactStyle) -> UIImpactFeedbackGenerator.FeedbackStyle {
+        switch style {
+        case .soft:
+            return .soft
+        case .light:
+            return .light
+        case .medium:
+            return .medium
+        case .rigid:
+            return .rigid
+        case .heavy:
+            return .heavy
+        }
+    }
+    #endif
 }

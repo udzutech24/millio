@@ -12360,6 +12360,176 @@
         }
       }
     },
+    "finances.dynamics.trade.error.account_required" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select an account or disable balance tracking."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выберите счет или отключите учет баланса."
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.error.insufficient_account_balance" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not enough money on the selected account."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На выбранном счете недостаточно денег."
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.error.no_accounts" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No %@ accounts available for this trade."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Для этой сделки нет доступных счетов в валюте %@."
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.funding.buy_balance_hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "After the purchase the account will have %@ left."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "После покупки на счете останется %@."
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.funding.buy_subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "From which account should the money be debited?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "С какого счета списать деньги?"
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.funding.empty" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add a %@ account if you want the deal to affect your cash balance."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавьте счет в валюте %@, если хотите учитывать движение денег по сделке."
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.funding.ignored_hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Money movement will be ignored. Only the asset position will change."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Движение денег будет проигнорировано. Изменится только позиция актива."
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.funding.sell_balance_hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "After the sale the account balance will become %@."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "После продажи баланс счета станет %@."
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.funding.sell_subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To which account should the money be credited?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На какой счет зачислить деньги?"
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.funding.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cash tracking"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Учет денег"
+          }
+        }
+      }
+    },
     "finances.dynamics.trade.mode" : {
       "extractionState" : "manual",
       "localizations" : {
