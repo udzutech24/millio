@@ -4,7 +4,6 @@ import Testing
 @testable import millio
 
 @Suite(.serialized)
-@MainActor
 struct MarketAssetCatalogTests {
     @Test("Resolver стабилизирует assetID для разных provider symbol форм одного US тикера")
     func resolvesStableAssetIDForProviderVariants() {
@@ -36,14 +35,12 @@ struct MarketAssetCatalogTests {
     }
 
     @Test("Asset catalog store upserts item and provider mapping without duplicates")
-    func assetCatalogStoreUpsertsModels() throws {
+    func assetCatalogStoreUpsertsModels() async throws {
         let schema = Schema([
             AssetCatalogItem.self,
             AssetProviderMapping.self
         ])
         let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
-        let context = container.mainContext
-        let store = AssetCatalogStore(modelContext: context)
 
         let identity = try #require(MarketAssetIdentityResolver.resolve(
             category: .crypto,
@@ -57,24 +54,31 @@ struct MarketAssetCatalogTests {
             providerName: "market-backend"
         ))
 
-        store.sync(identity: identity)
-        store.sync(identity: identity)
+        let result = try await MainActor.run {
+            let context = container.mainContext
+            let store = AssetCatalogStore(modelContext: context)
+            store.sync(identity: identity)
+            store.sync(identity: identity)
+            let assets = try context.fetch(FetchDescriptor<AssetCatalogItem>())
+            let mappings = try context.fetch(FetchDescriptor<AssetProviderMapping>())
+            return (
+                assetsCount: assets.count,
+                mappingsCount: mappings.count,
+                firstAssetID: assets.first?.assetID,
+                firstMappingAssetID: mappings.first?.assetID
+            )
+        }
 
-        let assets = try context.fetch(FetchDescriptor<AssetCatalogItem>())
-        let mappings = try context.fetch(FetchDescriptor<AssetProviderMapping>())
-
-        #expect(assets.count == 1)
-        #expect(mappings.count == 1)
-        #expect(assets.first?.assetID == identity.assetID)
-        #expect(mappings.first?.assetID == identity.assetID)
+        #expect(result.assetsCount == 1)
+        #expect(result.mappingsCount == 1)
+        #expect(result.firstAssetID == identity.assetID)
+        #expect(result.firstMappingAssetID == identity.assetID)
     }
 
     @Test("Asset catalog store gracefully skips sync when schema does not include catalog models")
-    func assetCatalogStoreSkipsUnsupportedSchema() throws {
+    func assetCatalogStoreSkipsUnsupportedSchema() async throws {
         let schema = Schema([Investment.self])
         let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
-        let context = container.mainContext
-        let store = AssetCatalogStore(modelContext: context)
         let identity = try #require(MarketAssetIdentityResolver.resolve(
             category: .stocks,
             symbol: "AAPL",
@@ -87,7 +91,11 @@ struct MarketAssetCatalogTests {
             providerName: "market-backend"
         ))
 
-        let didSync = store.syncIfSupported(identity: identity)
+        let didSync = await MainActor.run {
+            let context = container.mainContext
+            let store = AssetCatalogStore(modelContext: context)
+            return store.syncIfSupported(identity: identity)
+        }
 
         #expect(didSync == false)
     }

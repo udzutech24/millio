@@ -78,6 +78,10 @@ struct CashflowBulkExpenseParsedRow: Equatable {
 struct CashflowBulkExpenseCategoryResolution: Equatable {
     let option: CashflowCategoryOption
     let confidence: CashflowBulkExpenseImportMatchConfidence
+
+    var requiresManualReview: Bool {
+        confidence == .low || option.rawValue == ExpenseCategory.other.rawValue
+    }
 }
 
 struct CashflowBulkExpenseRowDraft: Identifiable, Equatable {
@@ -86,6 +90,7 @@ struct CashflowBulkExpenseRowDraft: Identifiable, Equatable {
     var titleText: String
     var amountText: String
     var selectedCategoryRaw: String
+    var suggestedCategoryRaws: [String]
     var noteText: String
     var sourceOrderIndex: Int
     var confidence: CashflowBulkExpenseImportMatchConfidence
@@ -97,6 +102,7 @@ struct CashflowBulkExpenseRowDraft: Identifiable, Equatable {
         titleText: String,
         amountText: String,
         selectedCategoryRaw: String = ExpenseCategory.other.rawValue,
+        suggestedCategoryRaws: [String] = [],
         noteText: String = "",
         sourceOrderIndex: Int,
         confidence: CashflowBulkExpenseImportMatchConfidence = .low,
@@ -107,6 +113,7 @@ struct CashflowBulkExpenseRowDraft: Identifiable, Equatable {
         self.titleText = titleText
         self.amountText = amountText
         self.selectedCategoryRaw = selectedCategoryRaw
+        self.suggestedCategoryRaws = suggestedCategoryRaws
         self.noteText = noteText
         self.sourceOrderIndex = sourceOrderIndex
         self.confidence = confidence
@@ -132,6 +139,9 @@ struct CashflowBulkExpenseRowDraft: Identifiable, Equatable {
 
     var requiresAttention: Bool {
         guard isAddable else { return true }
+        if !usesSuggestedCategory {
+            return selectedCategoryRaw == ExpenseCategory.other.rawValue
+        }
         return confidence == .low || selectedCategoryRaw == ExpenseCategory.other.rawValue
     }
 
@@ -238,6 +248,28 @@ struct CashflowBulkExpenseCategoryDraft: Identifiable, Equatable {
     var normalizedNote: String? {
         let trimmed = noteText.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
+struct CashflowBulkExpenseCategoryBreakdown: Equatable {
+    let baselineAmount: Double
+    let importedAmount: Double
+
+    var displayedTotal: Double {
+        baselineAmount + importedAmount
+    }
+
+    static func make(
+        displayedAmount: Double?,
+        baselineAmount: Double
+    ) -> CashflowBulkExpenseCategoryBreakdown {
+        let normalizedBaseline = max(0, baselineAmount)
+        let normalizedDisplayed = max(0, displayedAmount ?? 0)
+        let importedAmount = max(0, normalizedDisplayed - normalizedBaseline)
+        return CashflowBulkExpenseCategoryBreakdown(
+            baselineAmount: normalizedBaseline,
+            importedAmount: importedAmount
+        )
     }
 }
 

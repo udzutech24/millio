@@ -9,12 +9,35 @@ import SwiftUI
 import SwiftData
 import UIKit
 
+enum CashflowTransferExchangeRateMode: String, CaseIterable {
+    case current
+    case custom
+
+    var title: String {
+        switch self {
+        case .current:
+            return String(
+                localized: "cashflow.editor.transfer.rate_mode.current",
+                defaultValue: "Current",
+                comment: "Transfer exchange rate mode title for current rate"
+            )
+        case .custom:
+            return String(
+                localized: "cashflow.editor.transfer.rate_mode.custom",
+                defaultValue: "Custom",
+                comment: "Transfer exchange rate mode title for custom rate"
+            )
+        }
+    }
+}
+
 struct CashflowTransactionEditorView: View {
     static let amountMaxFractionDigits = 2
     static let amountBaseFontSize: CGFloat = 38
     static let amountCompactFontSize: CGFloat = 32
     static let amountMinimumScaleFactor: CGFloat = 0.72
-    static let amountRowHeight: CGFloat = 96
+    static let amountRowHeight: CGFloat = 56
+    static let exchangeRateFractionDigits = 8
 
     @ObservedObject var viewModel: CashflowViewModel
     @Environment(\.dismiss) private var dismiss
@@ -53,6 +76,13 @@ struct CashflowTransactionEditorView: View {
     @State private var isSavingTransaction: Bool = false
     @State private var showSaveErrorAlert: Bool = false
     @State private var validationTask: Task<Void, Never>? = nil
+    @State private var transferRateTask: Task<Void, Never>? = nil
+    @State private var transferExchangeRateMode: CashflowTransferExchangeRateMode = .current
+    @State private var customExchangeRateText: String = ""
+    @State private var customExchangeRateDisplayText: String = ""
+    @State private var suggestedTransferRate: Double? = nil
+    @State private var suggestedTransferRateDate: Date? = nil
+    @State private var isLoadingSuggestedTransferRate: Bool = false
     
     @State private var showCurrencyPicker: Bool = false
     @State private var currencySearchText: String = ""
@@ -109,6 +139,21 @@ struct CashflowTransactionEditorView: View {
             _recurrenceRule = State(initialValue: transaction.recurrenceRule)
             _recurrenceWeekdays = State(initialValue: transaction.recurrenceWeekdays)
             _shouldAffectCardBalance = State(initialValue: transaction.affectsCardBalance)
+            let initialTransferMode = Self.defaultTransferExchangeRateMode(existingRate: transaction.exchangeRate)
+            _transferExchangeRateMode = State(initialValue: initialTransferMode)
+            let storedRateText = initialTransferMode == .custom
+                ? AmountInputFormatter.plainString(
+                    from: transaction.exchangeRate ?? 0,
+                    maxFractionDigits: Self.exchangeRateFractionDigits
+                )
+                : ""
+            _customExchangeRateText = State(initialValue: storedRateText)
+            _customExchangeRateDisplayText = State(
+                initialValue: AmountInputFormatter.display(
+                    storedRateText,
+                    maxFractionDigits: Self.exchangeRateFractionDigits
+                )
+            )
         } else if let type = transactionType {
             let initialCurrency = Self.defaultEditorCurrency(
                 displayCurrency: viewModel.state.displayCurrency,
@@ -275,6 +320,7 @@ struct CashflowTransactionEditorView: View {
             if amountDisplayText.isEmpty {
                 amountDisplayText = Self.formattedAmountDisplayText(from: amountText)
             }
+            refreshTransferRateSuggestion()
             DispatchQueue.main.async {
                 isAmountFieldFocused = true
             }
@@ -285,17 +331,20 @@ struct CashflowTransactionEditorView: View {
             }
             synchronizeTransferCurrencies()
             validateAvailableBalance()
+            refreshTransferRateSuggestion()
         }
         .onChange(of: selectedToCardID) { _, _ in
             if selectedToCardID == selectedCardID {
                 selectedToCardID = nil
             }
             synchronizeTransferCurrencies()
+            refreshTransferRateSuggestion()
         }
         .onChange(of: selectedCurrency) { _, _ in
             synchronizeSelectedCards()
             synchronizeTransferCurrencies()
             validateAvailableBalance()
+            refreshTransferRateSuggestion()
         }
         .onChange(of: amountText) { _, _ in
             validateAvailableBalance()
@@ -312,6 +361,7 @@ struct CashflowTransactionEditorView: View {
         }
         .onChange(of: transactionDate) { _, _ in
             validateAvailableBalance()
+            refreshTransferRateSuggestion()
         }
         .onChange(of: selectedTransactionType) { _, _ in
             if selectedTransactionType != .income && selectedTransactionType != .expense {
@@ -320,10 +370,25 @@ struct CashflowTransactionEditorView: View {
             synchronizeSelectedCards()
             synchronizeTransferCurrencies()
             validateAvailableBalance()
+            refreshTransferRateSuggestion()
         }
         .onChange(of: CashflowViewModel.cardSyncSignature(for: viewModel.state.availableCards)) { _, _ in
             synchronizeSelectedCards()
             validateAvailableBalance()
+            refreshTransferRateSuggestion()
+        }
+        .onChange(of: transferExchangeRateMode) { _, _ in
+            refreshTransferRateSuggestion()
+        }
+        .onChange(of: customExchangeRateDisplayText) { _, newValue in
+            let sanitized = Self.sanitizedExchangeRateText(from: newValue)
+            let formatted = Self.formattedExchangeRateDisplayText(from: sanitized)
+            if newValue != formatted {
+                customExchangeRateDisplayText = formatted
+            }
+            if customExchangeRateText != sanitized {
+                customExchangeRateText = sanitized
+            }
         }
         .sheet(isPresented: $showCategorySheet) {
             CashflowCategorySelectionSheet(
@@ -812,6 +877,124 @@ struct CashflowTransactionEditorView: View {
         return viewModel.state.availableCards.first(where: { $0.cardUniqueID == selectedCardID })
     }
 
+    private var selectedTransferDestinationCard: Card? {
+        guard let selectedToCardID else { return nil }
+        return viewModel.state.availableCards.first(where: { $0.cardUniqueID == selectedToCardID })
+    }
+
+    private var isCrossCurrencyTransfer: Bool {
+        Self.shouldOfferTransferExchangeRate(
+            sourceCurrency: selectedTransferSourceCard?.currency,
+            destinationCurrency: selectedTransferDestinationCard?.currency
+        )
+    }
+
+    private var resolvedCustomExchangeRate: Double? {
+        let rate = AmountInputFormatter.parse(
+            customExchangeRateText,
+            maxFractionDigits: Self.exchangeRateFractionDigits
+        )
+        guard let rate, rate > 0 else { return nil }
+        return rate
+    }
+
+    private var resolvedTransferExchangeRate: Double? {
+        guard selectedTransactionType == .transfer else { return nil }
+        guard isCrossCurrencyTransfer else { return 1.0 }
+
+        switch transferExchangeRateMode {
+        case .current:
+            guard let suggestedTransferRate, suggestedTransferRate > 0 else { return nil }
+            return suggestedTransferRate
+        case .custom:
+            return resolvedCustomExchangeRate
+        }
+    }
+
+    private var resolvedTransferExchangeRateDate: Date? {
+        let calendar = Calendar.current
+        switch transferExchangeRateMode {
+        case .current:
+            return suggestedTransferRateDate ?? calendar.startOfDay(for: transactionDate)
+        case .custom:
+            return calendar.startOfDay(for: Date())
+        }
+    }
+
+    private var transferDestinationBalanceText: String? {
+        accountBalanceText(for: selectedToCardID)
+    }
+
+    private var transferRateQuoteText: String? {
+        guard isCrossCurrencyTransfer,
+              let sourceCurrency = Self.normalizedCurrencyCode(selectedTransferSourceCard?.currency),
+              let targetCurrency = Self.normalizedCurrencyCode(selectedTransferDestinationCard?.currency),
+              let rate = resolvedTransferExchangeRate else {
+            return nil
+        }
+
+        let plainRate = AmountInputFormatter.plainString(
+            from: rate,
+            maxFractionDigits: Self.exchangeRateFractionDigits
+        )
+        let formattedRate = AmountInputFormatter.display(
+            plainRate,
+            maxFractionDigits: Self.exchangeRateFractionDigits
+        )
+        return "1 \(sourceCurrency) = \(formattedRate) \(targetCurrency)"
+    }
+
+    private var transferReceivePreviewText: String? {
+        guard let amount = parseAmount(),
+              amount > 0,
+              let targetCurrency = Self.normalizedCurrencyCode(selectedTransferDestinationCard?.currency),
+              let receivedAmount = Self.transferReceivedAmount(
+                sourceAmount: amount,
+                exchangeRate: resolvedTransferExchangeRate
+              ) else {
+            return nil
+        }
+
+        let formattedAmount = formatNumberForDisplay(
+            AmountInputFormatter.plainString(from: receivedAmount)
+        )
+        return String(
+            localized: "cashflow.editor.transfer.received_amount",
+            defaultValue: "Will receive: \(formattedAmount) \(targetCurrency)",
+            comment: "Preview text for received amount in transfer destination currency"
+        )
+    }
+
+    private var transferRateStatusText: String? {
+        guard isCrossCurrencyTransfer else { return nil }
+
+        if transferExchangeRateMode == .current {
+            if isLoadingSuggestedTransferRate {
+                return String(
+                    localized: "cashflow.editor.transfer.rate_loading",
+                    defaultValue: "Loading current rate…",
+                    comment: "Transfer exchange rate loading state"
+                )
+            }
+
+            if suggestedTransferRate == nil {
+                return String(
+                    localized: "cashflow.editor.transfer.rate_unavailable",
+                    defaultValue: "Current rate is unavailable. Enter your own rate to continue.",
+                    comment: "Transfer exchange rate unavailable state"
+                )
+            }
+        } else if resolvedCustomExchangeRate == nil {
+            return String(
+                localized: "cashflow.editor.transfer.rate_custom_invalid",
+                defaultValue: "Enter a valid custom rate.",
+                comment: "Transfer custom exchange rate validation message"
+            )
+        }
+
+        return nil
+    }
+
     private var selectedAccountTitle: String {
         if let selected = selectableAccountsForCurrentSelection.first(where: { $0.id == selectedAccountPickerID }) {
             return selected.pickerTitle
@@ -863,9 +1046,114 @@ struct CashflowTransactionEditorView: View {
                     ),
                     excludingCardID: selectedCardID
                 )
+
+                if let destinationBalanceText = transferDestinationBalanceText {
+                    Text(destinationBalanceText)
+                        .font(.caption)
+                        .foregroundStyle(AppColors.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                if isCrossCurrencyTransfer {
+                    transferExchangeRateSection
+                }
             }
             .padding(.vertical, 12)
             .padding(.horizontal, 16)
+        }
+    }
+
+    private var transferExchangeRateSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            FinancesRowDivider()
+                .padding(.horizontal, -16)
+                .padding(.top, 2)
+
+            Text(
+                String(
+                    localized: "cashflow.editor.transfer.exchange_rate",
+                    defaultValue: "Exchange rate",
+                    comment: "Section title for transfer exchange rate"
+                )
+            )
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(AppColors.textPrimary)
+
+            Picker(
+                String(
+                    localized: "cashflow.editor.transfer.exchange_rate",
+                    defaultValue: "Exchange rate",
+                    comment: "Transfer exchange rate picker title"
+                ),
+                selection: $transferExchangeRateMode
+            ) {
+                ForEach(CashflowTransferExchangeRateMode.allCases, id: \.self) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            if transferExchangeRateMode == .custom {
+                HStack(spacing: 12) {
+                    Text(
+                        String(
+                            localized: "cashflow.editor.transfer.your_rate",
+                            defaultValue: "Your rate",
+                            comment: "Label for custom exchange rate input"
+                        )
+                    )
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AppColors.textSecondary)
+
+                    Spacer()
+
+                    TextField(
+                        "0",
+                        text: Binding(
+                            get: { customExchangeRateDisplayText },
+                            set: { customExchangeRateDisplayText = $0 }
+                        )
+                    )
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .frame(minWidth: 110, alignment: .trailing)
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.white.opacity(0.04))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                        )
+                )
+            }
+
+            if let transferRateQuoteText {
+                Text(transferRateQuoteText)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppColors.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if let transferReceivePreviewText {
+                Text(transferReceivePreviewText)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if let transferRateStatusText {
+                Text(transferRateStatusText)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(
+                        resolvedTransferExchangeRate == nil ? AppColors.error : AppColors.textSecondary
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
     }
 
@@ -1041,6 +1329,7 @@ struct CashflowTransactionEditorView: View {
             return selectedCardID != nil
                 && selectedToCardID != nil
                 && selectedCardID != selectedToCardID
+                && resolvedTransferExchangeRate != nil
                 && !isAmountOverBalance
         case .balanceAdjustment, .cardBalanceAdjustment:
             return selectedCardID != nil || editingTransaction?.creditID != nil || editingTransaction?.investmentID != nil
@@ -1194,6 +1483,15 @@ struct CashflowTransactionEditorView: View {
         transaction.recurrenceSeriesID = resolvedRecurrenceSeriesID
         transaction.affectsCardBalance = showsAffectCardBalanceToggle ? shouldAffectCardBalance : true
 
+        if selectedTransactionType == .transfer,
+           isCrossCurrencyTransfer,
+           let targetCurrency = Self.normalizedCurrencyCode(selectedTransferDestinationCard?.currency),
+           let resolvedTransferExchangeRate {
+            transaction.exchangeRate = resolvedTransferExchangeRate
+            transaction.exchangeRateCurrency = targetCurrency
+            transaction.exchangeRateDate = resolvedTransferExchangeRateDate
+        }
+
         isSavingTransaction = true
         Task {
             let didSave = await viewModel.persistTransaction(
@@ -1246,24 +1544,8 @@ struct CashflowTransactionEditorView: View {
     }
 
     private var selectedAccountBalanceText: String? {
-        if let cardID = selectedCardID,
-           let snapshot = viewModel.cardBalanceSnapshot(for: cardID) {
-            let availableText = String(
-                format: String(localized: "cashflow.editor.available_format"),
-                formatNumberForDisplay(snapshot.availableAmount),
-                snapshot.currency
-            )
-
-            guard let debtAmount = snapshot.debtAmount else {
-                return availableText
-            }
-
-            let debtLabel = String(localized: "finances.add_account.card.total_debt")
-            let availableLabel = String(localized: "finances.add_account.card.remaining_limit")
-            let debtText = formatNumberForDisplay(debtAmount)
-            let remainingLimitText = formatNumberForDisplay(snapshot.availableAmount)
-
-            return "\(debtLabel): \(debtText) \(snapshot.currency)\n\(availableLabel): \(remainingLimitText) \(snapshot.currency)"
+        if let balanceText = accountBalanceText(for: selectedCardID) {
+            return balanceText
         }
 
         if let investmentID = selectedInvestmentID,
@@ -1276,6 +1558,30 @@ struct CashflowTransactionEditorView: View {
         }
 
         return nil
+    }
+
+    private func accountBalanceText(for cardID: String?) -> String? {
+        guard let cardID,
+              let snapshot = viewModel.cardBalanceSnapshot(for: cardID) else {
+            return nil
+        }
+
+        let availableText = String(
+            format: String(localized: "cashflow.editor.available_format"),
+            formatNumberForDisplay(snapshot.availableAmount),
+            snapshot.currency
+        )
+
+        guard let debtAmount = snapshot.debtAmount else {
+            return availableText
+        }
+
+        let debtLabel = String(localized: "finances.add_account.card.total_debt")
+        let availableLabel = String(localized: "finances.add_account.card.remaining_limit")
+        let debtText = formatNumberForDisplay(debtAmount)
+        let remainingLimitText = formatNumberForDisplay(snapshot.availableAmount)
+
+        return "\(debtLabel): \(debtText) \(snapshot.currency)\n\(availableLabel): \(remainingLimitText) \(snapshot.currency)"
     }
 
     private func parseAmount() -> Double? {
@@ -1376,6 +1682,41 @@ struct CashflowTransactionEditorView: View {
         }
     }
 
+    private func refreshTransferRateSuggestion() {
+        transferRateTask?.cancel()
+
+        guard selectedTransactionType == .transfer, isCrossCurrencyTransfer else {
+            suggestedTransferRate = nil
+            suggestedTransferRateDate = nil
+            isLoadingSuggestedTransferRate = false
+            return
+        }
+
+        guard let sourceCurrency = Self.normalizedCurrencyCode(selectedTransferSourceCard?.currency),
+              let targetCurrency = Self.normalizedCurrencyCode(selectedTransferDestinationCard?.currency) else {
+            suggestedTransferRate = nil
+            suggestedTransferRateDate = nil
+            isLoadingSuggestedTransferRate = false
+            return
+        }
+
+        let rateDate = transactionDate
+        isLoadingSuggestedTransferRate = true
+        transferRateTask = Task {
+            let suggestion = await viewModel.suggestedTransferExchangeInfo(
+                from: sourceCurrency,
+                to: targetCurrency,
+                on: rateDate
+            )
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                isLoadingSuggestedTransferRate = false
+                suggestedTransferRate = suggestion?.rate
+                suggestedTransferRateDate = suggestion?.rateDate
+            }
+        }
+    }
+
     private var defaultWeeklyRecurrenceWeekday: CashflowRecurrenceWeekday {
         let weekday = Calendar.current.component(.weekday, from: transactionDate)
         return CashflowRecurrenceWeekday(rawValue: weekday) ?? .monday
@@ -1399,6 +1740,14 @@ extension CashflowTransactionEditorView {
         AmountInputFormatter.display(value, maxFractionDigits: amountMaxFractionDigits)
     }
 
+    static func sanitizedExchangeRateText(from value: String) -> String {
+        AmountInputFormatter.sanitize(value, maxFractionDigits: exchangeRateFractionDigits)
+    }
+
+    static func formattedExchangeRateDisplayText(from value: String) -> String {
+        AmountInputFormatter.display(value, maxFractionDigits: exchangeRateFractionDigits)
+    }
+
     static func amountFontSize(for value: String) -> CGFloat {
         let significantCharacters = value.filter { $0.isWholeNumber }.count
         return significantCharacters >= 7 ? amountCompactFontSize : amountBaseFontSize
@@ -1418,6 +1767,30 @@ extension CashflowTransactionEditorView {
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .uppercased()
         return normalized.isEmpty ? nil : normalized
+    }
+
+    static func shouldOfferTransferExchangeRate(sourceCurrency: String?, destinationCurrency: String?) -> Bool {
+        guard let sourceCurrency = normalizedCurrencyCode(sourceCurrency),
+              let destinationCurrency = normalizedCurrencyCode(destinationCurrency) else {
+            return false
+        }
+
+        return sourceCurrency != destinationCurrency
+    }
+
+    static func defaultTransferExchangeRateMode(existingRate: Double?) -> CashflowTransferExchangeRateMode {
+        guard let existingRate, existingRate > 0 else { return .current }
+        return .custom
+    }
+
+    static func transferReceivedAmount(sourceAmount: Double, exchangeRate: Double?) -> Double? {
+        guard sourceAmount > 0,
+              let exchangeRate,
+              exchangeRate > 0 else {
+            return nil
+        }
+
+        return sourceAmount * exchangeRate
     }
 
     static func defaultEditorCurrency(
@@ -1894,6 +2267,10 @@ struct CashflowCategoryEditorSheet: View {
         }
     }
 
+    private var suggestedIcons: [String] {
+        CashflowCategoryIconSuggestionEngine.suggestedIcons(forExpenseName: name)
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -1914,6 +2291,48 @@ struct CashflowCategoryEditorSheet: View {
                         FinancesSectionHeader(title: String(localized: "cashflow.editor.category_icon"))
                         FinancesGlassCard {
                             VStack(spacing: 12) {
+                                if !suggestedIcons.isEmpty {
+                                    VStack(alignment: .leading, spacing: 10) {
+                                        Text(
+                                            String(
+                                                localized: "cashflow.editor.icon_suggestions",
+                                                defaultValue: "Suggested icons",
+                                                comment: "Suggested icons title for category creation"
+                                            )
+                                        )
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(AppColors.textSecondary)
+
+                                        ScrollView(.horizontal, showsIndicators: false) {
+                                            HStack(spacing: 10) {
+                                                ForEach(suggestedIcons, id: \.self) { suggested in
+                                                    Button {
+                                                        icon = suggested
+                                                    } label: {
+                                                        CashflowCategoryIconView(
+                                                            icon: suggested,
+                                                            fontSize: 22,
+                                                            fontWeight: .semibold,
+                                                            tint: AnyShapeStyle(icon == suggested ? AppColors.textPrimary : AppColors.textSecondary)
+                                                        )
+                                                        .frame(width: 52, height: 52)
+                                                        .background(
+                                                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                                                .fill(icon == suggested ? Color.white.opacity(0.14) : Color.white.opacity(0.06))
+                                                                .overlay(
+                                                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                                                        .stroke(Color.white.opacity(icon == suggested ? 0.24 : 0.10), lineWidth: 1)
+                                                                )
+                                                        )
+                                                    }
+                                                    .buttonStyle(.plain)
+                                                }
+                                            }
+                                            .padding(.horizontal, 2)
+                                        }
+                                    }
+                                }
+
                                 Picker(String(localized: "cashflow.editor.icon_type"), selection: $selectedTab) {
                                     ForEach(IconPickerTab.allCases) { tab in
                                         Text(tab.localizedTitle).tag(tab)

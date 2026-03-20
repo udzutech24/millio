@@ -991,6 +991,162 @@ struct FinanceDynamicsViewModelTests {
         #expect(abs((points.first?.value ?? -1) - 0) < 0.01)
     }
 
+    @Test("Эффективный старт периода клипуется к дате создания нового счета")
+    func testResolvedPeriodDatesClampStartToAccountCreation() throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let now = Date()
+        let requestedStart = calendar.date(byAdding: .day, value: -30, to: now) ?? now
+        let createdAt = calendar.date(byAdding: .day, value: -11, to: now) ?? now
+
+        let card = Card(name: "Новый счет", cardNumber: "5555", bank: .other, cardType: .debit, currency: "RUB")
+        card.createdAt = createdAt
+        card.updatedAt = createdAt
+        card.initialBalance = 12_000
+        card.hasInitialBalance = true
+        card.balance = 12_000
+        modelContext.insert(card)
+
+        let group = FinanceGroup(name: "Тест", colorHex: "#FFFFFF")
+        let account = FinanceAccount(accountType: .card, accountID: card.cardUniqueID)
+        account.group = group
+        account.createdAt = createdAt
+        account.updatedAt = createdAt
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+
+        let period = dynamicsViewModel.resolvedPeriodDates(
+            for: [account],
+            basePeriod: (requestedStart, now)
+        )
+
+        #expect(period.start == createdAt)
+        #expect(period.end == now)
+    }
+
+    @Test("Breakdown по акциям не показывает ноль на старте, если позиция создана в пределах периода")
+    func testInvestmentBreakdownUsesInvestmentCreationDateAsStart() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let now = Date()
+        let createdAt = calendar.date(byAdding: .day, value: -3, to: now) ?? now
+
+        let investment = Investment(
+            name: "SPY",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 1_184_517,
+            currency: "USD"
+        )
+        investment.createdAt = createdAt
+        investment.updatedAt = createdAt
+        investment.initialAmount = 1_184_517
+        investment.hasInitialAmount = true
+        investment.marketQuantity = 10
+        investment.averagePurchaseUnitPrice = 118_451.7
+        investment.totalPurchaseCost = 1_184_517
+        modelContext.insert(investment)
+
+        let group = FinanceGroup(name: "Акции", colorHex: "#00CC66")
+        let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+        account.group = group
+        account.createdAt = createdAt
+        account.updatedAt = createdAt
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        dynamicsViewModel.state.period = .month
+        dynamicsViewModel.state.viewMode = .accounts
+
+        await dynamicsViewModel.updateDynamicsBreakdown()
+
+        let item = try #require(dynamicsViewModel.state.dynamicsBreakdown.first)
+        #expect(abs(item.startValue - 1_184_517) < 0.01)
+        #expect(abs(item.endValue - 1_184_517) < 0.01)
+    }
+
+    @Test("Breakdown по группе не показывает ноль на старте, если группа состоит из новой инвестиции")
+    func testInvestmentGroupBreakdownUsesInvestmentCreationDateAsStart() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let now = Date()
+        let createdAt = calendar.date(byAdding: .day, value: -5, to: now) ?? now
+
+        let investment = Investment(
+            name: "GLD",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 836_881,
+            currency: "USD"
+        )
+        investment.createdAt = createdAt
+        investment.updatedAt = createdAt
+        investment.initialAmount = 836_881
+        investment.hasInitialAmount = true
+        investment.marketQuantity = 7
+        investment.averagePurchaseUnitPrice = 119_554.43
+        investment.totalPurchaseCost = 836_881
+        modelContext.insert(investment)
+
+        let group = FinanceGroup(name: "Металлы", colorHex: "#D4AF37")
+        let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+        account.group = group
+        account.createdAt = createdAt
+        account.updatedAt = createdAt
+        group.accounts = [account]
+        modelContext.insert(group)
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let financeViewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockDynamicsCurrencyRateService(),
+            skipInitialLoad: true
+        )
+        let dynamicsViewModel = FinanceDynamicsViewModel(
+            modelContext: modelContext,
+            financeViewModel: financeViewModel,
+            currencyService: MockDynamicsCurrencyRateService()
+        )
+        dynamicsViewModel.handle(.loadData)
+        dynamicsViewModel.state.period = .month
+        dynamicsViewModel.state.viewMode = .groups
+
+        await dynamicsViewModel.updateDynamicsBreakdown()
+
+        let item = try #require(dynamicsViewModel.state.dynamicsBreakdown.first)
+        #expect(item.name == "Металлы")
+        #expect(abs(item.startValue - 836_881) < 0.01)
+        #expect(abs(item.endValue - 836_881) < 0.01)
+    }
+
     @Test("History-only доходы и расходы не искажают исторический баланс карты")
     func testHistoryOnlyCashflowTransactionsDoNotAffectDynamicsBalance() async throws {
         let modelContext = try createTestModelContext()

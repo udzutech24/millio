@@ -127,4 +127,13 @@ struct AmountInputFormatterTests {
         #expect(parsed != nil)
         #expect(abs((parsed ?? 0) - 0.000000221456) < 0.0000000000001)
     }
+
+    @Test("sanitize preserves crypto unit price precision up to eight decimals")
+    func sanitizeSupportsCryptoUnitPricePrecision() {
+        let sanitized = AmountInputFormatter.sanitize(
+            "0,123456789",
+            maxFractionDigits: AmountInputFormatter.marketPriceFractionDigits
+        )
+        #expect(sanitized == "0.12345678")
+    }
 }

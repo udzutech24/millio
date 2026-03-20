@@ -122,25 +122,25 @@ struct FinanceLocalizationTests {
             strings: strings,
             key: "finances.main.empty_intro.title",
             locale: "ru",
-            equals: "Контур финансового контроля"
+            equals: "Ваши продукты"
         )
         try assertLocalizedValue(
             strings: strings,
             key: "finances.main.empty_intro.title",
             locale: "en",
-            equals: "Finance Control Center"
+            equals: "Your Products"
         )
         try assertLocalizedValue(
             strings: strings,
             key: "finances.main.empty_intro.description",
             locale: "ru",
-            equals: "Сведите карты, кредитные обязательства и инвестиционные позиции в единый контур контроля. Откройте «Динамику», чтобы анализировать движение баланса, прирост капитала и источники потерь во времени."
+            equals: "Создавайте счета и карты, добавляйте акции, криптовалюту, недвижимость и любые другие продукты в одном удобном интерфейсе"
         )
         try assertLocalizedValue(
             strings: strings,
             key: "finances.main.empty_intro.description",
             locale: "en",
-            equals: "Consolidate cards, loan obligations, and investment positions in a single control area. Open Dynamics to analyze balance movement, capital growth, and loss sources over time."
+            equals: "Create accounts and cards, add stocks, crypto, real estate, and any other products in one streamlined interface"
         )
         try assertLocalizedValue(
             strings: strings,
@@ -165,6 +165,18 @@ struct FinanceLocalizationTests {
             key: "finances.dynamics.pro.title",
             locale: "en",
             equals: "Advanced charting is available in PRO"
+        )
+        try assertLocalizedValue(
+            strings: strings,
+            key: "finances.dynamics.pro.subtitle",
+            locale: "ru",
+            equals: "Оформите подписку для доступа к расширенной аналитике баланса"
+        )
+        try assertLocalizedValue(
+            strings: strings,
+            key: "finances.dynamics.pro.subtitle",
+            locale: "en",
+            equals: "Upgrade to access advanced balance analytics"
         )
     }
 

@@ -593,7 +593,7 @@ struct CashbackViewModelCustomCategoryTests {
             monthKey: Cashback.monthKey(for: now)
         ))
         context.insert(Cashback(
-            name: "Супермаркеты",
+            name: "Продукты",
             category: .supermarket,
             percentage: 10,
             cardIDs: [],

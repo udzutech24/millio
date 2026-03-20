@@ -81,6 +81,7 @@ struct CashflowTransactionImporter: ModelImporter {
         }()
         let recurrenceSeriesID = dict["recurrenceSeriesID"] as? String
         let affectsCardBalance = dict["affectsCardBalance"] as? Bool ?? true
+        let affectsCashflowTotals = dict["affectsCashflowTotals"] as? Bool
         let hasAppliedBalanceEffect = dict["hasAppliedBalanceEffect"] as? Bool ?? false
         
         // Создаем новую транзакцию
@@ -99,7 +100,8 @@ struct CashflowTransactionImporter: ModelImporter {
             recurrenceRule: recurrenceRule,
             recurrenceWeekdays: recurrenceWeekdays,
             recurrenceSeriesID: recurrenceSeriesID,
-            affectsCardBalance: affectsCardBalance
+            affectsCardBalance: affectsCardBalance,
+            affectsCashflowTotals: affectsCashflowTotals
         )
         transaction.createdAt = createdAt
         transaction.updatedAt = updatedAt

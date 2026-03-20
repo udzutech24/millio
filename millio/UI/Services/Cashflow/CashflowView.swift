@@ -76,24 +76,6 @@ struct CashflowActionButtonsLayout {
     }
 }
 
-struct CashflowEmptyStateIntroPrefs {
-    static let hiddenKey = "cashflow_main_empty_intro_hidden"
-
-    private let defaults: UserDefaults
-
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
-    }
-
-    func isHidden() -> Bool {
-        defaults.bool(forKey: Self.hiddenKey)
-    }
-
-    func setHidden(_ hidden: Bool) {
-        defaults.set(hidden, forKey: Self.hiddenKey)
-    }
-}
-
 struct CashflowView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
@@ -172,7 +154,6 @@ private struct CashflowContentView: View {
     @State private var showAssetChangeInfoSheet: Bool = false
     @State private var showIncomeBreakdown: Bool = false
     @State private var showExpenseBreakdown: Bool = false
-    @State private var isEmptyIntroHidden: Bool = CashflowEmptyStateIntroPrefs().isHidden()
     @State private var selectedTopAction: TopToolbarAction = .currency
     @State private var showExpandedChart: Bool = false
     @State private var showExpandedPeriodSelector: Bool = false
@@ -210,10 +191,6 @@ private struct CashflowContentView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     cashflowChartSection
-
-                    if viewModel.state.transactions.isEmpty {
-                        emptyTransactionsOnboardingState
-                    }
 
                     // Сводка активов за период
                     assetBreakdownSection
@@ -302,15 +279,11 @@ private struct CashflowContentView: View {
             cashflowExpandedChartSheet
         }
         .onAppear {
-            hideEmptyIntroIfNeeded()
             if viewModel.state.chartPeriod == .custom {
                 chartReferenceAnchorDate = viewModel.state.customEndDate
             } else {
                 chartReferenceAnchorDate = Date()
             }
-        }
-        .onChange(of: viewModel.state.transactions.map(\.transactionTypeRaw)) { _, _ in
-            hideEmptyIntroIfNeeded()
         }
         .onChange(of: viewModel.state.chartPeriod) { _, newPeriod in
             if newPeriod == .custom {
@@ -1108,16 +1081,89 @@ private struct CashflowContentView: View {
     }
 
     private var cashflowChartEmptyState: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "chart.xyaxis.line")
-                .font(.system(size: 26))
-                .foregroundStyle(primarySecondaryText)
-            Text("cashflow.chart.empty")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(primarySecondaryText)
+        VStack(spacing: 14) {
+            Image("loans")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 86, height: 86)
+                .padding(.top, 2)
+
+            Text("cashflow.chart.empty.banner.title")
+                .font(.system(size: 28, weight: .bold))
+                .foregroundStyle(AppColors.textPrimary)
+                .multilineTextAlignment(.center)
+
+            Text("cashflow.main.empty_intro.description")
+                .font(.system(size: 17, weight: .regular))
+                .foregroundStyle(AppColors.textTertiary)
+                .multilineTextAlignment(.center)
+                .lineSpacing(2)
+
+            Button {
+                viewModel.handle(.addTransaction(.expense))
+                fireLightImpact()
+            } label: {
+                Text("cashflow.chart.empty.banner.add_action")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Color.white.opacity(0.06))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .stroke(neonCyan.opacity(0.45), lineWidth: 1)
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
+
+            Button {
+                MiniAppNavigation.navigate(to: .finances, from: currentRoute, router: router)
+                fireLightImpact()
+            } label: {
+                Text("cashflow.chart.empty.banner.open_finances")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Color.white.opacity(0.06))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .stroke(Color.white.opacity(0.16), lineWidth: 1)
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
         }
-        .frame(maxWidth: .infinity, minHeight: 120)
-        .background(financeInnerBackground(cornerRadius: rowCornerRadius))
+        .padding(.horizontal, 18)
+        .padding(.vertical, 20)
+        .frame(maxWidth: .infinity, minHeight: 330)
+        .background(
+            RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [Color(hex: "041B32").opacity(0.95), Color.black.opacity(0.92)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [neonCyan.opacity(0.35), neonViolet.opacity(0.25)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+        )
     }
 
     private var cashflowChartProLocked: some View {
@@ -1720,109 +1766,9 @@ private struct CashflowContentView: View {
         }
     }
 
-    private var hasIncomeOrExpenseTransactions: Bool {
-        viewModel.state.transactions.contains { transaction in
-            transaction.transactionType == .income || transaction.transactionType == .expense
-        }
-    }
-
-    private var emptyTransactionsOnboardingState: some View {
-        VStack(spacing: 14) {
-            HStack {
-                Spacer()
-
-                if !isEmptyIntroHidden {
-                    Button {
-                        isEmptyIntroHidden = true
-                        CashflowEmptyStateIntroPrefs().setHidden(true)
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(primarySecondaryText)
-                            .frame(width: 24, height: 24)
-                            .background(Color.white.opacity(0.08))
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(String(localized: "cashflow.main.empty_intro.dismiss"))
-                }
-            }
-
-            Image(systemName: "chart.bar.doc.horizontal.fill")
-                .font(.system(size: 40))
-                .foregroundStyle(primarySecondaryText)
-
-            Text("cashflow.main.empty_intro.title")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(AppColors.textPrimary)
-                .multilineTextAlignment(.center)
-
-            if !isEmptyIntroHidden {
-                Text("cashflow.main.empty_intro.description")
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(primarySecondaryText)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(2)
-            }
-
-            Button {
-                viewModel.handle(.addTransaction(.expense))
-                fireLightImpact()
-            } label: {
-                Text("cashflow.main.empty_intro.add_expense")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: AppColors.expenseGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                    )
-            }
-            .buttonStyle(.plain)
-
-            if !isEmptyIntroHidden {
-                Button {
-                    MiniAppNavigation.navigate(to: .finances, from: currentRoute, router: router)
-                    fireLightImpact()
-                } label: {
-                    Text("cashflow.main.empty_intro.open_finances")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.white.opacity(0.08))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .stroke(Color.white.opacity(0.18), lineWidth: 1)
-                                )
-                        )
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 18)
-        .background(financeCardBackground(cornerRadius: panelCornerRadius))
-    }
-
     private func fireLightImpact() {
         let generator = UIImpactFeedbackGenerator(style: .light)
         generator.impactOccurred(intensity: 0.9)
-    }
-
-    private func hideEmptyIntroIfNeeded() {
-        guard hasIncomeOrExpenseTransactions, !isEmptyIntroHidden else { return }
-        isEmptyIntroHidden = true
-        CashflowEmptyStateIntroPrefs().setHidden(true)
     }
 
     private var assetChangeInfoSheet: some View {

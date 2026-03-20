@@ -6,7 +6,7 @@ struct CashbackOverviewMetricsTests {
     @Test("Summary for cashback counts categories and unique linked cards")
     func countsCategoriesAndLinkedCards() {
         let cashbacks = [
-            Cashback(name: "Супермаркеты", category: .supermarket, percentage: 5, cardIDs: ["a", "b"], monthKey: "2026-03"),
+            Cashback(name: "Продукты", category: .supermarket, percentage: 5, cardIDs: ["a", "b"], monthKey: "2026-03"),
             Cashback(name: "Кафе", category: .coffeeShop, percentage: 7, cardIDs: ["b", "c"], monthKey: "2026-03")
         ]
 

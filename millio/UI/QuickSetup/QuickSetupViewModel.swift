@@ -168,10 +168,10 @@ final class QuickSetupViewModel: ObservableObject {
         ExpenseCategory.bills.rawValue,
         ExpenseCategory.health.rawValue,
         ExpenseCategory.education.rawValue,
-        ExpenseCategory.other.rawValue,
-        "custom:travel",
-        "custom:home"
+        ExpenseCategory.other.rawValue
     ]
+
+    static let allExpenseCategoryIDs: [String] = ExpenseCategory.allCases.map(\.rawValue)
 
     @Published var currentStep: QuickSetupStep = .localeAndCurrencies
     @Published var selectedLanguage: Language
@@ -263,6 +263,12 @@ final class QuickSetupViewModel: ObservableObject {
         systemContext.quickSetupAvailableLanguages
     }
 
+    var availableProductTypes: [QuickSetupProductType] {
+        QuickSetupProductType.allCases.filter { type in
+            type != .crypto || EntitlementPolicy.canUseQuickSetupCrypto(isPro: isProUser)
+        }
+    }
+
     var recommendedCurrencyCodes: [String] {
         systemContext.recommendedCurrencyCodes
     }
@@ -292,6 +298,18 @@ final class QuickSetupViewModel: ObservableObject {
         return productTypeForCreation == .crypto
             ? QuickSetupLocalization.text(locale: locale, ru: "Цена покупки за монету", en: "Buy price per coin")
             : QuickSetupLocalization.text(locale: locale, ru: "Цена покупки за 1 шт.", en: "Buy price per share")
+    }
+
+    var productQuantityFractionDigits: Int {
+        productTypeForCreation == .crypto
+            ? AmountInputFormatter.marketQuantityFractionDigits
+            : AmountInputFormatter.defaultFractionDigits
+    }
+
+    var productUnitPriceFractionDigits: Int {
+        productTypeForCreation == .crypto
+            ? AmountInputFormatter.marketPriceFractionDigits
+            : AmountInputFormatter.defaultFractionDigits
     }
 
     var productMarketSearchTitle: String {
@@ -362,6 +380,10 @@ final class QuickSetupViewModel: ObservableObject {
         }
     }
 
+    var shouldPromptForPrimaryProductEntry: Bool {
+        products.isEmpty
+    }
+
     func makeSelection() -> QuickSetupSelection {
         let normalizedPrimary = primaryCurrencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         let normalizedFavorites = SettingsManager
@@ -424,11 +446,16 @@ final class QuickSetupViewModel: ObservableObject {
         selectedExpenseCategoryIDs = Set(Self.recommendedExpenseCategoryIDs)
     }
 
+    func selectAllExpenseCategories() {
+        selectedExpenseCategoryIDs = Set(Self.allExpenseCategoryIDs)
+    }
+
     func clearExpenseCategories() {
         selectedExpenseCategoryIDs.removeAll()
     }
 
     func selectProductType(_ type: QuickSetupProductType) {
+        guard availableProductTypes.contains(type) else { return }
         productTypeForCreation = type
         resetDraftInputs(keepingTypeSpecificData: false)
     }
@@ -446,8 +473,16 @@ final class QuickSetupViewModel: ObservableObject {
         selectedGroupDraftID = draft.id
     }
 
+    func chooseGroupPreset(_ preset: QuickSetupGroupPreset) {
+        setGroups(from: [preset])
+    }
+
     func selectGroupDraft(id: UUID?) {
         selectedGroupDraftID = id
+    }
+
+    func clearProducts() {
+        products.removeAll()
     }
 
     func removeGroup(id: UUID) {
@@ -469,6 +504,12 @@ final class QuickSetupViewModel: ObservableObject {
         if selectedGroupDraftID == id {
             selectedGroupDraftID = groups.first?.id
         }
+    }
+
+    private func setGroups(from presets: [QuickSetupGroupPreset]) {
+        let locale = selectedLanguage.locale ?? Locale.current
+        groups = presets.map { $0.draft(for: locale) }
+        selectedGroupDraftID = groups.first?.id
     }
 
     func applySelectedMarketSymbol(_ symbol: TwelveDataSymbol) {
@@ -497,6 +538,27 @@ final class QuickSetupViewModel: ObservableObject {
 
     @discardableResult
     func addDraftProduct() -> Bool {
+        guard let draft = buildDraftProduct() else {
+            return false
+        }
+
+        products.append(draft)
+        resetDraftInputs(keepingTypeSpecificData: false)
+        return true
+    }
+
+    @discardableResult
+    func savePrimaryDraftProduct() -> Bool {
+        guard let draft = buildDraftProduct() else {
+            return false
+        }
+
+        products = [draft]
+        resetDraftInputs(keepingTypeSpecificData: false)
+        return true
+    }
+
+    private func buildDraftProduct() -> QuickSetupProductDraft? {
         lastAddDraftError = nil
         let trimmedName = productNameInput.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedSymbol = productSymbolInput.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
@@ -507,12 +569,17 @@ final class QuickSetupViewModel: ObservableObject {
         if productTypeForCreation.isMarketTracked {
             guard !trimmedSymbol.isEmpty else {
                 lastAddDraftError = String(localized: "quick_setup.error.enter_ticker")
-                return false
+                return nil
+            }
+            if productTypeForCreation == .crypto, !EntitlementPolicy.canUseQuickSetupCrypto(isPro: isProUser) {
+                let locale = selectedLanguage.locale ?? Locale.current
+                lastAddDraftError = QuickSetupLocalization.text(locale: locale, ru: "Криптовалюта доступна в PRO", en: "Crypto is available in PRO")
+                return nil
             }
             guard let quantity = parsedDecimal(productQuantityInput), quantity > 0 else {
                 let locale = selectedLanguage.locale ?? Locale.current
                 lastAddDraftError = QuickSetupLocalization.text(locale: locale, ru: "Укажи количество позиции", en: "Enter position quantity")
-                return false
+                return nil
             }
             let purchaseUnitPrice: Double
             if productTypeForCreation == .crypto {
@@ -521,7 +588,7 @@ final class QuickSetupViewModel: ObservableObject {
                 guard let parsedPurchaseUnitPrice = parsedDecimal(productPurchasePriceInput), parsedPurchaseUnitPrice > 0 else {
                     let locale = selectedLanguage.locale ?? Locale.current
                     lastAddDraftError = QuickSetupLocalization.text(locale: locale, ru: "Укажи цену покупки", en: "Enter buy price")
-                    return false
+                    return nil
                 }
                 purchaseUnitPrice = parsedPurchaseUnitPrice
             }
@@ -530,15 +597,16 @@ final class QuickSetupViewModel: ObservableObject {
                     partialResult += 1
                 }
             }
-            if !EntitlementPolicy.canAddTrackedTicker(
+            if !EntitlementPolicy.canAddQuickSetupTrackedProduct(
+                type: productTypeForCreation,
                 isPro: isProUser,
                 currentTrackedTickers: currentTickerDraftCount
             ) {
-                lastAddDraftError = String(
-                    format: String(localized: "monetization.ticker.limit.short_format"),
-                    EntitlementPolicy.freeTrackedTickerLimit
-                )
-                return false
+                let locale = selectedLanguage.locale ?? Locale.current
+                lastAddDraftError = productTypeForCreation == .crypto
+                    ? QuickSetupLocalization.text(locale: locale, ru: "Криптовалюта доступна в PRO", en: "Crypto is available in PRO")
+                    : QuickSetupLocalization.text(locale: locale, ru: "В быстрой настройке без PRO доступна 1 акция", en: "Quick setup includes 1 stock without PRO")
+                return nil
             }
 
             let manualCurrentUnitPrice = parsedDecimal(productCurrentPriceInput)
@@ -560,7 +628,7 @@ final class QuickSetupViewModel: ObservableObject {
         } else {
             guard !trimmedName.isEmpty else {
                 lastAddDraftError = String(localized: "quick_setup.error.enter_name")
-                return false
+                return nil
             }
             resolvedName = trimmedName
             amount = max(0, parsedDecimal(productAmountInput) ?? 0)
@@ -571,20 +639,15 @@ final class QuickSetupViewModel: ObservableObject {
             ? productResolvedCurrencyCode
             : primaryCurrencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
 
-        products.append(
-            QuickSetupProductDraft(
-                type: productTypeForCreation,
-                name: resolvedName,
-                amount: amount,
-                currencyCode: normalizedCurrency.isEmpty ? SettingsManager.defaultPrimaryCurrencyCode : normalizedCurrency,
-                groupDraftID: selectedGroupDraftID,
-                marketSnapshot: marketSnapshot,
-                visualIcon: productTypeForCreation.icon
-            )
+        return QuickSetupProductDraft(
+            type: productTypeForCreation,
+            name: resolvedName,
+            amount: amount,
+            currencyCode: normalizedCurrency.isEmpty ? SettingsManager.defaultPrimaryCurrencyCode : normalizedCurrency,
+            groupDraftID: selectedGroupDraftID,
+            marketSnapshot: marketSnapshot,
+            visualIcon: productTypeForCreation.icon
         )
-
-        resetDraftInputs(keepingTypeSpecificData: false)
-        return true
     }
 
     func removeProduct(id: UUID) {

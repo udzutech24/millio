@@ -90,6 +90,9 @@ Offline-first поведение:
 - для обычного ручного изменения суммы сохраняется `CashflowTransaction.balanceAdjustment`;
 - для market-обновлений (stocks/crypto) обновление `amount` и market-полей выполняется без создания
   `CashflowTransaction`, чтобы не засорять историю автообновлениями цены.
+- settlement-транзакции market buy/sell, которые двигают деньги между картой/счётом и активом,
+  сохраняются в истории для аудита баланса, но помечаются как `affectsCashflowTotals = false` и не
+  попадают в доходы/расходы `Cashflow`.
 
 ## Где хранятся данные
 

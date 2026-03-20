@@ -235,4 +235,31 @@ struct HistoricalRateStoreTests {
         #expect(second.resolution == .current)
         #expect(mockService.historicalCalls == 1)
     }
+
+    @Test("Сброс negative cache разрешает повторную historical попытку")
+    func testResetUnavailableRequestCacheAllowsRetry() async throws {
+        let context = try createTestModelContext()
+        let mockService = MockHistoricalRateService()
+        mockService.historicalRate = nil
+        mockService.currentRate = 92.0
+
+        let store = HistoricalRateStore(modelContext: context, currencyService: mockService)
+        let date = Calendar.current.startOfDay(for: Date().addingTimeInterval(-7 * 86400))
+
+        let first = await store.getRate(on: date, from: "CNY", to: "RUB")
+        #expect(first.resolution == .current)
+        #expect(mockService.historicalCalls == 1)
+
+        mockService.historicalRatesByPair["CNY_RUB"] = 13.0
+
+        let second = await store.getRate(on: date, from: "CNY", to: "RUB")
+        #expect(second.resolution == .current)
+        #expect(mockService.historicalCalls == 1)
+
+        store.resetUnavailableRequestCache()
+        let third = await store.getRate(on: date, from: "CNY", to: "RUB")
+        #expect(third.resolution == .exact)
+        #expect(third.rate == 13.0)
+        #expect(mockService.historicalCalls == 2)
+    }
 }

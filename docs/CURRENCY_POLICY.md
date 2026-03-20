@@ -32,3 +32,14 @@
 - Crypto visibility is paywalled by `EntitlementPolicy.canUseConverterCrypto`:
   - Free: crypto is hidden and removed from selected converter currencies;
   - Pro: crypto can be added and converted.
+
+## Historical Rates Policy
+
+- Historical `exact` rates are resolved via provider chain:
+  1. `Frankfurter` (ECB-aligned default source).
+  2. `CBR` fallback for RUB-involved pairs (`RUB -> X` / `X -> RUB`).
+- If both providers miss, app falls back to:
+  - previously cached historical rate (`previous`);
+  - then current spot rate (`current`) as estimated value.
+- Manual `Refresh rates` clears in-memory negative caches for historical providers,
+  so transient misses can be retried without app restart.

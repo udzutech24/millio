@@ -269,8 +269,8 @@ struct CurrencyRateServiceTests {
         #expect(loader.requestedURLs.count == 1)
     }
 
-    @Test("Frankfurter не должен ходить в сеть для неподдерживаемой исторической валюты")
-    func testHistoricalRequestSkipsUnsupportedCurrencyWithoutNetworkCall() async {
+    @Test("RUB historical fallback использует второй провайдер")
+    func testHistoricalRUBFallbackUsesSecondaryProvider() async {
         final class MockHistoricalLoader: HTTPDataLoading {
             private(set) var requestedURLs: [URL] = []
 
@@ -300,6 +300,74 @@ struct CurrencyRateServiceTests {
 
         #expect(rubRate == nil)
         #expect(kztRate == nil)
-        #expect(loader.requestedURLs.isEmpty)
+        #expect(loader.requestedURLs.count == 1)
+        #expect(loader.requestedURLs.first?.host == "www.cbr.ru")
+    }
+
+    @Test("RUB historical fallback возвращает точный курс из CBR XML")
+    func testHistoricalRUBFallbackParsesCBRXML() async {
+        final class MockHistoricalLoader: HTTPDataLoading {
+            private(set) var requestedURLs: [URL] = []
+
+            func data(from url: URL) async throws -> (Data, URLResponse) {
+                requestedURLs.append(url)
+
+                if url.host == "www.cbr.ru" {
+                    let xml = """
+                    <?xml version="1.0" encoding="windows-1251"?>
+                    <ValCurs Date="01.01.2024" name="Foreign Currency Market">
+                        <Valute ID="R01235">
+                            <NumCode>840</NumCode>
+                            <CharCode>USD</CharCode>
+                            <Nominal>1</Nominal>
+                            <Name>US Dollar</Name>
+                            <Value>90,0000</Value>
+                        </Valute>
+                        <Valute ID="R01239">
+                            <NumCode>978</NumCode>
+                            <CharCode>EUR</CharCode>
+                            <Nominal>1</Nominal>
+                            <Name>Euro</Name>
+                            <Value>99,0000</Value>
+                        </Valute>
+                    </ValCurs>
+                    """
+                    let data = Data(xml.utf8)
+                    let http = HTTPURLResponse(
+                        url: url,
+                        statusCode: 200,
+                        httpVersion: "HTTP/1.1",
+                        headerFields: ["Content-Type": "application/xml"]
+                    )!
+                    return (data, http)
+                }
+
+                let data = Data(#"{"message":"not found"}"#.utf8)
+                let http = HTTPURLResponse(
+                    url: url,
+                    statusCode: 404,
+                    httpVersion: "HTTP/1.1",
+                    headerFields: ["Content-Type": "application/json"]
+                )!
+                return (data, http)
+            }
+        }
+
+        let loader = MockHistoricalLoader()
+        let service = CurrencyRateService(
+            rateSource: .erapi,
+            rateRepository: MockRateRepository(),
+            historicalLoader: loader
+        )
+        let date = Date(timeIntervalSince1970: 1_704_067_200) // 2024-01-01 UTC
+
+        let usdToRub = await service.getHistoricalRate(on: date, from: "USD", to: "RUB")
+        let rubToUsd = await service.getHistoricalRate(on: date, from: "RUB", to: "USD")
+
+        #expect(usdToRub != nil)
+        #expect(abs((usdToRub ?? 0) - 90.0) < 0.0001)
+        #expect(rubToUsd != nil)
+        #expect(abs((rubToUsd ?? 0) - (1.0 / 90.0)) < 0.0001)
+        #expect(loader.requestedURLs.allSatisfy { $0.host == "www.cbr.ru" })
     }
 }

@@ -148,16 +148,39 @@ enum IncomeCategory: String, Codable, CaseIterable {
     case other = "other"             // Другое
     
     var displayName: String {
+        localizedDisplayName()
+    }
+
+    func localizedDisplayName(locale: Locale = .autoupdatingCurrent) -> String {
         switch self {
-        case .salary: return String(localized: "Salary")
-        case .freelance: return String(localized: "Freelance")
-        case .business: return String(localized: "Business")
-        case .investment: return String(localized: "Investments")
-        case .rental: return String(localized: "Rental")
-        case .gift: return String(localized: "Gift")
-        case .bonus: return String(localized: "Bonus")
-        case .other: return String(localized: "Other")
+        case .salary: return AppLocalization.string("Salary", locale: locale)
+        case .freelance: return AppLocalization.string("Freelance", locale: locale)
+        case .business: return AppLocalization.string("Business", locale: locale)
+        case .investment: return AppLocalization.string("Investments", locale: locale)
+        case .rental: return AppLocalization.string("Rental", locale: locale)
+        case .gift: return AppLocalization.string("Gift", locale: locale)
+        case .bonus: return AppLocalization.string("Bonus", locale: locale)
+        case .other: return AppLocalization.string("Other", locale: locale)
         }
+    }
+
+    static func matchesSearch(rawValue: String, query: String, locale: Locale = .autoupdatingCurrent) -> Bool {
+        let normalizedQuery = normalizeSearchQuery(query)
+        guard !normalizedQuery.isEmpty else { return true }
+        guard let category = IncomeCategory(rawValue: rawValue) else { return false }
+
+        let candidates = [
+            category.localizedDisplayName(locale: locale),
+            category.localizedDisplayName(locale: Locale(identifier: "ru_RU")),
+            category.localizedDisplayName(locale: Locale(identifier: "en_US")),
+            rawValue
+        ]
+
+        return candidates
+            .map(normalizeSearchQuery)
+            .contains { candidate in
+                candidate.contains(normalizedQuery) || normalizedQuery.contains(candidate)
+            }
     }
     
     var icon: String {
@@ -212,6 +235,16 @@ enum ExpenseCategory: String, Codable, CaseIterable {
     var icon: String {
         ExpenseCategoryCatalog.metadata(for: self).icon
     }
+}
+
+private func normalizeSearchQuery(_ value: String) -> String {
+    value
+        .lowercased()
+        .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+        .replacingOccurrences(of: "ё", with: "е")
+        .replacingOccurrences(of: #"[^\p{L}\p{N}\s]"#, with: " ", options: .regularExpression)
+        .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+        .trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
 // MARK: - Custom Category
@@ -360,6 +393,7 @@ final class CashflowCustomCategory: Persistable {
         "cube.box.fill",
         "bag.fill",
         "creditcard.fill",
+        "wallet.pass.fill",
         "banknote.fill",
         "building.columns.fill",
         "dollarsign.circle.fill",
@@ -595,6 +629,10 @@ final class CashflowTransaction: Persistable {
     /// Влияет ли операция на текущий остаток карты
     var affectsCardBalance: Bool = true
 
+    /// Явный override участия операции в доходах/расходах Cashflow.
+    /// `nil` означает legacy-режим: участие выводится из типа операции и известных паттернов.
+    var affectsCashflowTotals: Bool?
+
     /// Был ли эффект операции уже применен к текущему балансу счета.
     /// Нужен, чтобы не применять одну и ту же операцию повторно при reopen/auto-apply.
     var hasAppliedBalanceEffect: Bool = false
@@ -655,6 +693,16 @@ final class CashflowTransaction: Persistable {
         && recurrenceSeriesID != nil
     }
 
+    /// Операция должна участвовать в метриках доходов/расходов Cashflow.
+    /// Optional-флаг позволяет без миграции корректно скрыть legacy settlement-транзакции
+    /// от market buy/sell, которые раньше сохранялись как обычные income/expense.
+    var shouldAffectCashflowTotals: Bool {
+        if let affectsCashflowTotals {
+            return affectsCashflowTotals
+        }
+        return !isLegacyInvestmentTradeSettlement
+    }
+
     var hasAssetChangeSnapshot: Bool {
         assetQuantityBefore != nil
             || assetQuantityAfter != nil
@@ -683,7 +731,8 @@ final class CashflowTransaction: Persistable {
         recurrenceRule: CashflowRecurrenceRule = .none,
         recurrenceWeekdays: Set<CashflowRecurrenceWeekday> = [],
         recurrenceSeriesID: String? = nil,
-        affectsCardBalance: Bool = true
+        affectsCardBalance: Bool = true,
+        affectsCashflowTotals: Bool? = nil
     ) {
         self.transactionTypeRaw = transactionType.rawValue
         self.amount = amount
@@ -702,6 +751,7 @@ final class CashflowTransaction: Persistable {
         self.recurrenceWeekdays = recurrenceWeekdays
         self.recurrenceSeriesID = recurrenceSeriesID
         self.affectsCardBalance = affectsCardBalance
+        self.affectsCashflowTotals = affectsCashflowTotals
         self.createdAt = Date()
         self.updatedAt = Date()
     }
@@ -744,6 +794,9 @@ final class CashflowTransaction: Persistable {
         }
         if let note = note {
             dict["note"] = note
+        }
+        if let affectsCashflowTotals {
+            dict["affectsCashflowTotals"] = affectsCashflowTotals
         }
         if let assetQuantityBefore = assetQuantityBefore {
             dict["assetQuantityBefore"] = assetQuantityBefore
@@ -817,5 +870,20 @@ final class CashflowTransaction: Persistable {
         assetUnitPriceAfter = after.unitPrice
         assetAmountBefore = before.totalAmount
         assetAmountAfter = after.totalAmount
+    }
+}
+
+private extension CashflowTransaction {
+    var isLegacyInvestmentTradeSettlement: Bool {
+        switch transactionType {
+        case .expense:
+            return expenseCategoryRaw == ExpenseCategory.other.rawValue
+                && note == String(localized: "finances.transaction.note.investment_buy")
+        case .income:
+            return incomeCategoryRaw == IncomeCategory.investment.rawValue
+                && note == String(localized: "finances.transaction.note.investment_sell")
+        case .transfer, .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
+            return false
+        }
     }
 }

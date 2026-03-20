@@ -9,6 +9,8 @@ import SwiftUI
 
 struct FinanceGroupEditorView: View {
     @ObservedObject var viewModel: FinanceViewModel
+    let editingGroupOverride: FinanceGroup?
+    let presentationStyle: FinanceEditorPresentationStyle
     @Environment(AppState.self) private var appState
     @Environment(AppRouter.self) private var router
     @Environment(\.dismiss) private var dismiss
@@ -23,14 +25,27 @@ struct FinanceGroupEditorView: View {
     @State private var showCurrencyPicker: Bool = false
     @State private var currencySearchText: String = ""
     @State private var showCryptoProAlert: Bool = false
+    @State private var showDeleteGroupConfirmation: Bool = false
+    @State private var pendingAccountDeletion: FinanceAccount? = nil
+    @State private var isColorPaletteExpanded: Bool = false
     
     private let predefinedColors: [Color] = [
         .blue, .cyan, .green, .mint, .purple, .pink,
         .indigo, .orange, .red, .yellow, .teal, .brown
     ]
+
+    init(
+        viewModel: FinanceViewModel,
+        editingGroupOverride: FinanceGroup? = nil,
+        presentationStyle: FinanceEditorPresentationStyle = .modal
+    ) {
+        self.viewModel = viewModel
+        self.editingGroupOverride = editingGroupOverride
+        self.presentationStyle = presentationStyle
+    }
     
     var body: some View {
-        NavigationStack {
+        let content =
             ZStack {
                 GradientBackground()
                 
@@ -39,12 +54,11 @@ struct FinanceGroupEditorView: View {
                         nameSection
                         colorSection
                         currencySection
+                        managementSection
                         
-                        if let editingGroup = viewModel.state.editingGroup {
+                        if let editingGroup = currentEditingGroup {
                             let orderedAccounts = viewModel.orderedAccounts(for: editingGroup)
-                            if !orderedAccounts.isEmpty {
-                                accountsSection(orderedAccounts)
-                            }
+                            accountsSection(orderedAccounts)
                         }
                     }
                     .padding(.top, 20)
@@ -53,41 +67,50 @@ struct FinanceGroupEditorView: View {
                 }
                 .scrollDismissesKeyboard(.immediately)
                 .dismissKeyboardOnTap()
+
+                FinancesDestructiveConfirmationOverlay(
+                    isPresented: showDeleteGroupConfirmation,
+                    title: deleteGroupConfirmationTitle,
+                    message: deleteGroupConfirmationMessage,
+                    confirmTitle: String(localized: "finances.common.delete"),
+                    cancelTitle: String(localized: "finances.common.cancel"),
+                    onConfirm: confirmDeleteGroup,
+                    onCancel: { showDeleteGroupConfirmation = false }
+                )
+
+                FinancesDestructiveConfirmationOverlay(
+                    isPresented: pendingAccountDeletion != nil,
+                    title: deleteAccountConfirmationTitle,
+                    message: deleteAccountConfirmationMessage,
+                    confirmTitle: String(localized: "finances.common.delete"),
+                    cancelTitle: String(localized: "finances.common.cancel"),
+                    onConfirm: confirmDeleteAccount,
+                    onCancel: { pendingAccountDeletion = nil }
+                )
             }
             .navigationTitle(
-                viewModel.state.editingGroup == nil
+                currentEditingGroup == nil
                     ? String(localized: "finances.group_editor.nav.new")
                     : String(localized: "finances.group_editor.nav.edit")
             )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(AppColors.textPrimary)
-                            .frame(width: 28, height: 28)
-                            .background(
-                                Circle()
-                                    .fill(Color.white.opacity(0.08))
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(String(localized: "finances.common.cancel"))
-                }
-                
-                if viewModel.state.editingGroup != nil {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button(role: .destructive) {
-                            deleteGroup()
+                if presentationStyle.showsDismissButton {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button {
+                            dismiss()
                         } label: {
-                            Image(systemName: "trash")
-                                .font(.system(size: 15, weight: .semibold))
+                            Image(systemName: "xmark")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(AppColors.textPrimary)
+                                .frame(width: 28, height: 28)
+                                .background(
+                                    Circle()
+                                        .fill(Color.white.opacity(0.08))
+                                )
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(String(localized: "finances.common.delete"))
+                        .accessibilityLabel(String(localized: "finances.common.cancel"))
                     }
                 }
                 
@@ -110,7 +133,10 @@ struct FinanceGroupEditorView: View {
                 }
             }
             .onAppear {
-                if let editing = viewModel.state.editingGroup {
+                if let editingGroupOverride {
+                    viewModel.state.editingGroup = editingGroupOverride
+                }
+                if let editing = currentEditingGroup {
                     name = editing.name
                     selectedCurrency = editing.displayCurrency
                     // Находим соответствующий цвет из predefinedColors по hex-значению
@@ -170,7 +196,18 @@ struct FinanceGroupEditorView: View {
                 message: String(localized: "monetization.crypto.pro_message"),
                 onSubscribe: { router.push(.subscription) }
             )
+
+        if presentationStyle.wrapsInNavigationStack {
+            NavigationStack {
+                content
+            }
+        } else {
+            content
         }
+    }
+
+    private var currentEditingGroup: FinanceGroup? {
+        editingGroupOverride ?? viewModel.state.editingGroup
     }
     
     private var nameSection: some View {
@@ -184,7 +221,7 @@ struct FinanceGroupEditorView: View {
                         .padding(.vertical, 14)
                         .padding(.horizontal, 16)
 
-                    if viewModel.state.editingGroup == nil {
+                    if currentEditingGroup == nil {
                         FinancesRowDivider(leadingPadding: 0)
                             .padding(.horizontal, 16)
 
@@ -210,28 +247,70 @@ struct FinanceGroupEditorView: View {
     private var colorSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             FinancesSectionHeader(title: String(localized: "finances.group_editor.section.color"))
-            FinancesGlassCard(contentPadding: EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)) {
-                LazyVGrid(columns: [
-                    GridItem(.flexible()),
-                    GridItem(.flexible()),
-                    GridItem(.flexible()),
-                    GridItem(.flexible())
-                ], spacing: 16) {
-                    ForEach(predefinedColors, id: \.self) { color in
-                        Button {
-                            selectedColor = color
-                        } label: {
-                            Circle()
-                                .fill(color)
-                                .frame(width: 40, height: 40)
-                                .overlay {
-                                    if selectedColor == color {
-                                        Circle()
-                                            .stroke(AppColors.textPrimary, lineWidth: 3)
-                                    }
-                                }
+            FinancesGlassCard {
+                VStack(spacing: 0) {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            isColorPaletteExpanded.toggle()
                         }
-                        .buttonStyle(.plain)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Circle()
+                                .fill(selectedColor)
+                                .frame(width: 22, height: 22)
+                                .overlay {
+                                    Circle()
+                                        .stroke(Color.white.opacity(0.28), lineWidth: 1)
+                                }
+
+                            Text(colorSectionTitle)
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(AppColors.textPrimary)
+
+                            Spacer()
+
+                            Image(systemName: isColorPaletteExpanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(AppColors.textTertiary)
+                        }
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 16)
+                    }
+                    .buttonStyle(.plain)
+
+                    if isColorPaletteExpanded {
+                        FinancesRowDivider(leadingPadding: 0)
+                            .padding(.horizontal, 16)
+
+                        LazyVGrid(columns: [
+                            GridItem(.flexible()),
+                            GridItem(.flexible()),
+                            GridItem(.flexible()),
+                            GridItem(.flexible())
+                        ], spacing: 16) {
+                            ForEach(predefinedColors, id: \.self) { color in
+                                Button {
+                                    selectedColor = color
+                                    withAnimation(.easeInOut(duration: 0.18)) {
+                                        isColorPaletteExpanded = false
+                                    }
+                                } label: {
+                                    Circle()
+                                        .fill(color)
+                                        .frame(width: 40, height: 40)
+                                        .overlay {
+                                            if selectedColor == color {
+                                                Circle()
+                                                    .stroke(AppColors.textPrimary, lineWidth: 3)
+                                            }
+                                        }
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 14)
+                        .padding(.bottom, 16)
                     }
                 }
             }
@@ -293,6 +372,51 @@ struct FinanceGroupEditorView: View {
             FinancesSectionHeader(title: String(localized: "finances.group_editor.section.accounts"))
             FinancesGlassCard {
                 VStack(spacing: 0) {
+                    NavigationLink {
+                        if let editingGroup = currentEditingGroup {
+                            FinanceAddAccountView(
+                                viewModel: viewModel,
+                                preselectedGroup: editingGroup,
+                                presentationStyle: .pushed
+                            )
+                        }
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: AppColors.financesGradient,
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+
+                            Text(String(localized: "finances.group.action.add_account"))
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(AppColors.textPrimary)
+
+                            Spacer()
+                        }
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 16)
+                    }
+                    .buttonStyle(.plain)
+
+                    if !accounts.isEmpty {
+                        FinancesRowDivider(leadingPadding: 0)
+                            .padding(.horizontal, 16)
+                    }
+
+                    if accounts.isEmpty {
+                        Text("finances.main.empty_products.title")
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundStyle(AppColors.textTertiary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 14)
+                            .padding(.horizontal, 16)
+                    }
+
                     ForEach(accounts) { account in
                         if let accountInfo = viewModel.getAccountInfo(account: account) {
                             HStack(spacing: 12) {
@@ -329,7 +453,7 @@ struct FinanceGroupEditorView: View {
                                 
                                 // Кнопка удаления
                                 Button {
-                                    viewModel.handle(.removeAccountFromGroup(account))
+                                    pendingAccountDeletion = account
                                 } label: {
                                     Image(systemName: "trash")
                                         .font(.system(size: 16, weight: .medium))
@@ -349,14 +473,60 @@ struct FinanceGroupEditorView: View {
             }
         }
     }
+
+    private var managementSection: some View {
+        Group {
+            if let editingGroup = currentEditingGroup {
+                VStack(alignment: .leading, spacing: 10) {
+                    FinancesSectionHeader(title: String(localized: "finances.group_editor.section.manage"))
+                    FinancesGlassCard {
+                        VStack(spacing: 0) {
+                            if presentationStyle.showsOpenCurrentGroupAction {
+                                NavigationLink {
+                                    FinanceDynamicsView(
+                                        financeViewModel: viewModel,
+                                        initialGroupID: editingGroup.groupUniqueID,
+                                        initialGroupCurrency: editingGroup.displayCurrency,
+                                        wrapInNavigationStack: false
+                                    )
+                                } label: {
+                                    managementRow(
+                                        title: String(localized: "finances.group.menu.open"),
+                                        systemImage: "chart.line.uptrend.xyaxis",
+                                        tint: AppColors.textPrimary
+                                    )
+                                }
+                                .buttonStyle(.plain)
+
+                                FinancesRowDivider(leadingPadding: 0)
+                                    .padding(.horizontal, 16)
+                            }
+
+                            Button(role: .destructive) {
+                                showDeleteGroupConfirmation = true
+                            } label: {
+                                managementRow(
+                                    title: String(localized: "finances.common.delete"),
+                                    systemImage: "trash",
+                                    tint: AppColors.error
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+        }
+    }
     
     private var isValid: Bool {
-        !name.isEmpty
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
     
     private func saveGroup() {
+        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let colorHex = selectedColor.toHex()
-        viewModel.handle(.updateGroup(name: name, colorHex: colorHex, displayCurrency: selectedCurrency))
+        viewModel.handle(.updateGroup(name: normalizedName, colorHex: colorHex, displayCurrency: selectedCurrency))
         dismiss()
     }
 
@@ -365,17 +535,86 @@ struct FinanceGroupEditorView: View {
         isNameFocused = true
     }
 
+    private var colorSectionTitle: String {
+        let languageCode = Locale.current.language.languageCode?.identifier ?? Locale.current.identifier
+        if languageCode == "ru" {
+            return isColorPaletteExpanded ? "Скрыть палитру" : "Выбрать цвет"
+        }
+        return isColorPaletteExpanded ? "Hide palette" : "Choose color"
+    }
+
     private func deleteGroup() {
-        guard let editingGroup = viewModel.state.editingGroup else { return }
+        guard let editingGroup = currentEditingGroup else { return }
         viewModel.handle(.deleteGroup(editingGroup))
         dismiss()
+    }
+
+    private func confirmDeleteGroup() {
+        showDeleteGroupConfirmation = false
+        deleteGroup()
+    }
+
+    private func confirmDeleteAccount() {
+        guard let account = pendingAccountDeletion else { return }
+        pendingAccountDeletion = nil
+        viewModel.handle(.removeAccountFromGroup(account))
+    }
+
+    private var deleteAccountConfirmationTitle: String {
+        guard let account = pendingAccountDeletion else {
+            return String(localized: "finances.dynamics.delete_account")
+        }
+        let name = viewModel.getAccountInfo(account: account)?.name
+            ?? String(localized: "finances.dynamics.chart.account_fallback")
+        return FinanceDeleteProductCopy.confirmationTitle(for: account.accountType, name: name)
+    }
+
+    private var deleteAccountConfirmationMessage: String {
+        guard let account = pendingAccountDeletion else {
+            return String(localized: "finances.dynamics.delete_account.confirm.message")
+        }
+        return String(localized: FinanceDeleteProductCopy.confirmationMessage(for: account.accountType))
+    }
+
+    private var deleteGroupConfirmationTitle: String {
+        let groupName = currentEditingGroup?.name ?? String(localized: "finances.group.ungrouped")
+        let languageCode = Locale.current.language.languageCode?.identifier ?? Locale.current.identifier
+        if languageCode == "ru" {
+            return "Удалить группу «\(groupName)»?"
+        }
+        return "Delete group \"\(groupName)\"?"
+    }
+
+    private var deleteGroupConfirmationMessage: String {
+        let languageCode = Locale.current.language.languageCode?.identifier ?? Locale.current.identifier
+        if languageCode == "ru" {
+            return "Это действие удалит группу и все продукты внутри неё. Подтвердите удаление."
+        }
+        return "This will delete the group and every product inside it. Please confirm the deletion."
+    }
+
+    private func managementRow(title: String, systemImage: String, tint: Color) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 20)
+
+            Text(title)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(tint)
+
+            Spacer()
+        }
+        .padding(.vertical, 14)
+        .padding(.horizontal, 16)
     }
     
     private func loadAvailableCurrencies() async {
         isLoadingCurrencies = true
         defer { isLoadingCurrencies = false }
 
-        let currentCurrency = viewModel.state.editingGroup?.displayCurrency ?? SettingsManager.shared.primaryCurrencyCode
+        let currentCurrency = currentEditingGroup?.displayCurrency ?? SettingsManager.shared.primaryCurrencyCode
         availableCurrencies = CurrencySelectionSupport.pickerCodes(extraCodes: [currentCurrency])
     }
     

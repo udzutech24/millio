@@ -174,6 +174,7 @@ final class AppState {
 /// Централизованные правила монетизации Free/PRO.
 enum EntitlementPolicy {
     static let freeTrackedTickerLimit = 5
+    static let freeQuickSetupTrackedTickerLimit = 1
     static let freeCashbackCardLimit = 3
     static let freeCashbackCategoryLimitPerMonth = 10
     static let freeFinanceProductLimit = 15
@@ -193,6 +194,25 @@ enum EntitlementPolicy {
     static func canUseConverterCrypto(isPro: Bool) -> Bool {
         guard isConverterCryptoProOnly else { return true }
         return isPro
+    }
+
+    static func canUseQuickSetupCrypto(isPro: Bool) -> Bool {
+        canUseFinanceCrypto(isPro: isPro)
+    }
+
+    static func canAddQuickSetupTrackedProduct(
+        type: QuickSetupProductType,
+        isPro: Bool,
+        currentTrackedTickers: Int
+    ) -> Bool {
+        switch type {
+        case .crypto:
+            return canUseQuickSetupCrypto(isPro: isPro) && canAddTrackedTicker(isPro: isPro, currentTrackedTickers: currentTrackedTickers)
+        case .ticker:
+            return isPro || currentTrackedTickers < freeQuickSetupTrackedTickerLimit
+        default:
+            return true
+        }
     }
 
     static func canAddTrackedTicker(isPro: Bool, currentTrackedTickers: Int) -> Bool {

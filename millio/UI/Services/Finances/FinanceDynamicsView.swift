@@ -222,6 +222,7 @@ private struct FinanceDynamicsContentView: View {
     @State private var overviewEntriesByGranularity: [FinanceOverviewGranularity: [FinanceOverviewPeriodEntry]] = [:]
     @State private var isOverviewChartLoading: Bool = false
     @State private var showDeleteAccountConfirmation: Bool = false
+    @State private var showDeleteGroupConfirmation: Bool = false
 
     // Кэшированные значения для графика
     @State private var cachedSelectedPoint: (date: Date, value: Double)? = nil
@@ -235,147 +236,239 @@ private struct FinanceDynamicsContentView: View {
         case custom
     }
 
+    private enum NavigationToolbarMode {
+        case group(FinanceGroup)
+        case market(Investment)
+        case account(FinanceAccount)
+        case none
+    }
+
     var body: some View {
+        configuredContent
+    }
+
+    private var configuredContent: some View {
+        baseContent
+            .navigationTitle(navigationTitleText)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { navigationToolbarContent }
+            .sheet(isPresented: filterSheetBinding) {
+                FinanceDynamicsFilterSheet(viewModel: viewModel)
+            }
+            .sheet(isPresented: $showCustomPeriodSheet) {
+                customPeriodSheet
+            }
+            .sheet(isPresented: $showSubscriptionSheet) {
+                NavigationStack {
+                    SubscriptionView()
+                }
+            }
+            .sheet(isPresented: $showDisplayCurrencySheet) {
+                displayCurrencySheet
+            }
+            .sheet(isPresented: $showTradeSheet) {
+                tradeSheetContent
+            }
+            .sheet(isPresented: $showFullProductEditSheet) {
+                fullProductEditSheetContent
+            }
+            .sheet(isPresented: $showCashflowHistory) {
+                cashflowHistorySheetContent
+            }
+            .onAppear(perform: handleOnAppear)
+            .onChange(of: marketInvestment?.updatedAt) { _, _ in
+                handleMarketInvestmentChange()
+            }
+    }
+
+    private var baseContent: some View {
         ZStack {
             GradientBackground()
-
-            if let marketInvestment = marketInvestment {
-                marketInvestmentDetailsView(marketInvestment)
-            } else {
-                let isCreditCardAccount = initialAccount.map { inlineCreditCard(for: $0) != nil } ?? false
-                let needsTopClearance = viewModel.state.isSingleAccountMode && isCreditCardAccount && shouldShowSingleAccountActionBar
-                let scrollTopPadding = FinanceDynamicsTopBarStyle.scrollContentTopPadding(needsClearance: needsTopClearance)
-
-                ScrollView {
-                    VStack(spacing: 16) {
-                        // Якорь для измерения скролла
-                        Color.clear
-                            .frame(height: 0)
-                            .background(
-                                GeometryReader { proxy in
-                                    Color.clear
-                                        .preference(
-                                            key: ScrollOffsetKey.self,
-                                            value: proxy.frame(in: .named("dynScroll")).minY
-                                        )
-                                }
-                            )
-
-                        chartCard
-
-                        if let warning = viewModel.state.currencyConversionWarning, !isEstimatedRateWarningHidden {
-                            currencyWarningView(text: warning) {
-                                isEstimatedRateWarningHidden = true
-                                FinanceDynamicsEstimatedRateWarningPrefs().setHidden(true)
-                            }
-                        }
-
-                        // Список динамики
-                        dynamicsListCard
-
-                        if shouldShowDeleteAccountFooter, let account = initialAccount {
-                            deleteAccountFooterButton(account: account)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, scrollTopPadding)
-                    .padding(.bottom, shouldShowDeleteAccountFooter ? 44 : 32)
-                }
-                .coordinateSpace(name: "dynScroll")
-                .onPreferenceChange(ScrollOffsetKey.self) { y in
-                    let threshold: CGFloat = 140
-                    let p = min(max(-y / threshold, 0), 1)
-                    let quant: CGFloat = 0.02
-                    if abs(p - lastCollapseProgress) > quant {
-                        lastCollapseProgress = p
-                        collapseProgress = p
-                    }
-                }
-            }
+            dynamicsBodyContent
         }
         .overlay {
-            FinancesDestructiveConfirmationOverlay(
-                isPresented: showDeleteAccountConfirmation,
-                title: deleteAccountConfirmationTitle,
-                message: String(localized: deleteAccountConfirmationMessageKey),
-                confirmTitle: String(localized: "finances.common.delete"),
-                cancelTitle: String(localized: "finances.common.cancel"),
-                onConfirm: confirmDeleteAccount,
-                onCancel: { showDeleteAccountConfirmation = false }
-            )
-        }
-        .navigationTitle(viewModel.state.isSingleAccountMode ? "" : String(localized: "finances.dynamics.title"))
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if let marketInvestment,
-               viewModel.state.isSingleAccountMode,
-               initialAccount != nil {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    marketEditTopBar(for: marketInvestment)
-                }
-            } else if shouldShowSingleAccountActionBar, let account = initialAccount {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    singleAccountActionBar(account: account)
-                }
+            ZStack {
+                FinancesDestructiveConfirmationOverlay(
+                    isPresented: showDeleteAccountConfirmation,
+                    title: deleteAccountConfirmationTitle,
+                    message: String(localized: deleteAccountConfirmationMessageKey),
+                    confirmTitle: String(localized: "finances.common.delete"),
+                    cancelTitle: String(localized: "finances.common.cancel"),
+                    onConfirm: confirmDeleteAccount,
+                    onCancel: { showDeleteAccountConfirmation = false }
+                )
+
+                FinancesDestructiveConfirmationOverlay(
+                    isPresented: showDeleteGroupConfirmation,
+                    title: deleteGroupConfirmationTitle,
+                    message: deleteGroupConfirmationMessage,
+                    confirmTitle: String(localized: "finances.common.delete"),
+                    cancelTitle: String(localized: "finances.common.cancel"),
+                    onConfirm: confirmDeleteCurrentGroup,
+                    onCancel: { showDeleteGroupConfirmation = false }
+                )
             }
         }
-        .sheet(isPresented: Binding(
+    }
+
+    private var navigationTitleText: String {
+        if viewModel.state.isSingleAccountMode {
+            return ""
+        }
+        if let group = currentDynamicsGroup {
+            return group.name
+        }
+        return String(localized: "finances.dynamics.title")
+    }
+
+    private var filterSheetBinding: Binding<Bool> {
+        Binding(
             get: { viewModel.state.showFilterSheet },
             set: { if !$0 { viewModel.handle(.hideFilterSheet) } }
-        )) {
-            FinanceDynamicsFilterSheet(viewModel: viewModel)
-        }
-        .sheet(isPresented: $showCustomPeriodSheet) {
-            customPeriodSheet
-        }
-        .sheet(isPresented: $showSubscriptionSheet) {
-            NavigationStack {
-                SubscriptionView()
+        )
+    }
+
+    @ToolbarContentBuilder
+    private var navigationToolbarContent: some ToolbarContent {
+        switch navigationToolbarMode {
+        case .group(let group):
+            ToolbarItem(placement: .navigationBarTrailing) {
+                singleGroupActionBar(group: group)
+            }
+        case .market(let marketInvestment):
+            ToolbarItem(placement: .navigationBarTrailing) {
+                marketEditTopBar(for: marketInvestment)
+            }
+        case .account(let account):
+            ToolbarItem(placement: .navigationBarTrailing) {
+                singleAccountActionBar(account: account)
+            }
+        case .none:
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                EmptyView()
             }
         }
-        .sheet(isPresented: $showDisplayCurrencySheet) {
-            displayCurrencySheet
+    }
+
+    private var navigationToolbarMode: NavigationToolbarMode {
+        if let group = currentDynamicsGroup {
+            return .group(group)
         }
-        .sheet(isPresented: $showTradeSheet) {
-            if let marketInvestment = marketInvestment {
-                tradeSheet(for: marketInvestment)
+        if let marketInvestment,
+           viewModel.state.isSingleAccountMode,
+           initialAccount != nil {
+            return .market(marketInvestment)
+        }
+        if shouldShowSingleAccountActionBar, let account = initialAccount {
+            return .account(account)
+        }
+        return .none
+    }
+
+    @ViewBuilder
+    private var tradeSheetContent: some View {
+        if let marketInvestment = marketInvestment {
+            tradeSheet(for: marketInvestment)
+        }
+    }
+
+    @ViewBuilder
+    private var fullProductEditSheetContent: some View {
+        if let account = initialAccount {
+            FinanceAddAccountView(
+                viewModel: financeViewModel,
+                editingCard: resolvedCard(for: account),
+                editingCredit: resolvedCredit(for: account),
+                editingInvestment: resolvedInvestment(for: account)
+            )
+            .onDisappear {
+                viewModel.handle(.loadData)
             }
         }
-        .sheet(isPresented: $showFullProductEditSheet) {
-            if let account = initialAccount {
-                FinanceAddAccountView(
-                    viewModel: financeViewModel,
-                    editingCard: resolvedCard(for: account),
-                    editingCredit: resolvedCredit(for: account),
-                    editingInvestment: resolvedInvestment(for: account)
-                )
-                .onDisappear {
-                    viewModel.handle(.loadData)
+    }
+
+    @ViewBuilder
+    private var cashflowHistorySheetContent: some View {
+        if let cashflowViewModel {
+            CashflowTransactionsHistoryView(viewModel: cashflowViewModel)
+        }
+    }
+
+    private func handleOnAppear() {
+        if let customPeriod = viewModel.state.customPeriod {
+            customStartDate = customPeriod.start
+            customEndDate = customPeriod.end
+            useCustomPeriod = viewModel.state.period == .custom
+        }
+        if let marketInvestment {
+            syncMarketDraft(from: marketInvestment)
+        }
+        if cashflowViewModel == nil {
+            cashflowViewModel = CashflowViewModel(modelContext: modelContext)
+        }
+    }
+
+    private func handleMarketInvestmentChange() {
+        if let marketInvestment, !isInlineMarketEdit {
+            syncMarketDraft(from: marketInvestment)
+        }
+    }
+
+    @ViewBuilder
+    private var dynamicsBodyContent: some View {
+        if let marketInvestment = marketInvestment {
+            marketInvestmentDetailsView(marketInvestment)
+        } else {
+            standardDynamicsContent
+        }
+    }
+
+    private var standardDynamicsContent: some View {
+        let isCreditCardAccount = initialAccount.map { inlineCreditCard(for: $0) != nil } ?? false
+        let needsTopClearance = viewModel.state.isSingleAccountMode && isCreditCardAccount && shouldShowSingleAccountActionBar
+        let scrollTopPadding = FinanceDynamicsTopBarStyle.scrollContentTopPadding(needsClearance: needsTopClearance)
+
+        return ScrollView {
+            VStack(spacing: 16) {
+                Color.clear
+                    .frame(height: 0)
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear
+                                .preference(
+                                    key: ScrollOffsetKey.self,
+                                    value: proxy.frame(in: .named("dynScroll")).minY
+                                )
+                        }
+                    )
+
+                chartCard
+
+                if let warning = viewModel.state.currencyConversionWarning, !isEstimatedRateWarningHidden {
+                    currencyWarningView(text: warning) {
+                        isEstimatedRateWarningHidden = true
+                        FinanceDynamicsEstimatedRateWarningPrefs().setHidden(true)
+                    }
+                }
+
+                dynamicsListCard
+
+                if shouldShowDeleteAccountFooter, let account = initialAccount {
+                    deleteAccountFooterButton(account: account)
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.top, scrollTopPadding)
+            .padding(.bottom, shouldShowDeleteAccountFooter ? 44 : 32)
         }
-        .sheet(isPresented: $showCashflowHistory) {
-            if let cashflowViewModel {
-                CashflowTransactionsHistoryView(viewModel: cashflowViewModel)
-            }
-        }
-        .onAppear {
-            // Синхронизация с ViewModel при появлении
-            if let customPeriod = viewModel.state.customPeriod {
-                customStartDate = customPeriod.start
-                customEndDate = customPeriod.end
-                useCustomPeriod = viewModel.state.period == .custom
-            }
-            if let marketInvestment {
-                syncMarketDraft(from: marketInvestment)
-            }
-            if cashflowViewModel == nil {
-                cashflowViewModel = CashflowViewModel(modelContext: modelContext)
-            }
-        }
-        .onChange(of: marketInvestment?.updatedAt) { _, _ in
-            if let marketInvestment, !isInlineMarketEdit {
-                syncMarketDraft(from: marketInvestment)
+        .coordinateSpace(name: "dynScroll")
+        .onPreferenceChange(ScrollOffsetKey.self) { y in
+            let threshold: CGFloat = 140
+            let p = min(max(-y / threshold, 0), 1)
+            let quant: CGFloat = 0.02
+            if abs(p - lastCollapseProgress) > quant {
+                lastCollapseProgress = p
+                collapseProgress = p
             }
         }
     }
@@ -391,6 +484,18 @@ private struct FinanceDynamicsContentView: View {
     private func marketInvestmentDetailsView(_ investment: Investment) -> some View {
         GeometryReader { proxy in
             let compactLayout = proxy.size.height < 820
+            let investmentCurrency = resolvedInvestmentCurrency(investment)
+            let quantityTitle = marketQuantityTitle(for: investment)
+            let quantityValue = "\(marketNumber(investment.marketQuantity ?? 0, digits: 8)) \(marketQuantityUnit(for: investment))"
+            let currentPriceTitle = FinancesL10n.format(
+                "finances.dynamics.trade.price_with_currency",
+                investmentCurrency
+            )
+            let currentPriceValue = money(investment.lastKnownUnitPrice ?? 0, currency: investmentCurrency)
+            let purchasePriceTitle = String(localized: "finances.add_account.investment.purchase_price")
+            let purchasePriceValue = money(investment.averagePurchaseUnitPrice ?? 0, currency: investmentCurrency)
+            let purchaseTotalTitle = String(localized: "finances.dynamics.market.purchase_total")
+            let purchaseTotalValue = money(investment.totalPurchaseCost ?? 0, currency: investmentCurrency)
 
             ScrollView {
                 VStack(spacing: 16) {
@@ -410,8 +515,8 @@ private struct FinanceDynamicsContentView: View {
 
                             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: compactLayout ? 6 : 8) {
                                 statCell(
-                                    marketQuantityTitle(for: investment),
-                                    "\(marketNumber(investment.marketQuantity ?? 0, digits: 8)) \(marketQuantityUnit(for: investment))",
+                                    quantityTitle,
+                                    quantityValue,
                                     isEditable: true,
                                     isEditing: isInlineMarketEdit,
                                     editText: $editQuantityText,
@@ -419,11 +524,8 @@ private struct FinanceDynamicsContentView: View {
                                     compactLayout: compactLayout
                                 )
                                 statCell(
-                                    FinancesL10n.format(
-                                        "finances.dynamics.trade.price_with_currency",
-                                        resolvedInvestmentCurrency(investment)
-                                    ),
-                                    money(investment.lastKnownUnitPrice ?? 0, currency: resolvedInvestmentCurrency(investment)),
+                                    currentPriceTitle,
+                                    currentPriceValue,
                                     isEditable: true,
                                     isEditing: isInlineMarketEdit,
                                     editText: $editUnitPriceText,
@@ -431,8 +533,8 @@ private struct FinanceDynamicsContentView: View {
                                     compactLayout: compactLayout
                                 )
                                 statCell(
-                                    String(localized: "finances.add_account.investment.purchase_price"),
-                                    money(investment.averagePurchaseUnitPrice ?? 0, currency: resolvedInvestmentCurrency(investment)),
+                                    purchasePriceTitle,
+                                    purchasePriceValue,
                                     isEditable: true,
                                     isEditing: isInlineMarketEdit,
                                     editText: $editPurchasePriceText,
@@ -440,8 +542,8 @@ private struct FinanceDynamicsContentView: View {
                                     compactLayout: compactLayout
                                 )
                                 statCell(
-                                    String(localized: "finances.dynamics.market.purchase_total"),
-                                    money(investment.totalPurchaseCost ?? 0, currency: resolvedInvestmentCurrency(investment)),
+                                    purchaseTotalTitle,
+                                    purchaseTotalValue,
                                     compactLayout: compactLayout
                                 )
                             }
@@ -586,6 +688,63 @@ private struct FinanceDynamicsContentView: View {
                 .padding(.vertical, 6)
                 .background(Capsule().fill(backgroundColor))
         }
+    }
+
+    private var currentDynamicsGroup: FinanceGroup? {
+        guard viewModel.state.isSingleGroupMode, !viewModel.state.isSingleAccountMode else { return nil }
+        guard let groupID = viewModel.state.selectedGroupIDs.first else { return nil }
+        return financeViewModel.state.groups.first { $0.groupUniqueID == groupID }
+    }
+
+    private func singleGroupActionBar(group: FinanceGroup) -> some View {
+        HStack(spacing: 8) {
+            NavigationLink {
+                FinanceAddAccountView(
+                    viewModel: financeViewModel,
+                    preselectedGroup: group,
+                    presentationStyle: .pushed
+                )
+                .onDisappear {
+                    viewModel.handle(.loadData)
+                }
+            } label: {
+                Image(systemName: "plus")
+                    .symbolRenderingMode(.monochrome)
+                    .font(.system(size: FinanceDynamicsTopBarStyle.compactIconSize, weight: .regular))
+                    .foregroundStyle(FinanceDynamicsTopBarStyle.passiveIconColor)
+                    .frame(width: FinanceDynamicsTopBarStyle.compactButtonSide, height: FinanceDynamicsTopBarStyle.compactButtonSide)
+            }
+            .buttonStyle(.plain)
+
+            Divider()
+                .frame(height: FinanceDynamicsTopBarStyle.compactSeparatorHeight)
+                .overlay(FinanceDynamicsTopBarStyle.compactSeparatorColor)
+
+            NavigationLink {
+                FinanceGroupEditorView(
+                    viewModel: financeViewModel,
+                    editingGroupOverride: group,
+                    presentationStyle: .pushed
+                )
+                .onDisappear {
+                    viewModel.handle(.loadData)
+                }
+            } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .symbolRenderingMode(.monochrome)
+                    .font(.system(size: FinanceDynamicsTopBarStyle.compactIconSize, weight: .regular))
+                    .foregroundStyle(FinanceDynamicsTopBarStyle.passiveIconColor)
+                    .frame(width: FinanceDynamicsTopBarStyle.compactButtonSide, height: FinanceDynamicsTopBarStyle.compactButtonSide)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func confirmDeleteCurrentGroup() {
+        guard let group = currentGroup else { return }
+        showDeleteGroupConfirmation = false
+        financeViewModel.handle(.hideGroupDynamics)
+        financeViewModel.handle(.deleteGroup(group))
     }
 
     private func statCell(
@@ -1943,6 +2102,31 @@ private struct FinanceDynamicsContentView: View {
         return FinanceDeleteProductCopy.confirmationMessage(for: account.accountType)
     }
 
+    private var currentGroup: FinanceGroup? {
+        guard viewModel.state.isSingleGroupMode,
+              let groupID = viewModel.state.selectedGroupIDs.first else {
+            return nil
+        }
+        return financeViewModel.state.groups.first(where: { $0.groupUniqueID == groupID })
+    }
+
+    private var deleteGroupConfirmationTitle: String {
+        let groupName = currentGroup?.name ?? String(localized: "finances.group.ungrouped")
+        let languageCode = Locale.current.language.languageCode?.identifier ?? Locale.current.identifier
+        if languageCode == "ru" {
+            return "Удалить группу «\(groupName)»?"
+        }
+        return "Delete group \"\(groupName)\"?"
+    }
+
+    private var deleteGroupConfirmationMessage: String {
+        let languageCode = Locale.current.language.languageCode?.identifier ?? Locale.current.identifier
+        if languageCode == "ru" {
+            return "Это действие удалит группу и все продукты внутри неё. Подтвердите удаление."
+        }
+        return "This will delete the group and every product inside it. Please confirm the deletion."
+    }
+
     private func deleteAccountFooterButton(account: FinanceAccount) -> some View {
         Button(role: .destructive) {
             showDeleteAccountConfirmation = true
@@ -2803,6 +2987,10 @@ private struct FinanceDynamicsContentView: View {
             }
         }
         .listRowSeparator(.visible)
+        .onLongPressGesture(minimumDuration: 0.45) {
+            guard let group = dynamicsGroup(for: item) else { return }
+            financeViewModel.handle(.showGroupDynamics(group))
+        }
     }
 
     @ViewBuilder
@@ -2866,13 +3054,18 @@ private struct FinanceDynamicsContentView: View {
         )
     }
 
+    private func dynamicsGroup(for item: DynamicsBreakdownItem) -> FinanceGroup? {
+        guard viewModel.state.viewMode == .groups, item.id != "total" else { return nil }
+        return financeViewModel.state.groups.first { $0.groupUniqueID == item.id }
+    }
+
     // MARK: - Blocked/Empty Views
 
     /// Единая заглушка для PRO-блокировки графика (без "подсказок"/вспомогательных карточек),
     /// чтобы внешний вид был консистентным во всех местах приложения.
     private func proBlockedView(size: ProChartUpsellMetrics.Size) -> some View {
         ProChartUpsellView(
-            titleKey: "finances.dynamics.pro.title",
+            titleKey: nil,
             subtitleKey: "finances.dynamics.pro.subtitle",
             ctaKey: "finances.dynamics.pro.cta",
             size: size,

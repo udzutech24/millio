@@ -10,7 +10,8 @@ import Foundation
 struct CashflowBulkExpenseImportCategoryResolver {
     func resolve(
         title: String,
-        availableOptions: [CashflowCategoryOption]
+        availableOptions: [CashflowCategoryOption],
+        preferredRawValue: String? = nil
     ) -> CashflowBulkExpenseCategoryResolution {
         let normalizedTitle = normalize(title)
         let fallback = availableOptions.first { $0.rawValue == ExpenseCategory.other.rawValue }
@@ -23,6 +24,11 @@ struct CashflowBulkExpenseImportCategoryResolver {
 
         guard !normalizedTitle.isEmpty else {
             return CashflowBulkExpenseCategoryResolution(option: fallback, confidence: .low)
+        }
+
+        if let preferredRawValue,
+           let preferredOption = availableOptions.first(where: { $0.rawValue == preferredRawValue }) {
+            return CashflowBulkExpenseCategoryResolution(option: preferredOption, confidence: .high)
         }
 
         var bestOption = fallback
@@ -47,6 +53,42 @@ struct CashflowBulkExpenseImportCategoryResolver {
         }
 
         return CashflowBulkExpenseCategoryResolution(option: bestOption, confidence: confidence)
+    }
+
+    func suggestedOptions(
+        title: String,
+        availableOptions: [CashflowCategoryOption],
+        preferredRawValue: String? = nil,
+        limit: Int = 3
+    ) -> [CashflowCategoryOption] {
+        let normalizedTitle = normalize(title)
+        var ranked: [(option: CashflowCategoryOption, score: Double)] = []
+
+        if let preferredRawValue,
+           let preferredOption = availableOptions.first(where: { $0.rawValue == preferredRawValue }) {
+            ranked.append((preferredOption, 2.0))
+        }
+
+        for option in availableOptions where option.rawValue != ExpenseCategory.other.rawValue {
+            let score = score(option: option, normalizedTitle: normalizedTitle)
+            guard score > 0 else { continue }
+            ranked.append((option, score))
+        }
+
+        var seen = Set<String>()
+        return ranked
+            .sorted { lhs, rhs in
+                if abs(lhs.score - rhs.score) > 0.0000001 {
+                    return lhs.score > rhs.score
+                }
+                return lhs.option.displayName < rhs.option.displayName
+            }
+            .compactMap { item in
+                guard seen.insert(item.option.rawValue).inserted else { return nil }
+                return item.option
+            }
+            .prefix(limit)
+            .map(\.self)
     }
 
     private func score(option: CashflowCategoryOption, normalizedTitle: String) -> Double {

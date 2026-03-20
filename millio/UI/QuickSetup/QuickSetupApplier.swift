@@ -107,6 +107,7 @@ struct QuickSetupApplier {
         let groupsByDraftID = try ensureQuickSetupGroups(groups)
         var ungroupedGroup: FinanceGroup?
         var trackedTickerCount = try activeTrackedTickerCount()
+        let locale = appState.selectedLanguage.locale ?? Locale.current
 
         for draft in products {
             let targetGroup: FinanceGroup
@@ -168,11 +169,12 @@ struct QuickSetupApplier {
                 modelContext.insert(link)
 
             case .crypto:
-                guard EntitlementPolicy.canAddTrackedTicker(
+                guard EntitlementPolicy.canAddQuickSetupTrackedProduct(
+                    type: .crypto,
                     isPro: appState.isPro,
                     currentTrackedTickers: trackedTickerCount
                 ) else {
-                    throw QuickSetupApplyError.trackedTickerLimitReached(limit: EntitlementPolicy.freeTrackedTickerLimit)
+                    throw QuickSetupApplyError.cryptoRequiresPro(locale: locale)
                 }
                 let investment = Investment(
                     name: draft.symbol ?? draft.name,
@@ -213,11 +215,15 @@ struct QuickSetupApplier {
                 modelContext.insert(link)
 
             case .ticker:
-                guard EntitlementPolicy.canAddTrackedTicker(
+                guard EntitlementPolicy.canAddQuickSetupTrackedProduct(
+                    type: .ticker,
                     isPro: appState.isPro,
                     currentTrackedTickers: trackedTickerCount
                 ) else {
-                    throw QuickSetupApplyError.trackedTickerLimitReached(limit: EntitlementPolicy.freeTrackedTickerLimit)
+                    throw QuickSetupApplyError.quickSetupTrackedTickerLimitReached(
+                        limit: EntitlementPolicy.freeQuickSetupTrackedTickerLimit,
+                        locale: locale
+                    )
                 }
                 let investment = Investment(
                     name: draft.symbol ?? draft.name,
@@ -335,6 +341,8 @@ struct QuickSetupApplier {
 
 enum QuickSetupApplyError: LocalizedError {
     case trackedTickerLimitReached(limit: Int)
+    case quickSetupTrackedTickerLimitReached(limit: Int, locale: Locale)
+    case cryptoRequiresPro(locale: Locale)
 
     var errorDescription: String? {
         switch self {
@@ -343,6 +351,17 @@ enum QuickSetupApplyError: LocalizedError {
                 format: String(localized: "monetization.ticker.limit.max_format"),
                 limit
             )
+        case .quickSetupTrackedTickerLimitReached(let limit, let locale):
+            return String(
+                format: QuickSetupLocalization.text(
+                    locale: locale,
+                    ru: "В быстрой настройке без PRO доступна %d акция",
+                    en: "Quick setup includes %d stock without PRO"
+                ),
+                limit
+            )
+        case .cryptoRequiresPro(let locale):
+            return QuickSetupLocalization.text(locale: locale, ru: "Криптовалюта доступна в PRO", en: "Crypto is available in PRO")
         }
     }
 }

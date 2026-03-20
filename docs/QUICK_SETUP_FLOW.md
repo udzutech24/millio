@@ -30,14 +30,23 @@
 - Category names in quick setup are localized based on the currently selected app language.
 
 3. `products`
-- Build finance groups first, then add one or many products in a row:
+- Choose product type first, then grouping, then save the initial product:
+  - the chosen product type collapses into a compact summary card, same as grouping;
   - one-tap group presets are based on the same finance group templates as the main finance editor;
-  - the selected group becomes the target for the next product draft;
-  - if no group is selected, the product falls back to the system `Ungrouped` group.
+  - grouping chips keep a stable order: `Cards`, `Assets`, `Credits`, `Stocks`, then the remaining presets;
+  - the grouping that best matches the selected product type is highlighted immediately as the recommended choice:
+    - `Card` -> `Cards`
+    - `Property` -> `Assets`
+    - `Debt` -> `Credits`
+    - `Crypto` -> `Assets`
+    - `Credit` -> `Credits`
+    - `Stocks` -> `Stocks`
+  - the selected group becomes the target for the saved startup product;
+  - after saving the product, the primary CTA switches from `Save` to `Continue`.
 - Why this exists:
   - totals and dynamics are clearer from day one;
   - user does not need to re-sort accounts right after onboarding;
-  - quick setup stays fast because groups can be picked from ready-made presets.
+  - quick setup stays fast because type and grouping are chosen up front.
 - Supported product types:
   - account (`Card`)
   - asset (`Investment.other`)

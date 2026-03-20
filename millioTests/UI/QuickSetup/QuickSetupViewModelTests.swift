@@ -128,6 +128,58 @@ final class QuickSetupViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.productPurchasePriceInput, "")
     }
 
+    func testSavePrimaryDraftProductReplacesExistingProduct() {
+        let appState = AppState()
+        let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)
+
+        XCTAssertTrue(viewModel.shouldPromptForPrimaryProductEntry)
+
+        viewModel.productNameInput = "Основная карта"
+        viewModel.productAmountInput = "500"
+        XCTAssertTrue(viewModel.savePrimaryDraftProduct())
+        XCTAssertEqual(viewModel.products.count, 1)
+        XCTAssertEqual(viewModel.products.first?.name, "Основная карта")
+        XCTAssertFalse(viewModel.shouldPromptForPrimaryProductEntry)
+
+        viewModel.productNameInput = "Наличные"
+        viewModel.productAmountInput = "120"
+        XCTAssertTrue(viewModel.savePrimaryDraftProduct())
+
+        XCTAssertEqual(viewModel.products.count, 1)
+        XCTAssertEqual(viewModel.products.first?.name, "Наличные")
+        XCTAssertEqual(viewModel.products.first?.amount, 120)
+        XCTAssertFalse(viewModel.shouldPromptForPrimaryProductEntry)
+    }
+
+    func testRemovingSavedPrimaryProductShowsEntryPromptAgain() {
+        let appState = AppState()
+        let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)
+
+        viewModel.productNameInput = "Основная карта"
+        viewModel.productAmountInput = "500"
+        XCTAssertTrue(viewModel.savePrimaryDraftProduct())
+
+        let savedProductID = try! XCTUnwrap(viewModel.products.first?.id)
+        viewModel.removeProduct(id: savedProductID)
+
+        XCTAssertTrue(viewModel.products.isEmpty)
+        XCTAssertTrue(viewModel.shouldPromptForPrimaryProductEntry)
+    }
+
+    func testClearProductsRemovesSavedDrafts() {
+        let appState = AppState()
+        let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)
+
+        viewModel.productNameInput = "Основная карта"
+        viewModel.productAmountInput = "500"
+        XCTAssertTrue(viewModel.savePrimaryDraftProduct())
+        XCTAssertEqual(viewModel.products.count, 1)
+
+        viewModel.clearProducts()
+
+        XCTAssertTrue(viewModel.products.isEmpty)
+    }
+
     func testAddGroupPresetCreatesAndSelectsGroupWithoutDuplicates() {
         let appState = AppState()
         let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)
@@ -234,6 +286,45 @@ final class QuickSetupViewModelTests: XCTestCase {
             viewModel.selectedExpenseCategoryIDs,
             Set(QuickSetupViewModel.recommendedExpenseCategoryIDs)
         )
+
+        viewModel.selectAllExpenseCategories()
+        XCTAssertEqual(
+            viewModel.selectedExpenseCategoryIDs,
+            Set(QuickSetupViewModel.allExpenseCategoryIDs)
+        )
+    }
+
+    func testChoosingGroupPresetReplacesPreviousGrouping() {
+        let appState = AppState()
+        let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)
+
+        let first = QuickSetupGroupPreset.all[0]
+        let second = QuickSetupGroupPreset.all[1]
+
+        viewModel.chooseGroupPreset(first)
+        XCTAssertEqual(viewModel.groups.count, 1)
+        XCTAssertEqual(viewModel.groups.first?.template, first.template)
+
+        viewModel.chooseGroupPreset(second)
+        XCTAssertEqual(viewModel.groups.count, 1)
+        XCTAssertEqual(viewModel.groups.first?.template, second.template)
+        XCTAssertEqual(viewModel.selectedGroupDraftID, viewModel.groups.first?.id)
+    }
+
+    func testProductTypesRecommendExpectedGroupingTemplates() {
+        XCTAssertEqual(QuickSetupProductType.card.recommendedGroupTemplate, .debitCards)
+        XCTAssertEqual(QuickSetupProductType.realEstate.recommendedGroupTemplate, .myRealEstate)
+        XCTAssertEqual(QuickSetupProductType.debt.recommendedGroupTemplate, .credits)
+        XCTAssertEqual(QuickSetupProductType.crypto.recommendedGroupTemplate, .myRealEstate)
+        XCTAssertEqual(QuickSetupProductType.credit.recommendedGroupTemplate, .credits)
+        XCTAssertEqual(QuickSetupProductType.ticker.recommendedGroupTemplate, .stocks)
+    }
+
+    func testQuickSetupGroupPresetOrderMatchesProductFlow() {
+        XCTAssertEqual(
+            QuickSetupGroupPreset.all.map(\.template),
+            [.debitCards, .myRealEstate, .credits, .stocks, .foreignCards, .deposits]
+        )
     }
 
     func testMarketSearchAutoOpenPolicyTriggersOnlyOnTransitionToMarketProduct() {
@@ -331,6 +422,7 @@ final class QuickSetupViewModelTests: XCTestCase {
 
     func testAddDraftCryptoAllowsMissingBuyPriceWhenMarketPriceExists() async {
         let appState = AppState()
+        appState.subscriptionAccessSource = .subscription
         let viewModel = QuickSetupViewModel(
             appState: appState,
             marketDataClient: QuickSetupMarketDataClientMock(latestPriceValue: 12.5),
@@ -361,6 +453,7 @@ final class QuickSetupViewModelTests: XCTestCase {
 
     func testAddDraftCryptoAllowsMissingBuyPriceWithoutMarketPrice() {
         let appState = AppState()
+        appState.subscriptionAccessSource = .subscription
         let viewModel = QuickSetupViewModel(
             appState: appState,
             marketDataClient: QuickSetupMarketDataClientMock(latestPriceValue: nil),
@@ -390,6 +483,7 @@ final class QuickSetupViewModelTests: XCTestCase {
 
     func testAddDraftCryptoUsesManualCurrentPriceWhenFeedUnavailable() {
         let appState = AppState()
+        appState.subscriptionAccessSource = .subscription
         let viewModel = QuickSetupViewModel(
             appState: appState,
             marketDataClient: QuickSetupMarketDataClientMock(latestPriceValue: nil),
@@ -417,6 +511,83 @@ final class QuickSetupViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.products.count, 1)
         XCTAssertEqual(viewModel.products.first?.amount ?? -1, 138761.56, accuracy: 0.0001)
         XCTAssertEqual(viewModel.products.first?.marketSnapshot?.currentUnitPrice ?? -1, 69380.78, accuracy: 0.0001)
+    }
+
+    func testCryptoProductPrecisionUsesExtendedQuantityAndUnitPriceDigits() {
+        let appState = AppState()
+        appState.subscriptionAccessSource = .subscription
+        let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)
+
+        viewModel.selectProductType(.crypto)
+
+        XCTAssertEqual(viewModel.productQuantityFractionDigits, AmountInputFormatter.marketQuantityFractionDigits)
+        XCTAssertEqual(viewModel.productUnitPriceFractionDigits, AmountInputFormatter.marketPriceFractionDigits)
+    }
+
+    func testTickerProductPrecisionKeepsStandardFractionDigits() {
+        let appState = AppState()
+        let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)
+
+        viewModel.selectProductType(.ticker)
+
+        XCTAssertEqual(viewModel.productQuantityFractionDigits, AmountInputFormatter.defaultFractionDigits)
+        XCTAssertEqual(viewModel.productUnitPriceFractionDigits, AmountInputFormatter.defaultFractionDigits)
+    }
+
+    func testFreeQuickSetupHidesCryptoProductType() {
+        let appState = AppState()
+        appState.subscriptionAccessSource = .free
+        let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)
+
+        XCTAssertFalse(viewModel.availableProductTypes.contains(.crypto))
+        XCTAssertTrue(viewModel.availableProductTypes.contains(.ticker))
+    }
+
+    func testProQuickSetupShowsCryptoProductType() {
+        let appState = AppState()
+        appState.subscriptionAccessSource = .subscription
+        let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)
+
+        XCTAssertTrue(viewModel.availableProductTypes.contains(.crypto))
+    }
+
+    func testFreeQuickSetupAllowsOnlyOneTickerDraft() {
+        let appState = AppState()
+        appState.subscriptionAccessSource = .free
+        let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)
+
+        viewModel.selectProductType(.ticker)
+        viewModel.applySelectedMarketSymbol(
+            TwelveDataSymbol(
+                symbol: "AAPL",
+                instrumentName: "Apple Inc",
+                exchange: "NASDAQ",
+                micCode: nil,
+                instrumentType: "Common Stock",
+                country: "United States",
+                currency: "USD"
+            )
+        )
+        viewModel.productQuantityInput = "1"
+        viewModel.productPurchasePriceInput = "100"
+        XCTAssertTrue(viewModel.addDraftProduct())
+
+        viewModel.applySelectedMarketSymbol(
+            TwelveDataSymbol(
+                symbol: "MSFT",
+                instrumentName: "Microsoft Corp",
+                exchange: "NASDAQ",
+                micCode: nil,
+                instrumentType: "Common Stock",
+                country: "United States",
+                currency: "USD"
+            )
+        )
+        viewModel.productQuantityInput = "1"
+        viewModel.productPurchasePriceInput = "200"
+
+        XCTAssertFalse(viewModel.addDraftProduct())
+        XCTAssertEqual(viewModel.lastAddDraftError, "В быстрой настройке без PRO доступна 1 акция")
     }
 
     func testNonRussianSystemSanitizesStoredRublePrimaryAndFavorites() {

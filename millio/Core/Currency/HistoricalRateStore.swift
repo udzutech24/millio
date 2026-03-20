@@ -106,6 +106,13 @@ final class HistoricalRateStore {
             }
         }
     }
+
+    /// Сбрасывает in-memory negative cache для исторических запросов.
+    /// Используется после ручного refresh курсов, чтобы повторно попробовать
+    /// даты/пары, которые ранее могли упасть из-за временной сетевой ошибки.
+    func resetUnavailableRequestCache() {
+        knownUnavailableRequests.removeAll()
+    }
     
     private func normalizedDate(_ date: Date) -> Date {
         Calendar.current.startOfDay(for: date)

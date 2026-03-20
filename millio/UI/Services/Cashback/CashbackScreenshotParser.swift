@@ -85,7 +85,7 @@ struct VisionCashbackScreenshotTextRecognizer: CashbackScreenshotTextRecognizing
 }
 
 /// Парсер скриншотов с категориями кешбэка. Распознаёт строки вида
-/// `5% Супермаркеты`, `до 10% Отели` и `Супермаркеты +5%`.
+/// `5% Продукты`, `до 10% Отели` и `Продукты +5%`.
 struct CashbackScreenshotParser {
     private let textRecognizer: any CashbackScreenshotTextRecognizing
 

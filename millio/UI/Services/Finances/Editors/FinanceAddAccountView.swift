@@ -13,6 +13,8 @@ struct FinanceAddAccountView: View {
     let editingCard: Card?
     let editingCredit: Credit?
     let editingInvestment: Investment?
+    let preselectedGroup: FinanceGroup?
+    let presentationStyle: FinanceEditorPresentationStyle
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
@@ -22,12 +24,16 @@ struct FinanceAddAccountView: View {
         viewModel: FinanceViewModel,
         editingCard: Card? = nil,
         editingCredit: Credit? = nil,
-        editingInvestment: Investment? = nil
+        editingInvestment: Investment? = nil,
+        preselectedGroup: FinanceGroup? = nil,
+        presentationStyle: FinanceEditorPresentationStyle = .modal
     ) {
         self.viewModel = viewModel
         self.editingCard = editingCard
         self.editingCredit = editingCredit
         self.editingInvestment = editingInvestment
+        self.preselectedGroup = preselectedGroup
+        self.presentationStyle = presentationStyle
     }
     
     private enum AddAccountMode: String, CaseIterable, Identifiable {
@@ -91,7 +97,7 @@ struct FinanceAddAccountView: View {
     private var resolvedGroup: FinanceGroup? {
         FinanceAddAccountGroupSelection.resolveSelectedGroup(
             selectedGroupID: selectedGroupID,
-            preselectedGroupID: viewModel.state.selectedGroupForAccount?.groupUniqueID,
+            preselectedGroupID: preselectedGroup?.groupUniqueID ?? viewModel.state.selectedGroupForAccount?.groupUniqueID,
             groups: viewModel.state.groups
         )
     }
@@ -698,15 +704,17 @@ struct FinanceAddAccountView: View {
                         selectedGroupID = createdGroup.groupUniqueID
                     }
                     groupIDsBeforeCreate = []
-                }
+            }
         }
         .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                ToolbarGlassIconButton(
-                    systemName: "xmark",
-                    accessibilityLabel: String(localized: "finances.common.cancel")
-                ) {
-                    dismiss()
+            if presentationStyle.showsDismissButton {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    ToolbarGlassIconButton(
+                        systemName: "xmark",
+                        accessibilityLabel: String(localized: "finances.common.cancel")
+                    ) {
+                        dismiss()
+                    }
                 }
             }
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -752,7 +760,9 @@ struct FinanceAddAccountView: View {
                 selectedProductTypeTitle = editingInvestment.category.displayName
                 accountName = editingInvestment.name
             }
-            if let preselectedGroup = viewModel.state.selectedGroupForAccount {
+            if let preselectedGroup {
+                selectedGroupID = preselectedGroup.groupUniqueID
+            } else if let preselectedGroup = viewModel.state.selectedGroupForAccount {
                 selectedGroupID = preselectedGroup.groupUniqueID
             } else if let editingCard {
                 let editingID = editingCard.cardUniqueID
@@ -789,32 +799,38 @@ struct FinanceAddAccountView: View {
     }
     
     var body: some View {
-        NavigationStack {
-            navigationContent
-                .modifier(SelectedAccountTypeChangeHandler(selectedAccountType: $selectedAccountType, cardViewModel: $cardViewModel, creditViewModel: $creditViewModel, investmentViewModel: $investmentViewModel, selectedArchivedAccountID: $selectedArchivedAccountID))
-                .onChange(of: selectedAccountType) { _, _ in
-                    focusNameFieldIfNeeded()
-                }
-                .onChange(of: selectedInvestmentCategory) { _, newValue in
-                    if newValue == .stocks || newValue == .crypto {
-                        if !canUseMarketCategory(newValue) {
-                            paywallMessage = marketCategoryPaywallMessage(for: newValue)
-                            showPaywallAlert = true
-                            selectedInvestmentCategory = .other
-                            return
-                        }
+        let content = navigationContent
+            .modifier(SelectedAccountTypeChangeHandler(selectedAccountType: $selectedAccountType, cardViewModel: $cardViewModel, creditViewModel: $creditViewModel, investmentViewModel: $investmentViewModel, selectedArchivedAccountID: $selectedArchivedAccountID))
+            .onChange(of: selectedAccountType) { _, _ in
+                focusNameFieldIfNeeded()
+            }
+            .onChange(of: selectedInvestmentCategory) { _, newValue in
+                if newValue == .stocks || newValue == .crypto {
+                    if !canUseMarketCategory(newValue) {
+                        paywallMessage = marketCategoryPaywallMessage(for: newValue)
+                        showPaywallAlert = true
+                        selectedInvestmentCategory = .other
+                        return
                     }
-                    if isTickerDrivenName {
-                        let selectedSymbol = investmentData?.marketData?.symbol?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                        if selectedSymbol.isEmpty {
-                            accountName = ""
-                        }
+                }
+                if isTickerDrivenName {
+                    let selectedSymbol = investmentData?.marketData?.symbol?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    if selectedSymbol.isEmpty {
+                        accountName = ""
                     }
-                    focusNameFieldIfNeeded()
                 }
-                .onAppear {
-                    focusNameFieldIfNeeded()
-                }
+                focusNameFieldIfNeeded()
+            }
+            .onAppear {
+                focusNameFieldIfNeeded()
+            }
+
+        if presentationStyle.wrapsInNavigationStack {
+            NavigationStack {
+                content
+            }
+        } else {
+            content
         }
     }
     

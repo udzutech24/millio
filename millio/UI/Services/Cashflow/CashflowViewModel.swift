@@ -374,6 +374,7 @@ final class CashflowViewModel: ViewModelProtocol {
     private let assetsSnapshotProvider: ((Date, Date, String) async -> (start: Double, end: Double)?)?
     private let defaults: UserDefaults
     private let categoryPinPrefs: CashflowCategoryPinPrefs
+    private let bulkExpenseMerchantPrefs: CashflowBulkExpenseMerchantCategoryPrefs
     private let budgetAutoRepeatPrefs = BudgetAutoRepeatPrefs()
     
     private var eventSubscriptionID: UUID?
@@ -395,6 +396,7 @@ final class CashflowViewModel: ViewModelProtocol {
         self.assetsSnapshotProvider = assetsSnapshotProvider
         self.defaults = defaults
         self.categoryPinPrefs = CashflowCategoryPinPrefs(defaults: defaults)
+        self.bulkExpenseMerchantPrefs = CashflowBulkExpenseMerchantCategoryPrefs(defaults: defaults)
         state.displayCurrency = SettingsManager.shared.primaryCurrencyCode
         let nowDate = now()
         state.selectedMonth = nowDate
@@ -544,6 +546,8 @@ final class CashflowViewModel: ViewModelProtocol {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 await CurrencyRateService.shared.forceRefreshRates()
+                CurrencyRateService.shared.resetHistoricalUnavailableRequestCache()
+                self.historicalRateStore.resetUnavailableRequestCache()
                 self.state.isRefreshingExchangeRates = false
                 self.updateChartData()
             }
@@ -799,6 +803,10 @@ final class CashflowViewModel: ViewModelProtocol {
             guard query.typeFilter.matches(transaction.transactionType) else {
                 return false
             }
+            if (query.typeFilter == .income || query.typeFilter == .expense)
+                && !transaction.shouldAffectCashflowTotals {
+                return false
+            }
 
             if let cardID = query.cardID,
                !historyTransactionMatchesCardFilter(transaction, cardID: cardID) {
@@ -921,6 +929,7 @@ final class CashflowViewModel: ViewModelProtocol {
         for transaction in state.transactions {
             switch transaction.transactionType {
             case .income:
+                guard transaction.shouldAffectCashflowTotals else { continue }
                 let converted = await convertAmountForTransaction(
                     transaction,
                     to: state.displayCurrency
@@ -942,6 +951,7 @@ final class CashflowViewModel: ViewModelProtocol {
                 }
                 
             case .expense:
+                guard transaction.shouldAffectCashflowTotals else { continue }
                 let converted = await convertAmountForTransaction(
                     transaction,
                     to: state.displayCurrency
@@ -1251,7 +1261,8 @@ final class CashflowViewModel: ViewModelProtocol {
         let sortedEntries = request.entries.sorted { $0.sourceOrderIndex < $1.sourceOrderIndex }
         let existingTransactions = bulkExpenseImportTransactions(
             cardID: request.cardID,
-            month: request.month
+            month: request.month,
+            affectsCardBalance: request.shouldAffectCardBalance
         )
         let nowDate = now()
         let transactionDates = Self.bulkExpenseTransactionDates(
@@ -1279,6 +1290,16 @@ final class CashflowViewModel: ViewModelProtocol {
 
         var existingByReferenceKey: [String: CashflowTransaction] = [:]
         for transaction in existingTransactions {
+            guard let categoryRaw = transaction.expenseCategoryRaw else { continue }
+            for key in Self.bulkExpenseImportLookupKeys(
+                cardID: request.cardID,
+                month: request.month,
+                categoryRaw: categoryRaw,
+                affectsCardBalance: transaction.affectsCardBalance,
+                calendar: Calendar.current
+            ) {
+                existingByReferenceKey[key] = transaction
+            }
             if let key = transaction.importReferenceKey {
                 existingByReferenceKey[key] = transaction
             }
@@ -1295,7 +1316,8 @@ final class CashflowViewModel: ViewModelProtocol {
             let referenceKey = Self.bulkExpenseImportReferenceKey(
                 cardID: request.cardID,
                 month: request.month,
-                categoryRaw: entry.expenseCategoryRaw
+                categoryRaw: entry.expenseCategoryRaw,
+                affectsCardBalance: request.shouldAffectCardBalance
             )
             seenReferenceKeys.insert(referenceKey)
 
@@ -1355,9 +1377,14 @@ final class CashflowViewModel: ViewModelProtocol {
 
     func bulkExpenseImportStoredEntries(
         cardID: String,
-        month: Date
+        month: Date,
+        affectsCardBalance: Bool
     ) -> [CashflowBulkExpenseStoredCategoryEntry] {
-        bulkExpenseImportTransactions(cardID: cardID, month: month)
+        bulkExpenseImportTransactions(
+            cardID: cardID,
+            month: month,
+            affectsCardBalance: affectsCardBalance
+        )
             .compactMap { transaction in
                 guard let categoryRaw = transaction.expenseCategoryRaw else { return nil }
                 return CashflowBulkExpenseStoredCategoryEntry(
@@ -1375,6 +1402,32 @@ final class CashflowViewModel: ViewModelProtocol {
             }
     }
 
+    func bulkExpenseImportBaselineCategoryTotals(
+        cardID: String,
+        month: Date,
+        affectsCardBalance: Bool
+    ) -> [String: Double] {
+        monthlyTransactions(for: .expense, month: month)
+            .filter { transaction in
+                transaction.cardID == cardID
+                    && transaction.affectsCardBalance == affectsCardBalance
+                    && transaction.shouldAffectCashflowTotals
+                    && transaction.importSourceRaw != CashflowBulkExpenseImportTransactionSource.monthlyCategoryRollup.rawValue
+            }
+            .reduce(into: [String: Double]()) { result, transaction in
+                let categoryRaw = transaction.expenseCategoryRaw ?? ExpenseCategory.other.rawValue
+                result[categoryRaw, default: 0] += transaction.amount
+            }
+    }
+
+    func learnedBulkExpenseCategoryRaw(for merchantTitle: String) -> String? {
+        bulkExpenseMerchantPrefs.categoryRaw(for: merchantTitle)
+    }
+
+    func rememberBulkExpenseCategory(categoryRaw: String, for merchantTitle: String) {
+        bulkExpenseMerchantPrefs.remember(categoryRaw: categoryRaw, for: merchantTitle)
+    }
+
     /// Возвращает суммы по категориям за выбранный месяц для типа операции.
     /// Ключ словаря — `rawValue` категории (`IncomeCategory` / `ExpenseCategory` / `custom:*`).
     func monthlyCategoryTotals(
@@ -1385,6 +1438,7 @@ final class CashflowViewModel: ViewModelProtocol {
         let targetType: CashflowTransactionType = kind == .income ? .income : .expense
         let targetCurrency = currency ?? state.displayCurrency
         let filtered = monthlyTransactions(for: targetType, month: month)
+            .filter(\.shouldAffectCashflowTotals)
 
         let previousWarning = state.currencyConversionWarning
         let previousWarningDate = state.currencyConversionWarningDate
@@ -1641,13 +1695,39 @@ final class CashflowViewModel: ViewModelProtocol {
         cardID: String,
         month: Date,
         categoryRaw: String,
+        affectsCardBalance: Bool,
         calendar: Calendar = .current
     ) -> String {
         let monthStart = monthStart(for: month, calendar: calendar)
         let components = calendar.dateComponents([.year, .month], from: monthStart)
         let year = components.year ?? 0
         let month = components.month ?? 0
-        return "bulk-expense|\(cardID)|\(year)-\(String(format: "%02d", month))|\(categoryRaw)"
+        let balanceMode = affectsCardBalance ? "balance-on" : "balance-off"
+        return "bulk-expense|\(cardID)|\(year)-\(String(format: "%02d", month))|\(balanceMode)|\(categoryRaw)"
+    }
+
+    private static func bulkExpenseImportLookupKeys(
+        cardID: String,
+        month: Date,
+        categoryRaw: String,
+        affectsCardBalance: Bool,
+        calendar: Calendar = .current
+    ) -> [String] {
+        let monthStart = monthStart(for: month, calendar: calendar)
+        let components = calendar.dateComponents([.year, .month], from: monthStart)
+        let year = components.year ?? 0
+        let month = components.month ?? 0
+        let legacyKey = "bulk-expense|\(cardID)|\(year)-\(String(format: "%02d", month))|\(categoryRaw)"
+        return [
+            bulkExpenseImportReferenceKey(
+                cardID: cardID,
+                month: monthStart,
+                categoryRaw: categoryRaw,
+                affectsCardBalance: affectsCardBalance,
+                calendar: calendar
+            ),
+            legacyKey
+        ]
     }
 
     // MARK: - Categories
@@ -1665,7 +1745,12 @@ final class CashflowViewModel: ViewModelProtocol {
             if option.isCustom {
                 return option.displayName.localizedCaseInsensitiveContains(trimmedQuery)
             }
-            return ExpenseCategoryCatalog.matchesSearch(rawValue: option.rawValue, query: trimmedQuery)
+            switch kind {
+            case .income:
+                return IncomeCategory.matchesSearch(rawValue: option.rawValue, query: trimmedQuery)
+            case .expense:
+                return ExpenseCategoryCatalog.matchesSearch(rawValue: option.rawValue, query: trimmedQuery)
+            }
         }
     }
 
@@ -2629,16 +2714,27 @@ final class CashflowViewModel: ViewModelProtocol {
         calendar.date(from: calendar.dateComponents([.year, .month], from: date)) ?? date
     }
 
-    private func bulkExpenseImportTransactions(cardID: String, month: Date) -> [CashflowTransaction] {
+    private func bulkExpenseImportTransactions(
+        cardID: String,
+        month: Date,
+        affectsCardBalance: Bool? = nil
+    ) -> [CashflowTransaction] {
         let calendar = Calendar.current
         let monthStart = Self.monthStart(for: month, calendar: calendar)
         let descriptor = FetchDescriptor<CashflowTransaction>()
         let allTransactions = (try? modelContext.fetch(descriptor)) ?? []
         return allTransactions.filter { transaction in
-            transaction.transactionType == .expense
-            && transaction.cardID == cardID
-            && transaction.importSourceRaw == CashflowBulkExpenseImportTransactionSource.monthlyCategoryRollup.rawValue
-            && Self.isSameMonth(transaction.transactionDate, monthStart, calendar: calendar)
+            guard transaction.transactionType == .expense,
+                  transaction.cardID == cardID,
+                  transaction.importSourceRaw == CashflowBulkExpenseImportTransactionSource.monthlyCategoryRollup.rawValue,
+                  Self.isSameMonth(transaction.transactionDate, monthStart, calendar: calendar) else {
+                return false
+            }
+
+            guard let affectsCardBalance else {
+                return true
+            }
+            return transaction.affectsCardBalance == affectsCardBalance
         }
     }
 
@@ -2725,6 +2821,61 @@ final class CashflowViewModel: ViewModelProtocol {
         }
         
         return value
+    }
+
+    struct TransferExchangeSuggestion: Equatable {
+        let rate: Double
+        let rateDate: Date
+        let isLiveRate: Bool
+    }
+
+    func suggestedTransferExchangeInfo(
+        from sourceCurrency: String,
+        to targetCurrency: String,
+        on date: Date
+    ) async -> TransferExchangeSuggestion? {
+        let source = normalizedCurrencyCode(sourceCurrency) ?? sourceCurrency
+        let target = normalizedCurrencyCode(targetCurrency) ?? targetCurrency
+        let normalizedDate = Calendar.current.startOfDay(for: date)
+        let today = Calendar.current.startOfDay(for: now())
+
+        guard source != target else {
+            return TransferExchangeSuggestion(rate: 1.0, rateDate: normalizedDate, isLiveRate: false)
+        }
+
+        let shouldPreferHistorical = normalizedDate < today
+
+        func makeHistoricalSuggestion() async -> TransferExchangeSuggestion? {
+            let historical = await historicalRateStore.getRate(
+                on: date,
+                from: source,
+                to: target
+            )
+            guard let rate = historical.rate, rate > 0 else { return nil }
+            return TransferExchangeSuggestion(
+                rate: rate,
+                rateDate: historical.rateDate ?? normalizedDate,
+                isLiveRate: false
+            )
+        }
+
+        if shouldPreferHistorical, let historicalSuggestion = await makeHistoricalSuggestion() {
+            return historicalSuggestion
+        }
+
+        if let liveRate = await CurrencyRateService.shared.convert(
+            amount: 1,
+            from: source,
+            to: target
+        ), liveRate > 0 {
+            return TransferExchangeSuggestion(
+                rate: liveRate,
+                rateDate: today,
+                isLiveRate: true
+            )
+        }
+
+        return await makeHistoricalSuggestion()
     }
 
     private struct ExchangeInfo {

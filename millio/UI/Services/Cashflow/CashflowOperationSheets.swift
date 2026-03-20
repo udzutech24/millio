@@ -179,16 +179,19 @@ private struct CashflowCategoryTransactionSheet: View {
     @State private var newCategoryName: String = ""
     @State private var newCategoryIcon: String = CashflowCustomCategory.defaultIcon
     @State private var showCategoryEditorSheet: Bool = false
+    @State private var showCategoryActionsDialog: Bool = false
     @State private var showDeleteCategoryAlert: Bool = false
     @State private var categoryEditorMode: CashflowCategoryEditorMode = .create
     @State private var categoryEditorName: String = ""
     @State private var categoryEditorIcon: String = CashflowCustomCategory.defaultIcon
     @State private var pendingDeleteCategoryRaw: String?
+    @State private var pendingActionCategory: CashflowCategoryOption?
     @State private var categoryGridWidth: CGFloat = UIScreen.main.bounds.width
     @State private var highlightedCategoryRaw: String?
     @State private var categoryUpdateFeedbackPlan: CashflowCategoryUpdateFeedbackPlan?
     @State private var categoryFeedbackSequence: Int = 0
     @State private var hasCompletedInitialLoad: Bool = false
+    @State private var suppressNextCategoryTap: Bool = false
     private let outerCornerRadius: CGFloat = 22
     private let innerCornerRadius: CGFloat = 16
 
@@ -344,11 +347,41 @@ private struct CashflowCategoryTransactionSheet: View {
                     handleCategoryEditorSave(name: name, icon: icon)
                 }
             }
+            .overlay(alignment: .bottom) {
+                if let option = pendingActionCategory {
+                    CashflowCategoryActionOverlay(
+                        isPresented: showCategoryActionsDialog,
+                        categoryName: option.displayName,
+                        categoryIcon: option.icon,
+                        accentColor: kind.accentColor,
+                        primaryActionTitle: viewModel.isCategoryPinned(rawValue: option.rawValue, kind: kind.categoryKind)
+                            ? String(localized: "cashflow.category.actions.unpin")
+                            : String(localized: "cashflow.category.actions.pin"),
+                        primaryActionIcon: viewModel.isCategoryPinned(rawValue: option.rawValue, kind: kind.categoryKind)
+                            ? "pin.slash"
+                            : "pin",
+                        onPrimaryAction: {
+                            togglePinned(for: option)
+                            closeCategoryActions()
+                        },
+                        onEdit: {
+                            closeCategoryActions()
+                            openCategoryEditor(for: option)
+                        },
+                        onDelete: viewModel.canDeleteCategory(rawValue: option.rawValue, kind: kind.categoryKind) ? {
+                            pendingDeleteCategoryRaw = option.rawValue
+                            closeCategoryActions()
+                            showDeleteCategoryAlert = true
+                        } : nil,
+                        onDismiss: closeCategoryActions
+                    )
+                }
+            }
             .alert(String(localized: "cashflow.operation.delete_category.title"), isPresented: $showDeleteCategoryAlert) {
                 Button(String(localized: "cashflow.common.cancel"), role: .cancel) {
                     pendingDeleteCategoryRaw = nil
                 }
-                Button(String(localized: "cashflow.history.detail.delete"), role: .destructive) {
+                Button(String(localized: "cashflow.category.actions.delete"), role: .destructive) {
                     guard let raw = pendingDeleteCategoryRaw else { return }
                     if viewModel.deleteCategory(rawValue: raw, kind: kind.categoryKind),
                        selectedCategory?.rawValue == raw {
@@ -708,21 +741,7 @@ private struct CashflowCategoryTransactionSheet: View {
         LazyVGrid(columns: categoryColumns, spacing: 10) {
             ForEach(categories) { option in
                 categoryCard(for: option)
-                .id(option.rawValue)
-                .contextMenu {
-                    Button(viewModel.isCategoryPinned(rawValue: option.rawValue, kind: kind.categoryKind) ? "Unpin" : "Pin") {
-                        togglePinned(for: option)
-                    }
-                    Button("Edit") {
-                        openCategoryEditor(for: option)
-                    }
-                    if viewModel.canDeleteCategory(rawValue: option.rawValue, kind: kind.categoryKind) {
-                        Button("Delete", role: .destructive) {
-                            pendingDeleteCategoryRaw = option.rawValue
-                            showDeleteCategoryAlert = true
-                        }
-                    }
-                }
+                    .id(option.rawValue)
             }
         }
         .background {
@@ -756,6 +775,10 @@ private struct CashflowCategoryTransactionSheet: View {
 
         return ZStack(alignment: .topTrailing) {
             Button {
+                if suppressNextCategoryTap {
+                    suppressNextCategoryTap = false
+                    return
+                }
                 selectedCategory = option
             } label: {
                 VStack(alignment: .leading, spacing: metrics.contentSpacing) {
@@ -883,6 +906,13 @@ private struct CashflowCategoryTransactionSheet: View {
                 .animation(.spring(response: 0.34, dampingFraction: 0.8), value: isHighlighted)
             }
             .buttonStyle(.plain)
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.35)
+                    .onEnded { _ in
+                        suppressNextCategoryTap = true
+                        openCategoryActions(for: option)
+                    }
+            )
 
             switch pinAffordanceStyle {
             case .hidden:
@@ -1133,6 +1163,16 @@ private struct CashflowCategoryTransactionSheet: View {
         categoryEditorName = option.displayName
         categoryEditorIcon = option.icon
         showCategoryEditorSheet = true
+    }
+
+    private func openCategoryActions(for option: CashflowCategoryOption) {
+        pendingActionCategory = option
+        showCategoryActionsDialog = true
+    }
+
+    private func closeCategoryActions() {
+        showCategoryActionsDialog = false
+        pendingActionCategory = nil
     }
 
     private func handleCategoryEditorSave(name: String, icon: String) {
@@ -1396,7 +1436,7 @@ private struct CashflowCategoryHelpSheet: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.black.ignoresSafeArea()
+                GradientBackground()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         ForEach(Array(content.notes.enumerated()), id: \.offset) { _, line in
@@ -1449,6 +1489,14 @@ private struct CashflowCategorySettingsSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var searchText: String = ""
+    @State private var showActionsDialog: Bool = false
+    @State private var showEditorSheet: Bool = false
+    @State private var showDeleteAlert: Bool = false
+    @State private var editorMode: CashflowCategoryEditorMode = .create
+    @State private var editorName: String = ""
+    @State private var editorIcon: String = CashflowCustomCategory.defaultIcon
+    @State private var pendingDeleteRaw: String?
+    @State private var pendingActionCategory: CashflowCategoryOption?
 
     private var systemOptions: [CashflowCategoryOption] {
         viewModel.categoryOptions(
@@ -1461,7 +1509,7 @@ private struct CashflowCategorySettingsSheet: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.black.ignoresSafeArea()
+                GradientBackground()
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
@@ -1513,8 +1561,8 @@ private struct CashflowCategorySettingsSheet: View {
             }
             .navigationTitle(
                 String(
-                    localized: "Settings",
-                    defaultValue: "Settings",
+                    localized: "cashflow.category.settings.title",
+                    defaultValue: "Category settings",
                     comment: "Settings sheet title"
                 )
             )
@@ -1534,11 +1582,55 @@ private struct CashflowCategorySettingsSheet: View {
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+        .overlay(alignment: .bottom) {
+            if let option = pendingActionCategory {
+                CashflowCategoryActionOverlay(
+                    isPresented: showActionsDialog,
+                    categoryName: option.displayName,
+                    categoryIcon: option.icon,
+                    accentColor: kind.accentColor,
+                    primaryActionTitle: nil,
+                    primaryActionIcon: nil,
+                    onPrimaryAction: nil,
+                    onEdit: {
+                        closeSettingsCategoryActions()
+                        openEditSheet(for: option)
+                    },
+                    onDelete: viewModel.canDeleteCategory(rawValue: option.rawValue, kind: kind.categoryKind) ? {
+                        pendingDeleteRaw = option.rawValue
+                        closeSettingsCategoryActions()
+                        showDeleteAlert = true
+                    } : nil,
+                    onDismiss: closeSettingsCategoryActions
+                )
+            }
+        }
+        .alert(String(localized: "cashflow.editor.delete_category.title"), isPresented: $showDeleteAlert) {
+            Button(String(localized: "cashflow.common.cancel"), role: .cancel) {
+                pendingDeleteRaw = nil
+            }
+            Button(String(localized: "cashflow.category.actions.delete"), role: .destructive) {
+                guard let raw = pendingDeleteRaw else { return }
+                _ = viewModel.deleteCategory(rawValue: raw, kind: kind.categoryKind)
+                pendingDeleteRaw = nil
+            }
+        } message: {
+            Text("cashflow.editor.delete_category.message")
+        }
+        .fullScreenCover(isPresented: $showEditorSheet) {
+            CashflowCategoryEditorSheet(
+                mode: editorMode,
+                name: $editorName,
+                icon: $editorIcon
+            ) { name, icon in
+                handleSave(name: name, icon: icon)
+            }
+        }
     }
 
     private func categoryVisibilityRow(for option: CashflowCategoryOption) -> some View {
         let isVisible = viewModel.categoryOptions(for: kind.categoryKind).contains { $0.rawValue == option.rawValue }
-        let canHide = option.rawValue != ExpenseCategory.other.rawValue
+        let canHide = option.rawValue != fallbackRaw
 
         return HStack(spacing: 12) {
             CashflowCategoryIconView(
@@ -1554,15 +1646,32 @@ private struct CashflowCategorySettingsSheet: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
                 Text(
-                    canHide
-                    ? (isVisible ? "Visible in list" : "Hidden from list")
-                    : "Always visible"
+                    visibilityText(isVisible: isVisible, canHide: canHide)
                 )
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(AppColors.textSecondary)
             }
 
             Spacer()
+
+            Button {
+                openActions(for: option)
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppColors.textSecondary)
+                    .frame(width: 34, height: 34)
+                    .background(
+                        Circle()
+                            .fill(Color.white.opacity(0.06))
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "cashflow.common.edit"))
 
             Toggle(
                 "",
@@ -1591,6 +1700,56 @@ private struct CashflowCategorySettingsSheet: View {
                         .stroke(Color.white.opacity(0.10), lineWidth: 1)
                 )
         )
+    }
+
+    private var fallbackRaw: String {
+        kind.categoryKind == .income ? IncomeCategory.other.rawValue : ExpenseCategory.other.rawValue
+    }
+
+    private func openEditSheet(for option: CashflowCategoryOption) {
+        editorMode = .edit(rawValue: option.rawValue)
+        editorName = option.displayName
+        editorIcon = option.icon
+        showEditorSheet = true
+    }
+
+    private func openActions(for option: CashflowCategoryOption) {
+        pendingActionCategory = option
+        showActionsDialog = true
+    }
+
+    private func closeSettingsCategoryActions() {
+        showActionsDialog = false
+        pendingActionCategory = nil
+    }
+
+    private func visibilityText(isVisible: Bool, canHide: Bool) -> String {
+        if !canHide {
+            return String(localized: "cashflow.category.visibility.always")
+        }
+        if isVisible {
+            return String(localized: "cashflow.category.visibility.visible")
+        }
+        return String(localized: "cashflow.category.visibility.hidden")
+    }
+
+    private func handleSave(name: String, icon: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        switch editorMode {
+        case .create:
+            break
+        case .edit(let rawValue):
+            guard viewModel.renameCategory(
+                rawValue: rawValue,
+                kind: kind.categoryKind,
+                newName: trimmed,
+                newIcon: icon
+            ) else { return }
+        }
+
+        showEditorSheet = false
     }
 }
 
@@ -1639,6 +1798,10 @@ enum CashflowCategoryTransactionSheetKind {
         case .income: return AppColors.incomeGradient
         case .expense: return AppColors.expenseGradient
         }
+    }
+
+    var accentColor: Color {
+        gradientColors.first ?? AppColors.brandPrimary
     }
 
     var strokeGradient: LinearGradient {
@@ -1721,7 +1884,7 @@ private struct CashflowCategoryQuickCreateSheet: View {
     }
 
     private var suggestedIcons: [String] {
-        ExpenseCategoryCatalog.suggestedIcons(for: name)
+        CashflowCategoryIconSuggestionEngine.suggestedIcons(forExpenseName: name)
     }
 
     var body: some View {

@@ -11,6 +11,14 @@ import Testing
 
 @Suite
 struct CashbackCategoryCatalogTests {
+    @Test("Системная категория супермаркетов в русской локали показывается как продукты")
+    func supermarketDisplayNameUsesProductsInRussian() {
+        let metadata = CashbackCategoryCatalog.metadata(for: .supermarket)
+
+        #expect(metadata.localizedDisplayName(locale: Locale(identifier: "ru_RU")) == "Продукты")
+        #expect(metadata.localizedDisplayName(locale: Locale(identifier: "en_US")) == "Groceries")
+    }
+
     @Test("Частичный запрос по компьютерам даёт релевантные иконки для кэшбэка")
     func suggestedIconsPreferComputerIconsForPartialComputerQuery() {
         let suggestions = CashbackCategoryCatalog.suggestedIcons(for: "Компью")

@@ -27,7 +27,7 @@ enum CashbackCategoryCatalog {
     static let allMetadata: [CashbackCategoryMetadata] = [
         .init(category: .allPurchases, displayNameRU: "Все покупки", displayNameEN: "All purchases", icon: "🛒", aliases: ["все покупки", "all purchases", "base cashback"]),
         .init(category: .gasStation, displayNameRU: "АЗС", displayNameEN: "Gas stations", icon: "⛽️", aliases: ["топливо", "азс", "заправки", "fuel", "gas station", "gas stations", "petrol"]),
-        .init(category: .supermarket, displayNameRU: "Продукты", displayNameEN: "Supermarkets", icon: "🛒", aliases: ["продукты", "супермаркеты", "groceries", "grocery", "supermarket", "supermarkets", "вкусвилл", "пятерочка"]),
+        .init(category: .supermarket, displayNameRU: "Продукты", displayNameEN: "Groceries", icon: "🛒", aliases: ["продукты", "супермаркеты", "groceries", "grocery", "supermarket", "supermarkets", "вкусвилл", "пятерочка"]),
         .init(category: .restaurant, displayNameRU: "Кафе", displayNameEN: "Restaurants", icon: "🍽️", aliases: ["кафе", "рестораны", "restaurants", "restaurant", "dining"]),
         .init(category: .fastFood, displayNameRU: "Фастфуд", displayNameEN: "Fast food", icon: "🍔", aliases: ["фастфуд", "быстрая еда", "fast food", "burger", "pizza", "пицца", "пиццерия", "роллы", "суши", "бургер", "шаверма", "шаурма", "доставка еды"]),
         .init(category: .coffeeShop, displayNameRU: "Кофейни", displayNameEN: "Coffee shops", icon: "☕️", aliases: ["кофейня", "кофе", "coffee", "coffee shop"]),

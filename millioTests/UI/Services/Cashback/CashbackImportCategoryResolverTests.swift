@@ -20,6 +20,7 @@ struct CashbackImportCategoryResolverTests {
 
     @Test("Резолвер маппит очевидные банковские категории в системные")
     func testResolveSystemCategoryRawMapsObviousNames() {
+        #expect(resolver.resolveSystemCategoryRaw(for: "Продукты") == CashbackCategory.supermarket.rawValue)
         #expect(resolver.resolveSystemCategoryRaw(for: "Супермаркеты") == CashbackCategory.supermarket.rawValue)
         #expect(resolver.resolveSystemCategoryRaw(for: "Рестораны") == CashbackCategory.restaurant.rawValue)
         #expect(resolver.resolveSystemCategoryRaw(for: "Топливо и АЗС") == CashbackCategory.gasStation.rawValue)

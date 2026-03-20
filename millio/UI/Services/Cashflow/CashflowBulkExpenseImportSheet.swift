@@ -19,6 +19,8 @@ struct CashflowBulkExpenseImportSheet: View {
     @State private var selectedCardID: String?
     @State private var selectedMonth: Date
     @State private var categoryDrafts: [CashflowBulkExpenseCategoryDraft] = []
+    @State private var baselineCategoryTotals: [String: Double] = [:]
+    @State private var unresolvedParsedRows: [CashflowBulkExpenseRowDraft] = []
     @State private var categorySearchText: String = ""
     @State private var importedCategoryRaws: Set<String> = []
     @State private var shouldAffectCardBalance: Bool = true
@@ -34,6 +36,7 @@ struct CashflowBulkExpenseImportSheet: View {
     @State private var showCategoryEditorSheet: Bool = false
     @State private var categoryEditorName: String = ""
     @State private var categoryEditorIcon: String = CashflowCustomCategory.defaultIcon
+    @State private var pendingCategoryCreationRowID: UUID?
     @FocusState private var focusedCategoryID: String?
 
     private let parser = CashflowBulkExpenseImportParser()
@@ -76,6 +79,9 @@ struct CashflowBulkExpenseImportSheet: View {
                         controlsCard
                         if mode == .screenshot {
                             screenshotCard
+                        }
+                        if !unresolvedParsedRows.isEmpty {
+                            unresolvedRowsCard
                         }
                         summaryCard
                         categoriesCard
@@ -156,6 +162,11 @@ struct CashflowBulkExpenseImportSheet: View {
                 }
             }
             .onChange(of: selectedMonth) { _, _ in
+                Task {
+                    await reloadDrafts()
+                }
+            }
+            .onChange(of: shouldAffectCardBalance) { _, _ in
                 Task {
                     await reloadDrafts()
                 }
@@ -594,6 +605,173 @@ struct CashflowBulkExpenseImportSheet: View {
         .background(cardBackground)
     }
 
+    private var unresolvedRowsCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Требует разбора")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.95))
+
+                Text("Сомнительные строки не отправляем автоматически в `Другое`. Выбери свою категорию или создай новую.")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.6))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            ForEach(unresolvedParsedRows) { row in
+                unresolvedRowCard(row)
+            }
+        }
+        .padding(16)
+        .background(cardBackground)
+    }
+
+    private func unresolvedRowCard(_ row: CashflowBulkExpenseRowDraft) -> some View {
+        let selectedOption = expenseCategoryOptions.first(where: { $0.rawValue == row.selectedCategoryRaw })
+
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(row.normalizedTitle.isEmpty ? "Без названия" : row.normalizedTitle)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.94))
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text("\(CashflowBulkExpenseRowDraft.formatAmount(row.amount ?? 0)) \(selectedCurrency)")
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundStyle(warning)
+                }
+
+                Spacer(minLength: 8)
+
+                Text("Проверь")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.76))
+                    .padding(.horizontal, 10)
+                    .frame(height: 26)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(warning.opacity(0.16))
+                            .overlay(
+                                Capsule(style: .continuous)
+                                    .stroke(warning.opacity(0.36), lineWidth: 1)
+                            )
+                    )
+            }
+
+            if let selectedOption, selectedOption.rawValue != ExpenseCategory.other.rawValue {
+                Text("Предположение: \(selectedOption.displayName)")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.54))
+            }
+
+            if !row.suggestedCategoryRaws.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(row.suggestedCategoryRaws, id: \.self) { rawValue in
+                            if let option = expenseCategoryOptions.first(where: { $0.rawValue == rawValue }) {
+                                quickSuggestionButton(rowID: row.id, option: option)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 1)
+                }
+            }
+
+            HStack(spacing: 8) {
+                Menu {
+                    ForEach(expenseCategoryOptions, id: \.rawValue) { option in
+                        Button {
+                            applyUnresolvedRow(row.id, to: option.rawValue)
+                        } label: {
+                            Label(option.displayName, systemImage: option.icon)
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "folder")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("В мою категорию")
+                            .font(.system(size: 13, weight: .semibold))
+                        Spacer(minLength: 6)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 11, weight: .bold))
+                    }
+                    .foregroundStyle(Color.white.opacity(0.94))
+                    .padding(.horizontal, 12)
+                    .frame(height: 40)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color.white.opacity(0.07))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    pendingCategoryCreationRowID = row.id
+                    categoryEditorName = row.normalizedTitle
+                    categoryEditorIcon = CashflowCustomCategory.defaultIcon
+                    showCategoryEditorSheet = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 12, weight: .bold))
+                        Text("Создать")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundStyle(Color.white.opacity(0.94))
+                    .padding(.horizontal, 12)
+                    .frame(height: 40)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(accent.opacity(0.14))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(accent.opacity(0.32), lineWidth: 1)
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(14)
+        .background(innerBackground)
+    }
+
+    private func quickSuggestionButton(rowID: UUID, option: CashflowCategoryOption) -> some View {
+        Button {
+            applyUnresolvedRow(rowID, to: option.rawValue)
+        } label: {
+            HStack(spacing: 6) {
+                CashflowCategoryIconView(
+                    icon: option.icon,
+                    fontSize: 11,
+                    fontWeight: .semibold,
+                    tint: AnyShapeStyle(Color.white.opacity(0.92))
+                )
+                Text(option.displayName)
+                    .lineLimit(1)
+            }
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(Color.white.opacity(0.94))
+            .padding(.horizontal, 10)
+            .frame(height: 32)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.white.opacity(0.08))
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     private var summaryCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
@@ -706,6 +884,7 @@ struct CashflowBulkExpenseImportSheet: View {
         let isTransferCategory = CashflowBulkExpenseCategorySortPolicy.isTransferCategory(
             draft.wrappedValue.category.rawValue
         )
+        let breakdown = categoryBreakdown(for: draft.wrappedValue)
         let tileFill = isTransferCategory ? danger.opacity(0.08) : Color.black.opacity(0.88)
         let borderGradient = LinearGradient(
             colors: isTransferCategory
@@ -760,11 +939,15 @@ struct CashflowBulkExpenseImportSheet: View {
                     .foregroundStyle(Color.white.opacity(0.42))
                     .lineLimit(1)
             }
+
+            if breakdown.importedAmount > 0.0000001 {
+                categoryBreakdownLabel(breakdown)
+            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
-        .frame(minHeight: 92)
+        .frame(minHeight: 96)
         .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -793,6 +976,25 @@ struct CashflowBulkExpenseImportSheet: View {
                 )
             }
         }
+    }
+
+    private func categoryBreakdown(for draft: CashflowBulkExpenseCategoryDraft) -> CashflowBulkExpenseCategoryBreakdown {
+        CashflowBulkExpenseCategoryBreakdown.make(
+            displayedAmount: draft.amount,
+            baselineAmount: baselineCategoryTotals[draft.category.rawValue] ?? 0
+        )
+    }
+
+    private func categoryBreakdownLabel(_ breakdown: CashflowBulkExpenseCategoryBreakdown) -> some View {
+        Text(
+            "Ручн. \(CashflowBulkExpenseRowDraft.formatAmount(breakdown.baselineAmount)) + Bulk \(CashflowBulkExpenseRowDraft.formatAmount(breakdown.importedAmount))"
+        )
+        .font(.system(size: 8, weight: .semibold))
+        .foregroundStyle(Color.white.opacity(0.52))
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
+        .frame(maxWidth: .infinity)
+        .padding(.top, -1)
     }
 
     private var floatingAddCategoryButton: some View {
@@ -849,7 +1051,31 @@ struct CashflowBulkExpenseImportSheet: View {
             )
         }
 
+        if let rowID = pendingCategoryCreationRowID {
+            applyUnresolvedRow(rowID, to: viewModel.categoryOptions(for: .expense, includeHiddenSystem: true)
+                .first(where: { $0.displayName == trimmed && $0.isCustom })?.rawValue)
+            pendingCategoryCreationRowID = nil
+        }
+
         showCategoryEditorSheet = false
+    }
+
+    private func applyUnresolvedRow(_ rowID: UUID, to categoryRaw: String?) {
+        guard let categoryRaw,
+              categoryRaw != ExpenseCategory.other.rawValue,
+              let rowIndex = unresolvedParsedRows.firstIndex(where: { $0.id == rowID }),
+              let amount = unresolvedParsedRows[rowIndex].amount,
+              amount > 0.0000001,
+              let categoryIndex = categoryDrafts.firstIndex(where: { $0.category.rawValue == categoryRaw }) else {
+            return
+        }
+
+        let merchantTitle = unresolvedParsedRows[rowIndex].normalizedTitle
+        let existingAmount = categoryDrafts[categoryIndex].amount ?? 0
+        categoryDrafts[categoryIndex].amountText = CashflowBulkExpenseRowDraft.formatAmount(existingAmount + amount)
+        importedCategoryRaws.insert(categoryRaw)
+        viewModel.rememberBulkExpenseCategory(categoryRaw: categoryRaw, for: merchantTitle)
+        unresolvedParsedRows.remove(at: rowIndex)
     }
 
     private func tileAmountFont(for value: String) -> Font {
@@ -1379,6 +1605,10 @@ struct CashflowBulkExpenseImportSheet: View {
             .filter { $0.currency == selectedCurrency }
     }
 
+    private var expenseCategoryOptions: [CashflowCategoryOption] {
+        viewModel.categoryOptions(for: .expense, includeHiddenSystem: true)
+    }
+
     private var filledDrafts: [CashflowBulkExpenseCategoryDraft] {
         categoryDrafts
             .filter(\.hasValue)
@@ -1394,7 +1624,7 @@ struct CashflowBulkExpenseImportSheet: View {
     }
 
     private var canSave: Bool {
-        selectedCardID != nil && !filledDrafts.isEmpty
+        selectedCardID != nil && !filledDrafts.isEmpty && unresolvedParsedRows.isEmpty
     }
 
     private var monthTitle: String {
@@ -1476,7 +1706,9 @@ struct CashflowBulkExpenseImportSheet: View {
     private func reloadDrafts() async {
         let emptyDrafts = makeEmptyCategoryDrafts()
         categoryDrafts = emptyDrafts
+        baselineCategoryTotals = [:]
         importedCategoryRaws = []
+        unresolvedParsedRows = []
         loadedAffectingTotal = 0
         errorMessage = nil
         saveMessage = nil
@@ -1486,21 +1718,32 @@ struct CashflowBulkExpenseImportSheet: View {
         guard let selectedCardID else { return }
         let storedEntries = viewModel.bulkExpenseImportStoredEntries(
             cardID: selectedCardID,
-            month: selectedMonth
+            month: selectedMonth,
+            affectsCardBalance: shouldAffectCardBalance
+        )
+        baselineCategoryTotals = viewModel.bulkExpenseImportBaselineCategoryTotals(
+            cardID: selectedCardID,
+            month: selectedMonth,
+            affectsCardBalance: shouldAffectCardBalance
         )
 
-        if let firstEntry = storedEntries.first {
-            shouldAffectCardBalance = firstEntry.affectsCardBalance
-        }
         loadedAffectingTotal = storedEntries
             .filter(\.affectsCardBalance)
             .reduce(0) { $0 + $1.amount }
+
+        for (categoryRaw, totalAmount) in baselineCategoryTotals where totalAmount > 0.0000001 {
+            guard let index = categoryDrafts.firstIndex(where: { $0.category.rawValue == categoryRaw }) else {
+                continue
+            }
+            categoryDrafts[index].amountText = CashflowBulkExpenseRowDraft.formatAmount(totalAmount)
+        }
 
         for entry in storedEntries {
             guard let index = categoryDrafts.firstIndex(where: { $0.category.rawValue == entry.categoryRaw }) else {
                 continue
             }
-            categoryDrafts[index].amountText = CashflowBulkExpenseRowDraft.formatAmount(entry.amount)
+            let baselineAmount = baselineCategoryTotals[entry.categoryRaw] ?? 0
+            categoryDrafts[index].amountText = CashflowBulkExpenseRowDraft.formatAmount(baselineAmount + entry.amount)
             categoryDrafts[index].noteText = entry.note ?? ""
         }
     }
@@ -1510,6 +1753,7 @@ struct CashflowBulkExpenseImportSheet: View {
         saveMessage = nil
         isErrorDismissed = false
         isSaveDismissed = false
+        unresolvedParsedRows = []
         isProcessing = true
         defer { isProcessing = false }
 
@@ -1540,10 +1784,37 @@ struct CashflowBulkExpenseImportSheet: View {
 
         let availableOptions = viewModel.categoryOptions(for: .expense, includeHiddenSystem: true)
         var mergedCount = 0
+        var unresolvedCount = 0
         var changedCategories: Set<String> = []
 
         for row in parsedRows {
-            let resolution = categoryResolver.resolve(title: row.title, availableOptions: availableOptions)
+            let learnedRawValue = viewModel.learnedBulkExpenseCategoryRaw(for: row.title)
+            let resolution = categoryResolver.resolve(
+                title: row.title,
+                availableOptions: availableOptions,
+                preferredRawValue: learnedRawValue
+            )
+            if resolution.requiresManualReview {
+                let suggestedRaws = categoryResolver.suggestedOptions(
+                    title: row.title,
+                    availableOptions: availableOptions,
+                    preferredRawValue: learnedRawValue
+                ).map(\.rawValue)
+                unresolvedParsedRows.append(
+                    CashflowBulkExpenseRowDraft(
+                        rawLine: row.title,
+                        titleText: row.title,
+                        amountText: CashflowBulkExpenseRowDraft.formatAmount(row.amount),
+                        selectedCategoryRaw: resolution.option.rawValue,
+                        suggestedCategoryRaws: suggestedRaws,
+                        sourceOrderIndex: unresolvedParsedRows.count,
+                        confidence: resolution.confidence,
+                        usesSuggestedCategory: true
+                    )
+                )
+                unresolvedCount += 1
+                continue
+            }
             guard let index = categoryDrafts.firstIndex(where: { $0.category.rawValue == resolution.option.rawValue }) else {
                 continue
             }
@@ -1556,15 +1827,21 @@ struct CashflowBulkExpenseImportSheet: View {
 
         importedCategoryRaws = changedCategories
 
-        saveMessage = String(
-            localized: "cashflow.bulk_expense.screenshot.merged",
-            defaultValue: "Merged \(mergedCount) recognized expenses into monthly category totals.",
-            comment: "Success message after merging screenshot rows into categories"
-        )
+        if unresolvedCount > 0 {
+            saveMessage = "Добавлено \(mergedCount). Ещё \(unresolvedCount) строк требуют разбора."
+        } else {
+            saveMessage = String(
+                localized: "cashflow.bulk_expense.screenshot.merged",
+                defaultValue: "Merged \(mergedCount) recognized expenses into monthly category totals.",
+                comment: "Success message after merging screenshot rows into categories"
+            )
+        }
         errorMessage = nil
         isSaveDismissed = false
         isErrorDismissed = false
-        mode = .manual
+        if unresolvedCount == 0 {
+            mode = .manual
+        }
     }
 
     private func saveRows() async {
@@ -1580,9 +1857,12 @@ struct CashflowBulkExpenseImportSheet: View {
         }
 
         let entries = filledDrafts.compactMap { draft -> CashflowBulkExpensePersistEntry? in
-            guard let amount = draft.amount, amount > 0 else { return nil }
+            guard let amount = draft.amount else { return nil }
+            let baselineAmount = baselineCategoryTotals[draft.category.rawValue] ?? 0
+            let importAmount = max(0, amount - baselineAmount)
+            guard importAmount > 0 else { return nil }
             return CashflowBulkExpensePersistEntry(
-                amount: amount,
+                amount: importAmount,
                 expenseCategoryRaw: draft.category.rawValue,
                 note: draft.normalizedNote,
                 sourceOrderIndex: draft.sourceOrderIndex

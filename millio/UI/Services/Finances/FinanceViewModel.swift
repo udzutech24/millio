@@ -1762,14 +1762,11 @@ final class FinanceViewModel: ViewModelProtocol {
                     ? String(localized: "finances.transaction.note.investment_buy")
                     : String(localized: "finances.transaction.note.investment_sell")
                 let settlementCardID: String?
-                let settlementInvestmentID: String?
                 switch settlementAccountForOrder {
                 case .card(let card):
                     settlementCardID = card.cardUniqueID
-                    settlementInvestmentID = nil
-                case .investment(let settlementInvestment):
+                case .investment:
                     settlementCardID = nil
-                    settlementInvestmentID = settlementInvestment.investmentUniqueID
                 }
                 let settlementTransaction = CashflowTransaction(
                     transactionType: side == .buy ? .expense : .income,
@@ -1777,10 +1774,13 @@ final class FinanceViewModel: ViewModelProtocol {
                     currency: investmentCurrency,
                     transactionDate: Date(),
                     cardID: settlementCardID,
-                    investmentID: settlementInvestmentID,
+                    // Keep the order leg attached to the traded investment so
+                    // audit/history queries can reconstruct the full operation.
+                    investmentID: investment.investmentUniqueID,
                     incomeCategory: side == .sell ? .investment : nil,
                     expenseCategory: side == .buy ? .other : nil,
-                    note: note
+                    note: note,
+                    affectsCashflowTotals: false
                 )
                 stampFrozenRate(on: settlementTransaction, targetCurrency: settlementAccountForOrder.currency)
                 settlementTransaction.hasAppliedBalanceEffect = true

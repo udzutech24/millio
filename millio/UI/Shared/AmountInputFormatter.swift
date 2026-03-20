@@ -6,6 +6,8 @@
 import Foundation
 
 enum AmountInputFormatter {
+    static let defaultFractionDigits = 2
+    static let marketPriceFractionDigits = 8
     static let marketQuantityFractionDigits = 12
 
     /// Formats integer-only monetary input on each keystroke.
@@ -15,7 +17,7 @@ enum AmountInputFormatter {
         return display(sanitized, maxFractionDigits: 0)
     }
 
-    static func sanitize(_ text: String, maxFractionDigits: Int = 2) -> String {
+    static func sanitize(_ text: String, maxFractionDigits: Int = defaultFractionDigits) -> String {
         let normalized = text
             .replacingOccurrences(of: " ", with: "")
             .replacingOccurrences(of: ",", with: ".")
@@ -54,7 +56,7 @@ enum AmountInputFormatter {
         return Double(normalized)
     }
 
-    static func display(_ text: String, maxFractionDigits: Int = 2) -> String {
+    static func display(_ text: String, maxFractionDigits: Int = defaultFractionDigits) -> String {
         let sanitized = sanitize(text, maxFractionDigits: maxFractionDigits)
         guard !sanitized.isEmpty else { return "" }
 
@@ -70,7 +72,7 @@ enum AmountInputFormatter {
     }
 
     static func plainString(from value: Double) -> String {
-        plainString(from: value, maxFractionDigits: 2)
+        plainString(from: value, maxFractionDigits: defaultFractionDigits)
     }
 
     static func plainString(from value: Double, maxFractionDigits: Int) -> String {

@@ -160,7 +160,8 @@ private struct FinancesContentViewInternal: View {
         TabView(selection: $selectedTab) {
             // Вкладка 1: Основной экран
             FinancesMainTabView(
-                viewModel: viewModel
+                viewModel: viewModel,
+                selectedTab: $selectedTab
             )
                 .tabItem {
                     financesTabItemLabel(
@@ -312,11 +313,16 @@ private struct FinancesSettingsSheet: View {
 
 private struct FinancesMainTabView: View {
     @ObservedObject var viewModel: FinanceViewModel
+    @Binding var selectedTab: FinancesTab
     @State private var draggedGroupID: String?
+    @State private var isEmptyIntroHidden: Bool = FinancesEmptyStateIntroPrefs().isHidden()
     
     var body: some View {
         mainContent
             .modifier(SheetsModifier(viewModel: viewModel))
+            .onAppear {
+                isEmptyIntroHidden = FinancesEmptyStateIntroPrefs().isHidden()
+            }
     }
     
     private var mainContent: some View {
@@ -697,28 +703,101 @@ private struct FinancesMainTabView: View {
     }
 
     private var emptyGroupsCallToAction: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 16) {
+            HStack {
+                Spacer()
+
+                if !isEmptyIntroHidden {
+                    Button {
+                        isEmptyIntroHidden = true
+                        FinancesEmptyStateIntroPrefs().setHidden(true)
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AppColors.textTertiary)
+                            .frame(width: 24, height: 24)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(String(localized: "finances.main.empty_intro.dismiss"))
+                }
+            }
+
+            Image("finance")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 88, height: 88)
+                .shadow(color: (AppColors.financesGradient.first ?? .cyan).opacity(0.18), radius: 16, y: 8)
+
+            Text("finances.main.empty_intro.title")
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(AppColors.textPrimary)
+                .multilineTextAlignment(.center)
+
+            if !isEmptyIntroHidden {
+                Text("finances.main.empty_intro.description")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(AppColors.textTertiary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 20)
+            }
+
             Button {
                 viewModel.handle(.showAddAccountSheet(nil))
             } label: {
                 Text("finances.main.empty_intro.add_product")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
+                    .frame(height: 56)
                     .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: AppColors.financesGradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Color.white.opacity(0.02))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [
+                                                (AppColors.financesGradient.first ?? .cyan).opacity(0.9),
+                                                (AppColors.financesGradient.last ?? AppColors.brandPrimary).opacity(0.9)
+                                            ],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        ),
+                                        lineWidth: 1
+                                    )
                             )
                     )
             }
             .buttonStyle(.plain)
+
+            if !isEmptyIntroHidden {
+                Button {
+                    selectedTab = .dynamics
+                } label: {
+                    Text("finances.main.empty_intro.open_dynamics")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppColors.textSecondary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 32)
+                }
+                .buttonStyle(.plain)
+            }
         }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 22)
+        .background(
+            FinanceChromeCardBackground(
+                cornerRadius: FinancesMainLayoutPolicy.sectionCardCornerRadius,
+                isElevated: true
+            )
+        )
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: FinancesMainLayoutPolicy.sectionCardCornerRadius,
+                style: .continuous
+            )
+        )
         .padding(.top, 8)
     }
 

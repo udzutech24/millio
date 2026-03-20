@@ -101,6 +101,24 @@ extension CashflowViewModelTests {
         #expect(prefs.isPinned(categoryRaw: "groceries", kind: .expense))
     }
 
+    @Test("orderedCategoryOptions поднимает pinned категорию наверх списка")
+    func orderedCategoryOptionsReflectPersistedPins() throws {
+        let modelContext = try createTestModelContext()
+        let isolated = makeIsolatedDefaults()
+        defer { isolated.defaults.removePersistentDomain(forName: isolated.suiteName) }
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, defaults: isolated.defaults)
+        let baseline = viewModel.orderedCategoryOptions(for: .expense)
+
+        #expect(baseline.count > 1)
+        guard let target = baseline.last else { return }
+
+        viewModel.setCategoryPinned(rawValue: target.rawValue, kind: .expense, isPinned: true)
+        let repinned = viewModel.orderedCategoryOptions(for: .expense)
+
+        #expect(repinned.first?.rawValue == target.rawValue)
+    }
+
     @Test("Текст предупреждения об оценочном курсе содержит дату для ru_RU")
     func estimatedRateWarningTextIncludesDateForRussianLocale() {
         let calendar = Calendar(identifier: .gregorian)
@@ -362,6 +380,36 @@ extension CashflowViewModelTests {
         }
         #expect(abs(usdCard.balance - 90) < 0.01)
         #expect(abs(rubCard.balance - 1_900) < 0.01)
+    }
+
+    @Test("Редактор перевода получает исторический курс как fallback для подсказки")
+    func suggestedTransferExchangeInfoFallsBackToHistoricalRate() async throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 20, hour: 10)) ?? Date()
+        let rateDate = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 18)) ?? Date()
+
+        modelContext.insert(
+            HistoricalRate(
+                baseCurrency: "USD",
+                quoteCurrency: "RUB",
+                rate: 88.5,
+                rateDate: rateDate,
+                source: "test"
+            )
+        )
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+
+        let suggestion = await viewModel.suggestedTransferExchangeInfo(
+            from: "USD",
+            to: "RUB",
+            on: rateDate
+        )
+
+        #expect(suggestion?.rate == 88.5)
+        #expect(suggestion?.rateDate == Calendar.current.startOfDay(for: rateDate))
+        #expect(suggestion?.isLiveRate == false)
     }
 
     @Test("Для кредитной карты snapshot возвращает долг и остаток лимита")
@@ -933,6 +981,24 @@ extension CashflowViewModelTests {
         #expect(AppLocalization.string("Business", locale: enLocale) == "Business")
         #expect(AppLocalization.string("Rental", locale: ruLocale) == "Аренда")
         #expect(AppLocalization.string("Rental", locale: enLocale) == "Rental")
+        #expect(IncomeCategory.salary.localizedDisplayName(locale: ruLocale) == "Зарплата")
+        #expect(IncomeCategory.salary.localizedDisplayName(locale: enLocale) == "Salary")
+        #expect(IncomeCategory.matchesSearch(rawValue: IncomeCategory.salary.rawValue, query: "зарп"))
+        #expect(IncomeCategory.matchesSearch(rawValue: IncomeCategory.salary.rawValue, query: "salary"))
+    }
+
+    @Test("Поиск категорий доходов использует локализованные названия, а не каталог расходов")
+    func incomeCategoryOptionsMatchLocalizedNames() throws {
+        let modelContext = try createTestModelContext()
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+
+        let byRussian = viewModel.categoryOptions(for: .income, matching: "зарп")
+        let byEnglish = viewModel.categoryOptions(for: .income, matching: "salary")
+        let expenseLeak = viewModel.categoryOptions(for: .income, matching: "продукты")
+
+        #expect(byRussian.contains { $0.rawValue == IncomeCategory.salary.rawValue })
+        #expect(byEnglish.contains { $0.rawValue == IncomeCategory.salary.rawValue })
+        #expect(!expenseLeak.contains { $0.rawValue == IncomeCategory.salary.rawValue })
     }
 
     @Test("Нормализация иконки поддерживает emoji и SF Symbols")
@@ -1039,6 +1105,25 @@ extension CashflowViewModelTests {
         #expect(!resolved.isCustom)
     }
 
+    @Test("Редактирование системной категории дохода сохраняет новое имя и иконку")
+    func testRenameIncomeSystemCategoryUpdatesNameAndIcon() throws {
+        let modelContext = try createTestModelContext()
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+
+        let renamed = viewModel.renameCategory(
+            rawValue: IncomeCategory.salary.rawValue,
+            kind: .income,
+            newName: "Оклад",
+            newIcon: "wallet.pass.fill"
+        )
+
+        #expect(renamed)
+        let resolved = viewModel.categoryOption(for: IncomeCategory.salary.rawValue, kind: .income)
+        #expect(resolved.displayName == "Оклад")
+        #expect(resolved.icon == "wallet.pass.fill")
+        #expect(!resolved.isCustom)
+    }
+
     @Test("Удаление системной категории скрывает ее и мигрирует транзакции в Другое")
     func testDeleteSystemCategoryHidesAndMigratesTransactions() async throws {
         let modelContext = try createTestModelContext()
@@ -1084,6 +1169,40 @@ extension CashflowViewModelTests {
 
         let options = viewModel.categoryOptions(for: .income)
         #expect(options.contains(where: { $0.rawValue == IncomeCategory.other.rawValue }))
+    }
+
+    @Test("Удаление системной категории дохода скрывает ее и мигрирует транзакции в Другое")
+    func testDeleteIncomeSystemCategoryHidesAndMigratesTransactions() async throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 2, day: 13)) ?? Date()
+        let viewModel = CashflowViewModel(
+            modelContext: modelContext,
+            now: { fixedNow },
+            assetsSnapshotProvider: { _, _, _ in
+                (start: 0, end: 0)
+            }
+        )
+
+        let transaction = CashflowTransaction(
+            transactionType: .income,
+            amount: 2_500,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: nil,
+            incomeCategoryRaw: IncomeCategory.salary.rawValue
+        )
+        modelContext.insert(transaction)
+        try modelContext.save()
+
+        viewModel.handle(.loadTransactions)
+        #expect(viewModel.canDeleteCategory(rawValue: IncomeCategory.salary.rawValue, kind: .income))
+
+        let deleted = viewModel.deleteCategory(rawValue: IncomeCategory.salary.rawValue, kind: .income)
+        #expect(deleted)
+        #expect(transaction.incomeCategoryRaw == IncomeCategory.other.rawValue)
+
+        let options = viewModel.categoryOptions(for: .income)
+        #expect(!options.contains(where: { $0.rawValue == IncomeCategory.salary.rawValue }))
     }
 
     @Test("Ежемесячный автоповтор создаёт пропущенные операции и не дублирует месяцы")
@@ -2358,6 +2477,96 @@ extension CashflowViewModelTests {
 
         #expect(abs(card.balance - 1_000) < 0.01)
         #expect(viewModel.state.transactions.first?.affectsCardBalance == false)
+    }
+
+    @Test("Settlement сделок по активам не попадает в income/expense Cashflow даже для legacy записей")
+    func testInvestmentTradeSettlementsAreExcludedFromCashflowTotals() async throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 12, hour: 12)) ?? Date()
+
+        let card = Card(
+            name: "Broker funding",
+            cardNumber: "9999",
+            bank: .other,
+            cardType: .debit,
+            currency: "RUB",
+            balance: 10_000
+        )
+        modelContext.insert(card)
+
+        let regularExpense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 200,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: card.cardUniqueID,
+            expenseCategoryRaw: ExpenseCategory.groceries.rawValue,
+            note: "Groceries"
+        )
+        let legacyBuySettlement = CashflowTransaction(
+            transactionType: .expense,
+            amount: 500,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: card.cardUniqueID,
+            expenseCategoryRaw: ExpenseCategory.other.rawValue,
+            note: String(localized: "finances.transaction.note.investment_buy")
+        )
+        let regularIncome = CashflowTransaction(
+            transactionType: .income,
+            amount: 300,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: card.cardUniqueID,
+            incomeCategoryRaw: IncomeCategory.salary.rawValue,
+            note: "Salary"
+        )
+        let legacySellSettlement = CashflowTransaction(
+            transactionType: .income,
+            amount: 700,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            cardID: card.cardUniqueID,
+            incomeCategoryRaw: IncomeCategory.investment.rawValue,
+            note: String(localized: "finances.transaction.note.investment_sell")
+        )
+
+        modelContext.insert(regularExpense)
+        modelContext.insert(legacyBuySettlement)
+        modelContext.insert(regularIncome)
+        modelContext.insert(legacySellSettlement)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(
+            modelContext: modelContext,
+            now: { fixedNow },
+            assetsSnapshotProvider: { _, _, _ in (start: 0, end: 0) }
+        )
+        viewModel.handle(.loadTransactions)
+
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            viewModel.state.transactions.count == 4
+                && abs(viewModel.state.totalExpense - 200) < 0.01
+                && abs(viewModel.state.totalIncome - 300) < 0.01
+        }
+
+        let expenseHistory = viewModel.historyTransactions(
+            matching: CashflowHistoryQuery(typeFilter: .expense)
+        )
+        let incomeHistory = viewModel.historyTransactions(
+            matching: CashflowHistoryQuery(typeFilter: .income)
+        )
+        let allHistory = viewModel.historyTransactions(
+            matching: CashflowHistoryQuery(typeFilter: .all)
+        )
+
+        #expect(expenseHistory.count == 1)
+        #expect(expenseHistory.first?.note == "Groceries")
+        #expect(incomeHistory.count == 1)
+        #expect(incomeHistory.first?.note == "Salary")
+        #expect(allHistory.count == 4)
+        #expect(abs(viewModel.state.convertedTransactions.reduce(0) { $0 + $1.expense } - 200) < 0.01)
+        #expect(abs(viewModel.state.convertedTransactions.reduce(0) { $0 + $1.income } - 300) < 0.01)
     }
 
     @Test("Сохранение из вложенного экрана категории не закрывает sheet расходов/доходов")

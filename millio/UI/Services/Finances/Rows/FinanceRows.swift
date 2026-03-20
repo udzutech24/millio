@@ -137,9 +137,6 @@ struct FinanceGroupRow: View {
         groupContent
             .background(groupBackground)
             .clipShape(RoundedRectangle(cornerRadius: FinanceScreenChrome.groupRowCornerRadius, style: .continuous))
-            .contextMenu {
-                contextMenuContent
-            }
             .onDrop(
                 of: [UTType.text],
                 delegate: FinanceGroupIndexDropDelegate(
@@ -185,6 +182,14 @@ struct FinanceGroupRow: View {
             .padding(.vertical, 16)
             .padding(.leading, contentLeadingInset)
             .padding(.trailing, contentTrailingInset)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.45)
+                    .onEnded { _ in
+                        viewModel.handle(.showGroupDynamics(group))
+                    }
+            )
         }
         .frame(height: 56)
     }
@@ -279,6 +284,7 @@ struct FinanceGroupRow: View {
                     }
                 }
             }
+
         }
         .padding(.bottom, 10)
     }
@@ -327,27 +333,6 @@ struct FinanceGroupRow: View {
                     .padding(.vertical, 14)
                     .padding(.leading, 10)
             }
-    }
-    
-    @ViewBuilder
-    private var contextMenuContent: some View {
-        Button {
-            viewModel.handle(.showGroupDynamics(group))
-        } label: {
-            Label("finances.group.menu.open", systemImage: "chart.line.uptrend.xyaxis")
-        }
-
-        Button {
-            viewModel.handle(.editGroup(group))
-        } label: {
-            Label("finances.common.edit", systemImage: "pencil")
-        }
-
-        Button(role: .destructive) {
-            viewModel.handle(.deleteGroup(group))
-        } label: {
-            Label("finances.common.delete", systemImage: "trash")
-        }
     }
     
     private func loadGroupTotal() async {

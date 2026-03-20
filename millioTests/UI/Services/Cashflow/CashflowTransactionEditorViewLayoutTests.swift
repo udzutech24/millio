@@ -181,6 +181,26 @@ struct CashflowTransactionEditorViewLayoutTests {
         #expect(accounts.count == 2)
     }
 
+    @Test("Для межвалютного перевода редактор предлагает курс")
+    func transferOffersExchangeRateOnlyForDifferentCurrencies() {
+        #expect(CashflowTransactionEditorView.shouldOfferTransferExchangeRate(sourceCurrency: "usd", destinationCurrency: "RUB"))
+        #expect(!CashflowTransactionEditorView.shouldOfferTransferExchangeRate(sourceCurrency: "RUB", destinationCurrency: "rub"))
+        #expect(!CashflowTransactionEditorView.shouldOfferTransferExchangeRate(sourceCurrency: nil, destinationCurrency: "RUB"))
+    }
+
+    @Test("Редактор открывает пользовательский режим курса если в переводе уже сохранен rate")
+    func transferDefaultsToCustomRateModeForExistingFrozenRate() {
+        #expect(CashflowTransactionEditorView.defaultTransferExchangeRateMode(existingRate: 91.25) == .custom)
+        #expect(CashflowTransactionEditorView.defaultTransferExchangeRateMode(existingRate: nil) == .current)
+        #expect(CashflowTransactionEditorView.defaultTransferExchangeRateMode(existingRate: 0) == .current)
+    }
+
+    @Test("Превью суммы получения считает по курсу")
+    func transferReceivedAmountUsesExchangeRate() {
+        #expect(CashflowTransactionEditorView.transferReceivedAmount(sourceAmount: 10, exchangeRate: 92.4) == 924)
+        #expect(CashflowTransactionEditorView.transferReceivedAmount(sourceAmount: 10, exchangeRate: nil) == nil)
+    }
+
     @Test("Основная информация для дохода: карта между суммой и валютой")
     func incomeMainInfoRows() {
         let rows = CashflowTransactionEditorView.mainInfoRows(for: .income)

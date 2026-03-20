@@ -69,8 +69,16 @@ final class QuickSetupCopyStyleTests: XCTestCase {
         let locale = Locale(identifier: "ru_RU")
         XCTAssertEqual(QuickSetupStep.localeAndCurrencies.title(for: locale), "Язык и валюты")
         XCTAssertEqual(QuickSetupStep.localeAndCurrencies.subtitle(for: locale), "Выберите язык и валюты")
+        XCTAssertEqual(QuickSetupStep.expenseCategories.subtitle(for: locale), "Выберите категории трат")
         XCTAssertEqual(QuickSetupStep.products.title(for: locale), "Продукты")
         XCTAssertEqual(QuickSetupStep.summary.title(for: locale), "Хранение данных")
+    }
+
+    func testTickerProductTypeUsesStocksTitleAndTickerSubtitle() {
+        let locale = Locale(identifier: "ru_RU")
+
+        XCTAssertEqual(QuickSetupProductType.ticker.title(for: locale), "Акции")
+        XCTAssertEqual(QuickSetupProductType.ticker.subtitle(for: locale), "Тикер")
     }
 
     func testBackupPreferenceCopyUsesOperationalTone() {

@@ -1,7 +1,7 @@
 import Foundation
 
 func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async -> T) async -> T? {
-    return await withTaskGroup(of: T?.self) { group in
+    await withTaskGroup(of: T?.self, returning: T?.self) { group in
         group.addTask {
             await operation()
         }
@@ -11,11 +11,9 @@ func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async -> T) a
             return nil
         }
 
-        for await value in group {
-            group.cancelAll()
-            return value
-        }
+        let value = await group.next() ?? nil
+        group.cancelAll()
+        return value
 
-        return nil
     }
 }

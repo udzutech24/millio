@@ -35,6 +35,7 @@ struct CashbackImportCategoryResolver {
         map[normalize("Airfare")] = .airlines
         map[normalize("Красота")] = .beauty
         map[normalize("Beauty")] = .beauty
+        map[normalize("Продукты")] = .supermarket
         map[normalize("Супермаркеты")] = .supermarket
         map[normalize("Supermarkets")] = .supermarket
         map[normalize("Groceries")] = .supermarket

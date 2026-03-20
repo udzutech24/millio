@@ -213,6 +213,36 @@ struct FinanceViewModelTests {
         #expect(viewModel.state.displayCurrency == "USD")
     }
 
+    @Test("FinanceViewModel открывает редактор для выбранной группы")
+    func testEditGroupShowsGroupEditorForSelectedGroup() throws {
+        let modelContext = try createTestModelContext()
+        let group = FinanceGroup(name: "Накопления", colorHex: "#00AAFF")
+        modelContext.insert(group)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(modelContext: modelContext, skipInitialLoad: true)
+
+        viewModel.handle(.editGroup(group))
+
+        #expect(viewModel.state.showGroupEditor)
+        #expect(viewModel.state.editingGroup?.groupUniqueID == group.groupUniqueID)
+    }
+
+    @Test("FinanceViewModel предвыбирает группу при открытии добавления счета")
+    func testShowAddAccountSheetStoresSelectedGroup() throws {
+        let modelContext = try createTestModelContext()
+        let group = FinanceGroup(name: "Инвестиции", colorHex: "#22CC88")
+        modelContext.insert(group)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(modelContext: modelContext, skipInitialLoad: true)
+
+        viewModel.handle(.showAddAccountSheet(group))
+
+        #expect(viewModel.state.showAddAccountSheet)
+        #expect(viewModel.state.selectedGroupForAccount?.groupUniqueID == group.groupUniqueID)
+    }
+
     @Test("FinanceViewModel мигрирует legacy market investments на assetID-first при загрузке")
     func testLoadAccountsMigratesMarketAssetIdentity() throws {
         let modelContext = try createTestModelContext()

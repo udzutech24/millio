@@ -216,9 +216,6 @@
         }
       }
     },
-    "Always visible" : {
-
-    },
     "Amount" : {
       "localizations" : {
         "en" : {
@@ -1426,6 +1423,7 @@
       }
     },
     "Bonus" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1442,6 +1440,7 @@
       }
     },
     "Business" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2108,13 +2107,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Supermarkets"
+            "value" : "Groceries"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Супермаркеты"
+            "value" : "Продукты"
           }
         }
       }
@@ -4085,6 +4084,74 @@
         }
       }
     },
+    "cashflow.category.actions.delete" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить"
+          }
+        }
+      }
+    },
+    "cashflow.category.actions.message" : {
+      "comment" : "Category actions sheet helper text",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose an action for this category."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выбери действие для этой категории."
+          }
+        }
+      }
+    },
+    "cashflow.category.actions.pin" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pin"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Закрепить"
+          }
+        }
+      }
+    },
+    "cashflow.category.actions.unpin" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unpin"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Открепить"
+          }
+        }
+      }
+    },
     "cashflow.category.hint_accessibility_format" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4103,8 +4170,7 @@
       }
     },
     "cashflow.category.settings.title" : {
-      "comment" : "Category settings section title",
-      "extractionState" : "extracted_with_value",
+      "comment" : "Category settings section title\nSettings sheet title",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4114,24 +4180,141 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Category settings"
+            "state" : "translated",
+            "value" : "Настройки категорий"
+          }
+        }
+      }
+    },
+    "cashflow.category.visibility.always" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Always visible"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Всегда отображается"
+          }
+        }
+      }
+    },
+    "cashflow.category.visibility.hidden" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hidden from list"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скрыта из списка"
+          }
+        }
+      }
+    },
+    "cashflow.category.visibility.visible" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Visible in list"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показывается в списке"
           }
         }
       }
     },
     "cashflow.chart.empty" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No data for the chart yet."
+            "value" : "No data for the chart yet"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Нет данных для графика."
+            "value" : "Нет данных для графика"
+          }
+        }
+      }
+    },
+    "cashflow.chart.empty.banner.add_action" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add transaction"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавить операцию"
+          }
+        }
+      }
+    },
+    "cashflow.chart.empty.banner.open_finances" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Finances"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перейти в Финансы"
+          }
+        }
+      }
+    },
+    "cashflow.chart.empty.banner.subtitle" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When income and expenses appear in the selected period, a trend chart will show up here, start with your first transaction"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Когда в выбранном периоде появятся доходы и расходы, здесь появится динамика, начните с первой операции"
+          }
+        }
+      }
+    },
+    "cashflow.chart.empty.banner.title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cashflow pulse"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пульс кэшфлоу"
           }
         }
       }
@@ -5124,6 +5307,150 @@
         }
       }
     },
+    "cashflow.editor.transfer.exchange_rate" : {
+      "comment" : "Section title for transfer exchange rate\nTransfer exchange rate picker title",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exchange rate"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Exchange rate"
+          }
+        }
+      }
+    },
+    "cashflow.editor.transfer.rate_custom_invalid" : {
+      "comment" : "Transfer custom exchange rate validation message",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a valid custom rate."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Enter a valid custom rate."
+          }
+        }
+      }
+    },
+    "cashflow.editor.transfer.rate_loading" : {
+      "comment" : "Transfer exchange rate loading state",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading current rate…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Loading current rate…"
+          }
+        }
+      }
+    },
+    "cashflow.editor.transfer.rate_mode.current" : {
+      "comment" : "Transfer exchange rate mode title for current rate",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Current"
+          }
+        }
+      }
+    },
+    "cashflow.editor.transfer.rate_mode.custom" : {
+      "comment" : "Transfer exchange rate mode title for custom rate",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Custom"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Custom"
+          }
+        }
+      }
+    },
+    "cashflow.editor.transfer.rate_unavailable" : {
+      "comment" : "Transfer exchange rate unavailable state",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current rate is unavailable. Enter your own rate to continue."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Current rate is unavailable. Enter your own rate to continue."
+          }
+        }
+      }
+    },
+    "cashflow.editor.transfer.received_amount" : {
+      "comment" : "Preview text for received amount in transfer destination currency",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Will receive: %1$@ %2$@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Will receive: %1$@ %2$@"
+          }
+        }
+      }
+    },
+    "cashflow.editor.transfer.your_rate" : {
+      "comment" : "Label for custom exchange rate input",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your rate"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your rate"
+          }
+        }
+      }
+    },
     "cashflow.history.cards" : {
       "comment" : "History card filter title",
       "extractionState" : "extracted_with_value",
@@ -5745,13 +6072,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "You are in Cashflow: this screen shows where money comes from, where it goes, and period totals. Go to Finances to manage products and balances in detail."
+            "value" : "You are in Cashflow: this screen shows where money comes from, where it goes, and period totals, go to Finances to manage products and balances in detail"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Вы в разделе «Кэшфлоу»: здесь видно, откуда приходят деньги, куда уходят и какой итог за период. Перейдите в «Финансы», чтобы управлять продуктами и балансами детально."
+            "value" : "Вы в разделе «Кэшфлоу»: здесь видно, откуда приходят деньги, куда уходят и какой итог за период, перейдите в «Финансы», чтобы управлять продуктами и балансами детально"
           }
         }
       }
@@ -8743,6 +9070,7 @@
       }
     },
     "Delete" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -8878,6 +9206,7 @@
 
     },
     "Edit" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -12326,40 +12655,6 @@
         }
       }
     },
-    "finances.dynamics.trade.error.insufficient_quantity" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not enough quantity to sell."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Недостаточно количества для продажи."
-          }
-        }
-      }
-    },
-    "finances.dynamics.trade.error.invalid_inputs" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Check quantity and price."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Проверьте количество и цену."
-          }
-        }
-      }
-    },
     "finances.dynamics.trade.error.account_required" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -12390,6 +12685,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "На выбранном счете недостаточно денег."
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.error.insufficient_quantity" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not enough quantity to sell."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Недостаточно количества для продажи."
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.error.invalid_inputs" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check quantity and price."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проверьте количество и цену."
           }
         }
       }
@@ -13244,6 +13573,23 @@
         }
       }
     },
+    "finances.group_editor.section.manage" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manage Group"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Управление группой"
+          }
+        }
+      }
+    },
     "finances.group_editor.section.name" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13257,6 +13603,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Название группы"
+          }
+        }
+      }
+    },
+    "finances.group.action.add_account" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add account"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавить счет"
           }
         }
       }
@@ -13675,13 +14038,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Consolidate cards, loan obligations, and investment positions in a single control area. Open Dynamics to analyze balance movement, capital growth, and loss sources over time."
+            "value" : "Create accounts and cards, add stocks, crypto, real estate, and any other products in one streamlined interface"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Сведите карты, кредитные обязательства и инвестиционные позиции в единый контур контроля. Откройте «Динамику», чтобы анализировать движение баланса, прирост капитала и источники потерь во времени."
+            "value" : "Создавайте счета и карты, добавляйте акции, криптовалюту, недвижимость и любые другие продукты в одном удобном интерфейсе"
           }
         }
       }
@@ -13726,13 +14089,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Finance Control Center"
+            "value" : "Your Products"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Контур финансового контроля"
+            "value" : "Ваши продукты"
           }
         }
       }
@@ -15814,6 +16177,7 @@
       }
     },
     "Freelance" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -15864,6 +16228,7 @@
       }
     },
     "Gift" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -15912,9 +16277,6 @@
           }
         }
       }
-    },
-    "Hidden from list" : {
-
     },
     "Hide details" : {
       "localizations" : {
@@ -16101,6 +16463,7 @@
       }
     },
     "Investments" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -16536,6 +16899,7 @@
       }
     },
     "monetization.ticker.limit.short_format" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -16857,6 +17221,7 @@
       }
     },
     "Other" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -16990,9 +17355,6 @@
           }
         }
       }
-    },
-    "Pin" : {
-
     },
     "Pin category" : {
 
@@ -18561,13 +18923,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Короткий отзыв помогает нам делать Millio лучше"
+            "value" : "Короткий отзыв помогает нам делать millio лучше"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Короткий отзыв помогает нам делать «Millio» лучше"
+            "value" : "Короткий отзыв помогает нам делать «millio» лучше"
           }
         }
       }
@@ -18579,13 +18941,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Как вам Millio?"
+            "value" : "Как вам millio?"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Как вам «Millio»?"
+            "value" : "Как вам «millio»?"
           }
         }
       }
@@ -18729,7 +19091,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Если будет минутка, поддержите «Millio» оценкой в App Store"
+            "value" : "Если будет минутка, поддержите «милью» оценкой в App Store"
           }
         }
       }
@@ -19347,6 +19709,9 @@
         }
       }
     },
+    "R" : {
+
+    },
     "Recurrence" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -19467,6 +19832,7 @@
       }
     },
     "Rental" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -19635,6 +20001,7 @@
       }
     },
     "Salary" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -21673,13 +22040,7 @@
         }
       }
     },
-    "Unpin" : {
-
-    },
     "Unpin category" : {
-
-    },
-    "Visible in list" : {
 
     },
     "Visible range" : {
@@ -21880,6 +22241,9 @@
           }
         }
       }
+    },
+    "В мою категорию" : {
+
     },
     "Введите PIN-код" : {
       "comment" : "A prompt instructing the user to enter their PIN code.",
@@ -23065,6 +23429,9 @@
     "Попробуйте другое название категории или карты" : {
 
     },
+    "Предположение: %@" : {
+
+    },
     "Предыдущий месяц" : {
       "localizations" : {
         "en" : {
@@ -23092,6 +23459,9 @@
           }
         }
       }
+    },
+    "Проверь" : {
+
     },
     "Проверьте настройки" : {
       "extractionState" : "stale",
@@ -23276,6 +23646,16 @@
         }
       }
     },
+    "Ручн. %@ + Bulk %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ручн. %1$@ + Bulk %2$@"
+          }
+        }
+      }
+    },
     "Свернуть" : {
       "comment" : "A button label that collapses the view.",
       "isCommentAutoGenerated" : true,
@@ -23358,6 +23738,9 @@
         }
       }
     },
+    "Создать" : {
+
+    },
     "Создать категорию" : {
       "comment" : "A button label that allows users to create new cashback categories.",
       "isCommentAutoGenerated" : true,
@@ -23375,6 +23758,9 @@
           }
         }
       }
+    },
+    "Сомнительные строки не отправляем автоматически в `Другое`. Выбери свою категорию или создай новую." : {
+
     },
     "Сохранить" : {
       "comment" : "A button that saves user settings.",
@@ -23428,6 +23814,9 @@
           }
         }
       }
+    },
+    "Требует разбора" : {
+
     },
     "Убрать из избранного" : {
       "localizations" : {

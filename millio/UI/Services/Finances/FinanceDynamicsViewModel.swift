@@ -478,8 +478,9 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     func loadData() {
         state.isLoading = true
         
-        // Загружаем группы и счета из financeViewModel
-        state.groups = financeViewModel.state.groups
+        // При прямом открытии экрана динамики financeViewModel может еще не успеть загрузить state.
+        // В этом случае читаем группы напрямую из SwiftData, чтобы breakdown не оставался пустым.
+        state.groups = loadGroupsSnapshot()
         
         // Загружаем карты, кредиты и инвестиции напрямую из базы данных,
         // чтобы всегда получать актуальные данные (включая обновленные балансы)
@@ -505,6 +506,26 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         updateChartData()
         
         state.isLoading = false
+    }
+
+    private func loadGroupsSnapshot() -> [FinanceGroup] {
+        let currentGroups = financeViewModel.state.groups
+        guard currentGroups.isEmpty else { return currentGroups }
+
+        let descriptor = FetchDescriptor<FinanceGroup>()
+        let ungroupedName = FinanceSystemGroups.ungroupedName
+        let groups = (try? modelContext.fetch(descriptor)) ?? []
+        return groups
+            .sorted { group1, group2 in
+                if group1.order != group2.order {
+                    return group1.order < group2.order
+                }
+                return group1.createdAt < group2.createdAt
+            }
+            .filter { group in
+                guard group.name == ungroupedName else { return true }
+                return !(group.accounts?.isEmpty ?? true)
+            }
     }
     
     /// Перестроить кэши для оптимизации производительности
@@ -669,12 +690,11 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     private func updateCurrentBalanceAndDelta(for selectedDate: Date?) async {
         if Task.isCancelled { return }
 
-        let (startDate, endDate) = getPeriodDates()
+        let accounts = getAccountsForCalculation()
+        let (startDate, endDate) = resolvedPeriodDates(for: accounts)
         state.periodStartDate = startDate
         state.periodEndDate = endDate
-        
-        // Получаем счета для расчета
-        let accounts = getAccountsForCalculation()
+
         let useNetTotals = shouldUseNetTotals()
         
         // Рассчитываем текущий баланс
@@ -788,7 +808,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     /// Обновить список динамики
     func updateDynamicsBreakdown() async {
         let accounts = getAccountsForCalculation()
-        let (startDate, endDate) = getPeriodDates()
+        let (startDate, endDate) = resolvedPeriodDates(for: accounts)
         
         var breakdown: [DynamicsBreakdownItem] = []
         
@@ -844,10 +864,14 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                             return (index, nil)
                         }
                         let accountCardIDs = Set(accountCardIDsArray)
+                        let groupPeriod = self.resolvedPeriodDates(
+                            for: filteredAccounts,
+                            basePeriod: (startDate, endDate)
+                        )
 
                         async let startBalanceTask = self.calculateBalanceAtDate(
                             accounts: filteredAccounts,
-                            date: startDate,
+                            date: groupPeriod.start,
                             accountCardIDs: accountCardIDs,
                             debtAsNegative: true,
                             includeInitialBeforeCreation: false
@@ -917,10 +941,14 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
                         guard let account = currentAccounts.first(where: { $0.accountUniqueID == accountUniqueID }) else {
                             return (index, nil)
                         }
+                        let accountPeriod = self.resolvedPeriodDates(
+                            for: [account],
+                            basePeriod: (startDate, endDate)
+                        )
 
                         async let startBalanceTask = self.calculateBalanceAtDate(
                             accounts: [account],
-                            date: startDate,
+                            date: accountPeriod.start,
                             accountCardIDs: accountCardIDs,
                             debtAsNegative: false,
                             includeInitialBeforeCreation: false
@@ -1000,6 +1028,7 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
     
     func updateChartDataAsync() async {
         let accounts = getAccountsForCalculation()
+        let period = resolvedPeriodDates(for: accounts)
         
         // Строим данные графика в зависимости от режима
         let useNetTotals = shouldUseNetTotals()
@@ -1008,8 +1037,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             // Все счета в одну линию
             state.chartData = await buildTimeSeriesData(
                 accounts: accounts,
-                startDate: getPeriodDates().start,
-                endDate: getPeriodDates().end,
+                startDate: period.start,
+                endDate: period.end,
                 label: String(localized: "finances.dynamics.chart.total_label"),
                 debtAsNegative: useNetTotals
             )
@@ -1018,10 +1047,11 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
             // Каждый счет - отдельная линия
             var allDataPoints: [ChartDataPoint] = []
             for account in accounts {
+                let accountPeriod = resolvedPeriodDates(for: [account], basePeriod: period)
                 let accountData = await buildTimeSeriesData(
                     accounts: [account],
-                    startDate: getPeriodDates().start,
-                    endDate: getPeriodDates().end,
+                    startDate: accountPeriod.start,
+                    endDate: accountPeriod.end,
                     label: getAccountInfoForDynamics(account: account)?.name ?? String(localized: "finances.dynamics.chart.account_fallback"),
                     debtAsNegative: false
                 )
@@ -1032,10 +1062,11 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         case .singleAccount(let accountID):
             // Один выбранный счет
             if let account = accounts.first(where: { $0.accountUniqueID == accountID }) {
+                let accountPeriod = resolvedPeriodDates(for: [account], basePeriod: period)
                 state.chartData = await buildTimeSeriesData(
                     accounts: [account],
-                    startDate: getPeriodDates().start,
-                    endDate: getPeriodDates().end,
+                    startDate: accountPeriod.start,
+                    endDate: accountPeriod.end,
                     label: getAccountInfoForDynamics(account: account)?.name ?? String(localized: "finances.dynamics.chart.account_fallback"),
                     debtAsNegative: false
                 )
@@ -1330,6 +1361,23 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
         
         return dataPoints
+    }
+
+    func resolvedPeriodDates(
+        for accounts: [FinanceAccount],
+        basePeriod: (start: Date, end: Date)? = nil
+    ) -> (start: Date, end: Date) {
+        let requestedPeriod = basePeriod ?? getPeriodDates()
+        guard !accounts.isEmpty else { return requestedPeriod }
+
+        let firstDataDate = earliestOverviewDate(
+            for: accounts,
+            referenceDate: requestedPeriod.end
+        )
+
+        // Не рисуем и не считаем "виртуальный ноль" до появления первого реального значения.
+        let clampedStart = max(requestedPeriod.start, firstDataDate)
+        return (min(clampedStart, requestedPeriod.end), requestedPeriod.end)
     }
 
     func buildOverviewEntries(
@@ -2093,7 +2141,8 @@ final class FinanceDynamicsViewModel: ViewModelProtocol {
         }
         guard !sourceCurrencies.isEmpty else { return }
 
-        let (startDate, endDate) = getPeriodDates()
+        let accounts = getAccountsForCalculation()
+        let (startDate, endDate) = resolvedPeriodDates(for: accounts)
         let calendar = Calendar.current
         let startDay = calendar.startOfDay(for: startDate)
         let endDay = calendar.startOfDay(for: endDate)

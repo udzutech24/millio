@@ -34,11 +34,11 @@ enum QuickSetupStep: Int, CaseIterable, Identifiable {
         case .localeAndCurrencies:
             return QuickSetupLocalization.text(locale: locale, ru: "Выберите язык и валюты", en: "Choose language and currencies")
         case .expenseCategories:
-            return QuickSetupLocalization.text(locale: locale, ru: "Оставьте нужные категории", en: "Keep only needed categories")
+            return QuickSetupLocalization.text(locale: locale, ru: "Выберите категории трат", en: "Choose expense categories")
         case .products:
             return QuickSetupLocalization.text(locale: locale, ru: "Добавьте счета и активы", en: "Add accounts and assets")
         case .summary:
-            return QuickSetupLocalization.text(locale: locale, ru: "Выберите режим хранения и backup", en: "Select storage and backup mode")
+            return QuickSetupLocalization.text(locale: locale, ru: "Выберите, как хранить данные", en: "Choose how to store your data")
         }
     }
 }
@@ -64,7 +64,7 @@ enum QuickSetupProductType: String, CaseIterable, Identifiable {
         case .debt: return QuickSetupLocalization.text(locale: locale, ru: "Долг", en: "Debt")
         case .crypto: return QuickSetupLocalization.text(locale: locale, ru: "Крипто", en: "Crypto")
         case .credit: return QuickSetupLocalization.text(locale: locale, ru: "Кредит", en: "Credit")
-        case .ticker: return QuickSetupLocalization.text(locale: locale, ru: "Тикер", en: "Ticker")
+        case .ticker: return QuickSetupLocalization.text(locale: locale, ru: "Акции", en: "Stocks")
         }
     }
 
@@ -79,7 +79,7 @@ enum QuickSetupProductType: String, CaseIterable, Identifiable {
         case .debt: return QuickSetupLocalization.text(locale: locale, ru: "Обязательство", en: "Liability")
         case .crypto: return QuickSetupLocalization.text(locale: locale, ru: "Монета", en: "Coin")
         case .credit: return QuickSetupLocalization.text(locale: locale, ru: "Платеж", en: "Payment")
-        case .ticker: return QuickSetupLocalization.text(locale: locale, ru: "1 позиция", en: "1 position")
+        case .ticker: return QuickSetupLocalization.text(locale: locale, ru: "Тикер", en: "Ticker")
         }
     }
 
@@ -96,6 +96,19 @@ enum QuickSetupProductType: String, CaseIterable, Identifiable {
 
     var isMarketTracked: Bool {
         self == .ticker || self == .crypto
+    }
+
+    var recommendedGroupTemplate: FinanceGroupNameTemplate {
+        switch self {
+        case .card:
+            return .debitCards
+        case .realEstate, .crypto:
+            return .myRealEstate
+        case .debt, .credit:
+            return .credits
+        case .ticker:
+            return .stocks
+        }
     }
 }
 
@@ -193,11 +206,11 @@ struct QuickSetupGroupPreset: Identifiable, Hashable {
 
     static let all: [QuickSetupGroupPreset] = [
         QuickSetupGroupPreset(template: .debitCards, colorHex: "#1D4ED8", icon: "creditcard.fill"),
-        QuickSetupGroupPreset(template: .foreignCards, colorHex: "#7C3AED", icon: "globe.europe.africa.fill"),
+        QuickSetupGroupPreset(template: .myRealEstate, colorHex: "#BE123C", icon: "shippingbox.fill"),
         QuickSetupGroupPreset(template: .credits, colorHex: "#B45309", icon: "doc.text.fill"),
         QuickSetupGroupPreset(template: .stocks, colorHex: "#15803D", icon: "chart.line.uptrend.xyaxis"),
-        QuickSetupGroupPreset(template: .deposits, colorHex: "#0369A1", icon: "banknote.fill"),
-        QuickSetupGroupPreset(template: .myRealEstate, colorHex: "#BE123C", icon: "shippingbox.fill")
+        QuickSetupGroupPreset(template: .foreignCards, colorHex: "#7C3AED", icon: "globe.europe.africa.fill"),
+        QuickSetupGroupPreset(template: .deposits, colorHex: "#0369A1", icon: "banknote.fill")
     ]
 }
 

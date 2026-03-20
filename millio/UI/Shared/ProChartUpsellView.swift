@@ -52,7 +52,7 @@ struct ProChartUpsellMetrics: Equatable {
 /// Ненавязчивый upsell-блок для ситуаций, когда график доступен только в PRO.
 /// Внешний фон (карточка/материал) задаётся снаружи — компонент отвечает только за контент и CTA.
 struct ProChartUpsellView: View {
-    let titleKey: LocalizedStringKey
+    let titleKey: LocalizedStringKey?
     let subtitleKey: LocalizedStringKey
     let ctaKey: LocalizedStringKey
     let size: ProChartUpsellMetrics.Size
@@ -68,10 +68,12 @@ struct ProChartUpsellView: View {
                 .font(.system(size: metrics.iconPointSize, weight: .semibold))
                 .foregroundStyle(AppColors.textSecondary)
 
-            Text(titleKey)
-                .font(.system(size: metrics.titlePointSize, weight: .semibold))
-                .foregroundStyle(AppColors.textPrimary)
-                .multilineTextAlignment(.center)
+            if let titleKey {
+                Text(titleKey)
+                    .font(.system(size: metrics.titlePointSize, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                    .multilineTextAlignment(.center)
+            }
 
             Text(subtitleKey)
                 .font(.system(size: metrics.subtitlePointSize))
@@ -82,17 +84,24 @@ struct ProChartUpsellView: View {
             Button(action: onTapCTA) {
                 Text(ctaKey)
                     .font(.system(size: metrics.ctaPointSize, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
+                    .foregroundStyle(.white)
                     .padding(.horizontal, 16)
                     .padding(.vertical, metrics.ctaVerticalPadding)
                     .background(
                         Capsule()
-                            .fill(Color.white.opacity(0.08))
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color(hex: "2A8CFF"), Color(hex: "4B76FF"), Color(hex: "7D72FF")],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
                             .overlay(
                                 Capsule()
-                                    .stroke(Color.white.opacity(0.16), lineWidth: 1)
+                                    .stroke(Color.white.opacity(0.22), lineWidth: 1)
                             )
                     )
+                    .shadow(color: Color(hex: "2A8CFF").opacity(0.24), radius: 14, x: 0, y: 8)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Text(ctaKey))
