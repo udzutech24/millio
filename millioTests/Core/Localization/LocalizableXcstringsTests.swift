@@ -148,6 +148,47 @@ final class LocalizableXcstringsTests: XCTestCase {
         }
     }
 
+    func testCashflowBulkExpenseControlsStringsAreTranslatedAndWithoutTrailingPeriods() throws {
+        let xcstringsURL = try Self.localizableXcstringsURL()
+        let data = try Data(contentsOf: xcstringsURL)
+
+        let jsonObject = try JSONSerialization.jsonObject(with: data)
+        guard
+            let root = jsonObject as? [String: Any],
+            let strings = root["strings"] as? [String: Any]
+        else {
+            return XCTFail("Invalid `millio/Localizable.xcstrings` JSON structure.")
+        }
+
+        let keys = [
+            "cashflow.bulk_expense.controls.title",
+            "cashflow.bulk_expense.controls.subtitle",
+            "cashflow.bulk_expense.card_title",
+            "cashflow.bulk_expense.affect_balance",
+            "cashflow.bulk_expense.affect_balance.short",
+            "cashflow.bulk_expense.affect_balance.hint",
+            "cashflow.bulk_expense.affect_balance.subtitle"
+        ]
+
+        for key in keys {
+            guard
+                let entry = strings[key] as? [String: Any],
+                let localizations = entry["localizations"] as? [String: Any]
+            else {
+                XCTFail("Missing `\(key)` in `millio/Localizable.xcstrings`.")
+                continue
+            }
+
+            let values = try localizedStringValues(for: localizations, key: key)
+            let english = values["en", default: ""]
+            let russian = values["ru", default: ""]
+
+            XCTAssertFalse(english.hasSuffix("."), "English `\(key)` should not end with a period.")
+            XCTAssertFalse(russian.hasSuffix("."), "Russian `\(key)` should not end with a period.")
+            XCTAssertNotEqual(russian, english, "Russian `\(key)` should not fall back to English.")
+        }
+    }
+
     func testCashflowAssetChangeCopyIsLocalizedAndWithoutTrailingPeriods() throws {
         let xcstringsURL = try Self.localizableXcstringsURL()
         let data = try Data(contentsOf: xcstringsURL)

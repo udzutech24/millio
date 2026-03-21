@@ -249,11 +249,12 @@ struct BackupRestoreIntegrityTests {
         
         let groups = try context.fetch(FetchDescriptor<FinanceGroup>())
         #expect(groups.count == 1)
-        #expect(groups.first?.updatedAt == newerGroup.updatedAt)
+        #expect(groups.first?.updatedAt == Date(timeIntervalSince1970: 2))
         
         let accounts = try context.fetch(FetchDescriptor<FinanceAccount>())
         #expect(accounts.count == 1)
         #expect(accounts.first?.group?.groupUniqueID == groups.first?.groupUniqueID)
+        #expect(accounts.first?.group?.updatedAt == Date(timeIntervalSince1970: 2))
     }
     
     @Test("runIfNeeded выполняется только один раз и выставляет флаг в UserDefaults")

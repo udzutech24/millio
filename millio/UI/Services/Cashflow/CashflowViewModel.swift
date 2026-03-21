@@ -1264,6 +1264,18 @@ final class CashflowViewModel: ViewModelProtocol {
             .filter { $0.value > 0.0000001 }
 
         let existingPlan = fetchBudgetPlan(matching: descriptor, categoryKind: categoryKind)
+        let shouldDeleteConfiguration = normalizedTotal <= 0.0000001 && normalizedCategoryLimits.isEmpty
+
+        if shouldDeleteConfiguration {
+            if let existingPlan {
+                deleteBudgetPlan(existingPlan)
+            } else {
+                loadBudgetPlanForCurrentPeriod()
+                updateChartData()
+            }
+            return
+        }
+
         let plan = existingPlan ?? BudgetPlan(
             categoryKind: categoryKind,
             descriptor: descriptor,

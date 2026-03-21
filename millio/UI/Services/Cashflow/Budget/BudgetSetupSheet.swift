@@ -18,7 +18,6 @@ struct BudgetSetupSheet: View {
     let repeatSuggestion: BudgetRepeatSuggestion?
     let onSave: (Double, [String: Double]) -> Void
     let onAutoRepeatChanged: (Bool) -> Void
-    let onDelete: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @State private var rawAmount: String = ""
@@ -37,8 +36,7 @@ struct BudgetSetupSheet: View {
         repeatSuggestion: BudgetRepeatSuggestion?,
         isAutoRepeatEnabled: Bool,
         onSave: @escaping (Double, [String: Double]) -> Void,
-        onAutoRepeatChanged: @escaping (Bool) -> Void,
-        onDelete: (() -> Void)? = nil
+        onAutoRepeatChanged: @escaping (Bool) -> Void
     ) {
         self.categoryKind = categoryKind
         self.periodTitle = periodTitle
@@ -50,7 +48,6 @@ struct BudgetSetupSheet: View {
         self.repeatSuggestion = repeatSuggestion
         self.onSave = onSave
         self.onAutoRepeatChanged = onAutoRepeatChanged
-        self.onDelete = onDelete
         let initialTotalAmount = Self.initialTotalAmount(
             existingAmount: existingAmount,
             repeatSuggestion: repeatSuggestion,
@@ -100,14 +97,6 @@ struct BudgetSetupSheet: View {
                     .background(Color.black.opacity(0.92))
             }
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(budgetLocalized(ru: "Готово", en: "Done")) {
-                        dismiss()
-                    }
-                    .foregroundStyle(AppColors.textPrimary)
-                }
-            }
         }
         .onChange(of: isAutoRepeatEnabled) { _, newValue in
             onAutoRepeatChanged(newValue)
@@ -242,23 +231,8 @@ struct BudgetSetupSheet: View {
     }
 
     private var saveButtonText: String {
-        switch categoryKind {
-        case .expense:
-            return budgetLocalized(ru: "Сохранить лимиты", en: "Save limits")
-        case .income:
-            return budgetLocalized(ru: "Сохранить план", en: "Save plan")
-        }
+        budgetLocalized(ru: "Сохранить", en: "Save")
     }
-
-    private var deleteButtonText: String {
-        switch categoryKind {
-        case .expense:
-            return budgetLocalized(ru: "Удалить лимит", en: "Delete limit")
-        case .income:
-            return budgetLocalized(ru: "Удалить план", en: "Delete plan")
-        }
-    }
-
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(titleText)
@@ -486,40 +460,24 @@ struct BudgetSetupSheet: View {
     }
 
     private var bottomActions: some View {
-        VStack(spacing: 10) {
-            Button {
-                onSave(viewState.effectiveTotalAmount, parsedCategoryLimits)
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
-                dismiss()
-            } label: {
-                Text(saveButtonText)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(Color.black)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color.white)
-                    )
-            }
-            .buttonStyle(.plain)
-            .disabled(!viewState.canSave)
-            .opacity(viewState.canSave ? 1 : 0.45)
-
-            if let onDelete, viewState.hasExistingConfiguration {
-                Button {
-                    onDelete()
-                    dismiss()
-                } label: {
-                    Text(deleteButtonText)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.red.opacity(0.95))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                }
-                .buttonStyle(.plain)
-            }
+        Button {
+            onSave(viewState.effectiveTotalAmount, parsedCategoryLimits)
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            dismiss()
+        } label: {
+            Text(saveButtonText)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(Color.black)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color.white)
+                )
         }
+        .buttonStyle(.plain)
+        .disabled(!viewState.canSave)
+        .opacity(viewState.canSave ? 1 : 0.45)
     }
 
     private func cardBackground(stroke: Color) -> some View {
@@ -712,15 +670,6 @@ private struct BudgetCategoryLimitDraftRow: View {
     }
 
     private func statusColor(_ status: BudgetStatus) -> Color {
-        switch status {
-        case .normal:
-            return Color(hex: "6DFFC7")
-        case .warning:
-            return Color(hex: "FFD66D")
-        case .critical:
-            return Color(hex: "FF9B6A")
-        case .exceeded:
-            return Color(hex: "FF6666")
-        }
+        budgetStatusTintToken(status).color
     }
 }

@@ -30,7 +30,7 @@ struct BudgetSetupSheetState: Equatable {
         if isTotalLimitEnabled {
             return parsedTotal > 0 && !hasOverflowConflict
         }
-        return !categoryLimits.isEmpty
+        return !categoryLimits.isEmpty || hasExistingConfiguration
     }
 
     var hasExistingConfiguration: Bool {

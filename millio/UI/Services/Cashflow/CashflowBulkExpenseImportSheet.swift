@@ -8,6 +8,79 @@
 import SwiftUI
 import PhotosUI
 
+struct CashflowBulkExpenseImportToolbarPresentation: Equatable {
+    let icon: String
+    let isEnabled: Bool
+}
+
+struct CashflowBulkExpenseImportControlsStatusPresentation: Equatable {
+    enum Tone: Equatable {
+        case neutral
+        case warning
+    }
+
+    let text: String
+    let tone: Tone
+}
+
+struct CashflowBulkExpenseImportTilePresentation: Equatable {
+    enum BorderTone: Equatable {
+        case expenseDefault
+        case transfer
+    }
+
+    let borderTone: BorderTone
+}
+
+struct CashflowBulkExpenseImportToggleToastPresentation: Equatable {
+    let message: String
+    let tint: Color
+    let systemImage: String
+}
+
+private enum CashflowBulkExpenseImportSelectorStyle {
+    case compact
+    case expanded
+}
+
+enum CashflowBulkExpenseImportLayoutPolicy {
+    static func saveActionPresentation(canSave: Bool, isProcessing: Bool) -> CashflowBulkExpenseImportToolbarPresentation {
+        CashflowBulkExpenseImportToolbarPresentation(
+            icon: "checkmark",
+            isEnabled: canSave && !isProcessing
+        )
+    }
+
+    static func controlsStatus(balanceText: String?, hasCards: Bool) -> CashflowBulkExpenseImportControlsStatusPresentation? {
+        if let balanceText, !balanceText.isEmpty {
+            return CashflowBulkExpenseImportControlsStatusPresentation(
+                text: balanceText,
+                tone: .neutral
+            )
+        }
+
+        guard !hasCards else { return nil }
+        return CashflowBulkExpenseImportControlsStatusPresentation(
+            text: String(localized: "cashflow.editor.no_cards_in_currency"),
+            tone: .warning
+        )
+    }
+
+    static func categoryTilePresentation(
+        isTransferCategory: Bool
+    ) -> CashflowBulkExpenseImportTilePresentation {
+        if isTransferCategory {
+            return CashflowBulkExpenseImportTilePresentation(
+                borderTone: .transfer
+            )
+        }
+
+        return CashflowBulkExpenseImportTilePresentation(
+            borderTone: .expenseDefault
+        )
+    }
+}
+
 struct CashflowBulkExpenseImportSheet: View {
     @ObservedObject var viewModel: CashflowViewModel
     let month: Date
@@ -23,7 +96,7 @@ struct CashflowBulkExpenseImportSheet: View {
     @State private var unresolvedParsedRows: [CashflowBulkExpenseRowDraft] = []
     @State private var categorySearchText: String = ""
     @State private var importedCategoryRaws: Set<String> = []
-    @State private var shouldAffectCardBalance: Bool = true
+    @State private var shouldAffectCardBalance: Bool = false
     @State private var loadedAffectingTotal: Double = 0
     @State private var screenshotItems: [PhotosPickerItem] = []
     @State private var isProcessing: Bool = false
@@ -37,20 +110,23 @@ struct CashflowBulkExpenseImportSheet: View {
     @State private var categoryEditorName: String = ""
     @State private var categoryEditorIcon: String = CashflowCustomCategory.defaultIcon
     @State private var pendingCategoryCreationRowID: UUID?
+    @State private var affectBalanceToast: CashflowBulkExpenseImportToggleToastPresentation?
+    @State private var isCategorySearchVisible: Bool = false
+    @State private var didInitializeAffectBalanceToggle: Bool = false
+    @State private var affectBalanceToastTask: Task<Void, Never>?
     @FocusState private var focusedCategoryID: String?
+    @FocusState private var isCategorySearchFocused: Bool
 
     private let parser = CashflowBulkExpenseImportParser()
     private let categoryResolver = CashflowBulkExpenseImportCategoryResolver()
     private let outerCornerRadius: CGFloat = 24
     private let innerCornerRadius: CGFloat = 18
     private let accent = Color(hex: "5FD1FF")
-    private let toggleAccent = Color(hex: "6A7EA3")
     private let positive = Color(hex: "6DFFC7")
     private let warning = Color(hex: "FFB454")
     private let danger = Color(hex: "FF5A5F")
     private let preferredCurrency = SettingsManager.shared.primaryCurrencyCode
     private let categoryGridColumns = [
-        GridItem(.flexible(), spacing: 8),
         GridItem(.flexible(), spacing: 8),
         GridItem(.flexible(), spacing: 8),
         GridItem(.flexible(), spacing: 8)
@@ -83,7 +159,6 @@ struct CashflowBulkExpenseImportSheet: View {
                         if !unresolvedParsedRows.isEmpty {
                             unresolvedRowsCard
                         }
-                        summaryCard
                         categoriesCard
                     }
                     .padding(.horizontal, 16)
@@ -95,13 +170,6 @@ struct CashflowBulkExpenseImportSheet: View {
                     .padding(.trailing, 24)
                     .padding(.bottom, 24)
             }
-            .navigationTitle(
-                String(
-                    localized: "cashflow.bulk_expense.title",
-                    defaultValue: "Mass expense import",
-                    comment: "Navigation title for bulk expense import sheet"
-                )
-            )
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
@@ -117,28 +185,65 @@ struct CashflowBulkExpenseImportSheet: View {
                     .buttonStyle(.plain)
                 }
 
+                ToolbarItem(placement: .principal) {
+                    Text(
+                        String(
+                            localized: "cashflow.bulk_expense.title",
+                            defaultValue: "Mass import",
+                            comment: "Navigation title for bulk expense import sheet"
+                        )
+                    )
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.96))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.9)
+                    .accessibilityAddTraits(.isHeader)
+                }
+
                 ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showHelpSheet = true
+                    } label: {
+                        Image(systemName: "questionmark.circle")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Color.white.opacity(0.78))
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(String(
+                        localized: "cashflow.bulk_expense.help.open",
+                        defaultValue: "How mass import works",
+                        comment: "Accessibility label for opening bulk import help"
+                    )))
+                }
+
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    let presentation = CashflowBulkExpenseImportLayoutPolicy.saveActionPresentation(
+                        canSave: canSave,
+                        isProcessing: isProcessing
+                    )
                     Button {
                         Task {
                             await saveRows()
                         }
                     } label: {
-                        Text(
-                            String(
-                                localized: "cashflow.bulk_expense.save",
-                                defaultValue: "Save",
-                                comment: "Bulk expense import save button"
-                            )
-                        )
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(canSave ? positive : Color.white.opacity(0.38))
+                        Image(systemName: presentation.icon)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(presentation.isEnabled ? AppColors.toggleOnGreen : AppColors.textSecondary.opacity(0.6))
+                            .frame(width: 44, height: 44)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(Text(String(
+                        localized: "cashflow.bulk_expense.save",
+                        defaultValue: "Save",
+                        comment: "Bulk expense import save button"
+                    )))
                     .disabled(!canSave || isProcessing)
                 }
             }
             .onAppear {
                 showMonthPickerSheet = false
+                didInitializeAffectBalanceToggle = false
                 configureInitialStateIfNeeded()
             }
             .onChange(of: screenshotItems) { _, newItems in
@@ -167,6 +272,11 @@ struct CashflowBulkExpenseImportSheet: View {
                 }
             }
             .onChange(of: shouldAffectCardBalance) { _, _ in
+                if didInitializeAffectBalanceToggle {
+                    presentAffectBalanceToast(isEnabled: shouldAffectCardBalance)
+                } else {
+                    didInitializeAffectBalanceToggle = true
+                }
                 Task {
                     await reloadDrafts()
                 }
@@ -176,6 +286,8 @@ struct CashflowBulkExpenseImportSheet: View {
             }
             .onDisappear {
                 showMonthPickerSheet = false
+                affectBalanceToastTask?.cancel()
+                affectBalanceToastTask = nil
             }
             .sheet(isPresented: $showHelpSheet) {
                 bulkImportHelpSheet
@@ -200,56 +312,41 @@ struct CashflowBulkExpenseImportSheet: View {
     }
 
     private var introHeader: some View {
-        HStack(alignment: .center, spacing: 8) {
-            Button {
-                showMonthPickerSheet = true
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "calendar")
-                        .font(.system(size: 13, weight: .semibold))
-                    Text(monthTitle)
-                        .lineLimit(1)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 11, weight: .bold))
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 8) {
+                Button {
+                    showMonthPickerSheet = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "calendar")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text(monthTitle)
+                            .lineLimit(1)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 11, weight: .bold))
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.92))
+                    .padding(.horizontal, 12)
+                    .frame(height: 38)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(Color.white.opacity(0.06))
+                            .overlay(
+                                Capsule(style: .continuous)
+                                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                            )
+                    )
                 }
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.92))
-                .padding(.horizontal, 12)
-                .frame(height: 38)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(Color.white.opacity(0.06))
-                        .overlay(
-                            Capsule(style: .continuous)
-                                .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                        )
-                )
+                .buttonStyle(.plain)
+                affectBalanceHeaderControl
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
-            .buttonStyle(.plain)
 
-            Button {
-                showHelpSheet = true
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "questionmark.circle")
-                        .font(.system(size: 14, weight: .semibold))
-                }
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.92))
-                .padding(.horizontal, 13)
-                .frame(height: 38)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(Color.white.opacity(0.06))
-                        .overlay(
-                            Capsule(style: .continuous)
-                                .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                        )
-                )
+            if let affectBalanceToast {
+                affectBalanceToastBanner(affectBalanceToast)
+                    .transition(.move(edge: .top).combined(with: .opacity))
             }
-            .buttonStyle(.plain)
-
-            Spacer(minLength: 0)
         }
     }
 
@@ -284,7 +381,14 @@ struct CashflowBulkExpenseImportSheet: View {
     }
 
     private var controlsCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let status = CashflowBulkExpenseImportLayoutPolicy.controlsStatus(
+            balanceText: shouldAffectCardBalance ? selectedCardBalanceText : nil,
+            hasCards: !cardsInSelectedCurrency.isEmpty
+        )
+        let balanceStatus = status?.tone == .neutral ? status : nil
+        let warningStatus = status?.tone == .warning ? status : nil
+
+        return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Menu {
                     ForEach(availableCurrencies, id: \.self) { currency in
@@ -295,7 +399,8 @@ struct CashflowBulkExpenseImportSheet: View {
                 } label: {
                     compactSelectorLabel(
                         title: String(localized: "cashflow.editor.currency"),
-                        value: selectedCurrency
+                        value: selectedCurrency,
+                        style: .compact
                     )
                 }
                 .buttonStyle(.plain)
@@ -321,77 +426,254 @@ struct CashflowBulkExpenseImportSheet: View {
                             comment: "Placeholder text for picking a card"
                         ),
                         icon: selectedCard?.cardType.icon ?? "creditcard.fill",
-                        usesPlaceholderStyle: selectedCard == nil
+                        usesPlaceholderStyle: selectedCard == nil,
+                        style: .expanded
                     )
                 }
                 .buttonStyle(.plain)
                 .disabled(cardsInSelectedCurrency.isEmpty)
                 .opacity(cardsInSelectedCurrency.isEmpty ? 0.55 : 1)
+                .frame(maxWidth: .infinity)
             }
 
-            if let balanceText = selectedCardBalanceText {
-                Text(balanceText)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Color.white.opacity(0.68))
-            } else if cardsInSelectedCurrency.isEmpty {
-                Text(String(localized: "cashflow.editor.no_cards_in_currency"))
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.58))
-            }
-
-            Toggle(
-                isOn: $shouldAffectCardBalance,
-                label: {
-                    HStack(alignment: .center, spacing: 6) {
-                        Text(
-                            String(
-                                localized: "cashflow.bulk_expense.affect_balance",
-                                defaultValue: "Update card balance",
-                                comment: "Toggle title for applying card balance changes"
-                            )
-                        )
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.92))
-
-                        Button {
-                            showHelpSheet = true
-                        } label: {
-                            Image(systemName: "questionmark.circle")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(Color.white.opacity(0.66))
-                        }
-                        .buttonStyle(.plain)
-
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.bottom, 2)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(
-                            String(
-                                localized: "cashflow.bulk_expense.affect_balance.subtitle",
-                                defaultValue: "Saved monthly totals reopen on this screen. Turn this off if you only want history.",
-                                comment: "Toggle subtitle for applying card balance changes"
-                            )
-                        )
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.58))
-                        .lineLimit(2)
-                    }
+            if let balanceStatus {
+                HStack {
+                    Spacer(minLength: 0)
+                    controlsStatusBadge(balanceStatus)
                 }
-            )
-            .toggleStyle(.switch)
-            .tint(toggleAccent)
+                .padding(.top, -2)
+            }
+
+            if let warningStatus {
+                controlsStatusBadge(warningStatus)
+            }
         }
-        .padding(12)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 6)
         .background(cardBackground)
+    }
+
+    private var affectBalanceHeaderControl: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "creditcard.and.123")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(AppColors.brandPrimary.opacity(0.92))
+                .frame(width: 20, height: 20)
+
+            Text(
+                String(
+                    localized: "cashflow.bulk_expense.affect_balance.compact",
+                    defaultValue: "Update balance",
+                    comment: "Compact title for bulk expense import balance update toggle"
+                )
+            )
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(Color.white.opacity(0.92))
+            .lineLimit(1)
+            .minimumScaleFactor(0.9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Spacer(minLength: 6)
+
+            affectBalanceToggleButton
+        }
+        .padding(.leading, 12)
+        .padding(.trailing, 4)
+        .frame(minWidth: 210, maxWidth: .infinity, minHeight: 44, maxHeight: 44, alignment: .trailing)
+        .background(
+            Capsule(style: .continuous)
+                .fill(Color.white.opacity(0.06))
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text(String(
+            localized: "cashflow.bulk_expense.affect_balance",
+            defaultValue: "Update card balance",
+            comment: "Toggle title for applying card balance changes"
+        )))
+    }
+
+    private var affectBalanceToggleButton: some View {
+        Button {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                shouldAffectCardBalance.toggle()
+            }
+        } label: {
+            ZStack(alignment: shouldAffectCardBalance ? .trailing : .leading) {
+                Capsule(style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: shouldAffectCardBalance
+                                ? [
+                                    Color(hex: "2CD56F").opacity(0.96),
+                                    Color(hex: "5EFF9A").opacity(0.92)
+                                ]
+                                : [
+                                    Color.white.opacity(0.10),
+                                    Color.white.opacity(0.05)
+                                ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .stroke(
+                                shouldAffectCardBalance
+                                    ? Color(hex: "7CFFAF").opacity(0.42)
+                                    : Color.white.opacity(0.08),
+                                lineWidth: 1
+                            )
+                    )
+                    .shadow(
+                        color: shouldAffectCardBalance
+                            ? Color(hex: "39E27D").opacity(0.26)
+                            : .clear,
+                        radius: 10
+                    )
+
+                Circle()
+                    .fill(Color.white.opacity(0.96))
+                    .frame(width: 26, height: 26)
+                    .overlay(
+                        Image(systemName: shouldAffectCardBalance ? "checkmark" : "minus")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(
+                                shouldAffectCardBalance
+                                    ? Color(hex: "1FA957")
+                                    : Color.white.opacity(0.42)
+                            )
+                    )
+                    .padding(3)
+                    .shadow(color: Color.black.opacity(0.2), radius: 6, y: 1)
+            }
+            .frame(width: 60, height: 32)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(String(
+            localized: "cashflow.bulk_expense.affect_balance",
+            defaultValue: "Update card balance",
+            comment: "Toggle title for applying card balance changes"
+        )))
+        .accessibilityValue(Text(shouldAffectCardBalance ? "On" : "Off"))
+    }
+
+    private func affectBalanceToastBanner(
+        _ presentation: CashflowBulkExpenseImportToggleToastPresentation
+    ) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: presentation.systemImage)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(presentation.tint.opacity(0.96))
+                .padding(.top, 1)
+
+            Text(
+                presentation.message
+            )
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(AppColors.textSecondary.opacity(0.92))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .multilineTextAlignment(.leading)
+
+            Button {
+                dismissAffectBalanceToast()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(AppColors.textSecondary.opacity(0.84))
+                    .frame(width: 18, height: 18)
+                    .background(Color.white.opacity(0.08))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .background(presentation.tint.opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(presentation.tint.opacity(0.24), lineWidth: 1)
+        }
+    }
+
+    private func controlsStatusBadge(_ status: CashflowBulkExpenseImportControlsStatusPresentation) -> some View {
+        let tint: Color
+        switch status.tone {
+        case .neutral:
+            tint = AppColors.brandPrimary
+        case .warning:
+            tint = warning
+        }
+
+        return HStack(spacing: 6) {
+            Image(systemName: status.tone == .neutral ? "creditcard.fill" : "exclamationmark.triangle.fill")
+                .font(.system(size: 11, weight: .bold))
+            Text(status.text)
+                .font(.system(size: 11, weight: .semibold))
+                .lineLimit(1)
+        }
+        .foregroundStyle(tint.opacity(0.96))
+        .padding(.horizontal, 10)
+        .frame(height: 28)
+        .background(
+            Capsule(style: .continuous)
+                .fill(tint.opacity(0.14))
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(tint.opacity(0.3), lineWidth: 1)
+                )
+        )
+    }
+
+    private func presentAffectBalanceToast(isEnabled: Bool) {
+        let message = isEnabled
+            ? String(
+                localized: "cashflow.bulk_expense.affect_balance.toast.enabled",
+                defaultValue: "Card balance will now update when you save this import.",
+                comment: "Transient toast shown after enabling balance updates in bulk expense import"
+            )
+            : String(
+                localized: "cashflow.bulk_expense.affect_balance.toast.disabled",
+                defaultValue: "Card balance will no longer change when you save this import.",
+                comment: "Transient toast shown after disabling balance updates in bulk expense import"
+            )
+
+        affectBalanceToastTask?.cancel()
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) {
+            affectBalanceToast = CashflowBulkExpenseImportToggleToastPresentation(
+                message: message,
+                tint: isEnabled ? AppColors.brandPrimary : warning,
+                systemImage: isEnabled ? "arrow.triangle.2.circlepath.circle.fill" : "pause.circle.fill"
+            )
+        }
+
+        affectBalanceToastTask = Task {
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                dismissAffectBalanceToast()
+            }
+        }
+    }
+
+    private func dismissAffectBalanceToast() {
+        affectBalanceToastTask?.cancel()
+        affectBalanceToastTask = nil
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) {
+            affectBalanceToast = nil
+        }
     }
 
     private func compactSelectorLabel(
         title: String,
         value: String,
         icon: String? = nil,
-        usesPlaceholderStyle: Bool = false
+        usesPlaceholderStyle: Bool = false,
+        style: CashflowBulkExpenseImportSelectorStyle = .expanded
     ) -> some View {
         HStack(spacing: 8) {
             if let icon {
@@ -402,12 +684,12 @@ struct CashflowBulkExpenseImportSheet: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(Color.white.opacity(0.58))
                     .textCase(.uppercase)
                     .lineLimit(1)
                 Text(value)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(usesPlaceholderStyle ? Color.white.opacity(0.58) : Color.white.opacity(0.94))
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
@@ -420,9 +702,20 @@ struct CashflowBulkExpenseImportSheet: View {
                 .foregroundStyle(Color.white.opacity(0.54))
         }
         .padding(.horizontal, 12)
-        .frame(height: 52)
-        .background(innerBackground)
-        .frame(maxWidth: .infinity)
+        .frame(height: 44)
+        .background(
+            Capsule(style: .continuous)
+                .fill(Color.white.opacity(0.06))
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        )
+        .frame(
+            minWidth: style == .compact ? 160 : 210,
+            maxWidth: style == .compact ? 180 : .infinity,
+            alignment: .leading
+        )
     }
 
     private func monthNavButton(systemImage: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
@@ -773,7 +1066,7 @@ struct CashflowBulkExpenseImportSheet: View {
     }
 
     private var summaryCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
                 summaryMetric(
                     title: String(
@@ -817,28 +1110,50 @@ struct CashflowBulkExpenseImportSheet: View {
     }
 
     private var categoriesCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.42))
+        VStack(alignment: .leading, spacing: 12) {
+            categoryHeaderCard
 
-                TextField(
-                    String(
-                        localized: "cashflow.bulk_expense.search.placeholder",
-                        defaultValue: "Search category",
-                        comment: "Search placeholder for bulk expense categories"
-                    ),
-                    text: $categorySearchText
-                )
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(Color.white.opacity(0.94))
+            if isCategorySearchVisible {
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.42))
+
+                    TextField(
+                        String(
+                            localized: "cashflow.bulk_expense.search.placeholder",
+                            defaultValue: "Search category",
+                            comment: "Search placeholder for bulk expense categories"
+                        ),
+                        text: $categorySearchText
+                    )
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.94))
+                    .focused($isCategorySearchFocused)
+                }
+                .padding(.horizontal, 14)
+                .frame(height: 46)
+                .background(innerBackground)
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
-            .padding(.horizontal, 14)
-            .frame(height: 46)
-            .background(innerBackground)
+
+            if let selectedCard, shouldAffectCardBalance {
+                let availableBalance = (selectedCardBalanceSnapshot?.availableAmount ?? selectedCard.balance) + loadedAffectingTotal
+                let overflow = totalAmount - availableBalance
+                if overflow > 0.009 {
+                    noticeCard(
+                        text: String(
+                            localized: "cashflow.bulk_expense.summary.balance_warning",
+                            defaultValue: "This monthly import exceeds the available card balance by \(CashflowBulkExpenseRowDraft.formatAmount(overflow)) \(selectedCard.currency).",
+                            comment: "Warning for bulk expense import when amount exceeds card balance"
+                        ),
+                        tint: warning,
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                }
+            }
 
             LazyVGrid(columns: categoryGridColumns, spacing: 8) {
                 ForEach(orderedDraftIndices, id: \.self) { index in
@@ -846,7 +1161,6 @@ struct CashflowBulkExpenseImportSheet: View {
                 }
             }
             .animation(.spring(response: 0.26, dampingFraction: 0.88), value: orderedDraftIndices)
-            .padding(.bottom, 76)
 
             if let errorMessage, !isErrorDismissed {
                 noticeCard(
@@ -867,6 +1181,86 @@ struct CashflowBulkExpenseImportSheet: View {
                 }
             }
         }
+        .padding(16)
+        .background(cardBackground)
+        .animation(.spring(response: 0.26, dampingFraction: 0.88), value: isCategorySearchVisible)
+    }
+
+    private var categoryHeaderCard: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(
+                    String(
+                        localized: "cashflow.bulk_expense.summary.rows",
+                        defaultValue: "Categories",
+                        comment: "Summary title for category count"
+                    )
+                )
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.6))
+
+                Text("\(filledDrafts.count)/\(categoryDrafts.count)")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(Color.white.opacity(0.97))
+            }
+
+            Spacer(minLength: 0)
+
+            VStack(spacing: 4) {
+                Text(
+                    String(
+                        localized: "cashflow.bulk_expense.summary.total",
+                        defaultValue: "Total",
+                        comment: "Summary title for total amount"
+                    )
+                )
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.6))
+
+                Text(totalAmountLabel)
+                    .font(.system(size: 19, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color.white.opacity(0.98))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .frame(maxWidth: .infinity)
+
+            Spacer(minLength: 0)
+
+            Button {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+                    isCategorySearchVisible.toggle()
+                }
+                if isCategorySearchVisible {
+                    isCategorySearchFocused = true
+                } else {
+                    isCategorySearchFocused = false
+                    categorySearchText = ""
+                }
+            } label: {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(isCategorySearchVisible ? accent : Color.white.opacity(0.78))
+                    .frame(width: 38, height: 38)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(isCategorySearchVisible ? accent.opacity(0.14) : Color.white.opacity(0.05))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(isCategorySearchVisible ? accent.opacity(0.4) : Color.white.opacity(0.08), lineWidth: 1)
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(String(
+                localized: "cashflow.bulk_expense.search.placeholder",
+                defaultValue: "Search category",
+                comment: "Search placeholder for bulk expense categories"
+            )))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 14)
+        .background(innerBackground)
     }
 
     private func categoryTile(_ draft: Binding<CashflowBulkExpenseCategoryDraft>) -> some View {
@@ -885,28 +1279,20 @@ struct CashflowBulkExpenseImportSheet: View {
             draft.wrappedValue.category.rawValue
         )
         let breakdown = categoryBreakdown(for: draft.wrappedValue)
-        let tileFill = isTransferCategory ? danger.opacity(0.08) : Color.black.opacity(0.88)
-        let borderGradient = LinearGradient(
-            colors: isTransferCategory
-                ? [danger.opacity(0.98), Color(hex: "FF8A5B").opacity(0.92)]
-                : [
-                    accent.opacity(draft.wrappedValue.hasValue ? 0.9 : 0.5),
-                    Color(hex: "C428C8").opacity(draft.wrappedValue.hasValue ? 0.85 : 0.5)
-                ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
+        let presentation = CashflowBulkExpenseImportLayoutPolicy.categoryTilePresentation(
+            isTransferCategory: isTransferCategory
         )
+        let tileFill = isTransferCategory ? danger.opacity(0.08) : Color.black.opacity(0.88)
 
         return VStack(spacing: 6) {
-            HStack {
-                Spacer(minLength: 0)
+            HStack(alignment: .top) {
                 CashflowCategoryIconView(
                     icon: draft.wrappedValue.category.icon,
                     fontSize: 18,
                     fontWeight: .semibold,
                     tint: AnyShapeStyle(Color.white.opacity(0.95))
                 )
-                Spacer(minLength: 0)
+                Spacer(minLength: 6)
             }
             .frame(height: 20)
 
@@ -954,7 +1340,13 @@ struct CashflowBulkExpenseImportSheet: View {
                 .fill(tileFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .stroke(borderGradient, lineWidth: isTransferCategory ? 1.5 : (draft.wrappedValue.hasValue ? 1.4 : 1))
+                        .stroke(
+                            categoryTileBorderGradient(
+                                presentation: presentation,
+                                hasValue: draft.wrappedValue.hasValue
+                            ),
+                            lineWidth: presentation.borderTone == .transfer ? 1.5 : (draft.wrappedValue.hasValue ? 1.4 : 1)
+                        )
                 )
         )
         .onTapGesture {
@@ -985,6 +1377,25 @@ struct CashflowBulkExpenseImportSheet: View {
         )
     }
 
+    private func categoryTileBorderGradient(
+        presentation: CashflowBulkExpenseImportTilePresentation,
+        hasValue: Bool
+    ) -> LinearGradient {
+        switch presentation.borderTone {
+        case .expenseDefault:
+            let colors = CashflowCategoryTransactionSheetKind.expense.gradientColors.map {
+                $0.opacity(hasValue ? 0.9 : 0.5)
+            }
+            return LinearGradient(colors: colors, startPoint: .leading, endPoint: .trailing)
+        case .transfer:
+            return LinearGradient(
+                colors: [danger.opacity(0.98), Color(hex: "FF8A5B").opacity(0.92)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+    }
+
     private func categoryBreakdownLabel(_ breakdown: CashflowBulkExpenseCategoryBreakdown) -> some View {
         Text(
             "Ручн. \(CashflowBulkExpenseRowDraft.formatAmount(breakdown.baselineAmount)) + Bulk \(CashflowBulkExpenseRowDraft.formatAmount(breakdown.importedAmount))"
@@ -1004,9 +1415,9 @@ struct CashflowBulkExpenseImportSheet: View {
             showCategoryEditorSheet = true
         } label: {
             Image(systemName: "plus")
-                .font(.system(size: 28, weight: .medium))
+                .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(Color.white.opacity(0.95))
-                .frame(width: 72, height: 72)
+                .frame(width: 38, height: 38)
                 .background(
                     Circle()
                         .fill(Color.black.opacity(0.92))
@@ -1021,7 +1432,7 @@ struct CashflowBulkExpenseImportSheet: View {
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     ),
-                                    lineWidth: 1.2
+                                    lineWidth: 1.1
                                 )
                         )
                 )
@@ -1446,22 +1857,6 @@ struct CashflowBulkExpenseImportSheet: View {
         }
     }
 
-    private func badge(title: String, systemImage: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: systemImage)
-            Text(title)
-                .lineLimit(1)
-        }
-        .font(.system(size: 11, weight: .semibold))
-        .foregroundStyle(Color.white.opacity(0.74))
-        .padding(.horizontal, 9)
-        .padding(.vertical, 6)
-        .background(
-            Capsule(style: .continuous)
-                .fill(Color.white.opacity(0.07))
-        )
-    }
-
     private func rowActionLabel(title: String, systemImage: String) -> some View {
         HStack(spacing: 10) {
             Image(systemName: systemImage)
@@ -1539,14 +1934,14 @@ struct CashflowBulkExpenseImportSheet: View {
 
     private var cardBackground: some View {
         RoundedRectangle(cornerRadius: outerCornerRadius, style: .continuous)
-            .fill(Color.white.opacity(0.035))
+            .fill(Color.white.opacity(0.018))
             .overlay(
                 RoundedRectangle(cornerRadius: outerCornerRadius, style: .continuous)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
+                    .stroke(Color.white.opacity(0.05), lineWidth: 0.8)
             )
             .background(
                 RoundedRectangle(cornerRadius: outerCornerRadius, style: .continuous)
-                    .fill(.ultraThinMaterial.opacity(0.25))
+                    .fill(.ultraThinMaterial.opacity(0.12))
             )
     }
 
@@ -1631,13 +2026,6 @@ struct CashflowBulkExpenseImportSheet: View {
         let formatter = DateFormatter()
         formatter.locale = .autoupdatingCurrent
         formatter.setLocalizedDateFormatFromTemplate("LLLL yyyy")
-        return formatter.string(from: selectedMonth).localizedCapitalized
-    }
-
-    private var monthShortTitle: String {
-        let formatter = DateFormatter()
-        formatter.locale = .autoupdatingCurrent
-        formatter.setLocalizedDateFormatFromTemplate("LLL yyyy")
         return formatter.string(from: selectedMonth).localizedCapitalized
     }
 

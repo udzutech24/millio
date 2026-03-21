@@ -14,6 +14,34 @@ enum CashflowCategorySheetBootstrap {
         viewModel.handle(.loadCards)
         viewModel.handle(.loadTransactions)
     }
+
+    /// Builds the default transaction date for category-driven creation flows.
+    /// We keep the current day-of-month when possible, but always clamp the
+    /// result into the month currently selected in the category sheet.
+    nonisolated static func initialTransactionDate(
+        forSelectedMonth selectedMonth: Date,
+        referenceDate: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Date {
+        let monthStart = calendar.date(
+            from: calendar.dateComponents([.year, .month], from: selectedMonth)
+        ) ?? selectedMonth
+        let referenceComponents = calendar.dateComponents(
+            [.hour, .minute, .second, .nanosecond],
+            from: referenceDate
+        )
+        let maxDay = calendar.range(of: .day, in: .month, for: monthStart)?.count ?? 31
+        let clampedDay = min(max(calendar.component(.day, from: referenceDate), 1), maxDay)
+
+        var components = calendar.dateComponents([.year, .month], from: monthStart)
+        components.day = clampedDay
+        components.hour = referenceComponents.hour
+        components.minute = referenceComponents.minute
+        components.second = referenceComponents.second
+        components.nanosecond = referenceComponents.nanosecond
+
+        return calendar.date(from: components) ?? monthStart
+    }
 }
 
 /// Единая политика сетки категорий для экранов создания дохода/расхода.
@@ -284,6 +312,9 @@ private struct CashflowCategoryTransactionSheet: View {
                     customNavigationTitle: kind.navigationTitle,
                     preselectedIncomeCategoryRaw: kind.categoryKind == .income ? option.rawValue : nil,
                     preselectedExpenseCategoryRaw: kind.categoryKind == .expense ? option.rawValue : nil,
+                    initialTransactionDate: CashflowCategorySheetBootstrap.initialTransactionDate(
+                        forSelectedMonth: selectedMonth
+                    ),
                     onSave: {
                         selectedCategory = nil
                         reloadMonthlyTotal(focusingOn: option.rawValue)
@@ -349,10 +380,6 @@ private struct CashflowCategoryTransactionSheet: View {
                     },
                     onAutoRepeatChanged: { isEnabled in
                         viewModel.isMonthlyBudgetAutoRepeatEnabled = isEnabled
-                    },
-                    onDelete: budgetTotalLimit == nil ? nil : {
-                        viewModel.deleteMonthlyBudgetLimit(month: selectedMonth, categoryKind: kind.categoryKind)
-                        reloadMonthlyTotal()
                     }
                 )
             }
@@ -522,7 +549,9 @@ private struct CashflowCategoryTransactionSheet: View {
 
     @ViewBuilder
     private var monthlySummaryHeroSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        let usesBudgetLayout = budgetSnapshot != nil
+
+        VStack(alignment: usesBudgetLayout ? .leading : .center, spacing: 14) {
             if isLoadingMonthlyTotal {
                 HStack {
                     Spacer()
@@ -535,14 +564,16 @@ private struct CashflowCategoryTransactionSheet: View {
             } else {
                 Text(formattedMonthlyTotal(monthlyTotal))
                     .font(.system(size: 34, weight: .bold))
-                    .foregroundStyle(kind.amountColor(for: monthlyTotal))
+                    .foregroundStyle(AppColors.textPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                     .contentTransition(.numericText())
+                    .frame(maxWidth: .infinity, alignment: usesBudgetLayout ? .leading : .center)
             }
 
             monthlyBudgetInlineSection
         }
+        .frame(maxWidth: .infinity, alignment: usesBudgetLayout ? .leading : .center)
         .padding(.horizontal, 16)
         .padding(.vertical, 16)
         .background(innerPanelBackground)
@@ -551,10 +582,11 @@ private struct CashflowCategoryTransactionSheet: View {
     @ViewBuilder
     private var monthlyBudgetInlineSection: some View {
         if let snapshot = budgetSnapshot {
+            let style = budgetMonthlySummaryStyle(kind: kind, snapshot: snapshot)
             VStack(alignment: .leading, spacing: 10) {
                 Text(monthlyBudgetUsageText(snapshot))
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(monthlyPlanTintColor(snapshot))
+                    .foregroundStyle(style.usageText.color)
 
                 GeometryReader { proxy in
                     let progress = min(max(snapshot.progress, 0), 1)
@@ -562,7 +594,7 @@ private struct CashflowCategoryTransactionSheet: View {
                         Capsule(style: .continuous)
                             .fill(Color.white.opacity(0.08))
                         Capsule(style: .continuous)
-                            .fill(monthlyPlanTintColor(snapshot))
+                            .fill(style.progressFill.color)
                             .frame(width: max(12, proxy.size.width * progress))
                     }
                 }
@@ -570,7 +602,7 @@ private struct CashflowCategoryTransactionSheet: View {
 
                 Text(monthlyBudgetStatusText(snapshot))
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(monthlyPlanTintColor(snapshot))
+                    .foregroundStyle(style.statusText.color)
 
                 if snapshot.categoriesLimitOverflow > 0.0000001 {
                     Text(
@@ -1267,16 +1299,7 @@ private struct CashflowCategoryTransactionSheet: View {
     }
 
     private func budgetStatusColor(_ status: BudgetStatus) -> Color {
-        switch status {
-        case .normal:
-            return Color(hex: "6DFFC7")
-        case .warning:
-            return Color(hex: "FFD66D")
-        case .critical:
-            return Color(hex: "FF9B6A")
-        case .exceeded:
-            return Color(hex: "FF6666")
-        }
+        budgetStatusTintToken(status).color
     }
 
     private func categoryBudgetBadgeText(_ status: BudgetStatus) -> String? {
@@ -1328,15 +1351,6 @@ private struct CashflowCategoryTransactionSheet: View {
                 ? "\(usedPercent)% of monthly limit"
                 : "\(usedPercent)% of income plan"
         )
-    }
-
-    private func monthlyPlanTintColor(_ snapshot: BudgetProgressSnapshot) -> Color {
-        switch kind {
-        case .expense:
-            return budgetStatusColor(snapshot.status)
-        case .income:
-            return snapshot.remaining <= 0.0000001 ? Color(hex: "19E694") : Color(hex: "6DFFC7")
-        }
     }
 
     private func categoryStrokeStyle(for option: CashflowCategoryOption) -> AnyShapeStyle {

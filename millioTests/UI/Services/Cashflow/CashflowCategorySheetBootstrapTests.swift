@@ -68,4 +68,44 @@ struct CashflowCategorySheetBootstrapTests {
         #expect(viewModel.state.availableCards.contains { $0.cardUniqueID == card.cardUniqueID })
         #expect(viewModel.state.transactions.contains { $0.persistentModelID == transaction.persistentModelID })
     }
+
+    @Test("Новая операция из выбранного месяца берет сегодняшний день внутри этого месяца")
+    func initialTransactionDateKeepsReferenceDayInsideSelectedMonth() {
+        let calendar = Calendar.current
+        let selectedMonth = calendar.date(from: DateComponents(year: 2026, month: 2, day: 1))!
+        let referenceDate = calendar.date(from: DateComponents(year: 2026, month: 3, day: 21, hour: 11, minute: 59))!
+
+        let result = CashflowCategorySheetBootstrap.initialTransactionDate(
+            forSelectedMonth: selectedMonth,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+
+        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: result)
+        #expect(components.year == 2026)
+        #expect(components.month == 2)
+        #expect(components.day == 21)
+        #expect(components.hour == 11)
+        #expect(components.minute == 59)
+    }
+
+    @Test("Новая операция из короткого месяца зажимает день в конец месяца")
+    func initialTransactionDateClampsOverflowDayToMonthEnd() {
+        let calendar = Calendar.current
+        let selectedMonth = calendar.date(from: DateComponents(year: 2026, month: 2, day: 1))!
+        let referenceDate = calendar.date(from: DateComponents(year: 2026, month: 3, day: 31, hour: 9, minute: 30))!
+
+        let result = CashflowCategorySheetBootstrap.initialTransactionDate(
+            forSelectedMonth: selectedMonth,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
+
+        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: result)
+        #expect(components.year == 2026)
+        #expect(components.month == 2)
+        #expect(components.day == 28)
+        #expect(components.hour == 9)
+        #expect(components.minute == 30)
+    }
 }

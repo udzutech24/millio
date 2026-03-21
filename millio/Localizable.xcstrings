@@ -2799,26 +2799,114 @@
         }
       }
     },
-    "cashflow.bulk_expense.affect_balance.subtitle" : {
-      "comment" : "Toggle subtitle for applying card balance changes",
+    "cashflow.bulk_expense.affect_balance.compact" : {
+      "comment" : "Compact title for bulk expense import balance update toggle",
+      "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Turn off if you only want history without touching the current balance."
+            "value" : "Update balance"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Отключите, если нужна только история без изменения текущего баланса."
+            "value" : "Обновлять остаток"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.affect_balance.hint" : {
+      "comment" : "Compact hint explaining bulk expense import balance update toggle",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import will also update the current card balance"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Импорт также изменит текущий баланс карты"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.affect_balance.short" : {
+      "comment" : "Short title for bulk expense import balance update toggle",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обновлять"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.affect_balance.subtitle" : {
+      "comment" : "Toggle subtitle for applying card balance changes",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn off if you only want history without touching the current balance"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отключите, если нужна только история без изменения текущего баланса"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.affect_balance.toast.disabled" : {
+      "comment" : "Transient toast shown after disabling balance updates in bulk expense import",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Card balance will no longer change when you save this import"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Теперь при сохранении импорта баланс карты меняться не будет"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.affect_balance.toast.enabled" : {
+      "comment" : "Transient toast shown after enabling balance updates in bulk expense import",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Card balance will now update when you save this import"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Теперь при сохранении импорта баланс карты будет обновляться"
           }
         }
       }
     },
     "cashflow.bulk_expense.card_title" : {
       "comment" : "Card picker title in bulk expense import",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2828,8 +2916,8 @@
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "new",
-            "value" : "Card"
+            "state" : "translated",
+            "value" : "Карта"
           }
         }
       }
@@ -2920,6 +3008,42 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Good"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.controls.subtitle" : {
+      "comment" : "Subtitle for bulk expense import card controls",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose where imported expenses should be applied"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выберите карту и валюту для импорта"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.controls.title" : {
+      "comment" : "Title for bulk expense import card and currency controls",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Card and currency"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Карта и валюта"
           }
         }
       }
@@ -3200,6 +3324,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Этот экран нужен для быстрого занесения месячных расходов по категориям без ручного создания каждой отдельной операции"
+          }
+        }
+      }
+    },
+    "cashflow.bulk_expense.help.open" : {
+      "comment" : "Accessibility label for opening bulk import help",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How mass import works"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Как работает массовый импорт"
           }
         }
       }
@@ -4063,13 +4205,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mass expense import"
+            "value" : "Mass import"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Массовый импорт расходов"
+            "value" : "Массовый импорт"
           }
         }
       }
@@ -17194,6 +17336,9 @@
         }
       }
     },
+    "Off" : {
+
+    },
     "OK" : {
       "comment" : "The text for an \"OK\" button. Used in an alert.",
       "isCommentAutoGenerated" : true,
@@ -17211,6 +17356,9 @@
           }
         }
       }
+    },
+    "On" : {
+
     },
     "Other" : {
       "extractionState" : "stale",

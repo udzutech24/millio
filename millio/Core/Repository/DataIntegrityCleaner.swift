@@ -103,6 +103,7 @@ enum DataIntegrityCleaner {
     
     private static func dedupeFinanceGroups(modelContext: ModelContext) throws {
         let groups = try modelContext.fetch(FetchDescriptor<FinanceGroup>())
+        let accounts = try modelContext.fetch(FetchDescriptor<FinanceAccount>())
         var byID: [String: FinanceGroup] = [:]
         
         for group in groups {
@@ -120,10 +121,8 @@ enum DataIntegrityCleaner {
                     remove = group
                 }
                 
-                if let accounts = remove.accounts {
-                    for account in accounts {
+                for account in accounts where account.group?.persistentModelID == remove.persistentModelID {
                         account.group = keep
-                    }
                 }
                 
                 byID[id] = keep
@@ -134,4 +133,3 @@ enum DataIntegrityCleaner {
         }
     }
 }
-

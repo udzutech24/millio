@@ -101,6 +101,32 @@ struct BudgetMonthlyRepeatTests {
         #expect(incomeSuggestion?.categoryLimits[ExpenseCategory.groceries.rawValue] == nil)
     }
 
+    @Test("Выключение общего лимита и пустые категории удаляют месячную конфигурацию")
+    func savingEmptyConfigurationDeletesMonthlyBudget() async throws {
+        let context = try createTestModelContext()
+        let march = monthDate(year: 2026, month: 3)
+        let viewModel = CashflowViewModel(modelContext: context, now: { march })
+
+        viewModel.saveMonthlyBudgetConfiguration(
+            month: march,
+            totalAmount: 120_000,
+            categoryLimits: [ExpenseCategory.groceries.rawValue: 40_000],
+            currency: "RUB"
+        )
+
+        viewModel.saveMonthlyBudgetConfiguration(
+            month: march,
+            totalAmount: 0,
+            categoryLimits: [:],
+            currency: "RUB"
+        )
+
+        let summary = await viewModel.monthlyBudgetSummary(for: .expense, month: march, in: "RUB")
+        #expect(summary.plan == nil)
+        #expect(summary.categoryLimits.isEmpty)
+        #expect(summary.snapshot == nil)
+    }
+
     @Test("Настройка автоповтора хранится в пользовательских настройках")
     func budgetAutoRepeatPrefsPersistValue() {
         let suiteName = "BudgetMonthlyRepeatTests.\(UUID().uuidString)"

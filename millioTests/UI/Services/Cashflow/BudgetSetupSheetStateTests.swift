@@ -64,6 +64,20 @@ struct BudgetSetupSheetStateTests {
         #expect(categoryOnlyState.effectiveTotalAmount == 0)
     }
 
+    @Test("Когда общий лимит выключают в уже существующей конфигурации, сохранение остается доступным")
+    func disablingExistingTotalLimitCanBeSavedToRemoveIt() {
+        let state = BudgetSetupSheetState(
+            isTotalLimitEnabled: false,
+            parsedTotal: 0,
+            categoryLimits: [:],
+            hasExistingAmount: true,
+            hasExistingCategoryLimits: false
+        )
+
+        #expect(state.canSave == true)
+        #expect(state.effectiveTotalAmount == 0)
+    }
+
     @Test("Экран считает существующей конфигурацию и без общего лимита, если уже есть лимиты категорий")
     func existingConfigurationIncludesCategoryOnlySetup() {
         let state = BudgetSetupSheetState(
