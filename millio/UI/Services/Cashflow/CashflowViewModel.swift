@@ -1960,7 +1960,9 @@ final class CashflowViewModel: ViewModelProtocol {
         mode: CashflowHistorySummaryMode
     ) async -> CashflowHistorySummaryModel {
         let targetType: CashflowTransactionType = mode == .expense ? .expense : .income
-        let transactions = historyTransactions(matching: query).filter { $0.transactionType == targetType }
+        let transactions = historyTransactions(matching: query).filter {
+            $0.transactionType == targetType && $0.shouldAffectCashflowTotals
+        }
         let targetCurrency = state.displayCurrency
 
         let previousWarning = state.currencyConversionWarning
@@ -3316,6 +3318,7 @@ final class CashflowViewModel: ViewModelProtocol {
             existing.recurrenceWeekdaysRaw = transaction.recurrenceWeekdaysRaw
             existing.recurrenceSeriesID = transaction.recurrenceSeriesID
             existing.affectsCardBalance = transaction.affectsCardBalance
+            existing.affectsCashflowTotals = transaction.affectsCashflowTotals
             existing.exchangeRate = exchangeInfo.rate
             existing.exchangeRateDate = exchangeInfo.rateDate
             existing.exchangeRateCurrency = exchangeInfo.rateCurrency
@@ -3337,7 +3340,8 @@ final class CashflowViewModel: ViewModelProtocol {
                 recurrenceRule: transaction.recurrenceRule,
                 recurrenceWeekdays: transaction.recurrenceWeekdays,
                 recurrenceSeriesID: transaction.recurrenceSeriesID,
-                affectsCardBalance: transaction.affectsCardBalance
+                affectsCardBalance: transaction.affectsCardBalance,
+                affectsCashflowTotals: transaction.affectsCashflowTotals
             )
             newTransaction.exchangeRate = exchangeInfo.rate
             newTransaction.exchangeRateDate = exchangeInfo.rateDate

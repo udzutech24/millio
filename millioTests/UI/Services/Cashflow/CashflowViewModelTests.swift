@@ -2700,6 +2700,122 @@ extension CashflowViewModelTests {
         #expect(abs(viewModel.state.convertedTransactions.reduce(0) { $0 + $1.income } - 300) < 0.01)
     }
 
+    @Test("Investment settlement с explicit affectsCashflowTotals false не попадает в расходы после сохранения")
+    func testPersistTransactionPreservesExplicitCashflowTotalsOptOut() async throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 19, hour: 20, minute: 47)) ?? Date()
+
+        let card = Card(
+            name: "Freedom",
+            cardNumber: "4242",
+            bank: .other,
+            cardType: .debit,
+            currency: "USD",
+            balance: 5_000
+        )
+        let investment = Investment(
+            name: "Freedom $ Deposit",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 0,
+            currency: "USD"
+        )
+        modelContext.insert(card)
+        modelContext.insert(investment)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(
+            modelContext: modelContext,
+            now: { fixedNow },
+            assetsSnapshotProvider: { _, _, _ in (start: 0, end: 0) }
+        )
+
+        let settlement = CashflowTransaction(
+            transactionType: .expense,
+            amount: 2_540.3,
+            currency: "USD",
+            transactionDate: fixedNow,
+            cardID: card.cardUniqueID,
+            investmentID: investment.investmentUniqueID,
+            expenseCategoryRaw: ExpenseCategory.other.rawValue,
+            note: "Asset purchase",
+            affectsCardBalance: true,
+            affectsCashflowTotals: false
+        )
+
+        let didSave = await viewModel.persistTransaction(settlement)
+        #expect(didSave)
+
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            viewModel.state.transactions.count == 1
+                && abs(viewModel.state.totalExpense) < 0.01
+        }
+
+        let savedTransaction = try #require(viewModel.state.transactions.first)
+        #expect(savedTransaction.affectsCashflowTotals == false)
+        #expect(savedTransaction.shouldAffectCashflowTotals == false)
+        #expect(abs(card.balance - 2_459.7) < 0.01)
+
+        let expenseHistory = viewModel.historyTransactions(
+            matching: CashflowHistoryQuery(typeFilter: .expense)
+        )
+        let allHistory = viewModel.historyTransactions(
+            matching: CashflowHistoryQuery(typeFilter: .all)
+        )
+
+        #expect(expenseHistory.isEmpty)
+        #expect(allHistory.count == 1)
+    }
+
+    @Test("History summary не включает investment settlement в breakdown расходов")
+    func testHistorySummaryExcludesInvestmentSettlementFromExpenseBreakdown() async throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 19, hour: 20, minute: 47)) ?? Date()
+
+        let regularExpense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 15_200,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            expenseCategoryRaw: ExpenseCategory.house.rawValue,
+            note: "Mortgage"
+        )
+        let settlement = CashflowTransaction(
+            transactionType: .expense,
+            amount: 267_558,
+            currency: "RUB",
+            transactionDate: fixedNow,
+            expenseCategoryRaw: ExpenseCategory.other.rawValue,
+            investmentID: "investment-1",
+            note: "Asset purchase",
+            affectsCashflowTotals: false
+        )
+        modelContext.insert(regularExpense)
+        modelContext.insert(settlement)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(
+            modelContext: modelContext,
+            now: { fixedNow },
+            assetsSnapshotProvider: { _, _, _ in (start: 0, end: 0) }
+        )
+
+        let summary = await viewModel.historySummary(
+            matching: CashflowHistoryQuery(
+                typeFilter: .all,
+                searchText: "",
+                startDate: fixedNow,
+                endDate: fixedNow
+            ),
+            mode: .expense
+        )
+
+        #expect(abs(summary.totalAmount - 15_200) < 0.01)
+        #expect(summary.entries.count == 1)
+        #expect(summary.entries.first?.rawValue == ExpenseCategory.house.rawValue)
+        #expect(summary.entries.first?.title == viewModel.expenseCategoryDisplayName(for: ExpenseCategory.house.rawValue))
+    }
+
     @Test("Сохранение из вложенного экрана категории не закрывает sheet расходов/доходов")
     func testPersistTransactionCanKeepCategorySheetOpen() async throws {
         let modelContext = try createTestModelContext()
