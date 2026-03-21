@@ -122,7 +122,7 @@ enum DataIntegrityCleaner {
                 }
                 
                 for account in accounts where account.group?.persistentModelID == remove.persistentModelID {
-                        account.group = keep
+                    account.group = keep
                 }
                 
                 byID[id] = keep

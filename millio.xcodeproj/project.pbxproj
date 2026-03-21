@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		777D081C2F2CF17B004777D8 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 777D081B2F2CF17B004777D8 /* FirebaseAnalytics */; };
 		777D081E2F2CF1C9004777D8 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 777D081D2F2CF1C9004777D8 /* GoogleService-Info.plist */; };
 		777D08212F2D1234004777D8 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = 777D08202F2D1234004777D8 /* FirebaseCrashlytics */; };
 		77B22ECF2F146CDC005146C6 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 77B22ECE2F146CDC005146C6 /* StoreKit.framework */; };
@@ -119,7 +118,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				777D081C2F2CF17B004777D8 /* FirebaseAnalytics in Frameworks */,
 				777D08212F2D1234004777D8 /* FirebaseCrashlytics in Frameworks */,
 				77B22ECF2F146CDC005146C6 /* StoreKit.framework in Frameworks */,
 			);
@@ -208,7 +206,6 @@
 			);
 			name = millio;
 			packageProductDependencies = (
-				777D081B2F2CF17B004777D8 /* FirebaseAnalytics */,
 				777D08202F2D1234004777D8 /* FirebaseCrashlytics */,
 			);
 			productName = millio;
@@ -853,11 +850,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		777D081B2F2CF17B004777D8 /* FirebaseAnalytics */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 777D081A2F2CF17B004777D8 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseAnalytics;
-		};
 		777D08202F2D1234004777D8 /* FirebaseCrashlytics */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 777D081A2F2CF17B004777D8 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
