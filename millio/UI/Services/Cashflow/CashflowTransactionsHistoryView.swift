@@ -350,7 +350,7 @@ struct CashflowTransactionsHistoryView: View {
                 .padding(.horizontal, 24)
             }
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, 10)
     }
 
     // MARK: - Search Bar
@@ -369,10 +369,14 @@ struct CashflowTransactionsHistoryView: View {
                     .focused($isSearchFocused)
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.vertical, 11)
             .background(
                 Capsule()
-                    .stroke(AppColors.textPrimary.opacity(0.3), lineWidth: 1)
+                    .fill(CashflowHistoryChrome.quietFill)
+                    .overlay(
+                        Capsule()
+                            .stroke(CashflowHistoryChrome.subduedStroke, lineWidth: 0.9)
+                    )
             )
 
             Button {
@@ -380,11 +384,20 @@ struct CashflowTransactionsHistoryView: View {
             } label: {
                 Image(systemName: "calendar")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(isDateFilterCustomized ? Color(hex: "47D7FF") : AppColors.textSecondary)
-                    .frame(width: 42, height: 42)
+                    .foregroundStyle(isDateFilterCustomized ? CashflowHistoryChrome.accentColor : AppColors.textSecondary)
+                    .frame(width: CashflowHistoryChrome.toolbarControlSize, height: CashflowHistoryChrome.toolbarControlSize)
                     .background(
                         Circle()
-                            .stroke(AppColors.textPrimary.opacity(0.3), lineWidth: 1)
+                            .fill(CashflowHistoryChrome.quietFill)
+                            .overlay(
+                                Circle()
+                                    .stroke(
+                                        isDateFilterCustomized
+                                        ? CashflowHistoryChrome.selectionStroke
+                                        : CashflowHistoryChrome.subduedStroke,
+                                        lineWidth: 0.9
+                                    )
+                            )
                     )
             }
             .buttonStyle(.plain)
@@ -530,11 +543,11 @@ struct CashflowTransactionsHistoryView: View {
                 .padding(.vertical, 12)
                 .background(
                     Capsule()
-                        .fill(Color.white.opacity(0.08))
+                        .fill(CashflowHistoryChrome.elevatedFill)
                 )
                 .overlay(
                     Capsule()
-                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                        .stroke(CashflowHistoryChrome.subduedStroke, lineWidth: 0.9)
                 )
         }
         .buttonStyle(.plain)
@@ -695,7 +708,7 @@ private struct HistoryDateFilterChip: View {
             }
             .foregroundStyle(chipForeground(isSelected: isSelected))
             .padding(.horizontal, 18)
-            .padding(.vertical, 12)
+            .padding(.vertical, 11)
             .background(chipBackground(isSelected: isSelected))
             .overlay(chipBorder(isSelected: isSelected))
         }
@@ -732,7 +745,7 @@ private struct HistoryTypeFilterChip: View {
                     .foregroundStyle(chipForeground(isSelected: true))
                     .padding(.leading, 18)
                     .padding(.trailing, 8)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 11)
                 }
 
                 Button(action: onReset) {
@@ -762,7 +775,7 @@ private struct HistoryTypeFilterChip: View {
                 }
                 .foregroundStyle(chipForeground(isSelected: false))
                 .padding(.horizontal, 18)
-                .padding(.vertical, 12)
+                .padding(.vertical, 11)
                 .background(chipBackground(isSelected: false))
                 .overlay(chipBorder(isSelected: false))
             }
@@ -786,7 +799,7 @@ private struct HistoryCardFilterChip: View {
             }
             .foregroundStyle(chipForeground(isSelected: isSelected))
             .padding(.horizontal, 18)
-            .padding(.vertical, 12)
+            .padding(.vertical, 11)
             .background(chipBackground(isSelected: isSelected))
             .overlay(chipBorder(isSelected: isSelected))
         }
@@ -796,50 +809,14 @@ private struct HistoryCardFilterChip: View {
 
 private func chipBackground(isSelected: Bool) -> some View {
     Capsule()
-        .fill(
-            isSelected
-            ? AnyShapeStyle(
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.02, green: 0.10, blue: 0.17).opacity(0.92),
-                        Color.black.opacity(0.88)
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
-            : AnyShapeStyle(Color.white.opacity(0.015))
-        )
-        .overlay {
-            if isSelected {
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                (AppColors.cashflowGradient.first ?? .blue).opacity(0.12),
-                                Color.clear
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-            }
-        }
+        .fill(isSelected ? CashflowHistoryChrome.selectionFill : CashflowHistoryChrome.quietFill)
 }
 
 private func chipBorder(isSelected: Bool) -> some View {
     Capsule()
         .stroke(
-            isSelected
-            ? AnyShapeStyle(
-                LinearGradient(
-                    colors: AppColors.cashflowGradient.map { $0.opacity(0.95) },
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
-            : AnyShapeStyle(Color.white.opacity(0.14)),
-            lineWidth: 1
+            isSelected ? CashflowHistoryChrome.selectionStroke : CashflowHistoryChrome.subduedStroke,
+            lineWidth: 0.9
         )
 }
 
@@ -1167,10 +1144,9 @@ private struct HistoryTransactionDetailView: View {
         }
         .padding(18)
         .background {
-            GlassBackground(
-                gradient: AppColors.cashflowGradient,
-                cornerRadius: 18,
-                strokeWidth: 1
+            CashflowHistorySurfaceBackground(
+                cornerRadius: CashflowHistoryChrome.rowCornerRadius,
+                isElevated: true
             )
         }
     }
@@ -1187,10 +1163,10 @@ private struct HistoryTransactionDetailView: View {
                     .padding(.vertical, 14)
                     .background(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color.white.opacity(0.12))
+                            .fill(CashflowHistoryChrome.elevatedFill)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                    .stroke(CashflowHistoryChrome.subduedStroke, lineWidth: 0.9)
                             )
                     )
             }
@@ -1308,12 +1284,10 @@ private struct HistoryTransactionCard: View {
             onOpenDetails()
         } label: {
             VStack(alignment: .leading, spacing: 6) {
-                // Сумма с префиксом +/–
                 Text(formattedAmount)
                     .font(.system(size: 19, weight: .bold))
                     .foregroundStyle(AppColors.textPrimary)
 
-                // Описание операции
                 if let description = transactionDescription, !description.isEmpty {
                     Text(description)
                         .font(.system(size: 13.5, weight: .regular))
@@ -1323,13 +1297,12 @@ private struct HistoryTransactionCard: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 13)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
             .background {
-                GlassBackground(
-                    gradient: AppColors.cashflowGradient,
-                    cornerRadius: 16,
-                    strokeWidth: 0.5
+                CashflowHistorySurfaceBackground(
+                    cornerRadius: CashflowHistoryChrome.rowCornerRadius,
+                    isElevated: false
                 )
             }
         }

@@ -96,12 +96,12 @@ func cashflowHistoryPercentText(share: Double) -> String {
 enum CashflowHistorySummaryLayout {
     static let collapseDistance: CGFloat = 180
     static let collapsedHeight: CGFloat = 120
-    static let narrowExpandedHeaderHeight: CGFloat = 208
-    static let wideExpandedHeaderHeight: CGFloat = 192
+    static let narrowExpandedHeaderHeight: CGFloat = 196
+    static let wideExpandedHeaderHeight: CGFloat = 182
     static let outerPadding: CGFloat = 16
-    static let sectionSpacing: CGFloat = 14
+    static let sectionSpacing: CGFloat = 12
     static let chipSpacing: CGFloat = 10
-    static let chipHeight: CGFloat = 72
+    static let chipHeight: CGFloat = 68
 
     static func collapseProgress(minY: CGFloat) -> CGFloat {
         let progress = -minY / collapseDistance
@@ -144,13 +144,13 @@ enum CashflowHistorySummaryLayout {
 enum CashflowHistorySummaryBuilder {
     private static let expensePalette = [
         "47D7FF",
-        "FF8C42",
-        "FF9B9B",
-        "6BDB95",
-        "BCD8F2",
-        "B8A6FF",
-        "FFD166",
-        "A1A7B8"
+        "FF9F5A",
+        "F68BA7",
+        "6FD2A8",
+        "AFC8FF",
+        "C5B6FF",
+        "E7C66C",
+        "9EA7BC"
     ]
 
     private static let incomePalette = [
@@ -241,7 +241,17 @@ private struct CashflowHistoryRingChart: View {
                 .allowsHitTesting(false)
 
                 Circle()
-                    .fill(Color.black.opacity(0.3))
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color.white.opacity(0.035),
+                                Color.black.opacity(0.34)
+                            ],
+                            center: .center,
+                            startRadius: 6,
+                            endRadius: size * 0.24
+                        )
+                    )
                     .frame(width: size * 0.48, height: size * 0.48)
             }
             .scaleEffect(compactScale, anchor: .center)
@@ -365,12 +375,12 @@ struct CashflowHistorySummaryCard: View {
             .background(cardBackground)
             .overlay(collapseShadowOverlay, alignment: .bottom)
             .overlay(cardBorder)
-            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: CashflowHistoryChrome.summaryCornerRadius, style: .continuous))
             .shadow(
-                color: Color.black.opacity(0.18 + (compactProgress * 0.12)),
-                radius: 20,
+                color: Color.black.opacity(0.16 + (compactProgress * 0.08)),
+                radius: 18,
                 x: 0,
-                y: 12
+                y: 10
             )
         }
         .frame(maxWidth: .infinity)
@@ -380,7 +390,7 @@ struct CashflowHistorySummaryCard: View {
         VStack(alignment: .leading, spacing: 8) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(amountLabel)
-                    .font(.system(size: compactProgress > 0.7 ? 23 : 30, weight: .bold, design: .rounded))
+                    .font(.system(size: compactProgress > 0.7 ? 23 : 29, weight: .bold, design: .rounded))
                     .foregroundStyle(AppColors.textPrimary.opacity(primaryTextOpacity))
                     .contentTransition(.numericText())
                     .lineLimit(2)
@@ -389,14 +399,14 @@ struct CashflowHistorySummaryCard: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 Text(subtitleLabel)
-                    .font(.system(size: compactProgress > 0.7 ? 16 : 20, weight: .medium))
+                    .font(.system(size: compactProgress > 0.7 ? 15 : 18, weight: .semibold))
                     .foregroundStyle(AppColors.textSecondary.opacity(secondaryTextOpacity))
                     .lineLimit(2)
             }
 
             if let selectedEntry, compactProgress < 0.75 {
                 Text(cashflowHistoryPercentText(share: selectedEntry.share))
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color(hex: selectedEntry.tintHex).opacity(accentTextOpacity))
             }
         }
@@ -417,22 +427,15 @@ struct CashflowHistorySummaryCard: View {
     }
 
     private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: 28, style: .continuous)
-            .fill(
-                LinearGradient(
-                    colors: [
-                        Color.white.opacity(0.085),
-                        Color.white.opacity(0.03)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
+        CashflowHistorySurfaceBackground(
+            cornerRadius: CashflowHistoryChrome.summaryCornerRadius,
+            isElevated: true
+        )
     }
 
     private var cardBorder: some View {
-        RoundedRectangle(cornerRadius: 28, style: .continuous)
-            .stroke(Color.white.opacity(0.08), lineWidth: 0.8)
+        RoundedRectangle(cornerRadius: CashflowHistoryChrome.summaryCornerRadius, style: .continuous)
+            .stroke(Color.white.opacity(0.06), lineWidth: 0.6)
     }
 
     private var collapseShadowOverlay: some View {
@@ -461,13 +464,16 @@ struct CashflowHistorySummaryCard: View {
             }
         } label: {
             HStack(spacing: 10) {
-                Text(entry.icon)
-                    .font(.system(size: 16))
-                    .frame(width: 30, height: 30)
-                    .background(
-                        Circle()
-                            .fill(tint.opacity(isSelected ? 0.95 : 0.78))
-                    )
+                ZStack {
+                    Circle()
+                        .fill(isSelected ? tint.opacity(0.22) : Color.white.opacity(0.06))
+                    Circle()
+                        .stroke(isSelected ? tint.opacity(0.55) : Color.white.opacity(0.08), lineWidth: 0.8)
+
+                    Text(entry.icon)
+                        .font(.system(size: 15))
+                }
+                .frame(width: 30, height: 30)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(entry.title)
@@ -490,12 +496,12 @@ struct CashflowHistorySummaryCard: View {
             .padding(.horizontal, 9)
             .padding(.vertical, 9)
             .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(tint.opacity(isSelected ? 0.22 : 0.12))
+                RoundedRectangle(cornerRadius: CashflowHistoryChrome.chipCornerRadius, style: .continuous)
+                    .fill(isSelected ? tint.opacity(0.16) : Color.white.opacity(0.045))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(tint.opacity(isSelected ? 0.55 : 0.18), lineWidth: 1)
+                RoundedRectangle(cornerRadius: CashflowHistoryChrome.chipCornerRadius, style: .continuous)
+                    .stroke(isSelected ? tint.opacity(0.30) : Color.white.opacity(0.08), lineWidth: 0.8)
             )
         }
         .buttonStyle(.plain)
