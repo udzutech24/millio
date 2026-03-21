@@ -15,6 +15,7 @@ import SwiftData
 struct CashflowViewModelTests {
     private static let schema = Schema([
         Card.self,
+        Investment.self,
         FinanceGroup.self,
         FinanceAccount.self,
         CashflowTransaction.self,
@@ -606,6 +607,39 @@ extension CashflowViewModelTests {
 
         #expect(abs(februaryTotal - 500) < 0.01)
         #expect(abs(januaryTotal - 100) < 0.01)
+    }
+
+    @Test("Итог дохода за месяц игнорирует операции, исключенные из cashflow totals")
+    func testMonthlyIncomeTotalSkipsTransactionsExcludedFromCashflowTotals() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let marchDate = calendar.date(from: DateComponents(year: 2026, month: 3, day: 21)) ?? Date()
+
+        let visibleIncome = CashflowTransaction(
+            transactionType: .income,
+            amount: 12_222,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 14, hour: 12)) ?? marchDate,
+            incomeCategory: .freelance
+        )
+        let hiddenSettlementIncome = CashflowTransaction(
+            transactionType: .income,
+            amount: 80_000,
+            currency: "USD",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 21, hour: 9)) ?? marchDate,
+            incomeCategory: .investment,
+            note: "Продажа актива",
+            affectsCashflowTotals: false
+        )
+
+        modelContext.insert(visibleIncome)
+        modelContext.insert(hiddenSettlementIncome)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+        let marchTotal = await viewModel.monthlyIncomeTotal(for: marchDate, in: "RUB")
+
+        #expect(abs(marchTotal - 12_222) < 0.01)
     }
 
     @Test("Итог расхода за месяц учитывает только расходы выбранного месяца")
@@ -2448,6 +2482,95 @@ extension CashflowViewModelTests {
         }
 
         #expect(abs(card.balance - 600) < 0.01)
+    }
+
+    @Test("Удаление grouped investment buy откатывает settlement even when future-dated leg lost applied flag")
+    func testDeleteGroupedInvestmentBuyRevertsSettlementWithoutAppliedFlag() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 18, hour: 16)) ?? Date()
+        let tradeDate = calendar.date(from: DateComponents(year: 2026, month: 3, day: 21, hour: 16)) ?? fixedNow
+
+        let card = Card(
+            name: "Broker Cash",
+            cardNumber: "7777",
+            bank: .other,
+            cardType: .debit,
+            currency: "USD",
+            balance: 4_323.67
+        )
+        let investment = Investment(
+            name: "SPY",
+            amount: 12_173.94,
+            currency: "USD"
+        )
+        investment.marketQuantity = 18
+        investment.lastKnownUnitPrice = 676.33
+        investment.averagePurchaseUnitPrice = 676.33
+        investment.totalPurchaseCost = 12_173.94
+
+        let operationGroupID = "trade-future-delete"
+        let assetLeg = CashflowTransaction(
+            transactionType: .balanceAdjustment,
+            amount: 676.33,
+            currency: "USD",
+            transactionDate: tradeDate,
+            investmentID: investment.investmentUniqueID,
+            note: String(localized: "finances.transaction.note.investment_buy"),
+            operationGroupID: operationGroupID
+        )
+        assetLeg.applyAssetChangeSnapshot(
+            before: CashflowAssetChangeSnapshot(
+                quantity: 17,
+                unitPrice: 676.33,
+                purchaseUnitPrice: 676.33,
+                purchaseCost: 11_497.61,
+                totalAmount: 11_497.61
+            ),
+            after: CashflowAssetChangeSnapshot(
+                quantity: 18,
+                unitPrice: 676.33,
+                purchaseUnitPrice: 676.33,
+                purchaseCost: 12_173.94,
+                totalAmount: 12_173.94
+            )
+        )
+
+        let settlementLeg = CashflowTransaction(
+            transactionType: .expense,
+            amount: 676.33,
+            currency: "USD",
+            transactionDate: tradeDate,
+            cardID: card.cardUniqueID,
+            investmentID: investment.investmentUniqueID,
+            expenseCategory: .other,
+            note: String(localized: "finances.transaction.note.investment_buy"),
+            operationGroupID: operationGroupID,
+            affectsCashflowTotals: false
+        )
+        settlementLeg.hasAppliedBalanceEffect = false
+
+        modelContext.insert(card)
+        modelContext.insert(investment)
+        modelContext.insert(assetLeg)
+        modelContext.insert(settlementLeg)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        viewModel.handle(.deleteTransaction(assetLeg, recalculate: true))
+
+        try await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            abs(card.balance - 5_000) < 0.01
+                && abs((investment.marketQuantity ?? .nan) - 17) < 0.000001
+                && abs(investment.amount - 11_497.61) < 0.01
+                && viewModel.state.transactions.isEmpty
+        }
+
+        #expect(abs(card.balance - 5_000) < 0.01)
+        let marketQuantity = try #require(investment.marketQuantity)
+        #expect(abs(marketQuantity - 17) < 0.000001)
+        #expect(abs(investment.amount - 11_497.61) < 0.01)
+        #expect(viewModel.state.transactions.isEmpty)
     }
 
     @Test("История фильтруется по диапазону дат включительно и сохраняет сортировку по дате")

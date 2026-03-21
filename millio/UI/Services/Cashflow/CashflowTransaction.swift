@@ -257,6 +257,8 @@ enum CashflowCategoryKind: String, Codable, CaseIterable {
 struct CashflowAssetChangeSnapshot {
     let quantity: Double?
     let unitPrice: Double?
+    let purchaseUnitPrice: Double?
+    let purchaseCost: Double?
     let totalAmount: Double
 }
 
@@ -589,6 +591,9 @@ final class CashflowTransaction: Persistable {
     
     /// ID инвестиции (для транзакций связанных с инвестициями)
     var investmentID: String?
+
+    /// ID составной операции, объединяющий технические legs одной сделки.
+    var operationGroupID: String?
     
     /// Описание/комментарий
     var note: String?
@@ -610,6 +615,18 @@ final class CashflowTransaction: Persistable {
 
     /// Снимок полной стоимости актива после изменения.
     var assetAmountAfter: Double?
+
+    /// Снимок средней цены покупки до изменения.
+    var assetPurchaseUnitPriceBefore: Double?
+
+    /// Снимок средней цены покупки после изменения.
+    var assetPurchaseUnitPriceAfter: Double?
+
+    /// Снимок полной себестоимости до изменения.
+    var assetPurchaseCostBefore: Double?
+
+    /// Снимок полной себестоимости после изменения.
+    var assetPurchaseCostAfter: Double?
 
     /// Источник пакетного импорта для идемпотентного обновления импортных наборов.
     var importSourceRaw: String?
@@ -726,6 +743,7 @@ final class CashflowTransaction: Persistable {
         incomeCategoryRaw: String? = nil,
         expenseCategoryRaw: String? = nil,
         note: String? = nil,
+        operationGroupID: String? = nil,
         importSourceRaw: String? = nil,
         importReferenceKey: String? = nil,
         recurrenceRule: CashflowRecurrenceRule = .none,
@@ -742,6 +760,7 @@ final class CashflowTransaction: Persistable {
         self.toCardID = toCardID
         self.creditID = creditID
         self.investmentID = investmentID
+        self.operationGroupID = operationGroupID
         self.incomeCategoryRaw = incomeCategoryRaw ?? incomeCategory?.rawValue
         self.expenseCategoryRaw = expenseCategoryRaw ?? expenseCategory?.rawValue
         self.note = note
@@ -795,6 +814,9 @@ final class CashflowTransaction: Persistable {
         if let note = note {
             dict["note"] = note
         }
+        if let operationGroupID = operationGroupID {
+            dict["operationGroupID"] = operationGroupID
+        }
         if let affectsCashflowTotals {
             dict["affectsCashflowTotals"] = affectsCashflowTotals
         }
@@ -815,6 +837,18 @@ final class CashflowTransaction: Persistable {
         }
         if let assetAmountAfter = assetAmountAfter {
             dict["assetAmountAfter"] = assetAmountAfter
+        }
+        if let assetPurchaseUnitPriceBefore = assetPurchaseUnitPriceBefore {
+            dict["assetPurchaseUnitPriceBefore"] = assetPurchaseUnitPriceBefore
+        }
+        if let assetPurchaseUnitPriceAfter = assetPurchaseUnitPriceAfter {
+            dict["assetPurchaseUnitPriceAfter"] = assetPurchaseUnitPriceAfter
+        }
+        if let assetPurchaseCostBefore = assetPurchaseCostBefore {
+            dict["assetPurchaseCostBefore"] = assetPurchaseCostBefore
+        }
+        if let assetPurchaseCostAfter = assetPurchaseCostAfter {
+            dict["assetPurchaseCostAfter"] = assetPurchaseCostAfter
         }
         if let importSourceRaw = importSourceRaw {
             dict["importSourceRaw"] = importSourceRaw
@@ -868,6 +902,10 @@ final class CashflowTransaction: Persistable {
         assetQuantityAfter = after.quantity
         assetUnitPriceBefore = before.unitPrice
         assetUnitPriceAfter = after.unitPrice
+        assetPurchaseUnitPriceBefore = before.purchaseUnitPrice
+        assetPurchaseUnitPriceAfter = after.purchaseUnitPrice
+        assetPurchaseCostBefore = before.purchaseCost
+        assetPurchaseCostAfter = after.purchaseCost
         assetAmountBefore = before.totalAmount
         assetAmountAfter = after.totalAmount
     }

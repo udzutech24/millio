@@ -60,6 +60,7 @@ final class QuickSetupLayoutTests: XCTestCase {
         XCTAssertNotNil(hosted.window)
         XCTAssertEqual(hosted.viewModel.currentStep, .products)
         XCTAssertEqual(hosted.viewModel.productTypeForCreation, .card)
+        XCTAssertFalse(hosted.viewModel.hasExplicitlySelectedProductType)
         XCTAssertFalse(hosted.viewModel.isMarketProductDraft)
         XCTAssertEqual(hosted.viewModel.productAmountFieldTitle, "Баланс в RUB")
     }

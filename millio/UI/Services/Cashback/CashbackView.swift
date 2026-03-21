@@ -43,6 +43,24 @@ private struct CashbackCategoryEditButton: View {
     }
 }
 
+private struct CashbackCardSelectionBadge: View {
+    let title: String
+    let tint: Color
+    let fill: Color
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(fill)
+            )
+    }
+}
+
 struct CashbackView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: CashbackViewModel?
@@ -622,14 +640,66 @@ private struct CashbackCategorySettingsSheet: View {
                         .foregroundStyle(AppColors.textPrimary)
                     }
                 }
+        }
+    }
+}
+
+private struct CashbackCardPromptOrb: View {
+    @State private var isAnimating: Bool = false
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: AppColors.cashbackGradient,
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .shadow(color: CashbackScreenStyle.accent.opacity(0.28), radius: isAnimating ? 18 : 10, y: 6)
+
+            Circle()
+                .stroke(Color.white.opacity(isAnimating ? 0.28 : 0.12), lineWidth: 1.2)
+                .scaleEffect(isAnimating ? 1.12 : 0.94)
+                .blur(radius: isAnimating ? 0.4 : 0)
+
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color.white.opacity(isAnimating ? 0.34 : 0.20),
+                            Color.white.opacity(0.02)
+                        ],
+                        center: .topLeading,
+                        startRadius: 3,
+                        endRadius: 24
+                    )
+                )
+                .scaleEffect(isAnimating ? 1.04 : 0.92)
+
+            Image(systemName: "sparkles")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.black.opacity(0.82))
+                .scaleEffect(isAnimating ? 1.06 : 0.94)
+                .opacity(isAnimating ? 1 : 0.9)
+        }
+        .frame(width: 52, height: 52)
+        .onAppear {
+            guard !isAnimating else { return }
+            withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
+                isAnimating = true
             }
         }
     }
+}
 // MARK: - Cashback Row View
 
 private struct CashbackRowView: View {
     let cashback: Cashback
     @ObservedObject var viewModel: CashbackViewModel
+    private let rowHeight: CGFloat = 66
+    private let rowVerticalSpacing: CGFloat = 5
 
     var body: some View {
         let categoryOption = viewModel.categoryOption(
@@ -675,15 +745,15 @@ private struct CashbackRowView: View {
                 }
             }
             .padding(.horizontal, 12)
-            .frame(height: 60)
+            .frame(height: rowHeight)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(contentCardBackground)
 
             percentageCapsule
-                .frame(height: 60)
+                .frame(height: rowHeight)
                 .fixedSize(horizontal: true, vertical: false)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, rowVerticalSpacing)
         .contentShape(Rectangle())
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button {
@@ -751,7 +821,7 @@ private struct CashbackRowView: View {
             .minimumScaleFactor(0.7)
             .lineLimit(1)
             .foregroundStyle(CashbackScreenStyle.showcasePercentTint)
-            .frame(width: 60, height: 60)
+            .frame(width: rowHeight, height: rowHeight)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(CashbackScreenStyle.showcaseCardFill)
@@ -938,7 +1008,10 @@ private struct CashbackEditorView: View {
                     ),
                     availableCards: availableCardsForPicker,
                     hasFreeLimit: cashbackCardsAreLimited,
-                    onTapUpgrade: { router.push(.subscription) }
+                    onTapUpgrade: { router.push(.subscription) },
+                    onCardsChanged: {
+                        viewModel.handle(.loadCards)
+                    }
                 )
             }
             .sheet(isPresented: $showCategoryEditorSheet) {
@@ -1020,58 +1093,76 @@ private struct CashbackEditorView: View {
             Button {
                 showCardPicker = true
             } label: {
-                FinancesGlassCard(accentColor: CashbackScreenStyle.accent) {
-                    HStack(spacing: 16) {
+                FinancesGlassCard(accentColor: CashbackScreenStyle.accent, cornerRadius: 20) {
+                    HStack(spacing: 14) {
                         if let cardID = selectedCardID, let card = viewModel.getCard(byID: cardID) {
-                            Image(systemName: card.cardType.icon)
-                                .font(.system(size: 22, weight: .semibold))
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: AppColors.cashbackGradient,
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .frame(width: 44, height: 44)
-                                .background {
+                            HStack(spacing: 14) {
+                                ZStack {
                                     Circle()
-                                        .fill(CashbackScreenStyle.subduedCircleFill)
-                                }
+                                        .fill(CashbackScreenStyle.iconTintFill)
 
-                            Text(card.name)
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(AppColors.textPrimary)
-                                .lineLimit(1)
-
-                            Spacer()
-                        } else {
-                            Image(systemName: "plus")
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundStyle(.black.opacity(0.85))
-                                .frame(width: 44, height: 44)
-                                .background {
-                                    Circle()
-                                        .fill(
+                                    Image(systemName: card.cardType.icon)
+                                        .font(.system(size: 22, weight: .semibold))
+                                        .foregroundStyle(
                                             LinearGradient(
                                                 colors: AppColors.cashbackGradient,
-                                                startPoint: .leading,
-                                                endPoint: .trailing
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
                                             )
                                         )
                                 }
+                                .frame(width: 52, height: 52)
 
-                            Text("Выбрать карту")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(AppColors.textPrimary)
+                                VStack(alignment: .leading, spacing: 6) {
+                                    HStack(spacing: 8) {
+                                        Text(CashbackCardPresentation.title(for: card))
+                                            .font(.system(size: 17, weight: .semibold))
+                                            .foregroundStyle(AppColors.textPrimary)
+                                            .lineLimit(1)
 
-                            Spacer()
+                                        CashbackCardSelectionBadge(
+                                            title: "Выбрана",
+                                            tint: CashbackScreenStyle.accentSoft,
+                                            fill: CashbackScreenStyle.accent.opacity(0.14)
+                                        )
+                                    }
+
+                                    Text(CashbackCardPresentation.subtitle(for: card))
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundStyle(AppColors.textSecondary)
+                                        .lineLimit(2)
+
+                                    Text(CashbackCardPresentation.detail(for: card))
+                                        .font(.system(size: 12, weight: .regular))
+                                        .foregroundStyle(AppColors.textTertiary)
+                                        .lineLimit(1)
+                                }
+
+                                Spacer(minLength: 0)
+                            }
+                        } else {
+                            HStack(spacing: 14) {
+                                CashbackCardPromptOrb()
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Выбрать карту")
+                                        .font(.system(size: 17, weight: .semibold))
+                                        .foregroundStyle(AppColors.textPrimary)
+
+                                    Text("Без карты кешбэк не сохранится")
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundStyle(AppColors.textSecondary)
+                                }
+
+                                Spacer(minLength: 0)
+                            }
                         }
 
                         Image(systemName: "chevron.right")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppColors.textTertiary)
                     }
-                    .padding(16)
+                    .padding(18)
                 }
             }
             .buttonStyle(.plain)
@@ -1224,6 +1315,7 @@ private struct CashbackEditorView: View {
 
                                 Text("Создать категорию")
                                     .font(.system(size: 15, weight: .regular))
+                                    .foregroundStyle(AppColors.textPrimary)
                             }
                             .foregroundStyle(
                                 LinearGradient(
@@ -1244,9 +1336,11 @@ private struct CashbackEditorView: View {
                                 if isShowingAllCategories {
                                     Text("Свернуть")
                                         .font(.system(size: 15, weight: .regular))
+                                        .foregroundStyle(AppColors.textPrimary)
                                 } else {
                                     Text("Показать ещё")
                                         .font(.system(size: 15, weight: .regular))
+                                        .foregroundStyle(AppColors.textPrimary)
                                 }
                                 Image(systemName: isShowingAllCategories ? "chevron.up" : "chevron.right")
                                     .font(.system(size: 15, weight: .regular))
@@ -1984,8 +2078,15 @@ private struct CashbackSingleCardPickerView: View {
     let availableCards: [Card]
     let hasFreeLimit: Bool
     let onTapUpgrade: () -> Void
+    let onCardsChanged: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Environment(AppState.self) private var appState
+    @Environment(AppRouter.self) private var router
     @State private var isAddCardRecommendationHidden = CashbackCardPickerRecommendationPrefs.shared.isHidden()
+    @State private var financeViewModel: FinanceViewModel?
+    @State private var showAddCardSheet: Bool = false
+    private let currentRoute: AppRoute = .cashback
 
     var body: some View {
         NavigationStack {
@@ -2010,7 +2111,13 @@ private struct CashbackSingleCardPickerView: View {
                     .padding(24)
                 } else {
                     ScrollView {
-                        VStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 14) {
+                            pickerHeader
+
+                            if hasFreeLimit {
+                                freeLimitHint
+                            }
+
                             ForEach(availableCards) { card in
                                 let cardID = card.cardUniqueID
                                 let isSelected = selectedCardID == cardID
@@ -2019,79 +2126,7 @@ private struct CashbackSingleCardPickerView: View {
                                     selectedCardID = cardID
                                     dismiss()
                                 } label: {
-                                    HStack(spacing: 16) {
-                                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                                            .font(.system(size: 24, weight: .semibold))
-                                            .foregroundStyle(
-                                                isSelected ?
-                                                LinearGradient(
-                                                    colors: AppColors.cashbackGradient,
-                                                    startPoint: .leading,
-                                                    endPoint: .trailing
-                                                ) :
-                                                LinearGradient(
-                                                    colors: [AppColors.textTertiary, AppColors.textTertiary],
-                                                    startPoint: .leading,
-                                                    endPoint: .trailing
-                                                )
-                                            )
-
-                                        Image(systemName: card.cardType.icon)
-                                            .font(.system(size: 28, weight: .semibold))
-                                            .foregroundStyle(
-                                                LinearGradient(
-                                                    colors: AppColors.cashbackGradient,
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
-                                            .frame(width: 48, height: 48)
-                                            .background {
-                                                Circle()
-                                                    .fill(CashbackScreenStyle.subduedCircleFill)
-                                            }
-
-                                        VStack(alignment: .leading, spacing: 6) {
-                                            Text(card.name)
-                                                .font(.system(size: 16, weight: .semibold))
-                                                .foregroundStyle(AppColors.textPrimary)
-
-                                            if card.isFavorite {
-                                                Label("Избранная", systemImage: "star.fill")
-                                                    .font(.system(size: 11, weight: .semibold))
-                                                    .foregroundStyle(AppColors.textPrimary)
-                                                    .padding(.horizontal, 8)
-                                                    .padding(.vertical, 3)
-                                                    .background(
-                                                        Capsule()
-                                                            .fill(Color.white.opacity(0.12))
-                                                    )
-                                            }
-
-                                            Text(card.maskedNumber)
-                                                .font(.system(size: 13, weight: .regular))
-                                                .foregroundStyle(AppColors.textTertiary)
-                                        }
-
-                                        Spacer()
-                                    }
-                                    .padding(16)
-                                    .background {
-                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                            .fill(CashbackScreenStyle.cardFill)
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                                    .fill(CashbackScreenStyle.glow)
-                                                    .opacity(isSelected ? 0.6 : 0)
-                                            )
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                                    .stroke(
-                                                        CashbackScreenStyle.accent.opacity(isSelected ? 0.55 : 0.2),
-                                                        lineWidth: 1
-                                                    )
-                                            )
-                                    }
+                                    cardRow(card: card, isSelected: isSelected)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -2099,24 +2134,7 @@ private struct CashbackSingleCardPickerView: View {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 16)
 
-                        if hasFreeLimit {
-                            Button {
-                                onTapUpgrade()
-                            } label: {
-                                Text(String(localized: "cashback.free_plan.show_all_cards_pro"))
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundStyle(AppColors.textPrimary)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 12)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                            .fill(CashbackScreenStyle.subduedCircleFill)
-                                    )
-                            }
-                            .buttonStyle(.plain)
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 8)
-                        }
+                        Color.clear.frame(height: isAddCardRecommendationHidden ? 16 : 108)
                     }
                 }
 
@@ -2133,30 +2151,186 @@ private struct CashbackSingleCardPickerView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Готово") {
+                    Button {
                         dismiss()
+                    } label: {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 17, weight: .semibold))
                     }
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: AppColors.cashbackGradient,
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
+                    .foregroundStyle(AppColors.brandPrimary)
+                    .accessibilityLabel(Text("Готово"))
+                }
+            }
+            .sheet(isPresented: $showAddCardSheet, onDismiss: onCardsChanged) {
+                if let financeViewModel {
+                    FinanceAddAccountView(
+                        viewModel: financeViewModel,
+                        preselectedAccountType: .card
                     )
                 }
             }
         }
     }
 
+    private var pickerHeader: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Выберите карту, для которой вы настраиваете категории и проценты в этом месяце")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(AppColors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let selectedCard = availableCards.first(where: { $0.cardUniqueID == selectedCardID }) {
+                HStack(spacing: 8) {
+                    Text("Выбрана")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(CashbackScreenStyle.accentSoft)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(CashbackScreenStyle.accent.opacity(0.14))
+                        )
+
+                    Text(CashbackCardPresentation.title(for: selectedCard))
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .padding(.horizontal, 2)
+    }
+
+    private func selectionIndicator(isSelected: Bool) -> some View {
+        ZStack {
+            Circle()
+                .fill(isSelected ? CashbackScreenStyle.accent.opacity(0.16) : Color.white.opacity(0.03))
+                .overlay(
+                    Circle()
+                        .stroke(
+                            isSelected ? CashbackScreenStyle.accent.opacity(0.52) : Color.white.opacity(0.10),
+                            lineWidth: 1
+                        )
+                )
+
+            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(
+                    isSelected
+                        ? AnyShapeStyle(
+                            LinearGradient(
+                                colors: AppColors.cashbackGradient,
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        : AnyShapeStyle(AppColors.textTertiary.opacity(0.7))
+                )
+        }
+        .frame(width: 30, height: 30)
+    }
+
+    private func favoriteMarker(for card: Card) -> some View {
+        Group {
+            if card.isFavorite {
+                Label("Избранная", systemImage: "star.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppColors.textSecondary)
+                    .labelStyle(.titleAndIcon)
+            }
+        }
+    }
+
+    private func rowBackground(isSelected: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .fill(isSelected ? CashbackScreenStyle.accent.opacity(0.10) : Color.white.opacity(0.035))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(
+                        isSelected ? CashbackScreenStyle.accent.opacity(0.34) : Color.white.opacity(0.08),
+                        lineWidth: 1
+                    )
+            )
+    }
+
+    private var freeLimitHint: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(CashbackScreenStyle.accentSoft)
+
+            Text(
+                String(
+                    format: String(localized: "cashback.free_plan.card_limit_format"),
+                    EntitlementPolicy.freeCashbackCardLimit
+                )
+            )
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(AppColors.textSecondary)
+
+            Spacer(minLength: 8)
+
+            Button(String(localized: "cashback.free_plan.show_all_cards_pro")) {
+                onTapUpgrade()
+            }
+            .font(.system(size: 13, weight: .semibold))
+            .buttonStyle(.plain)
+            .foregroundStyle(
+                LinearGradient(
+                    colors: AppColors.cashbackGradient,
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white.opacity(0.05))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(CashbackScreenStyle.accent.opacity(0.25), lineWidth: 1)
+                )
+        )
+    }
+
+    private func cardRow(card: Card, isSelected: Bool) -> some View {
+        HStack(spacing: 12) {
+            selectionIndicator(isSelected: isSelected)
+
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 8) {
+                    Text(CashbackCardPresentation.title(for: card))
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .lineLimit(1)
+
+                    favoriteMarker(for: card)
+                }
+
+                Text(CashbackCardPresentation.pickerSubtitle(for: card))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(AppColors.textSecondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(rowBackground(isSelected: isSelected))
+    }
+
     private var cardCreationRecommendationBanner: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Image(systemName: "lightbulb.max.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(CashbackScreenStyle.accent)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppColors.textSecondary)
 
                 Text("Где добавить новую карту")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppColors.textPrimary)
 
                 Spacer()
@@ -2170,19 +2344,36 @@ private struct CashbackSingleCardPickerView: View {
                 .accessibilityLabel(Text("Скрыть рекомендацию"))
             }
 
-            Text("Добавить новую карту можно в «Финансы» -> «+» -> «Новый продукт» -> «Карта».")
+            Text("Новой карты нет в списке? Добавьте ее в «Финансах»")
                 .font(.system(size: 13, weight: .regular))
                 .foregroundStyle(AppColors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            Button {
+                if financeViewModel == nil {
+                    financeViewModel = FinanceViewModel(modelContext: modelContext)
+                }
+                showAddCardSheet = true
+            } label: {
+                Text("Добавить карту")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppColors.brandPrimary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("Открыть создание новой карты"))
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
         .background {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(CashbackScreenStyle.cardFill)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white.opacity(0.035))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(CashbackScreenStyle.accent.opacity(0.45), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(CashbackScreenStyle.accent.opacity(0.04))
                 )
         }
     }

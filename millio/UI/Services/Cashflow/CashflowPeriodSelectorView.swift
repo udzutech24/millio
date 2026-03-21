@@ -77,7 +77,11 @@ struct CashflowPeriodSelectorView: View {
                         }
                     } else if selectedPeriodType == .custom {
                         Section {
-                            CalendarRangeMonthView(startDate: $customStartDate, endDate: $customEndDate)
+                            CalendarRangeMonthView(
+                                startDate: $customStartDate,
+                                endDate: $customEndDate,
+                                theme: .cashflow
+                            )
                         } header: {
                             Text("cashflow.period_selector.select_period")
                                 .foregroundStyle(AppColors.textSecondary)

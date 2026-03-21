@@ -59,12 +59,17 @@ struct CashflowTransactionImporter: ModelImporter {
         let creditID = dict["creditID"] as? String
         let investmentID = dict["investmentID"] as? String
         let note = dict["note"] as? String
+        let operationGroupID = dict["operationGroupID"] as? String
         let assetQuantityBefore = dict["assetQuantityBefore"] as? Double
         let assetQuantityAfter = dict["assetQuantityAfter"] as? Double
         let assetUnitPriceBefore = dict["assetUnitPriceBefore"] as? Double
         let assetUnitPriceAfter = dict["assetUnitPriceAfter"] as? Double
         let assetAmountBefore = dict["assetAmountBefore"] as? Double
         let assetAmountAfter = dict["assetAmountAfter"] as? Double
+        let assetPurchaseUnitPriceBefore = dict["assetPurchaseUnitPriceBefore"] as? Double
+        let assetPurchaseUnitPriceAfter = dict["assetPurchaseUnitPriceAfter"] as? Double
+        let assetPurchaseCostBefore = dict["assetPurchaseCostBefore"] as? Double
+        let assetPurchaseCostAfter = dict["assetPurchaseCostAfter"] as? Double
         let exchangeRate = dict["exchangeRate"] as? Double
         let exchangeRateDate = (dict["exchangeRateDate"] as? TimeInterval).map { Date(timeIntervalSince1970: $0) }
         let exchangeRateCurrency = dict["exchangeRateCurrency"] as? String
@@ -97,6 +102,7 @@ struct CashflowTransactionImporter: ModelImporter {
             incomeCategoryRaw: incomeCategoryRaw,
             expenseCategoryRaw: expenseCategoryRaw,
             note: note,
+            operationGroupID: operationGroupID,
             recurrenceRule: recurrenceRule,
             recurrenceWeekdays: recurrenceWeekdays,
             recurrenceSeriesID: recurrenceSeriesID,
@@ -114,6 +120,10 @@ struct CashflowTransactionImporter: ModelImporter {
         transaction.assetUnitPriceAfter = assetUnitPriceAfter
         transaction.assetAmountBefore = assetAmountBefore
         transaction.assetAmountAfter = assetAmountAfter
+        transaction.assetPurchaseUnitPriceBefore = assetPurchaseUnitPriceBefore
+        transaction.assetPurchaseUnitPriceAfter = assetPurchaseUnitPriceAfter
+        transaction.assetPurchaseCostBefore = assetPurchaseCostBefore
+        transaction.assetPurchaseCostAfter = assetPurchaseCostAfter
         transaction.hasAppliedBalanceEffect = hasAppliedBalanceEffect
 
         context.insert(transaction)

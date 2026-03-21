@@ -12,13 +12,13 @@ enum ServiceButtonStyle {
     static let cornerRadius: CGFloat = 24
     static let horizontalPadding: CGFloat = 16
     static let contentSpacing: CGFloat = 14
-    static let iconContainerSize: CGFloat = 58
-    static let iconSize: CGFloat = 56
+    static let iconContainerSize: CGFloat = 62
+    static let iconSize: CGFloat = 60
     static let titleSize: CGFloat = 17
 
-    static let baseFillTop = Color(hex: "11161F")
-    static let baseFillBottom = Color(hex: "090C12")
-    static let borderHighlight = Color.white.opacity(0.12)
+    static let baseFillTop = Color(hex: "11161F").opacity(0.82)
+    static let baseFillBottom = Color(hex: "090C12").opacity(0.72)
+    static let borderHighlight = Color.white.opacity(0.08)
     static let shadowColor = Color.black.opacity(0.26)
 }
 
@@ -78,11 +78,11 @@ struct ServiceButton: View {
                     )
                     .strokeBorder(
                         LinearGradient(
-                            colors: gradientColors.map { $0.opacity(0.52) },
+                            colors: gradientColors.map { $0.opacity(0.38) },
                             startPoint: .leading,
                             endPoint: .trailing
                         ),
-                        lineWidth: 0.85
+                        lineWidth: 0.72
                     )
                 }
                 .overlay(alignment: .top) {
@@ -102,9 +102,9 @@ struct ServiceButton: View {
                 }
                 .shadow(
                     color: ServiceButtonStyle.shadowColor,
-                    radius: 16,
+                    radius: 12,
                     x: 0,
-                    y: 8
+                    y: 6
                 )
             }
         }

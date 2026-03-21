@@ -147,11 +147,15 @@ struct CashflowTransactionsHistoryViewTests {
             before: CashflowAssetChangeSnapshot(
                 quantity: 10,
                 unitPrice: 100,
+                purchaseUnitPrice: nil,
+                purchaseCost: nil,
                 totalAmount: 1_000
             ),
             after: CashflowAssetChangeSnapshot(
                 quantity: 12,
                 unitPrice: 120,
+                purchaseUnitPrice: nil,
+                purchaseCost: nil,
                 totalAmount: 1_440
             )
         )
@@ -187,11 +191,15 @@ struct CashflowTransactionsHistoryViewTests {
             before: CashflowAssetChangeSnapshot(
                 quantity: 10,
                 unitPrice: 100,
+                purchaseUnitPrice: nil,
+                purchaseCost: nil,
                 totalAmount: 1_000
             ),
             after: CashflowAssetChangeSnapshot(
                 quantity: 10,
                 unitPrice: 120,
+                purchaseUnitPrice: nil,
+                purchaseCost: nil,
                 totalAmount: 1_200
             )
         )
@@ -267,5 +275,137 @@ struct CashflowTransactionsHistoryViewTests {
 
         #expect(filtered.count == 1)
         #expect(filtered.first?.cardID == firstCard.cardUniqueID)
+    }
+
+    @Test("История покупки актива показывает карту списания из связанной операции")
+    func historyResolvesLinkedSettlementCardForAssetTrade() {
+        let previousLanguage = LanguageManager.shared.currentLanguage
+        LanguageManager.shared.setLanguage(.russian)
+        defer { LanguageManager.shared.setLanguage(previousLanguage) }
+
+        let investmentTrade = CashflowTransaction(
+            transactionType: .balanceAdjustment,
+            amount: 676.33,
+            currency: "USD",
+            transactionDate: Date(),
+            investmentID: "asset-1",
+            note: String(localized: "finances.transaction.note.investment_buy"),
+            operationGroupID: "trade-1"
+        )
+        investmentTrade.applyAssetChangeSnapshot(
+            before: CashflowAssetChangeSnapshot(
+                quantity: 18,
+                unitPrice: 676.33,
+                purchaseUnitPrice: nil,
+                purchaseCost: nil,
+                totalAmount: 12_173.94
+            ),
+            after: CashflowAssetChangeSnapshot(
+                quantity: 19,
+                unitPrice: 676.33,
+                purchaseUnitPrice: nil,
+                purchaseCost: nil,
+                totalAmount: 12_850.27
+            )
+        )
+
+        let settlement = CashflowTransaction(
+            transactionType: .expense,
+            amount: 676.33,
+            currency: "USD",
+            transactionDate: Date(),
+            cardID: "card-main",
+            investmentID: "asset-1",
+            expenseCategory: .other,
+            note: String(localized: "finances.transaction.note.investment_buy"),
+            operationGroupID: "trade-1",
+            affectsCashflowTotals: false
+        )
+
+        let related = cashflowHistoryRelatedTransactions(for: investmentTrade, in: [investmentTrade, settlement])
+        let context = cashflowHistorySettlementAccountContext(
+            for: investmentTrade,
+            in: [investmentTrade, settlement]
+        )
+        let description = cashflowHistoryDescription(
+            for: investmentTrade,
+            relatedTransactions: [investmentTrade, settlement],
+            cardNameResolver: { cardID in
+                cardID == "card-main" ? "Black Card" : nil
+            },
+            investmentNameResolver: { investmentID in
+                investmentID == "asset-1" ? "Apple" : nil
+            },
+            incomeCategoryResolver: { _ in "" },
+            expenseCategoryResolver: { _ in "" },
+            locale: Locale(identifier: "ru_RU")
+        )
+
+        #expect(related.count == 1)
+        #expect(context == CashflowHistorySettlementAccountContext(cardID: "card-main", direction: .debit))
+        #expect(cashflowHistoryPrimaryTitle(for: investmentTrade) == "Покупка актива")
+        #expect(description?.contains("Счет списания: Black Card") == true)
+    }
+
+    @Test("Фильтр по карте находит покупку актива через settlement leg")
+    @MainActor
+    func historyFiltersInvestmentTradeByLinkedSettlementCard() throws {
+        let context = makeContext()
+        try context.deleteAll(CashflowTransaction.self)
+        try context.deleteAll(Card.self)
+        try context.save()
+
+        let card = Card(name: "Broker Card", cardNumber: "3333")
+        context.insert(card)
+
+        let investmentTrade = CashflowTransaction(
+            transactionType: .balanceAdjustment,
+            amount: 500,
+            currency: "USD",
+            transactionDate: Date(),
+            investmentID: "asset-1",
+            note: String(localized: "finances.transaction.note.investment_buy"),
+            operationGroupID: "trade-2"
+        )
+        investmentTrade.applyAssetChangeSnapshot(
+            before: CashflowAssetChangeSnapshot(
+                quantity: 1,
+                unitPrice: 100,
+                purchaseUnitPrice: nil,
+                purchaseCost: nil,
+                totalAmount: 100
+            ),
+            after: CashflowAssetChangeSnapshot(
+                quantity: 2,
+                unitPrice: 300,
+                purchaseUnitPrice: nil,
+                purchaseCost: nil,
+                totalAmount: 600
+            )
+        )
+
+        let settlement = CashflowTransaction(
+            transactionType: .expense,
+            amount: 500,
+            currency: "USD",
+            transactionDate: Date(),
+            cardID: card.cardUniqueID,
+            investmentID: "asset-1",
+            expenseCategory: .other,
+            note: String(localized: "finances.transaction.note.investment_buy"),
+            operationGroupID: "trade-2",
+            affectsCashflowTotals: false
+        )
+
+        context.insert(investmentTrade)
+        context.insert(settlement)
+        try context.save()
+
+        let viewModel = CashflowViewModel(modelContext: context)
+        let filtered = viewModel.historyTransactions(matching: CashflowHistoryQuery(cardID: card.cardUniqueID))
+
+        #expect(filtered.count == 1)
+        #expect(filtered.first?.operationGroupID == "trade-2")
+        #expect(filtered.first?.transactionType == .balanceAdjustment)
     }
 }

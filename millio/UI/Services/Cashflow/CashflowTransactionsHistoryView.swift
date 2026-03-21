@@ -129,6 +129,208 @@ func cashflowHistoryTimeToken(for date: Date?) -> String {
     return String(Int(timestamp.rounded(.towardZero)))
 }
 
+enum CashflowHistorySettlementDirection {
+    case debit
+    case credit
+}
+
+struct CashflowHistorySettlementAccountContext: Equatable {
+    let cardID: String
+    let direction: CashflowHistorySettlementDirection
+}
+
+func cashflowHistoryRelatedTransactions(
+    for transaction: CashflowTransaction,
+    in transactions: [CashflowTransaction]
+) -> [CashflowTransaction] {
+    guard let operationGroupID = transaction.operationGroupID?
+        .trimmingCharacters(in: .whitespacesAndNewlines),
+        !operationGroupID.isEmpty else {
+        return []
+    }
+
+    return transactions.filter {
+        $0.persistentModelID != transaction.persistentModelID
+            && $0.operationGroupID == operationGroupID
+    }
+}
+
+func cashflowHistorySettlementAccountContext(
+    for transaction: CashflowTransaction,
+    in transactions: [CashflowTransaction]
+) -> CashflowHistorySettlementAccountContext? {
+    switch transaction.transactionType {
+    case .expense:
+        if let cardID = transaction.cardID, !cardID.isEmpty {
+            return CashflowHistorySettlementAccountContext(cardID: cardID, direction: .debit)
+        }
+    case .income:
+        if let cardID = transaction.cardID, !cardID.isEmpty {
+            return CashflowHistorySettlementAccountContext(cardID: cardID, direction: .credit)
+        }
+    case .transfer:
+        return nil
+    case .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
+        break
+    }
+
+    for related in cashflowHistoryRelatedTransactions(for: transaction, in: transactions) {
+        switch related.transactionType {
+        case .expense:
+            if let cardID = related.cardID, !cardID.isEmpty {
+                return CashflowHistorySettlementAccountContext(cardID: cardID, direction: .debit)
+            }
+        case .income:
+            if let cardID = related.cardID, !cardID.isEmpty {
+                return CashflowHistorySettlementAccountContext(cardID: cardID, direction: .credit)
+            }
+        case .transfer, .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
+            continue
+        }
+    }
+
+    if let cardID = transaction.cardID, !cardID.isEmpty {
+        return CashflowHistorySettlementAccountContext(cardID: cardID, direction: .debit)
+    }
+
+    return nil
+}
+
+func cashflowHistoryPrimaryTitle(
+    for transaction: CashflowTransaction,
+    locale: Locale = .autoupdatingCurrent
+) -> String {
+    let resolvedLocale = cashflowHistoryPresentationLocale(from: locale)
+    let trimmedNote = transaction.note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    guard !trimmedNote.isEmpty else { return transaction.transactionType.displayName }
+
+    func localizedInvestmentTradeTitleIfNeeded() -> String? {
+        let buyTitles = [
+            AppLocalization.string("finances.transaction.note.investment_buy", locale: resolvedLocale),
+            AppLocalization.string("finances.transaction.note.investment_buy", locale: Locale(identifier: "ru_RU")),
+            AppLocalization.string("finances.transaction.note.investment_buy", locale: Locale(identifier: "en_US"))
+        ]
+        if buyTitles.contains(trimmedNote) {
+            return AppLocalization.string("finances.transaction.note.investment_buy", locale: resolvedLocale)
+        }
+
+        let sellTitles = [
+            AppLocalization.string("finances.transaction.note.investment_sell", locale: resolvedLocale),
+            AppLocalization.string("finances.transaction.note.investment_sell", locale: Locale(identifier: "ru_RU")),
+            AppLocalization.string("finances.transaction.note.investment_sell", locale: Locale(identifier: "en_US"))
+        ]
+        if sellTitles.contains(trimmedNote) {
+            return AppLocalization.string("finances.transaction.note.investment_sell", locale: resolvedLocale)
+        }
+
+        return nil
+    }
+
+    switch transaction.transactionType {
+    case .balanceAdjustment:
+        if transaction.investmentID != nil {
+            return localizedInvestmentTradeTitleIfNeeded() ?? trimmedNote
+        }
+        return transaction.transactionType.displayName
+    case .expense, .income:
+        if !transaction.shouldAffectCashflowTotals && transaction.investmentID != nil {
+            return localizedInvestmentTradeTitleIfNeeded() ?? trimmedNote
+        }
+        return transaction.transactionType.displayName
+    case .transfer, .cardBalanceAdjustment, .creditDebtAdjustment:
+        return transaction.transactionType.displayName
+    }
+}
+
+private func cashflowHistoryPresentationLocale(from locale: Locale) -> Locale {
+    let currentIdentifier = Locale.autoupdatingCurrent.identifier
+    guard locale.identifier == currentIdentifier else {
+        return locale
+    }
+    return LanguageManager.shared.currentLanguage.locale ?? locale
+}
+
+func cashflowHistoryAccountLabel(
+    for direction: CashflowHistorySettlementDirection,
+    locale: Locale = .autoupdatingCurrent
+) -> String {
+    let isRussian = locale.identifier.lowercased().hasPrefix("ru")
+    switch direction {
+    case .debit:
+        return isRussian ? "Счет списания" : "Debit account"
+    case .credit:
+        return isRussian ? "Счет зачисления" : "Credit account"
+    }
+}
+
+func cashflowHistoryDescription(
+    for transaction: CashflowTransaction,
+    relatedTransactions: [CashflowTransaction],
+    cardNameResolver: (String?) -> String?,
+    investmentNameResolver: (String?) -> String?,
+    incomeCategoryResolver: (String?) -> String,
+    expenseCategoryResolver: (String?) -> String,
+    locale: Locale = .autoupdatingCurrent
+) -> String? {
+    var parts: [String] = []
+
+    switch transaction.transactionType {
+    case .income:
+        if let raw = transaction.incomeCategoryRaw {
+            parts.append(incomeCategoryResolver(raw))
+        }
+    case .expense:
+        if let raw = transaction.expenseCategoryRaw {
+            parts.append(expenseCategoryResolver(raw))
+        }
+    case .transfer:
+        if let fromName = cardNameResolver(transaction.cardID),
+           let toName = cardNameResolver(transaction.toCardID) {
+            parts.append("\(fromName) -> \(toName)")
+        }
+    case .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
+        if let investmentName = investmentNameResolver(transaction.investmentID) {
+            parts.append(investmentName)
+        }
+    }
+
+    if let context = cashflowHistorySettlementAccountContext(
+        for: transaction,
+        in: relatedTransactions
+    ), let cardName = cardNameResolver(context.cardID) {
+        parts.append("\(cashflowHistoryAccountLabel(for: context.direction, locale: locale)): \(cardName)")
+    } else {
+        switch transaction.transactionType {
+        case .expense:
+            if let cardName = cardNameResolver(transaction.cardID) {
+                parts.append("\(cashflowHistoryAccountLabel(for: .debit, locale: locale)): \(cardName)")
+            }
+        case .income:
+            if let cardName = cardNameResolver(transaction.cardID) {
+                parts.append("\(cashflowHistoryAccountLabel(for: .credit, locale: locale)): \(cardName)")
+            }
+        case .transfer, .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
+            break
+        }
+    }
+
+    if let assetChangeSummary = cashflowHistoryAssetChangeSummary(
+        for: transaction,
+        currencyCode: transaction.currency,
+        locale: locale
+    ), !assetChangeSummary.isEmpty {
+        parts.append(assetChangeSummary)
+    }
+
+    let trimmedNote = transaction.note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    let primaryTitle = cashflowHistoryPrimaryTitle(for: transaction)
+    if !trimmedNote.isEmpty && trimmedNote != primaryTitle {
+        parts.append(trimmedNote)
+    }
+
+    return parts.isEmpty ? nil : parts.joined(separator: ". ")
+}
+
 // MARK: - History View
 
 struct CashflowTransactionsHistoryView: View {
@@ -479,7 +681,7 @@ struct CashflowTransactionsHistoryView: View {
                     ForEach(group.transactions) { transaction in
                         VStack(alignment: .leading, spacing: 5) {
                             // Заголовок типа операции
-                            FinancesSectionHeader(title: transaction.transactionType.displayName)
+                            FinancesSectionHeader(title: cashflowHistoryPrimaryTitle(for: transaction))
 
                             // Карточка операции
                             HistoryTransactionCard(
@@ -836,55 +1038,43 @@ private struct HistoryDateRangeSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 12) {
-                Text(
-                    String(
-                        format: String(localized: "cashflow.history.date_range.prefix"),
-                        periodTitle
-                    )
+            ZStack {
+                GradientBackground()
+
+                CalendarRangePickerPanel(
+                    title: nil,
+                    subtitle: String(localized: "cashflow.custom_period.calendar_hint"),
+                    startDate: $draftStartDate,
+                    endDate: $draftEndDate,
+                    theme: .cashflow
                 )
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(AppColors.textSecondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 24)
-
-                CalendarRangeMonthView(startDate: $draftStartDate, endDate: $draftEndDate)
-                    .padding(.horizontal, 24)
-
-                HStack(spacing: 12) {
-                    Button(String(localized: "cashflow.common.reset")) {
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+            }
+            .safeAreaInset(edge: .bottom) {
+                CalendarRangeSheetActionBar(
+                    secondaryTitle: String(localized: "cashflow.common.reset"),
+                    primaryTitle: String(localized: "cashflow.common.apply"),
+                    theme: .cashflow
+                ) {
                         resetToDefaultRange()
                         dismiss()
-                    }
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(AppColors.textSecondary)
-
-                    Button(String(localized: "cashflow.common.apply")) {
+                } primaryAction: {
                         startDate = draftStartDate
                         endDate = draftEndDate
                         dismiss()
-                    }
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 10)
-                    .background(
-                        Capsule()
-                            .fill(Color.white.opacity(0.1))
-                    )
                 }
-                .padding(.top, 4)
-                .padding(.bottom, 16)
             }
-            .background(Color.black.ignoresSafeArea())
             .navigationTitle(String(localized: "cashflow.history.date_filter.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button(String(localized: "cashflow.common.dismiss")) {
+                    ToolbarGlassIconButton(
+                        systemName: "xmark",
+                        accessibilityLabel: String(localized: "cashflow.common.dismiss")
+                    ) {
                         dismiss()
                     }
-                    .foregroundStyle(AppColors.textPrimary)
                 }
             }
             .onAppear {
@@ -1093,7 +1283,7 @@ private struct HistoryTransactionDetailView: View {
             )
             detailRow(
                 title: String(localized: "cashflow.history.detail.type"),
-                value: currentTransaction.transactionType.displayName
+                value: cashflowHistoryPrimaryTitle(for: currentTransaction)
             )
             detailRow(
                 title: String(localized: "cashflow.history.detail.date"),
@@ -1107,10 +1297,11 @@ private struct HistoryTransactionDetailView: View {
                 )
             }
 
-            if let fromCard = cardName(for: currentTransaction.cardID) {
+            if let settlementAccountContext,
+               let settlementCard = cardName(for: settlementAccountContext.cardID) {
                 detailRow(
-                    title: String(localized: "cashflow.history.detail.from_account"),
-                    value: fromCard
+                    title: cashflowHistoryAccountLabel(for: settlementAccountContext.direction),
+                    value: settlementCard
                 )
             }
 
@@ -1135,7 +1326,7 @@ private struct HistoryTransactionDetailView: View {
                 )
             }
 
-            if let note = currentTransaction.note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
+            if let note = detailNote {
                 detailRow(
                     title: String(localized: "cashflow.history.detail.note"),
                     value: note
@@ -1260,6 +1451,19 @@ private struct HistoryTransactionDetailView: View {
         )
     }
 
+    private var detailNote: String? {
+        let note = currentTransaction.note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !note.isEmpty else { return nil }
+        return note == cashflowHistoryPrimaryTitle(for: currentTransaction) ? nil : note
+    }
+
+    private var settlementAccountContext: CashflowHistorySettlementAccountContext? {
+        cashflowHistorySettlementAccountContext(
+            for: currentTransaction,
+            in: viewModel.state.transactions
+        )
+    }
+
     private var historyInvestmentTitle: String {
         Locale.autoupdatingCurrent.identifier.lowercased().hasPrefix("ru") ? "Актив" : "Asset"
     }
@@ -1348,49 +1552,14 @@ private struct HistoryTransactionCard: View {
     // MARK: - Описание операции
 
     private var transactionDescription: String? {
-        var parts: [String] = []
-
-        switch transaction.transactionType {
-        case .income:
-            if let categoryRaw = transaction.incomeCategoryRaw {
-                parts.append(viewModel.incomeCategoryDisplayName(for: categoryRaw))
-            }
-            if let cardName = cardName(for: transaction.cardID) {
-                parts.append("to \(cardName)")
-            }
-
-        case .expense:
-            if let categoryRaw = transaction.expenseCategoryRaw {
-                parts.append(viewModel.expenseCategoryDisplayName(for: categoryRaw))
-            }
-            if let cardName = cardName(for: transaction.cardID) {
-                parts.append("from \(cardName)")
-            }
-
-        case .transfer:
-            if let fromName = cardName(for: transaction.cardID),
-               let toName = cardName(for: transaction.toCardID) {
-                parts.append("\(fromName) → \(toName)")
-            }
-
-        default:
-            if let investmentName = investmentName(for: transaction.investmentID) {
-                parts.append(investmentName)
-            }
-            if let cardName = cardName(for: transaction.cardID) {
-                parts.append(cardName)
-            }
-        }
-
-        if let note = transaction.note, !note.isEmpty {
-            parts.append(note)
-        }
-
-        if let assetChangeSummary, !assetChangeSummary.isEmpty {
-            parts.append(assetChangeSummary)
-        }
-
-        return parts.isEmpty ? nil : parts.joined(separator: ". ")
+        cashflowHistoryDescription(
+            for: transaction,
+            relatedTransactions: viewModel.state.transactions,
+            cardNameResolver: cardName(for:),
+            investmentNameResolver: investmentName(for:),
+            incomeCategoryResolver: viewModel.incomeCategoryDisplayName(for:),
+            expenseCategoryResolver: viewModel.expenseCategoryDisplayName(for:)
+        )
     }
 
     private func cardName(for cardID: String?) -> String? {

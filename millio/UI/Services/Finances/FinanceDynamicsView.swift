@@ -2550,8 +2550,8 @@ private struct FinanceDynamicsContentView: View {
     // MARK: - Period Selector
 
     private var periodSelector: some View {
-        let periodBg = Color(.sRGB, red: 217.0 / 255.0, green: 217.0 / 255.0, blue: 217.0 / 255.0, opacity: 0.2)
-        let calendarBg = Color(.sRGB, red: 217.0 / 255.0, green: 217.0 / 255.0, blue: 217.0 / 255.0, opacity: 0.4)
+        let selectedFill = Color.white.opacity(0.10)
+        let quietFill = Color.white.opacity(0.05)
         return HStack(spacing: 6) {
             // Кнопки периодов
             ForEach([DynamicsPeriod.all, .day, .week, .month, .year], id: \.self) { period in
@@ -2567,19 +2567,17 @@ private struct FinanceDynamicsContentView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 7)
                         .background(
-                            Capsule().fill(
-                                period == viewModel.state.period && !useCustomPeriod
-                                    ? periodBg
-                                    : periodBg
-                            )
+                            Capsule()
+                                .fill(period == viewModel.state.period && !useCustomPeriod ? selectedFill : quietFill)
                         )
                         .overlay(
-                            Capsule().stroke(
-                                Color.white.opacity(
-                                    period == viewModel.state.period && !useCustomPeriod ? 0.20 : 0.08
-                                ),
-                                lineWidth: 0
-                            )
+                            Capsule()
+                                .stroke(
+                                    period == viewModel.state.period && !useCustomPeriod
+                                        ? CalendarRangeTheme.finances.ringColor.opacity(0.9)
+                                        : Color.white.opacity(0.14),
+                                    lineWidth: period == viewModel.state.period && !useCustomPeriod ? 1.2 : 1
+                                )
                         )
                         .foregroundStyle(
                             period == viewModel.state.period && !useCustomPeriod
@@ -2599,12 +2597,24 @@ private struct FinanceDynamicsContentView: View {
                 draftEndDate = customEndDate
                 showCustomPeriodSheet = true
             } label: {
-                Image("calendar")
-                    .frame(width: 24, height: 24)
-                    .font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(calendarBg))
+                    Image("calendar")
+                        .frame(width: 24, height: 24)
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(useCustomPeriod ? selectedFill : quietFill)
+                                .overlay(
+                                    Capsule()
+                                        .stroke(
+                                            useCustomPeriod
+                                                ? CalendarRangeTheme.finances.ringColor.opacity(0.9)
+                                                : Color.white.opacity(0.14),
+                                            lineWidth: useCustomPeriod ? 1.2 : 1
+                                        )
+                                )
+                        )
                     .foregroundStyle(useCustomPeriod ? AppColors.textPrimary : AppColors.textSecondary)
             }
             .buttonStyle(.plain)
@@ -2622,57 +2632,32 @@ private struct FinanceDynamicsContentView: View {
             ZStack {
                 GradientBackground()
 
-                VStack(spacing: 16) {
-                    // Header с информацией о периоде
-                    VStack(alignment: .leading, spacing: 6) {
-                        let sameYear = Calendar.current.component(.year, from: draftStartDate) == Calendar.current.component(.year, from: draftEndDate)
-                        let startFormat: Date.FormatStyle = sameYear ? .dateTime.day().month(.abbreviated) : .dateTime.day().month(.abbreviated).year()
-                        let endFormat: Date.FormatStyle = .dateTime.day().month(.abbreviated).year()
-                        Text(
-                            FinancesL10n.format(
-                                "finances.dynamics.custom_period.title",
-                                min(draftStartDate, draftEndDate).formatted(startFormat),
-                                max(draftStartDate, draftEndDate).formatted(endFormat)
-                            )
-                        )
-                            .font(.headline)
-                            .foregroundStyle(AppColors.textPrimary)
-                        Text(String(localized: "finances.dynamics.custom_period.subtitle"))
-                            .font(.callout)
-                            .foregroundStyle(AppColors.textSecondary)
-                    }
-                    .padding(.horizontal, 0)
-                    .padding(.top, 4)
-
-                    // Календарь
-                    CalendarRangeMonthView(startDate: $draftStartDate, endDate: $draftEndDate)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 8)
-                }
+                CalendarRangePickerPanel(
+                    title: nil,
+                    subtitle: String(localized: "finances.dynamics.custom_period.subtitle"),
+                    startDate: $draftStartDate,
+                    endDate: $draftEndDate,
+                    theme: .finances
+                )
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
+                    ToolbarGlassIconButton(
+                        systemName: "xmark",
+                        accessibilityLabel: String(localized: "cashflow.common.dismiss")
+                    ) {
                         showCustomPeriodSheet = false
-                    } label: {
-                        Image(systemName: "xmark")
-                            .foregroundStyle(AppColors.textPrimary)
                     }
-                    .buttonStyle(.plain)
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                let gradient = LinearGradient(
-                    colors: [
-                        Color(red: 0.12, green: 0.02, blue: 0.12),
-                        Color(red: 0.02, green: 0.12, blue: 0.10)
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-
-                HStack(spacing: 12) {
-                    Button {
+                CalendarRangeSheetActionBar(
+                    secondaryTitle: String(localized: "finances.common.reset"),
+                    primaryTitle: String(localized: "finances.dynamics.custom_period.show"),
+                    theme: .finances
+                ) {
                         draftStartDate = Date()
                         draftEndDate = Date()
                         customStartDate = draftStartDate
@@ -2681,20 +2666,7 @@ private struct FinanceDynamicsContentView: View {
                         viewModel.handle(.setPeriod(.month))
                         cachedSelectedPoint = nil
                         showCustomPeriodSheet = false
-                    } label: {
-                        Text(String(localized: "finances.common.reset"))
-                            .font(.system(size: 16, weight: .semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(
-                                Capsule()
-                                    .stroke(Color.white.opacity(0.7), lineWidth: 1)
-                            )
-                            .foregroundStyle(AppColors.textSecondary)
-                    }
-                    .buttonStyle(.plain)
-
-                    Button {
+                } primaryAction: {
                         let start = min(draftStartDate, draftEndDate)
                         let end = max(draftStartDate, draftEndDate)
                         let clampedEnd = min(end, Date())
@@ -2705,38 +2677,12 @@ private struct FinanceDynamicsContentView: View {
                         viewModel.handle(.setCustomPeriod(start: clampedStart, end: clampedEnd))
                         cachedSelectedPoint = nil
                         showCustomPeriodSheet = false
-                    } label: {
-                        Text(String(localized: "finances.dynamics.custom_period.show"))
-                            .font(.system(size: 16, weight: .semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(
-                                Capsule()
-                                    .fill(gradient)
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(
-                                                LinearGradient(
-                                                    colors: AppColors.financesGradient,
-                                                    startPoint: .leading,
-                                                    endPoint: .trailing
-                                                ),
-                                                lineWidth: 1
-                                            )
-                                    )
-                            )
-                            .foregroundStyle(Color.white)
-                    }
-                    .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
             }
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
     }
-
     // MARK: - Dynamics List Card
 
     private var dynamicsListCard: some View {

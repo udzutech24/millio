@@ -327,6 +327,8 @@ final class InvestmentViewModel: ViewModelProtocol {
             assetChangeSnapshotBefore = CashflowAssetChangeSnapshot(
                 quantity: previousQuantity,
                 unitPrice: previousUnitPrice,
+                purchaseUnitPrice: existing.averagePurchaseUnitPrice,
+                purchaseCost: existing.totalPurchaseCost,
                 totalAmount: oldAmount
             )
             // Обновляем существующую инвестицию
@@ -395,6 +397,8 @@ final class InvestmentViewModel: ViewModelProtocol {
                         after: CashflowAssetChangeSnapshot(
                             quantity: existing.marketQuantity,
                             unitPrice: existing.lastKnownUnitPrice,
+                            purchaseUnitPrice: existing.averagePurchaseUnitPrice,
+                            purchaseCost: existing.totalPurchaseCost,
                             totalAmount: existing.amount
                         )
                     )

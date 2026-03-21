@@ -22,6 +22,7 @@ struct QuickSetupView: View {
     @State private var productCurrentPriceDisplayText = ""
     @State private var isGroupSetupCollapsed = false
     @State private var isProductTypeCollapsed = false
+    @State private var keyboardFrame: CGRect = .zero
 
     private let mode: QuickSetupFlowMode
     private let onCompleted: (() -> Void)?
@@ -83,44 +84,51 @@ struct QuickSetupView: View {
     }
 
     var body: some View {
-        ZStack {
-            quickSetupBackground
+        GeometryReader { geometry in
+            let keyboardOverlap = QuickSetupLayout.keyboardOverlap(
+                screenHeight: UIScreen.main.bounds.height,
+                keyboardFrame: keyboardFrame,
+                safeAreaBottom: geometry.safeAreaInsets.bottom
+            )
 
-            if didCompleteSetup {
-                completionContent
-            } else {
-                VStack(spacing: 0) {
-                    header
+            ZStack {
+                quickSetupBackground
 
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 18) {
-                                progressBar
-                                stepHero
-                                stepContent
+                if didCompleteSetup {
+                    completionContent
+                } else {
+                    VStack(spacing: 0) {
+                        header
+
+                        ScrollViewReader { proxy in
+                            ScrollView {
+                                VStack(alignment: .leading, spacing: 18) {
+                                    progressBar
+                                    stepHero
+                                    stepContent
+                                }
+                                .padding(.horizontal, 20)
+                                .padding(.top, 12)
+                                .padding(.bottom, QuickSetupLayout.contentBottomPadding(keyboardOverlap: keyboardOverlap))
                             }
-                            .padding(.horizontal, 20)
-                            .padding(.top, 12)
-                            .padding(.bottom, focusedField == nil ? 20 : 320)
-                        }
-                        .scrollDismissesKeyboard(.interactively)
-                        .background(
-                            Color.clear
-                                .contentShape(Rectangle())
-                                .onTapGesture { focusedField = nil }
-                        )
-                        .onChange(of: focusedField) { _, newValue in
-                            guard let newValue else { return }
-                            DispatchQueue.main.async {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) {
-                                    proxy.scrollTo(newValue, anchor: .center)
+                            .scrollDismissesKeyboard(.interactively)
+                            .background(
+                                Color.clear
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { focusedField = nil }
+                            )
+                            .onChange(of: focusedField) { _, newValue in
+                                guard let newValue else { return }
+                                DispatchQueue.main.async {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) {
+                                        proxy.scrollTo(newValue, anchor: .center)
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
-        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             bottomActions
                 .padding(.top, 14)
@@ -263,6 +271,25 @@ struct QuickSetupView: View {
         .onAppear {
             syncAllAmountDisplayTexts()
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
+            guard
+                let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect
+            else {
+                return
+            }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                keyboardFrame = frame
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                keyboardFrame = .zero
+            }
+        }
+        .onDisappear {
+            keyboardFrame = .zero
+        }
+    }
     }
 
     private var header: some View {
@@ -727,7 +754,7 @@ struct QuickSetupView: View {
     private var productTypeIconSelector: some View {
         LazyVGrid(columns: productTypeGridColumns, spacing: 8) {
             ForEach(viewModel.availableProductTypes) { type in
-                let selected = viewModel.productTypeForCreation == type
+                let selected = viewModel.hasExplicitlySelectedProductType && viewModel.productTypeForCreation == type
                 Button {
                     focusedField = nil
                     withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {

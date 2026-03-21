@@ -803,6 +803,9 @@ final class CashflowViewModel: ViewModelProtocol {
         let dateRange = normalizedHistoryDateRange(start: query.startDate, end: query.endDate)
 
         return state.filteredTransactions.filter { transaction in
+            if shouldHideLinkedSettlementTransactionInHistory(transaction) {
+                return false
+            }
             guard query.typeFilter.matches(transaction.transactionType) else {
                 return false
             }
@@ -834,10 +837,33 @@ final class CashflowViewModel: ViewModelProtocol {
         }
     }
 
+    private func shouldHideLinkedSettlementTransactionInHistory(_ transaction: CashflowTransaction) -> Bool {
+        guard let operationGroupID = transaction.operationGroupID,
+              !operationGroupID.isEmpty else {
+            return false
+        }
+        guard transaction.transactionType == .expense || transaction.transactionType == .income else {
+            return false
+        }
+        guard transaction.shouldAffectCashflowTotals == false else {
+            return false
+        }
+
+        return state.filteredTransactions.contains { candidate in
+            candidate.operationGroupID == operationGroupID
+                && candidate.hasAssetChangeSnapshot
+        }
+    }
+
     private func historyTransactionMatchesCardFilter(_ transaction: CashflowTransaction, cardID: String) -> Bool {
         switch transaction.transactionType {
         case .income, .expense, .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
-            return transaction.cardID == cardID
+            if transaction.cardID == cardID {
+                return true
+            }
+            return linkedHistoryTransactions(for: transaction).contains { linked in
+                linked.cardID == cardID || linked.toCardID == cardID
+            }
         case .transfer:
             return transaction.cardID == cardID || transaction.toCardID == cardID
         }
@@ -899,7 +925,32 @@ final class CashflowViewModel: ViewModelProtocol {
             return true
         }
 
+        let linkedTransactions = linkedHistoryTransactions(for: transaction)
+        for linked in linkedTransactions {
+            let linkedFromCardName = cardsByID[linked.cardID ?? ""]
+            if let linkedFromCardName, linkedFromCardName.contains(query) {
+                return true
+            }
+
+            let linkedToCardName = cardsByID[linked.toCardID ?? ""]
+            if let linkedToCardName, linkedToCardName.contains(query) {
+                return true
+            }
+        }
+
         return false
+    }
+
+    private func linkedHistoryTransactions(for transaction: CashflowTransaction) -> [CashflowTransaction] {
+        guard let operationGroupID = transaction.operationGroupID,
+              !operationGroupID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return []
+        }
+
+        return state.filteredTransactions.filter {
+            $0.persistentModelID != transaction.persistentModelID
+                && $0.operationGroupID == operationGroupID
+        }
     }
     
     private func updateChartData() {
@@ -1741,6 +1792,7 @@ final class CashflowViewModel: ViewModelProtocol {
     ) async -> Double {
         let targetCurrency = currency ?? state.displayCurrency
         let filtered = monthlyTransactions(for: type, month: month)
+            .filter(\.shouldAffectCashflowTotals)
 
         let previousWarning = state.currencyConversionWarning
         let previousWarningDate = state.currencyConversionWarningDate
@@ -2656,10 +2708,52 @@ final class CashflowViewModel: ViewModelProtocol {
         for transaction: CashflowTransaction,
         direction: CardBalanceEffectDirection
     ) async throws {
-        guard shouldApplyCardBalanceImmediately(for: transaction) else { return }
+        switch direction {
+        case .apply:
+            guard shouldApplyCardBalanceImmediately(for: transaction) else { return }
+        case .revert:
+            guard persistedBalanceEffectWasApplied(for: transaction) else { return }
+        }
+
+        let impactedCardIDs = Set([transaction.cardID, transaction.toCardID].compactMap { $0 })
+        if !impactedCardIDs.isEmpty {
+            let resolvedCards = impactedCardIDs.compactMap { cardID -> (String, Card)? in
+                guard let card = card(for: cardID) else { return nil }
+                return (cardID, card)
+            }
+
+            for (cardID, card) in resolvedCards {
+                let delta = try await balanceDelta(
+                    for: transaction,
+                    onCardID: cardID,
+                    in: card.currency,
+                    direction: direction
+                )
+                guard abs(delta) > 0.0000001 else { continue }
+                let updatedBalance = card.balance + delta
+                if updatedBalance < -0.0001 {
+                    throw CashflowBalanceUpdateError.insufficientFundsToRevert(
+                        accountName: card.name,
+                        required: abs(delta),
+                        available: card.balance,
+                        currency: card.currency
+                    )
+                }
+                card.balance = max(0, updatedBalance)
+                card.updatedAt = now()
+            }
+            return
+        }
 
         if let investmentID = transaction.investmentID,
            let investment = investment(for: investmentID) {
+            if transaction.transactionType == .balanceAdjustment,
+               transaction.hasAssetChangeSnapshot {
+                applyInvestmentAssetSnapshot(for: transaction, to: investment, direction: direction)
+                investment.updatedAt = now()
+                return
+            }
+
             let delta = try await investmentBalanceDelta(
                 for: transaction,
                 investmentCurrency: investment.currency,
@@ -2668,36 +2762,31 @@ final class CashflowViewModel: ViewModelProtocol {
             guard abs(delta) > 0.0000001 else { return }
             investment.amount = max(0, investment.amount + delta)
             investment.updatedAt = now()
-            return
         }
+    }
 
-        let impactedCardIDs = Set([transaction.cardID, transaction.toCardID].compactMap { $0 })
-        guard !impactedCardIDs.isEmpty else { return }
+    private func applyInvestmentAssetSnapshot(
+        for transaction: CashflowTransaction,
+        to investment: Investment,
+        direction: CardBalanceEffectDirection
+    ) {
+        let isApply = direction == .apply
+        let quantity = isApply ? transaction.assetQuantityAfter : transaction.assetQuantityBefore
+        let unitPrice = isApply ? transaction.assetUnitPriceAfter : transaction.assetUnitPriceBefore
+        let totalAmount = isApply ? transaction.assetAmountAfter : transaction.assetAmountBefore
+        let purchaseUnitPrice = isApply
+            ? transaction.assetPurchaseUnitPriceAfter
+            : transaction.assetPurchaseUnitPriceBefore
+        let purchaseCost = isApply
+            ? transaction.assetPurchaseCostAfter
+            : transaction.assetPurchaseCostBefore
 
-        let resolvedCards = impactedCardIDs.compactMap { cardID -> (String, Card)? in
-            guard let card = card(for: cardID) else { return nil }
-            return (cardID, card)
-        }
-
-        for (cardID, card) in resolvedCards {
-            let delta = try await balanceDelta(
-                for: transaction,
-                onCardID: cardID,
-                in: card.currency,
-                direction: direction
-            )
-            guard abs(delta) > 0.0000001 else { continue }
-            let updatedBalance = card.balance + delta
-            if updatedBalance < -0.0001 {
-                throw CashflowBalanceUpdateError.insufficientFundsToRevert(
-                    accountName: card.name,
-                    required: abs(delta),
-                    available: card.balance,
-                    currency: card.currency
-                )
-            }
-            card.balance = max(0, updatedBalance)
-            card.updatedAt = now()
+        investment.marketQuantity = quantity
+        investment.lastKnownUnitPrice = unitPrice
+        investment.averagePurchaseUnitPrice = purchaseUnitPrice
+        investment.totalPurchaseCost = purchaseCost
+        if let totalAmount {
+            investment.amount = max(0, totalAmount)
         }
     }
 
@@ -3189,20 +3278,25 @@ final class CashflowViewModel: ViewModelProtocol {
     }
     
     private func deleteTransactionAsync(_ transaction: CashflowTransaction, recalculate: Bool) async {
-        let affectedEvents = recalculate ? affectedAccountEvents(for: transaction) : []
-        if recalculate, persistedBalanceEffectWasApplied(for: transaction) {
+        let transactionsToDelete = linkedTransactionsForDelete(containing: transaction)
+        let affectedEvents = recalculate
+            ? affectedAccountEventsForDelete(transactionsToDelete)
+            : []
+
+        if recalculate {
             do {
-                try await applyAccountBalanceEffect(for: transaction, direction: .revert)
-                transaction.hasAppliedBalanceEffect = false
+                try await revertTransactionsForDelete(transactionsToDelete)
             } catch {
-                AppLogger.log(.error, category: "Cashflow", "Failed to revert card balance on delete: \(error.localizedDescription)")
+                AppLogger.log(.error, category: "Cashflow", "Failed to revert balances on delete: \(error.localizedDescription)")
                 state.deleteBalanceUpdateErrorMessage = error.localizedDescription
                 loadTransactions()
                 return
             }
         }
 
-        modelContext.delete(transaction)
+        for transactionToDelete in transactionsToDelete {
+            modelContext.delete(transactionToDelete)
+        }
         
         do {
             try modelContext.save()
@@ -3217,6 +3311,59 @@ final class CashflowViewModel: ViewModelProtocol {
         } catch {
             AppLogger.log(.error, category: "Cashflow", "Failed to delete transaction: \(error.localizedDescription)")
         }
+    }
+
+    private func linkedTransactionsForDelete(containing transaction: CashflowTransaction) -> [CashflowTransaction] {
+        guard let operationGroupID = transaction.operationGroupID,
+              !operationGroupID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return [transaction]
+        }
+        let normalizedOperationGroupID = operationGroupID.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let descriptor = FetchDescriptor<CashflowTransaction>(
+            sortBy: [SortDescriptor(\.transactionDate, order: .reverse)]
+        )
+        let stored = (try? modelContext.fetch(descriptor)) ?? []
+        let linked = stored.filter {
+            $0.operationGroupID?.trimmingCharacters(in: .whitespacesAndNewlines) == normalizedOperationGroupID
+        }
+        return linked.isEmpty ? [transaction] : linked
+    }
+
+    private func revertTransactionsForDelete(_ transactions: [CashflowTransaction]) async throws {
+        for transaction in transactions.sorted(by: deleteRevertPriority) {
+            guard persistedBalanceEffectWasApplied(for: transaction) else { continue }
+            try await applyAccountBalanceEffect(for: transaction, direction: .revert)
+            transaction.hasAppliedBalanceEffect = false
+            transaction.updatedAt = now()
+        }
+    }
+
+    private func affectedAccountEventsForDelete(_ transactions: [CashflowTransaction]) -> Set<CashflowAffectedAccountEvent> {
+        var events: Set<CashflowAffectedAccountEvent> = []
+
+        for transaction in transactions where persistedBalanceEffectWasApplied(for: transaction) {
+            if transaction.cardID != nil || transaction.toCardID != nil {
+                events.insert(.cardsUpdated)
+            }
+
+            if transaction.investmentID != nil {
+                events.insert(.investmentsUpdated)
+            }
+        }
+
+        return events
+    }
+
+    private func deleteRevertPriority(_ lhs: CashflowTransaction, _ rhs: CashflowTransaction) -> Bool {
+        deleteRevertSortKey(for: lhs) < deleteRevertSortKey(for: rhs)
+    }
+
+    private func deleteRevertSortKey(for transaction: CashflowTransaction) -> Int {
+        if transaction.transactionType == .balanceAdjustment && transaction.hasAssetChangeSnapshot {
+            return 1
+        }
+        return 0
     }
 
     private func deleteTransactionWithoutRecalculation(_ transaction: CashflowTransaction) {
@@ -3311,6 +3458,7 @@ final class CashflowViewModel: ViewModelProtocol {
             existing.toCardID = transaction.toCardID
             existing.creditID = transaction.creditID
             existing.investmentID = transaction.investmentID
+            existing.operationGroupID = transaction.operationGroupID
             existing.incomeCategoryRaw = transaction.incomeCategoryRaw
             existing.expenseCategoryRaw = transaction.expenseCategoryRaw
             existing.note = transaction.note
@@ -3337,6 +3485,7 @@ final class CashflowViewModel: ViewModelProtocol {
                 incomeCategoryRaw: transaction.incomeCategoryRaw,
                 expenseCategoryRaw: transaction.expenseCategoryRaw,
                 note: transaction.note,
+                operationGroupID: transaction.operationGroupID,
                 recurrenceRule: transaction.recurrenceRule,
                 recurrenceWeekdays: transaction.recurrenceWeekdays,
                 recurrenceSeriesID: transaction.recurrenceSeriesID,
@@ -3475,6 +3624,10 @@ final class CashflowViewModel: ViewModelProtocol {
             return true
         }
 
+        if isLinkedInvestmentTradeSettlement(transaction) {
+            return true
+        }
+
         switch transaction.transactionType {
         case .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
             return true
@@ -3484,6 +3637,31 @@ final class CashflowViewModel: ViewModelProtocol {
             // treat `affectsCardBalance == true` as the source of truth so
             // delete-with-recalculation restores balances consistently.
             return shouldApplyCardBalanceImmediately(for: transaction)
+        }
+    }
+
+    private func isLinkedInvestmentTradeSettlement(_ transaction: CashflowTransaction) -> Bool {
+        guard transaction.transactionType == .expense || transaction.transactionType == .income else {
+            return false
+        }
+        guard transaction.investmentID != nil else {
+            return false
+        }
+        guard transaction.shouldAffectCashflowTotals == false else {
+            return false
+        }
+        guard let operationGroupID = transaction.operationGroupID?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !operationGroupID.isEmpty else {
+            return false
+        }
+
+        let descriptor = FetchDescriptor<CashflowTransaction>()
+        let storedTransactions = (try? modelContext.fetch(descriptor)) ?? state.transactions
+        return storedTransactions.contains { candidate in
+            candidate.persistentModelID != transaction.persistentModelID
+                && candidate.operationGroupID?.trimmingCharacters(in: .whitespacesAndNewlines) == operationGroupID
+                && candidate.hasAssetChangeSnapshot
         }
     }
     

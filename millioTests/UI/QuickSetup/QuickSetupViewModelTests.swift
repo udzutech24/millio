@@ -108,6 +108,19 @@ final class QuickSetupViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.canContinue)
     }
 
+    func testProductTypeStartsUnselectedUntilUserChoosesIt() {
+        let appState = AppState()
+        let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)
+
+        XCTAssertEqual(viewModel.productTypeForCreation, .card)
+        XCTAssertFalse(viewModel.hasExplicitlySelectedProductType)
+
+        viewModel.selectProductType(.debt)
+
+        XCTAssertEqual(viewModel.productTypeForCreation, .debt)
+        XCTAssertTrue(viewModel.hasExplicitlySelectedProductType)
+    }
+
     func testAddDraftProductRequiresNameAndResetsInputs() {
         let appState = AppState()
         let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)

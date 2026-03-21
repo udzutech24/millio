@@ -70,13 +70,13 @@ enum AppColors {
     // MARK: - Service Button Gradients
     
     /// Градиент для кнопки "Финансы"
-    static let financesGradient = [Color.blue, Color.cyan]
+    static let financesGradient = [Color(hex: "1D7BFF"), Color(hex: "29D3FF")]
     
     /// Градиент для кнопки "Курсы"
-    static let coursesGradient = [Color.green, Color.mint]
+    static let coursesGradient = [Color(hex: "18C57A"), Color(hex: "00E0B8")]
     
     /// Градиент для кнопки "Кешбэк"
-    static let cashbackGradient = [Color.blue, Color.cyan]
+    static let cashbackGradient = [Color(hex: "2B8CFF"), Color(hex: "005BFF")]
     
     /// Градиент для кнопки "Кредиты"
     static let creditsGradient = [Color.blue, Color.indigo]
@@ -93,7 +93,7 @@ enum AppColors {
     
     
     /// Градиент для кнопки "Кэшфлоу"
-    static let cashflowGradient = [Color.blue, Color.purple]
+    static let cashflowGradient = [Color(hex: "6A5CFF"), Color(hex: "D02BFF")]
     
     /// Градиент для кнопки "Игры"
     static let gamesGradient = [Color.green, Color.cyan]

@@ -20,109 +20,43 @@ struct CashflowCustomPeriodSheetView: View {
             ZStack {
                 GradientBackground()
 
-                VStack(spacing: 16) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        let sameYear = Calendar.current.component(.year, from: draftStartDate)
-                            == Calendar.current.component(.year, from: draftEndDate)
-                        let startFormat: Date.FormatStyle = sameYear
-                            ? .dateTime.day().month(.abbreviated)
-                            : .dateTime.day().month(.abbreviated).year()
-                        let endFormat: Date.FormatStyle = .dateTime.day().month(.abbreviated).year()
-
-                        Text(
-                            String(
-                                format: String(localized: "cashflow.history.date_range_format"),
-                                min(draftStartDate, draftEndDate).formatted(startFormat),
-                                max(draftStartDate, draftEndDate).formatted(endFormat)
-                            )
-                        )
-                        .font(.headline)
-                        .foregroundStyle(AppColors.textPrimary)
-
-                        Text("cashflow.custom_period.calendar_hint")
-                            .font(.callout)
-                            .foregroundStyle(AppColors.textSecondary)
-                    }
-                    .padding(.top, 4)
-
-                    CalendarRangeMonthView(startDate: $draftStartDate, endDate: $draftEndDate)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 8)
-                }
+                CalendarRangePickerPanel(
+                    title: nil,
+                    subtitle: String(localized: "cashflow.custom_period.calendar_hint"),
+                    startDate: $draftStartDate,
+                    endDate: $draftEndDate,
+                    theme: .cashflow
+                )
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
+                    ToolbarGlassIconButton(
+                        systemName: "xmark",
+                        accessibilityLabel: String(localized: "cashflow.common.dismiss")
+                    ) {
                         dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .foregroundStyle(AppColors.textPrimary)
                     }
-                    .buttonStyle(.plain)
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                let gradient = LinearGradient(
-                    colors: [
-                        Color(red: 0.12, green: 0.02, blue: 0.12),
-                        Color(red: 0.02, green: 0.12, blue: 0.10)
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-
-                HStack(spacing: 12) {
-                    Button {
+                CalendarRangeSheetActionBar(
+                    secondaryTitle: String(localized: "cashflow.common.reset"),
+                    primaryTitle: String(localized: "cashflow.custom_period.show"),
+                    theme: .cashflow
+                ) {
                         viewModel.handle(.resetToDefaultPeriod)
                         dismiss()
-                    } label: {
-                        Text("cashflow.common.reset")
-                            .font(.system(size: 16, weight: .semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(
-                                Capsule()
-                                    .stroke(Color.white.opacity(0.7), lineWidth: 1)
-                            )
-                            .foregroundStyle(AppColors.textSecondary)
-                    }
-                    .buttonStyle(.plain)
-
-                    Button {
+                } primaryAction: {
                         applyDraftPeriod()
                         dismiss()
-                    } label: {
-                        Text("cashflow.custom_period.show")
-                            .font(.system(size: 16, weight: .semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(
-                                Capsule()
-                                    .fill(gradient)
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(
-                                                LinearGradient(
-                                                    colors: AppColors.cashflowGradient,
-                                                    startPoint: .leading,
-                                                    endPoint: .trailing
-                                                ),
-                                                lineWidth: 1
-                                            )
-                                    )
-                            )
-                            .foregroundStyle(Color.white)
-                    }
-                    .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
             }
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
     }
-
     private func applyDraftPeriod(referenceDate: Date = Date()) {
         let range = CashflowViewModel.clampCustomPeriodRange(
             start: draftStartDate,

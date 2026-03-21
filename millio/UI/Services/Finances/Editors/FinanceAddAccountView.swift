@@ -14,6 +14,7 @@ struct FinanceAddAccountView: View {
     let editingCredit: Credit?
     let editingInvestment: Investment?
     let preselectedGroup: FinanceGroup?
+    let preselectedAccountType: FinanceAccountType?
     let presentationStyle: FinanceEditorPresentationStyle
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -26,6 +27,7 @@ struct FinanceAddAccountView: View {
         editingCredit: Credit? = nil,
         editingInvestment: Investment? = nil,
         preselectedGroup: FinanceGroup? = nil,
+        preselectedAccountType: FinanceAccountType? = nil,
         presentationStyle: FinanceEditorPresentationStyle = .modal
     ) {
         self.viewModel = viewModel
@@ -33,6 +35,7 @@ struct FinanceAddAccountView: View {
         self.editingCredit = editingCredit
         self.editingInvestment = editingInvestment
         self.preselectedGroup = preselectedGroup
+        self.preselectedAccountType = preselectedAccountType
         self.presentationStyle = presentationStyle
     }
     
@@ -759,6 +762,18 @@ struct FinanceAddAccountView: View {
                 selectedInvestmentPreset = .category
                 selectedProductTypeTitle = editingInvestment.category.displayName
                 accountName = editingInvestment.name
+            } else if let preselectedAccountType {
+                selectedAccountType = preselectedAccountType
+                switch preselectedAccountType {
+                case .card:
+                    selectedProductTypeTitle = FinanceAddAccountPreselection.productTitle(for: .card)
+                case .credit:
+                    selectedProductTypeTitle = FinanceAddAccountPreselection.productTitle(for: .credit)
+                case .investment:
+                    selectedInvestmentCategory = .other
+                    selectedInvestmentPreset = .asset
+                    selectedProductTypeTitle = FinanceAddAccountPreselection.productTitle(for: .investment)
+                }
             }
             if let preselectedGroup {
                 selectedGroupID = preselectedGroup.groupUniqueID

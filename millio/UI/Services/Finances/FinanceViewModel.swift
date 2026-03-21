@@ -1735,6 +1735,7 @@ final class FinanceViewModel: ViewModelProtocol {
             var didCreateTransaction = false
             var changedAccountTypes: Set<FinanceAccountType> = [.investment]
             let difference = investment.amount - oldAmount
+            let operationGroupID = UUID().uuidString
             if abs(difference) > 0.01 {
                 let note = side == .buy
                     ? String(localized: "finances.transaction.note.investment_buy")
@@ -1745,7 +1746,8 @@ final class FinanceViewModel: ViewModelProtocol {
                     currency: investment.currency,
                     transactionDate: Date(),
                     investmentID: investment.investmentUniqueID,
-                    note: note
+                    note: note,
+                    operationGroupID: operationGroupID
                 )
                 transaction.applyAssetChangeSnapshot(
                     before: snapshotBefore,
@@ -1780,6 +1782,7 @@ final class FinanceViewModel: ViewModelProtocol {
                     incomeCategory: side == .sell ? .investment : nil,
                     expenseCategory: side == .buy ? .other : nil,
                     note: note,
+                    operationGroupID: operationGroupID,
                     affectsCashflowTotals: false
                 )
                 stampFrozenRate(on: settlementTransaction, targetCurrency: settlementAccountForOrder.currency)
@@ -1920,6 +1923,8 @@ final class FinanceViewModel: ViewModelProtocol {
         marketAssetSnapshot(
             quantity: investment.marketQuantity,
             unitPrice: investment.lastKnownUnitPrice,
+            purchaseUnitPrice: investment.averagePurchaseUnitPrice,
+            purchaseCost: investment.totalPurchaseCost,
             totalAmount: investment.amount
         )
     }
@@ -1927,11 +1932,15 @@ final class FinanceViewModel: ViewModelProtocol {
     private func marketAssetSnapshot(
         quantity: Double?,
         unitPrice: Double?,
+        purchaseUnitPrice: Double?,
+        purchaseCost: Double?,
         totalAmount: Double
     ) -> CashflowAssetChangeSnapshot {
         CashflowAssetChangeSnapshot(
             quantity: quantity,
             unitPrice: unitPrice,
+            purchaseUnitPrice: purchaseUnitPrice,
+            purchaseCost: purchaseCost,
             totalAmount: totalAmount
         )
     }
@@ -2740,6 +2749,8 @@ final class FinanceViewModel: ViewModelProtocol {
                                 before: marketAssetSnapshot(
                                     quantity: previousQuantity,
                                     unitPrice: oldUnitPrice,
+                                    purchaseUnitPrice: investment.averagePurchaseUnitPrice,
+                                    purchaseCost: investment.totalPurchaseCost,
                                     totalAmount: oldAmount
                                 ),
                                 after: marketAssetSnapshot(for: investment)
@@ -2786,6 +2797,8 @@ final class FinanceViewModel: ViewModelProtocol {
                                 before: marketAssetSnapshot(
                                     quantity: investment.marketQuantity,
                                     unitPrice: investment.lastKnownUnitPrice,
+                                    purchaseUnitPrice: investment.averagePurchaseUnitPrice,
+                                    purchaseCost: investment.totalPurchaseCost,
                                     totalAmount: oldAmount
                                 ),
                                 after: marketAssetSnapshot(for: investment)

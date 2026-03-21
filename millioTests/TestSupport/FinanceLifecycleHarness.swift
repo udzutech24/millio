@@ -166,6 +166,66 @@ final class FinanceLifecycleHarness {
     }
 
     @discardableResult
+    func createLinkedMarketInvestment(
+        name: String,
+        quantity: Double,
+        marketPrice: Double,
+        purchasePrice: Double,
+        currency: String = "USD",
+        category: InvestmentCategory = .stocks
+    ) async throws -> Investment {
+        let investment = Investment(
+            name: name,
+            investmentType: .positive,
+            category: category,
+            amount: quantity * marketPrice,
+            currency: currency
+        )
+        investment.marketQuantity = quantity
+        investment.lastKnownUnitPrice = marketPrice
+        investment.averagePurchaseUnitPrice = purchasePrice
+        investment.totalPurchaseCost = quantity * purchasePrice
+        investment.includeInTotal = true
+        modelContext.insert(investment)
+
+        let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+        modelContext.insert(account)
+        financeViewModel.handle(.addAccountToGroup(accountType: .investment, accountID: investment.investmentUniqueID, group: group))
+        try modelContext.save()
+
+        try await waitUntil {
+            self.financeAccount(for: investment.investmentUniqueID, type: .investment) != nil
+                && self.financeViewModel.state.availableInvestments.contains(where: { $0.investmentUniqueID == investment.investmentUniqueID })
+                && self.cashflowViewModel.state.availableInvestments.contains(where: { $0.investmentUniqueID == investment.investmentUniqueID })
+        }
+
+        return investment
+    }
+
+    func executeInvestmentOrder(
+        investmentID: String,
+        side: InvestmentOrderSide,
+        quantity: Double,
+        unitPrice: Double,
+        funding: InvestmentOrderFunding
+    ) async throws {
+        guard let account = financeAccount(for: investmentID, type: .investment) else {
+            Issue.record("Expected finance account for investment \(investmentID)")
+            throw HarnessError.missingAccount
+        }
+        financeViewModel.handle(.executeInvestmentOrder(
+            account: account,
+            side: side,
+            quantity: quantity,
+            unitPrice: unitPrice,
+            funding: funding
+        ))
+        try await waitUntil {
+            !self.cashflowViewModel.state.transactions.isEmpty
+        }
+    }
+
+    @discardableResult
     func persistExpense(cardID: String, amount: Double, affectsBalance: Bool = true) async throws -> CashflowTransaction {
         let expense = CashflowTransaction(
             transactionType: .expense,
@@ -395,6 +455,30 @@ final class FinanceLifecycleHarness {
         #expect(Self.approximatelyEqual(cashflowViewModel.cardBalanceSnapshot(for: cardID)?.debtAmount ?? 0, debtAmount))
     }
 
+    func assertInvestmentState(
+        investmentID: String,
+        quantity: Double,
+        amount: Double,
+        purchasePrice: Double?,
+        purchaseCost: Double?
+    ) async throws {
+        try await waitUntil {
+            guard let investment = self.investmentFromStore(investmentID: investmentID) else {
+                return false
+            }
+            return Self.approximatelyEqual(investment.marketQuantity, quantity, epsilon: 0.000001)
+                && Self.approximatelyEqual(investment.amount, amount)
+                && Self.approximatelyEqual(investment.averagePurchaseUnitPrice, purchasePrice, epsilon: 0.000001)
+                && Self.approximatelyEqual(investment.totalPurchaseCost, purchaseCost, epsilon: 0.000001)
+        }
+
+        let investment = try requireInvestment(investmentID: investmentID)
+        #expect(Self.approximatelyEqual(investment.marketQuantity, quantity, epsilon: 0.000001))
+        #expect(Self.approximatelyEqual(investment.amount, amount))
+        #expect(Self.approximatelyEqual(investment.averagePurchaseUnitPrice, purchasePrice, epsilon: 0.000001))
+        #expect(Self.approximatelyEqual(investment.totalPurchaseCost, purchaseCost, epsilon: 0.000001))
+    }
+
     func assertTransactionCount(_ expected: Int) {
         #expect(cashflowViewModel.state.transactions.count == expected)
     }
@@ -405,6 +489,14 @@ final class FinanceLifecycleHarness {
             throw HarnessError.missingAccount
         }
         return account
+    }
+
+    func requireInvestment(investmentID: String) throws -> Investment {
+        guard let investment = investmentFromStore(investmentID: investmentID) else {
+            Issue.record("Expected investment \(investmentID)")
+            throw HarnessError.missingAccount
+        }
+        return investment
     }
 
     func requireTransaction(
@@ -436,15 +528,25 @@ final class FinanceLifecycleHarness {
     }
 
     private func financeAccount(for cardID: String) -> FinanceAccount? {
+        financeAccount(for: cardID, type: .card)
+    }
+
+    private func financeAccount(for accountID: String, type: FinanceAccountType) -> FinanceAccount? {
         financeViewModel.state.groups
             .flatMap { $0.accounts ?? [] }
-            .first { $0.accountType == .card && $0.accountID == cardID }
+            .first { $0.accountType == type && $0.accountID == accountID }
     }
 
     private func cardFromStore(cardID: String) -> Card? {
         let descriptor = FetchDescriptor<Card>()
         let cards = (try? modelContext.fetch(descriptor)) ?? []
         return cards.first(where: { $0.cardUniqueID == cardID })
+    }
+
+    private func investmentFromStore(investmentID: String) -> Investment? {
+        let descriptor = FetchDescriptor<Investment>()
+        let investments = (try? modelContext.fetch(descriptor)) ?? []
+        return investments.first(where: { $0.investmentUniqueID == investmentID })
     }
 
     private func waitUntil(
@@ -460,6 +562,17 @@ final class FinanceLifecycleHarness {
             try await Task.sleep(nanoseconds: intervalNanoseconds)
         }
         #expect(Bool(false), "Condition was not met before timeout")
+    }
+
+    private static func approximatelyEqual(_ lhs: Double?, _ rhs: Double?, epsilon: Double = 0.01) -> Bool {
+        switch (lhs, rhs) {
+        case (.none, .none):
+            return true
+        case let (.some(lhs), .some(rhs)):
+            return abs(lhs - rhs) < epsilon
+        default:
+            return false
+        }
     }
 
     private static func approximatelyEqual(_ lhs: Double?, _ rhs: Double, epsilon: Double = 0.01) -> Bool {

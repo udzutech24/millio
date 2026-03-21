@@ -183,6 +183,7 @@ final class QuickSetupViewModel: ObservableObject {
     @Published var favoriteCurrencyCodes: [String]
     @Published var selectedExpenseCategoryIDs: Set<String>
     @Published var productTypeForCreation: QuickSetupProductType = .card
+    @Published private(set) var hasExplicitlySelectedProductType = false
     @Published var productNameInput: String = ""
     @Published var productSymbolInput: String = ""
     @Published var productAmountInput: String = ""
@@ -456,6 +457,7 @@ final class QuickSetupViewModel: ObservableObject {
 
     func selectProductType(_ type: QuickSetupProductType) {
         guard availableProductTypes.contains(type) else { return }
+        hasExplicitlySelectedProductType = true
         productTypeForCreation = type
         resetDraftInputs(keepingTypeSpecificData: false)
     }
