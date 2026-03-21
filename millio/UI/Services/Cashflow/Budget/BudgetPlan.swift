@@ -26,6 +26,7 @@ struct BudgetPeriodDescriptor: Equatable {
 @Model
 final class BudgetPlan: Persistable {
     var budgetID: String = UUID().uuidString
+    var categoryKindRaw: String = CashflowCategoryKind.expense.rawValue
     var periodTypeRaw: String = BudgetPeriodType.month.rawValue
     var anchorYear: Int = 0
     var anchorMonth: Int = 0
@@ -42,13 +43,20 @@ final class BudgetPlan: Persistable {
         set { periodTypeRaw = newValue.rawValue }
     }
 
+    var categoryKind: CashflowCategoryKind {
+        get { CashflowCategoryKind(rawValue: categoryKindRaw) ?? .expense }
+        set { categoryKindRaw = newValue.rawValue }
+    }
+
     init(
+        categoryKind: CashflowCategoryKind,
         descriptor: BudgetPeriodDescriptor,
         currencyCode: String,
         totalLimitAmount: Double,
         isCategoryBudgetingEnabled: Bool = false
     ) {
         self.budgetID = UUID().uuidString
+        self.categoryKindRaw = categoryKind.rawValue
         self.periodTypeRaw = descriptor.type.rawValue
         self.anchorYear = descriptor.anchorYear
         self.anchorMonth = descriptor.anchorMonth
@@ -63,7 +71,12 @@ final class BudgetPlan: Persistable {
         self.updatedAt = Date()
     }
 
-    func matches(_ descriptor: BudgetPeriodDescriptor, calendar: Calendar = .current) -> Bool {
+    func matches(
+        _ descriptor: BudgetPeriodDescriptor,
+        categoryKind: CashflowCategoryKind,
+        calendar: Calendar = .current
+    ) -> Bool {
+        guard self.categoryKind == categoryKind else { return false }
         guard periodType == descriptor.type else { return false }
         switch descriptor.type {
         case .month, .quarter, .year:
@@ -76,11 +89,13 @@ final class BudgetPlan: Persistable {
     }
 
     func apply(
+        categoryKind: CashflowCategoryKind,
         descriptor: BudgetPeriodDescriptor,
         currencyCode: String,
         totalLimitAmount: Double,
         isCategoryBudgetingEnabled: Bool = false
     ) {
+        self.categoryKind = categoryKind
         periodType = descriptor.type
         anchorYear = descriptor.anchorYear
         anchorMonth = descriptor.anchorMonth
@@ -101,6 +116,7 @@ final class BudgetPlan: Persistable {
         let dict: [String: Any] = [
             "type": "BudgetPlan",
             "budgetID": budgetID,
+            "categoryKindRaw": categoryKindRaw,
             "periodTypeRaw": periodTypeRaw,
             "anchorYear": anchorYear,
             "anchorMonth": anchorMonth,

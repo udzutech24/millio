@@ -20,6 +20,8 @@ struct CashflowViewModelTests {
         CashflowTransaction.self,
         CashflowCustomCategory.self,
         CashflowSystemCategoryOverride.self,
+        BudgetPlan.self,
+        BudgetCategoryLimit.self,
         HistoricalRate.self
     ])
     private static var retainedContainers: [ModelContainer] = []
@@ -1544,6 +1546,135 @@ extension CashflowViewModelTests {
         #expect(planned.map(\.amount) == [50, 70])
         #expect(planned.allSatisfy { $0.recurrenceRule == .none })
         #expect(planned.allSatisfy { $0.transactionType == .expense })
+    }
+
+    @Test("План доходов за месяц считает факт, остаток и общий план текущего месяца")
+    func testIncomePlanSummaryCombinesActualAndPlannedMonthIncome() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 3, day: 10, hour: 12)) ?? Date()
+        let march = calendar.date(from: DateComponents(year: 2026, month: 3, day: 1)) ?? fixedNow
+
+        let actualIncome = CashflowTransaction(
+            transactionType: .income,
+            amount: 100,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 5, hour: 9)) ?? fixedNow,
+            incomeCategory: .salary
+        )
+        let plannedOneTimeIncome = CashflowTransaction(
+            transactionType: .income,
+            amount: 120,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 20, hour: 9)) ?? fixedNow,
+            incomeCategory: .business
+        )
+        let recurringIncome = CashflowTransaction(
+            transactionType: .income,
+            amount: 180,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 1, day: 25, hour: 9)) ?? fixedNow,
+            incomeCategory: .freelance,
+            recurrenceRule: .monthly,
+            recurrenceSeriesID: "series-income-25"
+        )
+        let aprilPlannedIncome = CashflowTransaction(
+            transactionType: .income,
+            amount: 250,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 4, day: 3, hour: 9)) ?? fixedNow,
+            incomeCategory: .investment
+        )
+        let expense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 999,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 15, hour: 9)) ?? fixedNow,
+            expenseCategory: .groceries
+        )
+
+        modelContext.insert(actualIncome)
+        modelContext.insert(plannedOneTimeIncome)
+        modelContext.insert(recurringIncome)
+        modelContext.insert(aprilPlannedIncome)
+        modelContext.insert(expense)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { fixedNow })
+        let summary = await viewModel.incomePlanSummary(for: march, in: "RUB")
+
+        #expect(summary != nil)
+        #expect(summary?.actual == 100)
+        #expect(summary?.planned == 400)
+        #expect(summary?.remaining == 300)
+        #expect(abs((summary?.progress ?? 0) - 0.25) < 0.0001)
+    }
+
+    @Test("Бюджет доходов за месяц считает общий план и категории отдельно от расходов")
+    func testIncomeBudgetSummaryUsesIncomePlanConfiguration() async throws {
+        let modelContext = try createTestModelContext()
+        let calendar = Calendar.current
+        let march = calendar.date(from: DateComponents(year: 2026, month: 3, day: 1)) ?? Date()
+
+        let salaryIncome = CashflowTransaction(
+            transactionType: .income,
+            amount: 180_000,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 5)) ?? march,
+            incomeCategory: .salary
+        )
+        let businessIncome = CashflowTransaction(
+            transactionType: .income,
+            amount: 70_000,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 12)) ?? march,
+            incomeCategory: .business
+        )
+        let expense = CashflowTransaction(
+            transactionType: .expense,
+            amount: 99_000,
+            currency: "RUB",
+            transactionDate: calendar.date(from: DateComponents(year: 2026, month: 3, day: 9)) ?? march,
+            expenseCategory: .groceries
+        )
+
+        modelContext.insert(salaryIncome)
+        modelContext.insert(businessIncome)
+        modelContext.insert(expense)
+        try modelContext.save()
+
+        let viewModel = CashflowViewModel(modelContext: modelContext, now: { march })
+        viewModel.saveMonthlyBudgetConfiguration(
+            categoryKind: .income,
+            month: march,
+            totalAmount: 400_000,
+            categoryLimits: [
+                IncomeCategory.salary.rawValue: 250_000,
+                IncomeCategory.business.rawValue: 100_000
+            ],
+            currency: "RUB"
+        )
+        viewModel.saveMonthlyBudgetConfiguration(
+            categoryKind: .expense,
+            month: march,
+            totalAmount: 120_000,
+            categoryLimits: [ExpenseCategory.groceries.rawValue: 120_000],
+            currency: "RUB"
+        )
+
+        let summary = await viewModel.incomeBudgetSummary(for: march, in: "RUB")
+
+        #expect(summary.plan?.totalLimitAmount == 400_000)
+        #expect(summary.snapshot?.spent == 250_000)
+        #expect(summary.snapshot?.remaining == 150_000)
+        #expect(abs((summary.snapshot?.progress ?? 0) - 0.625) < 0.0001)
+        #expect(summary.categoryLimits[IncomeCategory.salary.rawValue] == 250_000)
+        #expect(summary.categoryLimits[IncomeCategory.business.rawValue] == 100_000)
+        #expect(summary.categoryLimits[ExpenseCategory.groceries.rawValue] == nil)
+        #expect(summary.snapshot?.categorySnapshots.map(\.categoryRawValue) == [
+            IncomeCategory.business.rawValue,
+            IncomeCategory.salary.rawValue
+        ])
     }
 
     @Test("Планировщик объединяет ежемесячные шаблоны и разовые будущие операции в одном таймлайне")

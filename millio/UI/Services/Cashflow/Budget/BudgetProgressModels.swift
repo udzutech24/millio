@@ -34,3 +34,10 @@ struct BudgetProgressSnapshot: Equatable {
     let categorySnapshots: [BudgetCategoryProgressSnapshot]
     let categoriesLimitOverflow: Double
 }
+
+struct IncomePlanProgressSnapshot: Equatable {
+    let actual: Double
+    let planned: Double
+    let remaining: Double
+    let progress: Double
+}

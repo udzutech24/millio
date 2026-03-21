@@ -73,7 +73,7 @@ struct BackupRestoreIntegrityTests {
     }
     
     @Test("CashflowViewModel перезагружает историю после BackupEvent.restoreCompleted")
-    func testCashflowViewModelReloadsAfterRestoreCompletedEvent() throws {
+    func testCashflowViewModelReloadsAfterRestoreCompletedEvent() async throws {
         let container = makeContainer()
         let context = container.mainContext
         try resetAll(in: context)
@@ -91,6 +91,7 @@ struct BackupRestoreIntegrityTests {
         try context.save()
         
         EventBus.shared.publish(BackupEvent.restoreCompleted)
+        await Task.yield()
         
         #expect(viewModel.state.transactions.count == 1)
     }

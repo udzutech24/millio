@@ -67,6 +67,40 @@ struct BudgetMonthlyRepeatTests {
         #expect(Calendar.current.isDate(suggestion?.sourceMonth ?? .distantPast, equalTo: february, toGranularity: .month))
     }
 
+    @Test("Планы доходов и лимиты расходов хранятся отдельно для одного месяца")
+    func monthlyPlansAreSeparatedByCategoryKind() throws {
+        let context = try createTestModelContext()
+        let february = monthDate(year: 2026, month: 2)
+        let march = monthDate(year: 2026, month: 3)
+        let viewModel = CashflowViewModel(modelContext: context, now: { march })
+
+        viewModel.saveMonthlyBudgetConfiguration(
+            categoryKind: .expense,
+            month: february,
+            totalAmount: 120_000,
+            categoryLimits: [ExpenseCategory.groceries.rawValue: 40_000],
+            currency: "RUB"
+        )
+        viewModel.saveMonthlyBudgetConfiguration(
+            categoryKind: .income,
+            month: february,
+            totalAmount: 300_000,
+            categoryLimits: [IncomeCategory.salary.rawValue: 250_000],
+            currency: "RUB"
+        )
+
+        let expenseSuggestion = viewModel.previousMonthlyBudgetSuggestion(for: march, categoryKind: .expense)
+        let incomeSuggestion = viewModel.previousMonthlyBudgetSuggestion(for: march, categoryKind: .income)
+
+        #expect(expenseSuggestion?.totalAmount == 120_000)
+        #expect(expenseSuggestion?.categoryLimits[ExpenseCategory.groceries.rawValue] == 40_000)
+        #expect(expenseSuggestion?.categoryLimits[IncomeCategory.salary.rawValue] == nil)
+
+        #expect(incomeSuggestion?.totalAmount == 300_000)
+        #expect(incomeSuggestion?.categoryLimits[IncomeCategory.salary.rawValue] == 250_000)
+        #expect(incomeSuggestion?.categoryLimits[ExpenseCategory.groceries.rawValue] == nil)
+    }
+
     @Test("Настройка автоповтора хранится в пользовательских настройках")
     func budgetAutoRepeatPrefsPersistValue() {
         let suiteName = "BudgetMonthlyRepeatTests.\(UUID().uuidString)"

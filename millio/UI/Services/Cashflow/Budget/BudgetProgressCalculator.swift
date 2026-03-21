@@ -45,7 +45,11 @@ enum BudgetProgressCalculator {
                 if $0.status != $1.status {
                     return severity(for: $0.status) > severity(for: $1.status)
                 }
-                return $0.spent > $1.spent
+                let titleOrder = $0.title.localizedCaseInsensitiveCompare($1.title)
+                if titleOrder != .orderedSame {
+                    return titleOrder == .orderedAscending
+                }
+                return $0.categoryRawValue < $1.categoryRawValue
             }
         let categoriesLimitTotal = categoryLimits.reduce(0) { $0 + max(0, $1.limitAmount) }
 

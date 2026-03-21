@@ -645,7 +645,7 @@ final class CashflowViewModel: ViewModelProtocol {
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
         let plans = (try? modelContext.fetch(budgetFetch)) ?? []
-        let activePlan = plans.first(where: { $0.matches(descriptor) })
+        let activePlan = plans.first(where: { $0.matches(descriptor, categoryKind: .expense) })
         state.activeBudgetPlan = activePlan
         if let activePlan {
             state.activeBudgetCategoryLimits = fetchBudgetCategoryLimits(for: activePlan.budgetID)
@@ -662,12 +662,15 @@ final class CashflowViewModel: ViewModelProtocol {
         return (try? modelContext.fetch(descriptor)) ?? []
     }
 
-    private func fetchBudgetPlan(matching descriptor: BudgetPeriodDescriptor) -> BudgetPlan? {
+    private func fetchBudgetPlan(
+        matching descriptor: BudgetPeriodDescriptor,
+        categoryKind: CashflowCategoryKind
+    ) -> BudgetPlan? {
         let budgetFetch = FetchDescriptor<BudgetPlan>(
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
         let plans = (try? modelContext.fetch(budgetFetch)) ?? []
-        return plans.first(where: { $0.matches(descriptor) })
+        return plans.first(where: { $0.matches(descriptor, categoryKind: categoryKind) })
     }
 
     private func currentBudgetPeriodDescriptor(calendar: Calendar = .current) -> BudgetPeriodDescriptor {
@@ -1100,31 +1103,101 @@ final class CashflowViewModel: ViewModelProtocol {
         await monthlyTotal(for: .expense, month: month, in: currency)
     }
 
-    func expenseBudgetSummary(
+    func incomePlanSummary(
         for month: Date,
+        in currency: String? = nil
+    ) async -> IncomePlanProgressSnapshot? {
+        let calendar = Calendar.current
+        let targetCurrency = currency ?? state.displayCurrency
+        let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: month)) ?? month
+        let monthEnd = calendar.date(byAdding: DateComponents(month: 1, second: -1), to: monthStart) ?? monthStart
+        let cutoff = min(now(), monthEnd)
+        let actualTransactions = monthlyTransactions(for: .income, month: month)
+            .filter { transaction in
+                transaction.shouldAffectCashflowTotals && transaction.transactionDate <= cutoff
+            }
+        let plannedEntries = scheduledCalendarEntries(
+            for: .income,
+            month: month,
+            relativeTo: cutoff
+        )
+
+        let previousWarning = state.currencyConversionWarning
+        let previousWarningDate = state.currencyConversionWarningDate
+        defer {
+            state.currencyConversionWarning = previousWarning
+            state.currencyConversionWarningDate = previousWarningDate
+        }
+
+        var actualTotal: Double = 0
+        for transaction in actualTransactions {
+            actualTotal += await convertAmountForTransaction(transaction, to: targetCurrency)
+        }
+
+        var plannedRemainder: Double = 0
+        for entry in plannedEntries {
+            plannedRemainder += await convertAmountForTransaction(entry.transaction, to: targetCurrency)
+        }
+
+        let plannedTotal = actualTotal + plannedRemainder
+        guard plannedTotal > 0.0000001 else { return nil }
+
+        return IncomePlanProgressSnapshot(
+            actual: actualTotal,
+            planned: plannedTotal,
+            remaining: max(0, plannedRemainder),
+            progress: min(max(actualTotal / plannedTotal, 0), 1)
+        )
+    }
+
+    func monthlyBudgetSummary(
+        for categoryKind: CashflowCategoryKind,
+        month: Date,
         in currency: String? = nil
     ) async -> (plan: BudgetPlan?, snapshot: BudgetProgressSnapshot?, categoryLimits: [String: Double]) {
         let descriptor = monthlyBudgetPeriodDescriptor(for: month)
         let targetCurrency = currency ?? state.displayCurrency
-        let plan = fetchBudgetPlan(matching: descriptor)
+        let plan = fetchBudgetPlan(matching: descriptor, categoryKind: categoryKind)
         guard let plan else {
             return (nil, nil, [:])
         }
 
         let limits = fetchBudgetCategoryLimits(for: plan.budgetID)
+            .filter { $0.categoryKind == categoryKind }
         let categoryLimits = Dictionary(uniqueKeysWithValues: limits.map { ($0.categoryRawValue, $0.limitAmount) })
-        let totals = await monthlyCategoryTotals(for: .expense, month: month, in: targetCurrency)
-        let totalSpent = totals.values.reduce(0, +)
+        let totals = await monthlyCategoryTotals(for: categoryKind, month: month, in: targetCurrency)
+        let totalAmount = totals.values.reduce(0, +)
+        let titleResolver: (String) -> String = { [weak self] raw in
+            guard let self else { return raw }
+            switch categoryKind {
+            case .expense:
+                return self.expenseCategoryDisplayName(for: raw)
+            case .income:
+                return self.incomeCategoryDisplayName(for: raw)
+            }
+        }
         let snapshot = BudgetProgressCalculator.calculate(
-            totalSpent: totalSpent,
+            totalSpent: totalAmount,
             totalLimit: plan.totalLimitAmount,
             categorySpentByRawValue: totals,
             categoryLimits: limits,
-            categoryTitleResolver: { [weak self] raw in
-                self?.expenseCategoryDisplayName(for: raw) ?? raw
-            }
+            categoryTitleResolver: titleResolver
         )
         return (plan, snapshot, categoryLimits)
+    }
+
+    func expenseBudgetSummary(
+        for month: Date,
+        in currency: String? = nil
+    ) async -> (plan: BudgetPlan?, snapshot: BudgetProgressSnapshot?, categoryLimits: [String: Double]) {
+        await monthlyBudgetSummary(for: .expense, month: month, in: currency)
+    }
+
+    func incomeBudgetSummary(
+        for month: Date,
+        in currency: String? = nil
+    ) async -> (plan: BudgetPlan?, snapshot: BudgetProgressSnapshot?, categoryLimits: [String: Double]) {
+        await monthlyBudgetSummary(for: .income, month: month, in: currency)
     }
 
     var isMonthlyBudgetAutoRepeatEnabled: Bool {
@@ -1132,13 +1205,17 @@ final class CashflowViewModel: ViewModelProtocol {
         set { budgetAutoRepeatPrefs.isEnabled = newValue }
     }
 
-    func previousMonthlyBudgetSuggestion(for month: Date) -> BudgetRepeatSuggestion? {
+    func previousMonthlyBudgetSuggestion(
+        for month: Date,
+        categoryKind: CashflowCategoryKind = .expense
+    ) -> BudgetRepeatSuggestion? {
         let calendar = Calendar.current
         guard let previousMonth = calendar.date(byAdding: .month, value: -1, to: month) else { return nil }
         let descriptor = monthlyBudgetPeriodDescriptor(for: previousMonth, calendar: calendar)
-        guard let plan = fetchBudgetPlan(matching: descriptor) else { return nil }
+        guard let plan = fetchBudgetPlan(matching: descriptor, categoryKind: categoryKind) else { return nil }
 
         let limits = fetchBudgetCategoryLimits(for: plan.budgetID)
+            .filter { $0.categoryKind == categoryKind }
         let categoryLimits = Dictionary(uniqueKeysWithValues: limits.map { ($0.categoryRawValue, $0.limitAmount) })
 
         return BudgetRepeatSuggestion(
@@ -1149,12 +1226,14 @@ final class CashflowViewModel: ViewModelProtocol {
     }
 
     func saveMonthlyBudgetConfiguration(
+        categoryKind: CashflowCategoryKind = .expense,
         month: Date,
         totalAmount: Double,
         categoryLimits: [String: Double],
         currency: String? = nil
     ) {
         saveBudgetConfiguration(
+            categoryKind: categoryKind,
             descriptor: monthlyBudgetPeriodDescriptor(for: month),
             currencyCode: currency ?? state.displayCurrency,
             totalAmount: totalAmount,
@@ -1164,6 +1243,7 @@ final class CashflowViewModel: ViewModelProtocol {
 
     func saveBudgetConfiguration(totalAmount: Double, categoryLimits: [String: Double]) {
         saveBudgetConfiguration(
+            categoryKind: .expense,
             descriptor: currentBudgetPeriodDescriptor(),
             currencyCode: state.displayCurrency,
             totalAmount: totalAmount,
@@ -1172,6 +1252,7 @@ final class CashflowViewModel: ViewModelProtocol {
     }
 
     private func saveBudgetConfiguration(
+        categoryKind: CashflowCategoryKind,
         descriptor: BudgetPeriodDescriptor,
         currencyCode: String,
         totalAmount: Double,
@@ -1182,8 +1263,9 @@ final class CashflowViewModel: ViewModelProtocol {
             .mapValues { max(0, $0) }
             .filter { $0.value > 0.0000001 }
 
-        let existingPlan = fetchBudgetPlan(matching: descriptor)
+        let existingPlan = fetchBudgetPlan(matching: descriptor, categoryKind: categoryKind)
         let plan = existingPlan ?? BudgetPlan(
+            categoryKind: categoryKind,
             descriptor: descriptor,
             currencyCode: currencyCode,
             totalLimitAmount: normalizedTotal,
@@ -1193,6 +1275,7 @@ final class CashflowViewModel: ViewModelProtocol {
             modelContext.insert(plan)
         }
         plan.apply(
+            categoryKind: categoryKind,
             descriptor: descriptor,
             currencyCode: currencyCode,
             totalLimitAmount: normalizedTotal,
@@ -1213,7 +1296,7 @@ final class CashflowViewModel: ViewModelProtocol {
             } else {
                 let limit = BudgetCategoryLimit(
                     budgetID: plan.budgetID,
-                    categoryKind: .expense,
+                    categoryKind: categoryKind,
                     categoryRawValue: rawValue,
                     limitAmount: amount
                 )
@@ -1231,9 +1314,9 @@ final class CashflowViewModel: ViewModelProtocol {
         deleteBudgetPlan(plan)
     }
 
-    func deleteMonthlyBudgetLimit(month: Date) {
+    func deleteMonthlyBudgetLimit(month: Date, categoryKind: CashflowCategoryKind = .expense) {
         let descriptor = monthlyBudgetPeriodDescriptor(for: month)
-        guard let plan = fetchBudgetPlan(matching: descriptor) else { return }
+        guard let plan = fetchBudgetPlan(matching: descriptor, categoryKind: categoryKind) else { return }
         deleteBudgetPlan(plan)
     }
 

@@ -52,6 +52,47 @@ struct BudgetProgressCalculatorTests {
         #expect(snapshot?.categorySnapshots.first?.categoryRawValue == ExpenseCategory.groceries.rawValue)
     }
 
+    @Test("Category snapshots keep severity priority and use alphabetical tie-breaks")
+    func categorySnapshotsUseDeterministicOrdering() {
+        let salary = BudgetCategoryLimit(
+            budgetID: "plan",
+            categoryKind: .income,
+            categoryRawValue: IncomeCategory.salary.rawValue,
+            limitAmount: 250_000
+        )
+        let business = BudgetCategoryLimit(
+            budgetID: "plan",
+            categoryKind: .income,
+            categoryRawValue: IncomeCategory.business.rawValue,
+            limitAmount: 100_000
+        )
+
+        let snapshot = BudgetProgressCalculator.calculate(
+            totalSpent: 250_000,
+            totalLimit: 400_000,
+            categorySpentByRawValue: [
+                IncomeCategory.salary.rawValue: 180_000,
+                IncomeCategory.business.rawValue: 70_000
+            ],
+            categoryLimits: [salary, business],
+            categoryTitleResolver: { raw in
+                switch raw {
+                case IncomeCategory.salary.rawValue:
+                    return "Salary"
+                case IncomeCategory.business.rawValue:
+                    return "Business"
+                default:
+                    return raw
+                }
+            }
+        )
+
+        #expect(snapshot?.categorySnapshots.map(\.categoryRawValue) == [
+            IncomeCategory.business.rawValue,
+            IncomeCategory.salary.rawValue
+        ])
+    }
+
     @Test("Zero limit produces no snapshot")
     func zeroLimitHasNoSnapshot() {
         let snapshot = BudgetProgressCalculator.calculate(totalSpent: 100, totalLimit: 0)

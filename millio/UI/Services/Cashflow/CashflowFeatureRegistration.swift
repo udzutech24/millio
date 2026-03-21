@@ -219,6 +219,7 @@ struct BudgetPlanImporter: ModelImporter {
               let updatedAt = data["updatedAt"] as? TimeInterval else {
             throw AppError.backupCorrupted
         }
+        let categoryKindRaw = data["categoryKindRaw"] as? String ?? CashflowCategoryKind.expense.rawValue
 
         let descriptor = BudgetPeriodDescriptor(
             type: BudgetPeriodType(rawValue: periodTypeRaw) ?? .month,
@@ -228,12 +229,14 @@ struct BudgetPlanImporter: ModelImporter {
             anchorMonth: anchorMonth
         )
         let plan = BudgetPlan(
+            categoryKind: CashflowCategoryKind(rawValue: categoryKindRaw) ?? .expense,
             descriptor: descriptor,
             currencyCode: currencyCode,
             totalLimitAmount: totalLimitAmount,
             isCategoryBudgetingEnabled: isCategoryBudgetingEnabled
         )
         plan.budgetID = budgetID
+        plan.categoryKindRaw = categoryKindRaw
         plan.periodTypeRaw = periodTypeRaw
         plan.anchorYear = anchorYear
         plan.anchorMonth = anchorMonth

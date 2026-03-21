@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct BudgetSetupSheet: View {
+    let categoryKind: CashflowCategoryKind
     let periodTitle: String
     let currencyCode: String
     let existingAmount: Double?
@@ -23,8 +24,10 @@ struct BudgetSetupSheet: View {
     @State private var rawAmount: String = ""
     @State private var categoryDrafts: [String: String]
     @State private var isAutoRepeatEnabled: Bool
+    @State private var isTotalLimitEnabled: Bool
 
     init(
+        categoryKind: CashflowCategoryKind = .expense,
         periodTitle: String,
         currencyCode: String,
         existingAmount: Double?,
@@ -37,6 +40,7 @@ struct BudgetSetupSheet: View {
         onAutoRepeatChanged: @escaping (Bool) -> Void,
         onDelete: (() -> Void)? = nil
     ) {
+        self.categoryKind = categoryKind
         self.periodTitle = periodTitle
         self.currencyCode = currencyCode
         self.existingAmount = existingAmount
@@ -68,6 +72,7 @@ struct BudgetSetupSheet: View {
             }
         )
         _isAutoRepeatEnabled = State(initialValue: isAutoRepeatEnabled)
+        _isTotalLimitEnabled = State(initialValue: BudgetSetupSheetState.isTotalLimitInitiallyEnabled(initialTotalAmount))
     }
 
     var body: some View {
@@ -107,10 +112,7 @@ struct BudgetSetupSheet: View {
         .onChange(of: isAutoRepeatEnabled) { _, newValue in
             onAutoRepeatChanged(newValue)
         }
-    }
-
-    private var parsedTotal: Double {
-        AmountInputFormatter.parse(rawAmount) ?? 0
+        .animation(.easeInOut(duration: 0.2), value: isTotalLimitEnabled)
     }
 
     private var parsedCategoryLimits: [String: Double] {
@@ -120,25 +122,146 @@ struct BudgetSetupSheet: View {
         }
     }
 
-    private var categoryLimitSum: Double {
-        parsedCategoryLimits.values.reduce(0, +)
-    }
-
-    private var hasOverflowConflict: Bool {
-        parsedTotal > 0 && categoryLimitSum - parsedTotal > 0.0000001
-    }
-
-    private var canSave: Bool {
-        parsedTotal > 0 && !hasOverflowConflict
+    private var viewState: BudgetSetupSheetState {
+        BudgetSetupSheetState(
+            isTotalLimitEnabled: isTotalLimitEnabled,
+            parsedTotal: AmountInputFormatter.parse(rawAmount) ?? 0,
+            categoryLimits: parsedCategoryLimits,
+            hasExistingAmount: existingAmount != nil,
+            hasExistingCategoryLimits: !existingCategoryLimits.isEmpty
+        )
     }
 
     private var shouldShowRepeatControls: Bool {
         existingAmount == nil && repeatSuggestion != nil
     }
 
+    private var titleText: String {
+        switch categoryKind {
+        case .expense:
+            return budgetLocalized(ru: "Лимит бюджета", en: "Budget limit")
+        case .income:
+            return budgetLocalized(ru: "План доходов", en: "Income plan")
+        }
+    }
+
+    private var totalSectionTitleText: String {
+        switch categoryKind {
+        case .expense:
+            return budgetLocalized(ru: "Общий лимит", en: "Total limit")
+        case .income:
+            return budgetLocalized(ru: "Общий план", en: "Total plan")
+        }
+    }
+
+    private var totalSectionHintText: String {
+        switch categoryKind {
+        case .expense:
+            return budgetLocalized(
+                ru: "Задайте общий лимит на месяц, чтобы держать под контролем все расходы",
+                en: "Set a total monthly limit to keep all spending under control"
+            )
+        case .income:
+            return budgetLocalized(
+                ru: "Задайте общий план на месяц, чтобы видеть, сколько дохода уже набрано и сколько еще нужно добрать",
+                en: "Set a total monthly plan to see how much income is already received and how much is still needed"
+            )
+        }
+    }
+
+    private var totalToggleTitleText: String {
+        switch categoryKind {
+        case .expense:
+            return budgetLocalized(ru: "Включить общий лимит", en: "Enable total limit")
+        case .income:
+            return budgetLocalized(ru: "Включить общий план", en: "Enable total plan")
+        }
+    }
+
+    private var totalToggleHintText: String {
+        switch categoryKind {
+        case .expense:
+            return budgetLocalized(
+                ru: "Отключите, если хотите контролировать только отдельные категории",
+                en: "Turn it off if you want to control only specific categories"
+            )
+        case .income:
+            return budgetLocalized(
+                ru: "Отключите, если хотите планировать только отдельные категории доходов",
+                en: "Turn it off if you want to plan only specific income categories"
+            )
+        }
+    }
+
+    private var totalDisabledText: String {
+        switch categoryKind {
+        case .expense:
+            return budgetLocalized(ru: "Общий лимит отключен", en: "Total limit is off")
+        case .income:
+            return budgetLocalized(ru: "Общий план отключен", en: "Total plan is off")
+        }
+    }
+
+    private var categorySectionTitleText: String {
+        switch categoryKind {
+        case .expense:
+            return budgetLocalized(ru: "Лимиты по категориям", en: "Category limits")
+        case .income:
+            return budgetLocalized(ru: "План по категориям", en: "Category plan")
+        }
+    }
+
+    private var categorySectionHintText: String {
+        switch categoryKind {
+        case .expense:
+            return budgetLocalized(
+                ru: "Задайте индивидуальные лимиты только там, где нужен отдельный контроль",
+                en: "Set individual limits only where you need separate control"
+            )
+        case .income:
+            return budgetLocalized(
+                ru: "Задайте индивидуальный план только там, где нужен отдельный контроль по источникам дохода",
+                en: "Set individual targets only where you need separate control by income source"
+            )
+        }
+    }
+
+    private var footerHintText: String {
+        switch categoryKind {
+        case .expense:
+            return budgetLocalized(
+                ru: "Общий лимит помогает держать под контролем месяц целиком, а лимиты категорий нужны для точечной дисциплины",
+                en: "The total limit keeps the whole month in check, while category limits help where tighter discipline matters"
+            )
+        case .income:
+            return budgetLocalized(
+                ru: "Общий план держит фокус на результате месяца, а планы по категориям показывают, какой источник дохода проседает",
+                en: "The total plan keeps the month focused on the result, while category targets show which income source is lagging"
+            )
+        }
+    }
+
+    private var saveButtonText: String {
+        switch categoryKind {
+        case .expense:
+            return budgetLocalized(ru: "Сохранить лимиты", en: "Save limits")
+        case .income:
+            return budgetLocalized(ru: "Сохранить план", en: "Save plan")
+        }
+    }
+
+    private var deleteButtonText: String {
+        switch categoryKind {
+        case .expense:
+            return budgetLocalized(ru: "Удалить лимит", en: "Delete limit")
+        case .income:
+            return budgetLocalized(ru: "Удалить план", en: "Delete plan")
+        }
+    }
+
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(budgetLocalized(ru: "Лимит бюджета", en: "Budget limit"))
+            Text(titleText)
                 .font(.system(size: 28, weight: .bold))
                 .foregroundStyle(AppColors.textPrimary)
             Text(periodTitle)
@@ -165,7 +288,11 @@ struct BudgetSetupSheet: View {
                             )
 
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(budgetLocalized(ru: "Повторить прошлые лимиты", en: "Repeat previous limits"))
+                            Text(
+                                categoryKind == .expense
+                                ? budgetLocalized(ru: "Повторить прошлые лимиты", en: "Repeat previous limits")
+                                : budgetLocalized(ru: "Повторить прошлый план", en: "Repeat previous plan")
+                            )
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(AppColors.textPrimary)
                             Text(repeatSuggestionTitle(repeatSuggestion))
@@ -186,9 +313,14 @@ struct BudgetSetupSheet: View {
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppColors.textPrimary)
                         Text(
-                            budgetLocalized(
+                            categoryKind == .expense
+                            ? budgetLocalized(
                                 ru: "Если у нового месяца лимитов еще нет, форма сразу заполнится по прошлому месяцу.",
                                 en: "If the new month has no limits yet, the form will be prefilled from the previous month."
+                            )
+                            : budgetLocalized(
+                                ru: "Если у нового месяца плана еще нет, форма сразу заполнится по прошлому месяцу.",
+                                en: "If the new month has no plan yet, the form will be prefilled from the previous month."
                             )
                         )
                         .font(.system(size: 12, weight: .medium))
@@ -203,55 +335,95 @@ struct BudgetSetupSheet: View {
 
     private var totalLimitSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(budgetLocalized(ru: "Общий лимит", en: "Total limit"))
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(AppColors.textPrimary)
-
-            HStack(spacing: 10) {
-                TextField(
-                    "0",
-                    text: Binding(
-                        get: { rawAmount },
-                        set: { rawAmount = $0 }
-                    )
-                )
-                .onChange(of: rawAmount) { _, newValue in
-                    let formatted = AmountInputFormatter.integerInput(newValue)
-                    if formatted != newValue {
-                        rawAmount = formatted
-                    }
-                }
-                .keyboardType(.decimalPad)
-                .font(.system(size: 28, weight: .bold))
-                .foregroundStyle(AppColors.textPrimary)
-
-                Text(currencyCode)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.72))
+            VStack(alignment: .leading, spacing: 4) {
+                Text(totalSectionTitleText)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                Text(totalSectionHintText)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.68))
             }
-            .padding(16)
-            .background(cardBackground(stroke: Color.white.opacity(0.16)))
+
+            Toggle(isOn: $isTotalLimitEnabled) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(totalToggleTitleText)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                    Text(totalToggleHintText)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.68))
+                }
+            }
+            .toggleStyle(.switch)
+            .tint(Color(hex: "6DFFC7"))
+            .padding(14)
+            .background(cardBackground(stroke: Color.white.opacity(0.12)))
+
+            if isTotalLimitEnabled {
+                HStack(spacing: 10) {
+                    TextField(
+                        "0",
+                        text: Binding(
+                            get: { rawAmount },
+                            set: { rawAmount = $0 }
+                        )
+                    )
+                    .onChange(of: rawAmount) { _, newValue in
+                        let formatted = AmountInputFormatter.integerInput(newValue)
+                        if formatted != newValue {
+                            rawAmount = formatted
+                        }
+                    }
+                    .keyboardType(.decimalPad)
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundStyle(AppColors.textPrimary)
+
+                    Text(currencyCode)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(Color.white.opacity(0.72))
+                }
+                .padding(16)
+                .background(cardBackground(stroke: Color.white.opacity(0.16)))
+            } else {
+                Text(totalDisabledText)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.72))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(cardBackground(stroke: Color.white.opacity(0.10)))
+            }
 
             HStack {
                 Text(
-                    budgetLocalized(
+                    categoryKind == .expense
+                    ? budgetLocalized(
                         ru: "Сумма лимитов категорий",
                         en: "Category limits total"
+                    )
+                    : budgetLocalized(
+                        ru: "Сумма планов категорий",
+                        en: "Category targets total"
                     )
                 )
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Color.white.opacity(0.72))
                 Spacer()
-                Text("\(cashflowAmountText(categoryLimitSum)) \(currencyCode)")
+                Text("\(cashflowAmountText(viewState.categoryLimitSum)) \(currencyCode)")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(hasOverflowConflict ? Color.red.opacity(0.95) : AppColors.textPrimary)
+                    .foregroundStyle(viewState.hasOverflowConflict ? Color.red.opacity(0.95) : AppColors.textPrimary)
             }
 
-            if hasOverflowConflict {
+            if viewState.hasOverflowConflict {
                 Text(
-                    budgetLocalized(
-                        ru: "Категорийные лимиты превышают общий на \(cashflowAmountText(categoryLimitSum - parsedTotal)) \(currencyCode). Это плохая конфигурация, её нельзя сохранять.",
-                        en: "Category limits exceed the total by \(cashflowAmountText(categoryLimitSum - parsedTotal)) \(currencyCode). This configuration is invalid and cannot be saved."
+                    categoryKind == .expense
+                    ? budgetLocalized(
+                        ru: "Лимиты категорий превышают общий на \(cashflowAmountText(viewState.categoryLimitSum - viewState.parsedTotal)) \(currencyCode), такую конфигурацию нельзя сохранить",
+                        en: "Category limits exceed the total by \(cashflowAmountText(viewState.categoryLimitSum - viewState.parsedTotal)) \(currencyCode), so this setup cannot be saved"
+                    )
+                    : budgetLocalized(
+                        ru: "Планы категорий превышают общий на \(cashflowAmountText(viewState.categoryLimitSum - viewState.parsedTotal)) \(currencyCode), такую конфигурацию нельзя сохранить",
+                        en: "Category targets exceed the total by \(cashflowAmountText(viewState.categoryLimitSum - viewState.parsedTotal)) \(currencyCode), so this setup cannot be saved"
                     )
                 )
                 .font(.system(size: 12, weight: .medium))
@@ -264,15 +436,10 @@ struct BudgetSetupSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(budgetLocalized(ru: "Лимиты по категориям", en: "Category limits"))
+                    Text(categorySectionTitleText)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
-                    Text(
-                        budgetLocalized(
-                            ru: "Задай индивидуальные ограничения только там, где реально нужен контроль.",
-                            en: "Set individual caps only for categories that actually need control."
-                        )
-                    )
+                    Text(categorySectionHintText)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Color.white.opacity(0.68))
                 }
@@ -293,6 +460,7 @@ struct BudgetSetupSheet: View {
             VStack(spacing: 10) {
                 ForEach(categoryOptions) { option in
                     BudgetCategoryLimitDraftRow(
+                        categoryKind: categoryKind,
                         option: option,
                         currencyCode: currencyCode,
                         rawValue: Binding(
@@ -311,10 +479,7 @@ struct BudgetSetupSheet: View {
 
     private var footerHint: some View {
         Text(
-            budgetLocalized(
-                ru: "Главный лимит должен оставаться главным. Категории нужны не для красоты, а чтобы быстро ловить перерасход в узких местах.",
-                en: "The total limit should stay primary. Category limits exist to catch focused overspending, not to create visual noise."
-            )
+            footerHintText
         )
         .font(.system(size: 12, weight: .medium))
         .foregroundStyle(Color.white.opacity(0.62))
@@ -323,11 +488,11 @@ struct BudgetSetupSheet: View {
     private var bottomActions: some View {
         VStack(spacing: 10) {
             Button {
-                onSave(parsedTotal, parsedCategoryLimits)
+                onSave(viewState.effectiveTotalAmount, parsedCategoryLimits)
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
                 dismiss()
             } label: {
-                Text(budgetLocalized(ru: "Сохранить лимиты", en: "Save limits"))
+                Text(saveButtonText)
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(Color.black)
                     .frame(maxWidth: .infinity)
@@ -338,15 +503,15 @@ struct BudgetSetupSheet: View {
                     )
             }
             .buttonStyle(.plain)
-            .disabled(!canSave)
-            .opacity(canSave ? 1 : 0.45)
+            .disabled(!viewState.canSave)
+            .opacity(viewState.canSave ? 1 : 0.45)
 
-            if let onDelete, existingAmount != nil {
+            if let onDelete, viewState.hasExistingConfiguration {
                 Button {
                     onDelete()
                     dismiss()
                 } label: {
-                    Text(budgetLocalized(ru: "Удалить лимит", en: "Delete limit"))
+                    Text(deleteButtonText)
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Color.red.opacity(0.95))
                         .frame(maxWidth: .infinity)
@@ -371,6 +536,7 @@ struct BudgetSetupSheet: View {
         categoryDrafts = suggestion.categoryLimits.mapValues {
             AmountInputFormatter.integerInput(AmountInputFormatter.plainString(from: $0))
         }
+        isTotalLimitEnabled = BudgetSetupSheetState.isTotalLimitInitiallyEnabled(suggestion.totalAmount)
     }
 
     private func repeatSuggestionTitle(_ suggestion: BudgetRepeatSuggestion) -> String {
@@ -410,6 +576,7 @@ struct BudgetSetupSheet: View {
 }
 
 private struct BudgetCategoryLimitDraftRow: View {
+    let categoryKind: CashflowCategoryKind
     let option: CashflowCategoryOption
     let currencyCode: String
     @Binding var rawValue: String
@@ -440,7 +607,11 @@ private struct BudgetCategoryLimitDraftRow: View {
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(statusColor(snapshot.status))
                     } else {
-                        Text(budgetLocalized(ru: "Лимит не задан", en: "No limit set"))
+                        Text(
+                            categoryKind == .expense
+                            ? budgetLocalized(ru: "Лимит не задан", en: "No limit set")
+                            : budgetLocalized(ru: "План не задан", en: "No plan set")
+                        )
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(Color.white.opacity(0.56))
                     }
@@ -517,11 +688,26 @@ private struct BudgetCategoryLimitDraftRow: View {
         case .normal:
             return budgetLocalized(ru: "\(spent) из \(limit)", en: "\(spent) of \(limit)")
         case .warning:
-            return budgetLocalized(ru: "\(spent) из \(limit) · близко к лимиту", en: "\(spent) of \(limit) · getting close")
+            return budgetLocalized(
+                ru: categoryKind == .expense
+                    ? "\(spent) из \(limit) · близко к лимиту"
+                    : "\(spent) из \(limit) · близко к плану",
+                en: "\(spent) of \(limit) · getting close"
+            )
         case .critical:
-            return budgetLocalized(ru: "\(spent) из \(limit) · почти предел", en: "\(spent) of \(limit) · near limit")
+            return budgetLocalized(
+                ru: categoryKind == .expense
+                    ? "\(spent) из \(limit) · почти предел"
+                    : "\(spent) из \(limit) · почти выполнено",
+                en: "\(spent) of \(limit) · near target"
+            )
         case .exceeded:
-            return budgetLocalized(ru: "Перерасход \(cashflowAmountText(abs(snapshot.remaining)))", en: "Over by \(cashflowAmountText(abs(snapshot.remaining)))")
+            return budgetLocalized(
+                ru: categoryKind == .expense
+                    ? "Перерасход \(cashflowAmountText(abs(snapshot.remaining)))"
+                    : "Сверх плана \(cashflowAmountText(abs(snapshot.remaining)))",
+                en: "Over by \(cashflowAmountText(abs(snapshot.remaining)))"
+            )
         }
     }
 

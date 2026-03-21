@@ -49,16 +49,16 @@ struct CashflowCategoryGridLayout {
     static let compactWidthThreshold: CGFloat = 330
     static let budgetCompactWidthThreshold: CGFloat = 430
     static let columnSpacing: CGFloat = 8
-    static let unifiedCardMinHeight: CGFloat = 124
-    static let unifiedTopRowMinHeight: CGFloat = 22
-    static let unifiedFooterMinHeight: CGFloat = 24
+    static let unifiedCardMinHeight: CGFloat = 94
+    static let unifiedTopRowMinHeight: CGFloat = 18
+    static let unifiedFooterMinHeight: CGFloat = 18
 
     static func columnCount(
         for kind: CashflowCategoryTransactionSheetKind,
         containerWidth: CGFloat,
         showsBudgetDetails: Bool = false
     ) -> Int {
-        if kind == .expense, showsBudgetDetails, containerWidth < budgetCompactWidthThreshold {
+        if showsBudgetDetails, containerWidth < budgetCompactWidthThreshold {
             return compactColumns
         }
         if containerWidth < compactWidthThreshold {
@@ -86,10 +86,10 @@ struct CashflowCategoryGridLayout {
         if showsBudgetDetails {
             return CardMetrics(
                 topRowMinHeight: unifiedTopRowMinHeight,
-                contentSpacing: 6,
-                titleMinHeight: 26,
+                contentSpacing: 4,
+                titleMinHeight: 22,
                 cardMinHeight: unifiedCardMinHeight,
-                verticalPadding: 9,
+                verticalPadding: 7,
                 amountTopPadding: 0,
                 usesFlexibleSpacer: true,
                 footerMinHeight: unifiedFooterMinHeight
@@ -98,11 +98,11 @@ struct CashflowCategoryGridLayout {
 
         return CardMetrics(
             topRowMinHeight: unifiedTopRowMinHeight,
-            contentSpacing: 5,
-            titleMinHeight: 24,
+            contentSpacing: 4,
+            titleMinHeight: 20,
             cardMinHeight: unifiedCardMinHeight,
-            verticalPadding: 8,
-            amountTopPadding: 8,
+            verticalPadding: 6,
+            amountTopPadding: 4,
             usesFlexibleSpacer: true,
             footerMinHeight: unifiedFooterMinHeight
         )
@@ -159,6 +159,7 @@ private struct CashflowCategoryTransactionSheet: View {
     @State private var selectedMonth: Date = Calendar.current.startOfMonth(for: Date())
     @State private var selectedCategory: CashflowCategoryOption?
     @State private var searchText: String = ""
+    @State private var isSearchExpanded: Bool = false
     @State private var monthlyTotal: Double = 0
     @State private var categoryTotals: [String: Double] = [:]
     @State private var budgetSnapshot: BudgetProgressSnapshot?
@@ -192,11 +193,12 @@ private struct CashflowCategoryTransactionSheet: View {
     @State private var categoryFeedbackSequence: Int = 0
     @State private var hasCompletedInitialLoad: Bool = false
     @State private var suppressNextCategoryTap: Bool = false
+    @FocusState private var isSearchFieldFocused: Bool
     private let outerCornerRadius: CGFloat = 22
     private let innerCornerRadius: CGFloat = 16
 
     private var showsBudgetDetails: Bool {
-        kind == .expense && budgetSnapshot != nil
+        budgetSnapshot != nil
     }
 
     private var categoryColumns: [GridItem] {
@@ -218,7 +220,7 @@ private struct CashflowCategoryTransactionSheet: View {
     private var monthTitle: String {
         let formatter = DateFormatter()
         formatter.locale = .autoupdatingCurrent
-        formatter.setLocalizedDateFormatFromTemplate("LLLL y")
+        formatter.dateFormat = "LLLL yyyy"
         return formatter.string(from: selectedMonth).localizedCapitalized
     }
 
@@ -228,6 +230,19 @@ private struct CashflowCategoryTransactionSheet: View {
             matching: searchText,
             totalsByCategory: categoryTotals
         )
+    }
+
+    private var planButtonTitle: String {
+        switch kind {
+        case .expense:
+            return budgetSnapshot == nil
+                ? budgetLocalized(ru: "Добавить лимиты", en: "Add limits")
+                : budgetLocalized(ru: "Лимиты", en: "Limits")
+        case .income:
+            return budgetSnapshot == nil
+                ? budgetLocalized(ru: "План", en: "Plan")
+                : budgetLocalized(ru: "План", en: "Plan")
+        }
     }
 
     var body: some View {
@@ -240,10 +255,8 @@ private struct CashflowCategoryTransactionSheet: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 12) {
                             headerSection
-                            monthSelectorSection
                             monthlyTotalSection
                             managementSection
-                            searchSection
                             categoriesSection
                         }
                         .padding(.horizontal, 16)
@@ -310,18 +323,23 @@ private struct CashflowCategoryTransactionSheet: View {
                 )
             }
             .sheet(isPresented: $showBudgetSetupSheet) {
-                let repeatSuggestion = viewModel.previousMonthlyBudgetSuggestion(for: selectedMonth)
+                let repeatSuggestion = viewModel.previousMonthlyBudgetSuggestion(
+                    for: selectedMonth,
+                    categoryKind: kind.categoryKind
+                )
                 BudgetSetupSheet(
+                    categoryKind: kind.categoryKind,
                     periodTitle: monthTitle,
                     currencyCode: cashflowCurrencyCodeLabel(viewModel.state.displayCurrency),
                     existingAmount: budgetTotalLimit,
-                    categoryOptions: viewModel.categoryOptions(for: .expense),
+                    categoryOptions: viewModel.categoryOptions(for: kind.categoryKind),
                     existingCategoryLimits: categoryBudgetLimits,
                     categorySnapshots: budgetSnapshot?.categorySnapshots ?? [],
                     repeatSuggestion: repeatSuggestion,
                     isAutoRepeatEnabled: viewModel.isMonthlyBudgetAutoRepeatEnabled,
                     onSave: { amount, limits in
                         viewModel.saveMonthlyBudgetConfiguration(
+                            categoryKind: kind.categoryKind,
                             month: selectedMonth,
                             totalAmount: amount,
                             categoryLimits: limits,
@@ -333,7 +351,7 @@ private struct CashflowCategoryTransactionSheet: View {
                         viewModel.isMonthlyBudgetAutoRepeatEnabled = isEnabled
                     },
                     onDelete: budgetTotalLimit == nil ? nil : {
-                        viewModel.deleteMonthlyBudgetLimit(month: selectedMonth)
+                        viewModel.deleteMonthlyBudgetLimit(month: selectedMonth, categoryKind: kind.categoryKind)
                         reloadMonthlyTotal()
                     }
                 )
@@ -405,121 +423,74 @@ private struct CashflowCategoryTransactionSheet: View {
             }
         }
         .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
+        .presentationDragIndicator(.hidden)
     }
 
     private var headerSection: some View {
-        HStack {
-            Button {
+        HStack(spacing: 12) {
+            circleToolbarButton(systemName: "xmark", accessibilityLabel: String(localized: "cashflow.common.close")) {
                 dismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary.opacity(0.92))
-                    .frame(width: 44, height: 44)
-                    .background(
-                        Circle()
-                            .fill(Color.white.opacity(0.08))
-                            .overlay(
-                                Circle()
-                                    .stroke(Color.white.opacity(0.22), lineWidth: 1)
-                            )
-                    )
             }
-            .buttonStyle(.plain)
 
-            Spacer()
-
-            Button {
-                showTransactionsHistory = true
-            } label: {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary.opacity(0.92))
-                    .frame(width: 44, height: 44)
-                    .background(
-                        Circle()
-                            .fill(Color.white.opacity(0.08))
-                            .overlay(
-                                Circle()
-                                    .stroke(Color.white.opacity(0.22), lineWidth: 1)
-                            )
-                    )
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(String(localized: "cashflow.operation.history_accessibility"))
-
-            Button {
-                showSettingsSheet = true
-            } label: {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary.opacity(0.92))
-                    .frame(width: 44, height: 44)
-                    .background(
-                        Circle()
-                            .fill(Color.white.opacity(0.08))
-                            .overlay(
-                                Circle()
-                                    .stroke(Color.white.opacity(0.22), lineWidth: 1)
-                            )
-                    )
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(
-                String(localized: "Settings")
-            )
-        }
-        .padding(.top, 6)
-    }
-
-    private var monthSelectorSection: some View {
-        VStack(spacing: 6) {
-            HStack {
+            HStack(spacing: 10) {
                 Button {
                     shiftMonth(by: -1)
                 } label: {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(AppColors.textPrimary.opacity(0.9))
-                        .frame(width: 32, height: 32)
-                        .background(toolbarCircleBackground)
+                        .frame(width: 24, height: 24)
+                        .background(monthChevronBackground)
                 }
                 .buttonStyle(.plain)
 
-                Spacer()
+                VStack(spacing: 2) {
+                    Text(monthTitle)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(AppColors.textPrimary.opacity(0.92))
+                        .contentTransition(.numericText())
 
-                Text(monthTitle)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary.opacity(0.92))
-
-                Spacer()
+                    Text(monthRangeText(for: selectedMonth))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(AppColors.textSecondary.opacity(0.86))
+                        .monospacedDigit()
+                }
+                .frame(maxWidth: .infinity)
 
                 Button {
                     shiftMonth(by: 1)
                 } label: {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(canMoveForward ? AppColors.textPrimary.opacity(0.9) : AppColors.textSecondary.opacity(0.45))
-                        .frame(width: 32, height: 32)
-                        .background(toolbarCircleBackground)
+                        .frame(width: 24, height: 24)
+                        .background(monthChevronBackground)
                 }
                 .buttonStyle(.plain)
                 .disabled(!canMoveForward)
             }
             .padding(.horizontal, 8)
-            .padding(.vertical, 6)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
+            .background(monthHeaderBackground)
 
-            let period = monthRangeText(for: selectedMonth)
-            Text(period)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(AppColors.textSecondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 2)
+            HStack(spacing: 8) {
+                circleToolbarButton(
+                    systemName: "clock.arrow.circlepath",
+                    accessibilityLabel: String(localized: "cashflow.operation.history_accessibility")
+                ) {
+                    showTransactionsHistory = true
+                }
+
+                circleToolbarButton(
+                    systemName: "gearshape",
+                    accessibilityLabel: String(localized: "Settings")
+                ) {
+                    showSettingsSheet = true
+                }
+            }
         }
-        .padding(8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(outerPanelBackground)
+        .padding(.top, 6)
     }
 
     private var monthlyTotalSection: some View {
@@ -529,65 +500,61 @@ private struct CashflowCategoryTransactionSheet: View {
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(AppColors.textSecondary)
                 Spacer()
-                if kind == .expense {
-                    Button {
-                        showBudgetSetupSheet = true
-                    } label: {
-                        Text(budgetSnapshot == nil ? budgetLocalized(ru: "Добавить лимиты", en: "Add limits") : budgetLocalized(ru: "Лимиты", en: "Limits"))
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(AppColors.textPrimary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 8)
-                            .background(innerPanelBackground)
-                    }
-                    .buttonStyle(.plain)
+                Button {
+                    showBudgetSetupSheet = true
+                } label: {
+                    Text(planButtonTitle)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(innerPanelBackground)
                 }
+                .buttonStyle(.plain)
             }
             .padding(.horizontal, 2)
 
-            HStack {
-                Text("cashflow.operation.total")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary.opacity(0.92))
-                Spacer()
-                if isLoadingMonthlyTotal {
-                    ProgressView()
-                        .tint(AppColors.textPrimary)
-                        .scaleEffect(0.9)
-                } else {
-                    Text(formattedMonthlyTotal(monthlyTotal))
-                        .font(.system(size: 34, weight: .bold))
-                        .foregroundStyle(kind.amountColor(for: monthlyTotal))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                        .contentTransition(.numericText())
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 16)
-            .background(innerPanelBackground)
-
-            if kind == .expense {
-                monthlyBudgetInlineSection
-            }
+            monthlySummaryHeroSection
         }
         .padding(12)
         .background(outerPanelBackground)
     }
 
     @ViewBuilder
+    private var monthlySummaryHeroSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if isLoadingMonthlyTotal {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                        .tint(AppColors.textPrimary)
+                        .scaleEffect(0.9)
+                    Spacer()
+                }
+                .padding(.vertical, 18)
+            } else {
+                Text(formattedMonthlyTotal(monthlyTotal))
+                    .font(.system(size: 34, weight: .bold))
+                    .foregroundStyle(kind.amountColor(for: monthlyTotal))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                    .contentTransition(.numericText())
+            }
+
+            monthlyBudgetInlineSection
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 16)
+        .background(innerPanelBackground)
+    }
+
+    @ViewBuilder
     private var monthlyBudgetInlineSection: some View {
         if let snapshot = budgetSnapshot {
             VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text(budgetLocalized(ru: "Лимит месяца", en: "Monthly limit"))
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(AppColors.textPrimary.opacity(0.92))
-                    Spacer()
-                    Text("\(formattedAmount(snapshot.spent)) / \(formattedAmount(snapshot.limit))")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(budgetStatusColor(snapshot.status))
-                }
+                Text(monthlyBudgetUsageText(snapshot))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(monthlyPlanTintColor(snapshot))
 
                 GeometryReader { proxy in
                     let progress = min(max(snapshot.progress, 0), 1)
@@ -595,7 +562,7 @@ private struct CashflowCategoryTransactionSheet: View {
                         Capsule(style: .continuous)
                             .fill(Color.white.opacity(0.08))
                         Capsule(style: .continuous)
-                            .fill(budgetStatusColor(snapshot.status))
+                            .fill(monthlyPlanTintColor(snapshot))
                             .frame(width: max(12, proxy.size.width * progress))
                     }
                 }
@@ -603,12 +570,14 @@ private struct CashflowCategoryTransactionSheet: View {
 
                 Text(monthlyBudgetStatusText(snapshot))
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(budgetStatusColor(snapshot.status))
+                    .foregroundStyle(monthlyPlanTintColor(snapshot))
 
                 if snapshot.categoriesLimitOverflow > 0.0000001 {
                     Text(
                         budgetLocalized(
-                            ru: "Сумма лимитов категорий больше общего на \(formattedAmount(snapshot.categoriesLimitOverflow))",
+                            ru: kind == .expense
+                                ? "Сумма лимитов категорий больше общего на \(formattedAmount(snapshot.categoriesLimitOverflow))"
+                                : "Сумма планов категорий больше общего на \(formattedAmount(snapshot.categoriesLimitOverflow))",
                             en: "Category limits exceed total by \(formattedAmount(snapshot.categoriesLimitOverflow))"
                         )
                     )
@@ -616,10 +585,58 @@ private struct CashflowCategoryTransactionSheet: View {
                     .foregroundStyle(Color.orange.opacity(0.92))
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+        }
+    }
+
+    private var managementSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            let entries = CashflowManagementEntry.entries(for: kind.categoryKind)
+            HStack(spacing: 10) {
+                ForEach(entries) { entry in
+                    managementButton(entry: entry)
+                }
+
+                searchToggleButton
+            }
+
+            if shouldShowSearchField {
+                searchSection
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.28, dampingFraction: 0.86), value: shouldShowSearchField)
+    }
+
+    private func managementButton(entry: CashflowManagementEntry) -> some View {
+        Button {
+            handleManagementTap(entry)
+        } label: {
+            Image(systemName: entry.icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.92))
+                .frame(maxWidth: .infinity, minHeight: 52)
             .background(innerPanelBackground)
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel(entry.title)
+    }
+
+    private var searchToggleButton: some View {
+        Button {
+            toggleSearch()
+        } label: {
+            Image(systemName: shouldShowSearchField ? "xmark" : "magnifyingglass")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.92))
+                .frame(maxWidth: .infinity, minHeight: 52)
+            .background(innerPanelBackground)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(
+            shouldShowSearchField
+            ? String(localized: "cashflow.common.close", defaultValue: "Close")
+            : String(localized: "cashflow.operation.search_category", defaultValue: "Search category")
+        )
     }
 
     private var searchSection: some View {
@@ -630,69 +647,32 @@ private struct CashflowCategoryTransactionSheet: View {
             TextField(String(localized: "cashflow.operation.search_category"), text: $searchText)
                 .textInputAutocapitalization(.words)
                 .foregroundStyle(AppColors.textPrimary)
+                .focused($isSearchFieldFocused)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .background(innerPanelBackground)
-    }
-
-    private var managementSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("cashflow.operation.management")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(AppColors.textSecondary)
-                .padding(.horizontal, 2)
-
-            let entries = CashflowManagementEntry.entries(for: kind.categoryKind)
-            HStack(spacing: 10) {
-                ForEach(entries) { entry in
-                    managementButton(entry: entry)
-                }
-            }
+        .onChange(of: isSearchFieldFocused) { _, isFocused in
+            guard !isFocused, searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+            isSearchExpanded = false
         }
     }
 
-    private func managementButton(entry: CashflowManagementEntry) -> some View {
-        Button {
-            handleManagementTap(entry)
-        } label: {
-            let iconView = Image(systemName: entry.icon)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.92))
-                .frame(width: 30, height: 30)
-                .background(
-                    Circle()
-                        .fill(Color.black.opacity(0.92))
-                        .overlay(
-                            Circle()
-                                .stroke(kind.strokeGradient.opacity(0.7), lineWidth: 1)
-                        )
-                )
+    private var shouldShowSearchField: Bool {
+        isSearchExpanded || !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
-            HStack(spacing: 10) {
-                iconView
-
-                Spacer(minLength: 0)
-
-                Text(entry.title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(entry.lineLimit)
-                    .minimumScaleFactor(0.72)
-
-                Spacer(minLength: 0)
-
-                // Symmetric placeholder to keep the title visually centered.
-                iconView
-                    .opacity(0)
+    private func toggleSearch() {
+        if shouldShowSearchField {
+            searchText = ""
+            isSearchExpanded = false
+            isSearchFieldFocused = false
+        } else {
+            isSearchExpanded = true
+            DispatchQueue.main.async {
+                isSearchFieldFocused = true
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity, minHeight: 60, alignment: .center)
-            .background(innerPanelBackground)
         }
-        .buttonStyle(.plain)
     }
 
     private func handleManagementTap(_ entry: CashflowManagementEntry) {
@@ -861,7 +841,7 @@ private struct CashflowCategoryTransactionSheet: View {
                         if let summary {
                             VStack(alignment: .leading, spacing: metrics.contentSpacing) {
                                 HStack(alignment: .firstTextBaseline, spacing: 4) {
-                                    Text("Лимит \(formattedAmount(summary.limit))")
+                                    Text(categoryBudgetLimitLabel(summary.limit))
                                         .font(.system(size: 10, weight: .medium))
                                         .foregroundStyle(Color.white.opacity(0.66))
                                         .lineLimit(1)
@@ -1015,6 +995,47 @@ private struct CashflowCategoryTransactionSheet: View {
             )
     }
 
+    private var monthChevronBackground: some View {
+        Circle()
+            .fill(Color.white.opacity(0.04))
+            .overlay(
+                Circle()
+                    .stroke(Color.white.opacity(0.18), lineWidth: 1)
+            )
+    }
+
+    private var monthHeaderBackground: some View {
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .fill(Color.black.opacity(0.24))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(Color.white.opacity(0.10), lineWidth: 1)
+            )
+    }
+
+    private func circleToolbarButton(
+        systemName: String,
+        accessibilityLabel: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(AppColors.textPrimary.opacity(0.92))
+                .frame(width: 40, height: 40)
+                .background(
+                    Circle()
+                        .fill(Color.white.opacity(0.08))
+                        .overlay(
+                            Circle()
+                                .stroke(Color.white.opacity(0.22), lineWidth: 1)
+                        )
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
     private func shiftMonth(by value: Int) {
         let calendar = Calendar.current
         guard let newValue = calendar.date(byAdding: .month, value: value, to: selectedMonth) else {
@@ -1048,10 +1069,11 @@ private struct CashflowCategoryTransactionSheet: View {
                 month: selectedMonth,
                 in: viewModel.state.displayCurrency
             )
-            let budgetSummary: (plan: BudgetPlan?, snapshot: BudgetProgressSnapshot?, categoryLimits: [String: Double]) =
-                kind == .expense
-                ? await viewModel.expenseBudgetSummary(for: selectedMonth, in: viewModel.state.displayCurrency)
-                : (nil, nil, [:])
+            let budgetSummary = await viewModel.monthlyBudgetSummary(
+                for: kind.categoryKind,
+                month: selectedMonth,
+                in: viewModel.state.displayCurrency
+            )
 
             guard !Task.isCancelled else { return }
             await MainActor.run {
@@ -1126,7 +1148,6 @@ private struct CashflowCategoryTransactionSheet: View {
     }
 
     private func categoryBudgetSummary(for option: CashflowCategoryOption) -> BudgetCategoryProgressSnapshot? {
-        guard kind == .expense else { return nil }
         return budgetSnapshot?.categorySnapshots.first(where: { $0.categoryRawValue == option.rawValue })
     }
 
@@ -1138,6 +1159,15 @@ private struct CashflowCategoryTransactionSheet: View {
         formatter.minimumFractionDigits = 0
         let amount = formatter.string(from: NSNumber(value: value)) ?? "0"
         return amount
+    }
+
+    private func categoryBudgetLimitLabel(_ value: Double) -> String {
+        switch kind {
+        case .expense:
+            return "Лимит \(formattedAmount(value))"
+        case .income:
+            return "План \(formattedAmount(value))"
+        }
     }
 
     private func handleCreateCategory(_ name: String, icon: String) {
@@ -1217,7 +1247,7 @@ private struct CashflowCategoryTransactionSheet: View {
 
         let formatter = DateFormatter()
         formatter.locale = .autoupdatingCurrent
-        formatter.dateFormat = "dd.MM.yyyy"
+        formatter.dateFormat = "dd.MM"
         return "\(formatter.string(from: start)) — \(formatter.string(from: end))"
     }
 
@@ -1261,16 +1291,52 @@ private struct CashflowCategoryTransactionSheet: View {
     }
 
     private func monthlyBudgetStatusText(_ snapshot: BudgetProgressSnapshot) -> String {
-        if snapshot.remaining >= 0 {
+        let currency = cashflowCurrencyCodeLabel(viewModel.state.displayCurrency)
+        switch kind {
+        case .expense:
+            if snapshot.remaining >= 0 {
+                return budgetLocalized(
+                    ru: "Осталось \(formattedAmount(snapshot.remaining)) \(currency)",
+                    en: "\(formattedAmount(snapshot.remaining)) \(currency) remaining"
+                )
+            }
             return budgetLocalized(
-                ru: "Осталось \(formattedAmount(snapshot.remaining)) \(cashflowCurrencyCodeLabel(viewModel.state.displayCurrency))",
-                en: "\(formattedAmount(snapshot.remaining)) \(cashflowCurrencyCodeLabel(viewModel.state.displayCurrency)) remaining"
+                ru: "Перерасход \(formattedAmount(abs(snapshot.remaining))) \(currency)",
+                en: "Over by \(formattedAmount(abs(snapshot.remaining))) \(currency)"
+            )
+        case .income:
+            if snapshot.remaining <= 0.0000001 {
+                return budgetLocalized(
+                    ru: "План доходов выполнен",
+                    en: "Income plan reached"
+                )
+            }
+            return budgetLocalized(
+                ru: "По плану осталось \(formattedAmount(snapshot.remaining)) \(currency)",
+                en: "\(formattedAmount(snapshot.remaining)) \(currency) left in plan"
             )
         }
+    }
+
+    private func monthlyBudgetUsageText(_ snapshot: BudgetProgressSnapshot) -> String {
+        let usedPercent = Int((min(max(snapshot.progress, 0), 1) * 100).rounded())
         return budgetLocalized(
-            ru: "Перерасход \(formattedAmount(abs(snapshot.remaining))) \(cashflowCurrencyCodeLabel(viewModel.state.displayCurrency))",
-            en: "Over by \(formattedAmount(abs(snapshot.remaining))) \(cashflowCurrencyCodeLabel(viewModel.state.displayCurrency))"
+            ru: kind == .expense
+                ? "\(usedPercent)% от месячного лимита"
+                : "\(usedPercent)% от плана доходов",
+            en: kind == .expense
+                ? "\(usedPercent)% of monthly limit"
+                : "\(usedPercent)% of income plan"
         )
+    }
+
+    private func monthlyPlanTintColor(_ snapshot: BudgetProgressSnapshot) -> Color {
+        switch kind {
+        case .expense:
+            return budgetStatusColor(snapshot.status)
+        case .income:
+            return snapshot.remaining <= 0.0000001 ? Color(hex: "19E694") : Color(hex: "6DFFC7")
+        }
     }
 
     private func categoryStrokeStyle(for option: CashflowCategoryOption) -> AnyShapeStyle {
