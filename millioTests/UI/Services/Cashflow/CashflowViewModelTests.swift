@@ -2777,7 +2777,7 @@ extension CashflowViewModelTests {
             amount: 15_200,
             currency: "RUB",
             transactionDate: fixedNow,
-            expenseCategoryRaw: ExpenseCategory.house.rawValue,
+            expenseCategoryRaw: ExpenseCategory.homeGoods.rawValue,
             note: "Mortgage"
         )
         let settlement = CashflowTransaction(
@@ -2785,8 +2785,8 @@ extension CashflowViewModelTests {
             amount: 267_558,
             currency: "RUB",
             transactionDate: fixedNow,
-            expenseCategoryRaw: ExpenseCategory.other.rawValue,
             investmentID: "investment-1",
+            expenseCategoryRaw: ExpenseCategory.other.rawValue,
             note: "Asset purchase",
             affectsCashflowTotals: false
         )
@@ -2812,8 +2812,8 @@ extension CashflowViewModelTests {
 
         #expect(abs(summary.totalAmount - 15_200) < 0.01)
         #expect(summary.entries.count == 1)
-        #expect(summary.entries.first?.rawValue == ExpenseCategory.house.rawValue)
-        #expect(summary.entries.first?.title == viewModel.expenseCategoryDisplayName(for: ExpenseCategory.house.rawValue))
+        #expect(summary.entries.first?.rawValue == ExpenseCategory.homeGoods.rawValue)
+        #expect(summary.entries.first?.title == viewModel.expenseCategoryDisplayName(for: ExpenseCategory.homeGoods.rawValue))
     }
 
     @Test("Сохранение из вложенного экрана категории не закрывает sheet расходов/доходов")
