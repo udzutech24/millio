@@ -162,10 +162,12 @@ struct QuickSetupSystemContext {
 final class QuickSetupViewModel: ObservableObject {
     static let recommendedExpenseCategoryIDs: [String] = [
         ExpenseCategory.groceries.rawValue,
+        ExpenseCategory.dining.rawValue,
         ExpenseCategory.transport.rawValue,
+        ExpenseCategory.housing.rawValue,
+        ExpenseCategory.utilities.rawValue,
+        ExpenseCategory.telecom.rawValue,
         ExpenseCategory.shopping.rawValue,
-        ExpenseCategory.cafe.rawValue,
-        ExpenseCategory.bills.rawValue,
         ExpenseCategory.health.rawValue,
         ExpenseCategory.education.rawValue,
         ExpenseCategory.other.rawValue
@@ -216,6 +218,18 @@ final class QuickSetupViewModel: ObservableObject {
     private var hasCustomizedBackupPreference = false
 
     static let maxFavoriteCurrencies = 4
+
+    private var effectiveLocale: Locale {
+        if let selectedLocale = selectedLanguage.locale {
+            return selectedLocale
+        }
+
+        if let preferredLanguageIdentifier = systemContext.preferredLanguageIdentifiers.first {
+            return Locale(identifier: preferredLanguageIdentifier)
+        }
+
+        return systemContext.locale
+    }
 
     init(
         appState: AppState,
@@ -279,7 +293,7 @@ final class QuickSetupViewModel: ObservableObject {
     }
 
     var productAmountFieldTitle: String {
-        let locale = selectedLanguage.locale ?? Locale.current
+        let locale = effectiveLocale
         switch productTypeForCreation {
         case .card:
             return QuickSetupLocalization.text(locale: locale, ru: "Баланс в \(primaryCurrencyCode)", en: "Balance in \(primaryCurrencyCode)")
@@ -295,7 +309,7 @@ final class QuickSetupViewModel: ObservableObject {
     }
 
     var productPurchasePriceTitle: String {
-        let locale = selectedLanguage.locale ?? Locale.current
+        let locale = effectiveLocale
         return productTypeForCreation == .crypto
             ? QuickSetupLocalization.text(locale: locale, ru: "Цена покупки за монету", en: "Buy price per coin")
             : QuickSetupLocalization.text(locale: locale, ru: "Цена покупки за 1 шт.", en: "Buy price per share")
@@ -314,7 +328,7 @@ final class QuickSetupViewModel: ObservableObject {
     }
 
     var productMarketSearchTitle: String {
-        let locale = selectedLanguage.locale ?? Locale.current
+        let locale = effectiveLocale
         return productTypeForCreation == .crypto
             ? QuickSetupLocalization.text(locale: locale, ru: "Найти пару", en: "Find pair")
             : QuickSetupLocalization.text(locale: locale, ru: "Найти тикер", en: "Find ticker")
@@ -372,7 +386,7 @@ final class QuickSetupViewModel: ObservableObject {
     }
 
     var continueTitle: String {
-        let locale = selectedLanguage.locale ?? Locale.current
+        let locale = effectiveLocale
         switch currentStep {
         case .summary:
             return QuickSetupLocalization.text(locale: locale, ru: "Завершить", en: "Finish")
@@ -463,7 +477,7 @@ final class QuickSetupViewModel: ObservableObject {
     }
 
     func addGroupPreset(_ preset: QuickSetupGroupPreset) {
-        let locale = selectedLanguage.locale ?? Locale.current
+        let locale = effectiveLocale
         let targetName = normalizeGroupName(preset.title(for: locale))
         if let existing = groups.first(where: { normalizeGroupName($0.name) == targetName }) {
             selectedGroupDraftID = existing.id
@@ -509,7 +523,7 @@ final class QuickSetupViewModel: ObservableObject {
     }
 
     private func setGroups(from presets: [QuickSetupGroupPreset]) {
-        let locale = selectedLanguage.locale ?? Locale.current
+        let locale = effectiveLocale
         groups = presets.map { $0.draft(for: locale) }
         selectedGroupDraftID = groups.first?.id
     }
@@ -574,12 +588,12 @@ final class QuickSetupViewModel: ObservableObject {
                 return nil
             }
             if productTypeForCreation == .crypto, !EntitlementPolicy.canUseQuickSetupCrypto(isPro: isProUser) {
-                let locale = selectedLanguage.locale ?? Locale.current
+                let locale = effectiveLocale
                 lastAddDraftError = QuickSetupLocalization.text(locale: locale, ru: "Криптовалюта доступна в PRO", en: "Crypto is available in PRO")
                 return nil
             }
             guard let quantity = parsedDecimal(productQuantityInput), quantity > 0 else {
-                let locale = selectedLanguage.locale ?? Locale.current
+                let locale = effectiveLocale
                 lastAddDraftError = QuickSetupLocalization.text(locale: locale, ru: "Укажи количество позиции", en: "Enter position quantity")
                 return nil
             }
@@ -588,7 +602,7 @@ final class QuickSetupViewModel: ObservableObject {
                 purchaseUnitPrice = max(0, parsedDecimal(productPurchasePriceInput) ?? 0)
             } else {
                 guard let parsedPurchaseUnitPrice = parsedDecimal(productPurchasePriceInput), parsedPurchaseUnitPrice > 0 else {
-                    let locale = selectedLanguage.locale ?? Locale.current
+                    let locale = effectiveLocale
                     lastAddDraftError = QuickSetupLocalization.text(locale: locale, ru: "Укажи цену покупки", en: "Enter buy price")
                     return nil
                 }
@@ -604,7 +618,7 @@ final class QuickSetupViewModel: ObservableObject {
                 isPro: isProUser,
                 currentTrackedTickers: currentTickerDraftCount
             ) {
-                let locale = selectedLanguage.locale ?? Locale.current
+                let locale = effectiveLocale
                 lastAddDraftError = productTypeForCreation == .crypto
                     ? QuickSetupLocalization.text(locale: locale, ru: "Криптовалюта доступна в PRO", en: "Crypto is available in PRO")
                     : QuickSetupLocalization.text(locale: locale, ru: "В быстрой настройке без PRO доступна 1 акция", en: "Quick setup includes 1 stock without PRO")

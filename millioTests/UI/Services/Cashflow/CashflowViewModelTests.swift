@@ -954,7 +954,7 @@ extension CashflowViewModelTests {
             expenseBreakdown.map { $0.title } ==
             [
                 ExpenseCategory.shopping.displayName,
-                ExpenseCategory.cafe.displayName,
+                ExpenseCategory.dining.displayName,
                 ExpenseCategory.groceries.displayName
             ]
         )
@@ -988,35 +988,38 @@ extension CashflowViewModelTests {
         let income = viewModel.categoryOption(for: IncomeCategory.salary.rawValue, kind: .income)
         let expense = viewModel.categoryOption(for: ExpenseCategory.groceries.rawValue, kind: .expense)
 
-        #expect(income.icon == "💳")
+        #expect(income.icon == "💼")
         #expect(expense.icon == "🛒")
         #expect(!CashflowCustomCategory.isSFSymbolIcon(income.icon))
         #expect(!CashflowCustomCategory.isSFSymbolIcon(expense.icon))
     }
 
-    @Test("Доходы при старте содержат 8 базовых категорий с релевантными иконками и локализацией")
+    @Test("Доходы при старте содержат обновленный базовый набор с релевантными иконками и локализацией")
     func testIncomeSystemCategoriesDefaultSetAndLocalization() {
         #expect(
             IncomeCategory.allCases.map(\.rawValue) ==
-            ["salary", "freelance", "business", "bonus", "investment", "rental", "gift", "other"]
+            ["salary", "freelance", "business", "bonus", "interest", "dividends", "rental", "sale", "refunds", "gift", "other"]
         )
-        #expect(IncomeCategory.allCases.count == 8)
+        #expect(IncomeCategory.allCases.count == 11)
 
-        #expect(IncomeCategory.salary.icon == "💳")
+        #expect(IncomeCategory.salary.icon == "💼")
         #expect(IncomeCategory.freelance.icon == "🛠️")
         #expect(IncomeCategory.business.icon == "🏢")
-        #expect(IncomeCategory.bonus.icon == "🏅")
-        #expect(IncomeCategory.investment.icon == "📈")
+        #expect(IncomeCategory.bonus.icon == "🎉")
+        #expect(IncomeCategory.interest.icon == "🏦")
+        #expect(IncomeCategory.dividends.icon == "📈")
         #expect(IncomeCategory.rental.icon == "🏘️")
+        #expect(IncomeCategory.sale.icon == "🏷️")
+        #expect(IncomeCategory.refunds.icon == "↩️")
         #expect(IncomeCategory.gift.icon == "🎁")
-        #expect(IncomeCategory.other.icon == "📦")
+        #expect(IncomeCategory.other.icon == "🧩")
 
         let ruLocale = Locale(identifier: "ru_RU")
         let enLocale = Locale(identifier: "en_US")
         #expect(AppLocalization.string("Business", locale: ruLocale) == "Бизнес")
         #expect(AppLocalization.string("Business", locale: enLocale) == "Business")
-        #expect(AppLocalization.string("Rental", locale: ruLocale) == "Аренда")
-        #expect(AppLocalization.string("Rental", locale: enLocale) == "Rental")
+        #expect(IncomeCategory.rental.localizedDisplayName(locale: ruLocale) == "Аренда")
+        #expect(IncomeCategory.rental.localizedDisplayName(locale: enLocale) == "Rental")
         #expect(IncomeCategory.salary.localizedDisplayName(locale: ruLocale) == "Зарплата")
         #expect(IncomeCategory.salary.localizedDisplayName(locale: enLocale) == "Salary")
         #expect(IncomeCategory.matchesSearch(rawValue: IncomeCategory.salary.rawValue, query: "зарп"))
@@ -1035,6 +1038,20 @@ extension CashflowViewModelTests {
         #expect(byRussian.contains { $0.rawValue == IncomeCategory.salary.rawValue })
         #expect(byEnglish.contains { $0.rawValue == IncomeCategory.salary.rawValue })
         #expect(!expenseLeak.contains { $0.rawValue == IncomeCategory.salary.rawValue })
+    }
+
+    @Test("Legacy raw-значения категорий канонизируются в актуальный системный список")
+    func legacyCategoryRawsResolveToCurrentSystemCategories() throws {
+        let modelContext = try createTestModelContext()
+        let viewModel = CashflowViewModel(modelContext: modelContext)
+
+        let legacyExpense = viewModel.categoryOption(for: ExpenseCategory.marketplaces.rawValue, kind: .expense)
+        let legacyIncome = viewModel.categoryOption(for: IncomeCategory.investment.rawValue, kind: .income)
+
+        #expect(legacyExpense.rawValue == ExpenseCategory.shopping.rawValue)
+        #expect(legacyExpense.displayName == ExpenseCategory.shopping.displayName)
+        #expect(legacyIncome.rawValue == IncomeCategory.dividends.rawValue)
+        #expect(legacyIncome.displayName == IncomeCategory.dividends.displayName)
     }
 
     @Test("Нормализация иконки поддерживает emoji и SF Symbols")

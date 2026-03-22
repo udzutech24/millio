@@ -1964,13 +1964,15 @@ final class CashflowViewModel: ViewModelProtocol {
     }
 
     func categoryOption(for raw: String, kind: CashflowCategoryKind, fallbackName: String = "") -> CashflowCategoryOption {
-        if let system = systemCategoryOption(for: raw, kind: kind, includeHidden: true) {
+        let resolvedRaw = canonicalSystemCategoryRaw(for: raw, kind: kind)
+
+        if let system = systemCategoryOption(for: resolvedRaw, kind: kind, includeHidden: true) {
             return system
         }
-        if let customID = Self.customCategoryID(from: raw),
+        if let customID = Self.customCategoryID(from: resolvedRaw),
            let custom = state.customCategories.first(where: { $0.categoryID == customID && $0.kind == kind }) {
             return CashflowCategoryOption(
-                rawValue: raw,
+                rawValue: resolvedRaw,
                 displayName: custom.name,
                 icon: custom.icon,
                 isCustom: true
@@ -3728,15 +3730,17 @@ final class CashflowViewModel: ViewModelProtocol {
         kind: CashflowCategoryKind,
         includeHidden: Bool = false
     ) -> CashflowCategoryOption? {
-        guard let base = baseSystemCategoryOption(for: raw, kind: kind) else {
+        let resolvedRaw = canonicalSystemCategoryRaw(for: raw, kind: kind)
+
+        guard let base = baseSystemCategoryOption(for: resolvedRaw, kind: kind) else {
             return nil
         }
-        if let override = systemCategoryOverride(for: raw, kind: kind) {
+        if let override = systemCategoryOverride(for: resolvedRaw, kind: kind) {
             if override.isHidden && !includeHidden {
                 return nil
             }
             return CashflowCategoryOption(
-                rawValue: raw,
+                rawValue: resolvedRaw,
                 displayName: override.name,
                 icon: override.icon,
                 isCustom: false
@@ -3756,7 +3760,7 @@ final class CashflowViewModel: ViewModelProtocol {
 
     private func ensureSystemCategoriesVisible(rawValues: [String], kind: CashflowCategoryKind, nowDate: Date) {
         let systemRaws = Set(systemCategoryRaws(for: kind))
-        let rawsToReveal = Set(rawValues).intersection(systemRaws)
+        let rawsToReveal = Set(rawValues.map { canonicalSystemCategoryRaw(for: $0, kind: kind) }).intersection(systemRaws)
 
         guard !rawsToReveal.isEmpty else { return }
 
@@ -3827,7 +3831,7 @@ final class CashflowViewModel: ViewModelProtocol {
     /// Fallback category is the last-resort bucket for migration and import recovery,
     /// so deleting it would leave the model without a safe destination.
     private func isProtectedFallbackCategory(rawValue: String, kind: CashflowCategoryKind) -> Bool {
-        rawValue == fallbackCategoryRaw(for: kind)
+        canonicalSystemCategoryRaw(for: rawValue, kind: kind) == fallbackCategoryRaw(for: kind)
     }
 
     private func systemCategoryRaws(for kind: CashflowCategoryKind) -> [String] {
@@ -3840,29 +3844,41 @@ final class CashflowViewModel: ViewModelProtocol {
     }
 
     private func systemCategoryOverride(for raw: String, kind: CashflowCategoryKind) -> CashflowSystemCategoryOverride? {
-        state.systemCategoryOverrides.first {
-            $0.kind == kind && $0.categoryRaw == raw
+        let resolvedRaw = canonicalSystemCategoryRaw(for: raw, kind: kind)
+        return state.systemCategoryOverrides.first {
+            $0.kind == kind && $0.categoryRaw == resolvedRaw
         }
     }
 
     private func baseSystemCategoryOption(for raw: String, kind: CashflowCategoryKind) -> CashflowCategoryOption? {
         switch kind {
         case .income:
-            guard let category = IncomeCategory(rawValue: raw) else { return nil }
+            let resolvedRaw = IncomeCategory.canonicalRawValue(raw)
+            guard let category = IncomeCategory(rawValue: resolvedRaw) else { return nil }
             return CashflowCategoryOption(
-                rawValue: raw,
+                rawValue: resolvedRaw,
                 displayName: category.displayName,
                 icon: category.icon,
                 isCustom: false
             )
         case .expense:
-            guard let category = ExpenseCategory(rawValue: raw) else { return nil }
+            let resolvedRaw = ExpenseCategory.canonicalRawValue(raw)
+            guard let category = ExpenseCategory(rawValue: resolvedRaw) else { return nil }
             return CashflowCategoryOption(
-                rawValue: raw,
+                rawValue: resolvedRaw,
                 displayName: category.displayName,
                 icon: category.icon,
                 isCustom: false
             )
+        }
+    }
+
+    private func canonicalSystemCategoryRaw(for raw: String, kind: CashflowCategoryKind) -> String {
+        switch kind {
+        case .income:
+            return IncomeCategory.canonicalRawValue(raw)
+        case .expense:
+            return ExpenseCategory.canonicalRawValue(raw)
         }
     }
 

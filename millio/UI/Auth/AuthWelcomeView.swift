@@ -22,6 +22,10 @@ struct AuthWelcomeView: View {
     @ScaledMetric(relativeTo: .body) private var primaryButtonHeight: CGFloat = 52
     @ScaledMetric(relativeTo: .body) private var secondaryButtonHeight: CGFloat = 50
     @ScaledMetric(relativeTo: .body) private var buttonCornerRadius: CGFloat = 14
+    @ScaledMetric(relativeTo: .body) private var badgeHorizontalPadding: CGFloat = 14
+    @ScaledMetric(relativeTo: .body) private var badgeVerticalPadding: CGFloat = 10
+    @ScaledMetric(relativeTo: .caption) private var badgeIconSize: CGFloat = 14
+    @ScaledMetric(relativeTo: .body) private var badgeTracking: CGFloat = 1.6
 
     private enum L10n {
         static let badgePrivateAccess: LocalizedStringKey = "auth.welcome.badge.private_access"
@@ -29,19 +33,12 @@ struct AuthWelcomeView: View {
         static let title: LocalizedStringKey = "auth.welcome.title"
         static let subtitle: LocalizedStringKey = "auth.welcome.subtitle"
         static let continueWithoutAccount: LocalizedStringKey = "auth.welcome.cta.continue_without_account"
-        static let featureAppleSignIn: LocalizedStringKey = "auth.welcome.feature.apple_sign_in"
-        static let featurePrivateSession: LocalizedStringKey = "auth.welcome.feature.private_session"
-        static let featureGuestAccess: LocalizedStringKey = "auth.welcome.feature.guest_access"
     }
-
-    private let featureItems: [(icon: String, title: LocalizedStringKey)] = [
-        ("person.crop.circle.badge.checkmark", L10n.featureAppleSignIn),
-        ("lock.fill", L10n.featurePrivateSession),
-        ("sparkles", L10n.featureGuestAccess)
-    ]
 
     var body: some View {
         GeometryReader { proxy in
+            let metrics = AuthWelcomeLayoutPolicy.metrics(containerSize: proxy.size)
+
             ZStack {
                 GradientBackground(
                     topGradientColor: "153A7A",
@@ -62,85 +59,78 @@ struct AuthWelcomeView: View {
                     .blur(radius: 48)
                     .offset(x: 120, y: -110)
 
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: sectionSpacing) {
-                        Spacer(minLength: headerTopSpacer)
+                VStack(alignment: .leading, spacing: scaled(headerToCardSpacer, by: metrics.headerToCardSpacing / 12)) {
+                    Spacer(minLength: scaled(headerTopSpacer, by: metrics.topSpacerMinLength / 36))
 
-                        header
+                    header(metrics: metrics)
 
-                        Spacer(minLength: headerToCardSpacer)
-
-                        FinancesGlassCard(
-                            accentColor: AppColors.brandPrimary,
-                            cornerRadius: cardCornerRadius,
-                            contentPadding: EdgeInsets(
-                                top: cardPaddingTop,
-                                leading: cardPaddingHorizontal,
-                                bottom: cardPaddingBottom,
-                                trailing: cardPaddingHorizontal
-                            )
-                        ) {
-                            VStack(alignment: .leading, spacing: sectionSpacing) {
-                                hero
-                                actionBlock
-                            }
+                    FinancesGlassCard(
+                        accentColor: AppColors.brandPrimary,
+                        cornerRadius: scaled(cardCornerRadius, by: metrics.cardCornerRadius / 28),
+                        contentPadding: EdgeInsets(
+                            top: scaled(cardPaddingTop, by: metrics.cardPaddingTop / 24),
+                            leading: scaled(cardPaddingHorizontal, by: metrics.cardPaddingHorizontal / 22),
+                            bottom: scaled(cardPaddingBottom, by: metrics.cardPaddingBottom / 20),
+                            trailing: scaled(cardPaddingHorizontal, by: metrics.cardPaddingHorizontal / 22)
+                        )
+                    ) {
+                        VStack(alignment: .leading, spacing: scaled(sectionSpacing, by: metrics.sectionSpacing / 24)) {
+                            hero(metrics: metrics)
+                            actionBlock(metrics: metrics)
                         }
                     }
-                    .frame(
-                        minHeight: proxy.size.height - max(proxy.safeAreaInsets.bottom, 18),
-                        alignment: .bottom
-                    )
                 }
-                .padding(.horizontal, screenHorizontalPadding)
-                .padding(.bottom, max(proxy.safeAreaInsets.bottom, screenBottomPadding))
-
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .padding(.horizontal, scaled(screenHorizontalPadding, by: metrics.horizontalPadding / 20))
+                .padding(.top, proxy.safeAreaInsets.top + scaled(12, by: metrics.topPadding / 12))
+                .padding(.bottom, max(proxy.safeAreaInsets.bottom, scaled(screenBottomPadding, by: metrics.bottomPadding / 18)))
             }
         }
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 14) {
+    private func header(metrics: AuthWelcomeLayoutMetrics) -> some View {
+        VStack(alignment: .leading, spacing: scaled(14, by: metrics.headerSpacing / 14)) {
             HStack(spacing: 10) {
                 Image(systemName: "apple.logo")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: scaled(badgeIconSize, by: metrics.badgeIconSize / 14), weight: .semibold))
                 Text(L10n.badgePrivateAccess)
                     .font(.caption.weight(.semibold))
                     .textCase(.uppercase)
-                    .tracking(1.6)
+                    .tracking(scaled(badgeTracking, by: metrics.badgeTracking / 1.6))
             }
             .foregroundStyle(Color.white.opacity(0.82))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, scaled(badgeHorizontalPadding, by: metrics.badgeHorizontalPadding / 14))
+            .padding(.vertical, scaled(badgeVerticalPadding, by: metrics.badgeVerticalPadding / 10))
             .background(
                 Capsule()
                     .fill(Color.white.opacity(0.08))
             )
 
             Text(L10n.brand)
-                .font(.system(size: brandTitleSize, weight: .semibold, design: .default))
+                .font(.system(size: scaled(brandTitleSize, by: metrics.brandTitleScale), weight: .semibold, design: .default))
                 .foregroundStyle(Color.white.opacity(0.88))
         }
     }
 
-    private var hero: some View {
-        VStack(alignment: .leading, spacing: 14) {
+    private func hero(metrics: AuthWelcomeLayoutMetrics) -> some View {
+        VStack(alignment: .leading, spacing: scaled(14, by: metrics.heroSpacing / 14)) {
             Text(L10n.title)
-                .font(.system(size: heroTitleSize, weight: .semibold, design: .default))
+                .font(.system(size: scaled(heroTitleSize, by: metrics.heroTitleScale), weight: .semibold, design: .default))
                 .foregroundStyle(Color.white)
                 .kerning(-0.4)
                 .lineLimit(3)
-                .minimumScaleFactor(0.86)
+                .minimumScaleFactor(0.8)
                 .fixedSize(horizontal: false, vertical: true)
 
             Text(L10n.subtitle)
-                .font(.body)
+                .font(.system(size: scaled(17, by: metrics.subtitleScale)))
                 .foregroundStyle(Color.white.opacity(0.72))
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    private var actionBlock: some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private func actionBlock(metrics: AuthWelcomeLayoutMetrics) -> some View {
+        VStack(alignment: .leading, spacing: scaled(12, by: metrics.actionSpacing / 12)) {
             SignInWithAppleButton(.continue) { request in
                 authManager.markAppleSignInStarted()
                 request.requestedScopes = [.fullName, .email]
@@ -148,8 +138,8 @@ struct AuthWelcomeView: View {
                 Task { await authManager.signIn(with: result) }
             }
             .signInWithAppleButtonStyle(.white)
-            .frame(height: primaryButtonHeight)
-            .clipShape(RoundedRectangle(cornerRadius: buttonCornerRadius, style: .continuous))
+            .frame(height: scaled(primaryButtonHeight, by: metrics.primaryButtonHeight / 52))
+            .clipShape(RoundedRectangle(cornerRadius: scaled(buttonCornerRadius, by: metrics.buttonCornerRadius / 14), style: .continuous))
             .disabled(authManager.isBusy)
 
             Button {
@@ -159,12 +149,12 @@ struct AuthWelcomeView: View {
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(Color.white.opacity(0.92))
                     .frame(maxWidth: .infinity)
-                    .frame(height: secondaryButtonHeight)
+                    .frame(height: scaled(secondaryButtonHeight, by: metrics.secondaryButtonHeight / 50))
                     .background(
-                        RoundedRectangle(cornerRadius: buttonCornerRadius, style: .continuous)
+                        RoundedRectangle(cornerRadius: scaled(buttonCornerRadius, by: metrics.buttonCornerRadius / 14), style: .continuous)
                             .fill(Color.white.opacity(0.07))
                             .overlay(
-                                RoundedRectangle(cornerRadius: buttonCornerRadius, style: .continuous)
+                                RoundedRectangle(cornerRadius: scaled(buttonCornerRadius, by: metrics.buttonCornerRadius / 14), style: .continuous)
                                     .stroke(Color.white.opacity(0.1), lineWidth: 1)
                             )
                     )
@@ -178,5 +168,9 @@ struct AuthWelcomeView: View {
                     .foregroundStyle(Color.red.opacity(0.92))
             }
         }
+    }
+
+    private func scaled(_ base: CGFloat, by multiplier: CGFloat) -> CGFloat {
+        base * multiplier
     }
 }

@@ -330,11 +330,36 @@ final class FinanceLifecycleHarness {
     }
 
     func deleteTransaction(_ transaction: CashflowTransaction, recalculate: Bool) async throws {
+        let normalizedOperationGroupID = transaction.operationGroupID?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         cashflowViewModel.handle(.deleteTransaction(transaction, recalculate: recalculate))
         try await waitUntil {
-            !self.cashflowViewModel.state.transactions.contains {
+            let descriptor = FetchDescriptor<CashflowTransaction>()
+            let storedTransactions = (try? self.modelContext.fetch(descriptor)) ?? []
+
+            let originalRemovedFromStore = !storedTransactions.contains {
                 $0.persistentModelID == transaction.persistentModelID
             }
+            let linkedRemovedFromStore = normalizedOperationGroupID.map { operationGroupID in
+                !storedTransactions.contains {
+                    $0.operationGroupID?.trimmingCharacters(in: .whitespacesAndNewlines) == operationGroupID
+                }
+            } ?? true
+
+            let stateTransactions = self.cashflowViewModel.state.transactions
+            let originalRemovedFromState = !stateTransactions.contains {
+                $0.persistentModelID == transaction.persistentModelID
+            }
+            let linkedRemovedFromState = normalizedOperationGroupID.map { operationGroupID in
+                !stateTransactions.contains {
+                    $0.operationGroupID?.trimmingCharacters(in: .whitespacesAndNewlines) == operationGroupID
+                }
+            } ?? true
+
+            return originalRemovedFromStore
+                && linkedRemovedFromStore
+                && originalRemovedFromState
+                && linkedRemovedFromState
         }
     }
 

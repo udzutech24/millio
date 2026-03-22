@@ -208,29 +208,30 @@ final class MarketSymbolSearchViewModel: ObservableObject {
 
         isLoading = true
 
-        searchTask = Task {
+        searchTask = Task { @MainActor [weak self] in
+            guard let self else { return }
             do {
                 try await Task.sleep(for: .milliseconds(Int(MarketSymbolSearchEngine.remoteSearchDebounceMilliseconds)))
                 guard !Task.isCancelled else { return }
 
-                let fetched = try await self.resolver.resolveSymbols(
+                let fetched = try await resolver.resolveSymbols(
                     query: query,
-                    filter: self.filter,
+                    filter: filter,
                     outputSize: 20
                 )
                 guard !Task.isCancelled else { return }
 
-                self.results = fetched
-                self.storeCachedResults(fetched, for: queryCacheKey)
-                self.isLoading = false
-                self.errorMessage = nil
+                results = fetched
+                storeCachedResults(fetched, for: queryCacheKey)
+                isLoading = false
+                errorMessage = nil
             } catch is CancellationError {
                 return
             } catch {
-                let fallbackResults = self.resolver.localResults(query: query, filter: self.filter)
-                self.results = fallbackResults
-                self.isLoading = false
-                self.errorMessage = self.userFacingSearchErrorMessage(for: error, query: query, hasFallbackResults: !fallbackResults.isEmpty)
+                let fallbackResults = resolver.localResults(query: query, filter: filter)
+                results = fallbackResults
+                isLoading = false
+                errorMessage = userFacingSearchErrorMessage(for: error, query: query, hasFallbackResults: !fallbackResults.isEmpty)
             }
         }
     }

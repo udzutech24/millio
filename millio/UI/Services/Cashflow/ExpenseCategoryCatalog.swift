@@ -12,16 +12,18 @@ enum ExpenseCategoryGroup: String, CaseIterable, Codable {
     case dining = "dining"
     case transport = "transport"
     case auto = "auto"
-    case home = "home"
+    case housing = "housing"
+    case bills = "bills"
     case health = "health"
     case beauty = "beauty"
     case shopping = "shopping"
     case education = "education"
     case entertainment = "entertainment"
     case travel = "travel"
-    case digital = "digital"
-    case bills = "bills"
+    case subscriptions = "subscriptions"
     case pets = "pets"
+    case insurance = "insurance"
+    case taxesFees = "taxes_fees"
     case transfers = "transfers"
     case other = "other"
 }
@@ -42,6 +44,8 @@ struct ExpenseCategoryMetadata: Equatable {
 }
 
 enum ExpenseCategoryCatalog {
+    /// Visible system categories define the current product taxonomy.
+    /// Legacy categories remain below for display, import, and data compatibility.
     static let allMetadata: [ExpenseCategoryMetadata] = [
         .init(
             category: .groceries,
@@ -52,48 +56,17 @@ enum ExpenseCategoryCatalog {
             aliases: ["продукты", "супермаркеты", "grocery", "groceries", "supermarket", "food store", "вкусвилл", "пятерочка", "магнит"]
         ),
         .init(
-            category: .cafe,
+            category: .dining,
             group: .dining,
-            displayNameRU: "Кафе",
-            displayNameEN: "Cafes",
-            icon: "☕️",
-            aliases: ["кафе", "рестораны", "общепит", "restaurant", "restaurants", "cafe", "cafes", "dining"]
-        ),
-        .init(
-            category: .fastFood,
-            group: .dining,
-            displayNameRU: "Фастфуд",
-            displayNameEN: "Fast food",
-            icon: "🍔",
+            displayNameRU: "Еда вне дома",
+            displayNameEN: "Dining out",
+            icon: "🍽️",
             aliases: [
-                "фастфуд",
-                "быстрая еда",
-                "fast food",
-                "burger",
-                "pizza",
-                "пицца",
-                "пиццерия",
-                "роллы",
-                "суши",
-                "бургер",
-                "шаверма",
-                "шаурма",
-                "доставка еды",
-                "еда навынос",
-                "kfc",
-                "mcdonald",
-                "burger king",
-                "dodo",
-                "додо"
+                "еда вне дома", "кафе", "кафешка", "ресторан", "рестораны", "рестик", "рестики", "рестороны", "ресторан",
+                "общепит", "кофейня", "кофе", "coffee shop",
+                "coffee", "cafe", "cafes", "restaurant", "restaurants", "dining", "dining out",
+                "fast food", "фастфуд", "быстрая еда", "пицца", "роллы", "суши", "pizza", "burger", "sushi", "rolls", "доставка еды"
             ]
-        ),
-        .init(
-            category: .coffeeShops,
-            group: .dining,
-            displayNameRU: "Кофейни",
-            displayNameEN: "Coffee shops",
-            icon: "☕️",
-            aliases: ["кофейня", "кофе", "coffee", "coffee shop", "starbucks", "costa", "surf coffee"]
         ),
         .init(
             category: .transport,
@@ -122,50 +95,26 @@ enum ExpenseCategoryCatalog {
         .init(
             category: .carService,
             group: .auto,
-            displayNameRU: "Сервис",
-            displayNameEN: "Service",
-            icon: "🛠️",
+            displayNameRU: "Автосервис",
+            displayNameEN: "Car service",
+            icon: "🔧",
             aliases: ["автосервис", "сто", "ремонт авто", "car service", "auto repair", "maintenance", "шиномонтаж"]
         ),
         .init(
-            category: .shopping,
-            group: .shopping,
-            displayNameRU: "Покупки",
-            displayNameEN: "Shopping",
-            icon: "🛍️",
-            aliases: ["покупки", "shopping", "store", "mall", "retail", "техника", "electronics", "gadgets"]
-        ),
-        .init(
-            category: .marketplaces,
-            group: .shopping,
-            displayNameRU: "Маркетплейсы",
-            displayNameEN: "Marketplaces",
-            icon: "📦",
-            aliases: ["маркетплейс", "маркетплейсы", "marketplace", "marketplaces", "ozon", "wb", "wildberries", "amazon"]
-        ),
-        .init(
-            category: .clothing,
-            group: .shopping,
-            displayNameRU: "Одежда",
-            displayNameEN: "Clothing",
-            icon: "👕",
-            aliases: ["одежда", "обувь", "fashion", "apparel", "clothing", "shoes", "lamoda"]
-        ),
-        .init(
-            category: .homeGoods,
-            group: .home,
-            displayNameRU: "Дом",
-            displayNameEN: "Home",
+            category: .housing,
+            group: .housing,
+            displayNameRU: "Жилье",
+            displayNameEN: "Housing",
             icon: "🏠",
-            aliases: ["дом", "товары для дома", "home", "home goods", "household", "ikea", "leroy merlin"]
+            aliases: ["жилье", "жильё", "аренда", "rent", "mortgage", "ипотека", "home", "housing", "apartment", "квартира"]
         ),
         .init(
-            category: .bills,
+            category: .utilities,
             group: .bills,
-            displayNameRU: "Счета",
-            displayNameEN: "Bills",
-            icon: "🧾",
-            aliases: ["счета", "bill", "bills", "аренда", "rent", "regular payment"]
+            displayNameRU: "Коммунальные",
+            displayNameEN: "Utilities",
+            icon: "💡",
+            aliases: ["жкх", "коммунальные", "utilities", "electricity", "water", "gas utility", "electric bill"]
         ),
         .init(
             category: .telecom,
@@ -176,44 +125,56 @@ enum ExpenseCategoryCatalog {
             aliases: ["связь", "интернет", "telecom", "mobile", "isp", "wifi", "cellular", "мтс", "билайн", "мегафон"]
         ),
         .init(
-            category: .utilities,
-            group: .bills,
-            displayNameRU: "ЖКХ и коммунальные",
-            displayNameEN: "Utilities",
-            icon: "💡",
-            aliases: ["жкх", "коммунальные", "utilities", "electricity", "water", "gas utility", "electric bill"]
-        ),
-        .init(
             category: .health,
             group: .health,
             displayNameRU: "Здоровье",
             displayNameEN: "Health",
-            icon: "💊",
-            aliases: ["здоровье", "health", "doctor", "clinic"]
+            icon: "🩺",
+            aliases: ["здоровье", "health", "doctor", "clinic", "medical", "healthcare", "dental", "стоматология", "врач", "клиника"]
         ),
         .init(
-            category: .pharmacies,
+            category: .pharmacy,
             group: .health,
-            displayNameRU: "Аптеки",
-            displayNameEN: "Pharmacies",
+            displayNameRU: "Аптека",
+            displayNameEN: "Pharmacy",
             icon: "💊",
             aliases: ["аптека", "аптеки", "pharmacy", "drugstore", "chemist"]
         ),
         .init(
-            category: .medicalServices,
-            group: .health,
-            displayNameRU: "Медицина",
-            displayNameEN: "Medical",
-            icon: "🩺",
-            aliases: ["медицинские услуги", "клиника", "врач", "стоматология", "medical", "healthcare", "clinic", "dental"]
+            category: .shopping,
+            group: .shopping,
+            displayNameRU: "Покупки",
+            displayNameEN: "Shopping",
+            icon: "🛍️",
+            aliases: ["покупки", "shopping", "store", "mall", "retail", "маркетплейс", "маркетплейсы", "marketplace", "marketplaces", "ozon", "wb", "wildberries", "amazon"]
         ),
         .init(
-            category: .beauty,
-            group: .beauty,
-            displayNameRU: "Красота",
-            displayNameEN: "Beauty",
-            icon: "💄",
-            aliases: ["красота", "косметика", "beauty", "cosmetics", "skincare", "parfum", "spa", "barber"]
+            category: .clothing,
+            group: .shopping,
+            displayNameRU: "Одежда",
+            displayNameEN: "Clothing",
+            icon: "👕",
+            aliases: ["одежда", "обувь", "fashion", "apparel", "clothing", "shoes", "lamoda"]
+        ),
+        .init(
+            category: .electronics,
+            group: .shopping,
+            displayNameRU: "Электроника",
+            displayNameEN: "Electronics",
+            icon: "💻",
+            aliases: [
+                "электроника", "техника", "гаджеты", "gadgets", "electronics", "tech",
+                "компьютер", "компьютеры", "комп", "компы", "компьютерная техника",
+                "ноутбук", "ноут", "макбук", "laptop", "computer", "computers", "pc", "desktop", "macbook"
+            ]
+        ),
+        .init(
+            category: .homeGoods,
+            group: .housing,
+            displayNameRU: "Товары для дома",
+            displayNameEN: "Home goods",
+            icon: "🪑",
+            aliases: ["дом", "товары для дома", "home goods", "household", "ikea", "leroy merlin", "furniture", "мебель"]
         ),
         .init(
             category: .education,
@@ -240,53 +201,52 @@ enum ExpenseCategoryCatalog {
             aliases: ["путешествия", "travel", "trip", "hotel", "отель", "авиабилет", "flight", "railway", "train ticket"]
         ),
         .init(
-            category: .digitalServices,
-            group: .digital,
-            displayNameRU: "Сервисы",
-            displayNameEN: "Digital",
-            icon: "🖥️",
-            aliases: [
-                "цифровые сервисы",
-                "digital services",
-                "software",
-                "apps",
-                "saas",
-                "app store",
-                "компьютер",
-                "компьютеры",
-                "комп",
-                "компы",
-                "компьютерная техника",
-                "ноутбук",
-                "ноут",
-                "макбук",
-                "laptop",
-                "computer",
-                "computers",
-                "pc",
-                "desktop",
-                "macbook",
-                "tech",
-                "electronics",
-                "gadgets",
-                "электроника"
-            ]
-        ),
-        .init(
             category: .subscriptions,
-            group: .digital,
+            group: .subscriptions,
             displayNameRU: "Подписки",
             displayNameEN: "Subscriptions",
             icon: "🔁",
-            aliases: ["подписки", "subscription", "subscriptions", "netflix", "spotify", "youtube premium", "icloud"]
+            aliases: ["подписки", "subscription", "subscriptions", "netflix", "spotify", "youtube premium", "icloud", "digital services", "software", "saas", "app store"]
         ),
         .init(
             category: .pets,
             group: .pets,
-            displayNameRU: "Товары для животных",
-            displayNameEN: "Pet goods",
+            displayNameRU: "Животные",
+            displayNameEN: "Pets",
             icon: "🐾",
             aliases: ["питомцы", "зоомагазин", "pets", "pet store", "veterinary", "ветеринар"]
+        ),
+        .init(
+            category: .gifts,
+            group: .shopping,
+            displayNameRU: "Подарки",
+            displayNameEN: "Gifts",
+            icon: "🎁",
+            aliases: ["подарки", "подарок", "gifts", "gift", "flowers", "цветы", "flowers and gifts"]
+        ),
+        .init(
+            category: .beauty,
+            group: .beauty,
+            displayNameRU: "Красота",
+            displayNameEN: "Beauty",
+            icon: "💄",
+            aliases: ["красота", "косметика", "beauty", "cosmetics", "skincare", "parfum", "spa", "barber"]
+        ),
+        .init(
+            category: .insurance,
+            group: .insurance,
+            displayNameRU: "Страхование",
+            displayNameEN: "Insurance",
+            icon: "🛡️",
+            aliases: ["страхование", "insurance", "insured", "осаго", "каско", "travel insurance"]
+        ),
+        .init(
+            category: .taxesFees,
+            group: .taxesFees,
+            displayNameRU: "Налоги и комиссии",
+            displayNameEN: "Taxes & fees",
+            icon: "🏛️",
+            aliases: ["налоги", "комиссии", "fees", "taxes", "bank fee", "service fee", "госпошлина", "налог"]
         ),
         .init(
             category: .transfers,
@@ -295,18 +255,8 @@ enum ExpenseCategoryCatalog {
             displayNameEN: "Transfers",
             icon: "⇄",
             aliases: [
-                "перевод",
-                "переводы",
-                "перевод себе",
-                "сбп",
-                "sbp",
-                "p2p",
-                "card to card",
-                "между счетами",
-                "между счетов",
-                "перевод между счетами",
-                "transfer",
-                "transfers"
+                "перевод", "переводы", "перевод себе", "сбп", "sbp", "p2p", "card to card",
+                "между счетами", "между счетов", "перевод между счетами", "transfer", "transfers"
             ]
         ),
         .init(
@@ -316,6 +266,72 @@ enum ExpenseCategoryCatalog {
             displayNameEN: "Other",
             icon: "🧩",
             aliases: ["разное", "прочее", "other", "misc", "unknown", "uncategorized"]
+        ),
+
+        // Legacy categories kept to resolve and display old saved raw values.
+        .init(
+            category: .cafe,
+            group: .dining,
+            displayNameRU: "Кафе",
+            displayNameEN: "Cafes",
+            icon: "☕️",
+            aliases: ["кафе", "cafe", "cafes"]
+        ),
+        .init(
+            category: .fastFood,
+            group: .dining,
+            displayNameRU: "Фастфуд",
+            displayNameEN: "Fast food",
+            icon: "🍔",
+            aliases: ["фастфуд", "fast food", "burger", "pizza", "пицца", "бургер", "шаверма", "шаурма", "kfc", "mcdonald"]
+        ),
+        .init(
+            category: .coffeeShops,
+            group: .dining,
+            displayNameRU: "Кофейни",
+            displayNameEN: "Coffee shops",
+            icon: "☕️",
+            aliases: ["кофейня", "кофе", "coffee", "coffee shop", "starbucks", "costa", "surf coffee"]
+        ),
+        .init(
+            category: .marketplaces,
+            group: .shopping,
+            displayNameRU: "Маркетплейсы",
+            displayNameEN: "Marketplaces",
+            icon: "📦",
+            aliases: ["маркетплейс", "маркетплейсы", "marketplace", "marketplaces", "ozon", "wb", "wildberries", "amazon"]
+        ),
+        .init(
+            category: .bills,
+            group: .bills,
+            displayNameRU: "Счета",
+            displayNameEN: "Bills",
+            icon: "🧾",
+            aliases: ["счета", "bill", "bills", "regular payment"]
+        ),
+        .init(
+            category: .pharmacies,
+            group: .health,
+            displayNameRU: "Аптеки",
+            displayNameEN: "Pharmacies",
+            icon: "💊",
+            aliases: ["аптека", "аптеки", "pharmacy", "drugstore", "chemist"]
+        ),
+        .init(
+            category: .medicalServices,
+            group: .health,
+            displayNameRU: "Медицина",
+            displayNameEN: "Medical",
+            icon: "🩺",
+            aliases: ["медицинские услуги", "клиника", "врач", "стоматология", "medical", "healthcare", "clinic", "dental"]
+        ),
+        .init(
+            category: .digitalServices,
+            group: .subscriptions,
+            displayNameRU: "Сервисы",
+            displayNameEN: "Digital",
+            icon: "🖥️",
+            aliases: ["цифровые сервисы", "digital services", "software", "apps", "saas", "app store"]
         )
     ]
 
@@ -337,14 +353,9 @@ enum ExpenseCategoryCatalog {
     static func matchesSearch(rawValue: String, query: String, locale: Locale = .autoupdatingCurrent) -> Bool {
         let normalizedQuery = normalizeSearchValue(query)
         guard !normalizedQuery.isEmpty else { return true }
-        guard let metadata = metadata(forRawValue: rawValue) else { return false }
 
-        let candidates = [
-            metadata.localizedDisplayName(locale: locale),
-            metadata.displayNameRU,
-            metadata.displayNameEN,
-            rawValue
-        ] + metadata.aliases
+        let candidates = metadataCandidates(forRawValue: rawValue, locale: locale)
+        guard !candidates.isEmpty else { return false }
 
         return candidates
             .map(normalizeSearchValue)
@@ -360,6 +371,7 @@ enum ExpenseCategoryCatalog {
         }
 
         let matchedMetadata = rankedMetadata(for: normalized)
+        let heuristicIcons = heuristicIcons(for: normalized)
         let semanticIcons = matchedMetadata
             .prefix(3)
             .flatMap { semanticIconsByCategory[$0.category] ?? [] }
@@ -368,8 +380,9 @@ enum ExpenseCategoryCatalog {
         if let icon {
             combined.append(icon)
         }
+        // Exact food/token heuristics should outrank broad legacy category matches like fast food.
+        combined.append(contentsOf: heuristicIcons)
         combined.append(contentsOf: semanticIcons)
-        combined.append(contentsOf: heuristicIcons(for: normalized))
         combined.append(contentsOf: defaultSuggestedIcons)
 
         var unique: [String] = []
@@ -405,36 +418,58 @@ enum ExpenseCategoryCatalog {
         aliases: ["разное", "прочее", "other", "unknown"]
     )
 
-    private static let defaultSuggestedIcons = ["🧩", "🛒", "☕️", "🚕", "✈️", "🏠", "📱", "🎮", "💄", "🐾"]
+    private static let defaultSuggestedIcons = ["🧩", "🛒", "🍽️", "🚕", "✈️", "🏠", "📱", "🎮", "💄", "🐾"]
 
     private static let semanticIconsByCategory: [ExpenseCategory: [String]] = [
         .groceries: ["🛒", "🥑", "🥖"],
-        .cafe: ["☕️", "🍽️", "🥗"],
-        .fastFood: ["🍕", "🍣", "🍔", "🍟", "🌮"],
-        .coffeeShops: ["☕️", "🥐", "🍰"],
+        .dining: ["🍽️", "☕️", "🍔", "🍣"],
         .transport: ["🚇", "🚌", "🚉"],
         .taxi: ["🚕", "🚖", "🚘"],
         .fuel: ["⛽️", "🚗", "🛣️"],
-        .carService: ["🛠️", "🔧", "🚗"],
-        .shopping: ["🛍️", "🛒", "🎁"],
-        .marketplaces: ["📦", "🛍️", "🚚"],
-        .clothing: ["👕", "👟", "🧥"],
-        .homeGoods: ["🏠", "🪑", "🛋️"],
-        .bills: ["🧾", "💳", "🏦"],
-        .telecom: ["📱", "📶", "☎️"],
+        .carService: ["🔧", "🛠️", "🚗"],
+        .housing: ["🏠", "🔑", "🛋️"],
         .utilities: ["💡", "🚿", "🔥"],
-        .health: ["💊", "🩺", "❤️"],
-        .pharmacies: ["💊", "🩹", "🧴"],
-        .medicalServices: ["🩺", "🏥", "🦷"],
-        .beauty: ["💄", "💅", "🧴"],
+        .telecom: ["📱", "📶", "☎️"],
+        .health: ["🩺", "❤️", "🏥"],
+        .pharmacy: ["💊", "🩹", "🧴"],
+        .shopping: ["🛍️", "🛒", "📦"],
+        .clothing: ["👕", "👟", "🧥"],
+        .electronics: ["💻", "🖥️", "⌨️"],
+        .homeGoods: ["🪑", "🏠", "🛋️"],
         .education: ["📚", "🎓", "✏️"],
         .entertainment: ["🎮", "🎬", "🎟️"],
         .travel: ["✈️", "🏨", "🧳"],
-        .digitalServices: ["💻", "🖥️", "⌨️"],
         .subscriptions: ["🔁", "🎵", "📺"],
         .pets: ["🐾", "🐶", "🐱"],
+        .gifts: ["🎁", "💐", "🌸"],
+        .beauty: ["💄", "💅", "🧴"],
+        .insurance: ["🛡️", "📋", "🚘"],
+        .taxesFees: ["🏛️", "🧾", "💸"],
+        .transfers: ["⇄", "💳", "🏦"],
         .other: ["🧩", "📌", "📦"]
     ]
+
+    private static func metadataCandidates(forRawValue rawValue: String, locale: Locale) -> [String] {
+        let resolvedRaw = ExpenseCategory.canonicalRawValue(rawValue)
+        var metadataItems: [ExpenseCategoryMetadata] = []
+
+        if let currentMetadata = metadata(forRawValue: resolvedRaw) {
+            metadataItems.append(currentMetadata)
+        }
+        if resolvedRaw != rawValue, let legacyMetadata = metadata(forRawValue: rawValue) {
+            metadataItems.append(legacyMetadata)
+        }
+
+        return metadataItems.flatMap { metadata in
+            [
+                metadata.localizedDisplayName(locale: locale),
+                metadata.displayNameRU,
+                metadata.displayNameEN,
+                rawValue,
+                resolvedRaw
+            ] + metadata.aliases
+        }
+    }
 
     private static func heuristicIcons(for normalized: String) -> [String] {
         let tokens = tokenize(normalized)
@@ -459,6 +494,12 @@ enum ExpenseCategoryCatalog {
             normalized.contains("pc") {
             return ["💻", "🖥️", "⌨️"]
         }
+        if normalized.contains("страх") || normalized.contains("insurance") {
+            return ["🛡️", "📋", "💸"]
+        }
+        if normalized.contains("налог") || normalized.contains("комисс") || normalized.contains("tax") || normalized.contains("fee") {
+            return ["🏛️", "🧾", "💸"]
+        }
         if normalized.contains("спорт") || normalized.contains("sport") || normalized.contains("gym") {
             return ["🏋️", "⚽️", "🏃"]
         }
@@ -472,10 +513,6 @@ enum ExpenseCategoryCatalog {
             return ["🌸", "🎁", "💐"]
         }
         return []
-    }
-
-    private static func bestMatchingMetadata(for normalizedQuery: String) -> ExpenseCategoryMetadata? {
-        rankedMetadata(for: normalizedQuery).first
     }
 
     private static func rankedMetadata(for normalizedQuery: String) -> [ExpenseCategoryMetadata] {

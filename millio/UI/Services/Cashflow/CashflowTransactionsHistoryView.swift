@@ -1042,7 +1042,7 @@ private struct HistoryDateRangeSheet: View {
                 GradientBackground()
 
                 CalendarRangePickerPanel(
-                    title: nil,
+                    title: CalendarRangePickerCopy.sheetTitle(),
                     subtitle: String(localized: "cashflow.custom_period.calendar_hint"),
                     startDate: $draftStartDate,
                     endDate: $draftEndDate,

@@ -133,8 +133,8 @@ struct CashflowTransactionEditorView: View {
             _selectedCardID = State(initialValue: transaction.cardID)
             _selectedInvestmentID = State(initialValue: transaction.investmentID)
             _selectedToCardID = State(initialValue: transaction.toCardID)
-            _selectedIncomeCategoryRaw = State(initialValue: transaction.incomeCategoryRaw)
-            _selectedExpenseCategoryRaw = State(initialValue: transaction.expenseCategoryRaw)
+            _selectedIncomeCategoryRaw = State(initialValue: transaction.incomeCategoryRaw.map(IncomeCategory.canonicalRawValue))
+            _selectedExpenseCategoryRaw = State(initialValue: transaction.expenseCategoryRaw.map(ExpenseCategory.canonicalRawValue))
             _note = State(initialValue: transaction.note ?? "")
             _recurrenceRule = State(initialValue: transaction.recurrenceRule)
             _recurrenceWeekdays = State(initialValue: transaction.recurrenceWeekdays)
@@ -163,9 +163,13 @@ struct CashflowTransactionEditorView: View {
             _selectedCurrency = State(initialValue: initialCurrency)
             _transactionDate = State(initialValue: initialTransactionDate ?? Date())
             if type == .income {
-                _selectedIncomeCategoryRaw = State(initialValue: preselectedIncomeCategoryRaw ?? IncomeCategory.salary.rawValue)
+                _selectedIncomeCategoryRaw = State(
+                    initialValue: preselectedIncomeCategoryRaw.map(IncomeCategory.canonicalRawValue) ?? IncomeCategory.salary.rawValue
+                )
             } else if type == .expense {
-                _selectedExpenseCategoryRaw = State(initialValue: preselectedExpenseCategoryRaw ?? ExpenseCategory.groceries.rawValue)
+                _selectedExpenseCategoryRaw = State(
+                    initialValue: preselectedExpenseCategoryRaw.map(ExpenseCategory.canonicalRawValue) ?? ExpenseCategory.groceries.rawValue
+                )
             }
             _recurrenceRule = State(initialValue: initialRecurrenceRule ?? .none)
             _recurrenceWeekdays = State(initialValue: [])

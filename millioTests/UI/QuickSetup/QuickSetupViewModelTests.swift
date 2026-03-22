@@ -567,7 +567,15 @@ final class QuickSetupViewModelTests: XCTestCase {
     func testFreeQuickSetupAllowsOnlyOneTickerDraft() {
         let appState = AppState()
         appState.subscriptionAccessSource = .free
-        let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)
+        let systemContext = QuickSetupSystemContext(
+            preferredLanguageIdentifiers: ["ru-RU"],
+            locale: Locale(identifier: "ru_RU")
+        )
+        let viewModel = QuickSetupViewModel(
+            appState: appState,
+            systemContext: systemContext,
+            defaults: isolatedDefaults
+        )
 
         viewModel.selectProductType(.ticker)
         viewModel.applySelectedMarketSymbol(

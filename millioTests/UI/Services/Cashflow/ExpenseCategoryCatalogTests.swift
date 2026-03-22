@@ -15,7 +15,7 @@ struct ExpenseCategoryCatalogTests {
     func matchesDigitalCategoryForPartialComputerQuery() {
         #expect(
             ExpenseCategoryCatalog.matchesSearch(
-                rawValue: ExpenseCategory.digitalServices.rawValue,
+                rawValue: ExpenseCategory.electronics.rawValue,
                 query: "Компью"
             )
         )

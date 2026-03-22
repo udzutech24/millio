@@ -17,7 +17,7 @@ final class QuickSetupExpenseCategoryPresetTests: XCTestCase {
         let namesByID = Dictionary(uniqueKeysWithValues: presets.map { ($0.id, $0.displayName) })
 
         XCTAssertEqual(namesByID[ExpenseCategory.travel.rawValue], "Travel")
-        XCTAssertEqual(namesByID[ExpenseCategory.marketplaces.rawValue], "Marketplaces")
+        XCTAssertEqual(namesByID[ExpenseCategory.insurance.rawValue], "Insurance")
         XCTAssertEqual(namesByID[ExpenseCategory.transfers.rawValue], "Transfers")
     }
 }

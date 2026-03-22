@@ -140,6 +140,42 @@ struct CalendarRangeSelectionLogicTests {
         #expect(afterChoosingStart.nextEndpoint == .end)
     }
 
+    @Test("Single-day selection expands backward instead of collapsing when end endpoint is active")
+    func singleDaySelectionExpandsBackwardFromActiveEnd() {
+        let singleDay = makeDate(year: 2026, month: 2, day: 13)
+        let tappedEarlier = makeDate(year: 2026, month: 2, day: 11)
+
+        let result = CalendarRangeSelectionLogic.applyTap(
+            on: tappedEarlier,
+            startDate: singleDay,
+            endDate: singleDay,
+            activeEndpoint: .end,
+            calendar: calendar
+        )
+
+        #expect(result.startDate == tappedEarlier)
+        #expect(result.endDate == singleDay)
+        #expect(result.nextEndpoint == .end)
+    }
+
+    @Test("Single-day selection expands forward instead of collapsing when start endpoint is active")
+    func singleDaySelectionExpandsForwardFromActiveStart() {
+        let singleDay = makeDate(year: 2026, month: 2, day: 13)
+        let tappedLater = makeDate(year: 2026, month: 2, day: 14)
+
+        let result = CalendarRangeSelectionLogic.applyTap(
+            on: tappedLater,
+            startDate: singleDay,
+            endDate: singleDay,
+            activeEndpoint: .start,
+            calendar: calendar
+        )
+
+        #expect(result.startDate == singleDay)
+        #expect(result.endDate == tappedLater)
+        #expect(result.nextEndpoint == .start)
+    }
+
     private func makeDate(year: Int, month: Int, day: Int) -> Date {
         calendar.date(from: DateComponents(year: year, month: month, day: day))!
     }

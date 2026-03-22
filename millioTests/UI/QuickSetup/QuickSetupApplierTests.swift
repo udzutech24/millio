@@ -410,8 +410,8 @@ final class QuickSetupApplierTests: XCTestCase {
         let groceriesOverride = overrides.first(where: { $0.categoryRaw == ExpenseCategory.groceries.rawValue })
         XCTAssertTrue(groceriesOverride == nil || groceriesOverride?.isHidden == false)
 
-        let cafeOverride = try XCTUnwrap(overrides.first(where: { $0.categoryRaw == ExpenseCategory.cafe.rawValue }))
-        XCTAssertTrue(cafeOverride.isHidden)
+        let diningOverride = try XCTUnwrap(overrides.first(where: { $0.categoryRaw == ExpenseCategory.dining.rawValue }))
+        XCTAssertTrue(diningOverride.isHidden)
 
         let otherOverride = overrides.first(where: { $0.categoryRaw == ExpenseCategory.other.rawValue })
         XCTAssertTrue(otherOverride == nil || otherOverride?.isHidden == false)

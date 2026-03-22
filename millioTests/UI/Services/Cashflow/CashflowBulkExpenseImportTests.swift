@@ -62,7 +62,7 @@ struct CashflowBulkExpenseImportTests {
         let groceries = resolver.resolve(title: "ВкусВилл у дома", availableOptions: options)
         let transport = resolver.resolve(title: "Yandex Go taxi", availableOptions: options)
         let fuel = resolver.resolve(title: "Газпромнефть АЗС", availableOptions: options)
-        let marketplace = resolver.resolve(title: "Ozon order", availableOptions: options)
+        let shopping = resolver.resolve(title: "Ozon order", availableOptions: options)
         let transfer = resolver.resolve(title: "Перевод себе по СБП", availableOptions: options)
         let unknown = resolver.resolve(title: "Strange merchant xyz", availableOptions: options)
 
@@ -72,8 +72,8 @@ struct CashflowBulkExpenseImportTests {
         #expect(transport.confidence >= .medium)
         #expect(fuel.option.rawValue == ExpenseCategory.fuel.rawValue)
         #expect(fuel.confidence >= .medium)
-        #expect(marketplace.option.rawValue == ExpenseCategory.marketplaces.rawValue)
-        #expect(marketplace.confidence >= .medium)
+        #expect(shopping.option.rawValue == ExpenseCategory.shopping.rawValue)
+        #expect(shopping.confidence >= .medium)
         #expect(transfer.option.rawValue == ExpenseCategory.transfers.rawValue)
         #expect(transfer.confidence >= .medium)
         #expect(unknown.option.rawValue == ExpenseCategory.other.rawValue)
@@ -97,11 +97,11 @@ struct CashflowBulkExpenseImportTests {
         let suggested = resolver.suggestedOptions(
             title: "Coffee Point",
             availableOptions: options,
-            preferredRawValue: ExpenseCategory.cafe.rawValue
+            preferredRawValue: ExpenseCategory.dining.rawValue
         )
 
         #expect(!suggested.isEmpty)
-        #expect(suggested.first?.rawValue == ExpenseCategory.cafe.rawValue)
+        #expect(suggested.first?.rawValue == ExpenseCategory.dining.rawValue)
         #expect(suggested.count <= 3)
     }
 
@@ -117,8 +117,22 @@ struct CashflowBulkExpenseImportTests {
 
         #expect(byAlias.contains { $0.rawValue == ExpenseCategory.fuel.rawValue })
         #expect(byShortName.contains { $0.rawValue == ExpenseCategory.fuel.rawValue })
-        #expect(byMerchant.contains { $0.rawValue == ExpenseCategory.marketplaces.rawValue })
+        #expect(byMerchant.contains { $0.rawValue == ExpenseCategory.shopping.rawValue })
         #expect(byTransfer.contains { $0.rawValue == ExpenseCategory.transfers.rawValue })
+    }
+
+    @Test("Масс-импорт понимает синонимы и частые OCR-опечатки для еды вне дома")
+    func categoryOptionsMatchDiningTyposAndSynonyms() throws {
+        let context = try makeContext()
+        let viewModel = CashflowViewModel(modelContext: context)
+
+        let byRestaurantTypo = viewModel.categoryOptions(for: .expense, matching: "рестороны")
+        let byCafe = viewModel.categoryOptions(for: .expense, matching: "кафе")
+        let byCoffee = viewModel.categoryOptions(for: .expense, matching: "coffee shop")
+
+        #expect(byRestaurantTypo.contains { $0.rawValue == ExpenseCategory.dining.rawValue })
+        #expect(byCafe.contains { $0.rawValue == ExpenseCategory.dining.rawValue })
+        #expect(byCoffee.contains { $0.rawValue == ExpenseCategory.dining.rawValue })
     }
 
     @Test("После OCR новые категории всплывают наверх по убыванию суммы")

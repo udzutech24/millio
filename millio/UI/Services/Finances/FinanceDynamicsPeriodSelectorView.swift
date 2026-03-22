@@ -22,7 +22,7 @@ struct FinanceDynamicsPeriodSelectorView: View {
                 GradientBackground()
 
                 CalendarRangePickerPanel(
-                    title: nil,
+                    title: CalendarRangePickerCopy.sheetTitle(),
                     subtitle: String(localized: "finances.dynamics.custom_period.subtitle"),
                     startDate: $draftStartDate,
                     endDate: $draftEndDate,

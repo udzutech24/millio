@@ -142,10 +142,32 @@ enum IncomeCategory: String, Codable, CaseIterable {
     case freelance = "freelance"     // Фриланс
     case business = "business"       // Бизнес
     case bonus = "bonus"             // Премия
-    case investment = "investment"   // Инвестиции
+    case interest = "interest"       // Проценты
+    case dividends = "dividends"     // Дивиденды
     case rental = "rental"           // Аренда
+    case sale = "sale"               // Продажа вещей
+    case refunds = "refunds"         // Возвраты
     case gift = "gift"               // Подарок
     case other = "other"             // Другое
+
+    // Legacy system category kept for backward compatibility with saved data and notes.
+    case investment = "investment"   // Инвестиции
+
+    static var allCases: [IncomeCategory] {
+        [
+            .salary,
+            .freelance,
+            .business,
+            .bonus,
+            .interest,
+            .dividends,
+            .rental,
+            .sale,
+            .refunds,
+            .gift,
+            .other
+        ]
+    }
     
     var displayName: String {
         localizedDisplayName()
@@ -153,14 +175,18 @@ enum IncomeCategory: String, Codable, CaseIterable {
 
     func localizedDisplayName(locale: Locale = .autoupdatingCurrent) -> String {
         switch self {
-        case .salary: return AppLocalization.string("Salary", locale: locale)
-        case .freelance: return AppLocalization.string("Freelance", locale: locale)
-        case .business: return AppLocalization.string("Business", locale: locale)
-        case .investment: return AppLocalization.string("Investments", locale: locale)
-        case .rental: return AppLocalization.string("Rental", locale: locale)
-        case .gift: return AppLocalization.string("Gift", locale: locale)
-        case .bonus: return AppLocalization.string("Bonus", locale: locale)
-        case .other: return AppLocalization.string("Other", locale: locale)
+        case .salary: return localizedName(locale: locale, ru: "Зарплата", en: "Salary")
+        case .freelance: return localizedName(locale: locale, ru: "Фриланс", en: "Freelance")
+        case .business: return localizedName(locale: locale, ru: "Бизнес", en: "Business")
+        case .bonus: return localizedName(locale: locale, ru: "Премия", en: "Bonus")
+        case .interest: return localizedName(locale: locale, ru: "Проценты", en: "Interest")
+        case .dividends: return localizedName(locale: locale, ru: "Дивиденды", en: "Dividends")
+        case .rental: return localizedName(locale: locale, ru: "Аренда", en: "Rental")
+        case .sale: return localizedName(locale: locale, ru: "Продажа вещей", en: "Sale")
+        case .refunds: return localizedName(locale: locale, ru: "Возвраты", en: "Refunds")
+        case .gift: return localizedName(locale: locale, ru: "Подарок", en: "Gift")
+        case .other: return localizedName(locale: locale, ru: "Другое", en: "Other")
+        case .investment: return localizedName(locale: locale, ru: "Инвестиции", en: "Investments")
         }
     }
 
@@ -185,14 +211,27 @@ enum IncomeCategory: String, Codable, CaseIterable {
     
     var icon: String {
         switch self {
-        case .salary: return "💳"
+        case .salary: return "💼"
         case .freelance: return "🛠️"
         case .business: return "🏢"
-        case .bonus: return "🏅"
-        case .investment: return "📈"
+        case .bonus: return "🎉"
+        case .interest: return "🏦"
+        case .dividends: return "📈"
         case .rental: return "🏘️"
+        case .sale: return "🏷️"
+        case .refunds: return "↩️"
         case .gift: return "🎁"
-        case .other: return "📦"
+        case .other: return "🧩"
+        case .investment: return "📈"
+        }
+    }
+
+    static func canonicalRawValue(_ rawValue: String) -> String {
+        switch rawValue {
+        case IncomeCategory.investment.rawValue:
+            return IncomeCategory.dividends.rawValue
+        default:
+            return rawValue
         }
     }
 }
@@ -201,32 +240,72 @@ enum IncomeCategory: String, Codable, CaseIterable {
 
 enum ExpenseCategory: String, Codable, CaseIterable {
     case groceries = "groceries"     // Продукты
-    case cafe = "cafe"               // Кафе
-    case fastFood = "fast_food"      // Фастфуд
-    case coffeeShops = "coffee_shops" // Кофейни
+    case dining = "dining"           // Еда вне дома
     case transport = "transport"     // Транспорт
     case taxi = "taxi"               // Такси
     case fuel = "fuel"               // Топливо и АЗС
     case carService = "car_service"  // Автосервис
-    case shopping = "shopping"       // Покупки
-    case marketplaces = "marketplaces" // Маркетплейсы
-    case clothing = "clothing"       // Одежда и обувь
-    case homeGoods = "home_goods"    // Товары для дома
-    case entertainment = "entertainment" // Развлечения
-    case bills = "bills"             // Счета
-    case telecom = "telecom"         // Связь и интернет
+    case housing = "housing"         // Жилье
     case utilities = "utilities"     // Коммунальные
+    case telecom = "telecom"         // Связь и интернет
     case health = "health"           // Здоровье
-    case pharmacies = "pharmacies"   // Аптеки
-    case medicalServices = "medical_services" // Медицинские услуги
-    case beauty = "beauty"           // Красота и уход
+    case pharmacy = "pharmacy"       // Аптека
+    case shopping = "shopping"       // Покупки
+    case clothing = "clothing"       // Одежда и обувь
+    case electronics = "electronics" // Электроника
+    case homeGoods = "home_goods"    // Товары для дома
     case education = "education"     // Образование
+    case entertainment = "entertainment" // Развлечения
     case travel = "travel"           // Путешествия
-    case digitalServices = "digital_services" // Цифровые сервисы
     case subscriptions = "subscriptions" // Подписки
     case pets = "pets"               // Животные
+    case gifts = "gifts"             // Подарки
+    case beauty = "beauty"           // Красота и уход
+    case insurance = "insurance"     // Страхование
+    case taxesFees = "taxes_fees"    // Налоги и комиссии
     case transfers = "transfers"     // Переводы
     case other = "other"             // Другое
+
+    // Legacy system categories kept for backward compatibility with saved data.
+    case cafe = "cafe"
+    case fastFood = "fast_food"
+    case coffeeShops = "coffee_shops"
+    case marketplaces = "marketplaces"
+    case bills = "bills"
+    case pharmacies = "pharmacies"
+    case medicalServices = "medical_services"
+    case digitalServices = "digital_services"
+
+    static var allCases: [ExpenseCategory] {
+        [
+            .groceries,
+            .dining,
+            .transport,
+            .taxi,
+            .fuel,
+            .carService,
+            .housing,
+            .utilities,
+            .telecom,
+            .health,
+            .pharmacy,
+            .shopping,
+            .clothing,
+            .electronics,
+            .homeGoods,
+            .education,
+            .entertainment,
+            .travel,
+            .subscriptions,
+            .pets,
+            .gifts,
+            .beauty,
+            .insurance,
+            .taxesFees,
+            .transfers,
+            .other
+        ]
+    }
     
     var displayName: String {
         ExpenseCategoryCatalog.metadata(for: self).localizedDisplayName()
@@ -234,6 +313,27 @@ enum ExpenseCategory: String, Codable, CaseIterable {
     
     var icon: String {
         ExpenseCategoryCatalog.metadata(for: self).icon
+    }
+
+    static func canonicalRawValue(_ rawValue: String) -> String {
+        switch rawValue {
+        case ExpenseCategory.cafe.rawValue,
+             ExpenseCategory.fastFood.rawValue,
+             ExpenseCategory.coffeeShops.rawValue:
+            return ExpenseCategory.dining.rawValue
+        case ExpenseCategory.marketplaces.rawValue:
+            return ExpenseCategory.shopping.rawValue
+        case ExpenseCategory.bills.rawValue:
+            return ExpenseCategory.housing.rawValue
+        case ExpenseCategory.pharmacies.rawValue:
+            return ExpenseCategory.pharmacy.rawValue
+        case ExpenseCategory.medicalServices.rawValue:
+            return ExpenseCategory.health.rawValue
+        case ExpenseCategory.digitalServices.rawValue:
+            return ExpenseCategory.subscriptions.rawValue
+        default:
+            return rawValue
+        }
     }
 }
 
@@ -245,6 +345,10 @@ private func normalizeSearchQuery(_ value: String) -> String {
         .replacingOccurrences(of: #"[^\p{L}\p{N}\s]"#, with: " ", options: .regularExpression)
         .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
         .trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+private func localizedName(locale: Locale, ru: String, en: String) -> String {
+    AppLocalization.string(en, locale: locale, fallback: ExpenseCategoryCatalog.preferredLanguageCode(for: locale) == "ru" ? ru : en)
 }
 
 // MARK: - Custom Category
