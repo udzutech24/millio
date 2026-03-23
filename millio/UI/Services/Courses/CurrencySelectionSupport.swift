@@ -65,19 +65,19 @@ public struct CurrencySelectionSupport {
 
     public static let aliases: [String: [String]] = {
         var base: [String: [String]] = [
-            "RUB": ["рубль","руб","рубли","россия","рф","деревянный"],
-            "USD": ["доллар","доллары","бакс","баксы","доллар сша","сша","американский доллар"],
-            "EUR": ["евро","еврозона"],
-            "GBP": ["фунт","фунты","фунт стерлингов","стерлингов","британский фунт","великобритания","англия"],
-            "JPY": ["иена","йена","японская иена","япония"],
-            "CNY": ["юань","китайский юань","ренминби","китай"],
+            "RUB": ["рубль","руб","рубли","россия","рф","деревянный","ruble","rouble","russian ruble","russia"],
+            "USD": ["доллар","доллары","бакс","баксы","доллар сша","сша","американский доллар","dollar","us dollar","usa","united states","american dollar"],
+            "EUR": ["евро","еврозона","euro","eurozone"],
+            "GBP": ["фунт","фунты","фунт стерлингов","стерлингов","британский фунт","великобритания","англия","pound","pound sterling","british pound","united kingdom","uk","britain","england"],
+            "JPY": ["иена","йена","японская иена","япония","yen","japanese yen","japan"],
+            "CNY": ["юань","китайский юань","ренминби","китай","yuan","renminbi","chinese yuan","china"],
             "KZT": ["тенге","казахстан"],
-            "TRY": ["лира","турецкая лира","турция"],
+            "TRY": ["лира","турецкая лира","турция","lira","turkish lira","turkey","turkiye"],
             "UAH": ["гривна","украина"],
             "BYN": ["белорусский рубль","беларусь"],
-            "AUD": ["австралийский доллар","австралия"],
-            "CAD": ["канадский доллар","канада"],
-            "CHF": ["швейцарский франк","франк","швейцария"],
+            "AUD": ["австралийский доллар","австралия","australian dollar","australia"],
+            "CAD": ["канадский доллар","канада","canadian dollar","canada"],
+            "CHF": ["швейцарский франк","франк","швейцария","swiss franc","switzerland"],
             "PLN": ["злотый","польша"],
             "SEK": ["шведская крона","швеция","крона"],
             "NOK": ["норвежская крона","норвегия","крона"],
@@ -172,6 +172,14 @@ public struct CurrencySelectionSupport {
         return enLocale.localizedString(forCurrencyCode: c)
     }
 
+    static func countryNameRu(for code: String) -> String? {
+        localizedCountryName(for: code, locale: ruLocale)
+    }
+
+    static func countryNameEn(for code: String) -> String? {
+        localizedCountryName(for: code, locale: enLocale)
+    }
+
     public static func emoji(for code: String) -> String {
         let c = code.uppercased()
         if let meta = cryptoByCode[c] { return meta.emoji }
@@ -186,22 +194,35 @@ public struct CurrencySelectionSupport {
         return ""
     }
     
-    static func currencyToRegion(for currencyCode: String) -> String? {
-        return currencyToRegionMap[currencyCode.uppercased()]
+    static func currencyToRegions(for currencyCode: String) -> [String] {
+        currencyToRegionsMap[currencyCode.uppercased()] ?? []
     }
 
-    private static let currencyToRegionMap: [String: String] = {
-        var map: [String: String] = [:]
+    static func currencyToRegion(for currencyCode: String) -> String? {
+        currencyToRegions(for: currencyCode).first
+    }
+
+    private static let currencyToRegionsMap: [String: [String]] = {
+        var map: [String: Set<String>] = [:]
         for id in Locale.availableIdentifiers {
             let loc = Locale(identifier: id)
             guard let c = loc.currency?.identifier.uppercased(),
-                  let region = loc.region?.identifier.uppercased(),
-                  map[c] == nil
+                  let region = loc.region?.identifier.uppercased()
             else { continue }
-            map[c] = region
+            map[c, default: []].insert(region)
         }
-        return map
+
+        return map.mapValues { Array($0).sorted() }
     }()
+
+    private static func localizedCountryName(for code: String, locale: Locale) -> String? {
+        localizedCountryNames(for: code, locale: locale).first
+    }
+
+    private static func localizedCountryNames(for code: String, locale: Locale) -> [String] {
+        currencyToRegions(for: code)
+            .compactMap { locale.localizedString(forRegionCode: $0) }
+    }
 
     /// Полный список кодов валют для UI-пикеров.
     /// Собирается из локалей системы, чтобы не зависеть от загруженных курсов и наличия интернета.
@@ -419,6 +440,17 @@ public struct CurrencyPickerView: View {
                     }
                     .padding(.vertical, 8)
                 }
+                .scrollDismissesKeyboard(.immediately)
+                .simultaneousGesture(
+                    TapGesture().onEnded {
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil,
+                            from: nil,
+                            for: nil
+                        )
+                    }
+                )
             }
         }
         // Важно: это помогает вводить и тикеры (BTC), и англ. слова — без автозамены
@@ -583,6 +615,16 @@ extension CurrencySelectionSupport {
 
         let en = normalizedSearchToken(CurrencySelectionSupport.nameEn(for: uppercasedCode) ?? "")
         if en.contains(normalizedQuery) { return true }
+
+        let countryRu = CurrencySelectionSupport
+            .localizedCountryNames(for: uppercasedCode, locale: CurrencySelectionSupport.ruLocale)
+            .map(normalizedSearchToken)
+        if countryRu.contains(where: { $0.contains(normalizedQuery) }) { return true }
+
+        let countryEn = CurrencySelectionSupport
+            .localizedCountryNames(for: uppercasedCode, locale: CurrencySelectionSupport.enLocale)
+            .map(normalizedSearchToken)
+        if countryEn.contains(where: { $0.contains(normalizedQuery) }) { return true }
 
         let aliases = CurrencySelectionSupport.aliases[uppercasedCode] ?? []
         return aliases.contains { normalizedSearchToken($0).contains(normalizedQuery) }

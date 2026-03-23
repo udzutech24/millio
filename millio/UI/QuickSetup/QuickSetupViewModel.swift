@@ -160,6 +160,12 @@ struct QuickSetupSystemContext {
 
 @MainActor
 final class QuickSetupViewModel: ObservableObject {
+    enum FavoriteCurrencyToggleResult: Equatable {
+        case ignored
+        case added
+        case removed
+    }
+
     static let recommendedExpenseCategoryIDs: [String] = [
         ExpenseCategory.groceries.rawValue,
         ExpenseCategory.dining.rawValue,
@@ -308,6 +314,22 @@ final class QuickSetupViewModel: ObservableObject {
         }
     }
 
+    var productNamePlaceholder: String {
+        let locale = effectiveLocale
+        switch productTypeForCreation {
+        case .card:
+            return AppLocalization.string("finances.add_account.placeholder.card", locale: locale)
+        case .realEstate:
+            return AppLocalization.string("finances.add_account.placeholder.investment.house", locale: locale)
+        case .debt:
+            return AppLocalization.string("finances.add_account.placeholder.investment.debt", locale: locale)
+        case .credit:
+            return AppLocalization.string("finances.add_account.placeholder.credit", locale: locale)
+        case .crypto, .ticker:
+            return AppLocalization.string("finances.add_account.placeholder.market", locale: locale)
+        }
+    }
+
     var productPurchasePriceTitle: String {
         let locale = effectiveLocale
         return productTypeForCreation == .crypto
@@ -428,18 +450,19 @@ final class QuickSetupViewModel: ObservableObject {
         }
     }
 
-    func toggleFavoriteCurrency(_ rawCode: String) {
+    func toggleFavoriteCurrency(_ rawCode: String) -> FavoriteCurrencyToggleResult {
         let code = rawCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        guard !code.isEmpty else { return }
-        guard code != primaryCurrencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() else { return }
+        guard !code.isEmpty else { return .ignored }
+        guard code != primaryCurrencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() else { return .ignored }
 
         if let index = favoriteCurrencyCodes.firstIndex(of: code) {
             favoriteCurrencyCodes.remove(at: index)
-            return
+            return .removed
         }
 
-        guard favoriteCurrencyCodes.count < Self.maxFavoriteCurrencies else { return }
+        guard favoriteCurrencyCodes.count < Self.maxFavoriteCurrencies else { return .ignored }
         favoriteCurrencyCodes.insert(code, at: 0)
+        return .added
     }
 
     private func removePrimaryFromFavorites() {

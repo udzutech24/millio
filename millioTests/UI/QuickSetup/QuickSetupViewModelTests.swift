@@ -71,17 +71,27 @@ final class QuickSetupViewModelTests: XCTestCase {
         let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)
 
         viewModel.favoriteCurrencyCodes = []
-        viewModel.toggleFavoriteCurrency("USD")
+        XCTAssertEqual(viewModel.toggleFavoriteCurrency("USD"), .ignored)
         XCTAssertTrue(viewModel.favoriteCurrencyCodes.isEmpty)
 
-        viewModel.toggleFavoriteCurrency("EUR")
-        viewModel.toggleFavoriteCurrency("JPY")
-        viewModel.toggleFavoriteCurrency("GBP")
-        viewModel.toggleFavoriteCurrency("CHF")
-        viewModel.toggleFavoriteCurrency("AUD")
+        XCTAssertEqual(viewModel.toggleFavoriteCurrency("EUR"), .added)
+        XCTAssertEqual(viewModel.toggleFavoriteCurrency("JPY"), .added)
+        XCTAssertEqual(viewModel.toggleFavoriteCurrency("GBP"), .added)
+        XCTAssertEqual(viewModel.toggleFavoriteCurrency("CHF"), .added)
+        XCTAssertEqual(viewModel.toggleFavoriteCurrency("AUD"), .ignored)
 
         XCTAssertEqual(viewModel.favoriteCurrencyCodes.count, 4)
         XCTAssertFalse(viewModel.favoriteCurrencyCodes.contains("USD"))
+    }
+
+    func testToggleFavoriteCurrencyReturnsRemovedWhenCurrencyWasAlreadyFavorite() {
+        let appState = AppState()
+        let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)
+
+        viewModel.favoriteCurrencyCodes = ["EUR", "JPY"]
+
+        XCTAssertEqual(viewModel.toggleFavoriteCurrency("EUR"), .removed)
+        XCTAssertEqual(viewModel.favoriteCurrencyCodes, ["JPY"])
     }
 
     func testChangingPrimaryCurrencyRemovesItFromFavoritesImmediately() {
@@ -119,6 +129,36 @@ final class QuickSetupViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.productTypeForCreation, .debt)
         XCTAssertTrue(viewModel.hasExplicitlySelectedProductType)
+    }
+
+    func testProductNamePlaceholderMatchesFinanceCreateCopyForSelectedType() {
+        let appState = AppState()
+        appState.selectedLanguage = .russian
+        let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)
+
+        viewModel.productTypeForCreation = .card
+        XCTAssertEqual(viewModel.productNamePlaceholder, "Например, Основная карта")
+
+        viewModel.productTypeForCreation = .realEstate
+        XCTAssertEqual(viewModel.productNamePlaceholder, "Например, Квартира для аренды")
+
+        viewModel.productTypeForCreation = .debt
+        XCTAssertEqual(viewModel.productNamePlaceholder, "Например, Займ знакомому")
+
+        viewModel.productTypeForCreation = .credit
+        XCTAssertEqual(viewModel.productNamePlaceholder, "Например, Потребительский кредит")
+    }
+
+    func testProductNamePlaceholderUsesEnglishLocaleWithoutRussianLeak() {
+        let appState = AppState()
+        appState.selectedLanguage = .english
+        let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)
+
+        viewModel.productTypeForCreation = .realEstate
+        XCTAssertEqual(viewModel.productNamePlaceholder, "e.g. Rental property")
+
+        viewModel.productTypeForCreation = .ticker
+        XCTAssertEqual(viewModel.productNamePlaceholder, "Name from ticker/pair")
     }
 
     func testAddDraftProductRequiresNameAndResetsInputs() {

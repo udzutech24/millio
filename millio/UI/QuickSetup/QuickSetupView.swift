@@ -623,15 +623,6 @@ struct QuickSetupView: View {
                     Text(quickSetupText(ru: "Тип продукта", en: "Product type"))
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(AppColors.textPrimary)
-                    Text(
-                        quickSetupText(
-                            ru: "Сначала выберите, что именно добавляем",
-                            en: "Start by choosing what you're adding"
-                        )
-                    )
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(AppColors.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
                 }
 
                 productTypeIconSelector
@@ -1277,7 +1268,12 @@ struct QuickSetupView: View {
 
     private var standardDraftFields: some View {
         VStack(spacing: 8) {
-            TextField(quickSetupText(ru: "Название", en: "Name"), text: $viewModel.productNameInput)
+            TextField(
+                "",
+                text: $viewModel.productNameInput,
+                prompt: Text(viewModel.productNamePlaceholder)
+                    .foregroundStyle(AppColors.textSecondary.opacity(0.55))
+            )
                 .textInputAutocapitalization(.words)
                 .autocorrectionDisabled(false)
                 .focused($focusedField, equals: .productName)
@@ -1287,6 +1283,7 @@ struct QuickSetupView: View {
                 .background(RoundedRectangle(cornerRadius: 14).fill(.white.opacity(0.05)))
                 .id(FocusField.productName)
                 .accessibilityIdentifier("quickSetup.productNameField")
+                .accessibilityLabel(quickSetupText(ru: "Название", en: "Name"))
 
             TextField(
                 viewModel.productAmountFieldTitle,
@@ -1772,7 +1769,7 @@ private struct QuickSetupFavoriteCurrenciesSheet: View {
     let selectedCodes: [String]
     let suggestedCodes: [String]
     let maxSelection: Int
-    let onToggle: (String) -> Void
+    let onToggle: (String) -> QuickSetupViewModel.FavoriteCurrencyToggleResult
 
     var body: some View {
         CurrencyPickerView(
@@ -1785,10 +1782,14 @@ private struct QuickSetupFavoriteCurrenciesSheet: View {
             primaryPinnedCode: primaryCurrencyCode,
             primaryPinnedTitle: QuickSetupLocalization.text(locale: locale, ru: "Основная", en: "Primary"),
             onToggleFavorite: { code in
-                onToggle(code)
+                if onToggle(code) == .added {
+                    searchText = ""
+                }
             },
             onSelect: { code in
-                onToggle(code)
+                if onToggle(code) == .added {
+                    searchText = ""
+                }
             }
         )
         .navigationTitle(QuickSetupLocalization.text(locale: locale, ru: "Избранные валюты", en: "Favorite currencies"))

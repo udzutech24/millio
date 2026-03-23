@@ -18,6 +18,26 @@ struct CurrencySelectionSupportTests {
         #expect(CurrencySelectionSupport.matchesSearchQuery(code: "USD", query: "бакс"))
     }
 
+    @Test("Поиск находит валюту по стране на русском")
+    func matchesRussianCountryName() {
+        #expect(CurrencySelectionSupport.matchesSearchQuery(code: "RUB", query: "россия"))
+    }
+
+    @Test("Поиск находит валюту по стране на английском")
+    func matchesEnglishCountryName() {
+        #expect(CurrencySelectionSupport.matchesSearchQuery(code: "TRY", query: "turkey"))
+    }
+
+    @Test("Поиск находит валюту по английскому полному названию")
+    func matchesEnglishFullCurrencyName() {
+        #expect(CurrencySelectionSupport.matchesSearchQuery(code: "TRY", query: "turkish lira"))
+    }
+
+    @Test("Поиск находит валюту по английскому полному названию для рубля")
+    func matchesEnglishFullCurrencyNameForRuble() {
+        #expect(CurrencySelectionSupport.matchesSearchQuery(code: "RUB", query: "russian ruble"))
+    }
+
     @Test("Нормализация поиска игнорирует диакритику и регистр")
     func normalizationIgnoresDiacriticsAndCase() {
         let normalized = CurrencySelectionSupport.normalizedSearchToken("  ÉvRo  ")
