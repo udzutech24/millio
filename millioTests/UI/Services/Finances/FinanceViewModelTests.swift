@@ -1194,6 +1194,13 @@ struct FinanceViewModelTests {
         #expect(abs((investment.averagePurchaseUnitPrice ?? 0) - 150) < 0.0001)
         #expect(abs((investment.totalPurchaseCost ?? 0) - 3000) < 0.0001)
         #expect(abs(investment.amount - 4000) < 0.01)
+        #expect(viewModel.state.tradeCelebration?.side == .buy)
+        #expect(viewModel.state.tradeCelebration?.investmentName == "AAPL")
+        #expect(abs((viewModel.state.tradeCelebration?.totalAmount ?? 0) - 2000) < 0.01)
+        #expect(viewModel.state.tradeCelebration?.currency == "USD")
+
+        viewModel.handle(.clearTradeCelebration)
+        #expect(viewModel.state.tradeCelebration == nil)
 
         viewModel.handle(.executeInvestmentOrder(
             account: account,
@@ -1207,6 +1214,8 @@ struct FinanceViewModelTests {
         #expect(abs((investment.averagePurchaseUnitPrice ?? 0) - 150) < 0.0001)
         #expect(abs((investment.totalPurchaseCost ?? 0) - 2250) < 0.0001)
         #expect(abs(investment.amount - 3300) < 0.01)
+        #expect(viewModel.state.tradeCelebration?.side == .sell)
+        #expect(abs((viewModel.state.tradeCelebration?.totalAmount ?? 0) - 1100) < 0.01)
 
         let descriptor = FetchDescriptor<CashflowTransaction>()
         let transactions = try modelContext.fetch(descriptor)

@@ -150,6 +150,9 @@ struct FinanceState {
     /// Закрываемое уведомление о том, что часть ручного обновления не выполнилась.
     var refreshIssueMessage: String? = nil
     var showRefreshIssue: Bool = false
+
+    /// Последняя успешно завершенная сделка по рыночному активу.
+    var tradeCelebration: FinanceTradeCelebration? = nil
 }
 
 private struct StockRefreshIssues {
@@ -198,6 +201,31 @@ struct InvestmentOrderFunding: Equatable {
         settlementAccountKind: nil,
         shouldAffectCardBalance: false
     )
+}
+
+struct FinanceTradeCelebration: Equatable, Identifiable {
+    let id: UUID
+    let side: InvestmentOrderSide
+    let investmentName: String
+    let investmentCategory: InvestmentCategory
+    let totalAmount: Double
+    let currency: String
+
+    init(
+        id: UUID = UUID(),
+        side: InvestmentOrderSide,
+        investmentName: String,
+        investmentCategory: InvestmentCategory,
+        totalAmount: Double,
+        currency: String
+    ) {
+        self.id = id
+        self.side = side
+        self.investmentName = investmentName
+        self.investmentCategory = investmentCategory
+        self.totalAmount = totalAmount
+        self.currency = currency
+    }
 }
 
 // MARK: - Finance Actions
@@ -258,6 +286,7 @@ enum FinanceAction {
     case setSavingsGoalEnabled(Bool)
     case setSavingsGoalAmount(Double)
     case toggleAmountVisibility
+    case clearTradeCelebration
 }
 
 // MARK: - Finance ViewModel
@@ -552,6 +581,9 @@ final class FinanceViewModel: ViewModelProtocol {
         case .toggleAmountVisibility:
             state.isAmountHidden.toggle()
             storedAmountHidden = state.isAmountHidden
+
+        case .clearTradeCelebration:
+            state.tradeCelebration = nil
     }
     }
     
@@ -1795,6 +1827,13 @@ final class FinanceViewModel: ViewModelProtocol {
             try modelContext.save()
             loadAccounts()
             calculateTotalAmount()
+            state.tradeCelebration = FinanceTradeCelebration(
+                side: side,
+                investmentName: investmentDisplayName(investment),
+                investmentCategory: investment.category,
+                totalAmount: totalAmount,
+                currency: investmentCurrency
+            )
 
             var affectedGroupIDs: Set<String> = []
             for group in state.groups {

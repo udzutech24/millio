@@ -13149,6 +13149,91 @@
         }
       }
     },
+    "finances.dynamics.trade.celebration.badge" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Position updated"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Позиция обновлена"
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.celebration.buy.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You bought %@ for %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вы купили %@ на %@"
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.celebration.buy.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Purchase complete"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Покупка выполнена"
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.celebration.sell.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You sold %@ for %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вы продали %@ на %@"
+          }
+        }
+      }
+    },
+    "finances.dynamics.trade.celebration.sell.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sale complete"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Продажа выполнена"
+          }
+        }
+      }
+    },
     "finances.dynamics.trade.total_with_currency" : {
       "extractionState" : "manual",
       "localizations" : {

@@ -307,6 +307,14 @@ private struct FinanceDynamicsContentView: View {
                     onConfirm: confirmDeleteCurrentGroup,
                     onCancel: { showDeleteGroupConfirmation = false }
                 )
+
+                if let tradeCelebration = financeViewModel.state.tradeCelebration {
+                    FinanceTradeCelebrationOverlay(celebration: tradeCelebration) {
+                        financeViewModel.handle(.clearTradeCelebration)
+                    }
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                    .zIndex(2)
+                }
             }
         }
     }
