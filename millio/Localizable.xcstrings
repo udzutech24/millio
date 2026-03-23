@@ -4250,6 +4250,23 @@
         }
       }
     },
+    "cashflow.category.actions.operations" : {
+      "comment" : "Category action button that opens filtered operations history",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Operations"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Операции"
+          }
+        }
+      }
+    },
     "cashflow.category.actions.pin" : {
       "extractionState" : "manual",
       "localizations" : {

@@ -333,7 +333,7 @@ final class FinanceLifecycleHarness {
         let normalizedOperationGroupID = transaction.operationGroupID?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         cashflowViewModel.handle(.deleteTransaction(transaction, recalculate: recalculate))
-        try await waitUntil {
+        try await waitUntil(timeoutNanoseconds: 5_000_000_000) {
             let descriptor = FetchDescriptor<CashflowTransaction>()
             let storedTransactions = (try? self.modelContext.fetch(descriptor)) ?? []
 

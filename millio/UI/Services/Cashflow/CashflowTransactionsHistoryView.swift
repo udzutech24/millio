@@ -341,6 +341,7 @@ struct CashflowTransactionsHistoryView: View {
     @State private var selectedSummaryCategoryRawValue: String?
     @State private var summaryModel: CashflowHistorySummaryModel
     @State private var selectedCardID: String?
+    private let initialCategoryRawValue: String?
     @State private var isSearchActive = false
     @State private var searchText = ""
     @State private var selectedStartDate: Date?
@@ -357,13 +358,17 @@ struct CashflowTransactionsHistoryView: View {
         viewModel: CashflowViewModel,
         showsDismissButton: Bool = true,
         initialFilter: CashflowHistoryTypeFilter = .all,
+        initialCategoryRawValue: String? = nil,
+        initialCardID: String? = nil,
         initialStartDate: Date? = nil,
         initialEndDate: Date? = nil
     ) {
         self.viewModel = viewModel
         self.showsDismissButton = showsDismissButton
+        self.initialCategoryRawValue = initialCategoryRawValue
         let defaultRange = CashflowViewModel.defaultPeriodRange(referenceDate: Date(), calendar: .current)
         _selectedFilter = State(initialValue: initialFilter)
+        _selectedCardID = State(initialValue: initialCardID)
         _selectedStartDate = State(initialValue: initialStartDate ?? defaultRange.start)
         _selectedEndDate = State(initialValue: initialEndDate ?? defaultRange.end)
         _summaryModel = State(
@@ -381,7 +386,8 @@ struct CashflowTransactionsHistoryView: View {
             searchText: isSearchActive ? searchText : "",
             startDate: selectedStartDate,
             endDate: selectedEndDate,
-            cardID: selectedCardID
+            cardID: selectedCardID,
+            categoryRawValue: initialCategoryRawValue
         )
         return viewModel.historyTransactions(matching: query).filter(matchesSelectedSummaryCategory)
     }
@@ -409,7 +415,8 @@ struct CashflowTransactionsHistoryView: View {
             searchText: "",
             startDate: selectedStartDate,
             endDate: selectedEndDate,
-            cardID: selectedCardID
+            cardID: selectedCardID,
+            categoryRawValue: initialCategoryRawValue
         )
     }
 

@@ -13,6 +13,9 @@ struct CashflowCategoryActionOverlay: View {
     let primaryActionTitle: String?
     let primaryActionIcon: String?
     let onPrimaryAction: (() -> Void)?
+    let secondaryActionTitle: String?
+    let secondaryActionIcon: String?
+    let onSecondaryAction: (() -> Void)?
     let onEdit: () -> Void
     let onDelete: (() -> Void)?
     let onDismiss: () -> Void
@@ -71,6 +74,15 @@ struct CashflowCategoryActionOverlay: View {
                                     systemImage: primaryActionIcon,
                                     tint: accentColor,
                                     action: onPrimaryAction
+                                )
+                            }
+
+                            if let secondaryActionTitle, let secondaryActionIcon, let onSecondaryAction {
+                                actionButton(
+                                    title: secondaryActionTitle,
+                                    systemImage: secondaryActionIcon,
+                                    tint: AppColors.textPrimary,
+                                    action: onSecondaryAction
                                 )
                             }
 

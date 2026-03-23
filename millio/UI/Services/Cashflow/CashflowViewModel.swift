@@ -326,6 +326,7 @@ struct CashflowHistoryQuery {
     var startDate: Date?
     var endDate: Date?
     var cardID: String? = nil
+    var categoryRawValue: String? = nil
 }
 
 // MARK: - Cashflow Actions
@@ -801,6 +802,9 @@ final class CashflowViewModel: ViewModelProtocol {
             .lowercased()
         let cardsByID = Dictionary(uniqueKeysWithValues: state.allCards.map { ($0.cardUniqueID, $0.name.lowercased()) })
         let dateRange = normalizedHistoryDateRange(start: query.startDate, end: query.endDate)
+        let normalizedCategoryRawValue = query.categoryRawValue?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let usesCategoryFilter = !(normalizedCategoryRawValue?.isEmpty ?? true)
 
         return state.filteredTransactions.filter { transaction in
             if shouldHideLinkedSettlementTransactionInHistory(transaction) {
@@ -816,6 +820,15 @@ final class CashflowViewModel: ViewModelProtocol {
 
             if let cardID = query.cardID,
                !historyTransactionMatchesCardFilter(transaction, cardID: cardID) {
+                return false
+            }
+
+            if usesCategoryFilter,
+               !historyTransactionMatchesCategoryFilter(
+                transaction,
+                categoryRawValue: normalizedCategoryRawValue,
+                typeFilter: query.typeFilter
+               ) {
                 return false
             }
 
@@ -884,6 +897,36 @@ final class CashflowViewModel: ViewModelProtocol {
             return (start: normalized, end: normalized)
         case (nil, nil):
             return nil
+        }
+    }
+
+    private func historyTransactionMatchesCategoryFilter(
+        _ transaction: CashflowTransaction,
+        categoryRawValue: String?,
+        typeFilter: CashflowHistoryTypeFilter
+    ) -> Bool {
+        guard let categoryRawValue, !categoryRawValue.isEmpty else {
+            return true
+        }
+
+        switch typeFilter {
+        case .income:
+            return transaction.transactionType == .income
+                && (transaction.incomeCategoryRaw ?? IncomeCategory.other.rawValue) == categoryRawValue
+        case .expense:
+            return transaction.transactionType == .expense
+                && (transaction.expenseCategoryRaw ?? ExpenseCategory.other.rawValue) == categoryRawValue
+        case .all:
+            switch transaction.transactionType {
+            case .income:
+                return (transaction.incomeCategoryRaw ?? IncomeCategory.other.rawValue) == categoryRawValue
+            case .expense:
+                return (transaction.expenseCategoryRaw ?? ExpenseCategory.other.rawValue) == categoryRawValue
+            case .transfer, .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
+                return false
+            }
+        case .transfer, .assetBalanceChange, .accountBalanceCorrection:
+            return false
         }
     }
 

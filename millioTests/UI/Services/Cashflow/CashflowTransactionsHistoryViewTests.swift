@@ -277,6 +277,41 @@ struct CashflowTransactionsHistoryViewTests {
         #expect(filtered.first?.cardID == firstCard.cardUniqueID)
     }
 
+    @Test("Фильтр истории по категории оставляет только операции этой категории")
+    @MainActor
+    func historyFiltersTransactionsByCategory() throws {
+        let context = makeContext()
+        try context.deleteAll(CashflowTransaction.self)
+        try context.save()
+
+        context.insert(CashflowTransaction(
+            transactionType: .expense,
+            amount: 100,
+            currency: "RUB",
+            transactionDate: Date(),
+            expenseCategoryRaw: ExpenseCategory.groceries.rawValue
+        ))
+        context.insert(CashflowTransaction(
+            transactionType: .expense,
+            amount: 200,
+            currency: "RUB",
+            transactionDate: Date(),
+            expenseCategoryRaw: ExpenseCategory.cafe.rawValue
+        ))
+        try context.save()
+
+        let viewModel = CashflowViewModel(modelContext: context)
+        let filtered = viewModel.historyTransactions(
+            matching: CashflowHistoryQuery(
+                typeFilter: .expense,
+                categoryRawValue: ExpenseCategory.groceries.rawValue
+            )
+        )
+
+        #expect(filtered.count == 1)
+        #expect(filtered.first?.expenseCategoryRaw == ExpenseCategory.groceries.rawValue)
+    }
+
     @Test("История покупки актива показывает карту списания из связанной операции")
     func historyResolvesLinkedSettlementCardForAssetTrade() {
         let previousLanguage = LanguageManager.shared.currentLanguage

@@ -164,23 +164,44 @@ struct CashflowCategoryGridLayout {
 
 struct CashflowIncomeTransactionSheet: View {
     @ObservedObject var viewModel: CashflowViewModel
+    let initialHistoryCardID: String?
+
+    init(viewModel: CashflowViewModel, initialHistoryCardID: String? = nil) {
+        self.viewModel = viewModel
+        self.initialHistoryCardID = initialHistoryCardID
+    }
 
     var body: some View {
-        CashflowCategoryTransactionSheet(viewModel: viewModel, kind: .income)
+        CashflowCategoryTransactionSheet(
+            viewModel: viewModel,
+            kind: .income,
+            initialHistoryCardID: initialHistoryCardID
+        )
     }
 }
 
 struct CashflowExpenseTransactionSheet: View {
     @ObservedObject var viewModel: CashflowViewModel
+    let initialHistoryCardID: String?
+
+    init(viewModel: CashflowViewModel, initialHistoryCardID: String? = nil) {
+        self.viewModel = viewModel
+        self.initialHistoryCardID = initialHistoryCardID
+    }
 
     var body: some View {
-        CashflowCategoryTransactionSheet(viewModel: viewModel, kind: .expense)
+        CashflowCategoryTransactionSheet(
+            viewModel: viewModel,
+            kind: .expense,
+            initialHistoryCardID: initialHistoryCardID
+        )
     }
 }
 
 private struct CashflowCategoryTransactionSheet: View {
     @ObservedObject var viewModel: CashflowViewModel
     let kind: CashflowCategoryTransactionSheetKind
+    let initialHistoryCardID: String?
 
     @Environment(\.dismiss) private var dismiss
 
@@ -325,7 +346,11 @@ private struct CashflowCategoryTransactionSheet: View {
                 CashflowTransactionsHistoryView(
                     viewModel: viewModel,
                     showsDismissButton: false,
-                    initialFilter: kind.historyFilter
+                    initialFilter: kind.historyFilter,
+                    initialCategoryRawValue: pendingActionCategory?.rawValue,
+                    initialCardID: initialHistoryCardID,
+                    initialStartDate: historyRange.start,
+                    initialEndDate: historyRange.end
                 )
             }
             .sheet(isPresented: $showRecurringManagement) {
@@ -408,6 +433,15 @@ private struct CashflowCategoryTransactionSheet: View {
                         onPrimaryAction: {
                             togglePinned(for: option)
                             closeCategoryActions()
+                        },
+                        secondaryActionTitle: String(
+                            localized: "cashflow.category.actions.operations",
+                            defaultValue: "Операции",
+                            comment: "Category action button that opens filtered operations history"
+                        ),
+                        secondaryActionIcon: "list.bullet.rectangle",
+                        onSecondaryAction: {
+                            openOperations(for: option)
                         },
                         onEdit: {
                             closeCategoryActions()
@@ -1082,6 +1116,21 @@ private struct CashflowCategoryTransactionSheet: View {
         }
     }
 
+    private var historyRange: (start: Date, end: Date) {
+        let calendar = Calendar.current
+        let start = calendar.startOfMonth(for: selectedMonth)
+        let monthEnd = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: start) ?? selectedMonth
+        let today = calendar.startOfDay(for: Date())
+        let end = min(calendar.startOfDay(for: monthEnd), today)
+        return (start: start, end: max(start, end))
+    }
+
+    private func openOperations(for option: CashflowCategoryOption) {
+        pendingActionCategory = option
+        showCategoryActionsDialog = false
+        showTransactionsHistory = true
+    }
+
     private func reloadMonthlyTotal(focusingOn categoryRawValue: String? = nil) {
         monthTotalTask?.cancel()
         monthTotalTask = Task {
@@ -1672,6 +1721,9 @@ private struct CashflowCategorySettingsSheet: View {
                     primaryActionTitle: nil,
                     primaryActionIcon: nil,
                     onPrimaryAction: nil,
+                    secondaryActionTitle: nil,
+                    secondaryActionIcon: nil,
+                    onSecondaryAction: nil,
                     onEdit: {
                         closeSettingsCategoryActions()
                         openEditSheet(for: option)
