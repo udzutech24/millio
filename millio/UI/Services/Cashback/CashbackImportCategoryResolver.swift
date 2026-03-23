@@ -46,7 +46,9 @@ struct CashbackImportCategoryResolver {
         map[normalize("Pharmacies")] = .pharmacy
         map[normalize("Drugstores")] = .pharmacy
         map[normalize("Медицинские клиники")] = .healthcare
+        map[normalize("Медицинские услуги")] = .healthcare
         map[normalize("Medical clinics")] = .healthcare
+        map[normalize("Medical services")] = .healthcare
         map[normalize("Healthcare")] = .healthcare
         map[normalize("Транспорт")] = .transport
         map[normalize("Transport")] = .transport
@@ -85,7 +87,7 @@ struct CashbackImportCategoryResolver {
         Rule(category: .restaurant, keywords: ["ресторан", "еда", "общепит", "restaurant", "dining"]),
         Rule(category: .beauty, keywords: ["красот", "космет", "beauty"]),
         Rule(category: .pharmacy, keywords: ["аптек", "pharmac", "drugstore"]),
-        Rule(category: .healthcare, keywords: ["медицин", "клиник", "healthcare", "medical clinic"]),
+        Rule(category: .healthcare, keywords: ["медицин", "клиник", "healthcare", "medical clinic", "medical service"]),
         Rule(category: .transport, keywords: ["транспорт", "каршеринг", "transport", "public transit"]),
         Rule(category: .taxi, keywords: ["такси", "taxi", "комфорт", "ultima"]),
         Rule(category: .entertainment, keywords: ["развлеч", "кино", "театр", "entertainment", "movie", "cinema"]),

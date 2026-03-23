@@ -29,6 +29,17 @@ struct CashflowBulkExpenseImportTests {
         return container.mainContext
     }
 
+    private var expenseOptions: [CashflowCategoryOption] {
+        ExpenseCategory.allCases.map {
+            CashflowCategoryOption(
+                rawValue: $0.rawValue,
+                displayName: $0.displayName,
+                icon: $0.icon,
+                isCustom: false
+            )
+        }
+    }
+
     @Test("Парсер расходов понимает inline и split форматы и оставляет переводы для отдельной категории")
     func parserSupportsExpenseLayouts() {
         let rows = CashflowBulkExpenseImportParser.parseRecognizedLines([
@@ -50,14 +61,7 @@ struct CashflowBulkExpenseImportTests {
     @Test("Резолвер маппит очевидные траты в системные категории")
     func resolverMapsKeywordsToCategories() {
         let resolver = CashflowBulkExpenseImportCategoryResolver()
-        let options = ExpenseCategory.allCases.map {
-            CashflowCategoryOption(
-                rawValue: $0.rawValue,
-                displayName: $0.displayName,
-                icon: $0.icon,
-                isCustom: false
-            )
-        }
+        let options = expenseOptions
 
         let groceries = resolver.resolve(title: "ВкусВилл у дома", availableOptions: options)
         let transport = resolver.resolve(title: "Yandex Go taxi", availableOptions: options)
@@ -85,14 +89,7 @@ struct CashflowBulkExpenseImportTests {
     @Test("Резолвер отдаёт top suggestions и поднимает запомненную категорию наверх")
     func resolverRanksSuggestionsWithLearnedCategoryFirst() {
         let resolver = CashflowBulkExpenseImportCategoryResolver()
-        let options = ExpenseCategory.allCases.map {
-            CashflowCategoryOption(
-                rawValue: $0.rawValue,
-                displayName: $0.displayName,
-                icon: $0.icon,
-                isCustom: false
-            )
-        }
+        let options = expenseOptions
 
         let suggested = resolver.suggestedOptions(
             title: "Coffee Point",
@@ -103,6 +100,83 @@ struct CashflowBulkExpenseImportTests {
         #expect(!suggested.isEmpty)
         #expect(suggested.first?.rawValue == ExpenseCategory.dining.rawValue)
         #expect(suggested.count <= 3)
+    }
+
+    @Test("OCR сначала строит review-черновик для всех строк, а не мержит их молча")
+    func screenshotImportBuildsPreviewRowsBeforeApplying() {
+        let rows = [
+            CashflowBulkExpenseParsedRow(
+                rawLine: "ВкусВилл 1 240",
+                title: "ВкусВилл",
+                amount: 1_240,
+                sourceOrderIndex: 0
+            ),
+            CashflowBulkExpenseParsedRow(
+                rawLine: "Unknown merchant 340",
+                title: "Unknown merchant",
+                amount: 340,
+                sourceOrderIndex: 1
+            )
+        ]
+
+        let preview = CashflowBulkExpenseScreenshotReviewPolicy.makePreviewRows(
+            parsedRows: rows,
+            availableOptions: expenseOptions,
+            preferredRawValueForTitle: { _ in nil }
+        )
+
+        #expect(preview.count == 2)
+        #expect(preview[0].selectedCategoryRaw == ExpenseCategory.groceries.rawValue)
+        #expect(preview[0].requiresAttention == false)
+        #expect(preview[1].selectedCategoryRaw == ExpenseCategory.other.rawValue)
+        #expect(preview[1].requiresAttention)
+    }
+
+    @Test("В категории переносятся только проверенные строки, сомнительные остаются в review")
+    func screenshotReviewAppliesOnlyReviewedRows() {
+        let categoryDrafts = [
+            CashflowBulkExpenseCategoryDraft(
+                category: expenseOptions.first(where: { $0.rawValue == ExpenseCategory.groceries.rawValue })!,
+                sourceOrderIndex: 0
+            ),
+            CashflowBulkExpenseCategoryDraft(
+                category: expenseOptions.first(where: { $0.rawValue == ExpenseCategory.other.rawValue })!,
+                sourceOrderIndex: 1
+            )
+        ]
+        let rows = [
+            CashflowBulkExpenseRowDraft(
+                rawLine: "ВкусВилл",
+                titleText: "ВкусВилл",
+                amountText: "1 240",
+                selectedCategoryRaw: ExpenseCategory.groceries.rawValue,
+                suggestedCategoryRaws: [ExpenseCategory.groceries.rawValue],
+                sourceOrderIndex: 0,
+                confidence: .high,
+                usesSuggestedCategory: true
+            ),
+            CashflowBulkExpenseRowDraft(
+                rawLine: "Unknown merchant",
+                titleText: "Unknown merchant",
+                amountText: "340",
+                selectedCategoryRaw: ExpenseCategory.other.rawValue,
+                suggestedCategoryRaws: [],
+                sourceOrderIndex: 1,
+                confidence: .low,
+                usesSuggestedCategory: true
+            )
+        ]
+
+        let result = CashflowBulkExpenseScreenshotReviewPolicy.applyPreviewRows(
+            rows,
+            to: categoryDrafts
+        )
+
+        #expect(result.appliedRows.count == 1)
+        #expect(result.remainingRows.count == 1)
+        #expect(result.importedCategoryRaws == [ExpenseCategory.groceries.rawValue])
+        #expect(result.categoryDrafts[0].amountText == "1 240")
+        #expect(result.categoryDrafts[1].amountText.isEmpty)
     }
 
     @Test("Поиск категорий учитывает короткое имя и синонимы каталога")

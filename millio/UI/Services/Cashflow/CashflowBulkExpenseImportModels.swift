@@ -139,9 +139,7 @@ struct CashflowBulkExpenseRowDraft: Identifiable, Equatable {
 
     var requiresAttention: Bool {
         guard isAddable else { return true }
-        if !usesSuggestedCategory {
-            return selectedCategoryRaw == ExpenseCategory.other.rawValue
-        }
+        guard usesSuggestedCategory else { return false }
         return confidence == .low || selectedCategoryRaw == ExpenseCategory.other.rawValue
     }
 
@@ -270,6 +268,115 @@ struct CashflowBulkExpenseCategoryBreakdown: Equatable {
             baselineAmount: normalizedBaseline,
             importedAmount: importedAmount
         )
+    }
+}
+
+struct CashflowBulkExpensePreviewApplyResult: Equatable {
+    let categoryDrafts: [CashflowBulkExpenseCategoryDraft]
+    let importedCategoryRaws: Set<String>
+    let appliedRows: [CashflowBulkExpenseRowDraft]
+    let remainingRows: [CashflowBulkExpenseRowDraft]
+}
+
+enum CashflowBulkExpenseScreenshotReviewPolicy {
+    static func makePreviewRows(
+        parsedRows: [CashflowBulkExpenseParsedRow],
+        availableOptions: [CashflowCategoryOption],
+        resolver: CashflowBulkExpenseImportCategoryResolver = CashflowBulkExpenseImportCategoryResolver(),
+        preferredRawValueForTitle: (String) -> String?
+    ) -> [CashflowBulkExpenseRowDraft] {
+        parsedRows
+            .sorted { $0.sourceOrderIndex < $1.sourceOrderIndex }
+            .enumerated()
+            .map { index, row in
+                refreshPreviewRow(
+                    CashflowBulkExpenseRowDraft(
+                        rawLine: row.rawLine,
+                        titleText: row.title,
+                        amountText: CashflowBulkExpenseRowDraft.formatAmount(row.amount),
+                        sourceOrderIndex: index
+                    ),
+                    availableOptions: availableOptions,
+                    resolver: resolver,
+                    preferredRawValue: preferredRawValueForTitle(row.title)
+                )
+            }
+    }
+
+    static func refreshPreviewRow(
+        _ row: CashflowBulkExpenseRowDraft,
+        availableOptions: [CashflowCategoryOption],
+        resolver: CashflowBulkExpenseImportCategoryResolver = CashflowBulkExpenseImportCategoryResolver(),
+        preferredRawValue: String?
+    ) -> CashflowBulkExpenseRowDraft {
+        let resolution = resolver.resolve(
+            title: row.normalizedTitle,
+            availableOptions: availableOptions,
+            preferredRawValue: preferredRawValue
+        )
+        let suggestedRaws = uniqueRawValues(
+            from: [resolution.option.rawValue] +
+                resolver.suggestedOptions(
+                    title: row.normalizedTitle,
+                    availableOptions: availableOptions,
+                    preferredRawValue: preferredRawValue
+                ).map(\.rawValue)
+        )
+
+        var updated = row
+        updated.confidence = resolution.confidence
+        updated.suggestedCategoryRaws = suggestedRaws
+
+        let currentSelectionExists = availableOptions.contains { $0.rawValue == row.selectedCategoryRaw }
+        if row.usesSuggestedCategory || !currentSelectionExists {
+            updated.selectedCategoryRaw = resolution.option.rawValue
+            updated.usesSuggestedCategory = true
+        } else if updated.suggestedCategoryRaws.contains(row.selectedCategoryRaw) == false {
+            updated.suggestedCategoryRaws = uniqueRawValues(from: [row.selectedCategoryRaw] + updated.suggestedCategoryRaws)
+        }
+
+        return updated
+    }
+
+    static func applyPreviewRows(
+        _ rows: [CashflowBulkExpenseRowDraft],
+        to categoryDrafts: [CashflowBulkExpenseCategoryDraft]
+    ) -> CashflowBulkExpensePreviewApplyResult {
+        var updatedDrafts = categoryDrafts
+        var importedCategoryRaws: Set<String> = []
+        var appliedRows: [CashflowBulkExpenseRowDraft] = []
+        var remainingRows: [CashflowBulkExpenseRowDraft] = []
+
+        for row in rows.sorted(by: { $0.sourceOrderIndex < $1.sourceOrderIndex }) {
+            guard let amount = row.amount, amount > 0.0000001, row.requiresAttention == false else {
+                remainingRows.append(row)
+                continue
+            }
+            guard let categoryIndex = updatedDrafts.firstIndex(where: { $0.category.rawValue == row.selectedCategoryRaw }) else {
+                remainingRows.append(row)
+                continue
+            }
+
+            let existingAmount = updatedDrafts[categoryIndex].amount ?? 0
+            updatedDrafts[categoryIndex].amountText = CashflowBulkExpenseRowDraft.formatAmount(existingAmount + amount)
+            importedCategoryRaws.insert(row.selectedCategoryRaw)
+            appliedRows.append(row)
+        }
+
+        return CashflowBulkExpensePreviewApplyResult(
+            categoryDrafts: updatedDrafts,
+            importedCategoryRaws: importedCategoryRaws,
+            appliedRows: appliedRows,
+            remainingRows: remainingRows
+        )
+    }
+
+    private static func uniqueRawValues(from values: [String]) -> [String] {
+        var seen = Set<String>()
+        return values.filter { value in
+            guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+            return seen.insert(value).inserted
+        }
     }
 }
 

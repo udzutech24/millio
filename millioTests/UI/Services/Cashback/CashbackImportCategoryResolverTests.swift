@@ -29,6 +29,7 @@ struct CashbackImportCategoryResolverTests {
         #expect(resolver.resolveSystemCategoryRaw(for: "Детские товары") == CashbackCategory.kids.rawValue)
         #expect(resolver.resolveSystemCategoryRaw(for: "Такси") == CashbackCategory.taxi.rawValue)
         #expect(resolver.resolveSystemCategoryRaw(for: "Медицинские клиники") == CashbackCategory.healthcare.rawValue)
+        #expect(resolver.resolveSystemCategoryRaw(for: "Медицинские услуги") == CashbackCategory.healthcare.rawValue)
     }
 
     @Test("Резолвер маппит очевидные англоязычные категории в системные")
@@ -40,6 +41,7 @@ struct CashbackImportCategoryResolverTests {
         #expect(resolver.resolveSystemCategoryRaw(for: "Hotels") == CashbackCategory.hotels.rawValue)
         #expect(resolver.resolveSystemCategoryRaw(for: "Electronics") == CashbackCategory.electronics.rawValue)
         #expect(resolver.resolveSystemCategoryRaw(for: "Medical clinics") == CashbackCategory.healthcare.rawValue)
+        #expect(resolver.resolveSystemCategoryRaw(for: "Medical services") == CashbackCategory.healthcare.rawValue)
     }
 
     @Test("Неочевидные категории остаются без маппинга")
