@@ -979,8 +979,8 @@ struct CloudBackupStoreTests {
         #expect(latest == Data("payload-4".utf8))
     }
 
-    @Test("uploadBackup keeps multiple auto backup versions by default")
-    func testUploadBackupKeepsMultipleAutoBackupVersionsByDefault() async throws {
+    @Test("uploadBackup keeps only one auto backup version by default")
+    func testUploadBackupKeepsSingleAutoBackupVersionByDefault() async throws {
         let db = FakeCloudBackupDatabase()
         let store = CloudBackupStore(
             container: FakeCloudBackupContainer(accountStatusResult: .available, database: db)
@@ -991,9 +991,9 @@ struct CloudBackupStoreTests {
         }
 
         let versions = try await store.listBackupVersions()
-        #expect(versions.count == 4)
+        #expect(versions.count == 1)
         #expect(versions.allSatisfy { $0.recordName != "latest_backup" })
-        #expect(db.deletedRecordNames.isEmpty)
+        #expect(db.deletedRecordNames.count == 3)
     }
 
     @Test("importBackup stores pinned snapshot with provided original metadata")
@@ -1044,23 +1044,21 @@ struct CloudBackupStoreTests {
         #expect(db.deletedRecordNames.count == 1)
     }
 
-    @Test("uploadBackup limits pinned versions to five most recent snapshots")
-    func testUploadBackupLimitsPinnedVersionsToFiveMostRecentSnapshots() async throws {
+    @Test("uploadBackup limits pinned versions to four most recent snapshots by default")
+    func testUploadBackupLimitsPinnedVersionsToFourMostRecentSnapshotsByDefault() async throws {
         let db = FakeCloudBackupDatabase()
         let store = CloudBackupStore(
-            container: FakeCloudBackupContainer(accountStatusResult: .available, database: db),
-            maxSnapshots: 3,
-            maxPinnedSnapshots: 5
+            container: FakeCloudBackupContainer(accountStatusResult: .available, database: db)
         )
 
-        for index in 1...6 {
+        for index in 1...5 {
             try await store.uploadBackup(Data("pinned-\(index)".utf8), isPinned: true)
         }
 
         let versions = try await store.listBackupVersions()
         let pinnedVersions = versions.filter(\.isPinned)
 
-        #expect(pinnedVersions.count == 5)
+        #expect(pinnedVersions.count == 4)
         #expect(versions.filter { !$0.isPinned }.isEmpty)
         #expect(db.deletedRecordNames.count == 1)
     }
@@ -1087,6 +1085,39 @@ struct CloudBackupStoreTests {
         #expect(versions.filter { !$0.isPinned }.count == 2)
         #expect(versions.count == 7)
         #expect(db.deletedRecordNames.count == 2)
+    }
+
+    @Test("listBackupVersions prunes existing excess backups down to four manual and one auto")
+    func testListBackupVersionsPrunesExistingExcessBackups() async throws {
+        let db = FakeCloudBackupDatabase()
+        let store = CloudBackupStore(
+            container: FakeCloudBackupContainer(accountStatusResult: .available, database: db)
+        )
+
+        for index in 0..<6 {
+            let record = CKRecord(recordType: "AppBackup", recordID: CKRecord.ID(recordName: "snapshot_pinned_\(index)"))
+            record["backupDate"] = Date(timeIntervalSince1970: TimeInterval(1_000 + index))
+            record["backupSize"] = Int64(100 + index)
+            record["backupVersion"] = "2.0.0"
+            record["isPinned"] = 1
+            db.recordsByName[record.recordID.recordName] = record
+        }
+
+        for index in 0..<3 {
+            let record = CKRecord(recordType: "AppBackup", recordID: CKRecord.ID(recordName: "snapshot_auto_\(index)"))
+            record["backupDate"] = Date(timeIntervalSince1970: TimeInterval(2_000 + index))
+            record["backupSize"] = Int64(200 + index)
+            record["backupVersion"] = "2.0.0"
+            record["isPinned"] = 0
+            db.recordsByName[record.recordID.recordName] = record
+        }
+
+        let versions = try await store.listBackupVersions()
+
+        #expect(versions.count == 5)
+        #expect(versions.filter(\.isPinned).count == 4)
+        #expect(versions.filter { !$0.isPinned }.count == 1)
+        #expect(db.deletedRecordNames.count == 4)
     }
 
     @Test("downloadLatestBackup fallback к legacy latest, если index указывает на отсутствующие snapshots")

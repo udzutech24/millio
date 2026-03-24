@@ -34,7 +34,6 @@ struct BackupManagementView: View {
     @State private var isExportingVersion = false
     @State private var exportDocument: BackupTransferFileDocument?
     @State private var exportFilename = "millio-backup.milliobackup"
-    @State private var showPinnedLimitDialog = false
     @FocusState private var focusedField: PassphraseField?
 
     private enum PassphraseField {
@@ -114,7 +113,7 @@ struct BackupManagementView: View {
         return backupVersions.first(where: { $0.recordName == selectedRestoreRecordName })
     }
 
-    private var maxManualVersionCount: Int { 5 }
+    private var maxManualVersionCount: Int { 4 }
 
     private var pinnedVersionsCount: Int {
         backupVersions.filter(\.isPinned).count
@@ -273,24 +272,6 @@ struct BackupManagementView: View {
         } message: {
             Text(BackupL10n.tr("backup.restore.confirm.message", fallback: "Current local data will be fully replaced by the selected backup"))
         }
-        .confirmationDialog(
-            BackupL10n.format(
-                "backup.limit.reached.title",
-                fallback: "Maximum of %lld manual versions reached",
-                maxManualVersionCount
-            ),
-            isPresented: $showPinnedLimitDialog,
-            titleVisibility: .visible
-        ) {
-            if let oldestPinnedVersion {
-                Button(BackupL10n.tr("backup.limit.reached.action.delete_oldest", fallback: "Delete oldest version"), role: .destructive) {
-                    Task { await deleteVersion(recordName: oldestPinnedVersion.recordName) }
-                }
-            }
-            Button(BackupL10n.tr("common.cancel", fallback: "Cancel"), role: .cancel) {}
-        } message: {
-            Text(BackupL10n.tr("backup.limit.reached.message", fallback: "Delete one manual version and try again"))
-        }
         .fileExporter(
             isPresented: $isExportingVersion,
             document: exportDocument,
@@ -401,7 +382,10 @@ struct BackupManagementView: View {
                             appState.isBackupEnabled = newValue
                             SettingsManager.shared.isBackupEnabled = newValue
 
-                            if !newValue {
+                            if newValue {
+                                appState.isAutoBackupEnabled = true
+                                SettingsManager.shared.isAutoBackupEnabled = true
+                            } else {
                                 appState.isICloudAvailable = false
                                 appState.lastBackupDate = nil
                                 backupVersions = []
@@ -433,6 +417,8 @@ struct BackupManagementView: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(AppColors.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
+
+                autoBackupToggleRow
             }
         }
     }
@@ -654,7 +640,7 @@ struct BackupManagementView: View {
                     title: createButtonTitle,
                     subtitle: createSliderSubtitle,
                     icon: "arrow.clockwise.circle.fill",
-                    isEnabled: canCreateBackup
+                    isEnabled: canCreateBackup || hasReachedPinnedVersionLimit
                 ) {
                     Task { await createBackupNow() }
                 }
@@ -668,7 +654,7 @@ struct BackupManagementView: View {
                     showRestoreConfirmation = true
                 }
 
-                Text(BackupL10n.tr("backup.actions.auto_schedule.note", fallback: "Millio also refreshes backup automatically in the background while you keep using the app"))
+                Text(BackupL10n.tr("backup.actions.auto_schedule.note", fallback: "Millio refreshes one automatic backup every 24 hours while backup stays enabled"))
                     .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(AppColors.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -690,6 +676,25 @@ struct BackupManagementView: View {
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(primaryActionHint == BackupL10n.tr("backup.hint.passphrase_mismatch", fallback: "Passphrases do not match") ? AppColors.error : AppColors.textSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                if hasReachedPinnedVersionLimit, let oldestPinnedVersion {
+                    subtleCallout(
+                        title: BackupL10n.format(
+                            "backup.limit.reached.title",
+                            fallback: "Maximum of %lld manual versions reached",
+                            maxManualVersionCount
+                        ),
+                        text: BackupL10n.tr("backup.limit.reached.message", fallback: "Delete one manual version and try again")
+                    )
+
+                    compactActionButton(
+                        title: BackupL10n.tr("backup.limit.reached.action.delete_oldest", fallback: "Delete oldest version"),
+                        icon: "trash",
+                        isEnabled: deletingRecordName == nil && !isBusy
+                    ) {
+                        Task { await deleteVersion(recordName: oldestPinnedVersion.recordName) }
+                    }
                 }
             }
         }
@@ -728,7 +733,7 @@ struct BackupManagementView: View {
 
                 if isVersionsExpanded {
                     if backupVersions.isEmpty {
-                        Text(BackupL10n.tr("backup.versions.empty.full", fallback: "Create your first backup above, new automatic snapshots will also appear here"))
+                        Text(BackupL10n.tr("backup.versions.empty.full", fallback: "Create your first backup above, the daily automatic copy will also appear here"))
                             .font(.system(size: 12, weight: .regular))
                             .foregroundStyle(AppColors.textTertiary)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -836,7 +841,14 @@ struct BackupManagementView: View {
             return
         }
         guard hasReachedPinnedVersionLimit == false else {
-            showPinnedLimitDialog = true
+            isVersionsExpanded = true
+            backupError = .backupFailed(
+                BackupL10n.format(
+                    "backup.actions.create.subtitle.limit",
+                    fallback: "Maximum of %lld manual versions reached, delete one old version to save a new one",
+                    maxManualVersionCount
+                )
+            )
             return
         }
 
@@ -1057,6 +1069,43 @@ struct BackupManagementView: View {
             title: BackupL10n.tr("backup.metrics.last", fallback: "Last"),
             value: formattedBackupDate(appState.lastBackupDate) ?? BackupL10n.tr("backup.metrics.last.none", fallback: "None yet")
         )
+    }
+
+    private var autoBackupToggleRow: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(BackupL10n.tr("backup.auto_toggle.title", fallback: "Automatic daily backup"))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppColors.textPrimary)
+                Text(
+                    BackupL10n.tr(
+                        "backup.auto_toggle.subtitle",
+                        fallback: "Creates one auto backup every 24 hours and replaces the previous auto copy"
+                    )
+                )
+                .font(.system(size: 11, weight: .regular))
+                .foregroundStyle(AppColors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 8)
+
+            Toggle(
+                "",
+                isOn: Binding(
+                    get: { appState.isAutoBackupEnabled },
+                    set: { newValue in
+                        appState.isAutoBackupEnabled = newValue
+                        SettingsManager.shared.isAutoBackupEnabled = newValue
+                    }
+                )
+            )
+            .tint(AppColors.toggleOnGreen)
+            .labelsHidden()
+            .disabled(!appState.isBackupEnabled || isBusy)
+        }
+        .padding(12)
+        .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     @ViewBuilder

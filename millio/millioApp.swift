@@ -500,12 +500,14 @@ struct millioApp: App {
     
     private func triggerBackgroundBackup() {
         guard appState.isBackupEnabled,
+              appState.isAutoBackupEnabled,
               let diContainer = diContainer else { return }
 
         Task {
-            let policy = AutoBackupPolicy.everyThreeDays
-            let latestInfo = await diContainer.backupManager.lastBackupInfo()
-            guard policy.shouldRun(lastBackupDate: latestInfo?.date, now: Date()) else {
+            let policy = AutoBackupPolicy.everyTwentyFourHours
+            let versions = await diContainer.backupManager.listBackupVersions()
+            let latestAutoBackupDate = versions.first(where: { !$0.isPinned })?.date
+            guard policy.shouldRun(lastBackupDate: latestAutoBackupDate, now: Date()) else {
                 return
             }
 

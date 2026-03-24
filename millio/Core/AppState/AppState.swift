@@ -56,6 +56,7 @@ final class AppState {
         }
     }
     var isBackupEnabled: Bool = false
+    var isAutoBackupEnabled: Bool = false
     var isDailyReminderEnabled: Bool = false
     var isAppLockEnabled: Bool = false {
         didSet {
@@ -122,6 +123,7 @@ final class AppState {
 
     init() {
         self.isBackupEnabled = SettingsManager.shared.isBackupEnabled
+        self.isAutoBackupEnabled = SettingsManager.shared.isAutoBackupEnabled
         self.isDailyReminderEnabled = SettingsManager.shared.isDailyReminderEnabled
         self.isAppLockEnabled = SettingsManager.shared.isAppLockEnabled
         self.isBiometricUnlockEnabled = SettingsManager.shared.isBiometricUnlockEnabled

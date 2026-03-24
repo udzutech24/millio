@@ -721,13 +721,47 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Millio also refreshes backup automatically in the background while you keep using the app"
+            "value" : "Millio refreshes one automatic backup every 24 hours while backup stays enabled"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Millio также обновляет резервную копию автоматически в фоне, пока вы пользуетесь приложением"
+            "value" : "Millio обновляет одну автоматическую резервную копию каждые 24 часа, пока резервное копирование включено"
+          }
+        }
+      }
+    },
+    "backup.auto_toggle.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Creates one auto backup every 24 hours and replaces the previous auto copy"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Создаёт одну автокопию каждые 24 часа и заменяет предыдущую автоматическую версию"
+          }
+        }
+      }
+    },
+    "backup.auto_toggle.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatic daily backup"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Автоматическая резервная копия"
           }
         }
       }
@@ -1340,6 +1374,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld"
+          }
+        }
+      }
+    },
+    "backup.versions.empty.full" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create your first backup above, the daily automatic copy will also appear here"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Создайте первую резервную копию выше, здесь также будет появляться ежедневная автоматическая копия"
+          }
+        }
+      }
+    },
+    "backup.versions.empty.short" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing saved yet"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пока ничего не сохранено"
           }
         }
       }

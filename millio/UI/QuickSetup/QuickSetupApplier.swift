@@ -256,7 +256,9 @@ struct QuickSetupApplier {
 
     private func applyBackupPreference(_ preference: QuickSetupBackupPreference) {
         SettingsManager.shared.isBackupEnabled = preference.isBackupEnabled
+        SettingsManager.shared.isAutoBackupEnabled = preference.isBackupEnabled
         appState.isBackupEnabled = preference.isBackupEnabled
+        appState.isAutoBackupEnabled = preference.isBackupEnabled
 
         if !preference.isBackupEnabled {
             appState.isICloudAvailable = false

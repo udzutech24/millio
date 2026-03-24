@@ -735,6 +735,7 @@ final class DataResetService: DataResetServiceProtocol {
         appState.selectedLanguage = .system
         appState.primaryCurrencyCode = settingsManager.primaryCurrencyCode
         appState.isBackupEnabled = settingsManager.isBackupEnabled
+        appState.isAutoBackupEnabled = settingsManager.isAutoBackupEnabled
         appState.isICloudAvailable = false
         appState.lastBackupDate = nil
         appState.isDailyReminderEnabled = settingsManager.isDailyReminderEnabled

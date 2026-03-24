@@ -10,6 +10,7 @@ import OSLog
 
 protocol SettingsManagerProtocol {
     var isBackupEnabled: Bool { get set }
+    var isAutoBackupEnabled: Bool { get set }
     var isEncryptionEnabled: Bool { get set }
     var isDailyReminderEnabled: Bool { get set }
     var dailyReminderSettings: DailyReminderSettings { get set }
@@ -26,6 +27,7 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
     
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "SettingsManager")
     private let backupEnabledKey = "isBackupEnabled"
+    private let autoBackupEnabledKey = "isAutoBackupEnabled"
     private let encryptionEnabledKey = "isEncryptionEnabled"
     private let dailyReminderEnabledKey = "isDailyReminderEnabled"
     private let dailyReminderSettingsKey = "dailyReminderSettings"
@@ -83,6 +85,19 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
         set {
             defaults.set(newValue, forKey: backupEnabledKey)
             logger.info("Backup enabled: \(newValue)")
+        }
+    }
+
+    var isAutoBackupEnabled: Bool {
+        get {
+            if let stored = defaults.object(forKey: autoBackupEnabledKey) as? Bool {
+                return stored
+            }
+            return isBackupEnabled
+        }
+        set {
+            defaults.set(newValue, forKey: autoBackupEnabledKey)
+            logger.info("Auto backup enabled: \(newValue)")
         }
     }
     
@@ -383,6 +398,7 @@ final class SettingsManager: SettingsManagerProtocol, LaunchSplashPreferences {
     /// Возвращает пользовательские настройки к безопасным дефолтам приложения.
     func resetToDefaults() {
         isBackupEnabled = false
+        isAutoBackupEnabled = false
         isEncryptionEnabled = false
         isDailyReminderEnabled = false
         dailyReminderSettings = .default

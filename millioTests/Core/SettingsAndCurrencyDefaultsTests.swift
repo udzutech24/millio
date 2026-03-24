@@ -23,6 +23,28 @@ struct SettingsAndCurrencyDefaultsTests {
         isolated.defaults.removeObject(forKey: "isBackupEnabled")
         #expect(isolated.manager.isBackupEnabled == false)
     }
+
+    @Test("SettingsManager isAutoBackupEnabled follows backup flag when explicit setting is missing")
+    func testAutoBackupEnabledDefaultsToBackupFlag() {
+        let isolated = makeIsolatedSettingsManager()
+        defer { isolated.cleanup() }
+
+        isolated.defaults.removeObject(forKey: "isAutoBackupEnabled")
+        isolated.manager.isBackupEnabled = true
+
+        #expect(isolated.manager.isAutoBackupEnabled == true)
+    }
+
+    @Test("SettingsManager persists explicit auto backup preference")
+    func testAutoBackupEnabledPersistsExplicitValue() {
+        let isolated = makeIsolatedSettingsManager()
+        defer { isolated.cleanup() }
+
+        isolated.manager.isBackupEnabled = true
+        isolated.manager.isAutoBackupEnabled = false
+
+        #expect(isolated.manager.isAutoBackupEnabled == false)
+    }
     
     @Test("SettingsManager isEncryptionEnabled defaults to false")
     func testEncryptionEnabledDefaultFalse() {

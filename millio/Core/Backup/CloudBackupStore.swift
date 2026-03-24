@@ -147,8 +147,8 @@ private protocol BackupRecordNameProviding {
 extension BackupVersionInfo: BackupRecordNameProviding {}
 
 final class CloudBackupStore: CloudBackupStoreProtocol {
-    private static let defaultAutoSnapshotRetention = 6
-    private static let defaultPinnedSnapshotRetention = 5
+    private static let defaultAutoSnapshotRetention = 1
+    private static let defaultPinnedSnapshotRetention = 4
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "millio", category: "CloudBackupStore")
     private let container: CloudBackupContainerProtocol
     private let snapshotRecordType = "AppBackup"
@@ -462,6 +462,7 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
 
     func listBackupVersions() async throws -> [BackupVersionInfo] {
         let privateDB = container.privateCloudDatabase
+        try await pruneExcessSnapshotsIfNeeded(using: privateDB)
         var versions = try await listSnapshotVersions(using: privateDB)
 
         if let autoVersion = try await autoBackupVersion(using: privateDB),
@@ -587,6 +588,42 @@ final class CloudBackupStore: CloudBackupStoreProtocol {
 
         return versions.filter {
             !retainedRecordNames.contains($0.recordName)
+        }
+    }
+
+    private func pruneExcessSnapshotsIfNeeded(using database: CloudBackupDatabaseProtocol) async throws {
+        let versions = try await listSnapshotVersions(using: database)
+        let staleEntries = staleSnapshotEntries(from: versions)
+
+        guard !staleEntries.isEmpty else { return }
+
+        for staleEntry in staleEntries {
+            do {
+                try await database.deleteRecord(withID: CKRecord.ID(recordName: staleEntry.recordName))
+            } catch {
+                logger.warning("Failed to delete excess snapshot '\(staleEntry.recordName, privacy: .public)': \(self.descriptiveCloudKitError(error), privacy: .public)")
+            }
+        }
+
+        let retainedEntries = versions.filter { version in
+            staleEntries.contains(where: { $0.recordName == version.recordName }) == false
+        }
+
+        do {
+            try await saveIndexEntries(
+                retainedEntries.map {
+                    BackupIndexEntry(
+                        recordName: $0.recordName,
+                        date: $0.date,
+                        size: $0.size,
+                        version: $0.version,
+                        isPinned: $0.isPinned
+                    )
+                },
+                to: database
+            )
+        } catch {
+            logger.warning("Failed to save pruned backup index cache: \(self.descriptiveCloudKitError(error), privacy: .public)")
         }
     }
 
