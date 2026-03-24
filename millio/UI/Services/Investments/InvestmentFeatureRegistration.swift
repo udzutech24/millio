@@ -191,14 +191,15 @@ struct InvestmentImporter: ModelImporter {
         identity: ResolvedAssetIdentity,
         context: ModelContext
     ) {
-        if Thread.isMainThread {
-            _ = MainActor.assumeIsolated {
-                AssetCatalogStore(modelContext: context).syncIfSupported(identity: identity)
-            }
-            return
-        }
+        // Importers are synchronous, so they cannot legally hop to MainActor
+        // without blocking. Avoid `DispatchQueue.main.sync`: it causes priority
+        // inversions and mixes a context across executors. If we're already on
+        // the main thread, keep the catalog in sync immediately; otherwise we
+        // leave the catalog update to the normal main-actor flows that also
+        // resolve identities later.
+        guard Thread.isMainThread else { return }
 
-        _ = DispatchQueue.main.sync {
+        _ = MainActor.assumeIsolated {
             AssetCatalogStore(modelContext: context).syncIfSupported(identity: identity)
         }
     }

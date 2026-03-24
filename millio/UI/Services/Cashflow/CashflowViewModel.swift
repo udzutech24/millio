@@ -2651,21 +2651,32 @@ final class CashflowViewModel: ViewModelProtocol {
             return 0
         }
 
-        let amountInCardCurrency = try await convertAmountForValidation(
-            amount: transaction.amount,
-            from: transaction.currency,
-            to: cardCurrency,
-            on: transaction.transactionDate
-        )
-
         let appliedDelta: Double
         switch transaction.transactionType {
         case .income:
+            let amountInCardCurrency = try await convertAmountForValidation(
+                amount: transaction.amount,
+                from: transaction.currency,
+                to: cardCurrency,
+                on: transaction.transactionDate
+            )
             appliedDelta = transaction.cardID == cardID ? amountInCardCurrency : 0
         case .expense:
+            let amountInCardCurrency = try await convertAmountForValidation(
+                amount: transaction.amount,
+                from: transaction.currency,
+                to: cardCurrency,
+                on: transaction.transactionDate
+            )
             appliedDelta = transaction.cardID == cardID ? -amountInCardCurrency : 0
         case .transfer:
             if transaction.cardID == cardID {
+                let amountInCardCurrency = try await convertAmountForValidation(
+                    amount: transaction.amount,
+                    from: transaction.currency,
+                    to: cardCurrency,
+                    on: transaction.transactionDate
+                )
                 appliedDelta = -amountInCardCurrency
             } else if transaction.toCardID == cardID {
                 appliedDelta = try await transferReceivedAmount(
@@ -2676,6 +2687,12 @@ final class CashflowViewModel: ViewModelProtocol {
                 appliedDelta = 0
             }
         case .balanceAdjustment, .cardBalanceAdjustment, .creditDebtAdjustment:
+            let amountInCardCurrency = try await convertAmountForValidation(
+                amount: transaction.amount,
+                from: transaction.currency,
+                to: cardCurrency,
+                on: transaction.transactionDate
+            )
             appliedDelta = transaction.cardID == cardID ? amountInCardCurrency : 0
         }
 
@@ -2787,7 +2804,6 @@ final class CashflowViewModel: ViewModelProtocol {
                 card.balance = max(0, updatedBalance)
                 card.updatedAt = now()
             }
-            return
         }
 
         if let investmentID = transaction.investmentID,

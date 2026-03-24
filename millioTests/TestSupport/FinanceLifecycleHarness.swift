@@ -362,6 +362,10 @@ final class FinanceLifecycleHarness {
                 && originalRemovedFromState
                 && linkedRemovedFromState
         }
+
+        // Grouped deletes publish several follow-up updates. Force a deterministic
+        // refresh here so assertions read converged state instead of racing EventBus.
+        try await reloadAll()
     }
 
     func reloadAll() async throws {
@@ -370,12 +374,15 @@ final class FinanceLifecycleHarness {
         cashflowViewModel.handle(.loadTransactions)
         try await waitUntil {
             let cardDescriptor = FetchDescriptor<Card>()
+            let investmentDescriptor = FetchDescriptor<Investment>()
             let transactionDescriptor = FetchDescriptor<CashflowTransaction>()
 
             let storedCards = ((try? self.modelContext.fetch(cardDescriptor)) ?? []).filter { $0.archivedAt == nil }
+            let storedInvestments = ((try? self.modelContext.fetch(investmentDescriptor)) ?? []).filter { $0.archivedAt == nil }
             let storedTransactions = (try? self.modelContext.fetch(transactionDescriptor)) ?? []
 
             return self.financeViewModel.state.availableCards.count == storedCards.count
+                && self.financeViewModel.state.availableInvestments.count == storedInvestments.count
                 && self.cashflowViewModel.state.availableCards.count == storedCards.count
                 && self.cashflowViewModel.state.transactions.count == storedTransactions.count
         }
