@@ -39,4 +39,20 @@ struct ProfileMenuStructureTests {
 
         #expect(contactsSection.items == [.contactUs])
     }
+
+    @Test("Profile menu items keep stable icon styling semantics")
+    func testProfileMenuIconMetadata() {
+        #expect(ProfileMenuItemID.language.iconSystemName == "globe")
+        #expect(ProfileMenuItemID.language.iconTone == .blue)
+        #expect(ProfileMenuItemID.primaryCurrency.iconTone == .green)
+        #expect(ProfileMenuItemID.backup.iconTone == .cyan)
+        #expect(ProfileMenuItemID.dailyReminders.iconTone == .orange)
+        #expect(ProfileMenuItemID.quickSetup.iconTone == .purple)
+        #expect(ProfileMenuItemID.launchSplash.iconTone == .pink)
+        #expect(ProfileMenuItemID.smartDataReset.iconTone == .red)
+        #expect(ProfileMenuItemID.version.iconTone == .cyan)
+        #expect(ProfileMenuItemID.privacy.iconTone == .orange)
+        #expect(ProfileMenuItemID.terms.iconTone == .blue)
+        #expect(ProfileMenuItemID.contactUs.iconTone == .teal)
+    }
 }

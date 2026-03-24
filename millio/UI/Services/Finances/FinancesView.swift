@@ -31,6 +31,7 @@ struct FinancesView: View {
     @State private var showFinanceSettingsSheet: Bool = false
     @State private var showBalanceAuditSheetFromSettings: Bool = false
     @State private var showMassTickerImportSheet: Bool = false
+    @State private var showQuickNavigationPopover: Bool = false
     private let currentRoute: AppRoute = .finances
     
     var body: some View {
@@ -79,19 +80,22 @@ struct FinancesView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "finances.common.back"))
                 
-                Menu {
-                    ForEach(MiniAppNavigation.destinations(excluding: currentRoute)) { destination in
-                        Button {
-                            MiniAppNavigation.navigate(to: destination.route, from: currentRoute, router: router)
-                        } label: {
-                            Label(destination.title, systemImage: destination.systemImage)
-                        }
-                    }
+                Button {
+                    showQuickNavigationPopover.toggle()
                 } label: {
                     toolbarButtonLabel(systemName: "square.grid.2x2", weight: .regular)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "finances.common.quick_navigation"))
+                .popover(isPresented: $showQuickNavigationPopover, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
+                    MiniAppQuickNavigationPopover(
+                        destinations: MiniAppNavigation.destinations(excluding: currentRoute)
+                    ) { destination in
+                        showQuickNavigationPopover = false
+                        MiniAppNavigation.navigate(to: destination.route, from: currentRoute, router: router)
+                    }
+                    .presentationCompactAdaptation(.popover)
+                }
             }
 
             if viewModel != nil {

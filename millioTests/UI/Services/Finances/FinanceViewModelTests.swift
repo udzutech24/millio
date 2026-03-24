@@ -1396,6 +1396,67 @@ struct FinanceViewModelTests {
         #expect(abs(settlementInvestment.amount - 1_500) < 0.01)
     }
 
+    @Test("executeInvestmentOrder использует инжектированное now для дат сделки")
+    func testExecuteInvestmentOrderUsesInjectedNowForTransactionDates() throws {
+        let modelContext = try createTestModelContext()
+        let fixedNow = Calendar.current.date(from: DateComponents(year: 2026, month: 3, day: 18, hour: 16, minute: 30)) ?? Date()
+
+        let group = FinanceGroup(name: "Акции", colorHex: "#3366FF")
+        modelContext.insert(group)
+
+        let usdCard = Card(
+            name: "USD Card",
+            cardNumber: "1111",
+            bank: .other,
+            cardType: .debit,
+            currency: "USD",
+            balance: 5_000
+        )
+        modelContext.insert(usdCard)
+
+        let investment = Investment(
+            name: "SPY",
+            investmentType: .positive,
+            category: .stocks,
+            amount: 1_700,
+            currency: "USD"
+        )
+        investment.marketQuantity = 17
+        investment.lastKnownUnitPrice = 100
+        investment.averagePurchaseUnitPrice = 100
+        investment.totalPurchaseCost = 1_700
+        modelContext.insert(investment)
+
+        let account = FinanceAccount(accountType: .investment, accountID: investment.investmentUniqueID)
+        account.group = group
+        modelContext.insert(account)
+        try modelContext.save()
+
+        let viewModel = FinanceViewModel(
+            modelContext: modelContext,
+            currencyService: MockCurrencyRateService(),
+            now: { fixedNow },
+            skipInitialLoad: true
+        )
+        viewModel.handle(.loadGroups)
+        viewModel.handle(.loadAccounts)
+
+        viewModel.handle(.executeInvestmentOrder(
+            account: account,
+            side: .buy,
+            quantity: 1,
+            unitPrice: 100,
+            funding: InvestmentOrderFunding(
+                settlementAccountKind: .card(cardID: usdCard.cardUniqueID),
+                shouldAffectCardBalance: true
+            )
+        ))
+
+        let transactions = try modelContext.fetch(FetchDescriptor<CashflowTransaction>())
+        #expect(transactions.count == 2)
+        #expect(transactions.allSatisfy { Calendar.current.compare($0.transactionDate, to: fixedNow, toGranularity: .second) == .orderedSame })
+    }
+
     @Test("Обновление акций обновляет котировки только категории stocks")
     func testRefreshStockPricesUpdatesOnlyStocks() async throws {
         let modelContext = try createTestModelContext()

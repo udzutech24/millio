@@ -120,6 +120,15 @@ enum AppColors {
 
     static let profileValueAccent = Color(hex: "6AA8FF")
     static let toggleOnGreen = Color(hex: "34C759")
+    static let profileIconBlue = Color(hex: "5DA8FF")
+    static let profileIconCyan = Color(hex: "64D2FF")
+    static let profileIconGreen = Color(hex: "30D158")
+    static let profileIconOrange = Color(hex: "FF9F0A")
+    static let profileIconPurple = Color(hex: "BF5AF2")
+    static let profileIconPink = Color(hex: "FF6482")
+    static let profileIconRed = Color(hex: "FF6B6B")
+    static let profileIconGray = Color(hex: "A1A1AA")
+    static let profileIconTeal = Color(hex: "40C8B7")
 
     static let profileCardBackgroundGradient = [
         Color(hex: "712382").opacity(0.1),

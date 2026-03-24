@@ -301,6 +301,8 @@ final class FinanceViewModel: ViewModelProtocol {
     let currencyService: CurrencyRateServiceProtocol
     /// Клиент рыночных данных (внедряется для тестируемости)
     let marketDataClient: MarketDataClientProtocol
+    /// Логические "сейчас" для детерминированных тестов и согласованных временных меток.
+    private let nowProvider: () -> Date
 
     private let defaults = UserDefaults.standard
     private var ungroupedGroupName: String { FinanceSystemGroups.ungroupedName }
@@ -346,11 +348,13 @@ final class FinanceViewModel: ViewModelProtocol {
         modelContext: ModelContext,
         currencyService: CurrencyRateServiceProtocol? = nil,
         marketDataClient: MarketDataClientProtocol = MarketAPIClient.shared,
+        now: @escaping () -> Date = Date.init,
         skipInitialLoad: Bool = false
     ) {
         self.modelContext = modelContext
         self.currencyService = currencyService ?? CurrencyRateService.shared
         self.marketDataClient = marketDataClient
+        self.nowProvider = now
         state.displayCurrency = SettingsManager.shared.primaryCurrencyCode
         state.secondaryDisplayCurrency = defaultSecondaryDisplayCurrency(primary: state.displayCurrency)
         state.isSavingsGoalEnabled = storedSavingsGoalEnabled
@@ -1715,6 +1719,7 @@ final class FinanceViewModel: ViewModelProtocol {
         }
 
         let oldAmount = investment.amount
+        let transactionDate = nowProvider()
         if !investment.hasInitialAmount {
             investment.initialAmount = investment.amount
             investment.hasInitialAmount = true
@@ -1732,7 +1737,7 @@ final class FinanceViewModel: ViewModelProtocol {
         guard didApply else {
             return
         }
-        investment.updatedAt = Date()
+        investment.updatedAt = transactionDate
 
         if let settlementAccountForOrder {
             switch settlementAccountForOrder {
@@ -1747,7 +1752,7 @@ final class FinanceViewModel: ViewModelProtocol {
                 case .sell:
                     card.balance += totalAmount
                 }
-                card.updatedAt = Date()
+                card.updatedAt = transactionDate
             case .investment(let settlementInvestment):
                 if !settlementInvestment.hasInitialAmount {
                     settlementInvestment.initialAmount = settlementInvestment.amount
@@ -1759,7 +1764,7 @@ final class FinanceViewModel: ViewModelProtocol {
                 case .sell:
                     settlementInvestment.amount += totalAmount
                 }
-                settlementInvestment.updatedAt = Date()
+                settlementInvestment.updatedAt = transactionDate
             }
         }
 
@@ -1776,7 +1781,7 @@ final class FinanceViewModel: ViewModelProtocol {
                     transactionType: .balanceAdjustment,
                     amount: difference,
                     currency: investment.currency,
-                    transactionDate: Date(),
+                    transactionDate: transactionDate,
                     investmentID: investment.investmentUniqueID,
                     note: note,
                     operationGroupID: operationGroupID
@@ -1806,7 +1811,7 @@ final class FinanceViewModel: ViewModelProtocol {
                     transactionType: side == .buy ? .expense : .income,
                     amount: totalAmount,
                     currency: investmentCurrency,
-                    transactionDate: Date(),
+                    transactionDate: transactionDate,
                     cardID: settlementCardID,
                     // Keep the order leg attached to the traded investment so
                     // audit/history queries can reconstruct the full operation.

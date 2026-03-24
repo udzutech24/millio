@@ -59,6 +59,7 @@ final class FinanceLifecycleHarness {
             modelContext: modelContext,
             currencyService: nil,
             marketDataClient: marketDataClient,
+            now: { now },
             skipInitialLoad: false
         )
         self.cashflowViewModel = CashflowViewModel(modelContext: modelContext, now: { now })
@@ -407,6 +408,7 @@ final class FinanceLifecycleHarness {
             modelContext: modelContext,
             currencyService: nil,
             marketDataClient: FinanceLifecycleMarketDataClient(),
+            now: { self.now },
             skipInitialLoad: false
         )
         let cashflowViewModel = CashflowViewModel(modelContext: modelContext, now: { self.now })

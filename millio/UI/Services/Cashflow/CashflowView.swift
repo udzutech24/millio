@@ -158,6 +158,7 @@ private struct CashflowContentView: View {
     @State private var showExpandedChart: Bool = false
     @State private var showExpandedPeriodSelector: Bool = false
     @State private var fullScreenChartVisiblePeriods: Int = 4
+    @State private var showQuickNavigationPopover: Bool = false
     @State private var chartReferenceAnchorDate: Date = Date()
     @State private var selectedChartPeriodStart: Date? = nil
     @State private var isExpandedHintHidden: Bool = HintsVisibilityPrefs(key: "cashflow.expanded_chart.bottom_hint").isHidden
@@ -707,14 +708,8 @@ private struct CashflowContentView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text("cashflow.accessibility.back"))
 
-                Menu {
-                    ForEach(MiniAppNavigation.destinations(excluding: currentRoute)) { destination in
-                        Button {
-                            MiniAppNavigation.navigate(to: destination.route, from: currentRoute, router: router)
-                        } label: {
-                            Label(destination.title, systemImage: destination.systemImage)
-                        }
-                    }
+                Button {
+                    showQuickNavigationPopover.toggle()
                 } label: {
                     Image(systemName: "square.grid.2x2")
                         .font(.system(size: iconSize - 2, weight: .regular))
@@ -723,6 +718,15 @@ private struct CashflowContentView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text("cashflow.accessibility.quick_navigation"))
+                .popover(isPresented: $showQuickNavigationPopover, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
+                    MiniAppQuickNavigationPopover(
+                        destinations: MiniAppNavigation.destinations(excluding: currentRoute)
+                    ) { destination in
+                        showQuickNavigationPopover = false
+                        MiniAppNavigation.navigate(to: destination.route, from: currentRoute, router: router)
+                    }
+                    .presentationCompactAdaptation(.popover)
+                }
             }
             .padding(.horizontal, 10)
             .frame(height: 40)

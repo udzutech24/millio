@@ -7,6 +7,18 @@
 
 import SwiftUI
 
+enum ProfileMenuIconTone: String {
+    case blue
+    case cyan
+    case green
+    case orange
+    case purple
+    case pink
+    case red
+    case gray
+    case teal
+}
+
 enum ProfileMenuSectionID: String, Identifiable {
     case general
     case settings
@@ -81,6 +93,84 @@ enum ProfileMenuItemID: String, Identifiable {
     case showOnboarding
 
     var id: String { rawValue }
+
+    var iconSystemName: String {
+        switch self {
+        case .language:
+            return "globe"
+        case .primaryCurrency:
+            return "dollarsign"
+        case .backup:
+            return "arrow.clockwise.icloud"
+        case .security:
+            return "lock.shield"
+        case .dailyReminders:
+            return "bell"
+        case .quickSetup:
+            return "sparkles.rectangle.stack"
+        case .launchSplash:
+            return "sparkles.tv"
+        case .faq:
+            return "questionmark.circle"
+        case .smartDataReset:
+            return "trash"
+        case .version:
+            return "info.circle"
+        case .privacy:
+            return "hand.raised"
+        case .terms:
+            return "doc.text"
+        case .contactUs:
+            return "message"
+        case .premiumAccess:
+            return "crown"
+        case .trialDisabled:
+            return "pause.circle"
+        case .premiumDiagnostics:
+            return "flag"
+        case .showOnboarding:
+            return "sparkles"
+        }
+    }
+
+    var iconTone: ProfileMenuIconTone {
+        switch self {
+        case .language:
+            return .blue
+        case .primaryCurrency:
+            return .green
+        case .backup:
+            return .cyan
+        case .security:
+            return .green
+        case .dailyReminders:
+            return .orange
+        case .quickSetup:
+            return .purple
+        case .launchSplash:
+            return .pink
+        case .faq:
+            return .blue
+        case .smartDataReset:
+            return .red
+        case .version:
+            return .cyan
+        case .privacy:
+            return .orange
+        case .terms:
+            return .blue
+        case .contactUs:
+            return .teal
+        case .premiumAccess:
+            return .orange
+        case .trialDisabled:
+            return .pink
+        case .premiumDiagnostics:
+            return .purple
+        case .showOnboarding:
+            return .cyan
+        }
+    }
 }
 
 struct ProfileMenuSection: Identifiable, Equatable {

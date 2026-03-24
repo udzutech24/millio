@@ -721,13 +721,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Millio refreshes one automatic backup every 24 hours while backup stays enabled"
+            "value" : "One automatic backup is refreshed every 24 hours"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Millio обновляет одну автоматическую резервную копию каждые 24 часа, пока резервное копирование включено"
+            "value" : "Одна автокопия обновляется каждые 24 часа"
           }
         }
       }
@@ -738,13 +738,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Creates one auto backup every 24 hours and replaces the previous auto copy"
+            "value" : "Keeps one auto backup per day and replaces the previous one"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Создаёт одну автокопию каждые 24 часа и заменяет предыдущую автоматическую версию"
+            "value" : "Хранит одну автокопию в сутки и заменяет предыдущую"
           }
         }
       }
@@ -755,13 +755,30 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Automatic daily backup"
+            "value" : "Daily auto backup"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Автоматическая резервная копия"
+            "value" : "Автокопия раз в сутки"
+          }
+        }
+      }
+    },
+    "backup.actions.create.primary.first" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create first backup"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Создать первую копию"
           }
         }
       }
@@ -779,6 +796,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Сохранить новую версию"
+          }
+        }
+      }
+    },
+    "backup.actions.create.subtitle.requirements" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn on backup and iCloud first"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сначала включите резервное копирование и iCloud"
           }
         }
       }
@@ -829,7 +863,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Экспорт выбранной"
+            "value" : "Экспорт выбранной версии"
           }
         }
       }
@@ -868,19 +902,53 @@
         }
       }
     },
+    "backup.actions.restore.primary.select" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a backup to restore"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выберите копию для восстановления"
+          }
+        }
+      }
+    },
+    "backup.actions.restore.subtitle.select_first" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select a version in the list below first"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сначала выберите версию в списке ниже"
+          }
+        }
+      }
+    },
     "backup.actions.title" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Do this next"
+            "value" : "Backup actions"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Следующий шаг"
+            "value" : "Управление копиями"
           }
         }
       }
@@ -891,13 +959,47 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Last backup %@, Millio also refreshes backup automatically while you use the app"
+            "value" : "Last backup %@. One automatic backup is refreshed every 24 hours"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Последняя копия %@, Millio также обновляет резервную копию автоматически, пока вы пользуетесь приложением"
+            "value" : "Последняя копия %@. Одна автокопия обновляется каждые 24 часа"
+          }
+        }
+      }
+    },
+    "backup.dashboard.subtitle.need_icloud" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check iCloud sign-in and allow Millio to use it"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проверьте вход в iCloud и разрешите Millio использовать его"
+          }
+        }
+      }
+    },
+    "backup.dashboard.title.need_icloud" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for iCloud"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ожидание iCloud"
           }
         }
       }
@@ -919,6 +1021,193 @@
         }
       }
     },
+    "backup.dashboard.trust.detail.device" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quickest option, but not the safest choice for reinstall or a new device"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Самый быстрый вариант, но не лучший выбор для переустановки или нового устройства"
+          }
+        }
+      }
+    },
+    "backup.dashboard.trust.title.device" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Protection: this iPhone only"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Защита: только этот iPhone"
+          }
+        }
+      }
+    },
+    "backup.encryption.mode.device.risk" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "If you delete the app or move to another device, restore may fail"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Если удалить приложение или перейти на другое устройство, восстановление может не сработать"
+          }
+        }
+      }
+    },
+    "backup.encryption.mode.device.short" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Device"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Устройство"
+          }
+        }
+      }
+    },
+    "backup.encryption.mode.device.summary" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fastest setup. Restore is intended for this device only"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Самая быстрая настройка. Восстановление рассчитано только на это устройство"
+          }
+        }
+      }
+    },
+    "backup.encryption.mode.device.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This iPhone only"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Только этот iPhone"
+          }
+        }
+      }
+    },
+    "backup.encryption.mode.passphrase.risk" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep the passphrase somewhere safe. Millio cannot recover it"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сохраните кодовую фразу в надёжном месте. Millio не сможет её восстановить"
+          }
+        }
+      }
+    },
+    "backup.encryption.mode.passphrase.short" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Phrase"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Фраза"
+          }
+        }
+      }
+    },
+    "backup.encryption.mode.passphrase.summary" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Best for real backup. Use the same passphrase on a new device"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Лучший вариант для настоящей резервной копии. Используйте ту же кодовую фразу на новом устройстве"
+          }
+        }
+      }
+    },
+    "backup.encryption.mode.passphrase.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Passphrase"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Кодовая фраза"
+          }
+        }
+      }
+    },
+    "backup.hint.enable_icloud" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud access is required"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нужен доступ к iCloud"
+          }
+        }
+      }
+    },
     "backup.dashboard.trust.detail.passphrase" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -931,7 +1220,7 @@
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Рекомендуется, одна и та же кодовая фраза позволит восстановиться на другом устройстве"
+            "value" : "Рекомендуется: одна и та же кодовая фраза позволит восстановиться на другом устройстве"
           }
         }
       }
@@ -1068,6 +1357,57 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Лучший выбор для перехода на новое устройство"
+          }
+        }
+      }
+    },
+    "backup.protection.headline.device" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fastest, but limited to this iPhone"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Быстрее всего, но только для этого iPhone"
+          }
+        }
+      }
+    },
+    "backup.protection.recommended" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recommended"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Рекомендуется"
+          }
+        }
+      }
+    },
+    "backup.protection.summary.device" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Device-only protection is selected"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выбрана защита только для этого устройства"
           }
         }
       }

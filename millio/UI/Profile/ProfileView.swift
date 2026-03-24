@@ -291,6 +291,38 @@ struct ProfileView: View {
             .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(AppColors.textTertiary)
     }
+
+    private func iconColor(for item: ProfileMenuItemID) -> Color {
+        switch item.iconTone {
+        case .blue:
+            return AppColors.profileIconBlue
+        case .cyan:
+            return AppColors.profileIconCyan
+        case .green:
+            return AppColors.profileIconGreen
+        case .orange:
+            return AppColors.profileIconOrange
+        case .purple:
+            return AppColors.profileIconPurple
+        case .pink:
+            return AppColors.profileIconPink
+        case .red:
+            return AppColors.profileIconRed
+        case .gray:
+            return AppColors.profileIconGray
+        case .teal:
+            return AppColors.profileIconTeal
+        }
+    }
+
+    private func rowValueText(_ value: String, accent: Bool = false) -> some View {
+        Text(value)
+            .font(.system(size: 16, weight: accent ? .semibold : .regular))
+            .foregroundStyle(accent ? AppColors.profileValueAccent : AppColors.textTertiary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.74)
+            .allowsTightening(true)
+    }
     
     private var backupStatusText: String {
         let locale = appState.selectedLanguage.locale ?? Locale.current
@@ -392,9 +424,8 @@ struct ProfileView: View {
                     set: { appState.selectedLanguage = $0 }
                 ))
             } label: {
-                settingsRow(iconSystemName: "globe", title: "profile.language") {
-                    Text(appState.selectedLanguage.displayName)
-                        .foregroundStyle(AppColors.profileValueAccent)
+                settingsRow(item: .language, title: "profile.language") {
+                    rowValueText(appState.selectedLanguage.displayName, accent: true)
                     chevron
                 }
             }
@@ -408,9 +439,8 @@ struct ProfileView: View {
                     set: { appState.primaryCurrencyCode = $0 }
                 ))
             } label: {
-                settingsRow(iconSystemName: "dollarsign", title: "profile.currency") {
-                    Text(appState.primaryCurrencyCode)
-                        .foregroundStyle(AppColors.profileValueAccent)
+                settingsRow(item: .primaryCurrency, title: "profile.currency") {
+                    rowValueText(appState.primaryCurrencyCode, accent: true)
                     chevron
                 }
             }
@@ -421,9 +451,8 @@ struct ProfileView: View {
             NavigationLink {
                 BackupManagementView(router: router)
             } label: {
-                settingsRow(iconSystemName: "arrow.clockwise.icloud", title: "profile.backup") {
-                    Text(backupStatusText)
-                        .foregroundStyle(AppColors.textTertiary)
+                settingsRow(item: .backup, title: "profile.backup") {
+                    rowValueText(backupStatusText)
                     chevron
                 }
             }
@@ -434,9 +463,8 @@ struct ProfileView: View {
             NavigationLink {
                 AppSecuritySettingsView()
             } label: {
-                settingsRow(iconSystemName: "lock.shield", title: "profile.security") {
-                    Text(appLockStatusText)
-                        .foregroundStyle(AppColors.textTertiary)
+                settingsRow(item: .security, title: "profile.security") {
+                    rowValueText(appLockStatusText)
                     chevron
                 }
             }
@@ -447,7 +475,7 @@ struct ProfileView: View {
             NavigationLink {
                 DailyReminderSettingsView()
             } label: {
-                settingsRowText(iconSystemName: "bell", title: remindersRowTitle) {
+                settingsRowText(item: .dailyReminders, title: remindersRowTitle) {
                     chevron
                 }
             }
@@ -458,9 +486,8 @@ struct ProfileView: View {
             Button {
                 showQuickSetupSheet = true
             } label: {
-                settingsRow(iconSystemName: "sparkles.rectangle.stack", title: "profile.quick_setup") {
-                    Text(quickSetupStatusText)
-                        .foregroundStyle(AppColors.profileValueAccent)
+                settingsRow(item: .quickSetup, title: "profile.quick_setup") {
+                    rowValueText(quickSetupStatusText, accent: true)
                     chevron
                 }
             }
@@ -482,9 +509,13 @@ struct ProfileView: View {
                     }
                 }
             } label: {
-                settingsRow(iconSystemName: "sparkles.tv", title: "profile.launch_splash.title") {
-                    Text(appState.launchSplashDisplayMode.profileTitle(locale: appState.selectedLanguage.locale ?? Locale.current))
-                        .foregroundStyle(AppColors.profileValueAccent)
+                settingsRow(item: .launchSplash, title: "profile.launch_splash.title") {
+                    rowValueText(
+                        appState.launchSplashDisplayMode.profileTitle(
+                            locale: appState.selectedLanguage.locale ?? Locale.current
+                        ),
+                        accent: true
+                    )
                     chevron
                 }
             }
@@ -495,7 +526,7 @@ struct ProfileView: View {
             NavigationLink {
                 ProfileFAQView(selectedLanguage: appState.selectedLanguage)
             } label: {
-                settingsRow(iconSystemName: "questionmark.circle", title: "profile.faq.title") {
+                settingsRow(item: .faq, title: "profile.faq.title") {
                     chevron
                 }
             }
@@ -506,7 +537,7 @@ struct ProfileView: View {
             NavigationLink {
                 SmartDataResetView()
             } label: {
-                settingsRow(iconSystemName: "trash", title: "profile.smart_data_reset") {
+                settingsRow(item: .smartDataReset, title: "profile.smart_data_reset") {
                     chevron
                 }
             }
@@ -517,9 +548,8 @@ struct ProfileView: View {
             Button {
                 handleVersionTap()
             } label: {
-                settingsRow(iconSystemName: "info.circle", title: "profile.version") {
-                    Text(appVersion)
-                        .foregroundStyle(AppColors.textTertiary)
+                settingsRow(item: .version, title: "profile.version") {
+                    rowValueText(appVersion)
                 }
             }
             .buttonStyle(.plain)
@@ -527,7 +557,7 @@ struct ProfileView: View {
 
         case .privacy:
             Link(destination: legalLinks.privacyURL) {
-                legalSettingsRow(iconSystemName: "hand.raised", title: legalLinks.privacyTitle) {
+                legalSettingsRow(item: .privacy, title: legalLinks.privacyTitle) {
                     chevron
                 }
             }
@@ -536,7 +566,7 @@ struct ProfileView: View {
 
         case .terms:
             Link(destination: legalLinks.termsURL) {
-                legalSettingsRow(iconSystemName: "doc.text", title: legalLinks.termsTitle) {
+                legalSettingsRow(item: .terms, title: legalLinks.termsTitle) {
                     chevron
                 }
             }
@@ -547,7 +577,7 @@ struct ProfileView: View {
             Button {
                 showContactSheet = true
             } label: {
-                settingsRow(iconSystemName: "message", title: "profile.contact_us") {
+                settingsRow(item: .contactUs, title: "profile.contact_us") {
                     chevron
                 }
             }
@@ -570,7 +600,7 @@ struct ProfileView: View {
                     }
                 }
             )) {
-                settingsRow(iconSystemName: "crown", title: "profile.premium_access") { EmptyView() }
+                settingsRow(item: .premiumAccess, title: "profile.premium_access") { EmptyView() }
             }
             .tint(AppColors.toggleOnGreen)
             .accessibilityIdentifier("profile.debugPremiumToggle")
@@ -586,7 +616,7 @@ struct ProfileView: View {
                     }
                 }
             )) {
-                settingsRow(iconSystemName: "pause.circle", title: "profile.trial_disabled") { EmptyView() }
+                settingsRow(item: .trialDisabled, title: "profile.trial_disabled") { EmptyView() }
             }
             .tint(AppColors.toggleOnGreen)
             .accessibilityIdentifier("profile.trialDisabledToggle")
@@ -595,9 +625,8 @@ struct ProfileView: View {
             NavigationLink {
                 ProfilePremiumDiagnosticsView()
             } label: {
-                settingsRow(iconSystemName: "flag", title: premiumDiagnosticsTitleKey) {
-                    Text(premiumDiagnosticsSummary)
-                        .foregroundStyle(AppColors.profileValueAccent)
+                settingsRow(item: .premiumDiagnostics, title: premiumDiagnosticsTitleKey) {
+                    rowValueText(premiumDiagnosticsSummary, accent: true)
                     chevron
                 }
             }
@@ -609,7 +638,7 @@ struct ProfileView: View {
                 UserDefaults.standard.set(false, forKey: "hasCompletedOnboarding")
                 appState.lifecycle = .onboarding
             } label: {
-                settingsRow(iconSystemName: "sparkles", title: "profile.show_onboarding") {
+                settingsRow(item: .showOnboarding, title: "profile.show_onboarding") {
                     chevron
                 }
             }
@@ -691,79 +720,95 @@ struct ProfileView: View {
     }
     
     private func settingsRow<Trailing: View>(
-        iconSystemName: String,
+        item: ProfileMenuItemID,
         title: LocalizedStringKey,
         titleColor: Color = AppColors.textPrimary,
-        iconColor: Color = AppColors.textSecondary,
         @ViewBuilder trailing: () -> Trailing
     ) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: iconSystemName)
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: item.iconSystemName)
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(iconColor)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(iconColor(for: item))
                 .frame(width: 22, alignment: .leading)
             
             Text(title)
                 .font(.system(size: 16, weight: .regular))
                 .foregroundStyle(titleColor)
+                .multilineTextAlignment(.leading)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
             
             Spacer()
             
             HStack(spacing: 6) {
                 trailing()
             }
+            .fixedSize(horizontal: false, vertical: true)
         }
         .frame(minHeight: 32)
         .contentShape(Rectangle())
     }
 
     private func legalSettingsRow<Trailing: View>(
-        iconSystemName: String,
+        item: ProfileMenuItemID,
         title: String,
         @ViewBuilder trailing: () -> Trailing
     ) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: iconSystemName)
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: item.iconSystemName)
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(AppColors.textSecondary)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(iconColor(for: item))
                 .frame(width: 22, alignment: .leading)
 
             Text(title)
                 .font(.system(size: 16, weight: .regular))
                 .foregroundStyle(AppColors.textPrimary)
+                .multilineTextAlignment(.leading)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
 
             Spacer()
 
             HStack(spacing: 6) {
                 trailing()
             }
+            .fixedSize(horizontal: false, vertical: true)
         }
         .frame(minHeight: 32)
         .contentShape(Rectangle())
     }
 
     private func settingsRowText<Trailing: View>(
-        iconSystemName: String,
+        item: ProfileMenuItemID,
         title: String,
         titleColor: Color = AppColors.textPrimary,
-        iconColor: Color = AppColors.textSecondary,
         @ViewBuilder trailing: () -> Trailing
     ) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: iconSystemName)
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: item.iconSystemName)
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(iconColor)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(iconColor(for: item))
                 .frame(width: 22, alignment: .leading)
 
             Text(title)
                 .font(.system(size: 16, weight: .regular))
                 .foregroundStyle(titleColor)
+                .multilineTextAlignment(.leading)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
 
             Spacer()
 
             HStack(spacing: 6) {
                 trailing()
             }
+            .fixedSize(horizontal: false, vertical: true)
         }
         .frame(minHeight: 32)
         .contentShape(Rectangle())

@@ -25,6 +25,8 @@ struct BackupManagementView: View {
     @State private var isHydratingStoredPassphrase = false
     @State private var hydratedStoredPassphrase: String?
     @State private var encryptionMode: BackupEncryptionMode = .deviceKey
+    @State private var isAutoBackupOptionsExpanded = false
+    @State private var isActionsExpanded = false
     @State private var backupVersions: [BackupVersionInfo] = []
     @State private var deletingRecordName: String?
     @State private var isVersionsExpanded = false
@@ -438,13 +440,15 @@ struct BackupManagementView: View {
                             Text(dashboardContent.trustTitle)
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundStyle(AppColors.textPrimary)
-                            Text(protectionHeadline)
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(AppColors.brandPrimary)
-                            Text(dashboardContent.trustDetail)
-                                .font(.system(size: 12, weight: .regular))
-                                .foregroundStyle(AppColors.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                            if isProtectionExpanded || !isProtectionConfigured {
+                                Text(protectionHeadline)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(AppColors.brandPrimary)
+                                Text(dashboardContent.trustDetail)
+                                    .font(.system(size: 12, weight: .regular))
+                                    .foregroundStyle(AppColors.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
 
                         Spacer(minLength: 8)
@@ -632,68 +636,88 @@ struct BackupManagementView: View {
     private func actionsCard(availableWidth: CGFloat) -> some View {
         FinancesGlassCard(accentColor: AppColors.brandPrimary, cornerRadius: 22, contentPadding: EdgeInsets(top: 14, leading: 14, bottom: 14, trailing: 14)) {
             VStack(alignment: .leading, spacing: 10) {
-                Text(BackupL10n.tr("backup.actions.title", fallback: "Do this next"))
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(AppColors.textSecondary)
-
-                primaryActionButton(
-                    title: createButtonTitle,
-                    subtitle: createSliderSubtitle,
-                    icon: "arrow.clockwise.circle.fill",
-                    isEnabled: canCreateBackup || hasReachedPinnedVersionLimit
-                ) {
-                    Task { await createBackupNow() }
-                }
-
-                primaryActionButton(
-                    title: restoreButtonTitle,
-                    subtitle: restoreSliderSubtitle,
-                    icon: "arrow.down.circle.fill",
-                    isEnabled: canRestoreSelectedVersion
-                ) {
-                    showRestoreConfirmation = true
-                }
-
-                Text(BackupL10n.tr("backup.actions.auto_schedule.note", fallback: "Millio refreshes one automatic backup every 24 hours while backup stays enabled"))
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundStyle(AppColors.textSecondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                if BackupManagementLayout.shouldStackActionButtons(availableWidth: availableWidth) {
-                    VStack(spacing: 10) {
-                        exportActionButton
-                        importActionButton
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isActionsExpanded.toggle()
                     }
-                } else {
+                } label: {
                     HStack(spacing: 10) {
-                        exportActionButton
-                        importActionButton
+                        Text(BackupL10n.tr("backup.actions.title", fallback: "Backup actions"))
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(AppColors.textSecondary)
+
+                        Spacer()
+
+                        Image(systemName: isActionsExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AppColors.textTertiary)
                     }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
 
-                if let primaryActionHint {
-                    Text(primaryActionHint)
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(primaryActionHint == BackupL10n.tr("backup.hint.passphrase_mismatch", fallback: "Passphrases do not match") ? AppColors.error : AppColors.textSecondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-
-                if hasReachedPinnedVersionLimit, let oldestPinnedVersion {
-                    subtleCallout(
-                        title: BackupL10n.format(
-                            "backup.limit.reached.title",
-                            fallback: "Maximum of %lld manual versions reached",
-                            maxManualVersionCount
-                        ),
-                        text: BackupL10n.tr("backup.limit.reached.message", fallback: "Delete one manual version and try again")
-                    )
-
-                    compactActionButton(
-                        title: BackupL10n.tr("backup.limit.reached.action.delete_oldest", fallback: "Delete oldest version"),
-                        icon: "trash",
-                        isEnabled: deletingRecordName == nil && !isBusy
+                if isActionsExpanded {
+                    primaryActionButton(
+                        title: createButtonTitle,
+                        subtitle: createSliderSubtitle,
+                        icon: "arrow.clockwise.circle.fill",
+                        isEnabled: canCreateBackup || hasReachedPinnedVersionLimit
                     ) {
-                        Task { await deleteVersion(recordName: oldestPinnedVersion.recordName) }
+                        Task { await createBackupNow() }
+                    }
+
+                    primaryActionButton(
+                        title: restoreButtonTitle,
+                        subtitle: restoreSliderSubtitle,
+                        icon: "arrow.down.circle.fill",
+                        isEnabled: canRestoreSelectedVersion
+                    ) {
+                        showRestoreConfirmation = true
+                    }
+
+                    if appState.isAutoBackupEnabled {
+                        Text(BackupL10n.tr("backup.actions.auto_schedule.note", fallback: "One automatic backup is refreshed every 24 hours"))
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(AppColors.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    if BackupManagementLayout.shouldStackActionButtons(availableWidth: availableWidth) {
+                        VStack(spacing: 10) {
+                            exportActionButton
+                            importActionButton
+                        }
+                    } else {
+                        HStack(spacing: 10) {
+                            exportActionButton
+                            importActionButton
+                        }
+                    }
+
+                    if let primaryActionHint {
+                        Text(primaryActionHint)
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(primaryActionHint == BackupL10n.tr("backup.hint.passphrase_mismatch", fallback: "Passphrases do not match") ? AppColors.error : AppColors.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    if hasReachedPinnedVersionLimit, let oldestPinnedVersion {
+                        subtleCallout(
+                            title: BackupL10n.format(
+                                "backup.limit.reached.title",
+                                fallback: "Maximum of %lld manual versions reached",
+                                maxManualVersionCount
+                            ),
+                            text: BackupL10n.tr("backup.limit.reached.message", fallback: "Delete one manual version and try again")
+                        )
+
+                        compactActionButton(
+                            title: BackupL10n.tr("backup.limit.reached.action.delete_oldest", fallback: "Delete oldest version"),
+                            icon: "trash",
+                            isEnabled: deletingRecordName == nil && !isBusy
+                        ) {
+                            Task { await deleteVersion(recordName: oldestPinnedVersion.recordName) }
+                        }
                     }
                 }
             }
@@ -841,6 +865,7 @@ struct BackupManagementView: View {
             return
         }
         guard hasReachedPinnedVersionLimit == false else {
+            isActionsExpanded = true
             isVersionsExpanded = true
             backupError = .backupFailed(
                 BackupL10n.format(
@@ -1074,18 +1099,37 @@ struct BackupManagementView: View {
     private var autoBackupToggleRow: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(BackupL10n.tr("backup.auto_toggle.title", fallback: "Automatic daily backup"))
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(AppColors.textPrimary)
-                Text(
-                    BackupL10n.tr(
-                        "backup.auto_toggle.subtitle",
-                        fallback: "Creates one auto backup every 24 hours and replaces the previous auto copy"
+                HStack(spacing: 8) {
+                    Text(BackupL10n.tr("backup.auto_toggle.title", fallback: "Daily auto backup"))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppColors.textPrimary)
+
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            isAutoBackupOptionsExpanded.toggle()
+                        }
+                    } label: {
+                        Image(systemName: isAutoBackupOptionsExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(AppColors.textTertiary)
+                            .frame(width: 22, height: 22)
+                            .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isBusy)
+                }
+
+                if isAutoBackupOptionsExpanded {
+                    Text(
+                        BackupL10n.tr(
+                            "backup.auto_toggle.subtitle",
+                            fallback: "Keeps one auto backup per day and replaces the previous one"
+                        )
                     )
-                )
-                .font(.system(size: 11, weight: .regular))
-                .foregroundStyle(AppColors.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundStyle(AppColors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             Spacer(minLength: 8)

@@ -29,4 +29,16 @@ struct MiniAppNavigationTests {
         #expect(cashback?.titleKey == MainLocalization.serviceCashback)
         #expect(cashback?.title == MainLocalization.text(MainLocalization.serviceCashback))
     }
+
+    @Test("Мини-приложения используют стабильные акцентные цвета в quick navigation")
+    func destinationsExposeStableIconTints() {
+        let destinations = MiniAppNavigation.destinations(excluding: .profile)
+
+        let byRoute = Dictionary(uniqueKeysWithValues: destinations.map { ($0.route, $0) })
+
+        #expect(byRoute[.finances]?.iconTint == (AppColors.financesGradient.first ?? AppColors.brandPrimary))
+        #expect(byRoute[.courses]?.iconTint == (AppColors.coursesGradient.first ?? AppColors.profileIconGreen))
+        #expect(byRoute[.cashback]?.iconTint == AppColors.profileIconOrange)
+        #expect(byRoute[.cashflow]?.iconTint == (AppColors.cashflowGradient.first ?? AppColors.profileIconPurple))
+    }
 }

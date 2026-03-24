@@ -24,6 +24,21 @@ struct MiniAppDestination: Equatable, Identifiable {
             return systemImage
         }
     }
+
+    var iconTint: Color {
+        switch route {
+        case .finances:
+            return AppColors.financesGradient.first ?? AppColors.brandPrimary
+        case .courses:
+            return AppColors.coursesGradient.first ?? AppColors.profileIconGreen
+        case .cashback:
+            return AppColors.profileIconOrange
+        case .cashflow:
+            return AppColors.cashflowGradient.first ?? AppColors.profileIconPurple
+        default:
+            return AppColors.textSecondary
+        }
+    }
 }
 
 enum MiniAppNavigation {
