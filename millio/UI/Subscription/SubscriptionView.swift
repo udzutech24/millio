@@ -35,21 +35,24 @@ struct SubscriptionView: View {
     }
 
     var body: some View {
-        ZStack {
-            subscriptionBackground
+        GeometryReader { geometry in
+            let metrics = SubscriptionLayoutPolicy.metrics(containerSize: geometry.size)
 
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 22) {
-                    header
-                    plansCard
-                    benefitsSection
-                    controlsSection
+            ZStack {
+                subscriptionBackground
+
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: metrics.sectionSpacing) {
+                        topSection(metrics: metrics)
+                        benefitsSection(metrics: metrics)
+                        controlsSection(metrics: metrics)
+                    }
+                    .padding(.horizontal, SubscriptionLayoutPolicy.horizontalPadding)
+                    .padding(.top, SubscriptionLayoutPolicy.topContentPadding)
+                    .padding(.bottom, SubscriptionLayoutPolicy.scrollContentBottomPadding(isSubscribed: appState.isPro))
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
-                .padding(.bottom, appState.isPro ? 24 : 112)
+                .scrollBounceBehavior(.basedOnSize)
             }
-            .scrollBounceBehavior(.basedOnSize)
         }
         .safeAreaInset(edge: .top) {
             topBar
@@ -66,7 +69,7 @@ struct SubscriptionView: View {
                     .ignoresSafeArea()
                 )
         }
-        .safeAreaInset(edge: .bottom) {
+        .safeAreaInset(edge: .bottom, spacing: BottomPinnedLayoutPolicy.insetSpacing) {
             if !appState.isPro {
                 subscribeButton
             }
@@ -82,6 +85,14 @@ struct SubscriptionView: View {
             await loadProducts()
         }
         .environment(\.locale, localizationLocale)
+    }
+
+    private func topSection(metrics: SubscriptionLayoutPolicy.Metrics) -> some View {
+        VStack(spacing: metrics.topSectionSpacing) {
+            header(metrics: metrics)
+            plansCard(metrics: metrics)
+        }
+        .frame(minHeight: metrics.topSectionHeight, alignment: .top)
     }
 
     private var subscriptionBackground: some View {
@@ -148,28 +159,39 @@ struct SubscriptionView: View {
         .buttonStyle(.plain)
     }
 
-    private var header: some View {
-        VStack(spacing: 18) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 34, style: .continuous)
-                    .fill(Color.white.opacity(0.08))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 34, style: .continuous)
-                            .stroke(Color.white.opacity(0.14), lineWidth: 1)
+    private func header(metrics: SubscriptionLayoutPolicy.Metrics) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: metrics.heroCornerRadius, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.11),
+                            Color.white.opacity(0.05)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
                     )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: metrics.heroCornerRadius, style: .continuous)
+                        .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                )
 
-                VStack(spacing: 18) {
-                    heroTitleBlock
+            VStack(spacing: metrics.heroContentSpacing) {
+                Spacer(minLength: 0)
+                heroTitleBlock(metrics: metrics)
+                if !SubscriptionContent.heroHighlights.isEmpty {
                     heroHighlightsRow
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 22)
             }
+            .padding(.horizontal, metrics.heroHorizontalPadding)
+            .padding(.vertical, metrics.heroVerticalPadding)
         }
+        .frame(height: metrics.heroHeight)
     }
 
-    private var heroTitleBlock: some View {
-        VStack(spacing: 16) {
+    private func heroTitleBlock(metrics: SubscriptionLayoutPolicy.Metrics) -> some View {
+        VStack(spacing: metrics.heroTitleSpacing) {
             ZStack {
                 Circle()
                     .fill(
@@ -180,34 +202,34 @@ struct SubscriptionView: View {
                             endRadius: 58
                         )
                     )
-                    .frame(width: 120, height: 120)
+                    .frame(width: metrics.crownGlowSize, height: metrics.crownGlowSize)
 
                 Image("crown")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 110, height: 90)
+                    .frame(width: metrics.crownWidth, height: metrics.crownHeight)
             }
-            .padding(.top, 8)
+            .padding(.top, metrics.heroArtTopPadding)
 
-            VStack(spacing: 10) {
+            VStack(spacing: metrics.heroTextSpacing) {
                 Text("subscription.hero.eyebrow")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: metrics.eyebrowFontSize, weight: .semibold))
                     .foregroundStyle(Color.white.opacity(0.6))
                     .textCase(.uppercase)
                     .tracking(1.4)
 
                 Text("subscription.hero.title")
-                    .font(.system(size: 42, weight: .black, design: .rounded))
+                    .font(.system(size: metrics.heroTitleFontSize, weight: .black, design: .rounded))
                     .foregroundStyle(AppColors.textPrimary)
                     .multilineTextAlignment(.center)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
 
                 Text("subscription.hero.subtitle")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.system(size: metrics.heroSubtitleFontSize, weight: .medium))
                     .foregroundStyle(Color.white.opacity(0.7))
                     .multilineTextAlignment(.center)
-                    .lineLimit(3)
+                    .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -273,32 +295,33 @@ struct SubscriptionView: View {
         .background(heroStatBackground)
     }
 
-    private var plansCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 6) {
+    private func plansCard(metrics: SubscriptionLayoutPolicy.Metrics) -> some View {
+        VStack(alignment: .leading, spacing: metrics.planSectionSpacing) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text("subscription.plans.title")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: metrics.planEyebrowFontSize, weight: .semibold))
                     .foregroundStyle(Color.white.opacity(0.54))
                     .textCase(.uppercase)
 
                 Text("subscription.plans.subtitle")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: metrics.planSubtitleFontSize, weight: .medium))
                     .foregroundStyle(Color.white.opacity(0.7))
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            VStack(spacing: 12) {
+            VStack(spacing: metrics.planRowSpacing) {
                 ForEach(SubscriptionPlan.allCases) { plan in
-                    planRow(for: plan)
+                    planRow(for: plan, metrics: metrics)
                 }
             }
 
             Text("subscription.plans.footnote")
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: metrics.planFootnoteFontSize, weight: .medium))
                 .foregroundStyle(Color.white.opacity(0.54))
                 .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 2)
         }
-        .padding(18)
+        .padding(metrics.plansCardPadding)
         .background(
             RoundedRectangle(cornerRadius: 32, style: .continuous)
                 .fill(.ultraThinMaterial.opacity(0.5))
@@ -309,32 +332,32 @@ struct SubscriptionView: View {
         )
     }
 
-    private func planRow(for plan: SubscriptionPlan) -> some View {
+    private func planRow(for plan: SubscriptionPlan, metrics: SubscriptionLayoutPolicy.Metrics) -> some View {
         Button {
             selectedPlan = plan
         } label: {
             ViewThatFits(in: .horizontal) {
-                HStack(spacing: 14) {
-                    planSelectionIndicator(for: plan)
-                    planMainInfo(for: plan)
+                HStack(spacing: metrics.planRowInnerSpacing) {
+                    planSelectionIndicator(for: plan, metrics: metrics)
+                    planMainInfo(for: plan, metrics: metrics)
                     Spacer(minLength: 8)
-                    planPriceInfo(for: plan)
+                    planPriceInfo(for: plan, metrics: metrics)
                 }
 
-                VStack(alignment: .leading, spacing: 14) {
-                    HStack(alignment: .top, spacing: 14) {
-                        planSelectionIndicator(for: plan)
-                        planMainInfo(for: plan)
+                VStack(alignment: .leading, spacing: metrics.planRowInnerSpacing) {
+                    HStack(alignment: .top, spacing: metrics.planRowInnerSpacing) {
+                        planSelectionIndicator(for: plan, metrics: metrics)
+                        planMainInfo(for: plan, metrics: metrics)
                     }
 
                     HStack {
                         Spacer(minLength: 0)
-                        planPriceInfo(for: plan)
+                        planPriceInfo(for: plan, metrics: metrics)
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 18)
+            .padding(.horizontal, metrics.planRowHorizontalPadding)
+            .padding(.vertical, metrics.planRowVerticalPadding)
             .background(
                 RoundedRectangle(cornerRadius: 26, style: .continuous)
                     .fill(selectedPlan == plan ? Color.white.opacity(0.12) : Color.white.opacity(0.04))
@@ -350,28 +373,28 @@ struct SubscriptionView: View {
         .buttonStyle(.plain)
     }
 
-    private func planSelectionIndicator(for plan: SubscriptionPlan) -> some View {
+    private func planSelectionIndicator(for plan: SubscriptionPlan, metrics: SubscriptionLayoutPolicy.Metrics) -> some View {
         ZStack {
             Circle()
                 .stroke(Color.white.opacity(0.35), lineWidth: 2)
-                .frame(width: 34, height: 34)
+                .frame(width: metrics.planIndicatorSize, height: metrics.planIndicatorSize)
 
             if selectedPlan == plan {
                 Circle()
                     .fill(Color(hex: "50E07C"))
-                    .frame(width: 34, height: 34)
+                    .frame(width: metrics.planIndicatorSize, height: metrics.planIndicatorSize)
 
                 Image(systemName: "checkmark")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: metrics.planCheckmarkFontSize, weight: .bold))
                     .foregroundStyle(.white)
             }
         }
     }
 
-    private func planMainInfo(for plan: SubscriptionPlan) -> some View {
+    private func planMainInfo(for plan: SubscriptionPlan, metrics: SubscriptionLayoutPolicy.Metrics) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(plan.titleKey)
-                .font(.system(size: 21, weight: .bold))
+                .font(.system(size: metrics.planTitleFontSize, weight: .bold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
@@ -406,33 +429,32 @@ struct SubscriptionView: View {
         }
     }
 
-    private func planPriceInfo(for plan: SubscriptionPlan) -> some View {
+    private func planPriceInfo(for plan: SubscriptionPlan, metrics: SubscriptionLayoutPolicy.Metrics) -> some View {
         VStack(alignment: .trailing, spacing: 4) {
             planPriceLabel(for: plan)
-                .font(.system(size: 22, weight: .bold))
+                .font(.system(size: metrics.planPriceFontSize, weight: .bold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
 
             Text(plan.periodLabelKey)
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: metrics.planPeriodFontSize, weight: .medium))
                 .foregroundStyle(Color.white.opacity(0.7))
-
         }
         .fixedSize(horizontal: false, vertical: true)
     }
 
-    private var benefitsSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 6) {
+    private func benefitsSection(metrics: SubscriptionLayoutPolicy.Metrics) -> some View {
+        VStack(alignment: .leading, spacing: metrics.benefitsSectionSpacing) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text("subscription.features.title")
-                    .font(.system(size: 30, weight: .bold))
+                    .font(.system(size: metrics.benefitsTitleFontSize, weight: .bold))
                     .foregroundStyle(.white)
             }
 
             VStack(spacing: 0) {
                 ForEach(Array(SubscriptionContent.benefits.enumerated()), id: \.element.id) { index, benefit in
-                    benefitRow(benefit)
+                    benefitRow(benefit, metrics: metrics)
 
                     if index < SubscriptionContent.benefits.count - 1 {
                         Divider()
@@ -441,8 +463,8 @@ struct SubscriptionView: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, metrics.benefitsCardHorizontalPadding)
+            .padding(.vertical, metrics.benefitsCardVerticalPadding)
             .background(
                 RoundedRectangle(cornerRadius: 32, style: .continuous)
                     .fill(.ultraThinMaterial.opacity(0.5))
@@ -454,8 +476,8 @@ struct SubscriptionView: View {
         }
     }
 
-    private func benefitRow(_ benefit: SubscriptionBenefitDescriptor) -> some View {
-        HStack(alignment: .top, spacing: 14) {
+    private func benefitRow(_ benefit: SubscriptionBenefitDescriptor, metrics: SubscriptionLayoutPolicy.Metrics) -> some View {
+        HStack(alignment: .top, spacing: metrics.benefitRowSpacing) {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(
                     LinearGradient(
@@ -464,16 +486,16 @@ struct SubscriptionView: View {
                         endPoint: .bottomTrailing
                     )
                 )
-                .frame(width: 44, height: 44)
+                .frame(width: metrics.benefitIconSize, height: metrics.benefitIconSize)
                 .overlay {
                     Image(systemName: benefit.icon)
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.system(size: metrics.benefitIconFontSize, weight: .bold))
                         .foregroundStyle(.white)
                 }
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(verbatim: AppLocalization.string(benefit.titleKey, locale: localizationLocale))
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: metrics.benefitTitleFontSize, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(2)
                     .minimumScaleFactor(0.82)
@@ -481,20 +503,20 @@ struct SubscriptionView: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 Text(verbatim: AppLocalization.string(benefit.detailKey, locale: localizationLocale))
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: metrics.benefitDetailFontSize, weight: .medium))
                     .foregroundStyle(Color.white.opacity(0.62))
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.top, 6)
+            .padding(.top, 4)
 
             Spacer()
         }
-        .padding(.vertical, 14)
+        .padding(.vertical, metrics.benefitRowVerticalPadding)
     }
 
-    private var controlsSection: some View {
-        VStack(spacing: 14) {
+    private func controlsSection(metrics: SubscriptionLayoutPolicy.Metrics) -> some View {
+        VStack(spacing: metrics.controlsSectionSpacing) {
             if appState.isPro {
                 subscriptionStatusSection
             }
@@ -503,12 +525,12 @@ struct SubscriptionView: View {
                 trialButton
             }
 
-            legalSection
+            legalSection(metrics: metrics)
         }
     }
 
-    private var legalSection: some View {
-        VStack(spacing: 14) {
+    private func legalSection(metrics: SubscriptionLayoutPolicy.Metrics) -> some View {
+        VStack(spacing: metrics.legalSectionSpacing) {
             WrappingHStack(alignment: .center, horizontalSpacing: 14, verticalSpacing: 10) {
                 if appState.isPro {
                     Link(String(localized: "subscription.link.manage", locale: localizationLocale), destination: manageSubscriptionURL)
@@ -516,13 +538,13 @@ struct SubscriptionView: View {
                 Link(legalLinks.privacyTitle, destination: legalLinks.privacyURL)
                 Link(legalLinks.termsTitle, destination: legalLinks.termsURL)
             }
-            .font(.system(size: 13, weight: .medium))
+            .font(.system(size: metrics.legalLinkFontSize, weight: .medium))
             .foregroundStyle(Color.white.opacity(0.7))
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
 
             Text("subscription.legal.note")
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: metrics.legalNoteFontSize, weight: .medium))
                 .foregroundStyle(Color.white.opacity(0.52))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -533,7 +555,7 @@ struct SubscriptionView: View {
                 }
             } label: {
                 Text("subscription.button.restore")
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: metrics.restoreButtonFontSize, weight: .medium))
                     .foregroundStyle(AppColors.textSecondary)
             }
             .buttonStyle(.plain)
@@ -549,18 +571,18 @@ struct SubscriptionView: View {
         } label: {
             VStack(spacing: 4) {
                 ctaTitle
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                     .allowsTightening(true)
 
                 Text(ctaSubtitleKey)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Color.white.opacity(0.78))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 18)
+            .padding(.vertical, 15)
             .background(
                 LinearGradient(
                     colors: [Color(hex: "2A8CFF"), Color(hex: "4B76FF"), Color(hex: "7D72FF")],
@@ -573,20 +595,20 @@ struct SubscriptionView: View {
                     .stroke(Color.white.opacity(0.22), lineWidth: 1)
             )
             .clipShape(Capsule())
-            .shadow(color: Color(hex: "2A8CFF").opacity(0.24), radius: 20, x: 0, y: 12)
+            .shadow(color: Color(hex: "2A8CFF").opacity(0.18), radius: 16, x: 0, y: 10)
         }
         .buttonStyle(.plain)
         .disabled(isLoading)
         .opacity(isLoading ? 0.55 : 1)
-        .padding(.horizontal, 20)
-        .padding(.top, 10)
-        .padding(.bottom, 8)
+        .padding(.horizontal, SubscriptionLayoutPolicy.ctaHorizontalPadding)
+        .padding(.top, SubscriptionLayoutPolicy.ctaTopPadding)
+        .padding(.bottom, SubscriptionLayoutPolicy.ctaBottomPadding)
         .background(
             ZStack {
                 Rectangle()
                     .fill(.ultraThinMaterial.opacity(0.82))
                 LinearGradient(
-                    colors: [Color.black.opacity(0.0), Color.black.opacity(0.5)],
+                    colors: [Color.black.opacity(0.0), Color.black.opacity(0.36)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -673,10 +695,11 @@ struct SubscriptionView: View {
             return nil
         case .yearly:
             if let savings = yearlySavingsPercentage {
-                return String(
-                    format: String(localized: "subscription.plan.yearly.savings_format", locale: localizationLocale),
-                    savings
+                let format = AppLocalization.string(
+                    "subscription.plan.yearly.savings_format",
+                    locale: localizationLocale
                 )
+                return String(format: format, locale: localizationLocale, savings)
             }
             return String(localized: "subscription.plan.yearly.savings", locale: localizationLocale)
         }
@@ -853,26 +876,62 @@ private struct PremiumStarsBackground: View {
     }()
 
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                RadialGradient(
-                    colors: [Color(hex: "4D35B3").opacity(0.22), .clear],
-                    center: .top,
-                    startRadius: 10,
-                    endRadius: geometry.size.height * 0.65
-                )
+        TimelineView(.animation) { timeline in
+            GeometryReader { geometry in
+                let t = timeline.date.timeIntervalSinceReferenceDate
 
-                ForEach(points) { point in
-                    Circle()
-                        .fill(Color(hex: "A76CFF").opacity(point.opacity))
-                        .frame(width: point.size, height: point.size)
-                        .position(
-                            x: point.x * geometry.size.width,
-                            y: point.y * geometry.size.height
+                Canvas { context, size in
+                    let topGlow = CGRect(x: -size.width * 0.2, y: -size.height * 0.18, width: size.width * 1.4, height: size.height * 0.72)
+                    context.fill(
+                        Path(ellipseIn: topGlow),
+                        with: .radialGradient(
+                            Gradient(colors: [Color(hex: "4D35B3").opacity(0.26), .clear]),
+                            center: CGPoint(x: size.width * 0.5, y: size.height * 0.08),
+                            startRadius: 10,
+                            endRadius: size.height * 0.5
                         )
+                    )
+
+                    let secondaryGlowX = size.width * (0.72 + 0.035 * sin(t * 0.18))
+                    let secondaryGlowY = size.height * (0.18 + 0.02 * cos(t * 0.22))
+                    let secondaryGlow = CGRect(
+                        x: secondaryGlowX - size.width * 0.22,
+                        y: secondaryGlowY - size.height * 0.12,
+                        width: size.width * 0.44,
+                        height: size.height * 0.24
+                    )
+                    context.fill(
+                        Path(ellipseIn: secondaryGlow),
+                        with: .radialGradient(
+                            Gradient(colors: [Color(hex: "6A4CFF").opacity(0.1), .clear]),
+                            center: CGPoint(x: secondaryGlow.midX, y: secondaryGlow.midY),
+                            startRadius: 4,
+                            endRadius: size.width * 0.22
+                        )
+                    )
+
+                    for (index, point) in points.enumerated() {
+                        let layer = index % 3
+                        let speed = 0.42 + Double(layer) * 0.22
+                        let driftX = sin((t * speed) + point.y * 8) * (2.0 + Double(layer) * 1.5)
+                        let driftY = cos((t * (speed * 0.7)) + point.x * 7) * (1.2 + Double(layer) * 1.0)
+                        let twinkle = 0.58 + 0.42 * sin((t * (1.2 + Double(layer) * 0.35)) + Double(index) * 0.31)
+                        let pulse = layer == 2 ? 1.0 + 0.28 * sin((t * 0.9) + Double(index) * 0.17) : 1.0
+                        let sizeValue = point.size * pulse
+                        let rect = CGRect(
+                            x: point.x * size.width + driftX,
+                            y: point.y * size.height + driftY,
+                            width: sizeValue,
+                            height: sizeValue
+                        )
+                        context.fill(
+                            Path(ellipseIn: rect),
+                            with: .color(Color(hex: "A76CFF").opacity(point.opacity * twinkle))
+                        )
+                    }
                 }
+                .ignoresSafeArea()
             }
-            .ignoresSafeArea()
         }
     }
 }

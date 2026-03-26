@@ -277,13 +277,32 @@ struct ProfileView: View {
     
     // MARK: - PRO Subscription Block
 
+    @ViewBuilder
     private var premiumSubscriptionBlock: some View {
-        ProfilePremiumCard(
-            titleKey: "profile.premium.title"
-        ) {
-            router.push(.subscription)
+        switch ProfilePremiumDisplayMode.resolve(for: appState.subscriptionAccessSource) {
+        case .promotional:
+            ProfilePremiumCard(
+                titleKey: "profile.premium.title"
+            ) {
+                router.push(.subscription)
+            }
+            .padding(.horizontal, ProfileLayout.contentHorizontalInset)
+
+        case .compact(let status):
+            card {
+                Button {
+                    router.push(.subscription)
+                } label: {
+                    settingsRow(item: .premiumAccess, title: "profile.premium.title") {
+                        rowValueText(compactPremiumStatusText(for: status))
+                        chevron
+                    }
+                }
+                .padding(.vertical, 12)
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("profile.premiumCompactLink")
+            }
         }
-        .padding(.horizontal, ProfileLayout.contentHorizontalInset)
     }
     
     private var chevron: some View {
@@ -328,7 +347,10 @@ struct ProfileView: View {
         let locale = appState.selectedLanguage.locale ?? Locale.current
         if appState.isBackupEnabled {
             if let backupDate = appState.lastBackupDate {
-                return backupDate.formatted(date: .abbreviated, time: .shortened)
+                return ProfileBackupStatusFormatter.trailingDateText(
+                    for: backupDate,
+                    locale: locale
+                )
             }
             return AppLocalization.string("profile.status.enabled", locale: locale)
         }
@@ -362,18 +384,11 @@ struct ProfileView: View {
         return identifier.hasPrefix("ru")
     }
 
-    private var premiumStatusLine: String {
-        let locale = appState.selectedLanguage.locale ?? Locale.current
-        switch appState.subscriptionAccessSource {
-        case .free:
-            return AppLocalization.string("profile.premium.status.free", locale: locale)
-        case .trial:
-            return AppLocalization.string("profile.premium.status.trial", locale: locale)
-        case .subscription:
-            return AppLocalization.string("profile.premium.status.subscription", locale: locale)
-        case .debug:
-            return AppLocalization.string("profile.premium.status.debug", locale: locale)
-        }
+    private func compactPremiumStatusText(for status: ProfilePremiumCompactStatus) -> String {
+        AppLocalization.string(
+            status.localizationKey,
+            locale: appState.selectedLanguage.locale ?? Locale.current
+        )
     }
 
     private var premiumDiagnosticsSummary: String {

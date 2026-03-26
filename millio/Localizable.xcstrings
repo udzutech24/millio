@@ -17481,6 +17481,22 @@
         }
       }
     },
+    "monetization.cashflow.bulk_expense_screenshot.pro_only" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expense import from bank screenshots is available in PRO."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Импорт расходов из банковских скриншотов доступен в PRO."
+          }
+        }
+      }
+    },
     "monetization.finance.stocks.pro_only" : {
       "localizations" : {
         "en" : {
@@ -21386,6 +21402,40 @@
         }
       }
     },
+    "subscription.features.cashflow_expense_screenshot" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expense screenshots in Cashflow"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скриншоты расходов в Кэшфлоу"
+          }
+        }
+      }
+    },
+    "subscription.features.cashflow_expense_screenshot.detail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import a month's expenses from bank screenshots in minutes and save them to Cashflow without adding each transaction one by one"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "За несколько минут импортируйте расходы за месяц по банковским скриншотам и сохраните их в Кэшфлоу без добавления каждой операции по отдельности"
+          }
+        }
+      }
+    },
     "subscription.features.finance_markets" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -21443,13 +21493,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Add more than 15 cards, credits and investments"
+            "value" : "Add more than 10 cards, credits and investments"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Добавляйте больше 15 карт, кредитов и инвестиций"
+            "value" : "Добавляйте больше 10 карт, кредитов и инвестиций"
           }
         }
       }
@@ -22055,13 +22105,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Crypto, smart cashback and charts in one calm, focused plan"
+            "value" : "Smart cashback, charts and more room in one calm, focused plan"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Криптовалюта, умный кешбэк и графики в одном спокойном и цельном плане"
+            "value" : "Умный кешбэк, графики и больше пространства в одном спокойном и цельном плане"
           }
         }
       }

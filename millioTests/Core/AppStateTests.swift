@@ -605,27 +605,48 @@ struct AppLifecycleUseCaseTests {
         #expect(splashPrefs.lastLaunchSplashShownAt == now)
     }
 
-    @Test("EntitlementPolicy ограничивает тикеры в Free и снимает лимит в PRO")
+    @Test("EntitlementPolicy временно снимает лимит тикеров во время beta")
     func testTrackedTickerLimitPolicy() {
+        #expect(EntitlementPolicy.isTrackedTickerLimitProOnly == false)
         #expect(EntitlementPolicy.canAddTrackedTicker(isPro: false, currentTrackedTickers: 0) == true)
         #expect(EntitlementPolicy.canAddTrackedTicker(isPro: false, currentTrackedTickers: EntitlementPolicy.freeTrackedTickerLimit - 1) == true)
-        #expect(EntitlementPolicy.canAddTrackedTicker(isPro: false, currentTrackedTickers: EntitlementPolicy.freeTrackedTickerLimit) == false)
+        #expect(EntitlementPolicy.canAddTrackedTicker(isPro: false, currentTrackedTickers: EntitlementPolicy.freeTrackedTickerLimit) == true)
         #expect(EntitlementPolicy.canAddTrackedTicker(isPro: true, currentTrackedTickers: 999) == true)
     }
 
-    @Test("EntitlementPolicy ограничивает карты кешбэка в Free и снимает лимит в PRO")
+    @Test("EntitlementPolicy временно открывает все карты кешбэка во время beta")
     func testCashbackCardLimitPolicy() {
+        #expect(EntitlementPolicy.isCashbackCardsProOnly == false)
         #expect(EntitlementPolicy.canUseCashbackCard(isPro: false, cardIndex: 0) == true)
         #expect(EntitlementPolicy.canUseCashbackCard(isPro: false, cardIndex: EntitlementPolicy.freeCashbackCardLimit - 1) == true)
-        #expect(EntitlementPolicy.canUseCashbackCard(isPro: false, cardIndex: EntitlementPolicy.freeCashbackCardLimit) == false)
+        #expect(EntitlementPolicy.canUseCashbackCard(isPro: false, cardIndex: EntitlementPolicy.freeCashbackCardLimit) == true)
         #expect(EntitlementPolicy.canUseCashbackCard(isPro: true, cardIndex: 100) == true)
     }
 
-    @Test("EntitlementPolicy закрывает crypto-конвертацию в Free и открывает в PRO")
+    @Test("EntitlementPolicy открывает crypto-конвертацию для всех во время beta")
     func testConverterCryptoPolicy() {
-        #expect(EntitlementPolicy.isConverterCryptoProOnly == true)
-        #expect(EntitlementPolicy.canUseConverterCrypto(isPro: false) == false)
+        #expect(EntitlementPolicy.isConverterCryptoProOnly == false)
+        #expect(EntitlementPolicy.canUseConverterCrypto(isPro: false) == true)
         #expect(EntitlementPolicy.canUseConverterCrypto(isPro: true) == true)
+    }
+
+    @Test("EntitlementPolicy открывает акции и крипту в финансах для всех во время beta")
+    func testFinanceMarketAccessPolicy() {
+        #expect(EntitlementPolicy.isFinanceStocksProOnly == false)
+        #expect(EntitlementPolicy.isFinanceCryptoProOnly == false)
+        #expect(EntitlementPolicy.canUseFinanceStocks(isPro: false) == true)
+        #expect(EntitlementPolicy.canUseFinanceStocks(isPro: true) == true)
+        #expect(EntitlementPolicy.canUseFinanceCrypto(isPro: false) == true)
+        #expect(EntitlementPolicy.canUseFinanceCrypto(isPro: true) == true)
+    }
+
+    @Test("EntitlementPolicy ограничивает продукты в финансах до 10 в Free и снимает лимит в PRO")
+    func testFinanceProductLimitPolicy() {
+        #expect(EntitlementPolicy.isFinanceProductsProOnly == true)
+        #expect(EntitlementPolicy.canAddFinanceProduct(isPro: false, currentProducts: 0) == true)
+        #expect(EntitlementPolicy.canAddFinanceProduct(isPro: false, currentProducts: EntitlementPolicy.freeFinanceProductLimit - 1) == true)
+        #expect(EntitlementPolicy.canAddFinanceProduct(isPro: false, currentProducts: EntitlementPolicy.freeFinanceProductLimit) == false)
+        #expect(EntitlementPolicy.canAddFinanceProduct(isPro: true, currentProducts: 999) == true)
     }
 
     @Test("EntitlementPolicy закрывает импорт кешбэка со скриншота в Free и открывает в PRO")
@@ -633,6 +654,13 @@ struct AppLifecycleUseCaseTests {
         #expect(EntitlementPolicy.isCashbackScreenshotImportProOnly == true)
         #expect(EntitlementPolicy.canImportCashbackFromScreenshot(isPro: false) == false)
         #expect(EntitlementPolicy.canImportCashbackFromScreenshot(isPro: true) == true)
+    }
+
+    @Test("EntitlementPolicy закрывает импорт расходов со скриншота в Free и открывает в PRO")
+    func testCashflowExpenseScreenshotImportPolicy() {
+        #expect(EntitlementPolicy.isCashflowExpenseScreenshotImportProOnly == true)
+        #expect(EntitlementPolicy.canImportCashflowExpensesFromScreenshot(isPro: false) == false)
+        #expect(EntitlementPolicy.canImportCashflowExpensesFromScreenshot(isPro: true) == true)
     }
 }
 

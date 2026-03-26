@@ -333,12 +333,19 @@ final class FinanceLifecycleHarness {
     func deleteTransaction(_ transaction: CashflowTransaction, recalculate: Bool) async throws {
         let normalizedOperationGroupID = transaction.operationGroupID?
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        let transactionExistsInStoreBeforeDelete = {
+            let descriptor = FetchDescriptor<CashflowTransaction>()
+            let storedTransactions = (try? self.modelContext.fetch(descriptor)) ?? []
+            return storedTransactions.contains {
+                $0.persistentModelID == transaction.persistentModelID
+            }
+        }()
         cashflowViewModel.handle(.deleteTransaction(transaction, recalculate: recalculate))
         try await waitUntil(timeoutNanoseconds: 5_000_000_000) {
             let descriptor = FetchDescriptor<CashflowTransaction>()
             let storedTransactions = (try? self.modelContext.fetch(descriptor)) ?? []
 
-            let originalRemovedFromStore = !storedTransactions.contains {
+            let originalRemovedFromStore = transactionExistsInStoreBeforeDelete == false || !storedTransactions.contains {
                 $0.persistentModelID == transaction.persistentModelID
             }
             let linkedRemovedFromStore = normalizedOperationGroupID.map { operationGroupID in
@@ -346,21 +353,14 @@ final class FinanceLifecycleHarness {
                     $0.operationGroupID?.trimmingCharacters(in: .whitespacesAndNewlines) == operationGroupID
                 }
             } ?? true
+            let deleteFailed = self.cashflowViewModel.state.deleteBalanceUpdateErrorMessage != nil
 
-            let stateTransactions = self.cashflowViewModel.state.transactions
-            let originalRemovedFromState = !stateTransactions.contains {
-                $0.persistentModelID == transaction.persistentModelID
-            }
-            let linkedRemovedFromState = normalizedOperationGroupID.map { operationGroupID in
-                !stateTransactions.contains {
-                    $0.operationGroupID?.trimmingCharacters(in: .whitespacesAndNewlines) == operationGroupID
-                }
-            } ?? true
+            return deleteFailed || (originalRemovedFromStore && linkedRemovedFromStore)
+        }
 
-            return originalRemovedFromStore
-                && linkedRemovedFromStore
-                && originalRemovedFromState
-                && linkedRemovedFromState
+        if let deleteError = cashflowViewModel.state.deleteBalanceUpdateErrorMessage {
+            Issue.record("Delete transaction failed: \(deleteError)")
+            #expect(Bool(false), "Delete transaction failed: \(deleteError)")
         }
 
         // Grouped deletes publish several follow-up updates. Force a deterministic

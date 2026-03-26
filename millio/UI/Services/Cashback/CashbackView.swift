@@ -950,14 +950,16 @@ private struct CashbackEditorView: View {
     }
 
     private var availableCardsForPicker: [Card] {
-        if appState.isPro {
+        if !EntitlementPolicy.isCashbackCardsProOnly || appState.isPro {
             return viewModel.state.availableCards
         }
         return limitedFreeCards
     }
 
     private var cashbackCardsAreLimited: Bool {
-        !appState.isPro && viewModel.state.availableCards.count > EntitlementPolicy.freeCashbackCardLimit
+        EntitlementPolicy.isCashbackCardsProOnly
+            && !appState.isPro
+            && viewModel.state.availableCards.count > EntitlementPolicy.freeCashbackCardLimit
     }
 
     private var isScreenshotImportLocked: Bool {

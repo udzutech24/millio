@@ -36,4 +36,19 @@ struct LanguageAndSubscriptionLocalizationTests {
         #expect(AppLocalization.string("subscription.plan.per_month_suffix", locale: Locale(identifier: "ru")) == "/мес")
     }
 
+    @Test("Subscription yearly savings badge is localized for English and Russian locales")
+    func testSubscriptionYearlySavingsBadgeLocalization() {
+        let englishFormat = AppLocalization.string(
+            "subscription.plan.yearly.savings_format",
+            locale: Locale(identifier: "en")
+        )
+        let russianFormat = AppLocalization.string(
+            "subscription.plan.yearly.savings_format",
+            locale: Locale(identifier: "ru")
+        )
+
+        #expect(String(format: englishFormat, locale: Locale(identifier: "en"), 30) == "Save 30%")
+        #expect(String(format: russianFormat, locale: Locale(identifier: "ru"), 30) == "Экономия 30%")
+    }
+
 }

@@ -8,9 +8,9 @@ struct ProfileLegalLinksTests {
         let links = ProfileLegalLinks.make(for: .russian, fallbackLocale: Locale(identifier: "en_US"))
 
         #expect(links.privacyURL.absoluteString == "https://millio.udzutech.com/?lang=ru&page=privacy")
-        #expect(links.termsURL.absoluteString == "https://millio.udzutech.com/?lang=ru&page=terms")
+        #expect(links.termsURL.absoluteString == "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")
         #expect(links.privacyTitle == "Политика конфиденциальности")
-        #expect(links.termsTitle == "Пользовательское соглашение")
+        #expect(links.termsTitle == "Условия использования (EULA)")
     }
 
     @Test("Profile legal links use English URLs and titles for english language")
@@ -18,9 +18,9 @@ struct ProfileLegalLinksTests {
         let links = ProfileLegalLinks.make(for: .english, fallbackLocale: Locale(identifier: "ru_RU"))
 
         #expect(links.privacyURL.absoluteString == "https://millio.udzutech.com/?lang=en&page=privacy")
-        #expect(links.termsURL.absoluteString == "https://millio.udzutech.com/?lang=en&page=terms")
+        #expect(links.termsURL.absoluteString == "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")
         #expect(links.privacyTitle == "Privacy Policy")
-        #expect(links.termsTitle == "Terms of Use")
+        #expect(links.termsTitle == "Terms of Use (EULA)")
     }
 
     @Test("Profile legal links use locale fallback for system language")
@@ -29,8 +29,8 @@ struct ProfileLegalLinksTests {
         let englishSystemLinks = ProfileLegalLinks.make(for: .system, fallbackLocale: Locale(identifier: "en_US"))
 
         #expect(russianSystemLinks.privacyURL.absoluteString == "https://millio.udzutech.com/?lang=ru&page=privacy")
-        #expect(russianSystemLinks.termsURL.absoluteString == "https://millio.udzutech.com/?lang=ru&page=terms")
+        #expect(russianSystemLinks.termsURL.absoluteString == "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")
         #expect(englishSystemLinks.privacyURL.absoluteString == "https://millio.udzutech.com/?lang=en&page=privacy")
-        #expect(englishSystemLinks.termsURL.absoluteString == "https://millio.udzutech.com/?lang=en&page=terms")
+        #expect(englishSystemLinks.termsURL.absoluteString == "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")
     }
 }

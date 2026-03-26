@@ -939,7 +939,8 @@ struct FinanceAddAccountView: View {
         }
         if selectedAccountType == .investment,
            selectedInvestmentCategory.isMarketTickerCategory,
-           canUseMarketCategory(selectedInvestmentCategory) {
+           canUseMarketCategory(selectedInvestmentCategory),
+           EntitlementPolicy.hasTrackedTickerLimit(isPro: appState.isPro) {
             let remaining = max(0, EntitlementPolicy.freeTrackedTickerLimit - currentTrackedTickerCount)
             if !appState.isPro {
                 hints.append(

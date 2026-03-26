@@ -587,12 +587,12 @@ final class QuickSetupViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.productUnitPriceFractionDigits, AmountInputFormatter.defaultFractionDigits)
     }
 
-    func testFreeQuickSetupHidesCryptoProductType() {
+    func testFreeQuickSetupShowsCryptoProductTypeDuringBeta() {
         let appState = AppState()
         appState.subscriptionAccessSource = .free
         let viewModel = QuickSetupViewModel(appState: appState, defaults: isolatedDefaults)
 
-        XCTAssertFalse(viewModel.availableProductTypes.contains(.crypto))
+        XCTAssertTrue(viewModel.availableProductTypes.contains(.crypto))
         XCTAssertTrue(viewModel.availableProductTypes.contains(.ticker))
     }
 
@@ -604,7 +604,7 @@ final class QuickSetupViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.availableProductTypes.contains(.crypto))
     }
 
-    func testFreeQuickSetupAllowsOnlyOneTickerDraft() {
+    func testFreeQuickSetupAllowsMultipleTickerDraftsDuringBeta() {
         let appState = AppState()
         appState.subscriptionAccessSource = .free
         let systemContext = QuickSetupSystemContext(
@@ -647,8 +647,9 @@ final class QuickSetupViewModelTests: XCTestCase {
         viewModel.productQuantityInput = "1"
         viewModel.productPurchasePriceInput = "200"
 
-        XCTAssertFalse(viewModel.addDraftProduct())
-        XCTAssertEqual(viewModel.lastAddDraftError, "В быстрой настройке без PRO доступна 1 акция")
+        XCTAssertTrue(viewModel.addDraftProduct())
+        XCTAssertEqual(viewModel.products.count, 2)
+        XCTAssertNil(viewModel.lastAddDraftError)
     }
 
     func testNonRussianSystemSanitizesStoredRublePrimaryAndFavorites() {

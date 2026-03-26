@@ -278,7 +278,7 @@ final class QuickSetupApplierTests: XCTestCase {
         XCTAssertEqual(crypto.lastKnownUnitPrice, 420_000)
     }
 
-    func testApplyFreeQuickSetupRejectsSecondTicker() throws {
+    func testApplyFreeQuickSetupAllowsSecondTickerDuringBeta() throws {
         let container = try makeContainer()
         let context = container.mainContext
         let appState = AppState()
@@ -330,12 +330,10 @@ final class QuickSetupApplierTests: XCTestCase {
             backupPreference: .localOnly
         )
 
-        XCTAssertThrowsError(try applier.apply(selection)) { error in
-            XCTAssertEqual(error.localizedDescription, "В быстрой настройке без PRO доступна 1 акция")
-        }
+        XCTAssertNoThrow(try applier.apply(selection))
     }
 
-    func testApplyFreeQuickSetupRejectsCrypto() throws {
+    func testApplyFreeQuickSetupAcceptsCryptoDuringBeta() throws {
         let container = try makeContainer()
         let context = container.mainContext
         let appState = AppState()
@@ -370,9 +368,7 @@ final class QuickSetupApplierTests: XCTestCase {
             backupPreference: .localOnly
         )
 
-        XCTAssertThrowsError(try applier.apply(selection)) { error in
-            XCTAssertEqual(error.localizedDescription, "Криптовалюта доступна в PRO")
-        }
+        XCTAssertNoThrow(try applier.apply(selection))
     }
 
     func testApplyExpenseCategoriesPersistsVisibilityForExpandedSystemCategories() throws {

@@ -1,3 +1,4 @@
+import CoreGraphics
 import XCTest
 import SwiftUI
 import SwiftData

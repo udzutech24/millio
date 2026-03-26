@@ -86,10 +86,13 @@ struct BudgetSetupSheet: View {
                         footerHint
                     }
                     .padding(20)
-                    .padding(.bottom, 120)
+                    .padding(
+                        .bottom,
+                        BottomPinnedLayoutPolicy.scrollContentBottomPaddingForSafeAreaInset()
+                    )
                 }
             }
-            .safeAreaInset(edge: .bottom) {
+            .safeAreaInset(edge: .bottom, spacing: BottomPinnedLayoutPolicy.insetSpacing) {
                 bottomActions
                     .padding(.horizontal, 16)
                     .padding(.top, 12)

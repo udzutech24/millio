@@ -7,6 +7,10 @@
 
 import SwiftUI
 
+private enum RestoreTimeoutError: Error {
+    case timedOut
+}
+
 struct RestoreView: View {
     @Bindable var appState: AppState
     @Bindable var router: AppRouter
@@ -367,25 +371,25 @@ struct RestoreView: View {
     }
 
     private func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async -> T) async -> T? {
-        await withTaskGroup(of: T?.self) { group in
-            group.addTask {
-                await operation()
-            }
-
-            group.addTask {
-                try? await Task.sleep(for: .seconds(seconds))
-                return nil
-            }
-
-            var result: T?
-            for await value in group {
-                if let value {
-                    result = value
-                    break
+        do {
+            return try await withThrowingTaskGroup(of: T.self, returning: T?.self) { group in
+                group.addTask {
+                    await operation()
                 }
+
+                group.addTask {
+                    try await Task.sleep(for: .seconds(max(0, seconds)))
+                    throw RestoreTimeoutError.timedOut
+                }
+
+                let result = try await group.next()
+                group.cancelAll()
+                return result
             }
-            group.cancelAll()
-            return result
+        } catch is RestoreTimeoutError {
+            return nil
+        } catch {
+            return nil
         }
     }
 

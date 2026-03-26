@@ -76,6 +76,19 @@ struct CashflowActionButtonsLayout {
     }
 }
 
+enum CashflowExpandedChartLayoutPolicy {
+    static let controlsOverlayBottomPadding: CGFloat = 10
+    static let controlsOnlyOverlayHeight: CGFloat = 86
+    static let controlsWithHintOverlayHeight: CGFloat = 150
+
+    static func scrollContentBottomPadding(isHintHidden: Bool) -> CGFloat {
+        BottomPinnedLayoutPolicy.scrollContentBottomPaddingForOverlay(
+            overlayHeight: isHintHidden ? controlsOnlyOverlayHeight : controlsWithHintOverlayHeight,
+            overlayBottomPadding: controlsOverlayBottomPadding
+        )
+    }
+}
+
 struct CashflowView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
@@ -974,7 +987,12 @@ private struct CashflowContentView: View {
                         cashflowFullScreenChart
                     }
                     .padding(16)
-                    .padding(.bottom, isExpandedHintHidden ? 112 : 176)
+                    .padding(
+                        .bottom,
+                        CashflowExpandedChartLayoutPolicy.scrollContentBottomPadding(
+                            isHintHidden: isExpandedHintHidden
+                        )
+                    )
                 }
                 .safeAreaInset(edge: .bottom, alignment: .center, spacing: 0) {
                     VStack(spacing: 10) {
@@ -996,7 +1014,7 @@ private struct CashflowContentView: View {
                             )
                     )
                     .padding(.horizontal, 12)
-                    .padding(.bottom, 10)
+                    .padding(.bottom, CashflowExpandedChartLayoutPolicy.controlsOverlayBottomPadding)
                 }
             }
             .navigationTitle("cashflow.chart.title")

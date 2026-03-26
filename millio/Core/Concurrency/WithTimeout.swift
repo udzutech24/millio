@@ -1,42 +1,32 @@
 import Foundation
 
-private final class TimeoutResultBox<T>: @unchecked Sendable {
+private final class TimeoutContinuationBox<T>: @unchecked Sendable {
     private let lock = NSLock()
-    private var result: T?
-    private var didFinish = false
+    private var hasResumed = false
 
-    func store(_ value: T) {
+    func resume(_ continuation: CheckedContinuation<T?, Never>, with value: T?) {
         lock.lock()
         defer { lock.unlock() }
-        guard !didFinish else { return }
-        result = value
-        didFinish = true
-    }
-
-    func completedResult() -> T? {
-        lock.lock()
-        defer { lock.unlock() }
-        guard didFinish else { return nil }
-        return result
+        guard !hasResumed else { return }
+        hasResumed = true
+        continuation.resume(returning: value)
     }
 }
 
 func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async -> T) async -> T? {
-    let resultBox = TimeoutResultBox<T>()
-    return await withTaskGroup(of: T?.self, returning: T?.self) { group in
-        group.addTask {
+    let timeoutSeconds = max(0, seconds)
+    let box = TimeoutContinuationBox<T>()
+
+    return await withCheckedContinuation { continuation in
+        let operationTask = Task {
             let value = await operation()
-            resultBox.store(value)
-            return value
+            box.resume(continuation, with: value)
         }
 
-        group.addTask {
-            try? await Task.sleep(for: .seconds(max(0, seconds)))
-            return resultBox.completedResult()
+        Task {
+            try? await Task.sleep(for: .seconds(timeoutSeconds))
+            operationTask.cancel()
+            box.resume(continuation, with: nil)
         }
-
-        let value = await group.next() ?? nil
-        group.cancelAll()
-        return value
     }
 }

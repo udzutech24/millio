@@ -17,39 +17,6 @@ enum EntitlementDiagnostics {
 
         return [
             EntitlementDiagnosticItem(
-                id: "converter.crypto",
-                title: isRussian ? "Криптовалюта в конвертере" : "Crypto in converter",
-                location: isRussian ? "Курсы -> выбор валюты и конвертер" : "Courses -> currency picker and converter",
-                freeBehavior: isRussian ? "Доступны только фиатные валюты." : "Only fiat currencies are available.",
-                premiumBehavior: isRussian ? "Криптовалюты разблокированы." : "Crypto currencies are unlocked.",
-                isPremiumActive: EntitlementPolicy.canUseConverterCrypto(isPro: appState.isPro),
-                currentState: EntitlementPolicy.canUseConverterCrypto(isPro: appState.isPro)
-                    ? (isRussian ? "Открыто" : "Unlocked")
-                    : (isRussian ? "Закрыто на Free" : "Locked for Free")
-            ),
-            EntitlementDiagnosticItem(
-                id: "finances.market_assets",
-                title: isRussian ? "Акции и криптовалюта в финансах" : "Stocks & crypto in Finances",
-                location: isRussian ? "Финансы -> добавление инвест-счёта и редактор инвестиций" : "Finances -> add investment account and investment editor",
-                freeBehavior: isRussian ? "Недоступны без PRO." : "Locked without PRO.",
-                premiumBehavior: isRussian ? "Полный доступ к рынкам." : "Full market access.",
-                isPremiumActive: EntitlementPolicy.canUseFinanceStocks(isPro: appState.isPro) && EntitlementPolicy.canUseFinanceCrypto(isPro: appState.isPro),
-                currentState: (EntitlementPolicy.canUseFinanceStocks(isPro: appState.isPro) && EntitlementPolicy.canUseFinanceCrypto(isPro: appState.isPro))
-                    ? (isRussian ? "Открыто" : "Unlocked")
-                    : (isRussian ? "Закрыто на Free" : "Locked for Free")
-            ),
-            EntitlementDiagnosticItem(
-                id: "finances.tracked_tickers",
-                title: isRussian ? "Лимит тикеров акций и криптовалюты" : "Tracked stock & crypto tickers",
-                location: isRussian ? "Финансы -> добавление рыночных активов и Quick Setup" : "Finances -> market assets and Quick Setup",
-                freeBehavior: isRussian ? "До \(EntitlementPolicy.freeTrackedTickerLimit) тикеров." : "Up to \(EntitlementPolicy.freeTrackedTickerLimit) tracked tickers.",
-                premiumBehavior: isRussian ? "Безлимит тикеров." : "Unlimited tracked tickers.",
-                isPremiumActive: appState.isPro,
-                currentState: appState.isPro
-                    ? (isRussian ? "Без лимита" : "Unlimited")
-                    : (isRussian ? "Лимит \(EntitlementPolicy.freeTrackedTickerLimit)" : "Limit \(EntitlementPolicy.freeTrackedTickerLimit)")
-            ),
-            EntitlementDiagnosticItem(
                 id: "finances.products",
                 title: isRussian ? "Лимит продуктов" : "Products limit",
                 location: isRussian ? "Финансы -> добавление продуктов" : "Finances -> add products",
@@ -83,15 +50,15 @@ enum EntitlementDiagnostics {
                     : (isRussian ? "Закрыто на Free" : "Locked for Free")
             ),
             EntitlementDiagnosticItem(
-                id: "cashback.cards",
-                title: isRussian ? "Карты кешбэка" : "Cashback cards",
-                location: isRussian ? "Кешбэк -> выбор карты и доступ к сохранённым картам" : "Cashback -> card picker and saved card access",
-                freeBehavior: isRussian ? "Доступны только первые \(EntitlementPolicy.freeCashbackCardLimit) карты." : "Only first \(EntitlementPolicy.freeCashbackCardLimit) cards are available.",
-                premiumBehavior: isRussian ? "Доступны все карты." : "All cards are available.",
-                isPremiumActive: appState.isPro,
-                currentState: appState.isPro
-                    ? (isRussian ? "Все карты видны" : "All cards visible")
-                    : (isRussian ? "Только первые \(EntitlementPolicy.freeCashbackCardLimit) карты" : "First \(EntitlementPolicy.freeCashbackCardLimit) cards only")
+                id: "cashflow.expense_screenshot_import",
+                title: isRussian ? "Импорт расходов со скриншота" : "Expense screenshot import",
+                location: isRussian ? "Cashflow -> Mass import -> режим Screenshot" : "Cashflow -> Mass import -> Screenshot mode",
+                freeBehavior: isRussian ? "OCR-импорт закрыт." : "OCR import is locked.",
+                premiumBehavior: isRussian ? "OCR-импорт доступен." : "OCR import is available.",
+                isPremiumActive: EntitlementPolicy.canImportCashflowExpensesFromScreenshot(isPro: appState.isPro),
+                currentState: EntitlementPolicy.canImportCashflowExpensesFromScreenshot(isPro: appState.isPro)
+                    ? (isRussian ? "Открыто" : "Unlocked")
+                    : (isRussian ? "Закрыто на Free" : "Locked for Free")
             ),
             EntitlementDiagnosticItem(
                 id: "cashback.categories",

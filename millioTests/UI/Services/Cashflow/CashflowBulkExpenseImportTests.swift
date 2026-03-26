@@ -86,6 +86,13 @@ struct CashflowBulkExpenseImportTests {
         #expect(!groceries.requiresManualReview)
     }
 
+    @Test("Screenshot mode respects screenshot import entitlement")
+    func screenshotModeRespectsEntitlement() {
+        #expect(CashflowBulkExpenseImportMode.manual.isUnlocked(canImportScreenshots: false))
+        #expect(!CashflowBulkExpenseImportMode.screenshot.isUnlocked(canImportScreenshots: false))
+        #expect(CashflowBulkExpenseImportMode.screenshot.isUnlocked(canImportScreenshots: true))
+    }
+
     @Test("Резолвер отдаёт top suggestions и поднимает запомненную категорию наверх")
     func resolverRanksSuggestionsWithLearnedCategoryFirst() {
         let resolver = CashflowBulkExpenseImportCategoryResolver()

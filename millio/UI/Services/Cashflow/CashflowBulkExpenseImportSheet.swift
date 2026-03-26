@@ -44,6 +44,9 @@ private enum CashflowBulkExpenseImportSelectorStyle {
 }
 
 enum CashflowBulkExpenseImportLayoutPolicy {
+    static let floatingAddCategoryButtonSize: CGFloat = 38
+    static let floatingAddCategoryBottomPadding: CGFloat = 28
+
     static func saveActionPresentation(canSave: Bool, isProcessing: Bool) -> CashflowBulkExpenseImportToolbarPresentation {
         CashflowBulkExpenseImportToolbarPresentation(
             icon: "checkmark",
@@ -79,6 +82,13 @@ enum CashflowBulkExpenseImportLayoutPolicy {
             borderTone: .expenseDefault
         )
     }
+
+    static func scrollContentBottomPadding() -> CGFloat {
+        BottomPinnedLayoutPolicy.scrollContentBottomPaddingForOverlay(
+            overlayHeight: floatingAddCategoryButtonSize,
+            overlayBottomPadding: floatingAddCategoryBottomPadding
+        )
+    }
 }
 
 struct CashflowBulkExpenseImportSheet: View {
@@ -86,6 +96,8 @@ struct CashflowBulkExpenseImportSheet: View {
     let month: Date
     let onComplete: (() -> Void)?
 
+    @Environment(AppState.self) private var appState
+    @Environment(AppRouter.self) private var router
     @Environment(\.dismiss) private var dismiss
     @State private var mode: CashflowBulkExpenseImportMode = .manual
     @State private var selectedCurrency: String = SettingsManager.shared.primaryCurrencyCode
@@ -104,6 +116,8 @@ struct CashflowBulkExpenseImportSheet: View {
     @State private var saveMessage: String?
     @State private var isErrorDismissed: Bool = false
     @State private var isSaveDismissed: Bool = false
+    @State private var showPremiumAlert: Bool = false
+    @State private var premiumAlertMessage: String = ""
     @State private var showHelpSheet: Bool = false
     @State private var showMonthPickerSheet: Bool = false
     @State private var showCategoryEditorSheet: Bool = false
@@ -162,7 +176,7 @@ struct CashflowBulkExpenseImportSheet: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 6)
-                    .padding(.bottom, 120)
+                    .padding(.bottom, CashflowBulkExpenseImportLayoutPolicy.scrollContentBottomPadding())
                 }
 
                 floatingAddCategoryButton
@@ -308,6 +322,15 @@ struct CashflowBulkExpenseImportSheet: View {
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+        .premiumUpsellAlert(
+            isPresented: $showPremiumAlert,
+            titleKey: "Ограничение Free-плана",
+            message: premiumAlertMessage,
+            onSubscribe: {
+                router.push(.subscription)
+                dismiss()
+            }
+        )
     }
 
     private var introHeader: some View {
@@ -353,17 +376,25 @@ struct CashflowBulkExpenseImportSheet: View {
         HStack(spacing: 6) {
             ForEach(CashflowBulkExpenseImportMode.allCases) { item in
                 Button {
-                    mode = item
+                    handleModeSelection(item)
                 } label: {
-                    Text(item.title)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(mode == item ? Color.white.opacity(0.96) : Color.white.opacity(0.62))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 34)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(mode == item ? Color.white.opacity(0.16) : Color.clear)
-                        )
+                    HStack(spacing: 6) {
+                        Text(item.title)
+                            .lineLimit(1)
+
+                        if item.requiresPremiumAccess && !item.isUnlocked(canImportScreenshots: canImportScreenshotExpenses) {
+                            Image(systemName: "lock.fill")
+                                .font(.system(size: 11, weight: .bold))
+                        }
+                    }
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(mode == item ? Color.white.opacity(0.96) : Color.white.opacity(0.62))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 34)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(mode == item ? Color.white.opacity(0.16) : Color.clear)
+                    )
                 }
                 .buttonStyle(.plain)
             }
@@ -1489,7 +1520,10 @@ struct CashflowBulkExpenseImportSheet: View {
             Image(systemName: "plus")
                 .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(Color.white.opacity(0.95))
-                .frame(width: 38, height: 38)
+                .frame(
+                    width: CashflowBulkExpenseImportLayoutPolicy.floatingAddCategoryButtonSize,
+                    height: CashflowBulkExpenseImportLayoutPolicy.floatingAddCategoryButtonSize
+                )
                 .background(
                     Circle()
                         .fill(Color.black.opacity(0.92))
@@ -2141,6 +2175,10 @@ struct CashflowBulkExpenseImportSheet: View {
         selectedCardID != nil && !filledDrafts.isEmpty && screenshotPreviewRows.isEmpty
     }
 
+    private var canImportScreenshotExpenses: Bool {
+        EntitlementPolicy.canImportCashflowExpensesFromScreenshot(isPro: appState.isPro)
+    }
+
     private var monthTitle: String {
         let formatter = DateFormatter()
         formatter.locale = .autoupdatingCurrent
@@ -2175,6 +2213,9 @@ struct CashflowBulkExpenseImportSheet: View {
     }
 
     private func configureInitialStateIfNeeded() {
+        if !canImportScreenshotExpenses, mode == .screenshot {
+            mode = .manual
+        }
         syncSelectionWithCurrency()
         if categoryDrafts.isEmpty {
             categoryDrafts = makeEmptyCategoryDrafts()
@@ -2256,6 +2297,13 @@ struct CashflowBulkExpenseImportSheet: View {
     }
 
     private func analyzePhotos(items: [PhotosPickerItem]) async {
+        guard canImportScreenshotExpenses else {
+            await MainActor.run {
+                presentScreenshotImportUpsell()
+                screenshotItems = []
+            }
+            return
+        }
         errorMessage = nil
         saveMessage = nil
         isErrorDismissed = false
@@ -2351,6 +2399,22 @@ struct CashflowBulkExpenseImportSheet: View {
         } catch {
             errorMessage = error.localizedDescription
             isErrorDismissed = false
+        }
+    }
+
+    private func handleModeSelection(_ selectedMode: CashflowBulkExpenseImportMode) {
+        guard selectedMode.isUnlocked(canImportScreenshots: canImportScreenshotExpenses) else {
+            presentScreenshotImportUpsell()
+            return
+        }
+        mode = selectedMode
+    }
+
+    private func presentScreenshotImportUpsell() {
+        premiumAlertMessage = String(localized: "monetization.cashflow.bulk_expense_screenshot.pro_only")
+        showPremiumAlert = true
+        if mode == .screenshot {
+            mode = .manual
         }
     }
 }

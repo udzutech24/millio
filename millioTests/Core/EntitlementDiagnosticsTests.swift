@@ -20,19 +20,16 @@ struct EntitlementDiagnosticsTests {
         let items = EntitlementDiagnostics.items(for: appState)
         let ids = items.map(\.id)
 
-        #expect(items.count == 9)
+        #expect(items.count == 6)
         #expect(ids == [
-            "converter.crypto",
-            "finances.market_assets",
-            "finances.tracked_tickers",
             "finances.products",
             "finances.charts",
             "cashflow.chart",
-            "cashback.cards",
+            "cashflow.expense_screenshot_import",
             "cashback.categories",
             "cashback.screenshot"
         ])
-        #expect(items.first(where: { $0.id == "converter.crypto" })?.isPremiumActive == false)
+        #expect(items.first(where: { $0.id == "cashflow.expense_screenshot_import" })?.isPremiumActive == false)
     }
 
     @Test("Диагностика учитывает premium override")

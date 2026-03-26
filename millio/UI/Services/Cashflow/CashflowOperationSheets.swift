@@ -8,6 +8,18 @@
 import SwiftUI
 import UIKit
 
+enum CashflowOperationSheetLayoutPolicy {
+    static let floatingAddCategoryButtonSize: CGFloat = 64
+    static let floatingAddCategoryBottomPadding: CGFloat = 20
+
+    static func scrollContentBottomPadding() -> CGFloat {
+        BottomPinnedLayoutPolicy.scrollContentBottomPaddingForOverlay(
+            overlayHeight: floatingAddCategoryButtonSize,
+            overlayBottomPadding: floatingAddCategoryBottomPadding
+        )
+    }
+}
+
 enum CashflowCategorySheetBootstrap {
     @MainActor
     static func prepare(viewModel: CashflowViewModel) {
@@ -310,7 +322,7 @@ private struct CashflowCategoryTransactionSheet: View {
                         }
                         .padding(.horizontal, 16)
                         .padding(.top, 10)
-                        .padding(.bottom, 112)
+                        .padding(.bottom, CashflowOperationSheetLayoutPolicy.scrollContentBottomPadding())
                     }
                     .scrollDismissesKeyboard(.immediately)
                     .dismissKeyboardOnTap()
@@ -1017,7 +1029,10 @@ private struct CashflowCategoryTransactionSheet: View {
                     Image(systemName: "plus")
                         .font(.system(size: 24, weight: .semibold))
                         .foregroundStyle(Color.white.opacity(0.95))
-                        .frame(width: 64, height: 64)
+                        .frame(
+                            width: CashflowOperationSheetLayoutPolicy.floatingAddCategoryButtonSize,
+                            height: CashflowOperationSheetLayoutPolicy.floatingAddCategoryButtonSize
+                        )
                         .background(
                             Circle()
                                 .fill(Color.black.opacity(0.92))

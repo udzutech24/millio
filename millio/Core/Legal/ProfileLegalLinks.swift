@@ -9,6 +9,8 @@ import Foundation
 
 /// Centralized mapping for profile legal document links by selected app language.
 struct ProfileLegalLinks {
+    private static let appleStandardEULAURL = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!
+
     let privacyURL: URL
     let termsURL: URL
     let privacyTitle: String
@@ -20,17 +22,17 @@ struct ProfileLegalLinks {
         if isRussian {
             return ProfileLegalLinks(
                 privacyURL: URL(string: "https://millio.udzutech.com/?lang=ru&page=privacy")!,
-                termsURL: URL(string: "https://millio.udzutech.com/?lang=ru&page=terms")!,
+                termsURL: appleStandardEULAURL,
                 privacyTitle: "Политика конфиденциальности",
-                termsTitle: "Пользовательское соглашение"
+                termsTitle: "Условия использования (EULA)"
             )
         }
 
         return ProfileLegalLinks(
             privacyURL: URL(string: "https://millio.udzutech.com/?lang=en&page=privacy")!,
-            termsURL: URL(string: "https://millio.udzutech.com/?lang=en&page=terms")!,
+            termsURL: appleStandardEULAURL,
             privacyTitle: "Privacy Policy",
-            termsTitle: "Terms of Use"
+            termsTitle: "Terms of Use (EULA)"
         )
     }
 

@@ -13,6 +13,10 @@ enum CashflowBulkExpenseImportMode: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    var requiresPremiumAccess: Bool {
+        self == .screenshot
+    }
+
     var title: String {
         switch self {
         case .manual:
@@ -27,6 +31,15 @@ enum CashflowBulkExpenseImportMode: String, CaseIterable, Identifiable {
                 defaultValue: "Screenshot",
                 comment: "Mode title for screenshot bulk expense import"
             )
+        }
+    }
+
+    func isUnlocked(canImportScreenshots: Bool) -> Bool {
+        switch self {
+        case .manual:
+            return true
+        case .screenshot:
+            return canImportScreenshots
         }
     }
 }

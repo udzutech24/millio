@@ -179,15 +179,23 @@ enum EntitlementPolicy {
     static let freeQuickSetupTrackedTickerLimit = 1
     static let freeCashbackCardLimit = 3
     static let freeCashbackCategoryLimitPerMonth = 10
-    static let freeFinanceProductLimit = 15
-    /// Feature flag: криптовалюта в конвертере доступна только при PRO-подписке.
-    static let isConverterCryptoProOnly = true
+    static let freeFinanceProductLimit = 10
+    /// Beta flag: криптовалюта в конвертере временно доступна всем.
+    static let isConverterCryptoProOnly = false
     /// Feature flag: импорт категорий кешбэка со скриншота доступен только при PRO-подписке.
     static let isCashbackScreenshotImportProOnly = true
-    /// Feature flag: акции в финансах доступны только при PRO-подписке.
-    static let isFinanceStocksProOnly = true
-    /// Feature flag: крипта в финансах доступна только при PRO-подписке.
-    static let isFinanceCryptoProOnly = true
+    /// Feature flag: OCR-импорт расходов из банковских скриншотов доступен только при PRO-подписке.
+    static let isCashflowExpenseScreenshotImportProOnly = true
+    /// Beta flag: все карты кешбэка временно доступны всем.
+    static let isCashbackCardsProOnly = false
+    /// Beta flag: акции в финансах временно доступны всем.
+    static let isFinanceStocksProOnly = false
+    /// Beta flag: крипта в финансах временно доступна всем.
+    static let isFinanceCryptoProOnly = false
+    /// Beta flag: лимиты на рыночные тикеры временно сняты.
+    static let isTrackedTickerLimitProOnly = false
+    /// Feature flag: лимит продуктов в финансах действует только без PRO-подписки.
+    static let isFinanceProductsProOnly = true
     /// Feature flag: графики в финансах доступны только при PRO-подписке.
     static let isFinanceChartsProOnly = true
     /// Feature flag: график cashflow доступен только при PRO-подписке.
@@ -209,24 +217,41 @@ enum EntitlementPolicy {
     ) -> Bool {
         switch type {
         case .crypto:
-            return canUseQuickSetupCrypto(isPro: isPro) && canAddTrackedTicker(isPro: isPro, currentTrackedTickers: currentTrackedTickers)
+            return canUseQuickSetupCrypto(isPro: isPro) && canAddQuickSetupTrackedTicker(
+                isPro: isPro,
+                currentTrackedTickers: currentTrackedTickers
+            )
         case .ticker:
-            return isPro || currentTrackedTickers < freeQuickSetupTrackedTickerLimit
+            return canAddQuickSetupTrackedTicker(
+                isPro: isPro,
+                currentTrackedTickers: currentTrackedTickers
+            )
         default:
             return true
         }
     }
 
     static func canAddTrackedTicker(isPro: Bool, currentTrackedTickers: Int) -> Bool {
-        isPro || currentTrackedTickers < freeTrackedTickerLimit
+        guard isTrackedTickerLimitProOnly else { return true }
+        return isPro || currentTrackedTickers < freeTrackedTickerLimit
+    }
+
+    static func hasTrackedTickerLimit(isPro: Bool) -> Bool {
+        return isTrackedTickerLimitProOnly && !isPro
     }
 
     static func canUseCashbackCard(isPro: Bool, cardIndex: Int) -> Bool {
-        isPro || cardIndex < freeCashbackCardLimit
+        guard isCashbackCardsProOnly else { return true }
+        return isPro || cardIndex < freeCashbackCardLimit
     }
 
     static func canImportCashbackFromScreenshot(isPro: Bool) -> Bool {
         guard isCashbackScreenshotImportProOnly else { return true }
+        return isPro
+    }
+
+    static func canImportCashflowExpensesFromScreenshot(isPro: Bool) -> Bool {
+        guard isCashflowExpenseScreenshotImportProOnly else { return true }
         return isPro
     }
 
@@ -235,7 +260,8 @@ enum EntitlementPolicy {
     }
 
     static func canAddFinanceProduct(isPro: Bool, currentProducts: Int) -> Bool {
-        isPro || currentProducts < freeFinanceProductLimit
+        guard isFinanceProductsProOnly else { return true }
+        return isPro || currentProducts < freeFinanceProductLimit
     }
 
     static func canUseFinanceStocks(isPro: Bool) -> Bool {
@@ -256,5 +282,10 @@ enum EntitlementPolicy {
     static func canUseCashflowChart(isPro: Bool) -> Bool {
         guard isCashflowChartProOnly else { return true }
         return isPro
+    }
+
+    private static func canAddQuickSetupTrackedTicker(isPro: Bool, currentTrackedTickers: Int) -> Bool {
+        guard isTrackedTickerLimitProOnly else { return true }
+        return isPro || currentTrackedTickers < freeQuickSetupTrackedTickerLimit
     }
 }

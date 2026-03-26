@@ -1,3 +1,4 @@
+import CoreGraphics
 import SwiftUI
 import UIKit
 import Testing

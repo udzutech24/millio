@@ -3,23 +3,23 @@
 ## Current rules in code
 
 - Converter:
-  - Free: fiat currencies.
-  - PRO: crypto currencies.
+  - Free: fiat + crypto currencies.
+  - PRO: same access, beta feature is temporarily open to everyone.
 - Finances / market assets:
-  - Free: stocks and crypto are locked.
-  - PRO: stocks and crypto are available.
+  - Free: stocks and crypto are available during beta.
+  - PRO: same access, beta feature is temporarily open to everyone.
 - Finances / tracked tickers (stocks + crypto):
-  - Free: up to 5 tracked tickers.
-  - PRO: unlimited tracked tickers.
+  - Free: no tracked ticker limit during beta.
+  - PRO: same access, beta feature is temporarily open to everyone.
 - Finances / products:
-  - Free: up to 15 products total across cards, credits, and investments.
+  - Free: up to 10 products total across cards, credits, and investments.
   - PRO: no product count limit.
 - Finances / charts:
   - Free: charts are locked.
   - PRO: charts are available.
 - Cashback cards:
-  - Free: up to 3 cards for cashback setup.
-  - PRO: no card count limit.
+  - Free: all cashback cards are available during beta.
+  - PRO: same access, beta feature is temporarily open to everyone.
 - Cashback categories:
   - Free: up to 10 cashback categories per month.
   - PRO: unlimited cashback categories.
@@ -29,6 +29,9 @@
 - Cashflow:
   - Free: chart is locked.
   - PRO: chart is available.
+- Cashflow / expense screenshot import:
+  - Free: locked.
+  - PRO: available.
 
 ## Source of truth
 
@@ -49,6 +52,8 @@
 
 - Converter crypto:
   - `millio/UI/Services/Courses/ConverterView.swift`
+- Finance market assets beta access:
+  - `millio/Core/AppState/AppState.swift`
 - Tracked tickers in finances:
   - `millio/UI/Services/Finances/Editors/FinanceAddAccountView.swift`
   - `millio/UI/Services/Finances/InvestmentEditorView.swift`
@@ -64,5 +69,7 @@
   - `millio/UI/Services/Finances/Components/FinanceOverviewCardView.swift`
 - Cashflow chart:
   - `millio/UI/Services/Cashflow/CashflowView.swift`
+- Cashflow expense screenshot import:
+  - `millio/UI/Services/Cashflow/CashflowBulkExpenseImportSheet.swift`
 - Home Screen widget is not paywalled:
   - `millioCurrencyWidgetExtension/CurrencyConverterPremiumWidget.swift`
